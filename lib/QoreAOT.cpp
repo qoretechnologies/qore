@@ -34,6 +34,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreDir.h"
+#include <qore/QoreObject.h>
 #include <iostream>
 #include <chrono>
 
@@ -643,6 +644,20 @@ static bool getFallbackRequirementReason(const AOTCompiledFuncWithSlots& f, std:
     if (f.slot_ids.has_unsupported_exprs) {
         reason += reason.empty() ? "" : "; ";
         reason += "unsupported expression serialization";
+        if (!f.slot_ids.unsupported_expr_details.empty()) {
+            reason += " (";
+            size_t count = std::min<size_t>(f.slot_ids.unsupported_expr_details.size(), 3);
+            for (size_t i = 0; i < count; ++i) {
+                if (i) {
+                    reason += "; ";
+                }
+                reason += f.slot_ids.unsupported_expr_details[i];
+            }
+            if (f.slot_ids.unsupported_expr_details.size() > count) {
+                reason += "; ...";
+            }
+            reason += ")";
+        }
         needs_fallback = true;
     }
 
@@ -1739,7 +1754,15 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
             continue;
         }
         if (!ce->getInitExpr().isNothing()) {
-            pending_fqns.insert(makeAOTConstantFQN(ns_path, ce->getName()));
+            std::string fqn = makeAOTConstantFQN(ns_path, ce->getName());
+            if (getenv("QORE_AOT_DEBUG_PENDING_CONSTS")) {
+                fprintf(stderr, "AOT pending const: %s module=%s file=%s compile_module=%s\n",
+                    fqn.c_str(),
+                    ce->getModuleName() ? ce->getModuleName() : "<null>",
+                    ce->loc && ce->loc->getFile() ? ce->loc->getFile() : "<null>",
+                    compile_module ? compile_module : "<null>");
+            }
+            pending_fqns.insert(std::move(fqn));
         }
     }
 
@@ -1769,7 +1792,15 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
                 continue;
             }
             if (!ce->getInitExpr().isNothing()) {
-                pending_fqns.insert(makeAOTConstantFQN(class_path, ce->getName()));
+                std::string fqn = makeAOTConstantFQN(class_path, ce->getName());
+                if (getenv("QORE_AOT_DEBUG_PENDING_CONSTS")) {
+                    fprintf(stderr, "AOT pending class const: %s module=%s file=%s compile_module=%s\n",
+                        fqn.c_str(),
+                        ce->getModuleName() ? ce->getModuleName() : "<null>",
+                        ce->loc && ce->loc->getFile() ? ce->loc->getFile() : "<null>",
+                        compile_module ? compile_module : "<null>");
+                }
+                pending_fqns.insert(std::move(fqn));
             }
         }
     }
@@ -1786,6 +1817,7 @@ static void setAOTInitFuncConstantExclusions(AOTCompiledFuncWithSlots& fws,
         const AOTCompiledInitFunc& cif) {
     fws.const_reverse_map_exclude_direct_fqn = cif.const_reverse_map_exclude_direct_fqn;
     fws.const_reverse_map_exclude_fqns = cif.const_reverse_map_exclude_fqns;
+    fws.const_reverse_map_override = cif.const_reverse_map_override;
 }
 
 static const ConstantEntry* getAOTLoadConstantEntry(const RuntimeConstantRefNode* node,
@@ -1796,6 +1828,80 @@ static const ConstantEntry* getAOTLoadConstantEntry(const RuntimeConstantRefNode
     auto* expr_node = expr.getInternalNode();
     auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(expr_node);
     return rcr ? rcr->getConstantEntry() : nullptr;
+}
+
+static bool getAOTRuntimeConstantPath(const RuntimeConstantRefNode* node,
+        const AOTConstantReverseMap* const_reverse_map, std::string& path) {
+    path.clear();
+    if (!node) {
+        return false;
+    }
+    ConstantEntry* ce = node->getConstantEntry();
+    if (!ce) {
+        return false;
+    }
+
+    if (const_reverse_map) {
+        if (ce->val.hasNode()) {
+            auto it = const_reverse_map->find(ce->val.getInternalNode());
+            if (it != const_reverse_map->end()) {
+                path = it->second;
+                return true;
+            }
+        }
+
+        QoreValue sv = ce->getReferencedValue();
+        if (sv.hasNode()) {
+            auto it = const_reverse_map->find(sv.getInternalNode());
+            if (it != const_reverse_map->end()) {
+                path = it->second;
+                sv.discard(nullptr);
+                return true;
+            }
+        }
+        sv.discard(nullptr);
+        return false;
+    }
+
+    path = ce->getName();
+    return !path.empty();
+}
+
+static std::string getAOTRuntimeConstantDiagnostic(const RuntimeConstantRefNode* node) {
+    std::string rv = "unresolved runtime constant reference";
+    if (!node) {
+        return rv;
+    }
+    ConstantEntry* ce = node->getConstantEntry();
+    if (!ce) {
+        return rv + " without ConstantEntry";
+    }
+    rv += " '";
+    rv += ce->getName();
+    rv += "'";
+    if (ce->aot_shell_pending) {
+        rv += " (pending AOT shell)";
+    }
+    return rv;
+}
+
+static void setAOTCompileFatal(std::string* fatal_error, const char* item_kind,
+        const std::string& item_name, const char* phase, const std::string& reason) {
+    if (!fatal_error || !fatal_error->empty()) {
+        return;
+    }
+
+    *fatal_error = "AOT ";
+    *fatal_error += phase;
+    *fatal_error += " failed for ";
+    *fatal_error += item_kind;
+    *fatal_error += " '";
+    *fatal_error += item_name;
+    *fatal_error += "'";
+    if (!reason.empty()) {
+        *fatal_error += ": ";
+        *fatal_error += reason;
+    }
 }
 
 static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
@@ -1811,7 +1917,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         const char* compile_file = nullptr,
         bool metadata_only = false,
         const std::unordered_set<std::string>* pending_init_constant_fqns = nullptr,
-        const AOTConstantReverseMap* init_base_const_reverse_map = nullptr) {
+        const AOTConstantReverseMap* init_base_const_reverse_map = nullptr,
+        std::string* fatal_error = nullptr) {
+    if (fatal_error && !fatal_error->empty()) {
+        return;
+    }
+
     // Track compiled variant keys to skip duplicates from iterator yielding
     // the same variant twice (committed + pending)
     std::set<std::string> local_keys;
@@ -1836,8 +1947,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     std::unique_ptr<AOTConstantReverseMap> local_init_base_crm;
     if (!init_base_const_reverse_map) {
         if (const_reverse_map && pending_init_constant_fqns && !pending_init_constant_fqns->empty()) {
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
             local_init_base_crm.reset(new AOTConstantReverseMap(
-                buildPendingSafeConstantReverseMap(ns, *pending_init_constant_fqns)));
+                buildPendingSafeConstantReverseMap(root_ns, *pending_init_constant_fqns)));
             init_base_const_reverse_map = local_init_base_crm.get();
         } else {
             init_base_const_reverse_map = const_reverse_map;
@@ -2147,6 +2260,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         fprintf(stderr, "AOT: LLVM lowering failed for '%s': %s\n", variant_key.c_str(), llvm_error.c_str());
                     }
                     ++failed_count;
+                    setAOTCompileFatal(fatal_error, "function", variant_key,
+                        "LLVM lowering", llvm_error);
+                    delete ir_func;
+                    return;
                 }
                 delete ir_func;
             } else {
@@ -2155,6 +2272,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     fprintf(stderr, "AOT: IR lowering failed for '%s': %s\n", variant_key.c_str(), lower_error.c_str());
                 }
                 ++failed_count;
+                setAOTCompileFatal(fatal_error, "function", variant_key,
+                    "IR lowering", lower_error);
+                return;
             }
         }
     }
@@ -2186,6 +2306,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
 
         // Helper lambda for method iteration
         auto processMethod = [&](QoreMethod* meth) {
+            if (fatal_error && !fatal_error->empty()) {
+                return;
+            }
             if (!meth->isUser()) {
                 return;
             }
@@ -2363,6 +2486,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                                 variant_key.c_str(), llvm_error.c_str());
                         }
                         ++failed_count;
+                        setAOTCompileFatal(fatal_error, "method", variant_key,
+                            "LLVM lowering", llvm_error);
+                        delete ir_func;
+                        return;
                     }
                     delete ir_func;
                 } else {
@@ -2373,6 +2500,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             variant_key.c_str(), lower_error.c_str());
                     }
                     ++failed_count;
+                    setAOTCompileFatal(fatal_error, "method", variant_key,
+                        "IR lowering", lower_error);
+                    return;
                 }
             }
         };
@@ -2380,10 +2510,16 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         // Instance methods
         for (auto mi = qcp->hm.begin(), me = qcp->hm.end(); mi != me; ++mi) {
             processMethod(mi->second);
+            if (fatal_error && !fatal_error->empty()) {
+                return;
+            }
         }
         // Static methods
         for (auto mi = qcp->shm.begin(), me = qcp->shm.end(); mi != me; ++mi) {
             processMethod(mi->second);
+            if (fatal_error && !fatal_error->empty()) {
+                return;
+            }
         }
     }
 
@@ -2395,6 +2531,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     auto compileInitExpr = [&](const QoreValue& init_expr, const std::string& init_name,
             AOTCompiledInitFunc::TargetType target_type,
             const std::string& container_path, const std::string& item_name) {
+        if (fatal_error && !fatal_error->empty()) {
+            return;
+        }
         QoreIRFunction* ir_func = nullptr;
         std::string lower_error;
         int rc = tryLowerInitExpression(init_expr, init_name.c_str(), pgm, ir_func, lower_error);
@@ -2403,6 +2542,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 fprintf(stderr, "AOT: init expr lowering failed for '%s': %s\n",
                     init_name.c_str(), lower_error.c_str());
             }
+            setAOTCompileFatal(fatal_error, "init expression", init_name,
+                "IR lowering", lower_error);
             return;
         }
 
@@ -2457,9 +2598,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             }
             std::string err;
             bool ok = lowerer.lowerFunction(*fn, module, err);
-            if (!ok && getenv("QORE_AOT_DEBUG")) {
-                fprintf(stderr, "AOT: LLVM lowering failed for init '%s': %s\n",
-                    name.c_str(), err.c_str());
+            if (!ok) {
+                llvm_error = err;
+                if (getenv("QORE_AOT_DEBUG")) {
+                    fprintf(stderr, "AOT: LLVM lowering failed for init '%s': %s\n",
+                        name.c_str(), err.c_str());
+                }
             }
             return ok;
         };
@@ -2481,12 +2625,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 direct_exclude_fqn = makeAOTConstantFQN(container_path, item_name);
             }
 
-            std::unique_ptr<AOTConstantReverseMap> filtered_crm;
+            std::shared_ptr<AOTConstantReverseMap> filtered_crm;
             const AOTConstantReverseMap* init_const_reverse_map = init_base_const_reverse_map;
             if (init_base_const_reverse_map && (pending_init_constant_fqns && !pending_init_constant_fqns->empty()
                     || !direct_exclude_fqn.empty())) {
-                filtered_crm.reset(new AOTConstantReverseMap(filterPendingInitConstantReverseMap(
-                    *init_base_const_reverse_map, *pending_init_constant_fqns, direct_exclude_fqn)));
+                filtered_crm = std::make_shared<AOTConstantReverseMap>(filterPendingInitConstantReverseMap(
+                    *init_base_const_reverse_map, *pending_init_constant_fqns, direct_exclude_fqn));
                 init_const_reverse_map = filtered_crm.get();
             }
 
@@ -2507,6 +2651,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
             cif.const_reverse_map_exclude_direct_fqn = direct_exclude_fqn;
             cif.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
+            cif.const_reverse_map_override = filtered_crm;
             // Slot-identity extraction: combine identities from outer +
             // helpers so the serialized metadata carries every slot the
             // shared ctx needs to populate at load time.
@@ -2592,6 +2737,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     (int)slots.expr_slots.size(),
                     outlined_helpers.size());
             }
+        } else {
+            setAOTCompileFatal(fatal_error, "init expression", init_name,
+                "LLVM lowering", llvm_error);
         }
         delete ir_func;
     };
@@ -2685,6 +2833,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             std::string init_name = "__const_init::" + ns_path + "::" + ce->getName();
             compileInitExpr(init_expr, init_name, AOTCompiledInitFunc::NS_CONSTANT,
                 ns_path, ce->getName());
+            if (fatal_error && !fatal_error->empty()) {
+                return;
+            }
         }
     }
 
@@ -2726,6 +2877,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     + "::" + ce->getName();
                 compileInitExpr(init_expr, init_name, AOTCompiledInitFunc::CLASS_CONSTANT,
                     class_path, ce->getName());
+                if (fatal_error && !fatal_error->empty()) {
+                    return;
+                }
             }
 
             // Static variable init expressions
@@ -2738,6 +2892,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     + "::" + vi.first;
                 compileInitExpr(vi.second->exp, init_name, AOTCompiledInitFunc::STATIC_VAR,
                     class_path, vi.first);
+                if (fatal_error && !fatal_error->empty()) {
+                    return;
+                }
             }
         }
     }
@@ -2751,7 +2908,10 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
                 failed_count, total_ir_insts_all, const_reverse_map, compiled_keys,
                 compile_module, compile_file, metadata_only, pending_init_constant_fqns,
-                init_base_const_reverse_map);
+                init_base_const_reverse_map, fatal_error);
+            if (fatal_error && !fatal_error->empty()) {
+                return;
+            }
         }
     }
 }
@@ -3360,9 +3520,15 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
     // Pass "" as compile_module to filter out module-originated functions/classes;
     // module functions are available at runtime via runTimeLoadModule()
+    std::string fatal_lowering_error;
     compileNamespaceFunctions(root_ns, pgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
-        total_ir_insts_all, &const_reverse_map, nullptr, "");
+        total_ir_insts_all, &const_reverse_map, nullptr, "",
+        nullptr, false, nullptr, nullptr, &fatal_lowering_error);
+    if (!fatal_lowering_error.empty()) {
+        error = fatal_lowering_error;
+        return false;
+    }
 
     // Step 2: Try to compile top-level code with AOT mode
     {
@@ -5121,9 +5287,15 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // namespace level (e.g. `class CsvHelper { ... }` with no enclosing
     // namespace block), which were previously missed when only child
     // namespaces were iterated.
+    std::string fatal_lowering_error;
     compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
-        total_ir_insts_all, &const_reverse_map, nullptr, mod_info.name.c_str());
+        total_ir_insts_all, &const_reverse_map, nullptr, mod_info.name.c_str(),
+        nullptr, false, nullptr, nullptr, &fatal_lowering_error);
+    if (!fatal_lowering_error.empty()) {
+        error = fatal_lowering_error;
+        return false;
+    }
 
     // Compile module init closure (if any) as an AOT init function so its
     // side effects run at load time (e.g. DataProvider.qm assigns
@@ -5567,10 +5739,16 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // namespace level (e.g. `class CsvHelper { ... }` with no enclosing
         // namespace block), which were previously missed when only child
         // namespaces were iterated.
+        std::string fatal_lowering_error;
         compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
-            mod_info.name.c_str());
+            mod_info.name.c_str(), nullptr, false, nullptr, nullptr,
+            &fatal_lowering_error);
+        if (!fatal_lowering_error.empty()) {
+            error = fatal_lowering_error;
+            return false;
+        }
 
         // Compile module init closure (if any) as an AOT init function so its
         // side effects run at load time.
@@ -5940,11 +6118,16 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
+    std::string fatal_lowering_error;
     compileNamespaceFunctions(root_ns, qpgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
         failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
         /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
-        /*metadata_only=*/false);
+        /*metadata_only=*/false, nullptr, nullptr, &fatal_lowering_error);
+    if (!fatal_lowering_error.empty()) {
+        error = fatal_lowering_error;
+        return false;
+    }
 
     reportAOTCompileStats("script-context .qo (batch)",
         compiled_count, total_funcs, failed_count, compiled_funcs);
@@ -6571,11 +6754,16 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     // in target_canon.  Sibling items (preloaded from -L) already
     // have their LLVM code in their own .qo's, so we do not re-emit
     // them here.
+    std::string fatal_lowering_error;
     compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
         failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
         /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
-        /*metadata_only=*/false);
+        /*metadata_only=*/false, nullptr, nullptr, &fatal_lowering_error);
+    if (!fatal_lowering_error.empty()) {
+        error = fatal_lowering_error;
+        return false;
+    }
 
     reportAOTCompileStats("script-context .qo", compiled_count, total_funcs,
         failed_count, compiled_funcs);
@@ -7020,10 +7208,16 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
 
         // Compile only items whose declaration location matches the
         // target file (per-file filter, slice 4).
+        std::string fatal_lowering_error;
         compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
-            mod_info.name.c_str(), target_canon.c_str());
+            mod_info.name.c_str(), target_canon.c_str(), false, nullptr, nullptr,
+            &fatal_lowering_error);
+        if (!fatal_lowering_error.empty()) {
+            error = fatal_lowering_error;
+            return false;
+        }
 
         // Per-file `.qo`s are intermediates for the slice-6 aggregator
         // (`qcc -m --from-objects`), not standalone `.qmod`s.  The
@@ -7444,11 +7638,16 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         // Walk the full module (no compile_file filter) with
         // metadata_only=true — only external declarations go into the
         // glue module; actual bodies come from input .qo's at link time.
+        std::string fatal_lowering_error;
         compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), /*compile_file=*/nullptr,
-            /*metadata_only=*/true);
+            /*metadata_only=*/true, nullptr, nullptr, &fatal_lowering_error);
+        if (!fatal_lowering_error.empty()) {
+            error = fatal_lowering_error;
+            return false;
+        }
 
         if (init_c_holder) {
             // The module-init closure side effects are part of the module
@@ -7909,11 +8108,16 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
 
         AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
+        std::string fatal_lowering_error;
         compileNamespaceFunctions(root_ns, *qpgm, ctx, *module, di_builder, di_cu,
             compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
             failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
             mod_info.name.c_str(), /*compile_file=*/nullptr,
-            /*metadata_only=*/true);
+            /*metadata_only=*/true, nullptr, nullptr, &fatal_lowering_error);
+        if (!fatal_lowering_error.empty()) {
+            error = fatal_lowering_error;
+            return false;
+        }
 
         if (init_c_holder) {
             compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
@@ -8107,6 +8311,25 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
 
 // Returns true if an Invoke instruction's expression slot can be skipped because
 // the LLVM codegen handles it natively without the AST expression.
+static bool isNativelyLoweredAOTMethodRef(const QoreValue& expr, size_t operand_count) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {
+        return true;
+    }
+    return operand_count >= 1 && dynamic_cast<const ParseObjectMethodReferenceNode*>(node);
+}
+
+static bool isNativelyLoweredAOTCallRef(const QoreValue& expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
+    const QoreMethod* method = scr ? scr->getMethod() : nullptr;
+    if (method && method->isStatic() && method->getClass()) {
+        return true;
+    }
+    auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node);
+    return fcr && fcr->getFunction();
+}
+
 static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
     // Pure computation opcodes with pre-evaluated operands
     if ((!ii->operands.empty() && getOpcodeIsBinaryInvoke(
@@ -8117,8 +8340,23 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
                 && ii->operands.size() >= 1)
             || ii->invoke_opcode == QoreIROpcode::HashKeyAccess
             || ii->invoke_opcode == QoreIROpcode::HashKeyAccessInt
+            || (ii->invoke_opcode == QoreIROpcode::LoadStaticVar
+                && dynamic_cast<const StaticClassVarRefNode*>(ii->expr.getInternalNode()))
+            || (ii->invoke_opcode == QoreIROpcode::ListAssignAny
+                && ii->operands.size() >= 2)
             || ii->invoke_opcode == QoreIROpcode::CallClosureDirect
             || ii->invoke_opcode == QoreIROpcode::InstanceOfBool
+            || (ii->invoke_opcode == QoreIROpcode::AddString
+                && ii->operands.size() >= 2)
+            || (ii->invoke_opcode == QoreIROpcode::StringConcat
+                && !ii->operands.empty())
+            || ((ii->invoke_opcode == QoreIROpcode::EqString
+                    || ii->invoke_opcode == QoreIROpcode::NeString
+                    || ii->invoke_opcode == QoreIROpcode::LtString
+                    || ii->invoke_opcode == QoreIROpcode::LeString
+                    || ii->invoke_opcode == QoreIROpcode::GtString
+                    || ii->invoke_opcode == QoreIROpcode::GeString)
+                && ii->operands.size() >= 2)
             || (isRegexInvokeOpcode(ii->invoke_opcode)
                 && !ii->operands.empty())) {
         return true;
@@ -8135,6 +8373,14 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
     }
     // BackgroundInt with pre-evaluated args (method name embedded as string constant)
     if (ii->invoke_opcode == QoreIROpcode::BackgroundInt && !ii->operands.empty()) {
+        return true;
+    }
+    // Method references are emitted from the method name and the evaluated object context.
+    if (ii->invoke_opcode == QoreIROpcode::CreateMethodRef
+            && isNativelyLoweredAOTMethodRef(ii->expr, ii->operands.size())) {
+        return true;
+    }
+    if (ii->invoke_opcode == QoreIROpcode::CreateCallRef && isNativelyLoweredAOTCallRef(ii->expr)) {
         return true;
     }
     // ListPush with pre-evaluated operands (list + value)
@@ -8173,6 +8419,17 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
     return false;
 }
 
+static bool shouldSkipExprInstructionExprSlot(const QoreIRExprInstruction* ei) {
+    if (dynamic_cast<const QoreIRBackgroundInstruction*>(ei)) {
+        return true;
+    }
+    if (ei->opcode == QoreIROpcode::ListAssignAny && ei->operands.size() >= 2) {
+        return true;
+    }
+    return getOpcodeSkipAotExprSlot(static_cast<int>(ei->opcode))
+        && !ei->operands.empty();
+}
+
 // Walk a lvalue expression tree and register all inner VarRefNodes in the slot maps.
 // Required so ExprTreeSerializer can serialize subscript lvalue expressions even when the
 // base variable only appears inside a *LValue instruction and not in any LoadLocal/StoreLocal.
@@ -8206,6 +8463,37 @@ static void registerLValueBaseVars(const QoreValue& lvalue, AOTSlotMap& slots) {
 }
 
 void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
+    auto makeOpcodeSource = [](QoreIROpcode opcode) {
+        std::string source = "IR opcode ";
+        source += getOpcodeName(static_cast<int>(opcode));
+        source += " (";
+        source += std::to_string(static_cast<int>(opcode));
+        source += ")";
+        return source;
+    };
+
+    auto makeInvokeOpcodeSource = [](QoreIROpcode opcode, QoreIROpcode invoke_opcode) {
+        std::string source = "IR opcode ";
+        source += getOpcodeName(static_cast<int>(opcode));
+        source += ".";
+        source += getOpcodeName(static_cast<int>(invoke_opcode));
+        source += " (";
+        source += std::to_string(static_cast<int>(opcode));
+        source += ".";
+        source += std::to_string(static_cast<int>(invoke_opcode));
+        source += ")";
+        return source;
+    };
+
+    auto recordExprSlot = [&slots, &makeOpcodeSource](uint64_t bits, QoreIROpcode opcode) {
+        slots.getExprSlot(bits, makeOpcodeSource(opcode));
+    };
+
+    auto recordInvokeExprSlot = [&slots, &makeInvokeOpcodeSource](
+            uint64_t bits, QoreIROpcode opcode, QoreIROpcode invoke_opcode) {
+        slots.getExprSlot(bits, makeInvokeOpcodeSource(opcode, invoke_opcode));
+    };
+
     // Preserve the IR local slot identity in the AOT local table.  Handler IR
     // inherits parent locals by IR slot ID, and AOT handler deserialization uses
     // ctx->locals[slot_id] for those parent slots.  If AOT local slots are
@@ -8268,7 +8556,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     }
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordInvokeExprSlot(bits, inst->opcode, ii->invoke_opcode);
+                    if (ii->invoke_opcode == QoreIROpcode::CallStatic
+                            || ii->invoke_opcode == QoreIROpcode::CallStaticDirect) {
+                        slots.static_call_pre_evaluated_bits.insert(bits);
+                    }
                     // StoreLValue invoke: LLVM lowering uses the lvalue (extracted
                     // from the assignment expression) as a separate AOT slot
                     if (ii->invoke_opcode == QoreIROpcode::StoreLValue
@@ -8279,7 +8571,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                             QoreValue lv = assign->getLeft();
                             uint64_t lv_bits;
                             memcpy(&lv_bits, &lv, sizeof(lv_bits));
-                            slots.getExprSlot(lv_bits);
+                            recordInvokeExprSlot(lv_bits, inst->opcode, ii->invoke_opcode);
                         }
                     }
                     break;
@@ -8291,14 +8583,17 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
+                    if (inst->opcode == QoreIROpcode::CallStatic) {
+                        slots.static_call_pre_evaluated_bits.insert(bits);
+                    }
                     break;
                 }
                 case QoreIROpcode::CallDirect: {
                     auto* di = static_cast<QoreIRCallDirectInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &di->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::CallMethodDirect: {
@@ -8306,7 +8601,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     if (cmdi->expr) {
                         uint64_t bits;
                         memcpy(&bits, &cmdi->expr, sizeof(bits));
-                        slots.getExprSlot(bits);
+                        recordExprSlot(bits, inst->opcode);
                     }
                     break;
                 }
@@ -8315,7 +8610,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     if (imdi->expr) {
                         uint64_t bits;
                         memcpy(&bits, &imdi->expr, sizeof(bits));
-                        slots.getExprSlot(bits);
+                        recordExprSlot(bits, inst->opcode);
                     }
                     break;
                 }
@@ -8340,7 +8635,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     auto* lvi = static_cast<QoreIRLValueInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &lvi->lvalue, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     registerLValueBaseVars(lvi->lvalue, slots);  // Pre-register base vars for serialization
                     break;
                 }
@@ -8403,21 +8698,22 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::HashMapSelectAny:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
-                    // Skip expr slot when operands are pre-evaluated and registry allows it
-                    if (getOpcodeSkipAotExprSlot(static_cast<int>(inst->opcode))
-                            && !ei->operands.empty()) {
+                    if (shouldSkipExprInstructionExprSlot(ei)) {
                         break;
                     }
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::LoadStaticVar: {
                     auto* svi = static_cast<QoreIRStaticVarInstruction*>(inst.get());
+                    if (dynamic_cast<const StaticClassVarRefNode*>(svi->expr.getInternalNode())) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &svi->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::NewObject: {
@@ -8429,42 +8725,48 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     auto* noi = static_cast<QoreIRNewObjectInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &noi->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::RefForeachInit: {
                     auto* ri = static_cast<QoreIRRefForeachInitInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ri->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::LoadConstant: {
                     auto* lci = static_cast<QoreIRLoadConstantInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &lci->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::CreateClosure: {
                     auto* cci = static_cast<QoreIRCreateClosureInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &cci->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::CreateCallRef: {
                     auto* cri = static_cast<QoreIRCreateCallRefInstruction*>(inst.get());
+                    if (isNativelyLoweredAOTCallRef(cri->expr)) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &cri->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::CreateMethodRef: {
                     auto* mri = static_cast<QoreIRCreateMethodRefInstruction*>(inst.get());
+                    if (isNativelyLoweredAOTMethodRef(mri->expr, mri->operands.size())) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &mri->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::CreateParseRef: {
@@ -8493,49 +8795,50 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     }
                     uint64_t bits;
                     memcpy(&bits, &pri->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::NewHashDecl: {
                     auto* nhdi = static_cast<QoreIRNewHashDeclInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &nhdi->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::NewComplexHash: {
                     auto* nchi = static_cast<QoreIRNewComplexHashInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &nchi->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::NewComplexList: {
                     auto* ncli = static_cast<QoreIRNewComplexListInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ncli->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::VrnConstruct: {
                     auto* vrni = static_cast<QoreIRVrnConstructInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &vrni->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 case QoreIROpcode::CallStaticDirect: {
                     auto* csdi = static_cast<QoreIRCallStaticDirectInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &csdi->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
+                    slots.static_call_pre_evaluated_bits.insert(bits);
                     break;
                 }
                 case QoreIROpcode::DotEvalMethodDirect: {
                     auto* dmd = static_cast<QoreIRDotEvalMethodDirectInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &dmd->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     slots.dot_eval_direct_bits.insert(bits);
                     break;
                 }
@@ -8543,7 +8846,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     auto* idmd = static_cast<QoreIRInvokeDotEvalMethodDirectInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &idmd->expr, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     slots.dot_eval_direct_bits.insert(bits);
                     break;
                 }
@@ -8568,7 +8871,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                         if (case_val.hasNode()) {
                             uint64_t bits;
                             memcpy(&bits, &case_val, sizeof(bits));
-                            slots.getExprSlot(bits);
+                            recordExprSlot(bits, inst->opcode);
                         }
                     }
                     break;
@@ -8621,7 +8924,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
                     uint64_t bits;
                     memcpy(&bits, &enum_val, sizeof(bits));
-                    slots.getExprSlot(bits);
+                    recordExprSlot(bits, inst->opcode);
                     break;
                 }
                 default:
@@ -8821,7 +9124,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelectAny:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
-                    if (dynamic_cast<const QoreIRBackgroundInstruction*>(ei)) {
+                    if (shouldSkipExprInstructionExprSlot(ei)) {
                         break;
                     }
                     uint64_t bits;
@@ -8833,6 +9136,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::LoadStaticVar: {
                     auto* svi = static_cast<QoreIRStaticVarInstruction*>(inst.get());
+                    if (dynamic_cast<const StaticClassVarRefNode*>(svi->expr.getInternalNode())) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &svi->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -8878,6 +9184,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::CreateCallRef: {
                     auto* cri = static_cast<QoreIRCreateCallRefInstruction*>(inst.get());
+                    if (isNativelyLoweredAOTCallRef(cri->expr)) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &cri->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -8887,6 +9196,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::CreateMethodRef: {
                     auto* mri = static_cast<QoreIRCreateMethodRefInstruction*>(inst.get());
+                    if (isNativelyLoweredAOTMethodRef(mri->expr, mri->operands.size())) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &mri->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -9292,7 +9604,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelectAny:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
-                    if (dynamic_cast<const QoreIRBackgroundInstruction*>(ei)) {
+                    if (shouldSkipExprInstructionExprSlot(ei)) {
                         break;
                     }
                     uint64_t bits;
@@ -9306,6 +9618,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::LoadStaticVar: {
                     auto* svi = static_cast<QoreIRStaticVarInstruction*>(inst.get());
+                    if (dynamic_cast<const StaticClassVarRefNode*>(svi->expr.getInternalNode())) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &svi->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -9357,6 +9672,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::CreateCallRef: {
                     auto* cri = static_cast<QoreIRCreateCallRefInstruction*>(inst.get());
+                    if (isNativelyLoweredAOTCallRef(cri->expr)) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &cri->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -9367,6 +9685,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::CreateMethodRef: {
                     auto* mri = static_cast<QoreIRCreateMethodRefInstruction*>(inst.get());
+                    if (isNativelyLoweredAOTMethodRef(mri->expr, mri->operands.size())) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &mri->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -9802,8 +10123,12 @@ class ExprTreeSerializer {
 
         // RuntimeConstantRefNode
         if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+            std::string path;
+            if (!getAOTRuntimeConstantPath(rcr, const_reverse_map, path)) {
+                return false;
+            }
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CONST_REF));
-            writeStr(rcr->getConstantEntry()->getName());
+            writeStr(path);
             writeU16(0);
             return true;
         }
@@ -10579,6 +10904,10 @@ class ExprTreeSerializer {
         if (debug) {
             fprintf(stderr, "EXPR_TREE: unsupported node type '%s' (type %d)\n",
                 node->getTypeName(), node->getType());
+            if (auto* obj = dynamic_cast<const QoreObject*>(node)) {
+                fprintf(stderr, "EXPR_TREE: unsupported object class '%s' at %p; no constant reverse-map entry\n",
+                    obj->getClassName(), static_cast<const void*>(node));
+            }
         }
         return false;
     }
@@ -10735,12 +11064,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             return id;
         }
         id.kind = AOTExprKind::GENERIC_EVAL;
+        id.ref1 = "unsupported non-node expression type ";
+        id.ref1 += std::to_string(static_cast<int>(v.getType()));
         return id;
     }
 
     const AbstractQoreNode* node = v.getInternalNode();
     if (!node) {
         id.kind = AOTExprKind::GENERIC_EVAL;
+        id.ref1 = "null expression node";
         return id;
     }
 
@@ -10802,8 +11134,16 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             }
         }
         id.ref2 = call->getName();
-        id.call_args = call->getArgs();
-        id.parse_args = call->getParseArgs();
+        if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
+            if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
+                id.ref2 += "\n";
+                id.ref2 += sig->getSignatureText();
+            }
+        }
+        if (!slots.static_call_pre_evaluated_bits.count(bits)) {
+            id.call_args = call->getArgs();
+            id.parse_args = call->getParseArgs();
+        }
         return id;
     }
 
@@ -10996,6 +11336,72 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         return id;
     }
 
+    // Program constant container values must keep their stable constant
+    // identity.  Otherwise a reference like SomeModule::Map."key" can turn
+    // into a literal copy of the whole map and lose unserializable leaf values
+    // that are only valid through runtime constant resolution.
+    if (const_reverse_map
+            && (dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node))) {
+        auto cit = const_reverse_map->find(node);
+        if (cit != const_reverse_map->end()) {
+            id.kind = AOTExprKind::RUNTIME_CONST_REF;
+            id.ref1 = cit->second;
+            return id;
+        }
+    }
+
+    // Hash/list literals and hash dereferences are first-class AOTExprKind
+    // encodings.  Do not wrap them in EXPR_TREE when they appear as top-level
+    // expression slots.
+    if (auto* qhn = dynamic_cast<const QoreHashNode*>(node)) {
+        if (!qhn->getHashDecl() && qhn->size() <= 255) {
+            id.kind = AOTExprKind::HASH_LITERAL;
+            id.child_expr = v;
+            return id;
+        }
+    }
+    if (auto* phn = dynamic_cast<const QoreParseHashNode*>(node)) {
+        const QoreParseHashNode::nvec_t& keys = phn->getKeys();
+        const QoreParseHashNode::nvec_t& vals = phn->getValues();
+        if (keys.size() <= 255 && keys.size() == vals.size()) {
+            bool const_keys = true;
+            for (size_t i = 0; i < keys.size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT hash literal classification")) {
+                    return id;
+                }
+                const QoreValue& key = keys[i];
+                if (key.needsEval()) {
+                    const_keys = false;
+                    break;
+                }
+            }
+            if (const_keys) {
+                id.kind = AOTExprKind::HASH_LITERAL;
+                id.child_expr = v;
+                return id;
+            }
+        }
+    }
+    if (auto* qln = dynamic_cast<const QoreListNode*>(node)) {
+        if (qln->size() <= 255) {
+            id.kind = AOTExprKind::LIST_LITERAL;
+            id.child_expr = v;
+            return id;
+        }
+    }
+    if (auto* pln = dynamic_cast<const QoreParseListNode*>(node)) {
+        if (pln->size() <= 255) {
+            id.kind = AOTExprKind::LIST_LITERAL;
+            id.child_expr = v;
+            return id;
+        }
+    }
+    if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        id.kind = AOTExprKind::HASH_DEREF;
+        id.child_expr = v;
+        return id;
+    }
+
     // ScopedObjectCallNode: scoped new object (new ClassName::SubClass())
     // Note: must check BEFORE NewObjectCallNode since ScopedObjectCallNode
     // does not inherit from NewObjectCallNode
@@ -11011,6 +11417,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.ref2 = "(";
             const type_vec_t& types = sig->getTypeList();
             for (size_t i = 0; i < types.size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT scoped-new signature serialization")) {
+                    return AOTExprSlotId();
+                }
                 if (i > 0) id.ref2.append(",");
                 id.ref2.append(QoreTypeInfo::getPath(types[i]));
             }
@@ -11125,8 +11534,27 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.child_expr = omr->getExp();
         return id;
     }
+    if (auto* prn = dynamic_cast<const ParseReferenceNode*>(node)) {
+        id.kind = AOTExprKind::PARSE_REF;
+        id.child_expr = prn->getLVExp();
+        return id;
+    }
 
-    // Runtime constant reference: look up in const_reverse_map before EXPR_TREE fallback
+    // Runtime constant references should be serialized as resolvable constant
+    // identities, not as EXPR_TREE blobs rooted at EN_CONST_REF.
+    if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+        std::string path;
+        if (!getAOTRuntimeConstantPath(rcr, const_reverse_map, path)) {
+            id.kind = AOTExprKind::GENERIC_EVAL;
+            id.ref1 = getAOTRuntimeConstantDiagnostic(rcr);
+            return id;
+        }
+        id.kind = AOTExprKind::RUNTIME_CONST_REF;
+        id.ref1 = std::move(path);
+        return id;
+    }
+
+    // Runtime constant value: look up in const_reverse_map before EXPR_TREE fallback
     if (const_reverse_map) {
         auto cit = const_reverse_map->find(node);
         if (cit != const_reverse_map->end()) {
@@ -11152,6 +11580,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 
     // Unsupported expression type; reject the function instead of falling back to source.
     id.kind = AOTExprKind::GENERIC_EVAL;
+    id.ref1 = "unsupported expression type '";
+    id.ref1 += node->getTypeName();
+    id.ref1 += "' (node type ";
+    id.ref1 += std::to_string(node->getType());
+    id.ref1 += ")";
     printd(3, "AOT: unsupported expression type '%s' for slot serialization\n", node->getTypeName());
     if (getenv("QORE_AOT_DEBUG")) {
         fprintf(stderr, "AOT: unsupported expression type '%s' (node type %d) for slot serialization\n",
@@ -11299,6 +11732,20 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         out.exprs[slot] = classifyExpression(bits, slots, const_reverse_map);
         if (out.exprs[slot].kind == AOTExprKind::GENERIC_EVAL) {
             out.has_unsupported_exprs = true;
+            std::string detail = "slot ";
+            detail += std::to_string(slot);
+            auto source_it = slots.expr_slot_sources.find(bits);
+            if (source_it != slots.expr_slot_sources.end()) {
+                detail += " from ";
+                detail += source_it->second;
+            }
+            if (!out.exprs[slot].ref1.empty()) {
+                detail += ": ";
+                detail += out.exprs[slot].ref1;
+            } else {
+                detail += ": unsupported expression";
+            }
+            out.unsupported_expr_details.push_back(std::move(detail));
             if (getenv("QORE_AOT_DEBUG")) {
                 QoreValue dbg_v;
                 memcpy(&dbg_v, &bits, sizeof(dbg_v));

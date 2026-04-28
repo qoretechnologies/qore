@@ -33,6 +33,8 @@
 #include <qore/Qore.h>
 #include <qore/ParseOptionMap.h>
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreAOTExprNodeRegistry.h"
+#include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreIR.h"
 
 #include <algorithm>
@@ -1064,6 +1066,628 @@ static void print_aot_feature_flags(uint64_t flags) {
     }
 }
 
+struct AOTSlotMapDumpSummary {
+    struct ExprTreeDetail {
+        std::string function;
+        uint8_t root_kind = 0;
+        uint8_t top_kind = 0;
+        uint8_t container_kind = 0;
+        uint16_t slot = 0xffff;
+        bool top_level = false;
+    };
+
+    uint32_t functions = 0;
+    uint64_t local_slots = 0;
+    uint64_t global_slots = 0;
+    uint64_t expr_slots = 0;
+    uint64_t stmt_slots = 0;
+    uint64_t regex_slots = 0;
+    uint64_t body_locals = 0;
+    uint64_t lv_path_slots = 0;
+    uint32_t unsupported_functions = 0;
+    uint32_t malformed_entries = 0;
+    std::map<uint8_t, uint64_t> top_expr_kinds;
+    std::map<uint8_t, uint64_t> all_expr_kinds;
+    std::map<uint8_t, uint64_t> expr_tree_root_kinds;
+    std::vector<ExprTreeDetail> expr_tree_details;
+    std::vector<std::string> expr_tree_functions;
+    std::vector<std::string> generic_eval_functions;
+};
+
+struct AOTDumpExprContext {
+    uint8_t top_kind = 0;
+    uint8_t container_kind = 0;
+    uint16_t slot = 0xffff;
+};
+
+static bool dump_need(const uint8_t* p, const uint8_t* end, size_t n) {
+    return p && end && p <= end && static_cast<size_t>(end - p) >= n;
+}
+
+static bool dump_skip_bytes(const uint8_t*& p, const uint8_t* end, size_t n) {
+    if (!dump_need(p, end, n)) {
+        return false;
+    }
+    p += n;
+    return true;
+}
+
+static bool dump_read_u8(const uint8_t*& p, const uint8_t* end, uint8_t& v) {
+    if (!dump_need(p, end, 1)) {
+        return false;
+    }
+    v = QoreAOTBinaryReader::readU8(p);
+    return true;
+}
+
+static bool dump_read_u16(const uint8_t*& p, const uint8_t* end, uint16_t& v) {
+    if (!dump_need(p, end, 2)) {
+        return false;
+    }
+    v = QoreAOTBinaryReader::readU16(p);
+    return true;
+}
+
+static bool dump_read_u32(const uint8_t*& p, const uint8_t* end, uint32_t& v) {
+    if (!dump_need(p, end, 4)) {
+        return false;
+    }
+    v = QoreAOTBinaryReader::readU32(p);
+    return true;
+}
+
+static bool dump_skip_string_ref(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end, const char** value = nullptr) {
+    if (!dump_need(p, end, 4)) {
+        return false;
+    }
+    const char* s = reader.readStringRef(p);
+    if (value) {
+        *value = s;
+    }
+    return true;
+}
+
+static const char* dump_aot_expr_kind_name(uint8_t kind) {
+    const auto* info = getAOTExprSlotKindInfo(kind);
+    if (info && info->name) {
+        return info->name;
+    }
+    switch (static_cast<AOTExprKind>(kind)) {
+        case AOTExprKind::HASH_LITERAL: return "HASH_LITERAL";
+        case AOTExprKind::HASH_DEREF: return "HASH_DEREF";
+        case AOTExprKind::PARSE_REF: return "PARSE_REF";
+        case AOTExprKind::LIST_LITERAL: return "LIST_LITERAL";
+        default: break;
+    }
+    return "UNKNOWN";
+}
+
+static const char* dump_aot_expr_node_kind_name(uint8_t kind) {
+    const auto* info = getAOTExprNodeKindInfo(kind);
+    return info && info->name ? info->name : "UNKNOWN";
+}
+
+static void dump_record_expr_tree_root(AOTSlotMapDumpSummary& summary, uint8_t root_kind,
+        const std::string& func_name, bool top_level, const AOTDumpExprContext& ctx) {
+    ++summary.expr_tree_root_kinds[root_kind];
+    summary.expr_tree_details.push_back({
+        func_name,
+        root_kind,
+        ctx.top_kind,
+        ctx.container_kind,
+        ctx.slot,
+        top_level,
+    });
+}
+
+static void dump_record_expr_kind(AOTSlotMapDumpSummary& summary, uint8_t kind,
+        bool top_level, const std::string& func_name) {
+    ++summary.all_expr_kinds[kind];
+    if (top_level) {
+        ++summary.top_expr_kinds[kind];
+    }
+    if (kind == static_cast<uint8_t>(AOTExprKind::EXPR_TREE)) {
+        if (std::find(summary.expr_tree_functions.begin(), summary.expr_tree_functions.end(),
+                func_name) == summary.expr_tree_functions.end()) {
+            summary.expr_tree_functions.push_back(func_name);
+        }
+    } else if (kind == static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL)) {
+        if (std::find(summary.generic_eval_functions.begin(), summary.generic_eval_functions.end(),
+                func_name) == summary.generic_eval_functions.end()) {
+            summary.generic_eval_functions.push_back(func_name);
+        }
+    }
+}
+
+static bool dump_skip_inline_expr(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end, AOTSlotMapDumpSummary& summary,
+        const std::string& func_name, const AOTDumpExprContext& ctx);
+
+static bool dump_skip_inline_expr_list(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end, uint8_t count,
+        AOTSlotMapDumpSummary& summary, const std::string& func_name,
+        const AOTDumpExprContext& ctx) {
+    for (uint8_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump expression list")) {
+            return false;
+        }
+        if (!dump_skip_inline_expr(reader, p, end, summary, func_name, ctx)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end, uint8_t kind, bool slot_form,
+        AOTSlotMapDumpSummary& summary, const std::string& func_name,
+        const AOTDumpExprContext& ctx) {
+    AOTDumpExprContext child_ctx = ctx;
+    child_ctx.container_kind = kind;
+    auto skip_n_args = [&](uint8_t count) {
+        return dump_skip_inline_expr_list(reader, p, end, count, summary, func_name,
+            child_ctx);
+    };
+
+    switch (static_cast<AOTExprKind>(kind)) {
+        case AOTExprKind::FUNC_CALL:
+            if (!dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if (!slot_form || (reader.getHeader().feature_flags & QORE_AOT_FEAT_FUNC_CALL_VARIANT) != 0) {
+                return dump_skip_string_ref(reader, p, end);
+            }
+            return true;
+
+        case AOTExprKind::SELF_METHOD_CALL:
+        case AOTExprKind::STATIC_VARREF:
+        case AOTExprKind::CONST_ENUM:
+        case AOTExprKind::BOUND_METHOD_REF:
+        case AOTExprKind::STATIC_METHOD_REF:
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_string_ref(reader, p, end);
+
+        case AOTExprKind::STATIC_METHOD_CALL: {
+            uint8_t nargs = 0;
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_string_ref(reader, p, end)
+                && dump_read_u8(p, end, nargs)
+                && skip_n_args(nargs);
+        }
+
+        case AOTExprKind::NEW_OBJECT:
+        case AOTExprKind::SCOPED_NEW_OBJECT:
+            if (slot_form) {
+                return dump_skip_string_ref(reader, p, end)
+                    && dump_skip_string_ref(reader, p, end);
+            } else {
+                uint8_t nargs = 0;
+                return dump_skip_string_ref(reader, p, end)
+                    && dump_read_u8(p, end, nargs)
+                    && skip_n_args(nargs);
+            }
+
+        case AOTExprKind::RUNTIME_CONST_REF:
+        case AOTExprKind::SELF_VARREF:
+        case AOTExprKind::LOCAL_VARREF:
+        case AOTExprKind::GLOBAL_VARREF:
+        case AOTExprKind::CONST_NUMBER:
+        case AOTExprKind::CONST_BINARY:
+        case AOTExprKind::CONST_STRING:
+        case AOTExprKind::FUNC_CALL_REF:
+        case AOTExprKind::SELF_METHOD_REF:
+            return dump_skip_string_ref(reader, p, end);
+
+        case AOTExprKind::CALL_REF:
+        case AOTExprKind::OBJ_METHOD_REF:
+        case AOTExprKind::CONST_NOTHING:
+        case AOTExprKind::CONST_NULL:
+        case AOTExprKind::GENERIC_EVAL:
+            return true;
+
+        case AOTExprKind::CONST_INT:
+        case AOTExprKind::CONST_FLOAT:
+            return slot_form ? dump_skip_string_ref(reader, p, end)
+                : dump_skip_bytes(p, end, 8);
+
+        case AOTExprKind::CONST_BOOL:
+            return slot_form ? dump_skip_string_ref(reader, p, end)
+                : dump_skip_bytes(p, end, 1);
+
+        case AOTExprKind::HASHDECL_NEW:
+        case AOTExprKind::COMPLEX_HASH_NEW:
+        case AOTExprKind::COMPLEX_LIST_NEW: {
+            uint8_t nargs = 0;
+            return dump_skip_string_ref(reader, p, end)
+                && dump_read_u8(p, end, nargs)
+                && skip_n_args(nargs);
+        }
+
+        case AOTExprKind::HASH_LITERAL: {
+            uint8_t count = 0;
+            if (!dump_read_u8(p, end, count)) {
+                return false;
+            }
+            for (uint8_t i = 0; i < count; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump hash literal")) {
+                    return false;
+                }
+                if (!dump_skip_string_ref(reader, p, end)
+                        || !dump_skip_inline_expr(reader, p, end, summary, func_name,
+                            child_ctx)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case AOTExprKind::LIST_LITERAL: {
+            uint8_t count = 0;
+            return dump_read_u8(p, end, count) && skip_n_args(count);
+        }
+
+        case AOTExprKind::HASH_DEREF:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::PARSE_REF:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::CAST_HASHDECL: {
+            if (!dump_skip_string_ref(reader, p, end) || !dump_skip_bytes(p, end, 1)) {
+                return false;
+            }
+            if (!slot_form) {
+                uint8_t has_inner = 0;
+                if (!dump_read_u8(p, end, has_inner)) {
+                    return false;
+                }
+                if (has_inner && !dump_skip_inline_expr(reader, p, end, summary, func_name,
+                        child_ctx)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case AOTExprKind::CAST_COMPLEX_HASH:
+        case AOTExprKind::CAST_COMPLEX_LIST:
+        case AOTExprKind::CAST_CLASS:
+        case AOTExprKind::CAST_ENUM:
+            return dump_skip_string_ref(reader, p, end) && dump_skip_bytes(p, end, 1);
+
+        case AOTExprKind::DOT_EVAL_TARGET: {
+            if (!dump_skip_string_ref(reader, p, end)
+                    || !dump_skip_string_ref(reader, p, end)
+                    || !dump_skip_bytes(p, end, 1)) {
+                return false;
+            }
+            if (!slot_form) {
+                uint8_t nargs = 0;
+                return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                    && dump_read_u8(p, end, nargs)
+                    && skip_n_args(nargs);
+            }
+            return true;
+        }
+
+        case AOTExprKind::OBJ_METHOD_REF_EXPR:
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::CLOSURE_CREATE: {
+            if (!dump_skip_string_ref(reader, p, end)
+                    || !dump_skip_string_ref(reader, p, end)
+                    || !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            uint16_t nparams = 0;
+            if (!dump_read_u16(p, end, nparams)) {
+                return false;
+            }
+            for (uint16_t i = 0; i < nparams; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump closure parameters")) {
+                    return false;
+                }
+                if (!dump_skip_string_ref(reader, p, end)
+                        || !dump_skip_string_ref(reader, p, end)) {
+                    return false;
+                }
+                uint8_t has_default = 0;
+                if (!dump_read_u8(p, end, has_default)) {
+                    return false;
+                }
+                if (has_default) {
+                    std::string value_error;
+                    QoreValue dv = reader.readValue(p, end, value_error);
+                    dv.discard(nullptr);
+                    if (!value_error.empty()) {
+                        return false;
+                    }
+                }
+            }
+            if (!dump_skip_bytes(p, end, 1)) {
+                return false;
+            }
+            uint16_t ncaptured = 0;
+            if (!dump_read_u16(p, end, ncaptured)) {
+                return false;
+            }
+            for (uint16_t i = 0; i < ncaptured; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump closure captures")) {
+                    return false;
+                }
+                if (!dump_skip_string_ref(reader, p, end) || !dump_skip_bytes(p, end, 4)) {
+                    return false;
+                }
+            }
+            uint8_t has_ir = 0;
+            if (!dump_read_u8(p, end, has_ir)) {
+                return false;
+            }
+            if (has_ir) {
+                uint32_t ir_size = 0;
+                if (!dump_read_u32(p, end, ir_size) || !dump_skip_bytes(p, end, ir_size)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case AOTExprKind::EXPR_TREE: {
+            uint32_t blob_size = 0;
+            if (!dump_read_u32(p, end, blob_size)) {
+                return false;
+            }
+            if (blob_size > 0 && dump_need(p, end, blob_size)) {
+                dump_record_expr_tree_root(summary, *p, func_name, slot_form, ctx);
+            }
+            return dump_skip_bytes(p, end, blob_size);
+        }
+    }
+
+    return false;
+}
+
+static bool dump_skip_inline_expr(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end, AOTSlotMapDumpSummary& summary,
+        const std::string& func_name, const AOTDumpExprContext& ctx) {
+    uint8_t kind = 0;
+    if (!dump_read_u8(p, end, kind)) {
+        return false;
+    }
+    dump_record_expr_kind(summary, kind, false, func_name);
+    return dump_skip_expr_payload(reader, p, end, kind, false, summary, func_name, ctx);
+}
+
+static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
+        AOTSlotMapDumpSummary& summary, std::string& error) {
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* p = reader.getSectionData(*sec);
+    if (!p) {
+        error = "invalid SLOT_MAPS section";
+        return false;
+    }
+    const uint8_t* end = p + sec->size;
+    uint32_t num_funcs = 0;
+    if (!dump_read_u32(p, end, num_funcs)) {
+        error = "truncated SLOT_MAPS header";
+        return false;
+    }
+    summary.functions = num_funcs;
+
+    for (uint32_t f = 0; f < num_funcs; ++f) {
+        if (f && !(f % 100) && qore_check_cancel(nullptr, "AOT dump slot maps")) {
+            error = "AOT dump slot maps cancelled";
+            return false;
+        }
+        const uint8_t* entry_start = p;
+        uint32_t entry_size = 0;
+        if (!dump_read_u32(p, end, entry_size)) {
+            error = "truncated SLOT_MAPS entry header";
+            return false;
+        }
+        if (static_cast<size_t>(end - p) < entry_size) {
+            error = "SLOT_MAPS entry overruns section";
+            return false;
+        }
+        const uint8_t* entry_end = p + entry_size;
+        const char* fname = nullptr;
+        if (!dump_skip_string_ref(reader, p, entry_end, &fname)) {
+            ++summary.malformed_entries;
+            p = entry_start + 4 + entry_size;
+            continue;
+        }
+        std::string func_name = fname && *fname ? fname : "(unnamed)";
+
+        uint16_t num_locals = 0, num_globals = 0, num_exprs = 0, num_stmts = 0;
+        uint16_t num_regex = 0, num_body_locals = 0;
+        uint8_t has_unsupported = 0, num_lv_paths = 0;
+        if (!dump_read_u16(p, entry_end, num_locals)
+                || !dump_read_u16(p, entry_end, num_globals)
+                || !dump_read_u16(p, entry_end, num_exprs)
+                || !dump_read_u16(p, entry_end, num_stmts)
+                || !dump_read_u16(p, entry_end, num_regex)
+                || !dump_read_u16(p, entry_end, num_body_locals)
+                || !dump_read_u8(p, entry_end, has_unsupported)
+                || !dump_read_u8(p, entry_end, num_lv_paths)) {
+            ++summary.malformed_entries;
+            p = entry_start + 4 + entry_size;
+            continue;
+        }
+
+        summary.local_slots += num_locals;
+        summary.global_slots += num_globals;
+        summary.expr_slots += num_exprs;
+        summary.stmt_slots += num_stmts;
+        summary.regex_slots += num_regex;
+        summary.body_locals += num_body_locals;
+        summary.lv_path_slots += num_lv_paths;
+        if (has_unsupported) {
+            ++summary.unsupported_functions;
+        }
+
+        bool malformed = false;
+        for (uint16_t i = 0; i < num_locals && !malformed; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump local slots")) {
+                error = "AOT dump local slots cancelled";
+                return false;
+            }
+            malformed = !dump_skip_string_ref(reader, p, entry_end)
+                || !dump_skip_string_ref(reader, p, entry_end)
+                || !dump_skip_bytes(p, entry_end, 3);
+        }
+        for (uint16_t i = 0; i < num_globals && !malformed; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump global slots")) {
+                error = "AOT dump global slots cancelled";
+                return false;
+            }
+            malformed = !dump_skip_string_ref(reader, p, entry_end)
+                || !dump_skip_string_ref(reader, p, entry_end)
+                || !dump_skip_bytes(p, entry_end, 1);
+        }
+        for (uint16_t i = 0; i < num_exprs && !malformed; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump expression slots")) {
+                error = "AOT dump expression slots cancelled";
+                return false;
+            }
+            uint8_t kind = 0;
+            if (!dump_read_u8(p, entry_end, kind)) {
+                malformed = true;
+                break;
+            }
+            dump_record_expr_kind(summary, kind, true, func_name);
+            AOTDumpExprContext ctx;
+            ctx.top_kind = kind;
+            ctx.container_kind = kind;
+            ctx.slot = i;
+            if (!dump_skip_expr_payload(reader, p, entry_end, kind, true, summary, func_name, ctx)) {
+                malformed = true;
+                break;
+            }
+        }
+        if (malformed) {
+            ++summary.malformed_entries;
+        }
+        p = entry_start + 4 + entry_size;
+    }
+
+    return true;
+}
+
+static void print_aot_slot_map_summary(const QoreAOTBinaryReader& reader) {
+    AOTSlotMapDumpSummary summary;
+    std::string error;
+    if (!summarize_aot_slot_maps(reader, summary, error)) {
+        printf("    slot maps: error: %s\n", error.c_str());
+        return;
+    }
+    if (!summary.functions) {
+        printf("    slot maps: (none)\n");
+        return;
+    }
+
+    uint64_t top_expr_tree = summary.top_expr_kinds[static_cast<uint8_t>(AOTExprKind::EXPR_TREE)];
+    uint64_t all_expr_tree = summary.all_expr_kinds[static_cast<uint8_t>(AOTExprKind::EXPR_TREE)];
+    uint64_t top_generic = summary.top_expr_kinds[static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL)];
+    uint64_t all_generic = summary.all_expr_kinds[static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL)];
+
+    printf("    slot maps: functions=%u locals=%llu globals=%llu expr-slots=%llu stmts=%llu "
+           "regex=%llu body-locals=%llu lvpaths=%llu unsupported-functions=%u malformed=%u\n",
+        summary.functions,
+        static_cast<unsigned long long>(summary.local_slots),
+        static_cast<unsigned long long>(summary.global_slots),
+        static_cast<unsigned long long>(summary.expr_slots),
+        static_cast<unsigned long long>(summary.stmt_slots),
+        static_cast<unsigned long long>(summary.regex_slots),
+        static_cast<unsigned long long>(summary.body_locals),
+        static_cast<unsigned long long>(summary.lv_path_slots),
+        summary.unsupported_functions,
+        summary.malformed_entries);
+    printf("      fallback exprs: EXPR_TREE=%llu top/%llu total, GENERIC_EVAL=%llu top/%llu total\n",
+        static_cast<unsigned long long>(top_expr_tree),
+        static_cast<unsigned long long>(all_expr_tree),
+        static_cast<unsigned long long>(top_generic),
+        static_cast<unsigned long long>(all_generic));
+
+    auto print_limited_names = [](const char* label, const std::vector<std::string>& values) {
+        if (values.empty()) {
+            return;
+        }
+        printf("      %s:", label);
+        size_t limit = std::min<size_t>(values.size(), 8);
+        for (size_t i = 0; i < limit; ++i) {
+            printf("%s%s", i ? ", " : " ", values[i].c_str());
+        }
+        if (values.size() > limit) {
+            printf(", ... +%zu", values.size() - limit);
+        }
+        printf("\n");
+    };
+    print_limited_names("EXPR_TREE functions", summary.expr_tree_functions);
+    print_limited_names("GENERIC_EVAL functions", summary.generic_eval_functions);
+
+    if (!summary.expr_tree_root_kinds.empty()) {
+        printf("      EXPR_TREE root nodes:\n");
+        size_t printed = 0;
+        for (const auto& [kind, count] : summary.expr_tree_root_kinds) {
+            if (++printed % 100 == 0 && qore_check_cancel(nullptr, "AOT dump root-kind output")) {
+                printf("        ... output cancelled\n");
+                break;
+            }
+            printf("        %-20s (%3u): %llu\n", dump_aot_expr_node_kind_name(kind), kind,
+                static_cast<unsigned long long>(count));
+        }
+    }
+
+    if (dump_sections && !summary.top_expr_kinds.empty()) {
+        if (!summary.expr_tree_details.empty()) {
+            printf("      EXPR_TREE details:\n");
+            size_t printed = 0;
+            for (const auto& detail : summary.expr_tree_details) {
+                if (++printed % 100 == 0 && qore_check_cancel(nullptr, "AOT dump expression details output")) {
+                    printf("        ... output cancelled\n");
+                    break;
+                }
+                printf("        %s %-20s (%3u) top=%s slot=%u container=%s: %s\n",
+                    detail.top_level ? "top   " : "nested",
+                    dump_aot_expr_node_kind_name(detail.root_kind),
+                    detail.root_kind,
+                    dump_aot_expr_kind_name(detail.top_kind),
+                    detail.slot == 0xffff ? 0 : detail.slot,
+                    dump_aot_expr_kind_name(detail.container_kind),
+                    detail.function.c_str());
+            }
+        }
+        printf("      top expr slot kinds:\n");
+        size_t printed = 0;
+        for (const auto& [kind, count] : summary.top_expr_kinds) {
+            if (++printed % 100 == 0 && qore_check_cancel(nullptr, "AOT dump top-kind output")) {
+                printf("        ... output cancelled\n");
+                break;
+            }
+            printf("        %-20s (%3u): %llu\n", dump_aot_expr_kind_name(kind), kind,
+                static_cast<unsigned long long>(count));
+        }
+    }
+    if (dump_sections && summary.all_expr_kinds.size() != summary.top_expr_kinds.size()) {
+        printf("      all encoded expr kinds:\n");
+        size_t printed = 0;
+        for (const auto& [kind, count] : summary.all_expr_kinds) {
+            if (++printed % 100 == 0 && qore_check_cancel(nullptr, "AOT dump encoded-kind output")) {
+                printf("        ... output cancelled\n");
+                break;
+            }
+            printf("        %-20s (%3u): %llu\n", dump_aot_expr_kind_name(kind), kind,
+                static_cast<unsigned long long>(count));
+        }
+    }
+}
+
 static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index) {
     QoreAOTBinaryReader reader;
     std::string error;
@@ -1141,6 +1765,8 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
         printf("    build info: error: %s\n", error.c_str());
         error.clear();
     }
+
+    print_aot_slot_map_summary(reader);
 
     printf("    sections: %u\n", reader.getSectionCount());
     if (dump_sections) {

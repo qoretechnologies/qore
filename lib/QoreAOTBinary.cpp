@@ -68,6 +68,8 @@
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 
+#include <qore/QoreObject.h>
+
 #include <cassert>
 #include <cstring>
 #include <deque>
@@ -529,6 +531,12 @@ static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& 
     auto it = crm.find(node);
     if (it == crm.end() || aot_constant_reverse_path_is_better(it->second, path)) {
         crm[node] = path;
+        if (getenv("QORE_AOT_DEBUG_CONST_MAP")) {
+            if (auto* obj = dynamic_cast<const QoreObject*>(node)) {
+                fprintf(stderr, "AOT const map object: class=%s ptr=%p path=%s\n",
+                    obj->getClassName(), static_cast<const void*>(node), path.c_str());
+            }
+        }
     }
 
     if (v.getType() == NT_HASH) {
@@ -636,9 +644,20 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
     if (!path || !*path) {
         return QoreValue();
     }
+    const char* const_trace = getenv("QORE_AOT_CONST_TRACE");
+    bool trace_const = const_trace && (!*const_trace || strstr(path, const_trace));
+    if (trace_const) {
+        fprintf(stderr, "[aot-init] resolve constant path pgm=%p path=%s defer=%d wrap=%d\n",
+            (void*)pgm, path, (int)defer_if_pending, (int)wrap_top_level_if_ready);
+    }
 
     if (!aot_is_encoded_constant_path(path)) {
         ConstantEntry* ce = aot_resolve_constant_by_fqn(pgm, path);
+        if (trace_const) {
+            fprintf(stderr, "[aot-init] resolve constant simple path=%s ce=%p has=%d pending=%d\n",
+                path, (void*)ce, ce ? (int)ce->hasValue() : -1,
+                ce ? (int)ce->aot_shell_pending : -1);
+        }
         if (!ce) {
             return QoreValue();
         }
@@ -664,6 +683,11 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
     pos += base_len;
 
     ConstantEntry* ce = aot_resolve_constant_by_fqn(pgm, base.c_str());
+    if (trace_const) {
+        fprintf(stderr, "[aot-init] resolve constant encoded path=%s base=%s ce=%p has=%d pending=%d\n",
+            path, base.c_str(), (void*)ce, ce ? (int)ce->hasValue() : -1,
+            ce ? (int)ce->aot_shell_pending : -1);
+    }
     if (!ce) {
         return QoreValue();
     }
@@ -678,7 +702,19 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
     }
 
     QoreValue cur = ce->getReferencedValue();
-    return aot_resolve_constant_path_tail(cur, encoded, pos);
+    QoreValue rv = aot_resolve_constant_path_tail(cur, encoded, pos);
+    if (trace_const) {
+        fprintf(stderr, "[aot-init] resolve constant result path=%s type=%s has_node=%d\n",
+            path, rv.getTypeName(), (int)rv.hasNode());
+        if (rv.getType() == NT_HASH) {
+            const QoreHashNode* h = rv.get<const QoreHashNode>();
+            bool exists = false;
+            QoreValue rt = h ? h->getKeyValueExistence("return_type", exists) : QoreValue();
+            fprintf(stderr, "[aot-init] resolve constant result return_type exists=%d type=%s has_node=%d\n",
+                (int)exists, rt.getTypeName(), (int)rt.hasNode());
+        }
+    }
+    return rv;
 }
 
 // ---- QoreAOTBinaryWriter ----
@@ -4205,8 +4241,10 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
 
     for (auto& func : funcs) {
         AOTConstantReverseMap filtered_crm;
-        const AOTConstantReverseMap* func_const_reverse_map = const_reverse_map;
-        if (const_reverse_map && (!func.const_reverse_map_exclude_fqns.empty()
+        const AOTConstantReverseMap* func_const_reverse_map =
+            func.const_reverse_map_override ? func.const_reverse_map_override.get() : const_reverse_map;
+        if (!func.const_reverse_map_override && const_reverse_map
+                && (!func.const_reverse_map_exclude_fqns.empty()
                 || !func.const_reverse_map_exclude_direct_fqn.empty())) {
             filtered_crm = aot_filter_constant_reverse_map(*const_reverse_map,
                 func.const_reverse_map_exclude_fqns, func.const_reverse_map_exclude_direct_fqn);
@@ -4245,6 +4283,23 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
 
         // Expression slot entries (in slot order)
         for (auto& expr : func.slot_ids.exprs) {
+            if (const char* trace = getenv("QORE_AOT_SLOT_TRACE")) {
+                bool match = !*trace;
+                if (!match && func.name.find(trace) != std::string::npos) {
+                    match = true;
+                }
+                if (!match && expr.ref1.find(trace) != std::string::npos) {
+                    match = true;
+                }
+                if (!match && expr.ref2.find(trace) != std::string::npos) {
+                    match = true;
+                }
+                if (match) {
+                    fprintf(stderr, "[aot-slot] func=%s kind=%u ref1=%s ref2=%s\n",
+                        func.name.c_str(), static_cast<unsigned>(expr.kind),
+                        expr.ref1.c_str(), expr.ref2.c_str());
+                }
+            }
             writer.writeU8(static_cast<uint8_t>(expr.kind));
 
             // Use registry dispatch for expression slot metadata serialization
@@ -4741,6 +4796,9 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     }
     if (dynamic_cast<const QoreIRBackgroundInstruction*>(inst)) {
         return QoreIRInstGroup::Background;
+    }
+    if (dynamic_cast<const QoreIRContextRefInstruction*>(inst)) {
+        return QoreIRInstGroup::ContextRef;
     }
     if (dynamic_cast<const QoreIRSummarizeInstruction*>(inst)) {
         return QoreIRInstGroup::Summarize;
@@ -7076,7 +7134,7 @@ static bool readAndSetupVariantSignature(
                     *pp->RootNS, fname);
                 if (fe) {
                     FunctionCallNode* fcn = new FunctionCallNode(
-                        &loc_builtin, fe, (QoreListNode*)nullptr, pgm);
+                        &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
                     param_defaults[j] = QoreValue(fcn);
                 } else {
                     printd(0, "AOT deser: cannot resolve default expression function '%s'\n",

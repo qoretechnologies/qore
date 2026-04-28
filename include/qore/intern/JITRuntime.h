@@ -153,6 +153,14 @@ uint64_t qore_rt_background_dot_eval_name_call_aot(const char* method_name, uint
 uint64_t qore_rt_background_dot_eval_name_call_aot_throwing(const char* method_name,
     uint64_t recv_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Native AOT background call-reference/closure invocation with pre-evaluated args.
+uint64_t qore_rt_background_call_ref_value_aot(uint64_t callee_bits, uint64_t* args,
+    int nargs, ExceptionSink* xsink);
+
+//! Throwing wrapper for EH paths.
+uint64_t qore_rt_background_call_ref_value_aot_throwing(uint64_t callee_bits,
+    uint64_t* args, int nargs, ExceptionSink* xsink);
+
 //! Get exception info hash from ExceptionSink; returns NaN-boxed QoreValue (hash or NOTHING).
 //! Also clears the exception from the sink and sets td->catchException for rethrow support.
 uint64_t qore_rt_catch_exception(ExceptionSink* xsink);
@@ -400,12 +408,23 @@ class RuntimeConstantRefNode;
 //! Load a runtime constant value; returns NaN-boxed QoreValue
 uint64_t qore_rt_load_constant(const RuntimeConstantRefNode* node, ExceptionSink* xsink);
 
+//! Load a runtime constant or direct constant value via AOT context slot
+uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Load a static class variable by class path and variable name; returns NaN-boxed QoreValue
+uint64_t qore_rt_load_static_var_by_path(const char* class_path, const char* var_name, ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_by_path_throwing(const char* class_path, const char* var_name,
+        ExceptionSink* xsink);
+
 // --- Closure creation helper ---
 
 class QoreClosureParseNode;
 
 //! Create a closure/lambda; returns NaN-boxed QoreValue
 uint64_t qore_rt_create_closure(const QoreClosureParseNode* cn, ExceptionSink* xsink);
+
+//! Create a closure/lambda via AOT context slot
+uint64_t qore_rt_create_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 // --- Reference creation helpers ---
 
@@ -414,11 +433,34 @@ class ParseReferenceNode;
 //! Create a call reference (function/static method); returns NaN-boxed QoreValue
 uint64_t qore_rt_create_call_ref(uint64_t expr_bits, ExceptionSink* xsink);
 
+//! Create a static method call reference from serialized AOT metadata.
+uint64_t qore_rt_create_static_method_call_ref_aot(const char* class_path, const char* method_name,
+    ExceptionSink* xsink);
+uint64_t qore_rt_create_static_method_call_ref_aot_throwing(const char* class_path, const char* method_name,
+    ExceptionSink* xsink);
+
+//! Create a function call reference from serialized AOT metadata.
+uint64_t qore_rt_create_function_call_ref_aot(const char* function_name, ExceptionSink* xsink);
+uint64_t qore_rt_create_function_call_ref_aot_throwing(const char* function_name, ExceptionSink* xsink);
+
 //! Create a method reference; returns NaN-boxed QoreValue
 uint64_t qore_rt_create_method_ref(uint64_t expr_bits, ExceptionSink* xsink);
 
+//! Create a self method reference by method name; returns NaN-boxed QoreValue
+uint64_t qore_rt_create_self_method_ref_aot(const char* method_name, ExceptionSink* xsink);
+uint64_t qore_rt_create_self_method_ref_aot_throwing(const char* method_name, ExceptionSink* xsink);
+
+//! Create an object method reference from an evaluated object expression; returns NaN-boxed QoreValue
+uint64_t qore_rt_create_object_method_ref_aot(uint64_t object_bits, const char* method_name,
+    ExceptionSink* xsink);
+uint64_t qore_rt_create_object_method_ref_aot_throwing(uint64_t object_bits, const char* method_name,
+    ExceptionSink* xsink);
+
 //! Create a parse reference (\var); returns NaN-boxed QoreValue
 uint64_t qore_rt_create_parse_ref(const ParseReferenceNode* node, ExceptionSink* xsink);
+
+//! Create a parse reference via AOT context slot
+uint64_t qore_rt_create_parse_ref_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 // --- Typed container construction helpers ---
 
@@ -429,11 +471,20 @@ class NewComplexListNode;
 //! Create a new hashdecl instance; returns NaN-boxed QoreValue
 uint64_t qore_rt_new_hash_decl(const NewHashDeclNode* node, ExceptionSink* xsink);
 
+//! Create a new hashdecl instance via AOT context slot
+uint64_t qore_rt_new_hash_decl_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
 //! Create a new typed hash; returns NaN-boxed QoreValue
 uint64_t qore_rt_new_complex_hash(const NewComplexHashNode* node, ExceptionSink* xsink);
 
+//! Create a new typed hash via AOT context slot
+uint64_t qore_rt_new_complex_hash_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
 //! Create a new typed list; returns NaN-boxed QoreValue
 uint64_t qore_rt_new_complex_list(const NewComplexListNode* node, ExceptionSink* xsink);
+
+//! Create a new typed list via AOT context slot
+uint64_t qore_rt_new_complex_list_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 class VarRefNewObjectNode;
 
@@ -491,6 +542,19 @@ uint64_t qore_rt_context_init(const char* name, uint64_t exp_bits, uint64_t wher
 uint64_t qore_rt_context_init_throwing(const char* name, uint64_t exp_bits, uint64_t where_bits,
     uint64_t sort_bits, int sort_type, ExceptionSink* xsink);
 
+//! Evaluate `%field` / `context:field` against the thread-local context stack.
+uint64_t qore_rt_context_ref_at(const char* key, int32_t stack_offset, ExceptionSink* xsink);
+
+//! Throwing wrapper for context references.
+uint64_t qore_rt_context_ref_at_throwing(const char* key, int32_t stack_offset,
+    ExceptionSink* xsink);
+
+//! Evaluate `%%` and return a new hash for the current context row.
+uint64_t qore_rt_context_row(ExceptionSink* xsink);
+
+//! Throwing wrapper for context row references.
+uint64_t qore_rt_context_row_throwing(ExceptionSink* xsink);
+
 //! Get the iteration count (max_pos) from a Context state handle.  Nothrow.
 int64_t qore_rt_context_max_pos(uint64_t state_ptr);
 
@@ -511,6 +575,10 @@ uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSi
 //! Index into a list value; returns NaN-boxed result (with ref).
 //! Returns NOTHING if value is not a list or index is out of bounds.
 uint64_t qore_rt_list_index_access(uint64_t list_val, int64_t index, ExceptionSink* xsink);
+
+//! Extract the value assigned to one LHS entry in a list assignment.
+uint64_t qore_rt_list_assignment_value(uint64_t value, int64_t index, ExceptionSink* xsink);
+uint64_t qore_rt_list_assignment_value_throwing(uint64_t value, int64_t index, ExceptionSink* xsink);
 
 //! Concatenate two string values; returns NaN-boxed new string (with ref).
 //! Falls back to qore_rt_add_any if either operand is not a string.

@@ -302,6 +302,9 @@ public:
     QoreIRInstruction* createContextDestroy(QoreIRValue state, const QoreProgramLocation* loc = nullptr);
     QoreIRBackquoteInstruction* createBackquote(const char* command,
         const QoreProgramLocation* loc = nullptr);
+    QoreIRContextRefInstruction* createContextRef(const char* key, int32_t stack_offset,
+        const QoreProgramLocation* loc = nullptr);
+    QoreIRInstruction* createContextRow(const QoreProgramLocation* loc = nullptr);
     QoreIRFindInstruction* createFind(const QoreValue& exp, const QoreValue& find_exp,
         const QoreValue& where, const QoreProgramLocation* loc = nullptr);
     QoreIRSummarizeInstruction* createSummarize(const SummarizeStatement* stmt,

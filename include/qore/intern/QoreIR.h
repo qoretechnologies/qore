@@ -640,7 +640,12 @@ enum class QoreIROpcode : uint16_t {
     //! never has to be serialized as EXPR_TREE.
     Find                = 365,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (366, 367, ...)
+    //! Evaluate context references without serializing ContextrefNode /
+    //! ContextRowNode expression trees.
+    ContextRef          = 366,
+    ContextRow          = 367,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (368, 369, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -648,8 +653,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::Find);
-static_assert(QORE_IR_MAX_OPCODE == 365, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ContextRow);
+static_assert(QORE_IR_MAX_OPCODE == 367, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1921,6 +1926,19 @@ public:
     }
 
     std::string command;
+};
+
+//! Context reference expression instruction: `%field` or `name:field`.
+class QoreIRContextRefInstruction : public QoreIRInstruction {
+public:
+    QoreIRContextRefInstruction(std::string n_key, int32_t n_stack_offset)
+            : QoreIRInstruction(QoreIROpcode::ContextRef),
+              key(std::move(n_key)),
+              stack_offset(n_stack_offset) {
+    }
+
+    std::string key;
+    int32_t stack_offset = 0;
 };
 
 //! Find expression instruction — wraps find/source/where subexpressions.

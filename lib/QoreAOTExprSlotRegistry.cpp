@@ -31,6 +31,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreParseListNode.h"
+#include "qore/intern/QoreParseHashNode.h"
 
 class UserClosureVariant;
 QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant);
@@ -122,14 +123,14 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 20: CONST_STRING
     {"CONST_STRING", 20, true, write_slot_CONST_STRING, "String constant"},
 
-    // 21: HASH_LITERAL (unsupported in slot metadata)
-    {nullptr, 21, false, nullptr, "Hash literal"},
+    // 21: HASH_LITERAL
+    {"HASH_LITERAL", 21, true, write_slot_HASH_LITERAL, "Hash literal"},
 
-    // 22: HASH_DEREF (unsupported in slot metadata)
-    {nullptr, 22, false, nullptr, "Hash/object dereference"},
+    // 22: HASH_DEREF
+    {"HASH_DEREF", 22, true, write_slot_HASH_DEREF, "Hash/object dereference"},
 
-    // 23: PARSE_REF (unsupported in slot metadata)
-    {nullptr, 23, false, nullptr, "Parse reference"},
+    // 23: PARSE_REF
+    {"PARSE_REF", 23, true, write_slot_PARSE_REF, "Parse reference"},
 
     // 24: CAST_HASHDECL
     {"CAST_HASHDECL", 24, true, write_slot_CAST, "Hashdecl cast"},
@@ -158,8 +159,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 32: CONST_NOTHING
     {"CONST_NOTHING", 32, true, write_slot_CONST_NOTHING, "Nothing constant"},
 
-    // 33: LIST_LITERAL (unsupported in slot metadata)
-    {nullptr, 33, false, nullptr, "List literal"},
+    // 33: LIST_LITERAL
+    {"LIST_LITERAL", 33, true, write_slot_LIST_LITERAL, "List literal"},
 
     // 34: CONST_NULL
     {"CONST_NULL", 34, true, write_slot_CONST_NULL, "NULL constant"},

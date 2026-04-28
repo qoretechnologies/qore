@@ -302,7 +302,12 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     // re-evaluate the full AST expression — double-executing side effects
                     // in arguments (e.g. assertTrue(obj.doWork()) would call doWork()
                     // twice).
-                    if (auto* cast = dynamic_cast<const QoreCastOperatorNode*>(node)) {
+                    if (dynamic_cast<const LValueOperatorNode*>(node)) {
+                        // Lvalue operators have dedicated lowering that preserves
+                        // mutation semantics and emits LValuePath instructions
+                        // where possible. Pre-evaluating their operands here
+                        // would force a generic Invoke of the original AST node.
+                    } else if (auto* cast = dynamic_cast<const QoreCastOperatorNode*>(node)) {
                         const QoreSingleExpressionOperatorNode<>* cast_node = cast;
                         QoreIRValue value = lowerExpression(cast_node->getExp(), error);
                         if (!value.isValid()) {
@@ -3702,21 +3707,15 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         }
         return builder.createCreateCallRef(expr, loc)->result;
     }
-    // Context references are a legacy feature - delegate to AST evaluation
     if (auto* ctx_ref = dynamic_cast<const ContextrefNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, ctx_ref->loc, error);
+        return builder.createContextRef(ctx_ref->str, 0, ctx_ref->loc)->result;
     }
     if (auto* complex_ctx_ref = dynamic_cast<const ComplexContextrefNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, complex_ctx_ref->loc, error);
+        return builder.createContextRef(complex_ctx_ref->member,
+            complex_ctx_ref->stack_offset, complex_ctx_ref->loc)->result;
     }
-    // `%%` — whole current context row as a hash.  Route through the generic
-    // Call opcode like the other context references; its evalImpl dispatches
-    // through get_context_stack()->getRow().
     if (auto* ctx_row = dynamic_cast<const ContextRowNode*>(node)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, ctx_row->loc, error);
+        return builder.createContextRow(ctx_row->loc)->result;
     }
     if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(node)) {
         if (!exception_stack.empty()) {
@@ -3882,6 +3881,14 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
     }
     // Object method references (e.g., \methodName())
     if (auto* mref = dynamic_cast<const AbstractParseObjectMethodReferenceNode*>(node)) {
+        std::vector<QoreIRValue> operands;
+        if (auto* omref = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
+            QoreIRValue obj = lowerExpression(omref->getExp(), error);
+            if (!obj.isValid()) {
+                return QoreIRValue();
+            }
+            operands.push_back(obj);
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3889,12 +3896,14 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, mref->loc);
+            auto* inst = builder.createInvoke(expr, operands, normal_block, handler, mref->loc);
             inst->invoke_opcode = QoreIROpcode::CreateMethodRef;
             builder.setBlock(normal_block);
             return inst->result;
         }
-        return builder.createCreateMethodRef(expr, mref->loc)->result;
+        auto* inst = builder.createCreateMethodRef(expr, mref->loc);
+        inst->operands = operands;
+        return inst->result;
     }
     // Pre-evaluated hash/list constants (e.g., const hashes/lists containing runtime objects)
     if (dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node)) {
@@ -7619,38 +7628,86 @@ QoreIRValue QoreIRLowering::lowerSplice(const QoreValue& expr, std::string& erro
     }
     // Range lvalue (e.g., splice list[0..2], offset, len) - delegate entire expression to AST
     if (isRangeLValue(lvalue)) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
-    }
-    if (!guardLValueBase(lvalue, error)) {
+        error = "unsupported range lvalue for native splice lowering";
         return QoreIRValue();
     }
+
+    std::vector<LVPathStep> lv_path;
+    std::vector<QoreValue> dynamic_operands;
+    if (!extractLValuePath(lvalue, lv_path, dynamic_operands, /*allow_slice=*/false)
+            || lv_path.empty()) {
+        error = "unsupported lvalue for native splice lowering";
+        return QoreIRValue();
+    }
+
     QoreIRValue offset = lowerExpression(op->getOffset(), error);
     if (!offset.isValid()) {
         return QoreIRValue();
     }
-    QoreIRValue length = lowerExpression(op->getLength(), error);
+    QoreIRValue length = op->getLength().isNothing()
+        ? builder.createConstNothing(op->loc)->result
+        : lowerExpression(op->getLength(), error);
     if (!length.isValid()) {
         return QoreIRValue();
     }
-    QoreIRValue replacement = lowerExpression(op->getNewValue(), error);
+    QoreIRValue replacement = op->getNewValue().isNothing()
+        ? builder.createConstNothing(op->loc)->result
+        : lowerExpression(op->getNewValue(), error);
     if (!replacement.isValid()) {
         return QoreIRValue();
     }
-    if (!exception_stack.empty()) {
-        QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
-        if (!normal_block) {
-            error = "IR builder failed to create invoke continuation block";
+
+    std::vector<QoreIRValue> dyn_vals;
+    size_t lowered_dyn = 0;
+    for (auto& dop : dynamic_operands) {
+        if (++lowered_dyn % 100 == 0 && qore_check_cancel(nullptr, "IR splice lvalue operand lowering")) {
+            error = "IR splice lvalue operand lowering cancelled";
             return QoreIRValue();
         }
-        QoreIRBasicBlock* handler = exception_stack.back();
-        auto* inst = builder.createInvoke(expr, {offset, length, replacement}, normal_block, handler, op->loc);
-        inst->invoke_opcode = QoreIROpcode::SpliceLValue;
-        builder.setBlock(normal_block);
-        return inst->result;
+        QoreIRValue dv = lowerExpression(dop, error);
+        if (!dv.isValid()) {
+            return QoreIRValue();
+        }
+        dyn_vals.push_back(dv);
     }
-    return builder.createLValueTernaryOp(QoreIROpcode::SpliceLValue, lvalue, offset, length, replacement,
-        op->loc)->result;
+    uint32_t dyn_idx = 0;
+    size_t walked_steps = 0;
+    for (auto& step : lv_path) {
+        if (++walked_steps % 100 == 0 && qore_check_cancel(nullptr, "IR splice lvalue path lowering")) {
+            error = "IR splice lvalue path lowering cancelled";
+            return QoreIRValue();
+        }
+        if ((step.kind == LVPathStepKind::HashKey || step.kind == LVPathStepKind::ListIndex)
+                && step.operand_idx == UINT32_MAX) {
+            if (dyn_idx < dyn_vals.size()) {
+                step.operand_idx = dyn_vals[dyn_idx].id;
+                ++dyn_idx;
+            }
+        }
+    }
+
+    auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(
+        QoreIROpcode::LValuePathTernary);
+    path_inst->result = builder.getFunction()->createValue();
+    path_inst->path = std::move(lv_path);
+    path_inst->ternary_op = LVTernaryOp::Splice;
+    path_inst->loc = op->loc;
+    path_inst->ref_rv = op->needsReturnValue();
+    if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
+        path_inst->exception_target = handler;
+    }
+    path_inst->operands.push_back(offset);
+    path_inst->operands.push_back(length);
+    path_inst->operands.push_back(replacement);
+    for (size_t i = 0; i < dyn_vals.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "IR splice operand attachment")) {
+            error = "IR splice operand attachment cancelled";
+            return QoreIRValue();
+        }
+        auto& dv = dyn_vals[i];
+        path_inst->operands.push_back(dv);
+    }
+    return path_inst->result;
 }
 
 QoreIRValue QoreIRLowering::lowerExtract(const QoreValue& expr, std::string& error) {
@@ -8183,23 +8240,17 @@ QoreIRValue QoreIRLowering::lowerListAssignment(const QoreValue& expr, std::stri
     if (!op) {
         return QoreIRValue();
     }
-    // Decompose list assignment into individual ListIndexAccess + StoreLocal/StoreClosure
-    // LHS must be a QoreParseListNode with VarRefNode entries
+    // Decompose list assignment into per-entry extraction + lvalue stores.
+    // The RHS is evaluated exactly once; qore_rt_list_assignment_value preserves
+    // AST semantics for non-list RHS values (first LHS receives the value, the
+    // remaining LHS entries receive NOTHING).
     QoreValue lhs = op->getLeft();
     if (lhs.getType() != NT_PARSE_LIST) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::ListAssignAny, expr, operands, op->loc, error);
+        error = "unsupported list assignment lowering: left-hand side is not a parse list";
+        return QoreIRValue();
     }
     const auto* parse_list = lhs.get<const QoreParseListNode>();
-    // Verify all LHS entries are VarRefNode (local, closure, or global)
-    for (size_t i = 0; i < parse_list->size(); ++i) {
-        QoreValue entry = parse_list->get(i);
-        if (!entry.hasNode() || entry.getType() != NT_VARREF) {
-            // Non-variable lvalue (e.g., hash member, list element) — fall back to EXPR_TREE
-            std::vector<QoreIRValue> operands;
-            return lowerExprOpOrInvoke(QoreIROpcode::ListAssignAny, expr, operands, op->loc, error);
-        }
-    }
+
     // Lower RHS expression
     QoreIRValue rhs_val = lowerExpression(op->getRight(), error);
     if (!rhs_val.isValid()) {
@@ -8208,18 +8259,30 @@ QoreIRValue QoreIRLowering::lowerListAssignment(const QoreValue& expr, std::stri
     // For each LHS variable, extract element from list and store
     for (size_t i = 0; i < parse_list->size(); ++i) {
         QoreValue entry = parse_list->get(i);
-        const auto* var = entry.get<const VarRefNode>();
         // Create constant index
         QoreIRValue idx = builder.createConstInt(static_cast<int64_t>(i), op->loc)->result;
-        // ListIndexAccess: safely returns NOTHING for non-list RHS or out-of-bounds
-        auto* access_inst = builder.getBlock()->appendInstruction<QoreIRListIndexAccessInstruction>();
-        access_inst->loc = op->loc;
-        access_inst->result = builder.getFunction()->createValue();
-        access_inst->operands.push_back(rhs_val);
-        access_inst->operands.push_back(idx);
-        QoreIRValue element_val = access_inst->result;
-        // Store to variable with type coercion
-        if (!storeVarRef(var, element_val, error, "list-assignment")) {
+        QoreIRValue element_val = builder.createExprOp(QoreIROpcode::ListAssignAny, expr,
+            {rhs_val, idx}, op->loc)->result;
+
+        const auto* var = entry.getType() == NT_VARREF ? entry.get<const VarRefNode>() : nullptr;
+        if (var && var->getType() != VT_IMMEDIATE
+                && !(var->getTypeInfo() && QoreTypeInfo::isReference(var->getTypeInfo()))) {
+            if (!storeVarRef(var, element_val, error, "list-assignment")) {
+                return QoreIRValue();
+            }
+        } else if (entry.hasNode()) {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathAssign,
+                entry, &element_val, op->loc, error, false);
+            if (!path_result.isValid()) {
+                if (error.empty()) {
+                    error = "unsupported list assignment lvalue for native lowering: ";
+                    error += entry.getInternalNode()->getTypeName();
+                }
+                return QoreIRValue();
+            }
+        } else {
+            error = "unsupported list assignment lvalue for native lowering: ";
+            error += entry.getTypeName();
             return QoreIRValue();
         }
     }
@@ -8822,6 +8885,9 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
         }
     }
     path_inst->loc = loc;
+    if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
+        path_inst->exception_target = handler;
+    }
     // Add RHS operand if provided
     if (rhs) {
         path_inst->operands.push_back(*rhs);

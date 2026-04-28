@@ -75,6 +75,7 @@ struct QoreAOTCallTarget {
     const QoreClass* qc = nullptr;         //!< for dot-eval method calls (pre-resolved)
     const char* method_name = nullptr;     //!< for dot-eval fallback (name-based dispatch)
     bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
+    bool is_static_method = false;         //!< method is a static method target
 };
 
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.
@@ -190,10 +191,12 @@ struct AOTSlotMap {
     std::unordered_map<const void*, int32_t> local_slots;   //!< LocalVar* -> slot index
     std::unordered_map<const void*, int32_t> global_slots;  //!< Var* -> slot index
     std::unordered_map<uint64_t, int32_t> expr_slots;       //!< NaN-boxed expr bits -> slot index
+    std::unordered_map<uint64_t, std::string> expr_slot_sources; //!< Expr bits -> originating IR opcode diagnostic
     std::unordered_map<const void*, int32_t> stmt_slots;    //!< StatementBlock* -> slot index (OnBlockExit)
     std::unordered_map<const void*, int32_t> regex_case_slots;  //!< CaseNodeRegex* -> slot index
     std::unordered_map<const void*, int32_t> lv_path_slots;  //!< QoreIRLValuePathInstruction* -> slot
     std::unordered_set<uint64_t> dot_eval_direct_bits;  //!< expr bits from DotEvalMethodDirect (classify as DOT_EVAL_TARGET)
+    std::unordered_set<uint64_t> static_call_pre_evaluated_bits;  //!< CallStatic* expr bits whose args are IR operands
 
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {
@@ -226,7 +229,10 @@ struct AOTSlotMap {
     }
 
     //! Get or assign a slot for an expression (NaN-boxed QoreValue bits)
-    int32_t getExprSlot(uint64_t expr_bits) {
+    int32_t getExprSlot(uint64_t expr_bits, const std::string& source = std::string()) {
+        if (!source.empty() && expr_slot_sources.find(expr_bits) == expr_slot_sources.end()) {
+            expr_slot_sources[expr_bits] = source;
+        }
         auto it = expr_slots.find(expr_bits);
         if (it != expr_slots.end()) {
             return it->second;

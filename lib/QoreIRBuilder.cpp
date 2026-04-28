@@ -1168,6 +1168,21 @@ QoreIRBackquoteInstruction* QoreIRBuilder::createBackquote(const char* command,
     return inst;
 }
 
+QoreIRContextRefInstruction* QoreIRBuilder::createContextRef(const char* key, int32_t stack_offset,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRContextRefInstruction>(key ? key : "", stack_offset);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
+QoreIRInstruction* QoreIRBuilder::createContextRow(const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::ContextRow);
+    inst->loc = loc;
+    inst->result = func->createValue();
+    return inst;
+}
+
 QoreIRFindInstruction* QoreIRBuilder::createFind(const QoreValue& exp,
         const QoreValue& find_exp, const QoreValue& where,
         const QoreProgramLocation* loc) {

@@ -41,7 +41,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[366] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[368] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -160,7 +160,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[366] = {
     { "TransliterateAny"              , false, true , false,  0, "TransliterateAny", false, true , "ParseNode", true , false, false, false, false }, // 115
     { "TransliterateString"           , false, true , false,  0, "TransliterateString", false, true , "ParseNode", true , false, false, false, false }, // 116
     { "BackgroundInt"                 , false, true , false, OPCODE_MIN_OPERANDS(0), "BackgroundInt", false, true , "ParseNode", true , false, true , false, false }, // 117
-    { "ListAssignAny"                 , false, false, false,  0, "ListAssignAny", false, true , "ParseNode", true , false, false, false, false }, // 118
+    { "ListAssignAny"                 , false, false, false, OPCODE_MIN_OPERANDS(0), "ListAssignAny", false, true , "ParseNode", true , false, false, false, false }, // 118
     { "ExistsAny"                     , false, false, false,  1, "ExistsAny", false, true , "ParseNode", true , false, true , true , false }, // 119
     { "ExistsBool"                    , false, true , false,  1, "ExistsBool", false, true , "ParseNode", true , false, true , true , false }, // 120
     { "ElementsAny"                   , false, false, false,  1, "ElementsAny", false, true , "ParseNode", true , false, true , true , false }, // 121
@@ -329,7 +329,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[366] = {
     { "LoadConstant"                  , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 284
     { "CreateClosure"                 , false, false, false,  0, "CreateClosure", false, true , "ParseNode", true , false, false, false, false }, // 285
     { "CreateCallRef"                 , false, false, false,  0, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 286
-    { "CreateMethodRef"               , false, false, false,  0, "CreateMethodRef", false, true , "ParseNode", true , false, false, false, false }, // 287
+    { "CreateMethodRef"               , false, false, false, OPCODE_MIN_OPERANDS(0), "CreateMethodRef", false, true , "ParseNode", true , false, false, false, false }, // 287
     { "CreateParseRef"                , false, false, false, OPCODE_MIN_OPERANDS(0), "CreateParseRef", false, true , "ParseNode", true , false, false, false, false }, // 288
     { "NewHashDecl"                   , false, false, false,  0, "NewHashDecl", false, true , "ParseNode", true , false, false, false, false }, // 289
     { "NewComplexHash"                , false, false, false,  0, "NewComplexHash", false, true , "ParseNode", true , false, false, false, false }, // 290
@@ -408,12 +408,14 @@ constexpr OpcodeInfo OPCODE_REGISTRY[366] = {
     { "ContextDestroy"                , false, false, false,  1, "Pop thread-local context stack + free Context frame", true , false, "ParseNode", false, false, false, false, false }, // 363
     { "Backquote"                     , false, false, false,  0, "Execute backquote command", true , true , "BackquoteNode", true , false, false, false, false }, // 364
     { "Find"                          , true , false, false,  0, "Execute find expression", true , true , "FindNode", true , false, false, false, false }, // 365
+    { "ContextRef"                    , true , false, false,  0, "Evaluate context field reference", false, true , "ContextrefNode", true , false, true , false, false }, // 366
+    { "ContextRow"                    , true , false, false,  0, "Evaluate current context row", false, true , "ContextRowNode", true , false, true , false, false }, // 367
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 366,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 366"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 368,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 368"
 );
 
 //! ============================================================================

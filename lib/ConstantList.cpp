@@ -123,6 +123,10 @@ void ConstantEntry::del(ExceptionSink* xsink) {
 }
 
 void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
+    if (getenv("QORE_AOT_INIT_TRACE")) {
+        fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue ce=%p name=%s result=%s pending=%d has=%d\n",
+            (void*)this, name.c_str(), result.getTypeName(), (int)aot_shell_pending, (int)hasValue());
+    }
     // AOT init functions can lose container metadata while computing values.
     // Re-apply the declared constant type before storing so runtime overload
     // dispatch sees the same value type as source mode.
@@ -143,6 +147,10 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     saved_val = result.refSelf();
     init = true;
     aot_shell_pending = false;
+    if (getenv("QORE_AOT_INIT_TRACE")) {
+        fprintf(stderr, "[aot-init] ConstantEntry::setRuntimeValue done ce=%p name=%s pending=%d has=%d saved=%d\n",
+            (void*)this, name.c_str(), (int)aot_shell_pending, (int)hasValue(), (int)saved_val.hasNode());
+    }
 }
 
 int ConstantEntry::parseInit(ClassNs ptr) {

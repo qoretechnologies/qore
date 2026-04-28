@@ -512,7 +512,8 @@ public:
     }
 
     DLLLOCAL SelfFunctionCallNode(const QoreProgramLocation* loc, char* n, QoreParseListNode* n_args,
-            const QoreClass* n_qc) : AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc), ns(n), is_copy(false) {
+            const QoreClass* n_qc, bool n_is_copy = false)
+            : AbstractMethodCallNode(loc, NT_SELF_CALL, n_args, n_qc), ns(n), is_copy(n_is_copy) {
     }
 
     DLLLOCAL SelfFunctionCallNode(const QoreProgramLocation* loc, NamedScope* n_ns, QoreParseListNode* n_args)

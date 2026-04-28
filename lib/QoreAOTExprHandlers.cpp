@@ -114,7 +114,11 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
     if (!fe) {
         return QoreValue();
     }
-    FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, (QoreListNode*)nullptr, ctx.pgm);
+    // Match normal parsed calls: keep the resolved FunctionEntry, but do not
+    // bake the deserialization program into the call node. Builtins must use
+    // the active runtime program when they execute.
+    FunctionCallNode* fcn = new FunctionCallNode(
+        &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
     if (sig_ref && strncmp(sig_ref, "sig:", 4) == 0) {
         if (const AbstractQoreFunctionVariant* v =
                 fe->getFunction()->findVariantBySignatureText(sig_ref + 4)) {

@@ -193,6 +193,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ContextDestroy: return "context.destroy";
         case QoreIROpcode::Backquote: return "backquote";
         case QoreIROpcode::Find: return "find";
+        case QoreIROpcode::ContextRef: return "context.ref";
+        case QoreIROpcode::ContextRow: return "context.row";
         case QoreIROpcode::Summarize: return "summarize";
         case QoreIROpcode::EqInt: return "eq.int";
         case QoreIROpcode::EqFloat: return "eq.float";
@@ -393,6 +395,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::DivNumber: return "div.number";
         case QoreIROpcode::HashKeyStore: return "hash.key.store";
         case QoreIROpcode::HashKeyStoreDynamic: return "hash.key.store.dynamic";
+        case QoreIROpcode::HashDerefDynamic: return "hash.deref.dynamic";
         case QoreIROpcode::LValuePathAssign: return "lvalue.path.assign";
         case QoreIROpcode::LValuePathCompound: return "lvalue.path.compound";
         case QoreIROpcode::LValuePathUnary: return "lvalue.path.unary";
@@ -400,6 +403,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::LValuePathTernary: return "lvalue.path.ternary";
         case QoreIROpcode::ListIndexAccess: return "list.index.access";
         case QoreIROpcode::ListIndexStore: return "list.index.store";
+        case QoreIROpcode::ListIndexDynamic: return "list.index.dynamic";
         case QoreIROpcode::AddAssignLocalInt: return "add.assign.local.int";
         case QoreIROpcode::IncrementLocalInt: return "increment.local.int";
         case QoreIROpcode::BranchIfLtLocalInt: return "br.if.lt.local.int";
@@ -767,6 +771,11 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* fi = dynamic_cast<const QoreIRFindInstruction*>(inst.get());
                 if (fi && fi->where) {
                     out << " where=<expr>";
+                }
+            } else if (inst->opcode == QoreIROpcode::ContextRef) {
+                auto* cri = dynamic_cast<const QoreIRContextRefInstruction*>(inst.get());
+                if (cri) {
+                    out << " key=\"" << cri->key << "\" offset=" << cri->stack_offset;
                 }
             } else if (inst->opcode == QoreIROpcode::SwitchInt) {
                 auto* sw = dynamic_cast<const QoreIRSwitchIntInstruction*>(inst.get());

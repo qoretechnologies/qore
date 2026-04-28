@@ -1081,6 +1081,7 @@ struct AOTSlotIdentities {
     std::vector<AOTLVPathSlotId> lv_path_insts;  //!< indexed by lv_path slot index
     bool has_unsupported_exprs = false;   //!< true if any expression is GENERIC_EVAL
     bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
+    std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for GENERIC_EVAL slots
 };
 
 //! Descriptor for a compiled function with slot identities
@@ -1097,6 +1098,8 @@ struct AOTCompiledFuncWithSlots {
     std::string const_reverse_map_exclude_direct_fqn;
     //! Constant FQNs whose nested reverse-map paths must be ignored while serializing this function's slot payloads.
     std::vector<std::string> const_reverse_map_exclude_fqns;
+    //! Optional pre-filtered reverse map for functions whose init context must preserve alternate stable paths.
+    std::shared_ptr<const AOTConstantReverseMap> const_reverse_map_override;
     //! Handler IR functions for each statement slot (indexed by stmt slot index).
     //! Non-null entries have serializable handler IR; null entries need AST fallback.
     std::vector<const QoreIRFunction*> handler_irs;
@@ -1125,6 +1128,8 @@ struct AOTCompiledInitFunc {
     std::string const_reverse_map_exclude_direct_fqn;
     //! Constant FQNs whose nested reverse-map paths must be ignored while serializing this init function's slot payloads.
     std::vector<std::string> const_reverse_map_exclude_fqns;
+    //! Pre-filtered reverse map used for serializing this init function's slot payloads.
+    std::shared_ptr<const AOTConstantReverseMap> const_reverse_map_override;
     uint64_t feature_flags = 0;
 
     //! Target type for the init function result
@@ -2047,6 +2052,7 @@ enum class QoreIRInstGroup : uint8_t {
     Backquote = 60,         //!< QoreIRBackquoteInstruction
     Find = 61,              //!< QoreIRFindInstruction
     Background = 62,        //!< QoreIRBackgroundInstruction
+    ContextRef = 63,        //!< QoreIRContextRefInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

@@ -71,7 +71,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 365,
+static_assert(QORE_IR_MAX_OPCODE == 367,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -261,6 +261,17 @@ static QoreValue evalAndRef(const QoreValue& val, ExceptionSink* xsink) {
         return val;
     }
     return evalAndRef(const_cast<AbstractQoreNode*>(val.getInternalNode()), xsink);
+}
+
+static QoreValue getListAssignmentValue(QoreValue value, int64_t index) {
+    if (value.getType() == NT_LIST) {
+        const QoreListNode* l = value.get<const QoreListNode>();
+        if (index >= 0 && static_cast<size_t>(index) < l->size()) {
+            return l->getReferencedEntry(static_cast<size_t>(index));
+        }
+        return QoreValue();
+    }
+    return index == 0 ? value.refSelf() : QoreValue();
 }
 
 static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
@@ -2016,6 +2027,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::PopAny:
         case QoreIROpcode::PushAny:
         case QoreIROpcode::ListAssignAny: {
+            if (op == QoreIROpcode::ListAssignAny && inv->operands.size() >= 2) {
+                QoreValue rhs = getIRValue(values, inv->operands[0]);
+                QoreValue idx = getIRValue(values, inv->operands[1]);
+                return getListAssignmentValue(rhs, idx.getAsBigInt());
+            }
             static const bool trace_lvmut = getenv("QORE_IR_TRACE_LVMUT_FALLBACK") != nullptr;
             if (trace_lvmut) {
                 const QoreProgramLocation* loc = inv->loc;
@@ -6264,6 +6280,50 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::ContextRef: {
+                auto* cri = static_cast<QoreIRContextRefInstruction*>(inst);
+                QoreValue result = fromBits(qore_rt_context_ref_at(
+                    cri->key.c_str(), cri->stack_offset, xsink));
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, result, xsink);
+                if (result.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::ContextRow: {
+                QoreValue result = fromBits(qore_rt_context_row(xsink));
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, result, xsink);
+                if (result.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::ContextMaxPos: {
                 QoreValue state_val = getIRValue(values, inst->operands[0]);
                 int64_t max_pos = qore_rt_context_max_pos(
@@ -9512,6 +9572,17 @@ lvalue_path_unary_done:
         case QoreIROpcode::PushAny:
         case QoreIROpcode::ListAssignAny: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
+                if (inst->opcode == QoreIROpcode::ListAssignAny && inst->operands.size() >= 2) {
+                    QoreValue rhs = getIRValue(values, inst->operands[0]);
+                    QoreValue idx = getIRValue(values, inst->operands[1]);
+                    QoreValue res = getListAssignmentValue(rhs, idx.getAsBigInt());
+                    setValueSlot(values, inst->result.id, res, xsink);
+                    if (res.hasNode()) {
+                        cleanup.push_back(inst->result.id);
+                    }
+                    ++ip;
+                    break;
+                }
                 // Invalidate all caches BEFORE the lvalue operation to prevent COW inflation
                 cleanupLocalCaches();
                 // Direct eval() — avoids evalExprNode() overhead (refSelf + ValueHolder)

@@ -52,7 +52,12 @@ FunctionalOperatorInterface* FunctionalOperatorInterface::getFunctionalIterator(
                 return nullptr;
             if (h) {
                 bool temp = marg.isTemp();
-                marg.clearTemp();
+                if (temp) {
+                    marg.clearTemp();
+                } else {
+                    const_cast<QoreObject*>(marg->get<const QoreObject>())->ref();
+                    temp = true;
+                }
                 value_type = FunctionalOperator::list;
                 return new QoreFunctionalIteratorOperator(temp, h, xsink);
             }

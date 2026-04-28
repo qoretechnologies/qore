@@ -316,6 +316,18 @@ public class QLSServer {
 
         #! Single-char prefix index: lowercased first char → list of names
         hash<string, list<string>> metaPrefixIndex;
+
+        #! Process-local cache for immutable standard module documents
+        static hash<auto> stdModuleDocsCache;
+
+        #! Lock protecting standard module document cache initialization
+        static Mutex stdModuleDocsCacheMutex();
+
+        #! Process-local cache for immutable builtin metadata and lookup indexes
+        static hash<auto> builtinMetadataCache;
+
+        #! Lock protecting builtin metadata cache initialization
+        static Mutex builtinMetadataCacheMutex();
     }
 
     private:internal {
@@ -583,6 +595,14 @@ public class QLSServer {
     }
 
     private:internal parseStdModules() {
+        {
+            AutoLock al(stdModuleDocsCacheMutex);
+            if (stdModuleDocsCache.docs) {
+                stdModuleDocs = stdModuleDocsCache.docs;
+                return;
+            }
+        }
+
         # find standard Qore modules
         list<string> moduleFiles;
         try {
@@ -605,6 +625,13 @@ public class QLSServer {
 
         # parse everything
         map stdModuleDocs{$1} = new Document($1), moduleFiles;
+
+        {
+            AutoLock al(stdModuleDocsCacheMutex);
+            if (!stdModuleDocsCache.docs) {
+                stdModuleDocsCache.docs = stdModuleDocs;
+            }
+        }
     }
 
     #! Find the metadata directory containing qpp .meta.json files
@@ -628,6 +655,21 @@ public class QLSServer {
     #! Load builtin metadata from qpp .meta.json files + reflection
     private:internal loadBuiltinMetadata() {
         *string metadir = findMetadataDir();
+        string cacheKey = metadir ?? "";
+
+        {
+            AutoLock al(builtinMetadataCacheMutex);
+            if (builtinMetadataCache.builtinMetadata && builtinMetadataCache.dir == cacheKey) {
+                builtinMetadata = builtinMetadataCache.builtinMetadata;
+                metaByName = builtinMetadataCache.metaByName;
+                metaByQualifiedName = builtinMetadataCache.metaByQualifiedName;
+                metaClassByName = builtinMetadataCache.metaClassByName;
+                metaPrefixIndex = builtinMetadataCache.metaPrefixIndex;
+                log(0, "metadata index reused: %d names, %d qualified, %d classes",
+                    metaByName.size(), metaByQualifiedName.size(), metaClassByName.size());
+                return;
+            }
+        }
 
         # step 1: extract runtime structure via reflection
         hash<QoreApiMetadata::NamespaceInfo> runtimeMeta;
@@ -661,6 +703,20 @@ public class QLSServer {
         buildMetadataIndex(builtinMetadata);
         log(0, "metadata index built: %d names, %d qualified, %d classes",
             metaByName.size(), metaByQualifiedName.size(), metaClassByName.size());
+
+        {
+            AutoLock al(builtinMetadataCacheMutex);
+            if (!builtinMetadataCache.builtinMetadata || builtinMetadataCache.dir != cacheKey) {
+                builtinMetadataCache = {
+                    "dir": cacheKey,
+                    "builtinMetadata": builtinMetadata,
+                    "metaByName": metaByName,
+                    "metaByQualifiedName": metaByQualifiedName,
+                    "metaClassByName": metaClassByName,
+                    "metaPrefixIndex": metaPrefixIndex,
+                };
+            }
+        }
     }
 
     #! Build fast lookup indexes from the metadata tree
@@ -1179,7 +1235,7 @@ public class QLSServer {
         }
 
         # filter by symbol kind using usage info
-        *hash<string, bool> validKinds = SymbolUsageFastMap{string(symbolInfo.usage)};
+        *list<auto> validKinds = SymbolUsageFastMap{string(symbolInfo.usage)};
         list<hash<auto>> filtered = ();
         foreach hash<auto> entry in (entries) {
             if (validKinds) {

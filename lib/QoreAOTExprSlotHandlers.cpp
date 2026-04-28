@@ -235,6 +235,103 @@ static bool write_slot_OBJ_METHOD_REF_EXPR(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
+//! HASH_LITERAL: num_pairs(u8) + [key_str + value(AOTExprKind)] * N
+static bool write_slot_HASH_LITERAL(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    if (auto* qhn = dynamic_cast<const QoreHashNode*>(node)) {
+        if (qhn->size() > 255) {
+            return false;
+        }
+        ctx.writer.writeU8(static_cast<uint8_t>(qhn->size()));
+        ConstHashIterator it(qhn);
+        uint16_t count = 0;
+        while (it.next()) {
+            if (++count % 100 == 0 && qore_check_cancel(nullptr, "AOT hash literal serialization")) {
+                return false;
+            }
+            ctx.writer.writeStringRef(it.getKey());
+            classifyAndWriteExpr(ctx.writer, it.get(),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+        return true;
+    }
+    if (auto* phn = dynamic_cast<const QoreParseHashNode*>(node)) {
+        const QoreParseHashNode::nvec_t& keys = phn->getKeys();
+        const QoreParseHashNode::nvec_t& vals = phn->getValues();
+        if (keys.size() > 255 || keys.size() != vals.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < keys.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT hash literal key validation")) {
+                return false;
+            }
+            const QoreValue& key = keys[i];
+            if (key.needsEval()) {
+                return false;
+            }
+        }
+        ctx.writer.writeU8(static_cast<uint8_t>(keys.size()));
+        for (size_t i = 0; i < keys.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT hash literal serialization")) {
+                return false;
+            }
+            QoreStringValueHelper key(keys[i]);
+            ctx.writer.writeStringRef(key->c_str());
+            classifyAndWriteExpr(ctx.writer, vals[i],
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+        return true;
+    }
+    return false;
+}
+
+//! HASH_DEREF: left(AOTExprKind) + right(AOTExprKind)
+static bool write_slot_HASH_DEREF(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
+    if (!hd) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, hd->getLeft(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, hd->getRight(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+//! LIST_LITERAL: count(u8) + [value(AOTExprKind)] * N
+static bool write_slot_LIST_LITERAL(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    if (auto* qln = dynamic_cast<const QoreListNode*>(node)) {
+        if (qln->size() > 255) {
+            return false;
+        }
+        ctx.writer.writeU8(static_cast<uint8_t>(qln->size()));
+        for (size_t i = 0; i < qln->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT list literal serialization")) {
+                return false;
+            }
+            classifyAndWriteExpr(ctx.writer, qln->retrieveEntry(i),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+        return true;
+    }
+    if (auto* pln = dynamic_cast<const QoreParseListNode*>(node)) {
+        if (pln->size() > 255) {
+            return false;
+        }
+        ctx.writer.writeU8(static_cast<uint8_t>(pln->size()));
+        for (size_t i = 0; i < pln->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT parse-list literal serialization")) {
+                return false;
+            }
+            classifyAndWriteExpr(ctx.writer, pln->get(i),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+        return true;
+    }
+    return false;
+}
+
 //! CAST_HASHDECL/CAST_COMPLEX_HASH/CAST_COMPLEX_LIST/CAST_CLASS/CAST_ENUM:
 //! ref1 = type/class path, flags bit0 = or_nothing
 static bool write_slot_CAST(AOTExprSlotWriteCtx& ctx) {
@@ -418,6 +515,12 @@ static bool write_slot_CALL_REF(AOTExprSlotWriteCtx& ctx) {
 static bool write_slot_OBJ_METHOD_REF(AOTExprSlotWriteCtx& ctx) {
     (void)ctx;  // Unused
     return true;
+}
+
+//! PARSE_REF: inline lvalue expression
+static bool write_slot_PARSE_REF(AOTExprSlotWriteCtx& ctx) {
+    return ::classifyAndWriteExpr(ctx.writer, ctx.expr.child_expr,
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
 }
 
 //! EXPR_TREE: ref1 contains binary tree blob — write inline with length prefix

@@ -647,6 +647,31 @@ static std::unique_ptr<QoreIRInstruction> readBackground(
 }
 
 // ============================================================================
+// Group 63: ContextRef - native context reference metadata
+// ============================================================================
+
+static bool writeContextRef(AOTInstWriteCtx& ctx) {
+    auto* cri = static_cast<const QoreIRContextRefInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(cri->key.c_str());
+    ctx.writer.writeU32(static_cast<uint32_t>(cri->stack_offset));
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readContextRef(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    (void)opcode_raw;
+    const char* key = ctx.reader.readStringRef(ctx.ptr);
+    int32_t stack_offset = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ctx.ptr));
+    auto* cri = new QoreIRContextRefInstruction(key ? key : "", stack_offset);
+    cri->result = QoreIRValue(result_id);
+    cri->operands = operands;
+    cri->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(cri);
+}
+
+// ============================================================================
 // Group 59: CallClosureDirect - Native closure/call-reference invocation
 // ============================================================================
 
@@ -2893,8 +2918,11 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     { "Background", 62, true, false, writeBackground, readBackground,
       "Native background call metadata" },
 
-    // Remaining 63-255: Unsupported/undefined
-    UNUSED_ENTRY(63),
+    // Index 63: ContextRef
+    { "ContextRef", 63, true, false, writeContextRef, readContextRef,
+      "Native context reference" },
+
+    // Remaining 64-255: Unsupported/undefined
     UNUSED_ENTRY(64), UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
     UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
     UNUSED_ENTRY(72), UNUSED_ENTRY(73), UNUSED_ENTRY(74), UNUSED_ENTRY(75),

@@ -629,6 +629,14 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
     # transitive %requires chain.
     set(_effective_mod_deps ${_mod_deps})
 
+    # Record user-module dependencies for a final pass after all module
+    # targets have been declared.  The immediate dependency wiring below can
+    # only see targets already defined at this point; without the final pass,
+    # forward qlib dependencies are order-dependent and parallel qmod builds
+    # can race each other.
+    set_property(GLOBAL APPEND PROPERTY QORE_USER_MODULE_TARGETS ${f})
+    set_property(GLOBAL PROPERTY QORE_USER_MODULE_DEPS_${f} "${_effective_mod_deps}")
+
     # Add module name to the global list for documentation cross-referencing
     set(QORE_USER_MODULE_NAMES ${QORE_USER_MODULE_NAMES} ${f} CACHE INTERNAL "List of user module names for doc cross-referencing")
 
@@ -817,6 +825,33 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         endforeach()
     endif()
 ENDMACRO (QORE_USER_MODULE)
+
+function(QORE_FINALIZE_USER_MODULE_DEPENDENCIES)
+    get_property(_qore_user_modules GLOBAL PROPERTY QORE_USER_MODULE_TARGETS)
+    foreach(_mod ${_qore_user_modules})
+        get_property(_mod_deps GLOBAL PROPERTY QORE_USER_MODULE_DEPS_${_mod})
+        if (NOT _mod_deps)
+            continue()
+        endif()
+
+        foreach(_dep ${_mod_deps})
+            get_filename_component(_dep_name ${_dep} NAME_WE)
+
+            if (TARGET docs-${_mod} AND TARGET docs-${_dep_name})
+                add_dependencies(docs-${_mod} docs-${_dep_name})
+            endif()
+
+            if (TARGET ${_mod}-qmod)
+                if (TARGET ${_dep_name})
+                    add_dependencies(${_mod}-qmod ${_dep_name})
+                endif()
+                if (TARGET ${_dep_name}-qmod)
+                    add_dependencies(${_mod}-qmod ${_dep_name}-qmod)
+                endif()
+            endif()
+        endforeach()
+    endforeach()
+endfunction()
 
 # Install qore native/user module (.qm file) into proper location.
 #

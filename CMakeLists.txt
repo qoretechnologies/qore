@@ -2301,7 +2301,7 @@ qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 
 # base 3 modules
 qore_user_module("qlib/DataProvider" "Logger;MapperUtil;Mime;ProviderIndexUtil;Util;reflection" "DataProvider-Full.svg;Qore-Q-square.svg")
-qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml;QoreStructuredExtraction;QoreGuardrails;QoreOcrUtils;QoreVisionExtraction")
+qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml;QoreModelRegistry;QoreTokenizerUtils;QoreStructuredExtraction;QoreGuardrails;QoreOcrUtils;QoreVisionExtraction")
 qore_user_module("qlib/DataProviderDataFrame" "DataProvider;modules/dataframe/dataframe")
 qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util")
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
@@ -2532,6 +2532,8 @@ qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;Data
 qore_user_module("qlib/ClickFunnelsDataProvider" "ClickFunnelsRestClient;RestClient;RestClientIo;DataProvider" "clickfunnels-logo.svg")
 qore_user_module("qlib/UnbounceDataProvider" "UnbounceRestClient;RestClient;RestClientIo;DataProvider" "unbounce-logo.svg")
 qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;DataProvider" "unleashed-logo.svg")
+
+qore_finalize_user_module_dependencies()
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
     if (DOXYGEN_FOUND)

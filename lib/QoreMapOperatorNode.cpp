@@ -260,7 +260,12 @@ FunctionalOperatorInterface* QoreMapOperatorNode::getFunctionalIteratorImpl(Func
                 return nullptr;
             if (h) {
                 bool temp = marg.isTemp();
-                marg.clearTemp();
+                if (temp) {
+                    marg.clearTemp();
+                } else {
+                    const_cast<QoreObject*>(marg->get<const QoreObject>())->ref();
+                    temp = true;
+                }
                 value_type = list;
                 return new QoreFunctionalMapIteratorOperator(this, temp, h, xsink);
             }
