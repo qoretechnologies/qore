@@ -39,6 +39,11 @@ fi
 
 find / -path "${QORE_SRC_DIR}/build" -prune -o -name "libqore.so*" -exec rm -f {} \; 2>/dev/null || true
 
+if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi; then
+    echo && echo "-- installing Kerberos 5 development headers --"
+    apk add --no-cache krb5-dev
+fi
+
 # build or install Qore
 if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
     # Pre-built artifact from build stage - just install

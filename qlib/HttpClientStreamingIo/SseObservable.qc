@@ -208,6 +208,16 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         #! True while the notifier poll operation is active
         bool notifier_active = False;
 
+        #! Optional async startup callback for clients that need to validate
+        #! response headers before installing the SSE parser.
+        *code<auto(SseObservable)> startup_callback;
+
+        #! Optional cancellation closure returned by the startup callback
+        *code<bool()> startup_cancel;
+
+        #! True while async startup is active
+        bool startup_active = False;
+
         #! Notifier delivery worker thread ID
         *int tid;
 
@@ -260,6 +270,9 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         if (exists self.opts.emit_heartbeat) {
             emit_heartbeat = self.opts.emit_heartbeat;
         }
+        if (exists self.opts.startup_callback) {
+            startup_callback = self.opts.startup_callback;
+        }
     }
 
     #! Called when all observers have been added — starts the SSE stream
@@ -273,6 +286,52 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             closed = False;
         }
 
+        if (startup_callback) {
+            {
+                AutoLock al(m);
+                startup_active = True;
+                remove startup_cancel;
+            }
+            try {
+                *code<bool()> cancel_cb = startup_callback(self);
+                bool cancel_now;
+                bool already_handled;
+                {
+                    AutoLock al(m);
+                    # If !startup_active, activateStartedStream() or
+                    # startupFailed() already ran synchronously inside
+                    # startup_callback() and either published the stream or
+                    # already called notifyClosed(); do not double-cancel
+                    # or double-notify here.
+                    already_handled = !startup_active;
+                    cancel_now = !already_handled && stop;
+                    if (!cancel_now && !already_handled) {
+                        startup_cancel = cancel_cb;
+                    } else if (cancel_now) {
+                        startup_active = False;
+                    }
+                }
+                if (cancel_now) {
+                    if (cancel_cb) {
+                        cancel_cb();
+                    }
+                    notifyClosed();
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                {
+                    AutoLock al(m);
+                    startup_active = False;
+                    remove startup_cancel;
+                }
+                notifyClosed({
+                    "reason": "startup-error",
+                    "error": ex,
+                });
+                rethrow;
+            }
+            return;
+        }
+
         stream = mgr.acquireStream(url);
 
         hash<auto> req_headers = {
@@ -283,6 +342,62 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         sse_queue = sse_info.queue;
         notifier = sse_info.notifier;
 
+        startNotifierPoll();
+    }
+
+    #! Activates a stream opened by an async startup operation
+    /** Called by startup operations after response headers have been validated
+        and the stream has been switched to SSE parsing.
+
+        @param started_stream active stream handle
+        @param started_queue Queue receiving parsed SSE events
+        @param started_notifier EventNotifier signaled when events are queued
+    */
+    activateStartedStream(HttpClientIo::HttpClientStreamHandle started_stream,
+            Queue started_queue, EventNotifier started_notifier) {
+        bool stopped_before_activation;
+        {
+            AutoLock al(m);
+            startup_active = False;
+            remove startup_cancel;
+            stopped_before_activation = stop;
+            if (!stopped_before_activation) {
+                stream = started_stream;
+                sse_queue = started_queue;
+                notifier = started_notifier;
+            }
+        }
+
+        if (stopped_before_activation) {
+            started_stream.cancel();
+            notifyClosed();
+            return;
+        }
+
+        startNotifierPoll();
+    }
+
+    #! Reports async startup failure
+    /** @param ex startup exception information
+    */
+    startupFailed(hash<ExceptionInfo> ex) {
+        bool stopped;
+        {
+            AutoLock al(m);
+            startup_active = False;
+            remove startup_cancel;
+            stopped = stop;
+        }
+        if (!stopped) {
+            notifyClosed({
+                "reason": "startup-error",
+                "error": ex,
+            });
+        }
+    }
+
+    #! Starts the notifier poll operation after the SSE stream is active
+    private startNotifierPoll() {
         notifyObservers(EVENT_SSE_CONNECTED, {});
 
         bool stopped_reentrantly;
@@ -343,6 +458,7 @@ public class SseObservable inherits DataProvider::DelayedObservable {
         *HttpClientIo::HttpClientStreamHandle local_stream;
         *Queue local_sse_queue;
         *EventNotifier local_notifier;
+        *code<bool()> local_startup_cancel;
         bool wait_for_notifier;
         bool wake_notifier;
         bool notify_without_wait;
@@ -353,9 +469,15 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             local_stream = stream;
             local_sse_queue = sse_queue;
             local_notifier = notifier;
+            local_startup_cancel = startup_cancel;
+            startup_active = False;
+            remove startup_cancel;
         }
         if (local_stream) {
             local_stream.cancel();
+        }
+        if (local_startup_cancel) {
+            local_startup_cancel();
         }
 
         {
@@ -365,7 +487,8 @@ public class SseObservable inherits DataProvider::DelayedObservable {
             }
             wait_for_notifier = notifier_active && (!tid || tid != gettid());
             wake_notifier = notifier_active && !tid;
-            notify_without_wait = !notifier_active && local_stream;
+            notify_without_wait = !notifier_active
+                && (local_stream || local_startup_cancel);
         }
         if (wake_notifier && local_sse_queue) {
             try {

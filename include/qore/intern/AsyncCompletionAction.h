@@ -55,13 +55,24 @@
 */
 class ChannelAction : public AbstractAsyncAction {
 public:
-    DLLLOCAL ChannelAction(QoreChannel* channel) : channel(channel) {
+    DLLLOCAL ChannelAction(QoreChannel* channel, QoreEventNotifier* notifier = nullptr,
+            QoreObject* notifier_obj = nullptr) : channel(channel), notifier(notifier), notifier_obj(notifier_obj) {
         assert(channel);
         channel->ref();
+        if (notifier) {
+            notifier->ref();
+        }
+        if (notifier_obj) {
+            notifier_obj->ref();
+        }
     }
 
     DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
         std::lock_guard<std::mutex> lg(mtx);
+        if (sse_state) {
+            sse_state->execute(output, xsink);
+            return;
+        }
         if (frame_state) {
             // After installFrameState(): body bytes flow into the frame
             // decoder instead of the channel.  Serialized with the install
@@ -76,6 +87,8 @@ public:
             // Backpressure: channel full — discard and log
             output.discard(xsink);
             printd(5, "ChannelAction::execute(): channel full, discarding value\n");
+        } else {
+            notify();
         }
     }
 
@@ -83,18 +96,35 @@ public:
 
     DLLLOCAL void complete(ExceptionSink* xsink) override {
         std::lock_guard<std::mutex> lg(mtx);
+        if (completed) {
+            return;
+        }
+        completed = true;
+        if (sse_state) {
+            sse_state->complete(xsink);
+            return;
+        }
         if (frame_state) {
             frame_state->pushCloseSentinel();
             return;
         }
         if (channel) {
             channel->close();
+            notify();
         }
     }
 
     DLLLOCAL void executeError(const char* err, const char* desc,
             ExceptionSink* xsink) override {
         std::lock_guard<std::mutex> lg(mtx);
+        if (completed) {
+            return;
+        }
+        completed = true;
+        if (sse_state) {
+            sse_state->executeError(err, desc, xsink);
+            return;
+        }
         if (frame_state) {
             Queue* q = frame_state->getMsgQueue();
             if (q) {
@@ -114,13 +144,28 @@ public:
         if (!channel->trySend(h)) {
             h->deref(xsink);
             printd(5, "ChannelAction::executeError(): channel full, discarding error\n");
+        } else {
+            notify();
         }
         channel->close();
+        notify();
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) override {
         std::lock_guard<std::mutex> lg(mtx);
+        if (sse_state) {
+            sse_state->deref(xsink);
+            sse_state = nullptr;
+        }
         frame_state.reset();  // drops any installed msg_queue ref
+        if (notifier_obj) {
+            notifier_obj->deref(xsink);
+            notifier_obj = nullptr;
+        }
+        if (notifier) {
+            notifier->deref(xsink);
+            notifier = nullptr;
+        }
         if (channel) {
             channel->deref(xsink);
             channel = nullptr;
@@ -143,6 +188,11 @@ public:
     DLLLOCAL void installFrameState(std::unique_ptr<WebSocketStreamFrameState> fs,
             ExceptionSink* xsink) {
         std::lock_guard<std::mutex> lg(mtx);
+        if (sse_state) {
+            xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+                "cannot install frame state after SSE state has been installed");
+            return;
+        }
         // Drain anything the I/O thread already pushed before this call.
         // feedHashBodyLocked() extracts body bytes and hands them to the
         // decoder; non-body hashes (headers-only, metadata) are discarded.
@@ -160,10 +210,49 @@ public:
         frame_state = std::move(fs);
     }
 
+    //! Installs an SSE parser on this ChannelAction
+    /** Drains any response items already buffered in the channel and feeds
+        their body bytes through the SSE parser before publishing the parser
+        for subsequent I/O-thread dispatches.
+
+        @param queue parsed SSE event queue
+        @param notifier optional EventNotifier signaled after parsed events
+        @param notifier_obj optional EventNotifier object to keep the fd valid
+        @param initial optional already-consumed response item to feed first
+        @param xsink exception sink
+    */
+    DLLLOCAL void installSseState(Queue* queue, QoreEventNotifier* notifier,
+        QoreObject* notifier_obj, QoreValue initial, ExceptionSink* xsink);
+
+    //! Marks this action as eligible for delayed installSseState() after
+    //! end_stream — callers must opt in to retention because every retained
+    //! ChannelAction stays alive for the lifetime of the connection until
+    //! installSseState() / cancelStream() / cleanup() releases it.
+    DLLLOCAL void setSseInstallEligible() {
+        sse_install_eligible = true;
+    }
+
+    //! @return true if this action should be retained after end_stream so
+    //! that a later installSseState() call can drain buffered body bytes
+    DLLLOCAL bool isSseInstallEligible() const {
+        return sse_install_eligible;
+    }
+
 private:
     std::mutex mtx;
     QoreChannel* channel;
     std::unique_ptr<WebSocketStreamFrameState> frame_state;
+    AbstractAsyncAction* sse_state = nullptr;
+    QoreEventNotifier* notifier = nullptr;
+    QoreObject* notifier_obj = nullptr;
+    bool completed = false;
+    bool sse_install_eligible = false;
+
+    DLLLOCAL void notify() {
+        if (notifier) {
+            notifier->notify();
+        }
+    }
 
     //! Extracts the \c body binary from a response hash and feeds it into
     //! the decoder; called with \c mtx held.
@@ -426,6 +515,48 @@ private:
     std::mutex mtx;         //!< serializes buffered replay with I/O-thread delivery
     QoreString sse_buffer;  //!< accumulated SSE text (UTF-8)
 };
+
+inline void ChannelAction::installSseState(Queue* queue, QoreEventNotifier* notifier,
+        QoreObject* notifier_obj, QoreValue initial, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lg(mtx);
+    if (frame_state) {
+        initial.discard(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot install SSE state after frame state has been installed");
+        return;
+    }
+    if (sse_state) {
+        initial.discard(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "SSE state has already been installed");
+        return;
+    }
+
+    ReferenceHolder<SseAction> action(new SseAction(queue, notifier, notifier_obj), xsink);
+    if (initial.getType() != NT_NOTHING) {
+        action->execute(initial, xsink);
+        if (*xsink) {
+            return;
+        }
+    }
+    if (channel) {
+        while (true) {
+            bool has_value = false;
+            QoreValue item = channel->tryRecv(has_value);
+            if (!has_value) {
+                break;
+            }
+            action->execute(item, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+    }
+    sse_state = action.release();
+    if (completed) {
+        sse_state->complete(xsink);
+    }
+}
 
 //! Feeds body bytes into a WebSocketStreamFrameState for H2/H3 client WS tunnels
 /** Used to swap in after the extended-CONNECT handshake completes so that

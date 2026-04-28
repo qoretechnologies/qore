@@ -150,6 +150,8 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @param body request body (optional)
         @param channel Channel for incremental response delivery
         @param streaming if \c True, enable streaming mode (incremental body delivery)
+        @param body_streaming if \c True, request body data will be sent incrementally
+        @param notifier optional EventNotifier signaled after channel updates
 
         @return the stream ID
 
@@ -157,9 +159,11 @@ public class Http1ClientConnection inherits HttpClientConnection {
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers,
             *data body, Channel channel, bool streaming = True,
-            bool body_streaming = False) {
+            bool body_streaming = False, *EventNotifier notifier,
+            bool sse_install_eligible = False) {
         int sid = poll_op.submitRequestStreaming(method, path, headers, body, channel,
-            max_concurrent_streams, streaming, body_streaming);
+            max_concurrent_streams, streaming, body_streaming, notifier,
+            sse_install_eligible);
         # Wake the I/O controller so it processes the queued request
         *object ctl;
         {
@@ -234,6 +238,18 @@ public class Http1ClientConnection inherits HttpClientConnection {
         poll_op.setTrailers(trailers);
     }
 
+    #! Installs an SSE parser on an existing streaming request
+    /** @param stream_id the HTTP/1.1 stream ID
+        @param queue Queue to receive parsed SSE events
+        @param notifier optional EventNotifier signaled after queue updates
+        @param initial_body optional body bytes already consumed before
+        installing the parser
+    */
+    installSseState(int stream_id, Queue queue, *EventNotifier notifier,
+            *data initial_body) {
+        poll_op.installSseState(stream_id, queue, notifier, initial_body);
+    }
+
     #! Submits an SSE request with Queue-based parsed event delivery
     /** Like submitRequestStreaming() but creates an SseAction that parses SSE
         events on the I/O thread and pushes parsed SseMessageInfo hashes to a Queue.
@@ -243,6 +259,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @param headers request headers (optional)
         @param body request body (optional)
         @param queue Queue for parsed SSE event delivery
+        @param notifier optional EventNotifier signaled after queue updates
 
         @return the stream ID
     */

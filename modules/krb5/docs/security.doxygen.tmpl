@@ -1,0 +1,209 @@
+/* Copyright (C) 2026 Qore Technologies, s.r.o. */
+
+/** @page krb5security Security Model
+
+    @tableofcontents
+
+    The \c krb5 module is intended for security-sensitive use. It is
+    designed to slot into strict TLS, Kerberos, and Active Directory
+    deployments without weakening enterprise policies.
+
+    @section krb5sec_secrets Secret Handling
+
+    - The module never logs secrets. Passwords, session keys, ticket bytes,
+      and keytab key material are not written to any log, exception message,
+      or string returned from the Qore-level API.
+    - Credential metadata APIs (@ref Qore::Krb5::Krb5Credentials::getInfo()
+      and @ref Qore::Krb5::Krb5CredentialCache::listCredentials()) expose
+      principals, timestamps, flags, and numeric enctype identifiers, but
+      never the session key or ticket bytes themselves.
+    - Password-based initial credential acquisition is noninteractive by
+      default: \c change_password_prompt is disabled unless explicitly
+      requested via
+      @ref Qore::Krb5::Krb5InitialCredentialsOptions::change_password_prompt.
+
+    @section krb5sec_init_creds Initial Credential Acquisition
+
+    Initial credential acquisition through
+    @ref Qore::Krb5::Krb5Context::acquireCredentialsWithPassword() and
+    @ref Qore::Krb5::Krb5Context::acquireCredentialsWithKeytab() supports
+    the options enterprise deployments typically require:
+
+    - KDC canonicalization for
+      <a href="https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/get-started/virtual-dc/active-directory-domain-services-overview">Active
+      Directory</a>
+      <a href="https://learn.microsoft.com/en-us/windows/win32/ad/naming-properties">UPN</a>
+      logins
+    - Windows
+      <a href="https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-pac/166d8064-c863-41e1-9c23-edaaa5f36962">PAC</a>
+      requests
+    - <a href="https://datatracker.ietf.org/doc/html/rfc6113">FAST</a>
+      armor credential cache configuration
+    - explicit enctype lists to reject weak ciphers
+    - ticket lifetime and renewable lifetime controls
+    - explicit input and output credential caches
+
+    These options are carried as a typed
+    @ref Qore::Krb5::Krb5InitialCredentialsOptions hash.
+
+    @section krb5sec_gss GSSAPI Hardening
+
+    - GSSAPI token inputs are validated before decoding; malformed hex or
+      truncated tokens are rejected before reaching the GSSAPI library.
+    - @ref Qore::Krb5::GssClientContext defaults to the Kerberos mechanism
+      and to a conservative set of request flags
+      (\c GSS_C_MUTUAL_FLAG | \c GSS_C_SEQUENCE_FLAG | \c GSS_C_INTEG_FLAG).
+    - GSSAPI contexts can be bound to an explicit
+      @ref Qore::Krb5::GssCredential instead of relying on the process
+      default credential, which avoids surprising credential selection in
+      multi-tenant Qorus services.
+    - GSSAPI channel bindings can be supplied explicitly — including the
+      <a href="https://datatracker.ietf.org/doc/html/rfc5929">RFC 5929</a>
+      \c tls-server-end-point application data used by LDAP-over-TLS and
+      HTTPS endpoint binding — to defeat TLS-proxy credential relay
+      attacks.
+    - Completed contexts expose
+      @ref Qore::Krb5::GssClientContext::wrap() and
+      @ref Qore::Krb5::GssClientContext::unwrap() for SASL/GSSAPI
+      integrity and confidentiality layers when enterprise policy requires
+      message-level protection.
+    - Service endpoints can use @ref Qore::Krb5::GssAcceptorContext with an
+      explicit keytab-backed @ref Qore::Krb5::GssCredential, avoiding
+      process-global acceptor credential selection and exposing the
+      authenticated initiator principal after negotiation.
+    - Credential delegation (see @ref krb5sec_delegation) is opt-in: the
+      acceptor only receives a delegated credential when the initiator
+      explicitly sets \c GSS_DELEG_FLAG and the KDC policy allows it.
+
+    @section krb5sec_delegation Credential Delegation
+
+    Credential delegation allows a GSSAPI acceptor to act as the initiator
+    when connecting to further Kerberized services. This is a powerful
+    capability and should only be used when the trust relationship between
+    the initiator and the acceptor is well understood — a compromised
+    acceptor that holds a delegated credential can impersonate the
+    initiator for the lifetime of that credential.
+
+    @ref Qore::Krb5::GssAcceptorContext::getDelegatedCredential() extracts
+    the delegated @ref Qore::Krb5::GssCredential from a completed acceptor
+    context. The credential is transferred out of the GSSAPI layer, so the
+    method can only be called once per context — subsequent calls raise
+    \c KRB5-GSS-DELEGATION-ERROR. If the initiator did not set
+    \c GSS_DELEG_FLAG, or if KDC policy denied delegation, the method also
+    raises \c KRB5-GSS-DELEGATION-ERROR.
+
+    @section krb5sec_sandbox Filesystem Sandbox
+
+    File-backed credential caches and keytabs (\c FILE, \c WRFILE, and
+    \c DIR backends) honour %Qore filesystem sandboxing: every read, write,
+    or create operation passes through
+    \c QoreSandboxManagerHelper::checkFilesystemAccess() against the
+    backend's underlying path. Non-filesystem backends (\c MEMORY, \c API,
+    \c KCM, \c KEYRING, \c MSLSA for caches; \c MEMORY for keytabs) are
+    allowed through without a filesystem check. Any backend outside these
+    two allowlists is rejected with a \c KRB5-SANDBOX-ERROR exception so
+    that new MIT Kerberos backends cannot accidentally become
+    sandbox-reachable without review.
+
+    Credential-cache collection enumeration also checks each discovered cache
+    before reading cache details. If the active filesystem sandbox denies a
+    cache, the returned @ref Qore::Krb5::Krb5CredentialCacheInfo entry has
+    \c accessible set to \c False and does not expose the cache path or
+    principal.
+
+    @section krb5sec_network_sandbox Network Sandbox
+
+    KDC exchanges are executed by the MIT Kerberos and GSSAPI libraries. Those
+    libraries perform their own DNS resolution and socket I/O, so this module
+    cannot apply %Qore's fine-grained network sandbox post-resolution
+    \c checkConnect() policy inside an in-progress library call. To avoid a
+    sandbox escape, KDC-contacting operations fail closed with
+    \c KRB5-SANDBOX-ERROR whenever a sandbox manager has active network
+    restrictions that cannot be enforced by this module. A sandbox whose
+    network policy is explicitly unrestricted is allowed through.
+
+    @section krb5sec_domains Functional Domains
+
+    The module declares functional domains so that %Qore program-level
+    access control can block features that are not appropriate for a given
+    program:
+
+    - @ref Qore::Krb5::Krb5Context, @ref Qore::Krb5::Krb5CredentialCache,
+      @ref Qore::Krb5::Krb5Keytab, and @ref Qore::Krb5::GssCredential carry
+      the \c FILESYSTEM domain because they may read or write cache and
+      keytab files.
+    - @ref Qore::Krb5::Krb5Context::acquireCredentialsWithPassword(),
+      @ref Qore::Krb5::Krb5Context::acquireCredentialsWithKeytab(), and the
+      entire @ref Qore::Krb5::GssClientContext and
+      @ref Qore::Krb5::GssAcceptorContext classes carry the \c NETWORK
+      domain because their GSSAPI mechanisms may contact the KDC.
+    - @ref Qore::Krb5::Krb5Principal and @ref Qore::Krb5::Krb5Credentials
+      carry no functional domain because they operate purely on in-memory
+      data.
+
+    Programs running with \c PO_NO_NETWORK or \c PO_NO_FILESYSTEM will
+    therefore fail to parse code that reaches network or filesystem
+    operations, without needing to execute anything.
+
+    @section krb5sec_cancellation Cooperative Cancellation
+
+    Every blocking operation — initial credential acquisition, GSSAPI
+    context initialization, and GSSAPI message protection — checks for
+    cooperative thread cancellation before calling into the underlying
+    library. Once control has entered MIT Kerberos or GSSAPI, this module
+    regains cancellation control when the library call returns; callers should
+    still configure Kerberos timeouts appropriate for their deployment.
+
+    @section krb5sec_exceptions Exception Reference
+
+    The module raises the following %Qore exceptions. All exception messages
+    include the originating operation context and, where applicable, the
+    underlying Kerberos or GSSAPI error message. Secrets are never included
+    in exception messages.
+
+    - \c KRB5-INIT-ERROR — failure to initialize a Kerberos 5 runtime
+      context
+    - \c KRB5-REALM-ERROR — failure to retrieve the default realm or a
+      principal realm
+    - \c KRB5-PRINCIPAL-ERROR — failure to parse, copy, unparse, or
+      introspect a principal
+    - \c KRB5-CACHE-ERROR — credential-cache resolve, open, initialize,
+      store, or enumerate failure
+    - \c KRB5-CREDENTIALS-ERROR — credential construction, copy, or
+      metadata failure, including hex decoding failure of the session key
+      or ticket
+    - \c KRB5-KEYTAB-ERROR — keytab resolve, open, lookup, add-entry, or
+      enumerate failure
+    - \c KRB5-INIT-CREDS-ERROR — initial credential acquisition failure
+      (including bad option values, KDC errors, and wrong password)
+    - \c KRB5-GSS-ERROR — general GSSAPI failure from
+      \c gss_init_sec_context, \c gss_import_name, \c gss_krb5_import_cred,
+      \c gss_wrap, \c gss_unwrap, or \c gss_wrap_size_limit
+    - \c KRB5-GSS-ARG-ERROR — invalid arguments to a GSSAPI method (for
+      example a negative \c qop, an unsupported mechanism, or malformed
+      channel-binding options)
+    - \c KRB5-GSS-STATE-ERROR — GSSAPI operation attempted on a context
+      that is not complete
+    - \c KRB5-TOKEN-ERROR — malformed hex input for a token, wrapped
+      message, channel-binding field, or key
+    - \c KRB5-RENEW-ERROR — TGT credential renewal failure (for example
+      the ticket is not renewable, has expired, or the KDC rejected the
+      renewal request)
+    - \c KRB5-SERVICE-CREDS-ERROR — TGS service ticket acquisition failure
+      (for example no valid TGT in the cache, an unreachable KDC, or a
+      service-principal lookup failure)
+    - \c KRB5-GSS-DELEGATION-ERROR — the acceptor attempted to extract a
+      delegated credential but the initiator did not set
+      \c GSS_DELEG_FLAG, KDC policy denied delegation, or the credential
+      has already been extracted
+    - \c KRB5-SPNEGO-ERROR — SPNEGO envelope construction or parsing
+      failure (for example empty input, invalid hex, invalid base64, or a
+      malformed NegTokenResp that does not contain a responseToken field)
+    - \c KRB5-SANDBOX-ERROR — a credential-cache or keytab backend is not
+      on the sandbox allowlist, or a KDC-contacting operation cannot
+      enforce the active network sandbox policy (see @ref krb5sec_sandbox
+      and @ref krb5sec_network_sandbox)
+
+    In addition, any filesystem sandbox violation surfaces as the standard
+    \c FILESYSTEM-ACCESS-DENIED exception from the %Qore sandbox manager.
+*/

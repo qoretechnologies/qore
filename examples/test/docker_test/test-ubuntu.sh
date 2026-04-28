@@ -38,6 +38,11 @@ fi
 
 export MAKE_JOBS=${MAKE_JOBS:-6}
 
+if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi; then
+    echo && echo "-- installing Kerberos 5 development headers --"
+    apt-get update -qq && apt-get install -y -qq libkrb5-dev
+fi
+
 # build or install Qore
 if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
     # Pre-built artifact from build stage - just install

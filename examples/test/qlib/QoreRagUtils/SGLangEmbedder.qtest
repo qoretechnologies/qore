@@ -1,0 +1,272 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SGLangEmbedder.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/SGLangRestClient.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires QUnit
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class SGLangEmbedderTest
+
+#! HTTP stub that records every request and returns a configurable response per path.
+class FakeEmbeddingHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+        hash<string, hash<auto>> responses;
+        Mutex m();
+    }
+
+    constructor(hash<string, hash<auto>> responses) {
+        self.responses = responses;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        hash<auto> body_parsed = body.val() ? parse_json(body) : {};
+        push requests, {
+            "path": cx.raw_path,
+            "method": hdr.method,
+            "auth": hdr."authorization",
+            "body": body_parsed,
+        };
+        *hash<auto> resp = responses{cx.raw_path};
+        if (!resp) {
+            return makeResponse(404, "{\"detail\":\"Not Found\"}",
+                {"Content-Type": MimeTypeJson});
+        }
+        int code = resp.code ?? 200;
+        string body_out = resp.body.typeCode() == NT_STRING
+            ? resp.body
+            : make_json(resp.body);
+        return makeResponse(code, body_out, {"Content-Type": MimeTypeJson});
+    }
+}
+
+class SGLangEmbedderTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeEmbeddingHandler handler;
+    }
+
+    constructor() : Test("SGLangEmbedderTest", "1.0") {
+        addTestCase("openai-style first call pins openai",
+            \testOpenAiPinning());
+        addTestCase("native /embed fallback on 404 pins native",
+            \testNativeFallback());
+        addTestCase("pinned style skips re-probe on subsequent calls",
+            \testPinnedStyleSkipsProbe());
+        addTestCase("native /embed accepts 'embeddings' response shape",
+            \testNativeEmbeddingsShape());
+        addTestCase("non-404 errors propagate without fallback",
+            \testNon404Propagates());
+        addTestCase("native vector-count mismatch throws",
+            \testNativeShapeMismatch());
+        addTestCase("api_key forwarded as Bearer auth",
+            \testApiKeyForwarded());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": False,
+        };
+        http = new HttpServer(http_opts);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    private installHandler(hash<string, hash<auto>> responses) {
+        if (handler) {
+            http.removeHandler("emb");
+        }
+        handler = new FakeEmbeddingHandler(responses);
+        http.setHandler("emb", "/", MimeTypeJson, handler);
+    }
+
+    private SGLangEmbedder makeEmbedder(*string api_key) {
+        hash<EmbedderConfig> cfg = <EmbedderConfig>{
+            "backend": "sglang",
+            "url": "http://localhost:" + port,
+            "model": "bge-m3",
+        };
+        if (api_key.val()) {
+            cfg.api_key = api_key;
+        }
+        return new SGLangEmbedder(cfg);
+    }
+
+    testOpenAiPinning() {
+        checkModule();
+        installHandler({
+            "/v1/embeddings": {
+                "code": 200,
+                "body": {
+                    "data": (
+                        {"index": 0, "embedding": (1.0, 2.0, 3.0)},
+                        {"index": 1, "embedding": (4.0, 5.0, 6.0)},
+                    ),
+                },
+            },
+        });
+        SGLangEmbedder emb = makeEmbedder();
+        list<list<float>> rv = emb.encodeBatch(("hello", "world"));
+        assertEq(2, rv.size());
+        assertEq((1.0, 2.0, 3.0), rv[0]);
+        assertEq((4.0, 5.0, 6.0), rv[1]);
+        assertEq(SGLangEmbedder::StyleOpenAi, emb.getEndpointStyle());
+        # Second call uses pinned style — no probe.
+        emb.encodeBatch(("again",));
+        assertEq(2, handler.requests.size());
+        assertEq("/v1/embeddings", handler.requests[0].path);
+        assertEq("/v1/embeddings", handler.requests[1].path);
+    }
+
+    testNativeFallback() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {
+                    "dense": (
+                        (0.1, 0.2, 0.3),
+                        (0.4, 0.5, 0.6),
+                    ),
+                },
+            },
+        });
+        SGLangEmbedder emb = makeEmbedder();
+        list<list<float>> rv = emb.encodeBatch(("hello", "world"));
+        assertEq(2, rv.size());
+        assertEq((0.1, 0.2, 0.3), rv[0]);
+        assertEq((0.4, 0.5, 0.6), rv[1]);
+        assertEq(SGLangEmbedder::StyleNative, emb.getEndpointStyle());
+        assertEq(3, emb.getDimension());
+        # First call probes /v1/embeddings (404), then /embed (200) = 2 requests.
+        assertEq(2, handler.requests.size());
+        assertEq("/v1/embeddings", handler.requests[0].path);
+        assertEq("/embed", handler.requests[1].path);
+        assertEq(("texts": ("hello", "world")), handler.requests[1].body);
+    }
+
+    testPinnedStyleSkipsProbe() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {"dense": ((0.1,),)},
+            },
+        });
+        SGLangEmbedder emb = makeEmbedder();
+        emb.encodeBatch(("first",));
+        assertEq(SGLangEmbedder::StyleNative, emb.getEndpointStyle());
+        assertEq(2, handler.requests.size());          # /v1/embeddings + /embed
+        emb.encodeBatch(("second",));
+        # No re-probe of /v1/embeddings — pinned to /embed.
+        assertEq(3, handler.requests.size());
+        assertEq("/embed", handler.requests[2].path);
+        assertEq(("texts": ("second",)), handler.requests[2].body);
+    }
+
+    testNativeEmbeddingsShape() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {
+                    "embeddings": (
+                        (7.0, 8.0),
+                    ),
+                },
+            },
+        });
+        SGLangEmbedder emb = makeEmbedder();
+        list<list<float>> rv = emb.encodeBatch(("x",));
+        assertEq(1, rv.size());
+        assertEq((7.0, 8.0), rv[0]);
+        assertEq(SGLangEmbedder::StyleNative, emb.getEndpointStyle());
+    }
+
+    testNon404Propagates() {
+        checkModule();
+        installHandler({
+            "/v1/embeddings": {
+                "code": 400,
+                "body": {"object": "error",
+                    "message": "model is not an embedding model"},
+            },
+        });
+        SGLangEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("hello",));
+            fail("expected REST-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(400, ex.arg.status_code);
+        }
+        # Style not pinned because no successful encode happened.
+        assertNothing(emb.getEndpointStyle());
+        # Only /v1/embeddings was attempted — we do not fall back on non-404.
+        assertEq(1, handler.requests.size());
+        assertEq("/v1/embeddings", handler.requests[0].path);
+    }
+
+    testNativeShapeMismatch() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {"dense": ((1.0, 2.0),)},  # 1 vector for 2 texts
+            },
+        });
+        SGLangEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("a", "b"));
+            fail("expected EMBEDDER-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-RESPONSE-ERROR", ex.err);
+            assertRegex("returned 1 vectors for 2 input texts", ex.desc);
+        }
+    }
+
+    testApiKeyForwarded() {
+        checkModule();
+        installHandler({
+            "/v1/embeddings": {
+                "code": 200,
+                "body": {"data": ({"index": 0, "embedding": (1.0,)},)},
+            },
+        });
+        SGLangEmbedder emb = makeEmbedder("secret-key");
+        emb.encodeBatch(("x",));
+        assertEq(1, handler.requests.size());
+        assertEq("Bearer secret-key", handler.requests[0].auth);
+    }
+}

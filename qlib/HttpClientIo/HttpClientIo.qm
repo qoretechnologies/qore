@@ -137,11 +137,11 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
       negotiation
     - HTTP/3: auto-downgrades to HTTP/2 when a proxy is configured; throws if
       HTTP/3 is explicitly forced with a proxy
-    - Added @ref HttpClientStreamHandle::submitAsyncWithNotifier() "submitAsyncWithNotifier()"
+    - Added \c HttpClientStreamHandle::submitAsyncWithNotifier()
       for async request submission with EventNotifier signaling on completion
-    - Added @ref HttpClientConnectionManager::submitRequestAsync() "submitRequestAsync()"
+    - Added \c HttpClientConnectionManager::submitRequestAsync()
       for connection-manager-level async request submission with automatic retry
-    - Added @ref HttpClientConnectionManager::ensureConnectionAsync() "ensureConnectionAsync()"
+    - Added \c HttpClientConnectionManager::ensureConnectionAsync()
       for non-blocking connection pre-warming
     - Added \c max_request_retries to @ref HttpClientConnectionManagerOptions
       to make automatic request retry behavior configurable
@@ -156,7 +156,7 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     - Supports Content-Length, chunked transfer encoding, and connection-close body types
     - Protocol selection: \c "h1" forces HTTP/1.1; \c "auto" starts with H2 and upgrades to H3 via Alt-Svc
     - Connection manager creates multiple HTTP/1.1 connections for concurrent requests
-    - Added @ref HttpClientStreamHandle::submitAsyncNonBlocking() "submitAsyncNonBlocking()"
+    - Added \c HttpClientStreamHandle::submitAsyncNonBlocking()
       for non-blocking async request submission (throws if the connection is not ready)
 
     @subsection httpclientio_v1_0 Version 1.0
@@ -287,7 +287,7 @@ public namespace HttpClientIo {
     /** This hashdecl is the **single authoritative shape** for responses
         returned by the C++ HTTP connection manager and consumed by
         pure-async callers (@ref HttpClientConnectionManager,
-        @ref HttpClientIo, @ref RestClientIo, their DataProviders).
+        @ref HttpClientIo, \c RestClientIo, their DataProviders).
         Any new async code must read fields off this shape directly —
         no ad-hoc response hashes, no legacy-style flattening.
 
@@ -314,7 +314,7 @@ public namespace HttpClientIo {
         - **Legacy HTTPClient poll API** (`hc.startPollSendRecv(...)` +
           @c spop.getOutput() ) expects @c {code, info: {response-headers,
           response-headers-raw, response-body}, response-body}, matching
-          the pre-conn_mgr @ref HttpClientConnectSendRecvPollOperation
+          the pre-conn_mgr \c HttpClientConnectSendRecvPollOperation
           output format (where @c response-body is intentionally present
           at BOTH locations for backward compatibility with existing
           consumers).  Adapted from this shape by
@@ -364,7 +364,7 @@ public namespace HttpClientIo {
 
         #! Bare MIME type from the response \c Content-Type header, with parameters stripped
         /** Populated by @ref HttpClientStreamHandle::normalizeResponseBody() from
-            \c headers."content-type" using @ref Mime::mime_get_base_type().  Downstream
+            \c headers."content-type" using \c Mime::mime_get_base_type().  Downstream
             consumers (REST schema validator, DataStream client, etc.) should prefer this
             field for MIME type lookups so they don't each have to strip
             \c ";charset=utf-8" and other parameters themselves.

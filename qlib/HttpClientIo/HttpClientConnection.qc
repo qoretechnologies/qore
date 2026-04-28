@@ -102,13 +102,21 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     abstract Socket getSocket();
 
     #! Submits a request on this connection (protocol-specific)
-    /** @param promise Promise to resolve with the response (pure C++ dispatch)
+    /** @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param promise Promise to resolve with the response (pure C++ dispatch)
     */
     abstract int submitRequestImpl(string method, string path, *hash<auto> headers,
         *data body, Promise promise);
 
     #! Submits a request using CompositeAction (Promise + EventNotifier) — protocol-specific
-    /** @param promise Promise to resolve with the response
+    /** @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param promise Promise to resolve with the response
         @param notifier EventNotifier to signal after the Promise is resolved
     */
     abstract int submitRequestWithNotifierImpl(string method, string path, *hash<auto> headers,

@@ -753,6 +753,12 @@ public class HttpClientStreamHandle {
         END_STREAM and the server streams back data. For bidirectional streaming (e.g., gRPC,
         WebSocket), set \c body_streaming to \c True.
 
+        If \c notifier is provided, protocol implementations must not block waiting for connection
+        readiness. In this mode implementations throw \c HTTPCLIENT-NOT-READY when the connection
+        cannot submit the request immediately; callers can retry after the notifier-driven async
+        state machine reports readiness. If \c notifier is omitted, implementations use the normal
+        blocking readiness behavior.
+
         @param method HTTP method (e.g., "GET", "POST", "CONNECT")
         @param path request path
         @param headers request headers (optional)
@@ -760,18 +766,28 @@ public class HttpClientStreamHandle {
         communication; if \c False (default), submit with END_STREAM for response-only streaming
         @param body one-shot request body (optional); sent with the request before streaming
         begins — use for patterns like POST with JSON body + streaming SSE response
+        @param notifier optional EventNotifier signaled when raw response
+        items are available to @ref readData()
+        @param sse_install_eligible if \c True, the protocol implementation retains the underlying
+        completion action across \c end_stream so a later @ref installSseState() call can drain
+        buffered body bytes; opt in only when the caller intends to call @ref installSseState()
+        after the response completes (e.g., the Negotiate SSE observable startup path), since
+        retention costs memory until the action is consumed or the connection closes
 
         @return the stream ID
 
         @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not support streaming
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
+        @throw HTTPCLIENT-NOT-READY if \c notifier is provided and the connection is not ready for
+        request submission
 
 
         @see readData(), sendData(), writesDone()
     */
     int startStreaming(string method, string path, *hash<auto> headers,
-            bool body_streaming = False, *data body) {
+            bool body_streaming = False, *data body, *EventNotifier notifier,
+            bool sse_install_eligible = False) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "streaming is not supported by " + conn.getProtocol();
     }
@@ -868,6 +884,27 @@ public class HttpClientStreamHandle {
     installFrameState(Queue msg_queue) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
             "frame-state streaming is not supported by " + conn.getProtocol();
+    }
+
+    #! Installs an SSE event parser for this streaming response
+    /** Swaps a stream started with @ref startStreaming() from raw response
+        delivery through @ref readData() to I/O-thread SSE parsing.  Concrete
+        implementations drain any residual body bytes already queued for
+        @ref readData() and feed them into the parser before returning.
+
+        @param queue Queue that will receive parsed SSE event hashes
+        @param notifier optional EventNotifier signaled after queue updates
+        @param initial_body optional body bytes already consumed before
+        installing the parser
+
+        @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not
+               support SSE parser installation
+
+        @since %HttpClientIo 1.5
+    */
+    installSseState(Queue queue, *EventNotifier notifier, *data initial_body) {
+        throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
+            "SSE parser installation is not supported by " + conn.getProtocol();
     }
 
     #! Starts an SSE streaming request with I/O-thread event parsing
@@ -990,7 +1027,10 @@ public class HttpCancellableFuture inherits Future {
         Future real_future;
 
         #! The stream handle for I/O-level cancellation
-        HttpClientStreamHandle stream_handle;
+        *HttpClientStreamHandle stream_handle;
+
+        #! Optional cancellation closure for composite async operations
+        *code<bool()> cancel_func;
     }
 
     #! Creates a new HttpCancellableFuture
@@ -1000,6 +1040,15 @@ public class HttpCancellableFuture inherits Future {
     constructor(Future real_future, HttpClientStreamHandle stream_handle) {
         self.real_future = real_future;
         self.stream_handle = stream_handle;
+    }
+
+    #! Creates a new HttpCancellableFuture with a custom cancellation handler
+    /** @param real_future the raw protocol Future
+        @param cancel_func closure that cancels the in-flight operation
+    */
+    constructor(Future real_future, code<bool()> cancel_func) {
+        self.real_future = real_future;
+        self.cancel_func = cancel_func;
     }
 
     #! Blocks the calling thread until the result is available or an error occurs
@@ -1031,8 +1080,14 @@ public class HttpCancellableFuture inherits Future {
         if (real_future.isDone()) {
             return False;
         }
-        stream_handle.cancel();
-        return True;
+        if (cancel_func) {
+            return cancel_func();
+        }
+        if (stream_handle) {
+            stream_handle.cancel();
+            return True;
+        }
+        return False;
     }
 }
 

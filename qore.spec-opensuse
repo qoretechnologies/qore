@@ -44,6 +44,7 @@ BuildRequires:  pkgconfig(libbrotlienc)
 BuildRequires:  pkgconfig(libbrotlidec)
 BuildRequires:  pkgconfig(libzstd)
 BuildRequires:  pkgconfig(liblz4)
+BuildRequires:  krb5-devel
 BuildRequires:  rust
 BuildRequires:  cargo
 Requires:       %{_bindir}/env
@@ -149,6 +150,7 @@ BuildArch:      noarch
 This package contains tools for working with:
  - REST APIs (rest, saprest, sfrest)
  - SQL Databases (sqlutil, schema-reverse, qschema)
+ - Kerberos credential/keytab inspection (qklist)
  - Data Providers (qdp)
  - Code Formatting (qfmt)
  - API Schema Generation (qore-openapi3-gen, qore-asyncapi-gen)
@@ -159,6 +161,7 @@ This package contains tools for working with:
 %defattr(-,root,root,-)
 %{_bindir}/qdp
 %{_bindir}/qget
+%{_bindir}/qklist
 %{_bindir}/rest
 %{_bindir}/sfrest
 %{_bindir}/saprest

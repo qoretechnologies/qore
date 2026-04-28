@@ -97,7 +97,8 @@ class QJar {
             module_name =~ s/\.qm$//;
         }
         p.loadModule(module_load);
-        p.parse("binary sub byte_code(Class cls) { return get_byte_code('::' + cls.getPathName()); }", "api");
+        p.parse("binary sub byte_code(Class cls) { return get_byte_code('::' + cls.getPathName()); }
+                 string sub java_name(Class cls) { return get_java_name('::' + cls.getPathName()); }", "api");
 
         opts."module" = module_name;
         if (module_name =~ /^QorusFakeApi/) {
@@ -132,12 +133,25 @@ class QJar {
 
             # generate byte code
             binary b = p.callFunction("byte_code", cls);
-            # get output class file name
-            string ofn = opts.input + DirSep + "qore";
-            string path = cls.getPathName();
-            path =~ s/::/\//g;
+            # ask the jni module for the Java binary name it embedded in the bytecode
+            # — must match for define-class and for the on-disk path that consumers
+            # (jar / javac) resolve from the classpath
+            string java_class_path_name = p.callFunction("java_name", cls);
+            if (opts."module" != "qore") {
+                try {
+                    p.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + b.toBase64());
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "JNI-ERROR" || ex.desc !~ /duplicate .*class definition/) {
+                        rethrow;
+                    }
+                }
+            }
+            # get output class file name; derive from the Java binary name so the
+            # on-disk path matches the bytecode's internal class name
+            string path = java_class_path_name;
+            path =~ s/\./\//g;
             path += ".class";
-            ofn += DirSep + path;
+            string ofn = opts.input + DirSep + path;
             omap{ofn} = True;
 
             if (opts.dryrun) {

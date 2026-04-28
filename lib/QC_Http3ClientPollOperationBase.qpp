@@ -77,6 +77,12 @@ void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
             }
         }
         stream_actions.clear();
+        for (auto& [sid, action] : completed_channel_actions) {
+            if (action) {
+                action->deref(xsink);
+            }
+        }
+        completed_channel_actions.clear();
 
         // Clean up pending responses
         for (auto& [sid, resps] : pending_responses) {
@@ -340,7 +346,16 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 AutoLocker al(stream_lock);
                 auto it = stream_actions.find(sid);
                 if (it != stream_actions.end()) {
-                    it->second->deref(xsink);
+                    ChannelAction* ch_action = dynamic_cast<ChannelAction*>(it->second);
+                    if (ch_action && ch_action->isSseInstallEligible()) {
+                        auto completed_it = completed_channel_actions.find(sid);
+                        if (completed_it != completed_channel_actions.end()) {
+                            completed_it->second->deref(xsink);
+                        }
+                        completed_channel_actions[sid] = ch_action;
+                    } else {
+                        it->second->deref(xsink);
+                    }
                     stream_actions.erase(it);
                 }
                 --active_stream_count;
@@ -505,6 +520,12 @@ void Http3ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
         AutoLocker al(stream_lock);
         actions_copy = std::move(stream_actions);
         stream_actions.clear();
+        for (auto& [sid, action] : completed_channel_actions) {
+            if (action) {
+                action->deref(xsink);
+            }
+        }
+        completed_channel_actions.clear();
         active_stream_count = 0;
     }
 
@@ -781,6 +802,11 @@ bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
 
     auto it = stream_actions.find(sid);
     if (it == stream_actions.end()) {
+        auto completed_it = completed_channel_actions.find(sid);
+        if (completed_it != completed_channel_actions.end()) {
+            completed_it->second->deref(xsink);
+            completed_channel_actions.erase(completed_it);
+        }
         return false;  // already completed
     }
 
@@ -854,6 +880,51 @@ void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* m
     ch_action->deref(xsink);
 }
 
+void Http3ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* queue,
+        QoreEventNotifier* notifier, QoreObject* notifier_obj, QoreValue initial,
+        ExceptionSink* xsink) {
+    ChannelAction* ch_action = nullptr;
+    std::string sid = std::to_string(stream_id);
+    bool completed_action = false;
+    bool found_action = false;
+    {
+        AutoLocker al(stream_lock);
+        auto it = stream_actions.find(sid);
+        if (it != stream_actions.end()) {
+            found_action = true;
+            ch_action = dynamic_cast<ChannelAction*>(it->second);
+        } else {
+            auto completed_it = completed_channel_actions.find(sid);
+            if (completed_it != completed_channel_actions.end()) {
+                found_action = true;
+                ch_action = completed_it->second;
+                completed_channel_actions.erase(completed_it);
+                completed_action = true;
+            }
+        }
+        if (!ch_action) {
+            initial.discard(xsink);
+            if (found_action) {
+                xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+                    "cannot install SSE state: stream %lld action is not a ChannelAction",
+                    (long long)stream_id);
+            } else {
+                xsink->raiseException("HTTPCLIENT-STREAM-CLOSED",
+                    "cannot install SSE state: stream %lld not found or already complete",
+                    (long long)stream_id);
+            }
+            return;
+        }
+        ch_action->ref();
+    }
+
+    ch_action->installSseState(queue, notifier, notifier_obj, initial, xsink);
+    ch_action->deref(xsink);
+    if (completed_action) {
+        ch_action->deref(xsink);
+    }
+}
+
 void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* desc) {
     AutoLocker al(stream_lock);
     if (!error_info) {
@@ -891,6 +962,7 @@ qclass Http3ClientPollOperationBase [
 /** @param sock the UDP socket (must be bound via bindINET())
     @param host the remote hostname
     @param port the remote port (1-65535)
+    @param connection owning HTTP client connection
     @param family the address family (AF_INET or AF_INET6); default AF_UNSPEC
         resolves from hostname
     @param connect_timeout handshake deadline; \c 0 (default) disables the deadline.
@@ -1215,10 +1287,17 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
 
     @param stream_id the QUIC stream ID
     @param channel the Channel to push response chunks to
+    @param notifier optional EventNotifier signaled after channel updates
+    @param sse_install_eligible if \c True, the response \c ChannelAction is retained after
+    \c end_stream so a later @ref installSseState() call can drain buffered body bytes;
+    callers that do not intend to install SSE state must leave this \c False to avoid
+    holding the action for the lifetime of the connection
 
     @return hash with: "need_cancel" (bool), "buffered" (list or NOTHING)
 */
-*hash<auto> Http3ClientPollOperationBase::registerStreamWithChannel(int stream_id, object channel) {
+*hash<auto> Http3ClientPollOperationBase::registerStreamWithChannel(int stream_id, object channel,
+        *EventNotifier[QoreEventNotifier] notifier,
+        bool sse_install_eligible = False) {
     // Extract QoreChannel private data from the Channel object
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
@@ -1230,8 +1309,19 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
     }
     ReferenceHolder<QoreChannel> ch_holder(ch, xsink);
 
+    QoreEventNotifier* notifier_ptr = nullptr;
+    QoreObject* notifier_obj_ptr = nullptr;
+    if (notifier) {
+        notifier_ptr = notifier.release();
+        notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
+    }
+    ReferenceHolder<QoreEventNotifier> notifier_holder(notifier_ptr, xsink);
+
     bool need_cancel = false;
-    ReferenceHolder<ChannelAction> action(new ChannelAction(ch), xsink);
+    ReferenceHolder<ChannelAction> action(new ChannelAction(ch, notifier_ptr, notifier_obj_ptr), xsink);
+    if (sse_install_eligible) {
+        action->setSseInstallEligible();
+    }
     // Ownership: priv->registerStream takes the ref on success; see
     // registerStreamWithPromise for the rationale.
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
@@ -1371,4 +1461,44 @@ nothing Http3ClientPollOperationBase::installFrameState(int stream_id,
         Queue[Queue] msg_queue) {
     Queue* queue_ptr = msg_queue.release();
     priv->installFrameState(static_cast<int64_t>(stream_id), queue_ptr, xsink);
+}
+
+//! Installs an SSE parser on an active ChannelAction stream
+/** @param stream_id the H3 stream ID returned by submitRequestWithChannel()
+    @param queue Queue for parsed SSE event delivery
+    @param notifier optional EventNotifier signaled after queue updates
+    @param initial_body optional body bytes already received before installing
+        the SSE parser
+
+    @since %Qore 2.3
+*/
+nothing Http3ClientPollOperationBase::installSseState(int stream_id,
+        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier,
+        *data initial_body) {
+    QoreEventNotifier* notifier_ptr = nullptr;
+    QoreObject* notifier_obj_ptr = nullptr;
+    if (notifier) {
+        notifier_ptr = notifier.release();
+        notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
+    }
+    Queue* queue_ptr = queue.release();
+    QoreValue initial;
+    if (initial_body) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("body", initial_body->refSelf(), xsink);
+        if (*xsink) {
+            queue_ptr->deref(xsink);
+            if (notifier_ptr) {
+                notifier_ptr->deref(xsink);
+            }
+            return QoreValue();
+        }
+        initial = h.release();
+    }
+    priv->installSseState(static_cast<int64_t>(stream_id), queue_ptr,
+        notifier_ptr, notifier_obj_ptr, initial, xsink);
+    queue_ptr->deref(xsink);
+    if (notifier_ptr) {
+        notifier_ptr->deref(xsink);
+    }
 }

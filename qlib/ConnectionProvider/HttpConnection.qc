@@ -40,6 +40,13 @@ public namespace ConnectionProvider {
       \c "auto"); HTTP/2 (\c "2.0" or \c "auto") requires TLS and is negotiated via ALPN; HTTP/3 (\c "3.0")
       requires TLS and uses QUIC as the transport protocol
     - \c "max_redirects": maximum redirects to support
+    - \c "negotiate_auth": enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it
+    - \c "negotiate_credential_cache": credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication
+    - \c "negotiate_delegation_mode": delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication
+    - \c "negotiate_keytab": client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication
+    - \c "negotiate_preemptive": if \c True, send the initial Negotiate token before receiving a 401 challenge
+    - \c "negotiate_service_principal": Kerberos service principal to use; if omitted, REST clients derive a
+      host-based \c HTTP service name from the URL
     - \c "password": The password for authentication; only used if no username or password is set in the URL and if
       the \c username option is also used
     - \c "pre_encoded_urls": If @ref True "True" then all URI paths in URLs are assumed to be already
@@ -58,9 +65,89 @@ public namespace ConnectionProvider {
 
     @see @ref Qore::HTTPClient::constructor(hash<auto>) "HTTPClient::constructor(hash<auto> opts)" for more
     information on the above options
+
+    @note The raw @ref Qore::HTTPClient "HTTPClient" object returned by this connection does not implement the
+    SPNEGO retry exchange. If \c negotiate_auth is enabled, raw \c HttpConnection paths such as \c get(),
+    \c startPollConnect(), and \c startPollRequest() raise \c HTTP-NEGOTIATE-AUTH-ERROR. Use
+    \c RestConnection, \c RestClient, or \c RestClientIo for Kerberos/SPNEGO HTTP Negotiate authentication.
 */
 public class HttpConnection inherits AbstractConnectionWithInfo {
     public {
+        #! HTTP Negotiate delegation modes
+        const NegotiateDelegationModeAllowedValues = (
+            <AllowedValueInfo>{
+                "value": "none",
+                "desc": "Do not delegate credentials",
+            },
+            <AllowedValueInfo>{
+                "value": "s4u",
+                "desc": "Use constrained delegation with S4U where supported",
+            },
+            <AllowedValueInfo>{
+                "value": "direct",
+                "desc": "Delegate the initiator credential directly where supported",
+            },
+        );
+
+        #! HTTP Negotiate option names
+        const NegotiateOptionNames = (
+            "negotiate_auth",
+            "negotiate_service_principal",
+            "negotiate_keytab",
+            "negotiate_credential_cache",
+            "negotiate_preemptive",
+            "negotiate_delegation_mode",
+        );
+
+        #! HTTP Negotiate option metadata
+        const NegotiateOptions = {
+            "negotiate_auth": <ConnectionOptionInfo>{
+                "display_name": "Kerberos Negotiate Auth?",
+                "short_desc": "Enables Kerberos/SPNEGO HTTP Negotiate authentication",
+                "type": "bool",
+                "desc": "Enables Kerberos/SPNEGO HTTP Negotiate authentication for REST clients that support it; "
+                    "raw HTTPClient paths reject this option with HTTP-NEGOTIATE-AUTH-ERROR",
+                "default_value": False,
+            },
+            "negotiate_service_principal": <ConnectionOptionInfo>{
+                "display_name": "Kerberos Service Principal",
+                "short_desc": "The Kerberos HTTP service principal",
+                "type": "string",
+                "desc": "The Kerberos service principal to use for HTTP Negotiate authentication; if omitted, "
+                    "REST clients derive a host-based HTTP service name from the URL",
+            },
+            "negotiate_keytab": <ConnectionOptionInfo>{
+                "display_name": "Kerberos Client Keytab",
+                "short_desc": "Client keytab for Kerberos HTTP Negotiate authentication",
+                "type": "string",
+                "desc": "Client keytab to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+                "subst_env_vars": True,
+                "sensitive": True,
+            },
+            "negotiate_credential_cache": <ConnectionOptionInfo>{
+                "display_name": "Kerberos Credential Cache",
+                "short_desc": "Credential cache for Kerberos HTTP Negotiate authentication",
+                "type": "string",
+                "desc": "Credential cache to use for Kerberos/SPNEGO HTTP Negotiate authentication",
+                "subst_env_vars": True,
+            },
+            "negotiate_preemptive": <ConnectionOptionInfo>{
+                "display_name": "Preemptive Kerberos Negotiate?",
+                "short_desc": "Sends the initial Negotiate token without waiting for a 401 challenge",
+                "type": "bool",
+                "desc": "If True, send the initial Negotiate token before receiving a 401 challenge",
+                "default_value": False,
+            },
+            "negotiate_delegation_mode": <ConnectionOptionInfo>{
+                "display_name": "Kerberos Delegation Mode",
+                "short_desc": "Delegation mode for Kerberos HTTP Negotiate authentication",
+                "type": "string",
+                "desc": "Delegation mode for Kerberos/SPNEGO HTTP Negotiate authentication",
+                "default_value": "none",
+                "allowed_values": NegotiateDelegationModeAllowedValues,
+            },
+        };
+
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "HTTP Connection",
@@ -71,7 +158,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
                 "https": True,
                 "http": True,
             },
-            "options": {
+            "options": NegotiateOptions + {
                 "assume_encoding": <ConnectionOptionInfo>{
                     "display_name": "Assume Character Encoding",
                     "short_desc": "Sets the character encoding to assume if 'charset' is missing",
@@ -356,6 +443,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         @since ConnectionProvider 1.7
     */
     Qore::AbstractPollOperation startPollConnect(*Logger::LoggerInterface logger) {
+        checkRawHttpNegotiateUnsupported();
         if (opts.ping_method && opts.ping_path) {
             hash<auto> headers;
             headers += opts.headers;
@@ -390,6 +478,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     */
     Qore::AbstractPollOperation startPollRequest(string method, string path, auto body,
             *hash<auto> headers, *Logger::LoggerInterface logger) {
+        checkRawHttpNegotiateUnsupported();
         hash<auto> req_headers;
         req_headers += opts.headers;
         req_headers += headers;
@@ -412,12 +501,22 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         @param rtopts this connection type does not accept any runtime option, so this parameter is ignored
     */
     private Qore::HTTPClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        checkRawHttpNegotiateUnsupported();
         HTTPClient sc(getConnectionOptions());
         if (connect) {
             sc.connect();
         }
 
         return sc;
+    }
+
+    #! Rejects Kerberos/SPNEGO authentication for raw HTTPClient paths
+    private checkRawHttpNegotiateUnsupported() {
+        if (opts.negotiate_auth) {
+            throw "HTTP-NEGOTIATE-AUTH-ERROR",
+                "HttpConnection returns raw HTTPClient objects, which do not support negotiate_auth; use "
+                "RestConnection for Kerberos/SPNEGO HTTP Negotiate authentication";
+        }
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
