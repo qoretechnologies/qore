@@ -477,6 +477,10 @@ class TestPipelineDataProvider inherits AbstractDataProvider {
 
 public class DataProviderTest inherits QUnit::Test {
     constructor() : Test("DataProvider Test", "1.0") {
+        # Keep this core module test independent of host-specific provider discovery configuration.
+        unsetenv("QORE_DATA_PROVIDERS");
+        remove ENV{"QORE_DATA_PROVIDERS"};
+
         DataProviderTypeEntry::setEpheremalIdStart(-1);
 
         addTestCase("expression tests", \expressionTests());

@@ -1406,9 +1406,9 @@ if (errors) {
 
     #! Tries to load a module corresponding to the given factory
     private static *string tryGetModuleName(string name, string func, string type) {
-        *string prov = ENV.QORE_DATA_PROVIDERS;
+        *string prov = getenv("QORE_DATA_PROVIDERS");
         if (prov) {
-            list<string> pl = ENV.QORE_DATA_PROVIDERS.split(PathSep);
+            list<string> pl = prov.split(PathSep);
             foreach string mod in (pl) {
                 Program p(PO_NO_USER_API);
                 try {
@@ -1482,9 +1482,9 @@ if (errors) {
     private static *object loadFromEnvironment(string func, string type, *hash<SymbolInfo> info,
             *LoggerInterface logger) {
         # load modules from the QORE_DATA_PROVIDERS environment variable
-        *string prov = ENV.QORE_DATA_PROVIDERS;
+        *string prov = getenv("QORE_DATA_PROVIDERS");
         if (prov) {
-            list<string> pl = ENV.QORE_DATA_PROVIDERS.split(PathSep);
+            list<string> pl = prov.split(PathSep);
             foreach string mod in (pl) {
                 if (mod_map{mod}) {
                     continue;
