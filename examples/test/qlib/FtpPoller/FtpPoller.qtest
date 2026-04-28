@@ -147,6 +147,7 @@ class FtpPollerTest inherits QUnit::Test {
         });
         prov.setLogger(logger);
         prov.registerObserver(observer);
+        on_exit prov.stopEvents();
 
         list<TmpFile> files;
         map files += new TmpFile("ftp_test_" + $1, NOTHING, dir), Files;
@@ -154,8 +155,9 @@ class FtpPollerTest inherits QUnit::Test {
 
         prov.observersReady();
 
-        observer.wait();
-        map assertEq($1, observer.h{$1}.name), (map basename($1.path), files);
+        hash<string, hash<auto>> event_map = observer.wait(files.size());
+        prov.stopEvents();
+        map assertEq($1, event_map{$1}.name), (map basename($1.path), files);
 
         assertTrue(True);
 
@@ -166,36 +168,32 @@ class FtpPollerTest inherits QUnit::Test {
 }
 
 class MyObserver inherits Observer {
-    public {
-        hash<string, hash<auto>> h();
-    }
-
     private {
+        hash<string, hash<auto>> h();
         Mutex m();
         Condition cond();
     }
 
     update(string event_id, hash<auto> data_) {
-        h{data_.name} = data_;
-        if (h.size() == 3) {
-            m.lock();
-            on_exit m.unlock();
+        m.lock();
+        on_exit m.unlock();
 
-            cond.broadcast();
-        }
+        h{data_.name} = data_;
+        cond.broadcast();
     }
 
-    wait() {
+    hash<string, hash<auto>> wait(int expected) {
         date start = now_us();
 
         m.lock();
         on_exit m.unlock();
 
-        while (h.size() != 4) {
+        while (h.size() != expected) {
             cond.wait(m, 1s);
             if ((now_us() - start) > 5s) {
-                throw "ERROR", sprintf("%d/4 files received in timeout: %y", h.size(), keys h);
+                throw "ERROR", sprintf("%d/%d files received in timeout: %y", h.size(), expected, keys h);
             }
         }
+        return h;
     }
 }

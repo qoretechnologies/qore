@@ -40,6 +40,7 @@
 
 #include <qore/common.h>
 #include "qore/intern/ParseNode.h"
+#include "qore/intern/QoreTypeInfo.h"
 
 #include <string>
 
@@ -138,9 +139,9 @@ public:
 
     DLLLOCAL const QoreValue getValue() const;
 
-    //! Returns true if the constant's value has been initialized (saved_val is set)
+    //! Returns true if the constant's value has been initialized
     DLLLOCAL bool hasValue() const {
-        return static_cast<bool>(saved_val) || (val.hasNode() && val.getType() != NT_RTCONSTREF);
+        return static_cast<bool>(saved_val) || (val && val.getType() != NT_RTCONSTREF);
     }
 
     //! Sets the runtime value (val + saved_val) for AOT init functions
@@ -486,7 +487,7 @@ protected:
         // handled above); any other eval path is a programmer error (typically
         // parse-time fold of an unpopulated pending constant) and must raise
         // rather than loop.
-        if (ce->aot_shell_pending) {
+        if (ce->aot_shell_pending || !ce->hasValue()) {
             xsink->raiseException("AOT-PENDING-CONSTANT",
                 "cannot evaluate AOT-deserialized constant '%s' before its "
                 "__const_init function has populated the value",
@@ -502,7 +503,8 @@ protected:
 public:
     DLLLOCAL RuntimeConstantRefNode(const QoreProgramLocation* loc, ConstantEntry* n_ce) : ParseNode(loc,
             NT_RTCONSTREF, true, false), ce(n_ce) {
-        assert(ce->saved_val);
+        assert(ce->hasValue());
+        assert(!ce->aot_shell_pending);
     }
 
     //! Constructor for AOT deferred evaluation — saved_val may not be set yet
@@ -518,17 +520,42 @@ public:
     }
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
-        assert(ce->saved_val);
-        return ce->saved_val.getAsString(str, foff, xsink);
+        if (ce->saved_val) {
+            return ce->saved_val.getAsString(str, foff, xsink);
+        }
+        if (ce->aot_shell_pending || !ce->hasValue()) {
+            xsink->raiseException("AOT-PENDING-CONSTANT",
+                "cannot convert AOT-deserialized constant '%s' to a string before its "
+                "__const_init function has populated the value",
+                ce->getName());
+            return -1;
+        }
+        return ce->val.getAsString(str, foff, xsink);
     }
 
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
-        assert(ce->saved_val);
-        return ce->saved_val.getAsString(del, foff, xsink);
+        if (ce->saved_val) {
+            return ce->saved_val.getAsString(del, foff, xsink);
+        }
+        if (ce->aot_shell_pending || !ce->hasValue()) {
+            xsink->raiseException("AOT-PENDING-CONSTANT",
+                "cannot convert AOT-deserialized constant '%s' to a string before its "
+                "__const_init function has populated the value",
+                ce->getName());
+            del = false;
+            return nullptr;
+        }
+        return ce->val.getAsString(del, foff, xsink);
     }
 
     DLLLOCAL virtual const char* getTypeName() const {
-        return ce->saved_val.getTypeName();
+        if (ce->saved_val) {
+            return ce->saved_val.getTypeName();
+        }
+        if (ce->aot_shell_pending || !ce->hasValue()) {
+            return QoreTypeInfo::getName(ce->typeInfo);
+        }
+        return ce->val.getTypeName();
     }
 };
 

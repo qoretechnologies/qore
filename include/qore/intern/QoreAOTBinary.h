@@ -808,7 +808,7 @@ enum class AOTExprKind : uint8_t {
     CLOSURE_CREATE     = 11,  //!< Closure/lambda: ref1=enclosing class name (empty if none)
     CALL_REF           = 12,  //!< Call reference call: ref1=function_name (if function ref)
     OBJ_METHOD_REF     = 13,  //!< Object method reference: ref1=method_name
-    STATIC_VARREF      = 14,  //!< Static class variable: ref1=class_name, ref2=var_name
+    STATIC_VARREF      = 14,  //!< Static class variable: ref1=class_path, ref2=var_name
     SCOPED_NEW_OBJECT  = 15,  //!< Scoped new object: ref1=class_name
     HASHDECL_NEW       = 16,  //!< Hashdecl construction: ref1=hashdecl_path
     COMPLEX_HASH_NEW   = 17,  //!< Complex hash construction: ref1=type_path
@@ -1498,13 +1498,21 @@ public:
         constants from any sibling AOT blob in the batch. */
     bool resolveConstants(std::string& error);
 
+    //! Phase-split 2a-2b — register class static members.
+    /** Must run after resolveConstants() and before resolveMembers(), because
+        instance-member default expressions can reference class static members. */
+    bool resolveStaticMembersPhase(std::string& error);
+
     //! Phase-split 2a-3 — resolve this session's OWN instance members.
-    /** Must run after resolveConstants() so expression-tree member defaults
-        can resolve class and namespace constants. */
+    /** Must run after resolveConstants() and resolveStaticMembersPhase() so
+        expression-tree member defaults can resolve constants and static vars,
+        and after deserializeFunctionsAndMethods() so defaults can call class
+        static methods. */
     bool resolveMembers(std::string& error);
 
     //! Phase-split 2a compatibility entry point — resolve base classes, types,
-    //! constants, and this session's OWN members (no inherited imports yet).
+    //! constants, static members, functions/methods, and this session's OWN
+    //! members (no inherited imports yet).
     /** Must run before importInheritedMembersPhase() on ANY
         session, because that phase reads members from base
         classes that may live in sibling sessions. */
@@ -1533,13 +1541,14 @@ public:
     //! populated. */
     bool importInheritedMembersPhase(std::string& error);
 
-    //! Phase-split 2a-post — static members and top-level globals.
+    //! Phase-split 2a-post — top-level globals.
     bool resolveStaticsAndConstants(std::string& error);
 
-    //! Phase-split 2b — deserialize functions and methods.
+    //! Phase-split 2a-2c — deserialize functions and methods.
     /** Adds method variants to every class's pending method map
         (hm/shm).  No parseCommit fires here.  Must run after
-        resolveTypesAndMembers() on this session. */
+        resolveTypes(), resolveConstants(), and resolveStaticMembersPhase(),
+        and before resolveMembers() so member defaults can resolve static calls. */
     bool deserializeFunctionsAndMethods(std::string& error);
 
     //! Phase-split 2c — commit all newly deserialized classes.
@@ -1853,15 +1862,22 @@ public:
             }                                                        \
         } while (0)
 
-        // 2a: types/bases first, then constants across all sessions, then
-        // each session's OWN members.  The cross-session constant barrier is
-        // required for member defaults like Class::Defaults.Key.
+        // 2a: types/bases first, then constants, static members, and methods
+        // across all sessions, then each session's OWN instance members.  The
+        // barriers are required for member defaults like Class::Defaults.Key,
+        // Class::staticVar, and Class::staticMethod().
         AOT_PHASE_TIME(1, {
             for (auto& sess : sessions) {
                 if (!sess->resolveTypes(error)) return false;
             }
             for (auto& sess : sessions) {
                 if (!sess->resolveConstants(error)) return false;
+            }
+            for (auto& sess : sessions) {
+                if (!sess->resolveStaticMembersPhase(error)) return false;
+            }
+            for (auto& sess : sessions) {
+                if (!sess->deserializeFunctionsAndMethods(error)) return false;
             }
             for (auto& sess : sessions) {
                 if (!sess->resolveMembers(error)) return false;
@@ -1881,19 +1897,17 @@ public:
                 if (!sess->importInheritedMembersPhase(error)) return false;
             }
         });
-        // 2a-post: static members, class constants, globals.
+        // 2a-post: top-level globals.
         AOT_PHASE_TIME(4, {
             for (auto& sess : sessions) {
                 if (!sess->resolveStaticsAndConstants(error)) return false;
             }
         });
-        // 2b: function and method deserialization — every class's
-        // method map gets populated here.  Must finish across all
-        // sessions before ANY session commits.
+        // 2b: function and method deserialization used to live here.  It now
+        // runs before resolveMembers() so member default expression trees can
+        // resolve static method calls.  Keep this timing bucket reserved so
+        // existing phase timing output stays stable.
         AOT_PHASE_TIME(5, {
-            for (auto& sess : sessions) {
-                if (!sess->deserializeFunctionsAndMethods(error)) return false;
-            }
         });
         // 2c: commit classes — 4 sub-phases interleaved across
         // sessions so a session's parseCommit walk can find

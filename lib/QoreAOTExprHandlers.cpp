@@ -852,7 +852,7 @@ static bool write_expr_static_varref(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* sv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_VARREF));
-        ctx.writer.writeStringRef(sv->qc.getName());
+        ctx.writer.writeStringRef(sv->qc.getNamespacePath().c_str());
         ctx.writer.writeStringRef(sv->str.c_str());
         return true;
     }
@@ -867,19 +867,32 @@ static QoreValue read_expr_static_varref(AOTExprReadCtx& ctx) {
     }
     qore_program_private* pp = qore_program_private::get(*ctx.pgm);
     const qore_ns_private* found_ns = nullptr;
+    const char* class_path = (class_name[0] == ':' && class_name[1] == ':') ? class_name + 2 : class_name;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_name, found_ns);
+        *pp->RootNS, class_path, found_ns);
     if (!qc) {
         return QoreValue();
     }
+    const QoreClass* owner_qc = qc;
     const QoreExternalStaticMember* m = qc->findLocalStaticMember(var_name);
+    if (!m) {
+        QoreClassHierarchyIterator hi(*qc);
+        while (hi.next()) {
+            const QoreClass& pqc = hi.get();
+            m = pqc.findLocalStaticMember(var_name);
+            if (m) {
+                owner_qc = &pqc;
+                break;
+            }
+        }
+    }
     if (!m) {
         return QoreValue();
     }
     QoreVarInfo* vi = const_cast<QoreVarInfo*>(
         reinterpret_cast<const QoreVarInfo*>(m));
     StaticClassVarRefNode* node = new StaticClassVarRefNode(&loc_builtin, var_name,
-        *qc, *vi);
+        *owner_qc, *vi);
     return QoreValue(node);
 }
 

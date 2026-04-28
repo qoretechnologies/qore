@@ -3637,7 +3637,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // StaticClassVarRefNode: static class variable reference
     if (auto* sv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_VARREF));
-        writer.writeStringRef(sv->qc.getName());
+        writer.writeStringRef(sv->qc.getNamespacePath().c_str());
         writer.writeStringRef(sv->str.c_str());
         return true;
     }
@@ -4997,9 +4997,19 @@ bool QoreAOTBinaryDeserializer::resolveMembers(std::string& error) {
     return true;
 }
 
+// Phase-split 2a-2b.  Register static members before instance-member defaults
+// are deserialized, because those defaults can call static methods with static
+// var arguments (for example HashDataType::default_other_field_type references
+// DataProvider::AbstractDataProviderType::anyType).
+bool QoreAOTBinaryDeserializer::resolveStaticMembersPhase(std::string& error) {
+    return resolveStaticMembers(error);
+}
+
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
     return resolveTypes(error)
         && resolveConstants(error)
+        && resolveStaticMembersPhase(error)
+        && deserializeFunctionsAndMethods(error)
         && resolveMembers(error);
 }
 
@@ -5067,13 +5077,9 @@ bool QoreAOTBinaryDeserializer::importInheritedMembersPhase(std::string& error) 
     return importInheritedMembers(error);
 }
 
-// Phase-split 2a-c.  Static members and top-level globals.  Class and
-// namespace constants are already registered in resolveConstants() so both
-// instance and static member defaults can resolve them.
+// Phase-split 2a-c.  Top-level globals.  Class static members are registered
+// before instance members so member defaults can resolve static var references.
 bool QoreAOTBinaryDeserializer::resolveStaticsAndConstants(std::string& error) {
-    if (!resolveStaticMembers(error)) {
-        return false;
-    }
     if (!deserializeGlobals(error)) {
         return false;
     }
@@ -5153,8 +5159,8 @@ bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& erro
     // readAndSetupVariantSignature can look up return/param types by
     // index.  Safe at this point: all sibling sessions' shells are
     // populated (phase 1 is complete across the whole batch) and
-    // phase 2a (resolveTypesAndMembers) has linked base classes +
-    // typedefs, so complex type paths like `*hash<X::Y>` resolve.
+    // phase 2a's type pass has linked base classes + typedefs, so complex
+    // type paths like `*hash<X::Y>` resolve.
     if (!resolveTypeTable(error)) {
         return false;
     }
@@ -5304,7 +5310,6 @@ bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
         && rebuildBaseClassSmlPhase(error)
         && importInheritedMembersPhase(error)
         && resolveStaticsAndConstants(error)
-        && deserializeFunctionsAndMethods(error)
         && commitClasses(error)
         && finalize(error);
 }

@@ -9774,10 +9774,10 @@ class ExprTreeSerializer {
             return true;
         }
 
-        // StaticClassVarRefNode: ClassName::var
+        // StaticClassVarRefNode: namespace-qualified ClassName::var
         if (auto* scv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_VAR));
-            writeStr(scv->qc.getName());
+            writeStr(scv->qc.getNamespacePath());
             writeStr(scv->str);
             writeU16(0);
             return true;

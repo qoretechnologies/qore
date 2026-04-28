@@ -568,6 +568,13 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # rule runs — target-level deps, not mtime deps, so a newer qcc
     # binary doesn't force a qmod rebuild on its own.
     add_dependencies(${_name}-qmod qcc qcc-format-version)
+    if (DEFINED QORE_AOT_BINARY_MODULE_TARGETS)
+        foreach(_qore_aot_binary_module ${QORE_AOT_BINARY_MODULE_TARGETS})
+            if (TARGET ${_qore_aot_binary_module})
+                add_dependencies(${_name}-qmod ${_qore_aot_binary_module})
+            endif()
+        endforeach()
+    endif()
 
     # For split-dir modules install into ${QORE_USER_MODULES_DIR}/<name>/
     # so the layout matches the in-tree build: qmod sits alongside the
@@ -616,6 +623,12 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
 
     set (_extra_files ${ARGN})
 
+    # User-module dependencies are maintained explicitly by the caller.
+    # AOT qmod rules add all in-tree binary module targets separately, so
+    # split-module compilation cannot race binary modules required by a
+    # transitive %requires chain.
+    set(_effective_mod_deps ${_mod_deps})
+
     # Add module name to the global list for documentation cross-referencing
     set(QORE_USER_MODULE_NAMES ${QORE_USER_MODULE_NAMES} ${f} CACHE INTERNAL "List of user module names for doc cross-referencing")
 
@@ -629,7 +642,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         # prepare needed vars
         set(MOD_DOXYFILE "${CMAKE_BINARY_DIR}/doxygen/Doxyfile.${f}")
         unset(MOD_DEPS)
-        foreach(i ${_mod_deps})
+        foreach(i ${_effective_mod_deps})
             # we must use relative directories for tags; using absolute paths for tags will break the documentation
             # when used on any system except the one where it's generated
             get_filename_component(f0 ${i} NAME)
@@ -721,7 +734,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         add_dependencies(docs-${f} docs-lib)
 
         # make this dependent on the other module targets
-        foreach(i ${_mod_deps})
+        foreach(i ${_effective_mod_deps})
             get_filename_component(f0 ${i} NAME)
             if (TARGET docs-${f0})
                 add_dependencies(docs-${f} docs-${f0})
@@ -793,8 +806,11 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
             QORE_USER_MODULE_AOT_RULES(${f} 0
                 ${CMAKE_SOURCE_DIR}/${_module_file} ${_mod_targets})
         endif()
-        foreach(_dep ${_mod_deps})
+        foreach(_dep ${_effective_mod_deps})
             get_filename_component(_dep_name ${_dep} NAME_WE)
+            if (TARGET ${_dep_name})
+                add_dependencies(${f}-qmod ${_dep_name})
+            endif()
             if (TARGET ${_dep_name}-qmod)
                 add_dependencies(${f}-qmod ${_dep_name}-qmod)
             endif()

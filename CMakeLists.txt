@@ -1484,7 +1484,6 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/RSet.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/RSection.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreListNode.cpp\"
-#include \"${CMAKE_SOURCE_DIR}/lib/qore-main.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreGetOpt.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFtpClient.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DBI.cpp\"
@@ -1839,9 +1838,11 @@ if (SINGLE_COMPILATION_UNIT)
             "#include \"${CMAKE_BINARY_DIR}/ql_alloc_tracking.cpp\"\n")
     endif ()
     # Files that must be compiled separately from the SCU:
+    # - qore-main.cpp: includes platform dynamic-loader headers such as
+    #   <link.h> that define ELF macros conflicting with LLVM headers in the SCU
     # - qore_git_revision.cpp: so git hash changes only recompile this tiny file
     # - AllocTracking.cpp: defines global malloc/free symbols
-    set(LIBQORE_EXTRA_SRC lib/qore_git_revision.cpp)
+    set(LIBQORE_EXTRA_SRC lib/qore-main.cpp lib/qore_git_revision.cpp)
     if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
         list(APPEND LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
     endif ()
@@ -2226,10 +2227,29 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 # installing the json module to enable QM metadata extraction.
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
+set(QORE_QM_METADATA_MODULE_DIRS
+    ${CMAKE_BINARY_DIR}/modules/astparser
+    ${CMAKE_BINARY_DIR}/modules/reflection
+    ${CMAKE_BINARY_DIR}/modules/logger_bin
+    ${CMAKE_BINARY_DIR}/modules/linenoise
+    ${CMAKE_BINARY_DIR}/modules/krb5
+    ${CMAKE_BINARY_DIR}/modules/mongodb
+    ${CMAKE_BINARY_DIR}/modules/ml
+    ${CMAKE_BINARY_DIR}/modules/tokenizer
+    ${CMAKE_BINARY_DIR}/modules/ocr
+    ${CMAKE_BINARY_DIR}/modules/dataframe
+    ${CMAKE_BINARY_DIR}/modules/protobuf)
+string(REPLACE ";" ":" QORE_QM_METADATA_MODULE_DIRS_STR "${QORE_QM_METADATA_MODULE_DIRS}")
 set(QORE_QM_METADATA_ENV
-    "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_BINARY_DIR}/modules/logger_bin:${CMAKE_BINARY_DIR}/modules/krb5:${CMAKE_SOURCE_DIR}/qlib:/usr/local/share/qore-modules:/usr/local/lib/x86_64-linux-gnu/qore-modules:/usr/share/qore-modules:/usr/lib/x86_64-linux-gnu/qore-modules"
+    "QORE_MODULE_DIR=${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib:/usr/local/share/qore-modules:/usr/local/lib/x86_64-linux-gnu/qore-modules:/usr/share/qore-modules:/usr/lib/x86_64-linux-gnu/qore-modules"
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
-set(QORE_QM_METADATA_DEPENDS qore astparser reflection logger_bin krb5)
+set(QORE_AOT_BINARY_MODULE_TARGETS)
+foreach(_qore_build_module astparser reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)
+    if(TARGET ${_qore_build_module})
+        list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_qore_build_module})
+    endif()
+endforeach()
+set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 if(_qore_exe)
     execute_process(

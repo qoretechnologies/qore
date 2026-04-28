@@ -799,7 +799,7 @@ extern "C" void ast_scanner_clear_tree() {
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_elif p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state prepend_module_state module_cmd set_zone try_module try_reexport_module angle_state regex_brace_state regex_extract_brace_state regex_subst1_brace regex_subst2_brace_wait regex_subst2_brace regex_trans1_brace regex_trans2_brace_wait regex_trans2_brace
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_elif p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires_state regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state prepend_module_state module_cmd set_zone try_module try_reexport_module angle_state regex_brace_state regex_extract_brace_state regex_subst1_brace regex_subst2_brace_wait regex_subst2_brace regex_trans1_brace regex_trans2_brace_wait regex_trans2_brace
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -987,15 +987,15 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 <try_module><<EOF>>                     { AST_FLEX_DO_EOF }
 ^%endtry{WS}*$                          { yylval->parseopt = new ASTParseOption(APOK_ENDTRY); return PARSE_OPTION_FULL; }
 ^%requires{WS}*$                        { yylval->parseopt = new ASTStringParseOption(APOK_REQUIRES); return PARSE_OPTION_FULL; }
-^%requires                              { BEGIN(requires); return PARSE_OPTION_BEGIN; }
-<requires>[^\n\r]+                      {
+^%requires                              { BEGIN(requires_state); return PARSE_OPTION_BEGIN; }
+<requires_state>[^\n\r]+                {
                                             const char* trimmed = trim_inplace(yytext);
                                             if (trimmed)
                                                 yylval->parseopt = new ASTStringParseOption(APOK_REQUIRES, trimmed);
                                             BEGIN(INITIAL);
                                             return PARSE_OPTION_END;
                                         }
-<requires><<EOF>>                       { AST_FLEX_DO_EOF }
+<requires_state><<EOF>>                 { AST_FLEX_DO_EOF }
 ^%module-cmd{WS}*$                      { yylval->parseopt = new ASTStringParseOption(APOK_MODULE_CMD); return PARSE_OPTION_FULL; }
 ^%module-cmd                            { BEGIN(module_cmd); return PARSE_OPTION_BEGIN; }
 <module_cmd>{WS}*                       /* ignore white space */
