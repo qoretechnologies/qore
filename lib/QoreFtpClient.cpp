@@ -426,6 +426,10 @@ struct qore_ftp_private {
 
     DLLLOCAL QoreHashNode* getControlSocketInfo(ExceptionSink* xsink, bool host_lookup) const {
         AutoLocker al(m);
+        return getControlSocketInfoUnlocked(xsink, host_lookup);
+    }
+
+    DLLLOCAL QoreHashNode* getControlSocketInfoUnlocked(ExceptionSink* xsink, bool host_lookup) const {
         if (ctrl_op && ctrl_op->getControlSocket()) {
             return ctrl_op->getControlSocket()->getSocketInfo(xsink, host_lookup);
         }
@@ -891,16 +895,23 @@ struct qore_ftp_private {
             const void* send_data_ptr, size_t send_len,
             BinaryNode** recv_output, ExceptionSink* xsink) {
         // 1. Get local interface address from the async control socket
-        int ctrl_fd = (ctrl_op && ctrl_op->getControlSocket())
-            ? ctrl_op->getControlSocket()->getSocket()
-            : control.getSocket();
-        struct sockaddr_in add;
-        socklen_t socksize = sizeof(struct sockaddr_in);
-        if (getsockname(ctrl_fd, (struct sockaddr*)&add, &socksize) < 0) {
-            xsink->raiseErrnoException("FTP-CONNECT-ERROR", errno,
-                "cannot determine local interface address");
+        ReferenceHolder<QoreHashNode> ctrl_info(getControlSocketInfoUnlocked(xsink, false), xsink);
+        if (*xsink) {
             return -1;
         }
+        if (!ctrl_info) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "cannot determine local interface address");
+            return -1;
+        }
+        QoreValue family_value = ctrl_info->getKeyValue("family");
+        QoreValue address_value = ctrl_info->getKeyValue("address");
+        if (family_value.getType() != NT_INT || family_value.getAsBigInt() != AF_INET
+                || address_value.getType() != NT_STRING) {
+            xsink->raiseException("FTP-CONNECT-ERROR",
+                "cannot determine IPv4 local interface address for PORT mode");
+            return -1;
+        }
+        const char* ifname_buf = address_value.get<const QoreStringNode>()->c_str();
 
         // 2. Create a fresh QoreSocketObject for listening, bind + listen.
         // Refcount plan: new=1 (consumed below by `new QoreObject(QC_SOCKET...)`
@@ -909,13 +920,6 @@ struct qore_ftp_private {
         QoreSocketObject* listen_sock = new QoreSocketObject;
         if (applyDataSocketQueues(listen_sock, xsink)) {
             listen_sock->deref(xsink);
-            return -1;
-        }
-        char ifname_buf[80];
-        if (!inet_ntop(AF_INET, &add.sin_addr, ifname_buf, sizeof(ifname_buf))) {
-            listen_sock->deref(xsink);
-            xsink->raiseErrnoException("FTP-CONNECT-ERROR", errno,
-                "cannot determine local interface address");
             return -1;
         }
         // Bind on the control connection's local IPv4 interface, ephemeral port
