@@ -125,6 +125,11 @@ public class SendCloudReturnsDataProvider inherits SendCloudDataProviderBase {
             return new DefaultRecordIterator(new ListHashIterator((record,)),
                 where_cond, search_options);
         }
+        # Per the v2 OpenAPI spec, GET /returns accepts only the `cursor` query parameter;
+        # SendCloud silently drops `status`, `parcel_id`, `created_at_from`, and
+        # `created_at_to`.  We keep sending them (in case the spec is incomplete or future
+        # versions add server-side support) but enforce them client-side so the catalog
+        # surface behaves as advertised regardless.
         hash<auto> params;
         if (search_options.status) {
             params.status = search_options.status;
@@ -132,13 +137,15 @@ public class SendCloudReturnsDataProvider inherits SendCloudDataProviderBase {
         if (search_options.parcel_id) {
             params.parcel_id = search_options.parcel_id;
         }
+        *date created_from;
+        *date created_to;
         if (search_options.created_at_from) {
-            params.created_at_from = SendCloudDataProviderBase::formatDateTime(
-                search_options.created_at_from);
+            created_from = search_options.created_at_from;
+            params.created_at_from = SendCloudDataProviderBase::formatDateTime(created_from);
         }
         if (search_options.created_at_to) {
-            params.created_at_to = SendCloudDataProviderBase::formatDateTime(
-                search_options.created_at_to);
+            created_to = search_options.created_at_to;
+            params.created_at_to = SendCloudDataProviderBase::formatDateTime(created_to);
         }
         if (search_options.page_size) {
             params.page_size = search_options.page_size;
@@ -147,6 +154,33 @@ public class SendCloudReturnsDataProvider inherits SendCloudDataProviderBase {
             params.cursor = search_options.cursor;
         }
         list<auto> records = fetchAllCursorPages("returns", "returns", params, search_options.limit);
+
+        # client-side post-filter so advertised filters always match returned records
+        if (search_options.status.val() || search_options.parcel_id || created_from || created_to) {
+            list<auto> filtered = ();
+            foreach auto r in (records) {
+                if (search_options.status.val() && r.status != search_options.status) {
+                    continue;
+                }
+                if (search_options.parcel_id && int(r.parcel.id ?? 0) != int(search_options.parcel_id)) {
+                    continue;
+                }
+                if (created_from || created_to) {
+                    *string ts_str = r.created_at;
+                    if (ts_str.val()) {
+                        date ts = date(ts_str);
+                        if (created_from && ts < created_from) {
+                            continue;
+                        }
+                        if (created_to && ts > created_to) {
+                            continue;
+                        }
+                    }
+                }
+                filtered += r;
+            }
+            records = filtered;
+        }
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
     }
 

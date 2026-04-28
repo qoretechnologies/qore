@@ -58,11 +58,15 @@ public class SendCloudWatchParcelStatusChangedDataProvider inherits SendCloudWat
         return ProviderInfo;
     }
 
-    #! Fetches parcels updated since the given timestamp and filters to status-changed records
+    #! Fetches parcels updated since the given timestamp and filters to status-changed records.
+    /** Uses the v2 \c /parcels endpoint's documented \c updated_after query parameter (an earlier
+        revision used \c updated_at_from, which SendCloud silently dropped — verified against
+        the v2 OpenAPI spec, the only update-time filter is \c updated_after).
+    */
     private list<hash<auto>> fetchRecords(date since) {
         string since_str = SendCloudDataProviderBase::formatDateTime(since);
         hash<auto> params = {
-            "updated_at_from": since_str,
+            "updated_after": since_str,
             "page_size": MaxPageSize,
         };
         list<hash<auto>> parcels;

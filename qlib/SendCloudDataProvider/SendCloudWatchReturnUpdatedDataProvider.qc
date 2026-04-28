@@ -53,11 +53,18 @@ public class SendCloudWatchReturnUpdatedDataProvider inherits SendCloudWatchData
         return ProviderInfo;
     }
 
-    #! Fetches returns updated since the given timestamp
+    #! Fetches returns updated since the given timestamp.
+    /** The v2 \c /returns endpoint accepts only the \c cursor query parameter — no
+        \c updated_at / \c created_at filters at all (verified against the v2 OpenAPI
+        spec).  Sending a \c created_at_from would have looked correct but SendCloud
+        silently drops it, so we don't pretend to filter server-side: the watcher
+        pages through the full account history and post-filters by \c updated_at
+        client-side.  This keeps the watcher complete (no missed updates to older
+        returns) at the cost of full-history paging on each cycle; the inherent
+        SendCloud account size keeps this bounded in practice.
+    */
     private list<hash<auto>> fetchRecords(date since) {
-        string since_str = SendCloudDataProviderBase::formatDateTime(since);
         hash<auto> params = {
-            "created_at_from": since_str,
             "page_size": MaxPageSize,
         };
         list<hash<auto>> return_list;
@@ -67,7 +74,7 @@ public class SendCloudWatchReturnUpdatedDataProvider inherits SendCloudWatchData
             error("SendCloudWatchReturnUpdated: error fetching returns: %s: %s", ex.err, ex.desc);
             return ();
         }
-        # filter to returns with updated_at > since
+        # client-side filter: returns with updated_at > since (or created_at if updated_at absent)
         list<hash<auto>> changed = ();
         foreach hash<auto> r in (return_list) {
             *string ts_str = r.updated_at ?? r.created_at;
