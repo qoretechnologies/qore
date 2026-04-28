@@ -755,6 +755,90 @@ static void qore_socket_object_set_h2_headers(strcase_str_map_t& out, const Qore
     }
 }
 
+static QoreHashNode* qore_socket_object_make_sockaddr_output(const struct sockaddr_storage& addr, socklen_t len,
+        const std::string& socketname) {
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    BinaryNode* b = new BinaryNode();
+    b->append(&addr, sizeof(addr));
+    h->setKeyValue("addr", b, nullptr);
+    h->setKeyValue("len", static_cast<int64>(len), nullptr);
+    if (!socketname.empty()) {
+        h->setKeyValue("socketname", new QoreStringNode(socketname), nullptr);
+    }
+    return h;
+}
+
+class QoreSocketObjectAddressInfoPollOperation : public SocketPollOperationBase {
+public:
+    enum class Action {
+        Peer,
+        Socket,
+    };
+
+    DLLLOCAL QoreSocketObjectAddressInfoPollOperation(QoreSocketObject* sock, Action action)
+            : sock(sock), action(action) {
+    }
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        if (priv->checkValid(xsink)) {
+            done = true;
+            return nullptr;
+        }
+
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        int rc = action == Action::Peer
+            ? sp->getPeerSockAddr(xsink, addr, len)
+            : sp->getSocketSockAddr(xsink, addr, len);
+        if (!rc) {
+            socketname = sp->socketname;
+            success = true;
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return success ? qore_socket_object_make_sockaddr_output(addr, len, socketname) : QoreValue();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        if (done) {
+            return "done";
+        }
+        return action == Action::Peer ? "getting-peer-info" : "getting-socket-info";
+    }
+
+private:
+    QoreSocketObject* sock;
+    Action action;
+    struct sockaddr_storage addr = {};
+    socklen_t len = 0;
+    std::string socketname;
+    bool done = false;
+    bool success = false;
+};
+
 static QoreObject* qore_socket_object_make_poll_op(QoreObject* sock_obj, SocketPollOperationBase* poller,
         const char* goal, ExceptionSink* xsink) {
     ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
@@ -985,6 +1069,76 @@ static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOpe
     ReferenceHolder<QoreHashNode> result(
         qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, owner_name, xsink), xsink);
     return *xsink ? -1 : setup_poller->getRc();
+}
+
+static QoreHashNode* qore_socket_object_get_addr_info_from_output(const QoreValue output, bool host_lookup,
+        const char* err, ExceptionSink* xsink) {
+    if (output.getType() != NT_HASH) {
+        xsink->raiseException(err, "expected address information from async socket operation, got '%s'",
+            output.getFullTypeName());
+        return nullptr;
+    }
+
+    const QoreHashNode* h = output.get<const QoreHashNode>();
+    QoreValue addr_value = h->getKeyValue("addr");
+    QoreValue len_value = h->getKeyValue("len");
+    if (addr_value.getType() != NT_BINARY || len_value.getType() != NT_INT) {
+        xsink->raiseException(err, "invalid address information from async socket operation");
+        return nullptr;
+    }
+
+    const BinaryNode* bin = addr_value.get<const BinaryNode>();
+    if (bin->size() != sizeof(struct sockaddr_storage)) {
+        xsink->raiseException(err, "invalid socket address size from async socket operation: %zu", bin->size());
+        return nullptr;
+    }
+
+    int64 raw_len = len_value.getAsBigInt();
+    if (raw_len <= 0 || raw_len > static_cast<int64>(sizeof(struct sockaddr_storage))) {
+        xsink->raiseException(err, "invalid socket address length from async socket operation: " QLLD, raw_len);
+        return nullptr;
+    }
+
+    struct sockaddr_storage addr = {};
+    memcpy(&addr, bin->getPtr(), sizeof(addr));
+
+    std::string socketname;
+    QoreValue socketname_value = h->getKeyValue("socketname");
+    if (socketname_value.getType() == NT_STRING) {
+        socketname = socketname_value.get<const QoreStringNode>()->c_str();
+    }
+
+    return qore_socket_private::getAddrInfo(addr, static_cast<socklen_t>(raw_len), host_lookup, socketname);
+}
+
+static QoreHashNode* qore_socket_object_exec_address_info(QoreSocketObject* s,
+        QoreSocketObjectAddressInfoPollOperation::Action action, bool host_lookup, const char* owner_name,
+        const char* err, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread()) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*s);
+        AutoLocker al(priv->m);
+        return action == QoreSocketObjectAddressInfoPollOperation::Action::Peer
+            ? priv->socket->getPeerInfo(xsink, host_lookup)
+            : priv->socket->getSocketInfo(xsink, host_lookup);
+    }
+
+    s->ref();
+    QoreSocketObjectAddressInfoPollOperation* poller = new QoreSocketObjectAddressInfoPollOperation(s, action);
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, poller, "done", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, owner_name, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ValueHolder output(poller->getOutput(), xsink);
+    return *xsink ? nullptr : qore_socket_object_get_addr_info_from_output(*output, host_lookup, err, xsink);
 }
 
 static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int timeout_ms, bool ssl,
@@ -3758,13 +3912,15 @@ int QoreSocketObject::getUserTimeout() {
 }
 
 QoreHashNode* QoreSocketObject::getPeerInfo(ExceptionSink* xsink, bool host_lookup) const {
-    AutoLocker al(priv->m);
-    return priv->socket->getPeerInfo(xsink, host_lookup);
+    return qore_socket_object_exec_address_info(const_cast<QoreSocketObject*>(this),
+        QoreSocketObjectAddressInfoPollOperation::Action::Peer, host_lookup, "getPeerInfo",
+        "SOCKET-GETPEERINFO-ERROR", xsink);
 }
 
 QoreHashNode* QoreSocketObject::getSocketInfo(ExceptionSink* xsink, bool host_lookup) const {
-    AutoLocker al(priv->m);
-    return priv->socket->getSocketInfo(xsink, host_lookup);
+    return qore_socket_object_exec_address_info(const_cast<QoreSocketObject*>(this),
+        QoreSocketObjectAddressInfoPollOperation::Action::Socket, host_lookup, "getSocketInfo",
+        "SOCKET-GETSOCKETINFO-ERROR", xsink);
 }
 
 void QoreSocketObject::clearWarningQueue(ExceptionSink* xsink) {

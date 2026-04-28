@@ -2164,49 +2164,72 @@ struct qore_socket_private {
         return -1;
     }
 
-    // only called from qore-bound code - always with xsink
-    DLLLOCAL QoreHashNode* getPeerInfo(ExceptionSink* xsink, bool host_lookup = true) const {
+    DLLLOCAL int getPeerSockAddr(ExceptionSink* xsink, struct sockaddr_storage& addr, socklen_t& len) const {
         assert(xsink);
         if (sock == QORE_INVALID_SOCKET) {
             se_not_open("Socket", "getPeerInfo", xsink);
-            return 0;
+            return -1;
         }
 
-        struct sockaddr_storage addr;
-        socklen_t len = sizeof addr;
+        len = sizeof addr;
         if (getpeername(sock, (struct sockaddr*)&addr, &len)) {
             qore_socket_error(xsink, "SOCKET-GETPEERINFO-ERROR", "error in getpeername()");
-            return 0;
+            return -1;
         }
 
+        return 0;
+    }
+
+    DLLLOCAL int getSocketSockAddr(ExceptionSink* xsink, struct sockaddr_storage& addr, socklen_t& len) const {
+        assert(xsink);
+        if (sock == QORE_INVALID_SOCKET) {
+            se_not_open("Socket", "getSocketInfo", xsink);
+            return -1;
+        }
+
+#if defined(HPUX) && defined(__ia64) && defined(__LP64__)
+        // on HPUX 64-bit the OS defines socklen_t to be 8 bytes, but the library expects a 32-bit value
+        int local_len = sizeof addr;
+#else
+        socklen_t local_len = sizeof addr;
+#endif
+
+        if (getsockname(sock, (struct sockaddr*)&addr, &local_len)) {
+            qore_socket_error(xsink, "SOCKET-GETSOCKETINFO-ERROR", "error in getsockname()");
+            return -1;
+        }
+
+        len = local_len;
+        return 0;
+    }
+
+    // only called from qore-bound code - always with xsink
+    DLLLOCAL QoreHashNode* getPeerInfo(ExceptionSink* xsink, bool host_lookup = true) const {
+        struct sockaddr_storage addr;
+        socklen_t len;
+        if (getPeerSockAddr(xsink, addr, len)) {
+            return 0;
+        }
         return getAddrInfo(addr, len, host_lookup);
     }
 
     // only called from qore-bound code - always with xsink
     DLLLOCAL QoreHashNode* getSocketInfo(ExceptionSink* xsink, bool host_lookup = true) const {
-        assert(xsink);
-        if (sock == QORE_INVALID_SOCKET) {
-            se_not_open("Socket", "getSocketInfo", xsink);
-            return 0;
-        }
-
         struct sockaddr_storage addr;
-#if defined(HPUX) && defined(__ia64) && defined(__LP64__)
-        // on HPUX 64-bit the OS defines socklen_t to be 8 bytes, but the library expects a 32-bit value
-        int len = sizeof addr;
-#else
-        socklen_t len = sizeof addr;
-#endif
-
-        if (getsockname(sock, (struct sockaddr*)&addr, &len)) {
-            qore_socket_error(xsink, "SOCKET-GETSOCKETINFO-ERROR", "error in getsockname()");
+        socklen_t len;
+        if (getSocketSockAddr(xsink, addr, len)) {
             return 0;
         }
-
         return getAddrInfo(addr, len, host_lookup);
     }
 
-    DLLLOCAL QoreHashNode* getAddrInfo(const struct sockaddr_storage& addr, socklen_t len, bool host_lookup = true) const {
+    DLLLOCAL QoreHashNode* getAddrInfo(const struct sockaddr_storage& addr, socklen_t len,
+            bool host_lookup = true) const {
+        return getAddrInfo(addr, len, host_lookup, socketname);
+    }
+
+    DLLLOCAL static QoreHashNode* getAddrInfo(const struct sockaddr_storage& addr, socklen_t len, bool host_lookup,
+            const std::string& socketname) {
         QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
         if (addr.ss_family == AF_INET || addr.ss_family == AF_INET6) {
