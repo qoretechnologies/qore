@@ -521,19 +521,13 @@ public:
     */
     DLLLOCAL QoreValue takeStreamData(int64_t stream_id, bool& complete);
 
-    //! Wait for stream data or completion on a dispatched stream
-    /** Blocks until the stream_data_cv_ is signaled or the timeout expires.
-        @param timeout_ms maximum wait time in milliseconds
-    */
-    DLLLOCAL void waitForStreamData(int timeout_ms);
-
     //! Check if the QUIC handshake is complete
     DLLLOCAL bool isHandshakeComplete() const;
 
     //! Check if the connection is closed or closing
     DLLLOCAL bool isClosed() const;
 
-    //! Mark session as closed — wakes all handler threads blocked in waitForStreamData()/waitForStreamDrain()
+    //! Mark session as closed — wakes all handler threads waiting for stream data/drain
     /** Called by abort() before removing the session from the socket map.
         Thread-safe: uses atomic store + signals all CVs.
     */
@@ -803,15 +797,8 @@ public:
     DLLLOCAL int submitDatagram(int64_t stream_id, const uint8_t* data, size_t len,
                        ExceptionSink* xsink);
 
-    //! Read the next incoming QUIC datagram for a stream (RFC 9221/9297)
-    /** Blocks until a datagram arrives or the timeout expires.
-
-        @param stream_id the HTTP/3 stream ID (anchor stream)
-        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
-        @param xsink exception sink
-        @return binary datagram payload, or QoreValue() (NOTHING) on timeout or no data
-    */
-    DLLLOCAL QoreValue readDatagram(int64_t stream_id, int timeout_ms, ExceptionSink* xsink);
+    //! Take the next incoming QUIC datagram for a stream without blocking
+    DLLLOCAL BinaryNode* takeDatagram(int64_t stream_id, ExceptionSink* xsink);
 
     //! Register a @ref Queue to receive incoming QUIC datagrams for a stream (RFC 9221/9297)
     /** When a Queue is registered for a stream, @ref recvDatagramCallback pushes the payload
@@ -841,8 +828,8 @@ public:
 
     //! Unregister the @ref Queue previously registered for a stream's datagrams
     /** Subsequent datagrams for @a stream_id fall back to the internal deque path (so
-        legacy @ref readDatagram() callers continue to work).  The registered Queue is
-        dereferenced.
+        synchronous @c Socket::readQuicDatagram() callers continue to work).  The
+        registered Queue is dereferenced.
 
         @param stream_id the HTTP/3 stream ID
         @param xsink exception sink for Queue deref
@@ -1381,13 +1368,12 @@ private:
 
     std::mutex datagram_mutex_;  //!< protects datagram_queues_ and datagram_qqueues_
 
-    //! Condition variable for datagram arrival notifications
-    /** Uses the same generation-counter pattern as drain_cv_ to avoid
-        POSIX UB with PTHREAD_MUTEX_RECURSIVE.
-    */
-    std::mutex datagram_cv_mtx_;
-    std::condition_variable datagram_cv_;
-    std::atomic<unsigned> datagram_gen_{0};
+    //! Socket objects to wake when controller-backed datagram reads can make progress
+    std::mutex datagram_waiters_mtx_;
+    std::unordered_map<QoreObject*, size_t> datagram_waiters_;
+
+    DLLLOCAL void notifyDatagramData();
+    DLLLOCAL void wakeDatagramWaiters();
 
     //! Outgoing datagram queue (written by submitDatagram, consumed by writePacketsLocked)
     /** Each entry is a fully framed datagram (quarter-stream-ID + payload).
@@ -1454,17 +1440,16 @@ private:
 
     DLLLOCAL void wakeStreamDrainWaiters();
 
-    //! Condition variable for stream data notifications (headers-only body streaming)
+    //! Socket objects to wake when stream data notifications fire (headers-only body streaming)
     /** Signaled by h3RecvDataCallback and h3EndStreamCallback when data arrives or
-        a dispatched stream completes.  Used by readQuicStreamDataBlock() to wait for
-        body data on dispatched streams without polling.
-
-        Uses a separate non-recursive stream_data_mtx_ + stream_data_cv_ pair with an
-        atomic generation counter (same pattern as drain_cv_).
+        a dispatched stream completes.  Used by the controller-backed
+        readQuicStreamDataBlock() poll operation.
     */
-    std::mutex stream_data_mtx_;
-    std::condition_variable stream_data_cv_;
-    std::atomic<unsigned> stream_data_gen_{0};
+    std::mutex stream_data_waiters_mtx_;
+    std::unordered_map<QoreObject*, size_t> stream_data_waiters_;
+
+    DLLLOCAL void notifyStreamData();
+    DLLLOCAL void wakeStreamDataWaiters();
 
 public:
     //! Signal stream drain waiters that buffer space has been freed
@@ -1475,6 +1460,18 @@ public:
 
     //! Unregister a controller socket operation waiting for stream drain notifications
     DLLLOCAL void unregisterStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
+
+    //! Register a controller socket operation waiting for QUIC stream data notifications
+    DLLLOCAL void registerStreamDataWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
+
+    //! Unregister a controller socket operation waiting for QUIC stream data notifications
+    DLLLOCAL void unregisterStreamDataWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
+
+    //! Register a controller socket operation waiting for QUIC datagram notifications
+    DLLLOCAL void registerDatagramWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
+
+    //! Unregister a controller socket operation waiting for QUIC datagram notifications
+    DLLLOCAL void unregisterDatagramWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
 };
 
 #endif // _QORE_INTERN_QUICSESSION_H

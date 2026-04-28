@@ -1587,7 +1587,7 @@ public:
                     }
                 }
             }
-            // Wake handler threads blocked in waitForStreamData()/waitForStreamDrain()
+            // Wake handler threads waiting for QUIC stream data/drain
             // BEFORE removing the session from the socket map
             if (quic_session) {
                 quic_session->markClosed();
@@ -1769,7 +1769,7 @@ public:
                 }
             }
         }
-        // Wake handler threads blocked in waitForStreamData()/waitForStreamDrain()
+        // Wake handler threads waiting for QUIC stream data/drain
         // BEFORE removing sessions from the socket map
         for (auto& [id, session] : sessions_) {
             session->markClosed();

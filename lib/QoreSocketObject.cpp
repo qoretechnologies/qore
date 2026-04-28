@@ -451,6 +451,265 @@ private:
     bool wake_requested = false;
 };
 
+class QoreSocketObjectQuicStreamDataPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketObjectQuicStreamDataPollOperation(std::shared_ptr<QuicSession> session,
+            int64_t session_id, int64_t stream_id)
+            : session(std::move(session)), session_id(session_id), stream_id(stream_id) {
+    }
+
+    DLLLOCAL ~QoreSocketObjectQuicStreamDataPollOperation() override {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        done = true;
+        data.discard();
+        cleanup(xsink);
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        int rc = checkData(xsink);
+        if (rc != 1) {
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        if (!registered && registerWaiter(xsink)) {
+            done = true;
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        rc = checkData(xsink);
+        if (rc != 1) {
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        if (!wake_requested) {
+            wake_requested = true;
+            wakeIoThread(xsink);
+            if (*xsink) {
+                done = true;
+                cleanup(xsink);
+                return nullptr;
+            }
+        }
+
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return data ? data->refSelf() : QoreValue();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "quic-stream-data-read" : "waiting-quic-stream-data";
+    }
+
+    DLLLOCAL BinaryNode* takeOutput() {
+        return data.release();
+    }
+
+private:
+    DLLLOCAL int checkData(ExceptionSink* xsink) {
+        if (session->isMarkedClosed()) {
+            done = true;
+            xsink->raiseException("QUIC-ERROR",
+                "QUIC session closed during stream read (session %lld, stream %lld)",
+                (long long)session_id, (long long)stream_id);
+            return -1;
+        }
+
+        bool complete = false;
+        QoreValue chunk = session->takeStreamData(stream_id, complete);
+        if (chunk.getType() == NT_BINARY) {
+            data = chunk.take<BinaryNode>();
+            done = true;
+            return 0;
+        }
+        if (complete) {
+            done = true;
+            return 0;
+        }
+        return 1;
+    }
+
+    DLLLOCAL int registerWaiter(ExceptionSink* xsink) {
+        ReferenceHolder<QoreObject> obj(getReferencedSocketObject(xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        session->registerStreamDataWaiter(*obj, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        waiter_sock_obj = obj.release();
+        registered = true;
+        return 0;
+    }
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink) {
+        if (registered && waiter_sock_obj) {
+            session->unregisterStreamDataWaiter(waiter_sock_obj, xsink);
+            registered = false;
+        }
+        if (waiter_sock_obj) {
+            waiter_sock_obj->deref(xsink);
+            waiter_sock_obj = nullptr;
+        }
+    }
+
+    std::shared_ptr<QuicSession> session;
+    SimpleRefHolder<BinaryNode> data;
+    QoreObject* waiter_sock_obj = nullptr;
+    int64_t session_id;
+    int64_t stream_id;
+    bool done = false;
+    bool registered = false;
+    bool wake_requested = false;
+};
+
+class QoreSocketObjectQuicDatagramPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketObjectQuicDatagramPollOperation(std::shared_ptr<QuicSession> session,
+            int64_t stream_id)
+            : session(std::move(session)), stream_id(stream_id) {
+    }
+
+    DLLLOCAL ~QoreSocketObjectQuicDatagramPollOperation() override {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        done = true;
+        data.discard();
+        cleanup(xsink);
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        int rc = checkData(xsink);
+        if (rc != 1) {
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        if (!registered && registerWaiter(xsink)) {
+            done = true;
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        rc = checkData(xsink);
+        if (rc != 1) {
+            cleanup(xsink);
+            return nullptr;
+        }
+
+        if (!wake_requested) {
+            wake_requested = true;
+            wakeIoThread(xsink);
+            if (*xsink) {
+                done = true;
+                cleanup(xsink);
+                return nullptr;
+            }
+        }
+
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return data ? data->refSelf() : QoreValue();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "quic-datagram-read" : "waiting-quic-datagram";
+    }
+
+    DLLLOCAL QoreValue takeOutput() {
+        return data ? QoreValue(data.release()) : QoreValue();
+    }
+
+private:
+    DLLLOCAL int checkData(ExceptionSink* xsink) {
+        if (session->isMarkedClosed()) {
+            done = true;
+            return 0;
+        }
+
+        BinaryNode* chunk = session->takeDatagram(stream_id, xsink);
+        if (*xsink) {
+            done = true;
+            return -1;
+        }
+        if (chunk) {
+            data = chunk;
+            done = true;
+            return 0;
+        }
+        return 1;
+    }
+
+    DLLLOCAL int registerWaiter(ExceptionSink* xsink) {
+        ReferenceHolder<QoreObject> obj(getReferencedSocketObject(xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        session->registerDatagramWaiter(*obj, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        waiter_sock_obj = obj.release();
+        registered = true;
+        return 0;
+    }
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink) {
+        if (registered && waiter_sock_obj) {
+            session->unregisterDatagramWaiter(waiter_sock_obj, xsink);
+            registered = false;
+        }
+        if (waiter_sock_obj) {
+            waiter_sock_obj->deref(xsink);
+            waiter_sock_obj = nullptr;
+        }
+    }
+
+    std::shared_ptr<QuicSession> session;
+    SimpleRefHolder<BinaryNode> data;
+    QoreObject* waiter_sock_obj = nullptr;
+    int64_t stream_id;
+    bool done = false;
+    bool registered = false;
+    bool wake_requested = false;
+};
+
 static QoreObject* qore_socket_object_make_pollable_wrapper(QoreSocketObject* s) {
     s->ref();
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), s);
@@ -516,6 +775,64 @@ static int qore_socket_object_exec_stream_drain(QoreSocketObject* s,
 
     QoreValue output = stream_drain_poller->getOutput();
     return output.isNothing() ? -1 : static_cast<int>(output.getAsBigInt());
+}
+
+static BinaryNode* qore_socket_object_exec_quic_stream_data(QoreSocketObject* s,
+        QoreSocketObjectQuicStreamDataPollOperation* stream_data_poller, int timeout_ms,
+        int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, stream_data_poller, "quic-stream-data", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj,
+        timeout_ms, "readQuicStreamDataBlock", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (ex_holder) {
+        if (qore_socket_object_exec_exception_is(**ex_holder, "SOCKET-TIMEOUT")) {
+            xsink->raiseException("QUIC-STREAM-TIMEOUT",
+                "timeout reading QUIC stream data (session %lld, stream %lld)",
+                (long long)session_id, (long long)stream_id);
+            return nullptr;
+        }
+        qore_socket_object_raise_poll_result_exception(*ex_holder, xsink);
+        return nullptr;
+    }
+
+    return stream_data_poller->takeOutput();
+}
+
+static QoreValue qore_socket_object_exec_quic_datagram(QoreSocketObject* s,
+        QoreSocketObjectQuicDatagramPollOperation* datagram_poller, int timeout_ms, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, datagram_poller, "quic-datagram", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj,
+        timeout_ms, "readQuicDatagram", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (ex_holder) {
+        if (qore_socket_object_exec_exception_is(**ex_holder, "SOCKET-TIMEOUT")) {
+            return QoreValue();
+        }
+        qore_socket_object_raise_poll_result_exception(*ex_holder, xsink);
+        return QoreValue();
+    }
+
+    return datagram_poller->takeOutput();
 }
 
 static int qore_socket_object_exec_connect(QoreSocketObject* s, const char* target, int timeout_ms, bool ssl,
@@ -3796,8 +4113,8 @@ void QoreSocketObject::deregisterQuicConnectStreamFrameState(int64_t session_id,
 
 BinaryNode* QoreSocketObject::readQuicStreamDataBlock(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink) {
-    // Get the session WITHOUT holding the socket lock — the session is reference-counted
-    // and we need to avoid holding the socket lock while blocking on the CV
+    // Get the session without holding the socket lock while the controller-backed
+    // wait runs; the shared_ptr keeps the session alive for the poll operation.
     std::shared_ptr<QuicSession> session;
     {
         AutoLocker al(priv->m);
@@ -3809,50 +4126,9 @@ BinaryNode* QoreSocketObject::readQuicStreamDataBlock(int64_t session_id, int64_
             (long long)session_id);
         return nullptr;
     }
-    // Use a deadline to avoid timeout reset when data arrives incrementally
-    int64 deadline_ms = timeout_ms >= 0
-        ? q_clock_getmillis() + timeout_ms
-        : -1;
-
-    while (true) {
-        // Check if session has been torn down (abort)
-        if (session->isMarkedClosed()) {
-            xsink->raiseException("QUIC-ERROR",
-                "QUIC session closed during stream read (session %lld, stream %lld)",
-                (long long)session_id, (long long)stream_id);
-            return nullptr;
-        }
-
-        // 1. Atomically check stream buffer AND completion status under one lock
-        // This eliminates the TOCTOU race where data could arrive between separate
-        // takeStreamData() and isStreamComplete() calls
-        bool complete = false;
-        QoreValue data = session->takeStreamData(stream_id, complete);
-        if (data.getType() == NT_BINARY) {
-            return data.get<BinaryNode>();
-        }
-        if (complete) {
-            return nullptr;
-        }
-
-        // 3. Calculate remaining timeout from deadline
-        int remaining_ms;
-        if (deadline_ms >= 0) {
-            remaining_ms = (int)(deadline_ms - q_clock_getmillis());
-            if (remaining_ms <= 0) {
-                // Timeout — raise exception so callers can distinguish from stream completion
-                xsink->raiseException("QUIC-STREAM-TIMEOUT",
-                    "timeout reading QUIC stream data (session %lld, stream %lld)",
-                    (long long)session_id, (long long)stream_id);
-                return nullptr;
-            }
-        } else {
-            remaining_ms = -1;
-        }
-
-        // 4. Wait for stream data or completion
-        session->waitForStreamData(remaining_ms);
-    }
+    return qore_socket_object_exec_quic_stream_data(this,
+        new QoreSocketObjectQuicStreamDataPollOperation(session, session_id, stream_id), timeout_ms,
+        session_id, stream_id, xsink);
 }
 
 bool QoreSocketObject::isQuicStreamComplete(int64_t session_id, int64_t stream_id) const {
@@ -3908,9 +4184,8 @@ int QoreSocketObject::submitQuicDatagram(int64_t session_id, int64_t stream_id,
 
 QoreValue QoreSocketObject::readQuicDatagram(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink) {
-    // NOTE: readDatagram uses its own mutex (datagram_mutex_), not the session mutex,
-    // so we don't need to hold priv->m for the blocking read (which would deadlock
-    // the I/O thread). We only hold priv->m briefly to look up the session.
+    // Keep the socket lock scoped to session lookup. The actual wait is delegated
+    // to the async I/O controller.
     std::shared_ptr<QuicSession> session;
     {
         AutoLocker al(priv->m);
@@ -3922,7 +4197,8 @@ QoreValue QoreSocketObject::readQuicDatagram(int64_t session_id, int64_t stream_
             (long long)session_id);
         return QoreValue();
     }
-    return session->readDatagram(stream_id, timeout_ms, xsink);
+    return qore_socket_object_exec_quic_datagram(this,
+        new QoreSocketObjectQuicDatagramPollOperation(session, stream_id), timeout_ms, xsink);
 }
 
 void QoreSocketObject::registerQuicDatagramQueue(int64_t session_id, int64_t stream_id,

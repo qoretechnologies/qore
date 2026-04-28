@@ -56,6 +56,83 @@ std::atomic<int64_t> QuicSession::next_session_id_{1};
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
+static void quicRegisterSocketWaiter(std::mutex& waiters_mtx,
+        std::unordered_map<QoreObject*, size_t>& waiters, QoreObject* sock_obj) {
+    assert(sock_obj);
+    std::lock_guard<std::mutex> lock(waiters_mtx);
+    auto [it, inserted] = waiters.emplace(sock_obj, 0);
+    if (inserted) {
+        sock_obj->ref();
+    }
+    ++it->second;
+}
+
+static void quicUnregisterSocketWaiter(std::mutex& waiters_mtx,
+        std::unordered_map<QoreObject*, size_t>& waiters, QoreObject* sock_obj,
+        ExceptionSink* xsink) {
+    if (!sock_obj) {
+        return;
+    }
+
+    QoreObject* deref_obj = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(waiters_mtx);
+        auto it = waiters.find(sock_obj);
+        if (it == waiters.end()) {
+            return;
+        }
+        assert(it->second > 0);
+        if (!--it->second) {
+            deref_obj = it->first;
+            waiters.erase(it);
+        }
+    }
+
+    if (deref_obj) {
+        deref_obj->deref(xsink);
+    }
+}
+
+static void quicWakeSocketWaiters(std::mutex& waiters_mtx,
+        std::unordered_map<QoreObject*, size_t>& waiters) {
+    std::vector<QoreObject*> waiter_objs;
+    {
+        std::lock_guard<std::mutex> lock(waiters_mtx);
+        waiter_objs.reserve(waiters.size());
+        for (auto& [obj, count] : waiters) {
+            (void)count;
+            obj->ref();
+            waiter_objs.push_back(obj);
+        }
+    }
+    if (waiter_objs.empty()) {
+        return;
+    }
+
+    ExceptionSink xsink;
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        ctl_obj
+            ? static_cast<AsyncIoControllerPriv*>(
+                (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink))
+            : nullptr,
+        &xsink);
+    if (!xsink && ctrl) {
+        for (QoreObject* obj : waiter_objs) {
+            ctrl->wakeSocketByObject(obj, &xsink);
+            if (xsink) {
+                break;
+            }
+        }
+    }
+    for (QoreObject* obj : waiter_objs) {
+        obj->deref(&xsink);
+    }
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
 // HTTP/3 forbids hop-by-hop headers from HTTP/1.x (RFC 9114 Section 4.2)
 static const auto& h3_forbidden_headers = getForbiddenHopByHopHeaders();
 
@@ -2290,76 +2367,49 @@ void QuicSession::notifyStreamDrain() {
 
 void QuicSession::registerStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
     (void)xsink;
-    assert(sock_obj);
-    std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
-    auto [it, inserted] = drain_waiters_.emplace(sock_obj, 0);
-    if (inserted) {
-        sock_obj->ref();
-    }
-    ++it->second;
+    quicRegisterSocketWaiter(drain_waiters_mtx_, drain_waiters_, sock_obj);
 }
 
 void QuicSession::unregisterStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
-    if (!sock_obj) {
-        return;
-    }
-
-    QoreObject* deref_obj = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
-        auto it = drain_waiters_.find(sock_obj);
-        if (it == drain_waiters_.end()) {
-            return;
-        }
-        assert(it->second > 0);
-        if (!--it->second) {
-            deref_obj = it->first;
-            drain_waiters_.erase(it);
-        }
-    }
-
-    if (deref_obj) {
-        deref_obj->deref(xsink);
-    }
+    quicUnregisterSocketWaiter(drain_waiters_mtx_, drain_waiters_, sock_obj, xsink);
 }
 
 void QuicSession::wakeStreamDrainWaiters() {
-    std::vector<QoreObject*> waiters;
-    {
-        std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
-        waiters.reserve(drain_waiters_.size());
-        for (auto& [obj, count] : drain_waiters_) {
-            (void)count;
-            obj->ref();
-            waiters.push_back(obj);
-        }
-    }
-    if (waiters.empty()) {
-        return;
-    }
+    quicWakeSocketWaiters(drain_waiters_mtx_, drain_waiters_);
+}
 
-    ExceptionSink xsink;
-    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
-    ReferenceHolder<AsyncIoControllerPriv> ctrl(
-        ctl_obj
-            ? static_cast<AsyncIoControllerPriv*>(
-                (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink))
-            : nullptr,
-        &xsink);
-    if (!xsink && ctrl) {
-        for (QoreObject* obj : waiters) {
-            ctrl->wakeSocketByObject(obj, &xsink);
-            if (xsink) {
-                break;
-            }
-        }
-    }
-    for (QoreObject* obj : waiters) {
-        obj->deref(&xsink);
-    }
-    if (xsink) {
-        xsink.clear();
-    }
+void QuicSession::notifyStreamData() {
+    wakeStreamDataWaiters();
+}
+
+void QuicSession::registerStreamDataWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
+    (void)xsink;
+    quicRegisterSocketWaiter(stream_data_waiters_mtx_, stream_data_waiters_, sock_obj);
+}
+
+void QuicSession::unregisterStreamDataWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
+    quicUnregisterSocketWaiter(stream_data_waiters_mtx_, stream_data_waiters_, sock_obj, xsink);
+}
+
+void QuicSession::wakeStreamDataWaiters() {
+    quicWakeSocketWaiters(stream_data_waiters_mtx_, stream_data_waiters_);
+}
+
+void QuicSession::notifyDatagramData() {
+    wakeDatagramWaiters();
+}
+
+void QuicSession::registerDatagramWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
+    (void)xsink;
+    quicRegisterSocketWaiter(datagram_waiters_mtx_, datagram_waiters_, sock_obj);
+}
+
+void QuicSession::unregisterDatagramWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
+    quicUnregisterSocketWaiter(datagram_waiters_mtx_, datagram_waiters_, sock_obj, xsink);
+}
+
+void QuicSession::wakeDatagramWaiters() {
+    quicWakeSocketWaiters(datagram_waiters_mtx_, datagram_waiters_);
 }
 
 // ===== Extended CONNECT (RFC 9220) =====
@@ -2634,12 +2684,7 @@ void QuicSession::markStreamComplete(int64_t stream_id) {
         if (it->second->dispatched) {
             printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " dispatched, keeping in map\n",
                 stream_id);
-            // Wake handler threads waiting on body data
-            {
-                std::lock_guard<std::mutex> lg(stream_data_mtx_);
-                stream_data_gen_.fetch_add(1, std::memory_order_release);
-            }
-            stream_data_cv_.notify_all();
+            notifyStreamData();
             return;
         }
 
@@ -2811,12 +2856,17 @@ void QuicSession::cleanupStream(int64_t stream_id) {
             (int)isc, (int)cta);
         printd(5, "QuicSession::cleanupStream() stream_id=" QLLD " removing dispatched stream\n",
             stream_id);
+        bool notify_data = false;
         if (it->second->dispatched) {
             dispatched_stream_count_.fetch_sub(1,
                 std::memory_order_release);
+            notify_data = true;
         }
         streams_.erase(it);
         updateKeepAliveLocked();
+        if (notify_data) {
+            notifyStreamData();
+        }
     }
     // Non-CONNECT stream cleanup path: deregister Queue / frame state and
     // release references — handler has exited.
@@ -2860,12 +2910,17 @@ int QuicSession::resetStream(int64_t stream_id) {
         ASYNC_IO_TRACE("QuicSession::resetStream ERASE session=%lld stream_id=%lld is_connect=%d\n",
             (long long)getSessionId(), (long long)stream_id,
             (int)it->second->is_connect);
+        bool notify_data = false;
         if (it->second->dispatched) {
             dispatched_stream_count_.fetch_sub(1,
                 std::memory_order_release);
+            notify_data = true;
         }
         streams_.erase(it);
         updateKeepAliveLocked();
+        if (notify_data) {
+            notifyStreamData();
+        }
     }
     // Clean up any buffered extended-CONNECT tunnel data for this stream
     {
@@ -2916,20 +2971,6 @@ QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
     return bin.release();
 }
 
-void QuicSession::waitForStreamData(int timeout_ms) {
-    if (closed_.load(std::memory_order_acquire)) {
-        return;
-    }
-    unsigned gen = stream_data_gen_.load(std::memory_order_acquire);
-    std::unique_lock<std::mutex> lk(stream_data_mtx_);
-    int wait_ms = timeout_ms >= 0 ? std::min(timeout_ms, 100) : 100;
-    stream_data_cv_.wait_for(lk, std::chrono::milliseconds(wait_ms),
-        [this, gen]() {
-            return closed_.load(std::memory_order_acquire)
-                || stream_data_gen_.load(std::memory_order_acquire) != gen;
-        });
-}
-
 bool QuicSession::isHandshakeComplete() const {
     // No lock needed: handshake_completed_ is std::atomic<bool>
     return handshake_completed_.load(std::memory_order_acquire);
@@ -2954,12 +2995,8 @@ bool QuicSession::isClosed() const {
 void QuicSession::markClosed() {
     closed_.store(true, std::memory_order_release);
 
-    // Wake all handler threads blocked in waitForStreamData()
-    stream_data_gen_.fetch_add(1, std::memory_order_release);
-    {
-        std::lock_guard<std::mutex> lg(stream_data_mtx_);
-    }
-    stream_data_cv_.notify_all();
+    // Wake controller-backed stream data waiters.
+    notifyStreamData();
 
     // Wake all handler threads blocked in waitForStreamDrain()
     notifyStreamDrain();
@@ -2976,12 +3013,8 @@ void QuicSession::markClosed() {
         }
     }
 
-    // Also wake legacy readDatagram() callers blocked on datagram_cv_.
-    datagram_gen_.fetch_add(1, std::memory_order_release);
-    {
-        std::lock_guard<std::mutex> lg(datagram_cv_mtx_);
-    }
-    datagram_cv_.notify_all();
+    // Also wake controller-backed datagram read waiters.
+    notifyDatagramData();
 }
 
 ssize_t QuicSession::writeConnectionClose(uint8_t* buf, size_t buflen) {
@@ -4100,12 +4133,7 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
         // when the handler is slow.
         if (stream->dispatched) {
             stream->body.insert(stream->body.end(), data, data + datalen);
-            // Wake session-wide CV for handler threads waiting on body data
-            {
-                std::lock_guard<std::mutex> lg(session->stream_data_mtx_);
-                session->stream_data_gen_.fetch_add(1, std::memory_order_release);
-            }
-            session->stream_data_cv_.notify_all();
+            session->notifyStreamData();
             return 0;
         }
 
@@ -4691,12 +4719,8 @@ int QuicSession::recvDatagramCallback(ngtcp2_conn* conn, uint32_t flags,
             return 0;
         }
 
-        // Legacy path: signal CV waiters in QuicSession::readDatagram().
-        session->datagram_gen_.fetch_add(1, std::memory_order_release);
-        {
-            std::lock_guard<std::mutex> lg(session->datagram_cv_mtx_);
-        }
-        session->datagram_cv_.notify_all();
+        // Internal deque path: signal controller-backed Socket::readQuicDatagram() waiters.
+        session->notifyDatagramData();
     } catch (...) {
         // C callback — must not propagate C++ exceptions through ngtcp2's C code
         printd(0, "recvDatagramCallback(): exception while queuing datagram "
@@ -4814,102 +4838,31 @@ int QuicSession::submitDatagram(int64_t stream_id, const uint8_t* data, size_t l
     return 0;
 }
 
-QoreValue QuicSession::readDatagram(int64_t stream_id, int timeout_ms, ExceptionSink* xsink) {
-    // Try non-blocking read first
+BinaryNode* QuicSession::takeDatagram(int64_t stream_id, ExceptionSink* xsink) {
+    std::vector<uint8_t> data;
     {
         std::lock_guard<std::mutex> lg(datagram_mutex_);
         auto it = datagram_queues_.find(stream_id);
-        if (it != datagram_queues_.end() && !it->second.empty()) {
-            std::vector<uint8_t> data = std::move(it->second.front());
-            it->second.pop_front();
-            if (it->second.empty()) {
-                datagram_queues_.erase(it);
-            }
-            // Copy data into a malloc'd buffer for BinaryNode ownership
-            if (data.empty()) {
-                SimpleRefHolder<BinaryNode> bn(new BinaryNode());
-                return bn.release();
-            }
-            void* buf = malloc(data.size());
-            if (!buf) {
-                xsink->raiseException("QUIC-DATAGRAM-ERROR", "memory allocation failed");
-                return QoreValue();
-            }
-            memcpy(buf, data.data(), data.size());
-            SimpleRefHolder<BinaryNode> bn(new BinaryNode(buf, data.size()));
-            return bn.release();
+        if (it == datagram_queues_.end() || it->second.empty()) {
+            return nullptr;
+        }
+        data = std::move(it->second.front());
+        it->second.pop_front();
+        if (it->second.empty()) {
+            datagram_queues_.erase(it);
         }
     }
 
-    if (timeout_ms == 0) {
-        return QoreValue();
+    if (data.empty()) {
+        return new BinaryNode();
     }
-
-    // Wait for data with timeout using generation-based CV
-    auto deadline = std::chrono::steady_clock::now();
-    if (timeout_ms > 0) {
-        deadline += std::chrono::milliseconds(timeout_ms);
+    void* buf = malloc(data.size());
+    if (!buf) {
+        xsink->raiseException("QUIC-DATAGRAM-ERROR", "memory allocation failed");
+        return nullptr;
     }
-
-    while (true) {
-        if (closed_.load(std::memory_order_acquire)) {
-            return QoreValue();
-        }
-
-        unsigned cur_gen = datagram_gen_.load(std::memory_order_acquire);
-
-        // Check again under lock
-        {
-            std::lock_guard<std::mutex> lg(datagram_mutex_);
-            auto it = datagram_queues_.find(stream_id);
-            if (it != datagram_queues_.end() && !it->second.empty()) {
-                std::vector<uint8_t> data = std::move(it->second.front());
-                it->second.pop_front();
-                if (it->second.empty()) {
-                    datagram_queues_.erase(it);
-                }
-                // Copy data into a malloc'd buffer for BinaryNode ownership
-                if (data.empty()) {
-                    SimpleRefHolder<BinaryNode> bn(new BinaryNode());
-                    return bn.release();
-                }
-                void* buf = malloc(data.size());
-                if (!buf) {
-                    xsink->raiseException("QUIC-DATAGRAM-ERROR", "memory allocation failed");
-                    return QoreValue();
-                }
-                memcpy(buf, data.data(), data.size());
-                SimpleRefHolder<BinaryNode> bn(new BinaryNode(buf, data.size()));
-                return bn.release();
-            }
-        }
-
-        // Wait on CV
-        {
-            std::unique_lock<std::mutex> lk(datagram_cv_mtx_);
-            if (timeout_ms < 0) {
-                // Wait up to 100ms per iteration to check for session close
-                datagram_cv_.wait_for(lk, std::chrono::milliseconds(100),
-                    [this, cur_gen]() {
-                        return closed_.load(std::memory_order_acquire)
-                            || datagram_gen_.load(std::memory_order_acquire) != cur_gen;
-                    });
-            } else {
-                auto now = std::chrono::steady_clock::now();
-                if (now >= deadline) {
-                    return QoreValue();
-                }
-                auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    deadline - now);
-                int wait_ms = std::min(static_cast<int>(remaining.count()), 100);
-                datagram_cv_.wait_for(lk, std::chrono::milliseconds(wait_ms),
-                    [this, cur_gen]() {
-                        return closed_.load(std::memory_order_acquire)
-                            || datagram_gen_.load(std::memory_order_acquire) != cur_gen;
-                    });
-            }
-        }
-    }
+    memcpy(buf, data.data(), data.size());
+    return new BinaryNode(buf, data.size());
 }
 
 size_t QuicSession::getMaxDatagramPayloadSize(int64_t stream_id) const {
