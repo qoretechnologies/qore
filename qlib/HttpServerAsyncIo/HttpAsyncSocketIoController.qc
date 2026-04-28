@@ -922,6 +922,7 @@ public class HttpAsyncSocketIoController {
             "sock": listener,
             "spop": op,
             "key": op_key,
+            "thread_key": listener.uniqueHash(),
             "owner": owner,
             "to": -1s,  # no timeout for accepts
         });
@@ -1212,6 +1213,7 @@ public class HttpAsyncSocketIoController {
             "sock": listener,
             "spop": h3op,
             "key": op_key,
+            "thread_key": listener.uniqueHash(),
             "owner": owner,
             "to": -1s,  # no timeout for QUIC accept
         });
@@ -1278,6 +1280,7 @@ public class HttpAsyncSocketIoController {
                 "sock": listener,
                 "spop": h3op,
                 "key": sprintf("quic-read:%s:%d", owner, seq),
+                "thread_key": listener.uniqueHash(),
                 "owner": owner,
                 "to": -1s,
             });
