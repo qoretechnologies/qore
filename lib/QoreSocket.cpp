@@ -12403,21 +12403,48 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
 // HTTP/2 Flush Poll Operation implementation
 
 SocketHttp2FlushPollOperation::SocketHttp2FlushPollOperation(ExceptionSink* xsink,
-        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock) {
+        QoreSocketObject* sock, bool defer_init) : SocketPollSocketOperationBase(sock) {
+    init(xsink, defer_init);
+}
+
+void SocketHttp2FlushPollOperation::init(ExceptionSink* xsink, bool defer_init) {
+    controller_deferred_init = defer_init;
+    controller_deferred_tid = defer_init ? q_gettid() : -1;
+    if (defer_init) {
+        return;
+    }
+
     AutoLocker al(sock->priv->m);
+    initLocked(xsink);
+}
+
+int SocketHttp2FlushPollOperation::initLocked(ExceptionSink* xsink) {
+    assert(sock->priv->m.trylock());
+    if (initialized) {
+        return 0;
+    }
+    initialized = true;
 
     if (sock->priv->checkOpen(xsink)) {
-        return;
+        return -1;
     }
 
-    if (sock->priv->setNonBlock(xsink)) {
-        return;
+    int rc = controller_deferred_init
+        ? sock->priv->setNonBlockFromAsyncController(xsink, NB_ALL, controller_deferred_tid)
+        : sock->priv->setNonBlock(xsink);
+    if (rc) {
+        return -1;
     }
     set_non_block = true;
+    return 0;
 }
 
 QoreHashNode* SocketHttp2FlushPollOperation::continuePoll(ExceptionSink* xsink) {
     AutoLocker al(sock->priv->m);
+
+    if (!initialized && initLocked(xsink)) {
+        return nullptr;
+    }
 
     if (!sock->priv->socket->priv->isOpen()) {
         xsink->raiseException("HTTP2-ERROR", "socket closed during poll operation");

@@ -406,7 +406,7 @@ static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSi
 
 static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* owner_name, ExceptionSink* xsink) {
     s->ref();
-    return qore_socket_object_exec_poll_no_output(s, new SocketHttp2FlushPollOperation(xsink, s), -1,
+    return qore_socket_object_exec_poll_no_output(s, new SocketHttp2FlushPollOperation(xsink, s, true), -1,
         owner_name, "done", xsink);
 }
 

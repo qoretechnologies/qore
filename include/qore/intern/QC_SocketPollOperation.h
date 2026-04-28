@@ -715,7 +715,12 @@ private:
 */
 class SocketHttp2FlushPollOperation : public SocketPollSocketOperationBase {
 public:
-    DLLLOCAL SocketHttp2FlushPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+    DLLLOCAL SocketHttp2FlushPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+        bool defer_init = false);
+
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+
+    DLLLOCAL int initLocked(ExceptionSink* xsink);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -744,6 +749,9 @@ public:
 private:
     enum FlushState { H2F_FLUSHING, H2F_DONE };
     FlushState h2f_state = H2F_FLUSHING;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 
     DLLLOCAL virtual bool abortNeedsClose() const override { return true; }
 };
