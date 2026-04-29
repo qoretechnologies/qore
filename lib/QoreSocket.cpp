@@ -926,85 +926,6 @@ private:
     }
 };
 
-class QoreSocketControllerPollOperation : public SocketPollOperationBase {
-public:
-    DLLLOCAL QoreSocketControllerPollOperation(AbstractPollState* poll_state, const QoreEncoding* enc,
-            bool to_string, bool capture_output, const char* active_state, const char* done_state)
-            : poll_state(poll_state), enc(enc), to_string(to_string), capture_output(capture_output),
-            active_state(active_state), done_state(done_state) {
-    }
-
-    DLLLOCAL virtual bool goalReached() const override {
-        return done;
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
-        poll_state.reset();
-        done = true;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (!poll_state) {
-            done = true;
-            return nullptr;
-        }
-
-        int rc = poll_state->continuePoll(xsink);
-        if (!rc && capture_output) {
-            SimpleRefHolder<BinaryNode> bin(poll_state->takeOutput().get<BinaryNode>());
-            if (to_string) {
-                size_t len = bin->size();
-                char* buf = reinterpret_cast<char*>(bin->giveBuffer());
-                char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
-                if (!nbuf) {
-                    xsink->outOfMemory();
-                } else {
-                    nbuf[len] = '\0';
-                    data = new QoreStringNode(nbuf, len, len + 1, enc);
-                }
-            } else {
-                data = bin.release();
-            }
-        }
-        if (*xsink || rc <= 0) {
-            poll_state.reset();
-            if (!*xsink) {
-                done = true;
-            }
-            return nullptr;
-        }
-        auto* he_state = dynamic_cast<SocketConnectInetHappyEyeballsPollState*>(poll_state.get());
-        if (he_state && he_state->isRacing() && he_state->getState() == HEBS_RACING) {
-            std::vector<std::pair<int, int>> extra_fds;
-            he_state->getExtraFds(extra_fds);
-            QoreHashNode* rv = getSocketPollInfoHash(xsink, rc, extra_fds);
-            if (rv) {
-                rv->setKeyValue("poll_timeout_ms", HAPPY_EYEBALLS_DELAY_MS, xsink);
-            }
-            return rv;
-        }
-        return getSocketPollInfoHash(xsink, rc);
-    }
-
-    DLLLOCAL virtual QoreValue getOutput() const override {
-        return data ? data->refSelf() : QoreValue();
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? done_state : active_state;
-    }
-
-private:
-    std::unique_ptr<AbstractPollState> poll_state;
-    const QoreEncoding* enc;
-    bool to_string;
-    bool capture_output;
-    bool done = false;
-    const char* active_state;
-    const char* done_state;
-    SimpleRefHolder<SimpleValueQoreNode> data;
-};
-
 class QoreSocketControllerDeferredPollOperation : public SocketPollOperationBase {
 public:
     DLLLOCAL QoreSocketControllerDeferredPollOperation(QoreSocket* sock, const QoreEncoding* enc,
@@ -2227,20 +2148,6 @@ static QoreValue qore_socket_exec_poll(QoreSocket* s, SocketPollOperationBase* p
         return QoreValue();
     }
     return poller->getOutput();
-}
-
-static int qore_socket_exec_poll_state_no_output(QoreSocket* s, AbstractPollState* state, int timeout_ms,
-        const char* owner_name, const char* active_state, const char* done_state, ExceptionSink* xsink) {
-    std::unique_ptr<AbstractPollState> state_holder(state);
-    if (*xsink || !state_holder) {
-        return -1;
-    }
-
-    ValueHolder rv(qore_socket_exec_poll(s,
-        new QoreSocketControllerPollOperation(state_holder.release(), s->getEncoding(), false, false,
-            active_state, done_state),
-        timeout_ms, owner_name, done_state, xsink), xsink);
-    return *xsink ? -1 : 0;
 }
 
 static int qore_socket_exec_accept_descriptor(QoreSocket* s, SocketSource* source, int timeout_ms,
