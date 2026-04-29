@@ -6757,9 +6757,11 @@ int QoreSocket::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, Excep
     Http2SessionPtr h2 = priv->h2_session;
 
     QoreHashNode* ex = nullptr;
+    std::string owner_name("waitForHttp2StreamDrain:");
+    owner_name += std::to_string(stream_id);
     ValueHolder result(qore_socket_exec_poll(this,
         new QoreSocketHttp2StreamDrainPollOperation(h2, stream_id), timeout_ms,
-        "waitForHttp2StreamDrain", "stream-drained", xsink, &ex), xsink);
+        owner_name.c_str(), "stream-drained", xsink, &ex), xsink);
     ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
     if (*xsink) {
         return -1;
