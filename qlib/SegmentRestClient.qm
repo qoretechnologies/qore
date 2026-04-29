@@ -1,0 +1,402 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file SegmentRestClient.qm Qore user module for calling Twilio Segment REST API services
+
+/*  SegmentRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module SegmentRestClient {
+    version = "1.0";
+    desc = "user module for calling Twilio Segment REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("segment", SegmentRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage SegmentRestClient Module
+
+    @tableofcontents
+
+    @section segmentrestclientintro SegmentRestClient Introduction
+
+    The %SegmentRestClient module provides an API for calling
+    <a href="https://docs.segmentapis.com/">Twilio Segment Public API</a> services.
+
+    To use this module, use \c "%requires SegmentRestClient" in your code.
+
+    All the public classes provided in this module are listed here:
+    - @ref SegmentRestClient::SegmentRestClientBase "SegmentRestClientBase"
+    - @ref SegmentRestClient::SegmentRestClient "SegmentRestClient"
+    - @ref SegmentRestClient::SegmentRestClientIo "SegmentRestClientIo"
+    - @ref SegmentRestClient::SegmentRestConnection "SegmentRestConnection"
+
+    @section segmentrestclientrelnotes Release Notes
+
+    @subsection segmentrestclientv1_0 SegmentRestClient v1.0
+    - initial release of the module
+*/
+
+#! the SegmentRestClient namespace contains all the objects in the SegmentRestClient module
+public namespace SegmentRestClient {
+
+#! Common base class for SegmentRestClient functionality
+public class SegmentRestClientBase {
+    public {
+        #! Default Segment REST API URL (US region)
+        const DefaultUrl = "https://api.segmentapis.com";
+
+        #! EU Segment REST API URL
+        const EuUrl = "https://eu1.api.segmentapis.com";
+
+        #! Default region
+        const DefaultRegion = "us";
+
+        #! Default "data" option value
+        const DefaultData = "json";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (sources endpoint - lightweight, no leading slash since URL has no path)
+        const DefaultPingPath = "sources";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": "application/vnd.segment.stable+json",
+        };
+
+        #! Default headers sent with every request (stable API version)
+        const DefaultHeaders = {
+            "Accept": "application/vnd.segment.stable+json",
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "headers": DefaultHeaders,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+        };
+    }
+
+    #! Returns the API URL for the given region
+    static string getApiUrl(string region) {
+        return region == "eu" ? EuUrl : DefaultUrl;
+    }
+
+    #! Returns options for the SegmentRestClient constructor
+    /** Maps the \c apikey option to a Bearer token header and handles regional URL routing
+    */
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Validate region
+        string region = opts.region ?? DefaultRegion;
+        if (region !~ /^(us|eu)$/) {
+            throw "SEGMENT-ERROR", sprintf("invalid region %y; allowed values: \"us\", \"eu\"", region);
+        }
+
+        # Build API URL from region
+        rv.url = getApiUrl(region);
+
+        # Set Bearer token authentication
+        if (rv.apikey) {
+            rv.headers."Authorization" = "Bearer " + rv.apikey;
+            remove rv.apikey;
+        }
+
+        # Remove custom options so RestClient doesn't try to use them
+        remove rv.region;
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Twilio Segment API servers
+/** Segment uses Bearer token authentication with a workspace-level API token.
+
+    @par Regional URLs:
+    - US: https://api.segmentapis.com (default)
+    - EU: https://eu1.api.segmentapis.com
+
+    @par API Versioning:
+    Uses header-based versioning via the Accept header:
+    - Stable: application/vnd.segment.stable+json (default)
+    - Beta: application/vnd.segment.beta+json
+    - Alpha: application/vnd.segment.alpha+json
+*/
+public class SegmentRestClient inherits RestClient::RestClient, SegmentRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+SegmentRestClient rest({
+    "apikey": ENV.SEGMENT_API_TOKEN,
+    "region": "us",
+});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class
+        plus:
+        - \c apikey: the Segment Public API token (required)
+        - \c region: the data center region ("us" or "eu")
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+        @throw SEGMENT-ERROR invalid region
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(SegmentRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+}
+
+#! Class for Segment REST connections; returns @ref SegmentRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"; in addition,
+    this class provides the following options:
+    - \c token: the Segment Public API token (Bearer token)
+    - \c region: the data center region ("us" or "eu")
+
+    @see @ref SegmentRestClient::SegmentRestClient::constructor() for more information on the above options
+*/
+public class SegmentRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default connection URL
+        const DefaultConnectionUrl = "segment://api.segmentapis.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Segment REST Connection",
+            "short_desc": "A connection to the Twilio Segment REST API",
+            "desc": "A connection to the Twilio Segment Public API for managing your Customer Data Platform "
+                "workspace.\n\n"
+                "Segment helps you collect, clean, and control your customer data.\n\n"
+                "**Supported Operations:**\n"
+                "- Sources: Manage data collection points\n"
+                "- Destinations: Configure integration targets\n"
+                "- Warehouses: Manage data warehouse connections\n"
+                "- Tracking Plans: Define and enforce event schemas\n"
+                "- Labels: Organize and tag resources",
+            "cls": Class::forName("SegmentRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "segment": True,
+            },
+            "base_scheme_map": {
+                "https": "segment",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": SegmentRestClientBase::DefaultData,
+                },
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Segment Public API key for Bearer authentication",
+                    "type": "string",
+                    "desc": "The Segment Public API token used for Bearer token authentication.\n\n"
+                        "**To obtain your API token:**\n"
+                        "1. Log in to [Segment](https://app.segment.com)\n"
+                        "2. Go to **Settings > Workspace settings > Access Management > Tokens**\n"
+                        "3. Create a new Public API token\n\n"
+                        "**Note:** Only Workspace Owners can create API tokens.",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "region": <ConnectionOptionInfo>{
+                    "display_name": "Region",
+                    "short_desc": "Segment data center region",
+                    "type": "string",
+                    "desc": "Select the Segment data center region for your workspace.\n\n"
+                        "Your region is determined when you create your Segment workspace and cannot be changed.",
+                    "default_value": SegmentRestClientBase::DefaultRegion,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "us",
+                            "display_name": "US",
+                            "short_desc": "United States",
+                            "desc": "US data center (api.segmentapis.com)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "eu",
+                            "display_name": "EU",
+                            "short_desc": "European Union",
+                            "desc": "EU data center (eu1.api.segmentapis.com)",
+                        },
+                    ),
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": SegmentRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": SegmentRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": SegmentRestClientBase::DefaultPingPath,
+                },
+            },
+            "required_options": "apikey",
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "Segment API Key",
+                    "intent": "info",
+                    "content": "To connect to Segment, you need a Public API token:\n\n"
+                        "1. Log in to [Segment](https://app.segment.com)\n"
+                        "2. Go to **Settings > Workspace settings > Access Management > Tokens**\n"
+                        "3. Create a new Public API token\n\n"
+                        "Only Workspace Owners can create tokens. Keep your token secure.",
+                },
+                <UiMessageInfo>{
+                    "title": "Select Your Region",
+                    "intent": "info",
+                    "content": "Choose the region that matches your Segment workspace:\n"
+                        "- **US**: United States data center (default)\n"
+                        "- **EU**: European Union data center\n\n"
+                        "Your region was set when you created your workspace and cannot be changed.",
+                },
+            ),
+        };
+    }
+
+    #! creates the SegmentRestConnection object
+    constructor(string name, string description, string url = DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the SegmentRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(SegmentRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref SegmentRestConnection::constructor()
+    private static hash<auto> getConfig(hash<auto> config) {
+        string region = config.opts.region ?? SegmentRestClientBase::DefaultRegion;
+        string url = region == "eu"
+            ? "segment://eu1.api.segmentapis.com"
+            : "segment://api.segmentapis.com";
+        return config + {
+            "url": url,
+        };
+    }
+
+    #! returns \c "segment"
+    string getType() {
+        return "segment";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "Segment";
+    }
+
+    #! returns a data provider object for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the SegmentDataProvider and creates the data provider
+        # object dynamically
+        load_module("SegmentDataProvider");
+        return create_object("SegmentDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            string region = opts.region ?? SegmentRestClientBase::DefaultRegion;
+            string correct_url = region == "eu"
+                ? "segment://eu1.api.segmentapis.com"
+                : "segment://api.segmentapis.com";
+            hash<auto> updates;
+            if (url != correct_url) {
+                updates.url = correct_url;
+            }
+            # Fix ping_path if it has a leading slash
+            if (opts.ping_path =~ /^\//) {
+                updates.ping_path = opts.ping_path[1..];
+            }
+            if (updates) {
+                doUpdateOptions(self, updates);
+            }
+        }
+    }
+
+    #! returns a @ref SegmentRestClient object
+    private SegmentRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SegmentRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since SegmentRestClient 1.0
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SegmentRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for Twilio Segment REST API using multiplexed HTTP connections
+/** @see SegmentRestClient for more information
+*/
+public class SegmentRestClientIo inherits RestClientIo::RestClientIo, SegmentRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(SegmentRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+} # namespace SegmentRestClient

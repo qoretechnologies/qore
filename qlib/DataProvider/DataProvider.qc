@@ -226,6 +226,7 @@ public class DataProvider {
             "openapi3": "OpenApi3DataProvider",
             "perplexity": "PerplexityDataProvider",
             "pdfco": "PdfCoDataProvider",
+            "segment": "SegmentDataProvider",
             "pop3": "Pop3ClientDataProvider",
 
             # provided by the jni module
