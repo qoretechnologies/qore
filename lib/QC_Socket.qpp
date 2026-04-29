@@ -149,6 +149,23 @@ static QoreHashNode* socket_exec_poll_operation(QoreObject* self, QoreSocketObje
     return result.release();
 }
 
+static void socket_wake_async_controller(QoreObject* self) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        !xsink && ctl_obj
+            ? static_cast<AsyncIoControllerPriv*>(
+                (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink))
+            : nullptr,
+        &xsink);
+    if (!xsink && ctrl) {
+        ctrl->wakeSocketByObject(self, &xsink);
+    }
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
 static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPollOperationBase* poller,
         int timeout_ms, ExceptionSink* xsink) {
     ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
@@ -6684,11 +6701,16 @@ AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id,
     @since %Qore 2.2
 */
 int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) {
-    return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
+    int rc = s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
+    if (!*xsink && rc >= 0) {
+        socket_wake_async_controller(self);
+    }
+    return rc;
 }
 
 //! Submits an HTTP/2 response without creating a poll operation
-/** Queues the response in the nghttp2 session. The actual socket write is handled by
+/** Queues the response in the nghttp2 session and wakes the async I/O controller
+    when this socket is registered there. The actual socket write is handled by
     the active read poll operation's sendPendingData() calls. This is designed for
     HTTP/2 multiplexing where the read operation stays on the I/O thread and responses
     are submitted from handler threads.
@@ -6721,6 +6743,9 @@ nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> 
     }
 
     s->submitHttp2Response(stream_id, status_code, headers, body_ptr, body_len, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
@@ -6755,6 +6780,9 @@ nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
 */
 nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
     s->submitHttp2ConnectResponse(stream_id, status_code, headers, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Returns a poll operation for sending an HTTP/2 CONNECT response (RFC 8441)
@@ -6866,7 +6894,8 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
 
     Must be paired with @ref sendHttp2StreamData() and/or @ref sendHttp2Trailers();
     flushing to the wire is driven by the I/O thread's existing HTTP/2 flush poll
-    operation.  No explicit flush call is needed from the handler.
+    operation.  This method wakes the registered async I/O controller; no explicit
+    flush call is needed from the handler.
 
     @param stream_id the HTTP/2 stream ID
     @param status_code HTTP status code (e.g., 200)
@@ -6879,13 +6908,17 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
 nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_code,
         *hash<auto> headers) {
     s->submitHttp2StreamingResponseHeadersAsync((int32_t)stream_id, status_code, headers, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
     return QoreValue();
 }
 
 //! Sends HTTP/2 DATA frame payload on a server-side stream
 /** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
     shared pointer; the actual DATA enqueue runs under only the session's
-    internal recursive mutex.
+    internal recursive mutex.  After a successful enqueue, the registered async
+    I/O controller is woken to flush pending frames.
 
     @param stream_id the HTTP/2 stream ID
     @param data the binary data to send
@@ -6899,6 +6932,9 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
 */
 nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
     s->sendHttp2StreamDataAsync((int32_t)stream_id, data, (bool)end_stream, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
     return QoreValue();
 }
 
@@ -6923,6 +6959,9 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 */
 nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) {
     s->sendHttp2TrailersAsync((int32_t)stream_id, trailers, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
     return QoreValue();
 }
 
@@ -6953,6 +6992,9 @@ nothing Socket::cleanupHttp2Stream(int stream_id) {
 */
 nothing Socket::resetHttp2Stream(int stream_id) {
     s->resetHttp2StreamAsync((int32_t)stream_id, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
     return QoreValue();
 }
 
@@ -6983,8 +7025,9 @@ int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_cod
     // If rv == 1 (not I/O-thread-safe), the SimpleRefHolder destructor will deref the body.
     int rv = s->submitHttp2StreamingResponseWithStream((int32_t)stream_id, status_code, headers,
         *body, xsink);
-    if (!rv) {
+    if (!rv && !*xsink) {
         body.release();
+        socket_wake_async_controller(self);
     }
     return rv;
 }
@@ -7147,6 +7190,9 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = 
 */
 nothing Socket::cancelHttp2Stream(int stream_id) {
     s->cancelHttp2Stream(stream_id, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Returns a poll operation for a QUIC client: performs QUIC handshake, sets up HTTP/3, and reads responses
@@ -7561,6 +7607,9 @@ nothing Socket::cancelQuicStream(int session_id, int stream_id) {
         return QoreValue();
     }
     s->cancelQuicStream(session_id, stream_id, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Submits an HTTP/3 response on an active QUIC server connection
@@ -7601,6 +7650,9 @@ nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_cod
         return QoreValue();
     }
     s->submitQuicResponse(session_id, stream_id, status_code, headers, body_ptr, body_len, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Sends an HTTP/3 GOAWAY shutdown notice on a QUIC session
@@ -7626,6 +7678,9 @@ nothing Socket::submitQuicShutdownNotice(int session_id) {
         return QoreValue();
     }
     s->submitQuicShutdownNotice(session_id, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Sends an HTTP/3 GOAWAY shutdown on a QUIC session
@@ -7651,6 +7706,9 @@ nothing Socket::submitQuicShutdown(int session_id) {
         return QoreValue();
     }
     s->submitQuicShutdown(session_id, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Returns GOAWAY state for a QUIC session
@@ -7821,8 +7879,8 @@ AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id,
     @endcode
 
     Submits the response headers with a deferred body. Data is provided incrementally
-    via @ref submitQuicStreamData(). The I/O thread must call writePackets() to flush
-    the data to the network.
+    via @ref submitQuicStreamData(). The registered async I/O controller is woken
+    after submission so the I/O thread can flush the data to the network.
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID to respond on
@@ -7849,6 +7907,9 @@ nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int s
         return QoreValue();
     }
     s->submitQuicResponseStreaming(session_id, stream_id, status_code, headers, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Sends body data on a streaming HTTP/3 response
@@ -7862,7 +7923,8 @@ nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int s
     @endcode
 
     Appends data to the stream's buffer and resumes the nghttp3 deferred data reader
-    if it was waiting. The I/O thread must call writePackets() to flush.
+    if it was waiting. The registered async I/O controller is woken after a
+    successful enqueue so the I/O thread can flush pending packets.
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID
@@ -7891,8 +7953,12 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
     if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
         return -1;
     }
-    return s->submitQuicStreamData(session_id, stream_id, body_ptr, body_len,
+    int rc = s->submitQuicStreamData(session_id, stream_id, body_ptr, body_len,
         (bool)end_stream, xsink);
+    if (!*xsink && rc >= 0) {
+        socket_wake_async_controller(self);
+    }
+    return rc;
 }
 
 //! Submit HTTP/3 streaming response with InputStream body (non-blocking)
@@ -7946,6 +8012,9 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
     // Transfer InputStream ownership to the session for I/O thread reading
     InputStream* body_ptr = body.release();
     s->setQuicStreamInputStream(session_id, stream_id, body_ptr, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
     return *xsink ? -1 : 0;
 }
 
@@ -8028,6 +8097,9 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
         return QoreValue();
     }
     s->submitQuicConnectResponse(session_id, stream_id, status_code, headers, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Reads data from an HTTP/3 extended CONNECT stream (RFC 9220)
@@ -8389,6 +8461,9 @@ nothing Socket::resetQuicStream(int session_id, int stream_id) {
         return QoreValue();
     }
     s->resetQuicStream(session_id, stream_id, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Send a QUIC DATAGRAM frame associated with an HTTP/3 stream (RFC 9221/9297)
@@ -8423,6 +8498,9 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
         return QoreValue();
     }
     s->submitQuicDatagram(session_id, stream_id, data, xsink);
+    if (!*xsink) {
+        socket_wake_async_controller(self);
+    }
 }
 
 //! Read the next incoming QUIC datagram for an HTTP/3 stream (RFC 9221/9297)
