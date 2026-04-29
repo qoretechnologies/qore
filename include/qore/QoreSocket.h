@@ -1962,10 +1962,11 @@ public:
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
             const QoreHashNode* headers, ExceptionSink* xsink);
 
-    //! Submits an HTTP/2 response to the nghttp2 session without creating a poll operation
-    /** The response headers and body are queued in the nghttp2 session.  The actual
-        socket write is handled by the active read poll operation's sendPendingData() calls.
-        This is thread-safe and can be called from any thread.
+    //! Submits an HTTP/2 response through the async I/O controller
+    /** The response headers and body are copied on the caller thread and queued
+        in the nghttp2 session by the async I/O controller.  The actual socket
+        write is handled by the active read poll operation's sendPendingData()
+        calls.
 
         @param stream_id the HTTP/2 stream ID from the request
         @param status_code the HTTP status code
@@ -1981,10 +1982,11 @@ public:
             const QoreHashNode* headers, const void* body, size_t body_len,
             ExceptionSink* xsink);
 
-    //! Submits an HTTP/2 CONNECT response without creating a poll operation (RFC 8441)
-    /** Queues the CONNECT response in the nghttp2 session without END_STREAM, keeping
-        the stream open for bidirectional data transfer. The actual socket write is handled
-        by the active read poll operation's sendPendingData() calls.
+    //! Submits an HTTP/2 CONNECT response through the async I/O controller (RFC 8441)
+    /** Queues the CONNECT response in the nghttp2 session without END_STREAM,
+        keeping the stream open for bidirectional data transfer. The actual
+        socket write is handled by the active read poll operation's
+        sendPendingData() calls.
 
         This is designed for HTTP/2 multiplexing where the read operation stays on the I/O
         thread and CONNECT responses are submitted from handler threads.

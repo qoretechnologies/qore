@@ -453,14 +453,14 @@ public:
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
         const QoreHashNode* headers, ExceptionSink* xsink);
 
-    //! Submits an HTTP/2 response without creating a poll operation
+    //! Submits an HTTP/2 response through the async I/O controller
     /** @since %Qore 2.3
     */
     DLLEXPORT int submitHttp2Response(int32_t stream_id, int status_code,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink);
 
-    //! Submits an HTTP/2 CONNECT response without creating a poll operation (RFC 8441)
+    //! Submits an HTTP/2 CONNECT response through the async I/O controller (RFC 8441)
     /** @since %Qore 2.3
     */
     DLLEXPORT int submitHttp2ConnectResponse(int32_t stream_id, int status_code,
@@ -470,6 +470,15 @@ public:
     /** @since %Qore 2.3
     */
     DLLEXPORT int32_t submitHttp2Request(const QoreHashNode* headers, const void* body,
+        size_t body_len, ExceptionSink* xsink, bool streaming = false);
+
+    //! Internal HTTP/2 client helper: enqueue request without waking the controller.
+    /** The caller must wake the owning poll operation after registering the
+        stream action that will receive the response.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int32_t submitHttp2RequestNoWake(const QoreHashNode* headers, const void* body,
         size_t body_len, ExceptionSink* xsink, bool streaming = false);
 
     //! Cancels a pending HTTP/2 stream by sending RST_STREAM
@@ -485,6 +494,9 @@ public:
     */
     DLLEXPORT void setHttp2StreamStreaming(int32_t stream_id);
 
+    //! Internal variant of setHttp2StreamStreaming() that reports controller errors
+    DLLLOCAL int setHttp2StreamStreaming(int32_t stream_id, ExceptionSink* xsink);
+
     //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** @since %Qore 2.3
     */
@@ -493,6 +505,16 @@ public:
     DLLEXPORT int sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
     DLLEXPORT BinaryNode* readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink);
+    //! Internal async-poll helper for HTTP/2 stream DATA reads.
+    /** Public synchronous callers must use @ref readHttp2StreamData(), which
+        delegates through the async I/O controller. Poll operations use this
+        helper so I/O-thread stream dispatch can drain the already-owned HTTP/2
+        session buffer directly.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL BinaryNode* readHttp2StreamDataForAsyncPoll(int32_t stream_id, size_t max_bytes,
+            ExceptionSink* xsink);
 
     //! Sends HTTP/2 trailer headers on a stream
     /** Used internally by HTTPClient's HTTP/2 client-side code path.
@@ -522,6 +544,17 @@ public:
     */
     DLLLOCAL int flushHttp2PendingDataForAsyncPoll(ExceptionSink* xsink);
 
+    //! Internal async-poll helper for HTTP/2 stream DATA enqueue.
+    /** Public synchronous callers must use @ref sendHttp2StreamData(), which
+        delegates through the async I/O controller.  Poll operations use this
+        helper so I/O-thread protocol callbacks can enqueue DATA directly on
+        the already-owned HTTP/2 session.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int sendHttp2StreamDataForAsyncPoll(int32_t stream_id, const BinaryNode* data,
+            bool end_stream, ExceptionSink* xsink);
+
     //! Submit HTTP/2 streaming response with InputStream body (non-blocking)
     /** Handler thread calls this and returns immediately. The I/O thread reads from
         the InputStream and sends DATA frames incrementally.
@@ -530,50 +563,56 @@ public:
     DLLEXPORT int submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
             const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink);
 
-    //! Submit HTTP/2 streaming response headers without holding the socket wrapper lock
-    /** Acquires the wrapper lock only briefly to copy the Http2Session shared
-        pointer, then performs header submission under only the session's
-        internal recursive mutex.
+    //! Submit HTTP/2 streaming response headers through the async I/O controller
+    /** Copies caller-owned data, delegates the HTTP/2 session mutation to the
+        async I/O controller, and wakes the owning poll operation on success.
     */
     DLLEXPORT int submitHttp2StreamingResponseHeadersAsync(int32_t stream_id, int status_code,
             const QoreHashNode* headers, ExceptionSink* xsink);
 
-    //! Send HTTP/2 DATA frame payload without holding the socket wrapper lock
-    /** Briefly acquires @c priv->m only to copy the Http2Session shared
-        pointer; enqueue runs under only the session's internal mutex.
+    //! Send HTTP/2 DATA frame payload through the async I/O controller
+    /** Copies caller-owned data, delegates the HTTP/2 session mutation to the
+        async I/O controller, and wakes the owning poll operation on success.
     */
     DLLEXPORT int sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNode* data,
             bool end_stream, ExceptionSink* xsink);
 
-    //! Send HTTP/2 trailers without holding the socket wrapper lock
-    /** Briefly acquires @c priv->m only to copy the Http2Session shared
-        pointer; submission runs under only the session's internal mutex.
+    //! Send HTTP/2 trailers through the async I/O controller
+    /** Copies caller-owned data, delegates the HTTP/2 session mutation to the
+        async I/O controller, and wakes the owning poll operation on success.
     */
     DLLEXPORT int sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
 
-    //! Remove an HTTP/2 stream from the session without holding the socket wrapper lock
-    /** Briefly acquires @c priv->m to copy the Http2Session shared pointer,
-        then performs stream cleanup under only the session's internal mutex.
+    //! Remove an HTTP/2 stream from the session through the async I/O controller
+    /** Non-I/O-thread callers delegate cleanup to the async I/O controller.
+        I/O-thread callers clean up directly on the already-owned session.
     */
     DLLEXPORT void cleanupHttp2StreamAsync(int32_t stream_id);
 
-    //! Send RST_STREAM and clean up the stream state without holding the socket wrapper lock
-    /** Briefly acquires @c priv->m to copy the Http2Session shared pointer,
-        then submits RST_STREAM and cleans up stream state under only the
-        session's internal mutex.
+    //! Send RST_STREAM and clean up the stream state through the async I/O controller
+    /** Non-I/O-thread callers delegate reset and cleanup to the async I/O
+        controller.  I/O-thread callers run directly on the already-owned
+        session.
     */
     DLLEXPORT int resetHttp2StreamAsync(int32_t stream_id, ExceptionSink* xsink);
+
+    //! Internal variant of resetHttp2StreamAsync() with an explicit HTTP/2 error code
+    DLLLOCAL int resetHttp2StreamAsync(int32_t stream_id, uint32_t error_code, ExceptionSink* xsink);
 
     //! Check if an HTTP/2 stream has been closed
     /** Used internally by HTTPClient's HTTP/2 client-side code path.
     */
     DLLEXPORT bool isHttp2StreamClosed(int32_t stream_id) const;
+    //! Internal async-poll helper for HTTP/2 stream closed checks.
+    DLLLOCAL bool isHttp2StreamClosedForAsyncPoll(int32_t stream_id) const;
 
     //! Check if the remote peer has closed their side of an HTTP/2 stream
     /** Used internally by HTTPClient's HTTP/2 client-side code path.
     */
     DLLEXPORT bool isHttp2StreamRemoteClosed(int32_t stream_id) const;
+    //! Internal async-poll helper for HTTP/2 remote stream closed checks.
+    DLLLOCAL bool isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) const;
 
     //! Wait for an HTTP/2 stream's send buffer to drain below the backpressure threshold
     /** @param stream_id the HTTP/2 stream ID
@@ -687,6 +726,10 @@ public:
     DLLEXPORT int64_t submitQuicRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink);
 
+    //! Internal no-wake variant used when callers must register stream state before polling resumes
+    DLLLOCAL int64_t submitQuicRequestNoWake(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink);
+
     //! Submits a streaming HTTP/3 request (headers only, no END_STREAM) on the client QUIC session
     /** Opens a bidirectional stream for incremental data exchange.  Data is provided
         via sendQuicClientStreamData() and read via readQuicStreamDataBlock().
@@ -703,6 +746,10 @@ public:
     DLLEXPORT int64_t submitQuicRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, ExceptionSink* xsink);
 
+    //! Internal no-wake variant used when callers must register stream state before polling resumes
+    DLLLOCAL int64_t submitQuicRequestStreamingNoWake(const char* method, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink);
+
     //! Sends body data on an open client-side HTTP/3 streaming request
     /** @param stream_id the stream ID returned by submitQuicRequestStreaming()
         @param data body data (may be nullptr with len 0 to send empty DATA + END_STREAM)
@@ -716,6 +763,23 @@ public:
     */
     DLLEXPORT int sendQuicClientStreamData(int64_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
+
+    //! Mark a client-side HTTP/3 stream for incremental response body delivery
+    /** Internal helper for HTTP/3 client connection code; delegates the
+        QuicSession mutation to the async I/O controller.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int setQuicClientStreamStreaming(int64_t stream_id, ExceptionSink* xsink);
+
+    //! Submit trailers on a client-side HTTP/3 streaming request
+    /** Internal helper for HTTP/3 client connection code; delegates the
+        QuicSession mutation to the async I/O controller.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int submitQuicClientTrailers(int64_t stream_id, const QoreHashNode* trailers,
+        ExceptionSink* xsink);
 
     //! Waits for a client-side HTTP/3 streaming body buffer to drain
     /** Blocks until the stream's buffered data drops below the backpressure threshold,
@@ -757,6 +821,16 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT void cancelQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
+
+    //! Internal async-aware HTTP/3 stream cancellation helper
+    /** Non-I/O-thread callers delegate cancellation to the async I/O
+        controller.  I/O-thread callers cancel directly on the already-owned
+        session.  Missing sessions are ignored to keep cleanup paths
+        idempotent.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int cancelQuicStreamAsync(int64_t session_id, int64_t stream_id, ExceptionSink* xsink);
 
     //! Submits an HTTP/3 response on an active QUIC server connection
     /** @param session_id the QUIC session ID
@@ -837,6 +911,14 @@ public:
     */
     DLLEXPORT int submitQuicResponseStreaming(int64_t session_id, int64_t stream_id, int status_code,
         const QoreHashNode* headers, ExceptionSink* xsink);
+
+    //! Submits a streaming HTTP/3 response and registers an InputStream body on the async I/O controller
+    /** @return 0 on success, 1 if the stream is not I/O-thread-safe, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int submitQuicStreamingResponseWithStream(int64_t session_id, int64_t stream_id, int status_code,
+        const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink);
 
     //! Sends body data on a streaming HTTP/3 response
     /** @param session_id the QUIC session ID

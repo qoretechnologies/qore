@@ -195,12 +195,10 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
         # Phase 2: submit to QUIC layer with STREAM_ID_BLOCKED retry.
         #
-        # IMPORTANT: sock.submitQuicRequest() acquires sock->priv->m internally.
-        # The I/O thread holds sock->priv->m (via C++ continuePoll()) and then
-        # acquires stream_lock (in handleReading()).  Holding stream_lock here
-        # while calling submitQuicRequest() would therefore create a lock-order
-        # inversion and risk deadlock.  submitQuicRequest() is intentionally
-        # called outside stream_lock.
+        # IMPORTANT: sock.submitQuicRequest() blocks through the async I/O
+        # controller.  Holding stream_lock while waiting for controller-backed
+        # submission would risk a lock-order inversion with handleReading(), so
+        # submitQuicRequest() is intentionally called outside stream_lock.
         self.beginSubmit();
 
         Socket sock = self.getSocket();

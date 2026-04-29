@@ -610,10 +610,8 @@ void Http2ClientConnection::pushSendData(const void* data, size_t len, Exception
         poll_op_priv->sendStreamData(streaming_send_stream_id, *bin, false, xsink);
     }
 
-    // Wake the I/O controller so it processes the queued data
-    if (!*xsink) {
-        wakeController();
-    }
+    // sendStreamData() delegates to the socket-level enqueue operation, which
+    // wakes the controller after the DATA frame is queued.
 }
 
 void Http2ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
@@ -636,10 +634,8 @@ void Http2ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
 
     sock_priv->sendHttp2Trailers(streaming_send_stream_id, trailers, xsink);
 
-    // Wake the I/O controller so it processes the queued trailers
-    if (!*xsink) {
-        wakeController();
-    }
+    // sendHttp2Trailers() delegates to the socket-level enqueue operation,
+    // which wakes the controller after the trailers are queued.
 }
 
 void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {

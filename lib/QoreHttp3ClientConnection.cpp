@@ -991,8 +991,7 @@ void Http3ClientConnection::pushSendData(const void* data, size_t len, Exception
         return;
     }
 
-    std::shared_ptr<QuicSession> session = poll_op_priv->getInnerOp()->getSession();
-    if (!session) {
+    if (!sock_priv) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot push data: QUIC session not available");
         return;
@@ -1001,15 +1000,10 @@ void Http3ClientConnection::pushSendData(const void* data, size_t len, Exception
     bool end_stream = (!data || !len);
     if (end_stream) {
         // End-of-body: send empty DATA with end_stream flag
-        session->sendStreamData(streaming_send_stream_id, nullptr, 0, true, xsink);
+        sock_priv->sendQuicClientStreamData(streaming_send_stream_id, nullptr, 0, true, xsink);
         streaming_send_stream_id = -1;
     } else {
-        session->sendStreamData(streaming_send_stream_id, data, len, false, xsink);
-    }
-
-    // Wake the I/O controller so QUIC packets are produced and sent on the I/O thread.
-    if (!*xsink) {
-        wakeController();
+        sock_priv->sendQuicClientStreamData(streaming_send_stream_id, data, len, false, xsink);
     }
 }
 
@@ -1031,31 +1025,13 @@ void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
         return;
     }
 
-    std::shared_ptr<QuicSession> session = poll_op_priv->getInnerOp()->getSession();
-    if (!session) {
+    if (!sock_priv) {
         xsink->raiseException("HTTPCLIENT-STATE-ERROR",
             "cannot set trailers: QUIC session not available");
         return;
     }
 
-    // Convert QoreHashNode trailers to strcase_str_map_t
-    strcase_str_map_t trailer_map;
-    if (trailers) {
-        ConstHashIterator hi(trailers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                trailer_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
-            }
-        }
-    }
-
-    session->submitTrailers(streaming_send_stream_id, trailer_map, xsink);
-
-    // Wake the I/O controller so QUIC packets are produced and sent on the I/O thread.
-    if (!*xsink) {
-        wakeController();
-    }
+    sock_priv->submitQuicClientTrailers(streaming_send_stream_id, trailers, xsink);
 }
 
 void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {

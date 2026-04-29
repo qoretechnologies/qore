@@ -482,6 +482,15 @@ public:
     //! Returns the active HTTP/2 server stream ID for this thread, or <= 0 if no HTTP/2 response is active
     DLLLOCAL int32_t getH2ActiveServerStreamId() const;
 
+    //! Returns the thread-local HTTP/2 stream ID without inspecting the HTTP/2 session
+    DLLLOCAL int32_t getH2ActiveThreadStreamId() const;
+
+    //! Returns true if an HTTP/2 session is active; must be called on the async I/O controller path
+    DLLLOCAL bool hasH2SessionForAsyncPoll() const;
+
+    //! Returns true if an HTTP/2 server session is active; must be called on the async I/O controller path
+    DLLLOCAL bool isH2ServerSessionForAsyncPoll() const;
+
     //! Builds the HTTP response status line and sets the legacy response-uri info key
     DLLLOCAL void getSendHttpResponseStatusLine(QoreString& hdr, QoreHashNode* info, int code, const char* desc,
             const char* http_version) const;

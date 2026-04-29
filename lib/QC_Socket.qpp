@@ -174,6 +174,141 @@ static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPo
     return *xsink ? -1 : 0;
 }
 
+class SocketExecHttp1AllowedPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL SocketExecHttp1AllowedPollOperation(QoreSocketObject* sock, const char* mname)
+            : sock(sock), mname(mname) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        if (priv->hasH2SessionForAsyncPoll()) {
+            xsink->raiseException("HTTP2-ERROR",
+                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "http1-checked" : "checking-http1";
+    }
+
+private:
+    QoreSocketObject* sock;
+    std::string mname;
+    bool done = false;
+};
+
+class SocketExecHttp2ServerStreamPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL SocketExecHttp2ServerStreamPollOperation(QoreSocketObject* sock, int32_t stream_id,
+            const char* mname)
+            : sock(sock), stream_id(stream_id), mname(mname) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        output = -1;
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        if (!priv->hasH2SessionForAsyncPoll()) {
+            output = -1;
+        } else if (priv->isH2ServerSessionForAsyncPoll() && stream_id > 0) {
+            output = stream_id;
+        } else {
+            xsink->raiseException("HTTP2-ERROR",
+                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
+            output = -1;
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return static_cast<int64>(output);
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "http2-server-stream-checked" : "checking-http2-server-stream";
+    }
+
+private:
+    QoreSocketObject* sock;
+    int32_t stream_id;
+    std::string mname;
+    int32_t output = -1;
+    bool done = false;
+};
+
+static QoreValue socket_exec_poll_output(QoreObject* self, QoreSocketObject* s, SocketPollOperationBase* poller,
+        const char* owner_name, const char* goal, ExceptionSink* xsink) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, -1, owner_name, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return poller->getOutput();
+}
+
+static int socket_exec_check_http1_allowed(QoreObject* self, QoreSocketObject* s, const char* mname,
+        ExceptionSink* xsink) {
+    ValueHolder rv(socket_exec_poll_output(self, s, new SocketExecHttp1AllowedPollOperation(s, mname),
+        mname, "http1-checked", xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int32_t socket_exec_get_http2_server_stream(QoreObject* self, QoreSocketObject* s, int32_t stream_id,
+        const char* mname, ExceptionSink* xsink) {
+    ValueHolder rv(socket_exec_poll_output(self, s,
+        new SocketExecHttp2ServerStreamPollOperation(s, stream_id, mname), mname,
+        "http2-server-stream-checked", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return rv->isNothing() ? -1 : static_cast<int32_t>(rv->getAsBigInt());
+}
+
 static int socket_exec_send_binary(QoreObject* self, QoreSocketObject* s, BinaryNode* data,
         int timeout_ms, ExceptionSink* xsink) {
     s->ref();
@@ -257,6 +392,10 @@ private:
 static int socket_exec_send_http_message(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         const void* data, size_t size, const QoreStringNode* body_event, int timeout_ms, ExceptionSink* xsink) {
+    if (socket_exec_check_http1_allowed(self, s, "sendHTTPMessage", xsink)) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
     if (my_socket_priv::getPriv(*s)->getSendHttpMessageHeaders(xsink, hdr, info, method, path, http_version,
             headers, size, QORE_SOURCE_SOCKET)) {
@@ -284,7 +423,11 @@ static int socket_exec_send_http_response(QoreObject* self, QoreSocketObject* s,
         int code, const char* desc, const char* http_version, const QoreHashNode* headers,
         const void* data, size_t size, const QoreStringNode* body_event, int timeout_ms, ExceptionSink* xsink) {
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
-    int32_t stream_id = priv->getH2ActiveServerStreamId();
+    int32_t stream_id = priv->getH2ActiveThreadStreamId();
+    stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponse", xsink);
+    if (*xsink) {
+        return -1;
+    }
     if (stream_id > 0) {
         QoreString status_line(s->getEncoding());
         priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
@@ -519,6 +662,10 @@ static int socket_exec_send_http_chunked_body_callback(QoreObject* self, QoreSoc
 static int socket_exec_send_http_message_callback(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    if (socket_exec_check_http1_allowed(self, s, "sendHTTPMessageWithCallback", xsink)) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
     if (my_socket_priv::getPriv(*s)->getSendHttpMessageChunkedHeaders(xsink, hdr, info, method, path,
             http_version, headers, QORE_SOURCE_SOCKET)) {
@@ -534,9 +681,22 @@ static int socket_exec_send_http_message_callback(QoreObject* self, QoreSocketOb
 static int socket_exec_send_http_response_callback(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
         int code, const char* desc, const char* http_version, const QoreHashNode* headers,
         const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    int32_t stream_id = priv->getH2ActiveThreadStreamId();
+    stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponseWithCallback", xsink);
+    if (*xsink) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
-    if (my_socket_priv::getPriv(*s)->getSendHttpResponseChunkedHeaders(xsink, hdr, info, code, desc, http_version,
-            headers, QORE_SOURCE_SOCKET)) {
+    if (stream_id > 0) {
+        priv->getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
+        xsink->raiseException("HTTP2-ERROR",
+            "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
+        return -1;
+    }
+    if (priv->getSendHttpResponseChunkedHeaders(xsink, hdr, info, code, desc, http_version, headers,
+            QORE_SOURCE_SOCKET)) {
         return -1;
     }
 
@@ -556,7 +716,12 @@ static int socket_exec_send_http_response_input_stream(QoreObject* self, QoreSoc
     }
 
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
-    if (priv->getH2ActiveServerStreamId() > 0) {
+    int32_t stream_id = priv->getH2ActiveThreadStreamId();
+    stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponse", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (stream_id > 0) {
         QoreString status_line(s->getEncoding());
         priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
         xsink->raiseException("HTTP2-ERROR",
@@ -6687,12 +6852,11 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
     return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
 }
 
-//! Submits an HTTP/2 response without creating a poll operation
-/** Queues the response in the nghttp2 session and wakes the async I/O controller
-    when this socket is registered there. The actual socket write is handled by
-    the active read poll operation's sendPendingData() calls. This is designed for
-    HTTP/2 multiplexing where the read operation stays on the I/O thread and responses
-    are submitted from handler threads.
+//! Submits an HTTP/2 response through the async I/O controller
+/** Copies caller-owned data, queues the response in the nghttp2 session on the
+    async I/O controller, and wakes the controller when this socket is registered
+    there. The actual socket write is handled by the active read poll operation's
+    sendPendingData() calls.
 
     @param stream_id the HTTP/2 stream ID from the request
     @param status_code the HTTP status code to send
@@ -6738,10 +6902,11 @@ nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
     s->setHttp2ConnectProtocolEnabled(enable);
 }
 
-//! Submits an HTTP/2 CONNECT response without creating a poll operation (RFC 8441)
-/** Queues the CONNECT response in the nghttp2 session without END_STREAM, keeping
-    the stream open for bidirectional data transfer (WebSocket over HTTP/2). The actual
-    socket write is handled by the active read poll operation's sendPendingData() calls.
+//! Submits an HTTP/2 CONNECT response through the async I/O controller (RFC 8441)
+/** Queues the CONNECT response in the nghttp2 session without END_STREAM on the
+    async I/O controller, keeping the stream open for bidirectional data transfer
+    (WebSocket over HTTP/2). The actual socket write is handled by the active
+    read poll operation's sendPendingData() calls.
 
     This is designed for HTTP/2 multiplexing where the read operation stays on the I/O
     thread and CONNECT responses are submitted from handler threads.
@@ -6860,10 +7025,8 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
 
 //! Submits HTTP/2 streaming response headers without body or END_STREAM
 /** Used by server-side HTTP/2 handlers driven by an async I/O controller.
-    The socket wrapper lock is acquired only briefly to copy the HTTP/2 session
-    shared pointer; the actual header submission runs under only the session's
-    internal recursive mutex.  This avoids handler-thread vs. I/O-thread
-    contention on the socket wrapper lock.
+    The call copies caller-owned data and delegates HTTP/2 session mutation to
+    the async I/O controller.
 
     Must be paired with @ref sendHttp2StreamData() and/or @ref sendHttp2Trailers();
     flushing to the wire is driven by the I/O thread's existing HTTP/2 flush poll
@@ -6885,10 +7048,9 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
 }
 
 //! Sends HTTP/2 DATA frame payload on a server-side stream
-/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
-    shared pointer; the actual DATA enqueue runs under only the session's
-    internal recursive mutex.  After a successful enqueue, the registered async
-    I/O controller is woken to flush pending frames.
+/** Copies caller-owned data and delegates HTTP/2 DATA enqueue to the async I/O
+    controller. After a successful enqueue, the registered async I/O controller
+    is woken to flush pending frames.
 
     @param stream_id the HTTP/2 stream ID
     @param data the binary data to send
@@ -6906,9 +7068,8 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 }
 
 //! Sends HTTP/2 trailer headers on a server-side stream
-/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
-    shared pointer; the actual trailer submission runs under only the session's
-    internal recursive mutex.
+/** Copies caller-owned data and delegates trailer submission to the async I/O
+    controller.
 
     Submits a trailing HEADERS frame with END_STREAM on the specified stream.
     The stream's data provider is configured to use NGHTTP2_DATA_FLAG_NO_END_STREAM
@@ -6930,9 +7091,7 @@ nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) 
 }
 
 //! Removes an HTTP/2 stream from the session
-/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
-    shared pointer; the stream bookkeeping removal runs under only the session's
-    internal recursive mutex.
+/** Delegates stream bookkeeping removal to the async I/O controller.
 
     @param stream_id the HTTP/2 stream ID to remove
 
@@ -6944,9 +7103,8 @@ nothing Socket::cleanupHttp2Stream(int stream_id) {
 }
 
 //! Send RST_STREAM to abort an HTTP/2 stream and clean up the stream state
-/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
-    shared pointer; the RST_STREAM submission and stream cleanup run under
-    only the session's internal recursive mutex.
+/** Delegates RST_STREAM submission and stream cleanup to the async I/O
+    controller.
 
     @param stream_id the HTTP/2 stream ID to reset
 
@@ -7946,16 +8104,11 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
         return 1;
     }
 
-    // Submit response headers without closing the stream
-    s->submitQuicResponseStreaming(session_id, stream_id, status_code, headers, xsink);
-    if (*xsink) {
-        return -1;
+    int rv = s->submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, *body, xsink);
+    if (!rv && !*xsink) {
+        body.release();
     }
-
-    // Transfer InputStream ownership to the session for I/O thread reading
-    InputStream* body_ptr = body.release();
-    s->setQuicStreamInputStream(session_id, stream_id, body_ptr, xsink);
-    return *xsink ? -1 : 0;
+    return rv;
 }
 
 //! Waits for a streaming HTTP/3 body buffer to drain below the backpressure threshold

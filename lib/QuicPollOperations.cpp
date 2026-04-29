@@ -1131,29 +1131,6 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
     }
 }
 
-int64_t SocketQuicClientPollOperation::submitRequest(
-    const char* method, const char* path,
-    const strcase_str_map_t& headers,
-    const void* body, size_t body_len,
-    ExceptionSink* xsink) {
-    if (!quic_session) {
-        xsink->raiseException("QUIC-ERROR", "QUIC session not initialized");
-        return -1;
-    }
-    return quic_session->submitRequest(method, path, headers, body, body_len, xsink);
-}
-
-int64_t SocketQuicClientPollOperation::submitRequestStreaming(
-    const char* method, const char* path,
-    const strcase_str_map_t& headers,
-    ExceptionSink* xsink) {
-    if (!quic_session) {
-        xsink->raiseException("QUIC-ERROR", "QUIC session not initialized");
-        return -1;
-    }
-    return quic_session->submitRequestStreaming(method, path, headers, xsink);
-}
-
 int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
     // Create a new connected UDP socket and swap the fd on the socket object.
     // The old fd is closed immediately — this removes it from epoll so the
@@ -2077,7 +2054,7 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
     int64_t session_id, int64_t stream_id, int status_code,
     const QoreHashNode* headers,
     const AbstractQoreNode* body)
-    : SocketPollSocketOperationBase(sock) {
+    : SocketPollSocketOperationBase(sock), stream_id_(stream_id), status_code_(status_code) {
     AutoLocker al(sock->priv->m);
 
     // Validate socket
@@ -2094,28 +2071,29 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
     }
 
     // Convert headers hash to std::map
-    strcase_str_map_t hdr_map;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
             QoreStringValueHelper val(hi.get());
-            hdr_map[hi.getKey()] = val->c_str();
+            header_map_[hi.getKey()] = val->c_str();
         }
     }
 
-    // Get body data
-    const void* body_ptr = nullptr;
-    size_t body_len = 0;
+    // Copy body data so session mutation can be deferred to continuePoll().
     if (body) {
         qore_type_t body_type = body->getType();
         if (body_type == NT_BINARY) {
             const BinaryNode* b = static_cast<const BinaryNode*>(body);
-            body_ptr = b->getPtr();
-            body_len = b->size();
+            if (b->size()) {
+                body_ = new BinaryNode;
+                body_->append(b->getPtr(), b->size());
+            }
         } else if (body_type == NT_STRING) {
             const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            body_ptr = str->c_str();
-            body_len = str->size();
+            if (str->size()) {
+                body_ = new BinaryNode;
+                body_->append(str->c_str(), str->size());
+            }
         }
     }
 
@@ -2154,22 +2132,7 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
             errno, strerror(errno));
     }
 
-    // Save stream_id for ACK tracking in FLUSHING state
-    stream_id_ = stream_id;
-
-    // Snapshot migration generation before sending — used in FLUSHING to detect
-    // whether a path migration occurred during this response.
-    send_migration_gen_ = quic_session->getMigrationGen();
-
-    // Submit the response to the HTTP/3 layer
-    int rv = quic_session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
-    if (*xsink) {
-        sock->priv->clearNonBlock();
-        set_non_block = false;
-        return;
-    }
-
-    qcs_state = QCS::SENDING;
+    qcs_state = QCS::NONE;
 }
 
 const char* SocketQuicSendResponsePollOperation::getStateImpl() const {
@@ -2276,6 +2239,26 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
 
     while (true) {
         switch (qcs_state) {
+            case QCS::NONE: {
+                const void* body_ptr = body_ ? body_->getPtr() : nullptr;
+                size_t body_len = body_ ? body_->size() : 0;
+
+                // Submit the response to the HTTP/3 layer on the controller thread.
+                int rv = quic_session->submitResponse(stream_id_, status_code_, header_map_, body_ptr, body_len,
+                    xsink);
+                if (rv && !*xsink) {
+                    xsink->raiseException("QUIC-ERROR", "failed to submit HTTP/3 response: rv=%d", rv);
+                }
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                // Snapshot migration generation when SENDING state begins.
+                send_migration_gen_ = quic_session->getMigrationGen();
+                qcs_state = QCS::SENDING;
+                continue;
+            }
+
             case QCS::SENDING: {
                 // Read any incoming ACKs to update flow control windows
                 recvAndProcessPackets(xsink);
@@ -2408,7 +2391,8 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     int64_t session_id, int64_t stream_id, int status_code,
     const QoreHashNode* headers,
     InputStream* input_stream, QoreObject* input_stream_obj, int64 chunk_size)
-    : SocketPollSocketOperationBase(sock), stream_id(stream_id),
+    : SocketPollSocketOperationBase(sock), session_id(session_id), stream_id(stream_id),
+      status_code(status_code),
       input_stream(input_stream), input_stream_obj(input_stream_obj),
       chunk_size(chunk_size > 0 ? chunk_size : 16384),
       is_pollable(input_stream->supportsNonBlockingIo()) {
@@ -2428,12 +2412,11 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     }
 
     // Convert headers hash to std::map
-    strcase_str_map_t hdr_map;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
             QoreStringValueHelper val(hi.get());
-            hdr_map[hi.getKey()] = val->c_str();
+            header_map[hi.getKey()] = val->c_str();
         }
     }
 
@@ -2472,14 +2455,6 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
             "errno=%d (%s)\n", errno, strerror(errno));
     }
 
-    // Submit the streaming response (headers only, deferred data reader)
-    int rv = quic_session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
-    if (*xsink) {
-        sock->priv->clearNonBlock();
-        set_non_block = false;
-        return;
-    }
-
     // Cache the pollable file descriptor for non-blocking reads
     if (is_pollable) {
         stream_fd = input_stream->getPollableDescriptor();
@@ -2489,12 +2464,11 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     }
 
     // Thread affinity: QPP wrapper calls unassignThread() after construction
-    printd(5, "SocketQuicSendStreamingResponsePollOperation() headers submitted stream_id=%" PRId64 "\n",
-        stream_id);
 }
 
 const char* SocketQuicSendStreamingResponsePollOperation::getStateImpl() const {
     switch (ss_state) {
+        case QCS_SS::SUBMIT_HEADERS: return "submitting-headers";
         case QCS_SS::READ_CHUNK: return "reading-chunk";
         case QCS_SS::SEND_CHUNK: return "sending-chunk";
         case QCS_SS::FLUSH: return "flushing";
@@ -2594,8 +2568,32 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
         return nullptr;
     }
 
+    auto cancel_stream = [&]() {
+        sock->priv->m.unlock();
+        ExceptionSink cancel_xsink;
+        sock->cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
+        cancel_xsink.clear();
+        sock->priv->m.lock();
+    };
+
     while (true) {
         switch (ss_state) {
+            case QCS_SS::SUBMIT_HEADERS: {
+                // Submit the streaming response (headers only, deferred data reader)
+                int rv = quic_session->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+                if (rv && !*xsink) {
+                    xsink->raiseException("QUIC-ERROR", "failed to submit HTTP/3 streaming response: rv=%d", rv);
+                }
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                printd(5, "SocketQuicSendStreamingResponsePollOperation() headers submitted stream_id=%" PRId64
+                    "\n", stream_id);
+                ss_state = QCS_SS::READ_CHUNK;
+                continue;
+            }
+
             case QCS_SS::READ_CHUNK: {
                 if (eof) {
                     // Send end-of-stream marker
@@ -2623,9 +2621,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                     if (poll_rv < 0) {
                         xsink->raiseException("QUIC-ERROR", "poll() on stream fd failed: %s",
                             strerror(errno));
-                        ExceptionSink cancel_xsink;
-                        quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
-                            &cancel_xsink);
+                        cancel_stream();
                         return nullptr;
                     }
                     if (poll_rv == 0) {
@@ -2645,9 +2641,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                     int64 count = input_stream->readNonBlock(
                         const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
                     if (*xsink) {
-                        ExceptionSink cancel_xsink;
-                        quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
-                            &cancel_xsink);
+                        cancel_stream();
                         return nullptr;
                     }
                     if (count == 0) {
@@ -2674,9 +2668,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                         return nullptr;
                     }
                     if (*xsink) {
-                        ExceptionSink cancel_xsink;
-                        quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
-                            &cancel_xsink);
+                        cancel_stream();
                         return nullptr;
                     }
                     if (!current_chunk) {

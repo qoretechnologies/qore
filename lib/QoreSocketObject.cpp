@@ -45,7 +45,10 @@
 #include "qore/intern/FileInputStream.h"
 #include "qore/intern/FileOutputStream.h"
 
+#include <atomic>
 #include <limits>
+
+static std::atomic<uint64_t> qore_socket_object_sync_exec_seq{0};
 
 static void qore_socket_object_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
     QoreValue err = ex->getKeyValue("err");
@@ -64,25 +67,6 @@ static void qore_socket_object_raise_poll_result_exception(const QoreHashNode* e
 static bool qore_socket_object_exec_exception_is(const QoreHashNode& ex, const char* err) {
     QoreValue ex_err = ex.getKeyValue("err");
     return ex_err.getType() == NT_STRING && !strcmp(ex_err.get<const QoreStringNode>()->c_str(), err);
-}
-
-static void qore_socket_object_wake_async_controller(QoreSocketObject* s) {
-    if (qore_on_async_io_thread()) {
-        return;
-    }
-
-    ExceptionSink xsink;
-    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
-    ReferenceHolder<AsyncIoControllerPriv> ctrl(
-        !xsink && ctl_obj
-            ? static_cast<AsyncIoControllerPriv*>(
-                (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink))
-            : nullptr,
-        &xsink);
-    if (!xsink && ctrl) {
-        ctrl->wakeSocket(s->getIoIdentityHash());
-    }
-    xsink.clear();
 }
 
 static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s, QoreObject* sock_obj,
@@ -113,6 +97,10 @@ static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s,
     key += owner_name;
     key += ':';
     key += s->getUniqueHash();
+    // Several synchronous callers can delegate work for the same socket at the
+    // same time; keep the cache key unique while thread_key preserves affinity.
+    key += ':';
+    key += std::to_string(++qore_socket_object_sync_exec_seq);
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
     info->setKeyValue("sock", sock_obj->objectRefSelf(), xsink);
@@ -249,6 +237,95 @@ private:
     int controller_deferred_tid = -1;
 };
 
+class QoreSocketObjectHttp1AllowedPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketObjectHttp1AllowedPollOperation(QoreSocketObject* sock, const char* mname)
+            : sock(sock), mname(mname) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        if (priv->hasH2SessionForAsyncPoll()) {
+            xsink->raiseException("HTTP2-ERROR",
+                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "http1-checked" : "checking-http1";
+    }
+
+private:
+    QoreSocketObject* sock;
+    std::string mname;
+    bool done = false;
+};
+
+class QoreSocketObjectHttp2ServerStreamPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketObjectHttp2ServerStreamPollOperation(QoreSocketObject* sock, int32_t stream_id,
+            const char* mname)
+            : sock(sock), stream_id(stream_id), mname(mname) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        output = -1;
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        if (!priv->hasH2SessionForAsyncPoll()) {
+            output = -1;
+        } else if (priv->isH2ServerSessionForAsyncPoll() && stream_id > 0) {
+            output = stream_id;
+        } else {
+            xsink->raiseException("HTTP2-ERROR",
+                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
+            output = -1;
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return static_cast<int64>(output);
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "http2-server-stream-checked" : "checking-http2-server-stream";
+    }
+
+private:
+    QoreSocketObject* sock;
+    int32_t stream_id;
+    std::string mname;
+    int32_t output = -1;
+    bool done = false;
+};
+
 class QoreSocketObjectIdleDataPollOperation : public SocketPollOperationBase {
 public:
     QoreSocketObjectIdleDataPollOperation(ExceptionSink* xsink, QoreSocketObject* sock) : sock(sock) {
@@ -343,6 +420,11 @@ private:
     int controller_deferred_tid = -1;
 };
 
+static std::shared_ptr<QuicSession> qore_socket_object_get_quic_session(const QoreSocketObject* s,
+        int64_t session_id);
+static std::shared_ptr<QuicSession> qore_socket_object_get_first_quic_session(const QoreSocketObject* s);
+static Http2SessionPtr qore_socket_object_get_h2_session(const QoreSocketObject* s);
+
 class QoreSocketObjectStreamDrainPollOperation : public SocketPollOperationBase {
 public:
     DLLLOCAL QoreSocketObjectStreamDrainPollOperation(Http2SessionPtr h2, int64_t stream_id)
@@ -353,11 +435,34 @@ public:
             : quic(std::move(quic)), stream_id(stream_id) {
     }
 
+    DLLLOCAL QoreSocketObjectStreamDrainPollOperation(QoreSocketObject* sock, int32_t stream_id, bool http2)
+            : sock(sock), stream_id(stream_id), use_h2_session(http2) {
+        assert(http2);
+        sock->ref();
+    }
+
+    DLLLOCAL QoreSocketObjectStreamDrainPollOperation(QoreSocketObject* sock, int64_t stream_id)
+            : sock(sock), stream_id(stream_id), use_first_quic_session(true) {
+        sock->ref();
+    }
+
+    DLLLOCAL QoreSocketObjectStreamDrainPollOperation(QoreSocketObject* sock, int64_t session_id,
+            int64_t stream_id)
+            : sock(sock), stream_id(stream_id), quic_session_id(session_id) {
+        sock->ref();
+    }
+
     DLLLOCAL ~QoreSocketObjectStreamDrainPollOperation() override {
         ExceptionSink xsink;
         cleanup(&xsink);
         if (xsink) {
             xsink.clear();
+        }
+        if (sock) {
+            sock->deref(&xsink);
+            if (xsink) {
+                xsink.clear();
+            }
         }
     }
 
@@ -376,7 +481,7 @@ public:
             return nullptr;
         }
 
-        int rc = checkDrain();
+        int rc = checkDrain(xsink);
         if (rc != 1) {
             output = rc;
             done = true;
@@ -391,7 +496,7 @@ public:
             return nullptr;
         }
 
-        rc = checkDrain();
+        rc = checkDrain(xsink);
         if (rc != 1) {
             output = rc;
             done = true;
@@ -422,13 +527,47 @@ public:
     }
 
 private:
-    DLLLOCAL int checkDrain() const {
+    DLLLOCAL bool ensureSession(ExceptionSink* xsink) {
+        if (h2 || quic) {
+            return true;
+        }
+        assert(sock);
+        if (use_h2_session) {
+            h2 = qore_socket_object_get_h2_session(sock);
+            if (!h2) {
+                xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+                return false;
+            }
+            return true;
+        }
+        quic = use_first_quic_session
+            ? qore_socket_object_get_first_quic_session(sock)
+            : qore_socket_object_get_quic_session(sock, quic_session_id);
+        if (!quic) {
+            if (use_first_quic_session) {
+                xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket");
+            } else {
+                xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+                    (long long)quic_session_id);
+            }
+            return false;
+        }
+        return true;
+    }
+
+    DLLLOCAL int checkDrain(ExceptionSink* xsink) {
+        if (!ensureSession(xsink)) {
+            return -1;
+        }
         return h2
             ? h2->waitForStreamDrain(static_cast<int32_t>(stream_id), 0)
             : quic->waitForStreamDrain(stream_id, 0);
     }
 
     DLLLOCAL int registerWaiter(ExceptionSink* xsink) {
+        if (!ensureSession(xsink)) {
+            return -1;
+        }
         ReferenceHolder<QoreObject> obj(getReferencedSocketObject(xsink), xsink);
         if (*xsink) {
             return -1;
@@ -450,7 +589,7 @@ private:
         if (registered && waiter_sock_obj) {
             if (h2) {
                 h2->unregisterStreamDrainWaiter(waiter_sock_obj, xsink);
-            } else {
+            } else if (quic) {
                 quic->unregisterStreamDrainWaiter(waiter_sock_obj, xsink);
             }
             registered = false;
@@ -461,26 +600,35 @@ private:
         }
     }
 
+    QoreSocketObject* sock = nullptr;
     Http2SessionPtr h2;
     std::shared_ptr<QuicSession> quic;
     QoreObject* waiter_sock_obj = nullptr;
     int64_t stream_id;
+    int64_t quic_session_id = 0;
     int output = -1;
     bool done = false;
     bool registered = false;
     bool wake_requested = false;
+    bool use_h2_session = false;
+    bool use_first_quic_session = false;
 };
 
 class QoreSocketObjectQuicStreamDataPollOperation : public SocketPollOperationBase {
 public:
-    DLLLOCAL QoreSocketObjectQuicStreamDataPollOperation(std::shared_ptr<QuicSession> session,
-            int64_t session_id, int64_t stream_id)
-            : session(std::move(session)), session_id(session_id), stream_id(stream_id) {
+    DLLLOCAL QoreSocketObjectQuicStreamDataPollOperation(QoreSocketObject* sock, int64_t session_id,
+            int64_t stream_id)
+            : sock(sock), session_id(session_id), stream_id(stream_id) {
+        sock->ref();
     }
 
     DLLLOCAL ~QoreSocketObjectQuicStreamDataPollOperation() override {
         ExceptionSink xsink;
         cleanup(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+        sock->deref(&xsink);
         if (xsink) {
             xsink.clear();
         }
@@ -545,7 +693,24 @@ public:
     }
 
 private:
+    DLLLOCAL bool ensureSession(ExceptionSink* xsink) {
+        if (session) {
+            return true;
+        }
+        session = qore_socket_object_get_quic_session(sock, session_id);
+        if (!session) {
+            done = true;
+            xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+                (long long)session_id);
+            return false;
+        }
+        return true;
+    }
+
     DLLLOCAL int checkData(ExceptionSink* xsink) {
+        if (!ensureSession(xsink)) {
+            return -1;
+        }
         if (session->isMarkedClosed()) {
             done = true;
             xsink->raiseException("QUIC-ERROR",
@@ -569,6 +734,9 @@ private:
     }
 
     DLLLOCAL int registerWaiter(ExceptionSink* xsink) {
+        if (!ensureSession(xsink)) {
+            return -1;
+        }
         ReferenceHolder<QoreObject> obj(getReferencedSocketObject(xsink), xsink);
         if (*xsink) {
             return -1;
@@ -583,7 +751,7 @@ private:
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
-        if (registered && waiter_sock_obj) {
+        if (registered && waiter_sock_obj && session) {
             session->unregisterStreamDataWaiter(waiter_sock_obj, xsink);
             registered = false;
         }
@@ -593,6 +761,7 @@ private:
         }
     }
 
+    QoreSocketObject* sock;
     std::shared_ptr<QuicSession> session;
     SimpleRefHolder<BinaryNode> data;
     QoreObject* waiter_sock_obj = nullptr;
@@ -605,14 +774,19 @@ private:
 
 class QoreSocketObjectQuicDatagramPollOperation : public SocketPollOperationBase {
 public:
-    DLLLOCAL QoreSocketObjectQuicDatagramPollOperation(std::shared_ptr<QuicSession> session,
+    DLLLOCAL QoreSocketObjectQuicDatagramPollOperation(QoreSocketObject* sock, int64_t session_id,
             int64_t stream_id)
-            : session(std::move(session)), stream_id(stream_id) {
+            : sock(sock), session_id(session_id), stream_id(stream_id) {
+        sock->ref();
     }
 
     DLLLOCAL ~QoreSocketObjectQuicDatagramPollOperation() override {
         ExceptionSink xsink;
         cleanup(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+        sock->deref(&xsink);
         if (xsink) {
             xsink.clear();
         }
@@ -677,7 +851,24 @@ public:
     }
 
 private:
+    DLLLOCAL bool ensureSession(ExceptionSink* xsink) {
+        if (session) {
+            return true;
+        }
+        session = qore_socket_object_get_quic_session(sock, session_id);
+        if (!session) {
+            done = true;
+            xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+                (long long)session_id);
+            return false;
+        }
+        return true;
+    }
+
     DLLLOCAL int checkData(ExceptionSink* xsink) {
+        if (!ensureSession(xsink)) {
+            return -1;
+        }
         if (session->isMarkedClosed()) {
             done = true;
             return 0;
@@ -697,6 +888,9 @@ private:
     }
 
     DLLLOCAL int registerWaiter(ExceptionSink* xsink) {
+        if (!ensureSession(xsink)) {
+            return -1;
+        }
         ReferenceHolder<QoreObject> obj(getReferencedSocketObject(xsink), xsink);
         if (*xsink) {
             return -1;
@@ -711,7 +905,7 @@ private:
     }
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
-        if (registered && waiter_sock_obj) {
+        if (registered && waiter_sock_obj && session) {
             session->unregisterDatagramWaiter(waiter_sock_obj, xsink);
             registered = false;
         }
@@ -721,13 +915,294 @@ private:
         }
     }
 
+    QoreSocketObject* sock;
     std::shared_ptr<QuicSession> session;
     SimpleRefHolder<BinaryNode> data;
     QoreObject* waiter_sock_obj = nullptr;
+    int64_t session_id;
     int64_t stream_id;
     bool done = false;
     bool registered = false;
     bool wake_requested = false;
+};
+
+class QoreSocketObjectQuicConnectStreamDataPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketObjectQuicConnectStreamDataPollOperation(QoreSocketObject* sock, int64_t session_id,
+            int64_t stream_id)
+            : sock(sock), session_id(session_id), stream_id(stream_id) {
+        sock->ref();
+    }
+
+    DLLLOCAL ~QoreSocketObjectQuicConnectStreamDataPollOperation() override {
+        ExceptionSink xsink;
+        sock->deref(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+        data.discard();
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
+        if (!session) {
+            xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+                (long long)session_id);
+            done = true;
+            return nullptr;
+        }
+
+        QoreValue rv = session->readConnectStreamData(stream_id, xsink);
+        if (*xsink) {
+            done = true;
+            return nullptr;
+        }
+        if (rv.getType() == NT_BINARY) {
+            data = rv.take<BinaryNode>();
+        } else if (!rv.isNothing()) {
+            std::string type = rv.getFullTypeName();
+            rv.discard(xsink);
+            if (!*xsink) {
+                xsink->raiseException("QUIC-ERROR", "unexpected %s value reading QUIC CONNECT stream data",
+                    type.c_str());
+            }
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return data ? data->refSelf() : QoreValue();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "quic-connect-stream-data-read" : "reading-quic-connect-stream-data";
+    }
+
+    DLLLOCAL QoreValue takeOutput() {
+        return data ? QoreValue(data.release()) : QoreValue();
+    }
+
+private:
+    QoreSocketObject* sock;
+    SimpleRefHolder<BinaryNode> data;
+    int64_t session_id;
+    int64_t stream_id;
+    bool done = false;
+};
+
+class QoreSocketObjectQuicQueryPollOperation : public SocketPollOperationBase {
+public:
+    enum class Action {
+        FirstSessionClosed,
+        FirstSessionId,
+        GoawayState,
+        GoawayReceived,
+        PeerCertificate,
+        StreamComplete,
+        MaxDatagramSize,
+        DatagramSupported,
+    };
+
+    DLLLOCAL QoreSocketObjectQuicQueryPollOperation(QoreSocketObject* sock, Action action,
+            int64_t session_id = 0, int64_t stream_id = 0)
+            : sock(sock), action(action), session_id(session_id), stream_id(stream_id) {
+        sock->ref();
+    }
+
+    DLLLOCAL ~QoreSocketObjectQuicQueryPollOperation() override {
+        ExceptionSink xsink;
+        output.discard(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+        sock->deref(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        output.discard(xsink);
+        output = defaultValue();
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        switch (action) {
+            case Action::FirstSessionClosed:
+                setFirstSessionClosed();
+                break;
+
+            case Action::FirstSessionId:
+                setFirstSessionId(xsink);
+                break;
+
+            case Action::GoawayState:
+                setGoawayState(xsink);
+                break;
+
+            case Action::GoawayReceived:
+                setGoawayReceived();
+                break;
+
+            case Action::PeerCertificate:
+                setPeerCertificate(xsink);
+                break;
+
+            case Action::StreamComplete:
+                setStreamComplete();
+                break;
+
+            case Action::MaxDatagramSize:
+                setMaxDatagramSize(xsink);
+                break;
+
+            case Action::DatagramSupported:
+                setDatagramSupported(xsink);
+                break;
+        }
+
+        if (*xsink) {
+            output.discard(xsink);
+            output = defaultValue();
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return output.refSelf();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "quic-query-done" : "querying-quic-session";
+    }
+
+private:
+    DLLLOCAL QoreValue defaultValue() const {
+        switch (action) {
+            case Action::FirstSessionClosed:
+            case Action::StreamComplete:
+                return true;
+            case Action::FirstSessionId:
+            case Action::MaxDatagramSize:
+                return 0;
+            case Action::GoawayReceived:
+            case Action::DatagramSupported:
+                return false;
+            case Action::GoawayState:
+            case Action::PeerCertificate:
+                return QoreValue();
+        }
+        return QoreValue();
+    }
+
+    DLLLOCAL std::shared_ptr<QuicSession> getSession(ExceptionSink* xsink, const char* err,
+            const char* desc) const {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
+        if (!session) {
+            xsink->raiseException(err, desc, (long long)session_id);
+        }
+        return session;
+    }
+
+    DLLLOCAL void setFirstSessionClosed() {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(sock);
+        output = !session || session->isClosed();
+    }
+
+    DLLLOCAL void setFirstSessionId(ExceptionSink* xsink) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        output = sp->getFirstQuicSessionId(xsink);
+    }
+
+    DLLLOCAL void setGoawayState(ExceptionSink* xsink) {
+        std::shared_ptr<QuicSession> session = getSession(xsink, "QUIC-SESSION-ERROR",
+            "session %lld not found");
+        if (*xsink) {
+            return;
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclQuicGoawayStateInfo, xsink), xsink);
+        if (*xsink) {
+            return;
+        }
+        h->setKeyValue("goaway_sent", session->isGoawaySent(), xsink);
+        h->setKeyValue("goaway_received", session->isGoawayReceived(), xsink);
+        h->setKeyValue("goaway_max_stream_id", session->getGoawayMaxStreamId(), xsink);
+        if (!*xsink) {
+            output = h.release();
+        }
+    }
+
+    DLLLOCAL void setGoawayReceived() {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
+        output = session ? session->isGoawayReceived() : false;
+    }
+
+    DLLLOCAL void setPeerCertificate(ExceptionSink* xsink) {
+        std::shared_ptr<QuicSession> session = getSession(xsink, "QUIC-SESSION-ERROR",
+            "no QUIC session with id %lld on this socket");
+        if (*xsink) {
+            return;
+        }
+        X509* cert = session->getPeerCertificate();
+        if (cert) {
+            output = new QoreObject(QC_SSLCERTIFICATE, getProgram(), new QoreSSLCertificate(cert));
+        }
+    }
+
+    DLLLOCAL void setStreamComplete() {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
+        output = !session || session->isStreamComplete(stream_id);
+    }
+
+    DLLLOCAL void setMaxDatagramSize(ExceptionSink* xsink) {
+        std::shared_ptr<QuicSession> session = getSession(xsink, "QUIC-ERROR",
+            "no QUIC session with id %lld on this socket");
+        if (*xsink) {
+            return;
+        }
+        output = static_cast<int64_t>(session->getMaxDatagramPayloadSize(stream_id));
+    }
+
+    DLLLOCAL void setDatagramSupported(ExceptionSink* xsink) {
+        std::shared_ptr<QuicSession> session = getSession(xsink, "QUIC-ERROR",
+            "no QUIC session with id %lld on this socket");
+        if (*xsink) {
+            return;
+        }
+        output = session->isDatagramSupported();
+    }
+
+    QoreSocketObject* sock;
+    QoreValue output;
+    Action action;
+    int64_t session_id;
+    int64_t stream_id;
+    bool done = false;
 };
 
 static QoreObject* qore_socket_object_make_pollable_wrapper(QoreSocketObject* s) {
@@ -761,6 +1236,131 @@ static Http2SessionPtr qore_socket_object_get_h2_session(const QoreSocketObject*
     return sp->h2_session;
 }
 
+class QoreSocketObjectHttp2StreamDataPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketObjectHttp2StreamDataPollOperation(QoreSocketObject* sock, int32_t stream_id,
+            size_t max_bytes)
+            : sock(sock), stream_id(stream_id), max_bytes(max_bytes) {
+        sock->ref();
+    }
+
+    DLLLOCAL ~QoreSocketObjectHttp2StreamDataPollOperation() override {
+        ExceptionSink xsink;
+        sock->deref(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+        data.discard();
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        Http2SessionPtr h2 = qore_socket_object_get_h2_session(sock);
+        if (!h2) {
+            xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+            done = true;
+            return nullptr;
+        }
+
+        data = h2->takeStreamData(stream_id, max_bytes, xsink);
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return data ? data->refSelf() : QoreValue();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "http2-stream-data-read" : "reading-http2-stream-data";
+    }
+
+    DLLLOCAL BinaryNode* takeOutput() {
+        return data.release();
+    }
+
+private:
+    QoreSocketObject* sock;
+    SimpleRefHolder<BinaryNode> data;
+    int32_t stream_id;
+    size_t max_bytes;
+    bool done = false;
+};
+
+class QoreSocketObjectHttp2StreamStatePollOperation : public SocketPollOperationBase {
+public:
+    enum class Action {
+        Closed,
+        RemoteClosed,
+    };
+
+    DLLLOCAL QoreSocketObjectHttp2StreamStatePollOperation(QoreSocketObject* sock, int32_t stream_id,
+            Action action)
+            : sock(sock), stream_id(stream_id), action(action) {
+        sock->ref();
+    }
+
+    DLLLOCAL ~QoreSocketObjectHttp2StreamStatePollOperation() override {
+        ExceptionSink xsink;
+        sock->deref(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        output = true;
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink*) override {
+        if (done) {
+            return nullptr;
+        }
+
+        Http2SessionPtr h2 = qore_socket_object_get_h2_session(sock);
+        if (!h2) {
+            output = true;
+        } else if (action == Action::Closed) {
+            output = h2->isStreamClosed(stream_id);
+        } else {
+            output = h2->isStreamRemoteClosed(stream_id);
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return output;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "http2-stream-state-checked" : "checking-http2-stream-state";
+    }
+
+private:
+    QoreSocketObject* sock;
+    int32_t stream_id;
+    Action action;
+    bool output = true;
+    bool done = false;
+};
+
 static void qore_socket_object_set_h2_headers(strcase_str_map_t& out, const QoreHashNode* headers) {
     if (!headers) {
         return;
@@ -775,6 +1375,18 @@ static void qore_socket_object_set_h2_headers(strcase_str_map_t& out, const Qore
     }
 }
 
+static void qore_socket_object_set_quic_headers(strcase_str_map_t& out, const QoreHashNode* headers) {
+    if (!headers) {
+        return;
+    }
+
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        QoreStringValueHelper val(hi.get());
+        out[hi.getKey()] = val->c_str();
+    }
+}
+
 static QoreHashNode* qore_socket_object_make_sockaddr_output(const struct sockaddr_storage& addr, socklen_t len,
         const std::string& socketname) {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
@@ -786,6 +1398,681 @@ static QoreHashNode* qore_socket_object_make_sockaddr_output(const struct sockad
         h->setKeyValue("socketname", new QoreStringNode(socketname), nullptr);
     }
     return h;
+}
+
+class QoreSocketObjectHttp2EnqueuePollOperation : public SocketPollOperationBase {
+public:
+    enum class Action {
+        PushPromise,
+        Response,
+        ConnectResponse,
+        Request,
+        Cancel,
+        StreamData,
+        Trailers,
+        StreamingResponseHeaders,
+        StreamingResponseWithStream,
+        Cleanup,
+        Reset,
+        SetStreaming,
+    };
+
+    DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, Action action,
+            int32_t stream_id, const char* path, const QoreHashNode* headers)
+            : sock(sock), action(action), stream_id(stream_id), path(path ? path : "") {
+        sock->ref();
+        qore_socket_object_set_h2_headers(header_map, headers);
+    }
+
+    DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, Action action,
+            int32_t stream_id, int status_code, const QoreHashNode* headers, const void* body_ptr = nullptr,
+            size_t body_len = 0)
+            : sock(sock), action(action), stream_id(stream_id), status_code(status_code) {
+        sock->ref();
+        qore_socket_object_set_h2_headers(header_map, headers);
+        if (body_ptr && body_len) {
+            body = new BinaryNode;
+            body->append(body_ptr, body_len);
+        }
+    }
+
+    DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, const QoreHashNode* headers,
+            const void* body_ptr, size_t body_len, bool streaming, bool wake_controller, ExceptionSink* xsink)
+            : sock(sock), action(Action::Request), streaming(streaming), wake_controller(wake_controller) {
+        sock->ref();
+        parseRequestHeaders(headers, xsink);
+        if (body_ptr && body_len) {
+            body = new BinaryNode;
+            body->append(body_ptr, body_len);
+        }
+    }
+
+    DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, int32_t stream_id,
+            const BinaryNode* data, bool end_stream)
+            : sock(sock), action(Action::StreamData), stream_id(stream_id), end_stream(end_stream) {
+        sock->ref();
+        if (data && data->size()) {
+            body = new BinaryNode;
+            body->append(data->getPtr(), data->size());
+        }
+    }
+
+    DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, Action action,
+            int32_t stream_id, bool wake_controller = true)
+            : sock(sock), action(action), stream_id(stream_id), wake_controller(wake_controller) {
+        sock->ref();
+    }
+
+    DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, Action action,
+            int32_t stream_id, uint32_t error_code, bool wake_controller = true)
+            : sock(sock), action(action), stream_id(stream_id), h2_error_code(error_code),
+            wake_controller(wake_controller) {
+        assert(action == Action::Reset || action == Action::Cancel);
+        sock->ref();
+    }
+
+    DLLLOCAL QoreSocketObjectHttp2EnqueuePollOperation(QoreSocketObject* sock, int32_t stream_id,
+            int status_code, const QoreHashNode* headers, InputStream* input_stream, int64_t content_length)
+            : sock(sock), action(Action::StreamingResponseWithStream), stream_id(stream_id),
+            status_code(status_code), input_stream(input_stream), content_length(content_length) {
+        sock->ref();
+        qore_socket_object_set_h2_headers(header_map, headers);
+    }
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        output = -1;
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        Http2SessionPtr h2 = qore_socket_object_get_h2_session(sock);
+        if (!h2) {
+            if (action == Action::Cleanup || action == Action::Reset || action == Action::SetStreaming) {
+                output = 0;
+                done = true;
+                return nullptr;
+            }
+            xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+            output = -1;
+            done = true;
+            return nullptr;
+        }
+
+        switch (action) {
+            case Action::PushPromise:
+                output = h2->submitPushPromise(stream_id, path.c_str(), header_map, xsink);
+                break;
+
+            case Action::Response: {
+                const void* ptr = body ? body->getPtr() : nullptr;
+                size_t len = body ? body->size() : 0;
+                output = h2->submitResponse(stream_id, status_code, header_map, ptr, len, xsink);
+                break;
+            }
+
+            case Action::ConnectResponse:
+                output = h2->submitConnectResponse(stream_id, status_code, header_map, xsink);
+                break;
+
+            case Action::Request: {
+                const void* ptr = body ? body->getPtr() : nullptr;
+                size_t len = body ? body->size() : 0;
+                output = h2->submitRequest(method.c_str(), path.c_str(), request_headers, ptr, len, xsink,
+                    streaming);
+                break;
+            }
+
+            case Action::Cancel:
+                output = h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+                break;
+
+            case Action::StreamData: {
+                const void* ptr = body ? body->getPtr() : nullptr;
+                size_t len = body ? body->size() : 0;
+                int rv = h2->sendStreamData(stream_id, ptr, len, end_stream, xsink);
+                if (rv > 0 && !*xsink) {
+                    xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %d buffer full: data dropped", stream_id);
+                    output = -1;
+                } else {
+                    output = rv;
+                }
+                break;
+            }
+
+            case Action::Trailers:
+                output = h2->submitTrailers(stream_id, header_map, xsink);
+                break;
+
+            case Action::StreamingResponseHeaders:
+                output = h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+                break;
+
+            case Action::StreamingResponseWithStream:
+                output = h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+                if (!output && !*xsink) {
+                    h2->setStreamInputStream(stream_id, input_stream, xsink, content_length);
+                    if (!*xsink) {
+                        input_stream = nullptr;
+                    }
+                }
+                break;
+
+            case Action::Cleanup:
+                h2->cleanupStream(stream_id);
+                output = 0;
+                break;
+
+            case Action::Reset:
+                output = h2->submitRstStream(stream_id, h2_error_code, xsink);
+                if (output != 0) {
+                    printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
+                        "cleaning up local state anyway\n", stream_id, (int)output);
+                }
+                h2->cleanupStream(stream_id);
+                break;
+
+            case Action::SetStreaming:
+                h2->setStreamStreaming(stream_id);
+                output = 0;
+                break;
+        }
+
+        if (!*xsink && output >= 0 && wake_controller) {
+            wakeIoThread(xsink);
+        }
+        if (*xsink) {
+            output = -1;
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return static_cast<int64>(output);
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "done" : "enqueueing";
+    }
+
+private:
+    DLLLOCAL void parseRequestHeaders(const QoreHashNode* headers, ExceptionSink* xsink) {
+        if (!headers) {
+            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
+            return;
+        }
+
+        request_headers.reserve(headers->size() + 4);
+        auto append = [&](const std::string& key, const char* sval) {
+            if (key == ":method") {
+                if (sval && *sval) {
+                    method = sval;
+                }
+            } else if (key == ":path") {
+                if (sval && *sval) {
+                    path = sval;
+                }
+            }
+            request_headers.emplace_back(key, sval ? sval : "");
+        };
+
+        ConstHashIterator hi(headers);
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            QoreValue val = hi.get();
+            std::string skey(key);
+            if (val.getType() == NT_STRING) {
+                append(skey, val.get<const QoreStringNode>()->c_str());
+            } else if (val.getType() == NT_LIST) {
+                const QoreListNode* l = val.get<const QoreListNode>();
+                for (size_t i = 0; i < l->size(); ++i) {
+                    QoreValue elem = l->retrieveEntry(i);
+                    if (elem.getType() == NT_STRING) {
+                        append(skey, elem.get<const QoreStringNode>()->c_str());
+                    }
+                }
+            }
+        }
+
+        if (method.empty()) {
+            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
+            return;
+        }
+        if (path.empty()) {
+            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
+        }
+    }
+
+    QoreSocketObject* sock;
+    Action action;
+    int32_t stream_id = 0;
+    int status_code = 0;
+    uint32_t h2_error_code = NGHTTP2_CANCEL;
+    std::string method;
+    std::string path;
+    strcase_str_map_t header_map;
+    std::vector<std::pair<std::string, std::string>> request_headers;
+    SimpleRefHolder<BinaryNode> body;
+    InputStream* input_stream = nullptr;
+    int64_t content_length = -1;
+    bool end_stream = false;
+    bool streaming = false;
+    bool wake_controller = true;
+    int64 output = -1;
+    bool done = false;
+};
+
+class QoreSocketObjectQuicEnqueuePollOperation : public SocketPollOperationBase {
+public:
+    enum class Action {
+        Request,
+        RequestStreaming,
+        ClientStreamData,
+        Cancel,
+        Response,
+        ShutdownNotice,
+        Shutdown,
+        ResponseStreaming,
+        StreamData,
+        SetStreamInputStream,
+        StreamingResponseWithStream,
+        ConnectResponse,
+        Cleanup,
+        Reset,
+        Datagram,
+        Trailers,
+        SetStreaming,
+        RegisterConnectQueue,
+        DeregisterConnectQueue,
+        RegisterConnectFrameState,
+        DeregisterConnectFrameState,
+        RegisterDatagramQueue,
+        UnregisterDatagramQueue,
+    };
+
+    DLLLOCAL QoreSocketObjectQuicEnqueuePollOperation(QoreSocketObject* sock, const char* method,
+            const char* path, const QoreHashNode* headers, const void* body_ptr, size_t body_len,
+            bool streaming, bool wake_controller = true)
+            : sock(sock), action(streaming ? Action::RequestStreaming : Action::Request),
+            method(method ? method : ""), path(path ? path : ""), use_first_session(true),
+            wake_controller(wake_controller) {
+        sock->ref();
+        qore_socket_object_set_quic_headers(header_map, headers);
+        setBody(body_ptr, body_len);
+    }
+
+    DLLLOCAL QoreSocketObjectQuicEnqueuePollOperation(QoreSocketObject* sock, Action action,
+            int64_t session_id, int64_t stream_id, const void* body_ptr, size_t body_len, bool end_stream)
+            : sock(sock), action(action), session_id(session_id), stream_id(stream_id),
+            end_stream(end_stream) {
+        assert(action == Action::ClientStreamData || action == Action::StreamData || action == Action::Datagram);
+        sock->ref();
+        use_first_session = action == Action::ClientStreamData;
+        setBody(body_ptr, body_len);
+    }
+
+    DLLLOCAL QoreSocketObjectQuicEnqueuePollOperation(QoreSocketObject* sock, Action action,
+            int64_t session_id, int64_t stream_id, int status_code, const QoreHashNode* headers,
+            const void* body_ptr = nullptr, size_t body_len = 0)
+            : sock(sock), action(action), session_id(session_id), stream_id(stream_id),
+            status_code(status_code) {
+        assert(action == Action::Response || action == Action::ResponseStreaming
+            || action == Action::ConnectResponse || action == Action::Trailers);
+        sock->ref();
+        use_first_session = action == Action::Trailers;
+        qore_socket_object_set_quic_headers(header_map, headers);
+        setBody(body_ptr, body_len);
+    }
+
+    DLLLOCAL QoreSocketObjectQuicEnqueuePollOperation(QoreSocketObject* sock, Action action,
+            int64_t session_id, int64_t stream_id = 0)
+            : sock(sock), action(action), session_id(session_id), stream_id(stream_id) {
+        assert(action == Action::Cancel || action == Action::ShutdownNotice || action == Action::Shutdown
+            || action == Action::Cleanup || action == Action::Reset || action == Action::SetStreaming
+            || action == Action::DeregisterConnectQueue || action == Action::DeregisterConnectFrameState
+            || action == Action::UnregisterDatagramQueue);
+        sock->ref();
+        use_first_session = action == Action::SetStreaming;
+    }
+
+    DLLLOCAL QoreSocketObjectQuicEnqueuePollOperation(QoreSocketObject* sock, Action action,
+            int64_t session_id, int64_t stream_id, Queue* queue)
+            : sock(sock), action(action), session_id(session_id), stream_id(stream_id), queue(queue) {
+        assert(action == Action::RegisterConnectQueue || action == Action::RegisterConnectFrameState
+            || action == Action::RegisterDatagramQueue);
+        sock->ref();
+    }
+
+    DLLLOCAL QoreSocketObjectQuicEnqueuePollOperation(QoreSocketObject* sock, int64_t session_id,
+            int64_t stream_id, InputStream* input_stream, bool ref_input_stream)
+            : sock(sock), action(Action::SetStreamInputStream), session_id(session_id), stream_id(stream_id) {
+        sock->ref();
+        setInputStream(input_stream, ref_input_stream);
+    }
+
+    DLLLOCAL QoreSocketObjectQuicEnqueuePollOperation(QoreSocketObject* sock, int64_t session_id,
+            int64_t stream_id, int status_code, const QoreHashNode* headers, InputStream* input_stream,
+            bool ref_input_stream)
+            : sock(sock), action(Action::StreamingResponseWithStream), session_id(session_id),
+            stream_id(stream_id), status_code(status_code) {
+        sock->ref();
+        qore_socket_object_set_quic_headers(header_map, headers);
+        setInputStream(input_stream, ref_input_stream);
+    }
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            if (queue) {
+                queue->deref(xsink);
+                queue = nullptr;
+            }
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        output = -1;
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        std::shared_ptr<QuicSession> session = getSession(xsink);
+        if (*xsink || !session) {
+            output = sessionMissingIsOk() ? 0 : -1;
+            done = true;
+            return nullptr;
+        }
+
+        switch (action) {
+            case Action::Request:
+                output = session->submitRequest(method.c_str(), path.c_str(), header_map,
+                    body ? body->getPtr() : nullptr, body ? body->size() : 0, xsink);
+                break;
+
+            case Action::RequestStreaming:
+                output = session->submitRequestStreaming(method.c_str(), path.c_str(), header_map, xsink);
+                break;
+
+            case Action::ClientStreamData:
+            case Action::StreamData:
+                output = session->sendStreamData(stream_id, body ? body->getPtr() : nullptr,
+                    body ? body->size() : 0, end_stream, xsink);
+                break;
+
+            case Action::Cancel:
+                output = session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, xsink);
+                break;
+
+            case Action::Response:
+                output = session->submitResponse(stream_id, status_code, header_map,
+                    body ? body->getPtr() : nullptr, body ? body->size() : 0, xsink);
+                break;
+
+            case Action::ShutdownNotice:
+                output = session->submitShutdownNotice(xsink);
+                break;
+
+            case Action::Shutdown:
+                output = session->submitShutdown(xsink);
+                break;
+
+            case Action::ResponseStreaming:
+                output = session->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+                break;
+
+            case Action::SetStreamInputStream:
+                session->setStreamInputStream(stream_id, *input_stream, xsink);
+                if (!*xsink) {
+                    input_stream.release();
+                    output = 0;
+                }
+                break;
+
+            case Action::StreamingResponseWithStream:
+                output = session->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+                if (!output && !*xsink) {
+                    session->setStreamInputStream(stream_id, *input_stream, xsink);
+                    if (!*xsink) {
+                        input_stream.release();
+                        output = 0;
+                    }
+                }
+                break;
+
+            case Action::ConnectResponse:
+                output = session->submitConnectResponse(stream_id, status_code, header_map, xsink);
+                break;
+
+            case Action::Cleanup:
+                session->cleanupStream(stream_id);
+                output = 0;
+                break;
+
+            case Action::Reset:
+                output = session->resetStream(stream_id);
+                break;
+
+            case Action::Datagram:
+                output = session->submitDatagram(stream_id,
+                    body ? reinterpret_cast<const uint8_t*>(body->getPtr()) : nullptr,
+                    body ? body->size() : 0, xsink);
+                break;
+
+            case Action::Trailers:
+                output = session->submitTrailers(stream_id, header_map, xsink);
+                break;
+
+            case Action::SetStreaming:
+                session->setStreamStreaming(stream_id);
+                output = 0;
+                break;
+
+            case Action::RegisterConnectQueue:
+                session->registerConnectStreamQueue(stream_id, queue);
+                queue = nullptr;
+                output = 0;
+                break;
+
+            case Action::DeregisterConnectQueue:
+                session->deregisterConnectStreamQueue(stream_id);
+                output = 0;
+                break;
+
+            case Action::RegisterConnectFrameState:
+                session->registerConnectStreamFrameState(stream_id, queue);
+                queue = nullptr;
+                output = 0;
+                break;
+
+            case Action::DeregisterConnectFrameState:
+                session->deregisterConnectStreamFrameState(stream_id);
+                output = 0;
+                break;
+
+            case Action::RegisterDatagramQueue:
+                session->registerDatagramQueue(stream_id, queue, xsink);
+                if (!*xsink) {
+                    queue = nullptr;
+                    output = 0;
+                }
+                break;
+
+            case Action::UnregisterDatagramQueue:
+                session->unregisterDatagramQueue(stream_id, xsink);
+                if (!*xsink) {
+                    output = 0;
+                }
+                break;
+        }
+
+        if (!*xsink && shouldWakeController()) {
+            wakeIoThread(xsink);
+        }
+        if (*xsink) {
+            output = -1;
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return static_cast<int64>(output);
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "done" : "quic-enqueueing";
+    }
+
+private:
+    DLLLOCAL void setBody(const void* body_ptr, size_t body_len) {
+        if (body_ptr && body_len) {
+            body = new BinaryNode;
+            body->append(body_ptr, body_len);
+        }
+    }
+
+    DLLLOCAL void setInputStream(InputStream* is, bool add_ref) {
+        if (is && add_ref) {
+            is->ref();
+        }
+        input_stream = is;
+    }
+
+    DLLLOCAL std::shared_ptr<QuicSession> getSession(ExceptionSink* xsink) const {
+        if (use_first_session) {
+            std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(sock);
+            if (!session) {
+                if (action == Action::Request || action == Action::RequestStreaming) {
+                    xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket; "
+                        "use startPollQuicConnect() first");
+                } else {
+                    xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket");
+                }
+            }
+            return session;
+        }
+
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(sock, session_id);
+        if (!session) {
+            if (sessionMissingIsOk()) {
+                return nullptr;
+            } else if (action == Action::ShutdownNotice || action == Action::Shutdown) {
+                xsink->raiseException("QUIC-SESSION-ERROR", "session %lld not found",
+                    (long long)session_id);
+            } else {
+                xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+                    (long long)session_id);
+            }
+        }
+        return session;
+    }
+
+    DLLLOCAL bool shouldWakeController() const {
+        if (!wake_controller) {
+            return false;
+        }
+        switch (action) {
+            case Action::Request:
+            case Action::RequestStreaming:
+                return output >= 0;
+            case Action::ClientStreamData:
+            case Action::StreamData:
+            case Action::Cancel:
+            case Action::Response:
+            case Action::ShutdownNotice:
+            case Action::Shutdown:
+            case Action::ResponseStreaming:
+            case Action::SetStreamInputStream:
+            case Action::StreamingResponseWithStream:
+            case Action::ConnectResponse:
+            case Action::Reset:
+            case Action::Datagram:
+            case Action::Trailers:
+                return output == 0;
+            case Action::Cleanup:
+            case Action::SetStreaming:
+            case Action::RegisterConnectQueue:
+            case Action::DeregisterConnectQueue:
+            case Action::RegisterConnectFrameState:
+            case Action::DeregisterConnectFrameState:
+            case Action::RegisterDatagramQueue:
+            case Action::UnregisterDatagramQueue:
+                return false;
+        }
+        return false;
+    }
+
+    DLLLOCAL bool sessionMissingIsOk() const {
+        return action == Action::DeregisterConnectQueue
+            || action == Action::DeregisterConnectFrameState
+            || action == Action::UnregisterDatagramQueue;
+    }
+
+    QoreSocketObject* sock;
+    Action action;
+    int64_t session_id = 0;
+    int64_t stream_id = 0;
+    int status_code = 0;
+    std::string method;
+    std::string path;
+    strcase_str_map_t header_map;
+    SimpleRefHolder<BinaryNode> body;
+    SimpleRefHolder<InputStream> input_stream;
+    Queue* queue = nullptr;
+    bool end_stream = false;
+    bool use_first_session = false;
+    bool wake_controller = true;
+    int64 output = -1;
+    bool done = false;
+};
+
+static int64_t qore_socket_object_get_content_length(const QoreHashNode* headers) {
+    if (!headers) {
+        return -1;
+    }
+
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        if (!strcasecmp(hi.getKey(), "content-length")) {
+            QoreValue v = hi.get();
+            if (v.getType() == NT_STRING) {
+                const char* s = v.get<const QoreStringNode>()->c_str();
+                char* endptr = nullptr;
+                long long cl = strtoll(s, &endptr, 10);
+                if (endptr != s && cl >= 0) {
+                    return cl;
+                }
+            } else if (v.getType() == NT_INT) {
+                return v.getAsBigInt();
+            }
+            break;
+        }
+    }
+    return -1;
 }
 
 class QoreSocketObjectAddressInfoPollOperation : public SocketPollOperationBase {
@@ -892,6 +2179,136 @@ static int qore_socket_object_exec_poll_no_output(QoreSocketObject* s, SocketPol
     return *xsink ? -1 : 0;
 }
 
+static QoreValue qore_socket_object_exec_poll_output(QoreSocketObject* s, SocketPollOperationBase* poller,
+        int timeout_ms, const char* owner_name, const char* goal, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, poller, goal, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, timeout_ms, owner_name, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return poller->getOutput();
+}
+
+static int qore_socket_object_exec_check_http1_allowed(QoreSocketObject* s, const char* mname,
+        ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_object_exec_poll_output(s,
+        new QoreSocketObjectHttp1AllowedPollOperation(s, mname), -1, mname, "http1-checked", xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int32_t qore_socket_object_exec_get_http2_server_stream(QoreSocketObject* s, int32_t stream_id,
+        const char* mname, ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_object_exec_poll_output(s,
+        new QoreSocketObjectHttp2ServerStreamPollOperation(s, stream_id, mname), -1, mname,
+        "http2-server-stream-checked", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return rv->isNothing() ? -1 : static_cast<int32_t>(rv->getAsBigInt());
+}
+
+static QoreValue qore_socket_object_exec_http2_enqueue(QoreSocketObject* s,
+        QoreSocketObjectHttp2EnqueuePollOperation* poller, const char* owner_name, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, poller, "done", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, owner_name, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return poller->getOutput();
+}
+
+static int64 qore_socket_object_exec_http2_enqueue_int(QoreSocketObject* s,
+        QoreSocketObjectHttp2EnqueuePollOperation* poller, const char* owner_name, ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_object_exec_http2_enqueue(s, poller, owner_name, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return rv->isNothing() ? -1 : rv->getAsBigInt();
+}
+
+static BinaryNode* qore_socket_object_exec_http2_stream_data(QoreSocketObject* s,
+        QoreSocketObjectHttp2StreamDataPollOperation* stream_data_poller, int32_t stream_id,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, stream_data_poller, "http2-stream-data", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::string owner_name("readHttp2StreamData:");
+    owner_name += std::to_string(stream_id);
+    ReferenceHolder<QoreHashNode> result(qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj,
+        -1, owner_name.c_str(), xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return stream_data_poller->takeOutput();
+}
+
+static bool qore_socket_object_exec_http2_stream_state(QoreSocketObject* s,
+        QoreSocketObjectHttp2StreamStatePollOperation* stream_state_poller, int32_t stream_id,
+        const char* owner_prefix, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, stream_state_poller, "http2-stream-state", xsink), xsink);
+    if (*xsink) {
+        return true;
+    }
+
+    std::string owner_name(owner_prefix);
+    owner_name += ':';
+    owner_name += std::to_string(stream_id);
+    ReferenceHolder<QoreHashNode> result(qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj,
+        -1, owner_name.c_str(), xsink), xsink);
+    if (*xsink) {
+        return true;
+    }
+
+    QoreValue output = stream_state_poller->getOutput();
+    return output.getAsBool();
+}
+
+static QoreValue qore_socket_object_exec_quic_enqueue(QoreSocketObject* s,
+        QoreSocketObjectQuicEnqueuePollOperation* poller, const char* owner_name, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, poller, "done", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, owner_name, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return poller->getOutput();
+}
+
+static int64 qore_socket_object_exec_quic_enqueue_int(QoreSocketObject* s,
+        QoreSocketObjectQuicEnqueuePollOperation* poller, const char* owner_name, ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_object_exec_quic_enqueue(s, poller, owner_name, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return rv->isNothing() ? -1 : rv->getAsBigInt();
+}
+
 static int qore_socket_object_exec_stream_drain(QoreSocketObject* s,
         QoreSocketObjectStreamDrainPollOperation* stream_drain_poller, int timeout_ms,
         const char* owner_name, ExceptionSink* xsink) {
@@ -988,6 +2405,45 @@ static QoreValue qore_socket_object_exec_quic_datagram(QoreSocketObject* s,
     return datagram_poller->takeOutput();
 }
 
+static QoreValue qore_socket_object_exec_quic_connect_stream_data(QoreSocketObject* s,
+        QoreSocketObjectQuicConnectStreamDataPollOperation* connect_data_poller, int64_t session_id,
+        int64_t stream_id, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, connect_data_poller, "quic-connect-stream-data", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    std::string owner_name("readQuicConnectStreamData:");
+    owner_name += std::to_string(session_id);
+    owner_name += ':';
+    owner_name += std::to_string(stream_id);
+    ReferenceHolder<QoreHashNode> result(qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj,
+        -1, owner_name.c_str(), xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return connect_data_poller->takeOutput();
+}
+
+static QoreValue qore_socket_object_exec_quic_query(QoreSocketObject* s,
+        QoreSocketObjectQuicQueryPollOperation* query_poller, const char* owner_name, ExceptionSink* xsink) {
+    ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+    ReferenceHolder<QoreObject> op_obj(
+        qore_socket_object_make_poll_op(*sock_obj, query_poller, "quic-query", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, owner_name, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return query_poller->getOutput();
+}
+
 static int qore_socket_object_exec_connect(QoreSocketObject* s, const char* target, int timeout_ms, bool ssl,
         ExceptionSink* xsink) {
     s->ref();
@@ -1032,10 +2488,11 @@ static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSi
 }
 
 static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* owner_name, ExceptionSink* xsink,
-        bool submit_ping = false) {
+        bool submit_ping = false, bool missing_h2_ok = false) {
     s->ref();
-    return qore_socket_object_exec_poll_no_output(s, new SocketHttp2FlushPollOperation(xsink, s, true, submit_ping),
-        -1, owner_name, "done", xsink);
+    return qore_socket_object_exec_poll_no_output(s,
+        new SocketHttp2FlushPollOperation(xsink, s, true, submit_ping, missing_h2_ok), -1, owner_name, "done",
+        xsink);
 }
 
 static int qore_socket_object_exec_shutdown(QoreSocketObject* s, ExceptionSink* xsink) {
@@ -2069,6 +3526,10 @@ static int qore_socket_object_exec_send_http_message(QoreSocketObject* s, QoreHa
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         const void* data, size_t size, const QoreStringNode* body_event, int source, int timeout_ms,
         ExceptionSink* xsink) {
+    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPMessage", xsink)) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
     if (my_socket_priv::getPriv(*s)->getSendHttpMessageHeaders(xsink, hdr, info, method, path, http_version,
             headers, size, source)) {
@@ -2097,7 +3558,11 @@ static int qore_socket_object_exec_send_http_response(QoreSocketObject* s, QoreH
         const void* data, size_t size, const QoreStringNode* body_event, int source, int timeout_ms,
         ExceptionSink* xsink) {
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
-    int32_t stream_id = priv->getH2ActiveServerStreamId();
+    int32_t stream_id = priv->getH2ActiveThreadStreamId();
+    stream_id = qore_socket_object_exec_get_http2_server_stream(s, stream_id, "sendHTTPResponse", xsink);
+    if (*xsink) {
+        return -1;
+    }
     if (stream_id > 0) {
         QoreString status_line(s->getEncoding());
         priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
@@ -2353,6 +3818,10 @@ static int qore_socket_object_exec_send_http_message_callback(QoreSocketObject* 
         return -1;
     }
 
+    if (qore_socket_object_exec_check_http1_allowed(s, "sendHTTPMessageWithCallback", xsink)) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
     if (priv->getSendHttpMessageChunkedHeaders(xsink, hdr, info, method, path, http_version, headers, source)) {
         return -1;
@@ -2375,7 +3844,20 @@ static int qore_socket_object_exec_send_http_response_callback(QoreSocketObject*
         return -1;
     }
 
+    int32_t stream_id = priv->getH2ActiveThreadStreamId();
+    stream_id = qore_socket_object_exec_get_http2_server_stream(s, stream_id, "sendHTTPResponseWithCallback",
+        xsink);
+    if (*xsink) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
+    if (stream_id > 0) {
+        priv->getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
+        xsink->raiseException("HTTP2-ERROR",
+            "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
+        return -1;
+    }
     if (priv->getSendHttpResponseChunkedHeaders(xsink, hdr, info, code, desc, http_version, headers, source)) {
         return -1;
     }
@@ -2402,7 +3884,12 @@ static int qore_socket_object_exec_send_http_response_input_stream(QoreSocketObj
         return -1;
     }
 
-    if (priv->getH2ActiveServerStreamId() > 0) {
+    int32_t stream_id = priv->getH2ActiveThreadStreamId();
+    stream_id = qore_socket_object_exec_get_http2_server_stream(s, stream_id, "sendHTTPResponse", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (stream_id > 0) {
         QoreString status_line(s->getEncoding());
         priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
         xsink->raiseException("HTTP2-ERROR",
@@ -3327,139 +4814,80 @@ bool QoreSocketObject::isHttp2() const {
 
 int32_t QoreSocketObject::submitHttp2PushPromise(int32_t stream_id, const char* path,
         const QoreHashNode* headers, ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
-    }
-
-    strcase_str_map_t h2_headers;
-    qore_socket_object_set_h2_headers(h2_headers, headers);
-    int32_t rv = h2->submitPushPromise(stream_id, path, h2_headers, xsink);
-    if (rv >= 0 && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int32_t>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::PushPromise, stream_id, path, headers),
+        "submitHttp2PushPromise", xsink));
 }
 
 int QoreSocketObject::submitHttp2Response(int32_t stream_id, int status_code,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
-    }
-
-    strcase_str_map_t h2_headers;
-    qore_socket_object_set_h2_headers(h2_headers, headers);
-    int rv = h2->submitResponse(stream_id, status_code, h2_headers, body, body_len, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::Response, stream_id, status_code, headers, body,
+            body_len),
+        "submitHttp2Response", xsink));
 }
 
 int QoreSocketObject::submitHttp2ConnectResponse(int32_t stream_id, int status_code,
         const QoreHashNode* headers, ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::ConnectResponse, stream_id, status_code, headers),
+        "submitHttp2ConnectResponse", xsink));
+}
+
+static int32_t qore_socket_object_submit_http2_request(QoreSocketObject* s, const QoreHashNode* headers,
+        const void* body, size_t body_len, ExceptionSink* xsink, bool streaming, bool wake_controller) {
+    QoreSocketObjectHttp2EnqueuePollOperation* poller =
+        new QoreSocketObjectHttp2EnqueuePollOperation(s, headers, body, body_len, streaming, wake_controller, xsink);
+    if (*xsink) {
+        poller->deref(xsink);
         return -1;
     }
-
-    strcase_str_map_t h2_headers;
-    qore_socket_object_set_h2_headers(h2_headers, headers);
-    int rv = h2->submitConnectResponse(stream_id, status_code, h2_headers, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int32_t>(qore_socket_object_exec_http2_enqueue_int(s, poller, "submitHttp2Request",
+        xsink));
 }
 
 int32_t QoreSocketObject::submitHttp2Request(const QoreHashNode* headers, const void* body,
         size_t body_len, ExceptionSink* xsink, bool streaming) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
-    }
+    return qore_socket_object_submit_http2_request(this, headers, body, body_len, xsink, streaming, true);
+}
 
-    if (!headers) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
-        return -1;
-    }
-
-    std::vector<std::pair<std::string, std::string>> h2_headers;
-    h2_headers.reserve(headers->size() + 4);
-    std::string method;
-    std::string path;
-
-    auto append = [&](const std::string& key, const char* sval) {
-        if (key == ":method") {
-            if (sval && *sval) {
-                method = sval;
-            }
-        } else if (key == ":path") {
-            if (sval && *sval) {
-                path = sval;
-            }
-        }
-        h2_headers.emplace_back(key, sval ? sval : "");
-    };
-
-    ConstHashIterator hi(headers);
-    while (hi.next()) {
-        const char* key = hi.getKey();
-        QoreValue val = hi.get();
-        std::string skey(key);
-        if (val.getType() == NT_STRING) {
-            append(skey, val.get<const QoreStringNode>()->c_str());
-        } else if (val.getType() == NT_LIST) {
-            const QoreListNode* l = val.get<const QoreListNode>();
-            for (size_t i = 0; i < l->size(); ++i) {
-                QoreValue elem = l->retrieveEntry(i);
-                if (elem.getType() == NT_STRING) {
-                    append(skey, elem.get<const QoreStringNode>()->c_str());
-                }
-            }
-        }
-    }
-
-    if (method.empty()) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
-        return -1;
-    }
-    if (path.empty()) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
-        return -1;
-    }
-
-    int32_t stream_id = h2->submitRequest(method.c_str(), path.c_str(), h2_headers, body, body_len, xsink,
-        streaming);
-    if (stream_id >= 0 && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return stream_id;
+int32_t QoreSocketObject::submitHttp2RequestNoWake(const QoreHashNode* headers, const void* body,
+        size_t body_len, ExceptionSink* xsink, bool streaming) {
+    return qore_socket_object_submit_http2_request(this, headers, body, body_len, xsink, streaming, false);
 }
 
 void QoreSocketObject::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return;
-    }
-    int rv = h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
+    qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::Cancel, stream_id),
+        "cancelHttp2Stream", xsink);
 }
 
 void QoreSocketObject::setHttp2StreamStreaming(int32_t stream_id) {
+    ExceptionSink xsink;
+    setHttp2StreamStreaming(stream_id, &xsink);
+    if (xsink) {
+        xsink.clear();
+    }
+}
+
+int QoreSocketObject::setHttp2StreamStreaming(int32_t stream_id, ExceptionSink* xsink) {
+    if (!qore_on_async_io_thread()) {
+        return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+            new QoreSocketObjectHttp2EnqueuePollOperation(this,
+                QoreSocketObjectHttp2EnqueuePollOperation::Action::SetStreaming, stream_id, false),
+            "setHttp2StreamStreaming", xsink));
+    }
+
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (h2) {
         h2->setStreamStreaming(stream_id);
     }
+    return 0;
 }
 
 void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
@@ -3469,6 +4897,17 @@ void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
 
 int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this, stream_id, data, end_stream),
+        "sendHttp2StreamData", xsink));
+}
+
+int QoreSocketObject::sendHttp2StreamDataForAsyncPoll(int32_t stream_id, const BinaryNode* data,
+        bool end_stream, ExceptionSink* xsink) {
+    if (!qore_on_async_io_thread()) {
+        return sendHttp2StreamData(stream_id, data, end_stream, xsink);
+    }
+
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
@@ -3485,11 +4924,20 @@ int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* d
         xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %d buffer full: data dropped", stream_id);
         return -1;
     }
-    qore_socket_object_wake_async_controller(this);
     return 0;
 }
 
 BinaryNode* QoreSocketObject::readHttp2StreamData(int32_t stream_id, size_t max_bytes, ExceptionSink* xsink) {
+    return qore_socket_object_exec_http2_stream_data(this,
+        new QoreSocketObjectHttp2StreamDataPollOperation(this, stream_id, max_bytes), stream_id, xsink);
+}
+
+BinaryNode* QoreSocketObject::readHttp2StreamDataForAsyncPoll(int32_t stream_id, size_t max_bytes,
+        ExceptionSink* xsink) {
+    if (!qore_on_async_io_thread()) {
+        return readHttp2StreamData(stream_id, max_bytes, xsink);
+    }
+
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     if (!h2) {
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
@@ -3500,19 +4948,10 @@ BinaryNode* QoreSocketObject::readHttp2StreamData(int32_t stream_id, size_t max_
 
 int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
         ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
-    }
-
-    strcase_str_map_t trailer_map;
-    qore_socket_object_set_h2_headers(trailer_map, trailers);
-    int rv = h2->submitTrailers(stream_id, trailer_map, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::Trailers, stream_id, 0, trailers),
+        "sendHttp2Trailers", xsink));
 }
 
 int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
@@ -3520,16 +4959,7 @@ int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
     if (*xsink) {
         return -1;
     }
-    Http2SessionPtr h2;
-    {
-        AutoLocker al(priv->m);
-        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
-        h2 = sp->h2_session;
-    }
-    if (!h2) {
-        return 0;
-    }
-    return qore_socket_object_exec_http2_flush(this, "flushHttp2PendingData", xsink);
+    return qore_socket_object_exec_http2_flush(this, "flushHttp2PendingData", xsink, false, true);
 }
 
 int QoreSocketObject::flushHttp2PendingDataForAsyncPoll(ExceptionSink* xsink) {
@@ -3546,12 +4976,7 @@ int QoreSocketObject::submitHttp2Ping(ExceptionSink* xsink) {
     if (*xsink) {
         return -1;
     }
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        return 0;
-    }
-
-    return qore_socket_object_exec_http2_flush(this, "submitHttp2Ping", xsink, true);
+    return qore_socket_object_exec_http2_flush(this, "submitHttp2Ping", xsink, true, true);
 }
 
 int QoreSocketObject::submitHttp2PingForAsyncPoll(ExceptionSink* xsink) {
@@ -3571,88 +4996,79 @@ int QoreSocketObject::submitHttp2PingForAsyncPoll(ExceptionSink* xsink) {
     return h2->sendPendingData(0, xsink);
 }
 
-// Async-path H2 server write methods.  These follow the waitForHttp2StreamDrain
-// precedent (see below): acquire priv->m only briefly to copy the
-// Http2Session shared pointer, then perform header/data/trailer submission
-// under only the session's internal recursive mutex.  This eliminates the
-// handler-thread vs. I/O-thread contention on priv->m that motivated the
-// GrpcServer async-migration (see design/grpc-server-async-migration.md).
+// Async-path H2 server write methods. Non-I/O-thread callers delegate session
+// mutation to the async I/O controller; callbacks already running inside the
+// owning poll operation use explicit ForAsyncPoll helpers instead of recursing
+// through the blocking controller path.
 int QoreSocketObject::submitHttp2StreamingResponseHeadersAsync(int32_t stream_id, int status_code,
         const QoreHashNode* headers, ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
-    }
-    strcase_str_map_t header_map;
-    qore_socket_object_set_h2_headers(header_map, headers);
-    int rv = h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::StreamingResponseHeaders, stream_id, status_code,
+            headers),
+        "submitHttp2StreamingResponseHeaders", xsink));
 }
 
 int QoreSocketObject::sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNode* data,
         bool end_stream, ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
-    }
-    const void* ptr = data ? data->getPtr() : nullptr;
-    size_t len = data ? data->size() : 0;
-    int rv = h2->sendStreamData(stream_id, ptr, len, end_stream, xsink);
-    if (rv < 0) {
-        return -1;
-    }
-    if (rv > 0) {
-        xsink->raiseException("HTTP2-FLOW-CONTROL",
-            "stream %d buffer full: data dropped", stream_id);
-        return -1;
-    }
-    qore_socket_object_wake_async_controller(this);
-    return 0;
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this, stream_id, data, end_stream),
+        "sendHttp2StreamData", xsink));
 }
 
 int QoreSocketObject::sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNode* trailers,
         ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
-        return -1;
-    }
-    strcase_str_map_t trailer_map;
-    qore_socket_object_set_h2_headers(trailer_map, trailers);
-    int rv = h2->submitTrailers(stream_id, trailer_map, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::Trailers, stream_id, 0, trailers),
+        "sendHttp2Trailers", xsink));
 }
 
 void QoreSocketObject::cleanupHttp2StreamAsync(int32_t stream_id) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (h2) {
-        h2->cleanupStream(stream_id);
+    if (qore_on_async_io_thread()) {
+        Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+        if (h2) {
+            h2->cleanupStream(stream_id);
+        }
+        return;
+    }
+
+    ExceptionSink xsink;
+    qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::Cleanup, stream_id, false),
+        "cleanupHttp2Stream", &xsink);
+    if (xsink) {
+        xsink.clear();
     }
 }
 
 int QoreSocketObject::resetHttp2StreamAsync(int32_t stream_id, ExceptionSink* xsink) {
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        return 0;
+    return resetHttp2StreamAsync(stream_id, NGHTTP2_CANCEL, xsink);
+}
+
+int QoreSocketObject::resetHttp2StreamAsync(int32_t stream_id, uint32_t error_code, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread()) {
+        Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
+        if (!h2) {
+            return 0;
+        }
+        int rv = h2->submitRstStream(stream_id, error_code, xsink);
+        if (rv != 0) {
+            printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
+                "cleaning up local state anyway\n", stream_id, rv);
+        }
+        if (!rv && !*xsink) {
+            (void)h2->sendPendingData(0, xsink);
+        }
+        h2->cleanupStream(stream_id);
+        return rv;
     }
-    int rv = h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    if (rv != 0) {
-        printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
-            "cleaning up local state anyway\n", stream_id, rv);
-    }
-    h2->cleanupStream(stream_id);
-    return rv;
+
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this,
+            QoreSocketObjectHttp2EnqueuePollOperation::Action::Reset, stream_id, error_code),
+        "resetHttp2Stream", xsink));
 }
 
 int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, int status_code,
@@ -3664,52 +5080,6 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return 1;
     }
 
-    // Follow the same brief-lock pattern as the other async-safe HTTP/2
-    // server write methods: acquire priv->m only long enough to copy the
-    // Http2Session shared pointer, then do all session work under only
-    // Http2Session's own recursive mutex.  The handler thread never
-    // competes with the I/O thread for priv->m during frame submission
-    // or InputStream registration.
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
-        return -1;
-    }
-
-    // Submit response headers without END_STREAM
-    strcase_str_map_t header_map;
-    qore_socket_object_set_h2_headers(header_map, headers);
-    int rv = h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
-    if (rv) {
-        return rv;
-    }
-
-    // Extract Content-Length from headers if declared, so the session can
-    // enforce it and send RST_STREAM on short-stream (InputStream EOFs
-    // before the promised bytes are delivered).  Without this the peer
-    // receives END_STREAM on a truncated body and waits forever for the
-    // missing bytes (FUTURE-TIMEOUT on the HTTP client).
-    int64_t content_length = -1;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            if (!strcasecmp(hi.getKey(), "content-length")) {
-                QoreValue v = hi.get();
-                if (v.getType() == NT_STRING) {
-                    const char* s = v.get<const QoreStringNode>()->c_str();
-                    char* endptr = nullptr;
-                    long long cl = strtoll(s, &endptr, 10);
-                    if (endptr != s && cl >= 0) {
-                        content_length = cl;
-                    }
-                } else if (v.getType() == NT_INT) {
-                    content_length = v.getAsBigInt();
-                }
-                break;
-            }
-        }
-    }
-
     // Transfer ownership of InputStream to the session for I/O thread reading
     // The handler thread unassigns before calling; I/O thread will reassign on first read
     body->unassignThread(xsink);
@@ -3717,20 +5087,52 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         return -1;
     }
 
-    h2->setStreamInputStream(stream_id, body, xsink, content_length);
-    if (*xsink) {
-        return -1;
-    }
-    qore_socket_object_wake_async_controller(this);
-    return 0;
+    return static_cast<int>(qore_socket_object_exec_http2_enqueue_int(this,
+        new QoreSocketObjectHttp2EnqueuePollOperation(this, stream_id, status_code, headers, body,
+            qore_socket_object_get_content_length(headers)),
+        "submitHttp2StreamingResponseWithStream", xsink));
 }
 
 bool QoreSocketObject::isHttp2StreamClosed(int32_t stream_id) const {
+    ExceptionSink xsink;
+    bool rv = qore_socket_object_exec_http2_stream_state(const_cast<QoreSocketObject*>(this),
+        new QoreSocketObjectHttp2StreamStatePollOperation(const_cast<QoreSocketObject*>(this), stream_id,
+            QoreSocketObjectHttp2StreamStatePollOperation::Action::Closed),
+        stream_id, "isHttp2StreamClosed", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return true;
+    }
+    return rv;
+}
+
+bool QoreSocketObject::isHttp2StreamClosedForAsyncPoll(int32_t stream_id) const {
+    if (!qore_on_async_io_thread()) {
+        return isHttp2StreamClosed(stream_id);
+    }
+
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     return !h2 || h2->isStreamClosed(stream_id);
 }
 
 bool QoreSocketObject::isHttp2StreamRemoteClosed(int32_t stream_id) const {
+    ExceptionSink xsink;
+    bool rv = qore_socket_object_exec_http2_stream_state(const_cast<QoreSocketObject*>(this),
+        new QoreSocketObjectHttp2StreamStatePollOperation(const_cast<QoreSocketObject*>(this), stream_id,
+            QoreSocketObjectHttp2StreamStatePollOperation::Action::RemoteClosed),
+        stream_id, "isHttp2StreamRemoteClosed", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return true;
+    }
+    return rv;
+}
+
+bool QoreSocketObject::isHttp2StreamRemoteClosedForAsyncPoll(int32_t stream_id) const {
+    if (!qore_on_async_io_thread()) {
+        return isHttp2StreamRemoteClosed(stream_id);
+    }
+
     Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
     return !h2 || h2->isStreamRemoteClosed(stream_id);
 }
@@ -3750,16 +5152,10 @@ int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms,
     if (*xsink) {
         return -1;
     }
-    // Look up the session briefly; the controller-backed wait must not hold
-    // priv->m while the I/O thread drives sendPendingData().
-    Http2SessionPtr h2 = qore_socket_object_get_h2_session(this);
-    if (!h2) {
-        return -1;
-    }
     std::string owner_name("waitForHttp2StreamDrain:");
     owner_name += std::to_string(stream_id);
     return qore_socket_object_exec_stream_drain(this,
-        new QoreSocketObjectStreamDrainPollOperation(h2, stream_id), timeout_ms, owner_name.c_str(),
+        new QoreSocketObjectStreamDrainPollOperation(this, stream_id, true), timeout_ms, owner_name.c_str(),
         xsink);
 }
 
@@ -4042,8 +5438,13 @@ int64 QoreSocketObject::getMaxChunkedBodySize() const {
 }
 
 void QoreSocketObject::setHttp2MaxRequestBodySize(int64 size) {
-    AutoLocker al(priv->m);
-    priv->socket->setHttp2MaxRequestBodySize(size);
+    ExceptionSink xsink;
+    qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
+        SocketSetupPollOperation::ConfigAction::SetHttp2MaxRequestBodySize, size), "setHttp2MaxRequestBodySize",
+        "done", &xsink);
+    if (xsink) {
+        xsink.clear();
+    }
 }
 
 int64 QoreSocketObject::getHttp2MaxRequestBodySize() const {
@@ -4076,79 +5477,82 @@ bool QoreSocketObject::isQuic() const {
     return priv->hasQuicSession();
 }
 
+static int64_t qore_socket_object_submit_quic_request(QoreSocketObject* s, const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink,
+        bool streaming, bool wake_controller, const char* owner_name) {
+    return qore_socket_object_exec_quic_enqueue_int(s,
+        new QoreSocketObjectQuicEnqueuePollOperation(s, method, path, headers, body, body_len, streaming,
+            wake_controller),
+        owner_name, xsink);
+}
+
 int64_t QoreSocketObject::submitQuicRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket; "
-            "use startPollQuicConnect() first");
-        return -1;
-    }
+    return qore_socket_object_submit_quic_request(this, method, path, headers, body, body_len, xsink, false, true,
+        "submitQuicRequest");
+}
 
-    // Convert headers hash to std::map
-    strcase_str_map_t hdr_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreStringValueHelper val(hi.get());
-            hdr_map[hi.getKey()] = val->c_str();
-        }
-    }
-
-    int64_t stream_id = session->submitRequest(method, path, hdr_map, body, body_len, xsink);
-    if (stream_id >= 0 && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return stream_id;
+int64_t QoreSocketObject::submitQuicRequestNoWake(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink) {
+    return qore_socket_object_submit_quic_request(this, method, path, headers, body, body_len, xsink, false, false,
+        "submitQuicRequest");
 }
 
 int64_t QoreSocketObject::submitQuicRequestStreaming(const char* method, const char* path,
         const QoreHashNode* headers, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket; "
-            "use startPollQuicConnect() first");
-        return -1;
-    }
+    return qore_socket_object_submit_quic_request(this, method, path, headers, nullptr, 0, xsink, true, true,
+        "submitQuicRequestStreaming");
+}
 
-    // Convert headers hash to std::map
-    strcase_str_map_t hdr_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreStringValueHelper val(hi.get());
-            hdr_map[hi.getKey()] = val->c_str();
-        }
-    }
-
-    int64_t stream_id = session->submitRequestStreaming(method, path, hdr_map, xsink);
-    if (stream_id >= 0 && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return stream_id;
+int64_t QoreSocketObject::submitQuicRequestStreamingNoWake(const char* method, const char* path,
+        const QoreHashNode* headers, ExceptionSink* xsink) {
+    return qore_socket_object_submit_quic_request(this, method, path, headers, nullptr, 0, xsink, true, false,
+        "submitQuicRequestStreaming");
 }
 
 int QoreSocketObject::sendQuicClientStreamData(int64_t stream_id, const void* data,
         size_t len, bool end_stream, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket");
-        return -1;
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::ClientStreamData, 0, stream_id, data, len,
+            end_stream),
+        "sendQuicClientStreamData", xsink));
+}
+
+int QoreSocketObject::setQuicClientStreamStreaming(int64_t stream_id, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread()) {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
+        if (session) {
+            session->setStreamStreaming(stream_id);
+        }
+        return 0;
     }
 
-    int rv = session->sendStreamData(stream_id, data, len, end_stream, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::SetStreaming, 0, stream_id),
+        "setQuicClientStreamStreaming", xsink));
+}
+
+int QoreSocketObject::submitQuicClientTrailers(int64_t stream_id, const QoreHashNode* trailers,
+        ExceptionSink* xsink) {
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::Trailers, 0, stream_id, 0, trailers),
+        "submitQuicClientTrailers", xsink));
 }
 
 bool QoreSocketObject::isQuicSessionClosed() const {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
-    if (!session) {
+    ExceptionSink xsink;
+    ValueHolder rv(qore_socket_object_exec_quic_query(const_cast<QoreSocketObject*>(this),
+        new QoreSocketObjectQuicQueryPollOperation(const_cast<QoreSocketObject*>(this),
+            QoreSocketObjectQuicQueryPollOperation::Action::FirstSessionClosed),
+        "isQuicSessionClosed", &xsink), &xsink);
+    if (xsink) {
+        xsink.clear();
         return true;
     }
-    return session->isClosed();
+    return rv->getAsBool();
 }
 
 int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeout_ms,
@@ -4157,195 +5561,155 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
     if (*xsink) {
         return -1;
     }
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket");
-        return -1;
-    }
 
     std::string owner_name("waitForQuicClientStreamDrain:");
     owner_name += std::to_string(stream_id);
     return qore_socket_object_exec_stream_drain(this,
-        new QoreSocketObjectStreamDrainPollOperation(session, stream_id), timeout_ms,
+        new QoreSocketObjectStreamDrainPollOperation(this, stream_id), timeout_ms,
         owner_name.c_str(), xsink);
 }
 
 void QoreSocketObject::cancelQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return;
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::Cancel, session_id, stream_id),
+        "cancelQuicStream", xsink);
+}
+
+int QoreSocketObject::cancelQuicStreamAsync(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread()) {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
+        if (!session) {
+            return 0;
+        }
+        return session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, xsink);
     }
 
-    int rv = session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::Cancel, session_id, stream_id),
+        "cancelQuicStream", xsink));
 }
 
 int QoreSocketObject::submitQuicResponse(int64_t session_id, int64_t stream_id, int status_code,
         const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return -1;
-    }
-
-    // Convert headers hash to std::map
-    strcase_str_map_t hdr_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreStringValueHelper val(hi.get());
-            hdr_map[hi.getKey()] = val->c_str();
-        }
-    }
-
-    int rv = session->submitResponse(stream_id, status_code, hdr_map, body, body_len, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::Response, session_id, stream_id, status_code,
+            headers, body, body_len),
+        "submitQuicResponse", xsink));
 }
 
 int64_t QoreSocketObject::getFirstQuicSessionId(ExceptionSink* xsink) const {
-    AutoLocker al(priv->m);
-    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
-    return sp->getFirstQuicSessionId(xsink);
+    ExceptionSink tmp_xsink;
+    ExceptionSink* sink = xsink ? xsink : &tmp_xsink;
+    ValueHolder rv(qore_socket_object_exec_quic_query(const_cast<QoreSocketObject*>(this),
+        new QoreSocketObjectQuicQueryPollOperation(const_cast<QoreSocketObject*>(this),
+            QoreSocketObjectQuicQueryPollOperation::Action::FirstSessionId),
+        "getFirstQuicSessionId", sink), sink);
+    if (*sink) {
+        if (!xsink) {
+            tmp_xsink.clear();
+        }
+        return 0;
+    }
+    return rv->getAsBigInt();
 }
 
 void QoreSocketObject::submitQuicShutdownNotice(int64_t session_id, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-SESSION-ERROR", "session %lld not found",
-                              (long long)session_id);
-        return;
-    }
-    int rv = session->submitShutdownNotice(xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::ShutdownNotice, session_id),
+        "submitQuicShutdownNotice", xsink);
 }
 
 void QoreSocketObject::submitQuicShutdown(int64_t session_id, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-SESSION-ERROR", "session %lld not found",
-                              (long long)session_id);
-        return;
-    }
-    int rv = session->submitShutdown(xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::Shutdown, session_id),
+        "submitQuicShutdown", xsink);
 }
 
 QoreHashNode* QoreSocketObject::getQuicSessionGoawayState(int64_t session_id, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-SESSION-ERROR", "session %lld not found",
-                              (long long)session_id);
-        return nullptr;
-    }
-    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclQuicGoawayStateInfo, xsink), xsink);
+    ValueHolder h(qore_socket_object_exec_quic_query(this,
+        new QoreSocketObjectQuicQueryPollOperation(this,
+            QoreSocketObjectQuicQueryPollOperation::Action::GoawayState, session_id),
+        "getQuicSessionGoawayState", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
-    h->setKeyValue("goaway_sent", session->isGoawaySent(), xsink);
-    h->setKeyValue("goaway_received", session->isGoawayReceived(), xsink);
-    h->setKeyValue("goaway_max_stream_id", session->getGoawayMaxStreamId(), xsink);
-    return h.release();
+    return h->getType() == NT_HASH ? h.release().get<QoreHashNode>() : nullptr;
 }
 
 bool QoreSocketObject::isQuicGoawayReceived(int64_t session_id, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        // Return false rather than raising an exception for a lightweight check;
-        // the session may have been cleaned up between checks
+    ValueHolder rv(qore_socket_object_exec_quic_query(this,
+        new QoreSocketObjectQuicQueryPollOperation(this,
+            QoreSocketObjectQuicQueryPollOperation::Action::GoawayReceived, session_id),
+        "isQuicGoawayReceived", xsink), xsink);
+    if (*xsink) {
         return false;
     }
-    return session->isGoawayReceived();
+    return rv->getAsBool();
 }
 
 QoreObject* QoreSocketObject::getQuicPeerCertificate(int64_t session_id, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-SESSION-ERROR",
-            "no QUIC session with id %lld on this socket", (long long)session_id);
+    ValueHolder cert(qore_socket_object_exec_quic_query(this,
+        new QoreSocketObjectQuicQueryPollOperation(this,
+            QoreSocketObjectQuicQueryPollOperation::Action::PeerCertificate, session_id),
+        "getQuicPeerCertificate", xsink), xsink);
+    if (*xsink || cert->isNothing()) {
         return nullptr;
     }
-    // getPeerCertificate() returns X509* with refcount incremented (SSL_get_peer_certificate);
-    // QoreSSLCertificate takes ownership
-    X509* cert = session->getPeerCertificate();
-    if (!cert) {
-        return nullptr;
-    }
-    return new QoreObject(QC_SSLCERTIFICATE, getProgram(), new QoreSSLCertificate(cert));
+    return cert->getType() == NT_OBJECT ? cert.release().get<QoreObject>() : nullptr;
 }
 
 int QoreSocketObject::submitQuicResponseStreaming(int64_t session_id, int64_t stream_id,
         int status_code, const QoreHashNode* headers, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return -1;
-    }
-
-    // Convert headers hash to std::map
-    strcase_str_map_t hdr_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreStringValueHelper val(hi.get());
-            hdr_map[hi.getKey()] = val->c_str();
-        }
-    }
-
-    int rv = session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::ResponseStreaming, session_id, stream_id,
+            status_code, headers),
+        "submitQuicResponseStreaming", xsink));
 }
 
 int QoreSocketObject::submitQuicStreamData(int64_t session_id, int64_t stream_id,
         const void* data, size_t len, bool end_stream, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return -1;
-    }
-
-    int rv = session->sendStreamData(stream_id, data, len, end_stream, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::StreamData, session_id, stream_id, data, len,
+            end_stream),
+        "submitQuicStreamData", xsink));
 }
 
 void QoreSocketObject::setQuicStreamInputStream(int64_t session_id, int64_t stream_id,
         InputStream* body, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return;
-    }
+    SimpleRefHolder<InputStream> body_holder(body);
 
-    // Unassign InputStream from handler thread so I/O thread can claim it
     body->unassignThread(xsink);
     if (*xsink) {
         return;
     }
 
-    session->setStreamInputStream(stream_id, body, xsink);
-    if (!*xsink) {
-        qore_socket_object_wake_async_controller(this);
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this, session_id, stream_id, body_holder.release(), false),
+        "setQuicStreamInputStream", xsink);
+}
+
+int QoreSocketObject::submitQuicStreamingResponseWithStream(int64_t session_id, int64_t stream_id,
+        int status_code, const QoreHashNode* headers, InputStream* body, ExceptionSink* xsink) {
+    if (!body->isIoThreadSafe()) {
+        return 1;
     }
+
+    body->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this, session_id, stream_id, status_code, headers, body,
+            true),
+        "submitQuicStreamingResponseWithStream", xsink));
 }
 
 int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_id,
@@ -4354,218 +5718,153 @@ int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_
     if (*xsink) {
         return -1;
     }
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return -1;
-    }
     std::string owner_name("waitForQuicStreamDrain:");
     owner_name += std::to_string(session_id);
     owner_name += ':';
     owner_name += std::to_string(stream_id);
     return qore_socket_object_exec_stream_drain(this,
-        new QoreSocketObjectStreamDrainPollOperation(session, stream_id), timeout_ms,
+        new QoreSocketObjectStreamDrainPollOperation(this, session_id, stream_id), timeout_ms,
         owner_name.c_str(), xsink);
 }
 
 int QoreSocketObject::submitQuicConnectResponse(int64_t session_id, int64_t stream_id,
         int status_code, const QoreHashNode* headers, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return -1;
-    }
-
-    // Convert headers hash to std::map
-    strcase_str_map_t hdr_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreStringValueHelper val(hi.get());
-            hdr_map[hi.getKey()] = val->c_str();
-        }
-    }
-
-    int rv = session->submitConnectResponse(stream_id, status_code, hdr_map, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::ConnectResponse, session_id, stream_id,
+            status_code, headers),
+        "submitQuicConnectResponse", xsink));
 }
 
 QoreValue QoreSocketObject::readQuicConnectStreamData(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return QoreValue();
-    }
-
-    return session->readConnectStreamData(stream_id, xsink);
+    return qore_socket_object_exec_quic_connect_stream_data(this,
+        new QoreSocketObjectQuicConnectStreamDataPollOperation(this, session_id, stream_id),
+        session_id, stream_id, xsink);
 }
 
 void QoreSocketObject::registerQuicConnectStreamQueue(int64_t session_id, int64_t stream_id,
         Queue* queue, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return;
-    }
-    session->registerConnectStreamQueue(stream_id, queue);
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::RegisterConnectQueue, session_id, stream_id, queue),
+        "registerQuicConnectStreamQueue", xsink);
 }
 
 void QoreSocketObject::deregisterQuicConnectStreamQueue(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        return;  // silently ignore — session may already be gone during cleanup
-    }
-    session->deregisterConnectStreamQueue(stream_id);
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::DeregisterConnectQueue, session_id, stream_id),
+        "deregisterQuicConnectStreamQueue", xsink);
 }
 
 void QoreSocketObject::registerQuicConnectStreamFrameState(int64_t session_id, int64_t stream_id,
         Queue* msg_queue, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        ExceptionSink tmp;
-        msg_queue->deref(&tmp);
-        tmp.clear();
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return;
-    }
-    session->registerConnectStreamFrameState(stream_id, msg_queue);
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::RegisterConnectFrameState, session_id, stream_id,
+            msg_queue),
+        "registerQuicConnectStreamFrameState", xsink);
 }
 
 void QoreSocketObject::deregisterQuicConnectStreamFrameState(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        return;
-    }
-    session->deregisterConnectStreamFrameState(stream_id);
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::DeregisterConnectFrameState, session_id, stream_id),
+        "deregisterQuicConnectStreamFrameState", xsink);
 }
 
 BinaryNode* QoreSocketObject::readQuicStreamDataBlock(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return nullptr;
-    }
     return qore_socket_object_exec_quic_stream_data(this,
-        new QoreSocketObjectQuicStreamDataPollOperation(session, session_id, stream_id), timeout_ms,
+        new QoreSocketObjectQuicStreamDataPollOperation(this, session_id, stream_id), timeout_ms,
         session_id, stream_id, xsink);
 }
 
 bool QoreSocketObject::isQuicStreamComplete(int64_t session_id, int64_t stream_id) const {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        return true;  // Session not found, treat as complete
+    ExceptionSink xsink;
+    ValueHolder rv(qore_socket_object_exec_quic_query(const_cast<QoreSocketObject*>(this),
+        new QoreSocketObjectQuicQueryPollOperation(const_cast<QoreSocketObject*>(this),
+            QoreSocketObjectQuicQueryPollOperation::Action::StreamComplete, session_id, stream_id),
+        "isQuicStreamComplete", &xsink), &xsink);
+    if (xsink) {
+        xsink.clear();
+        return true;
     }
-    return session->isStreamComplete(stream_id);
+    return rv->getAsBool();
 }
 
 void QoreSocketObject::cleanupQuicStream(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return;
-    }
-    session->cleanupStream(stream_id);
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::Cleanup, session_id, stream_id),
+        "cleanupQuicStream", xsink);
 }
 
 int QoreSocketObject::resetQuicStream(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return -1;
-    }
-    int rv = session->resetStream(stream_id);
-    if (!rv) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::Reset, session_id, stream_id),
+        "resetQuicStream", xsink));
 }
 
 int QoreSocketObject::submitQuicDatagram(int64_t session_id, int64_t stream_id,
         const BinaryNode* data, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return -1;
-    }
-    const uint8_t* ptr = data ? reinterpret_cast<const uint8_t*>(data->getPtr()) : nullptr;
-    size_t len = data ? data->size() : 0;
-    int rv = session->submitDatagram(stream_id, ptr, len, xsink);
-    if (!rv && !*xsink) {
-        qore_socket_object_wake_async_controller(this);
-    }
-    return rv;
+    return static_cast<int>(qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::Datagram, session_id, stream_id,
+            data ? data->getPtr() : nullptr, data ? data->size() : 0, false),
+        "submitQuicDatagram", xsink));
 }
 
 QoreValue QoreSocketObject::readQuicDatagram(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return QoreValue();
-    }
     return qore_socket_object_exec_quic_datagram(this,
-        new QoreSocketObjectQuicDatagramPollOperation(session, stream_id), timeout_ms, session_id, stream_id, xsink);
+        new QoreSocketObjectQuicDatagramPollOperation(this, session_id, stream_id), timeout_ms, session_id, stream_id,
+        xsink);
 }
 
 void QoreSocketObject::registerQuicDatagramQueue(int64_t session_id, int64_t stream_id,
         Queue* queue, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return;
-    }
-    session->registerDatagramQueue(stream_id, queue, xsink);
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::RegisterDatagramQueue, session_id, stream_id, queue),
+        "registerQuicDatagramQueue", xsink);
 }
 
 void QoreSocketObject::unregisterQuicDatagramQueue(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        // Session gone — nothing to unregister.  Silent for idempotent teardown.
-        return;
-    }
-    session->unregisterDatagramQueue(stream_id, xsink);
+    qore_socket_object_exec_quic_enqueue_int(this,
+        new QoreSocketObjectQuicEnqueuePollOperation(this,
+            QoreSocketObjectQuicEnqueuePollOperation::Action::UnregisterDatagramQueue, session_id, stream_id),
+        "unregisterQuicDatagramQueue", xsink);
 }
 
 int64_t QoreSocketObject::getQuicMaxDatagramSize(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
+    ValueHolder rv(qore_socket_object_exec_quic_query(this,
+        new QoreSocketObjectQuicQueryPollOperation(this,
+            QoreSocketObjectQuicQueryPollOperation::Action::MaxDatagramSize, session_id, stream_id),
+        "getQuicMaxDatagramSize", xsink), xsink);
+    if (*xsink) {
         return 0;
     }
-    return static_cast<int64_t>(session->getMaxDatagramPayloadSize(stream_id));
+    return rv->getAsBigInt();
 }
 
 bool QoreSocketObject::isQuicDatagramSupported(int64_t session_id, ExceptionSink* xsink) {
-    std::shared_ptr<QuicSession> session = qore_socket_object_get_quic_session(this, session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
+    ValueHolder rv(qore_socket_object_exec_quic_query(this,
+        new QoreSocketObjectQuicQueryPollOperation(this,
+            QoreSocketObjectQuicQueryPollOperation::Action::DatagramSupported, session_id),
+        "isQuicDatagramSupported", xsink), xsink);
+    if (*xsink) {
         return false;
     }
-    return session->isDatagramSupported();
+    return rv->getAsBool();
 }
 
 bool my_socket_priv::hasQuicSession() const {

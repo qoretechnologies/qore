@@ -394,7 +394,7 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
     // queue->push() wakes the consumer directly; both calls are thread-safe.
     ExceptionSink xsink;
     while (true) {
-        BinaryNode* data = sock->readHttp2StreamData(stream_id, 0, &xsink);
+        BinaryNode* data = sock->readHttp2StreamDataForAsyncPoll(stream_id, 0, &xsink);
         if (xsink) {
             xsink.clear();
             break;
@@ -432,7 +432,7 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendHttp2StreamData(stream_id, *holder, false, &cxsink);
+            int rv = sock_ptr->sendHttp2StreamDataForAsyncPoll(stream_id, *holder, false, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path.
                 cxsink.clear();
@@ -461,7 +461,7 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
     // directly into the frame state so we don't lose pre-registration data.
     ExceptionSink xsink;
     while (true) {
-        BinaryNode* data = sock->readHttp2StreamData(stream_id, 0, &xsink);
+        BinaryNode* data = sock->readHttp2StreamDataForAsyncPoll(stream_id, 0, &xsink);
         if (xsink) {
             xsink.clear();
             break;
@@ -517,7 +517,7 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         // Drain all available data from the per-stream buffer
         int drain_count = 0;
         while (true) {
-            BinaryNode* data = sock->readHttp2StreamData(stream_id, 0, xsink);
+            BinaryNode* data = sock->readHttp2StreamDataForAsyncPoll(stream_id, 0, xsink);
             if (*xsink) {
                 return;
             }
@@ -532,8 +532,8 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
                 // Frame-state fast path: feed raw bytes to the C++ frame
                 // decoder, which pushes typed message hashes to info.queue
                 // as complete WS messages are reassembled.  The send
-                // callback may enqueue control-frame responses via
-                // sendHttp2StreamData() — the enclosing continueReadPoll()
+                // callback may enqueue control-frame responses via the
+                // async-poll send helper; the enclosing continueReadPoll()
                 // will flush pending data after drainStreamQueues returns.
                 int pushed = info.frame_state->feedData(data->getPtr(), data->size());
                 drain_count += pushed;
@@ -562,8 +562,8 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         // nghttp2 doesn't detect TCP closure — it only processes HTTP/2 frames.
         // When the peer drops the TCP connection, the socket becomes closed but
         // the HTTP/2 stream state in nghttp2 remains unchanged.
-        if (sock->isHttp2StreamRemoteClosed(stream_id)
-                || sock->isHttp2StreamClosed(stream_id)
+        if (sock->isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
+                || sock->isHttp2StreamClosedForAsyncPoll(stream_id)
                 || !sock->isOpen()) {
             // Push NOTHING sentinel so the handler thread knows the stream is done
             info.queue->push(xsink, QoreValue());

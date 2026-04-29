@@ -1096,6 +1096,12 @@ struct qore_socket_private : public QoreReferenceCounter {
         return h2_active_stream_id;
     }
 
+    DLLLOCAL int32_t getH2ActiveThreadStreamId() const {
+        AutoLocker al(h2_active_stream_lock);
+        auto it = h2_active_stream_ids.find(q_gettid());
+        return it == h2_active_stream_ids.end() ? -1 : it->second;
+    }
+
     DLLLOCAL void setH2ActiveStreamId(int32_t stream_id) {
         bool use_thread_map;
         {
