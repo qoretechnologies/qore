@@ -534,6 +534,7 @@ struct qore_ftp_private {
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
         AutoLocker al(m);
+        cleanupAsync(xsink);
         if (data.getQueue() && (data.getQueue() == control.getQueue())) {
             // make sure only one close event is pushed on the queue
             data.cleanup(xsink);
@@ -556,6 +557,8 @@ struct qore_ftp_private {
     }
 
     DLLLOCAL void disconnectIntern() {
+        ExceptionSink cleanup_xsink;
+        cleanupAsync(&cleanup_xsink);
         control.close();
         control_connected = false;
         if (!manual_mode) {
@@ -563,14 +566,6 @@ struct qore_ftp_private {
         }
         data.close();
         loggedin = false;
-        // Clear async pointers. Active controller submissions are canceled by
-        // cleanupAsync() on error paths before this object is released.
-        ctrl_op = nullptr;
-        if (ctrl_op_obj) {
-            ExceptionSink xsink;
-            ctrl_op_obj->deref(&xsink);
-            ctrl_op_obj = nullptr;
-        }
     }
 
     DLLLOCAL int connect(ExceptionSink* xsink) {
