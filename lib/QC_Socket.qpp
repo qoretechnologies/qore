@@ -44,12 +44,15 @@
 #include "qore/QoreSSLPrivateKey.h"
 
 #include <cerrno>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <string>
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
+
+static std::atomic<uint64_t> socket_qore_sync_exec_seq{0};
 
 static void hash_set_int_key(QoreHashNode& h, int k, const char* str) {
     char buf[15];
@@ -120,6 +123,10 @@ static QoreHashNode* socket_exec_poll_operation(QoreObject* self, QoreSocketObje
     key += owner_name;
     key += ':';
     key += socket_hash->c_str();
+    // Several synchronous callers can delegate work for the same socket at the
+    // same time; keep the cache key unique while thread_key preserves affinity.
+    key += ':';
+    key += std::to_string(++socket_qore_sync_exec_seq);
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
     info->setKeyValue("sock", self->objectRefSelf(), xsink);

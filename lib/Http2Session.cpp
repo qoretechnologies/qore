@@ -43,6 +43,7 @@
 #include "qore/intern/qore_socket_private.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cinttypes>
 #include <cstdlib>
@@ -51,6 +52,8 @@
 #include <unordered_set>
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
+
+static std::atomic<uint64_t> http2_session_sync_exec_seq{0};
 
 static bool http2DebugEnabled() {
     static std::once_flag flag;
@@ -219,6 +222,10 @@ static QoreHashNode* http2_exec_poll_operation(qore_socket_private* sock, QoreOb
     key += owner_name;
     key += ':';
     key += pollable->getUniqueHash();
+    // Multiple blocking session helpers can target the same socket affinity;
+    // keep the cache key unique while thread_key preserves controller routing.
+    key += ':';
+    key += std::to_string(++http2_session_sync_exec_seq);
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
     info->setKeyValue("sock", sock_obj->objectRefSelf(), xsink);
