@@ -1,6 +1,11 @@
 # HTTP/3 Performance: Analysis and Optimization Roadmap
 
-## Current State (2026-02-26)
+## Baseline Profile (2026-02-26)
+
+This profile predates the socket sync-wrapper migration to controller-backed
+wait operations.  The lock and benchmark observations remain useful baseline
+data, but synchronous socket waits now enter the async I/O controller instead of
+issuing a direct blocking `poll()` syscall from the caller thread.
 
 ### Benchmark Results (localhost, release build, 500 iterations)
 
@@ -47,7 +52,7 @@ mgr.request(url, method, path)
         -> recv(EAGAIN)                      # syscall
         -> sendPendingPackets()              # session mtx_ + sendto() syscall
         -> recv-after-send attempt           # syscall (usually EAGAIN)
-      -> Socket::poll()                      # poll() syscall, blocks for response
+      -> controller-backed socket wait       # Socket::poll()/NotifierPollOperation readiness wait
       -> connection lock                     # Mutex lock
     -> drivePoll() again
       -> connection lock                     # Mutex lock
