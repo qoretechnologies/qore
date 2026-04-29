@@ -327,6 +327,10 @@ public:
         return path.c_str();
     }
 
+    DLLLOCAL void activate() {
+        active = true;
+    }
+
     DLLLOCAL void cleanup() {
         if (!active) {
             return;
@@ -339,7 +343,7 @@ public:
 
 private:
     QoreStringMaker path;
-    bool active = true;
+    bool active = false;
 };
 
 class FtpResp {
@@ -1918,7 +1922,8 @@ int QoreFtpClient::get(const char* remotepath, const char* localname, ExceptionS
     QoreSandboxManagerHelper smh;
     if (smh) {
         if (!smh->checkFilesystemAccess(*ln, QSEC_WRITE | QSEC_CREATE, xsink)
-                || !smh->checkFilesystemAccess(tmp_path.c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
+                || !smh->checkFilesystemAccess(tmp_path.c_str(),
+                    QSEC_READ | QSEC_WRITE | QSEC_CREATE | QSEC_DELETE, xsink)) {
             return -1;
         }
     }
@@ -1936,6 +1941,7 @@ int QoreFtpClient::get(const char* remotepath, const char* localname, ExceptionS
         qore_ftp_raise_file_open_error(open_xsink, tmp_path.c_str(), xsink);
         return -1;
     }
+    tmp_path.activate();
 
     int rv = priv->getAsyncBlocking(remotepath, *os, xsink);
     sl.unlock();
