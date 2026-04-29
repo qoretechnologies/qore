@@ -2397,6 +2397,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     }
     // Direct params: pre-populate slot cache from caller-provided values,
     // bypassing TLS instantiate/eval/uninstantiate round-trip entirely.
+    auto cleanupDirectParamSlots = [&](int last_arg) {
+        for (int j = last_arg; j >= 0; --j) {
+            auto cleanup_it = func.param_slot_ids.find(j);
+            if (cleanup_it == func.param_slot_ids.end()) {
+                continue;
+            }
+            uint32_t cleanup_sid = cleanup_it->second;
+            if (cleanup_sid < local_slot_count && locals_instantiated[cleanup_sid]) {
+                locals_slot_cache[cleanup_sid].discard(xsink);
+                locals_slot_cache[cleanup_sid] = QoreValue();
+                locals_instantiated[cleanup_sid] = false;
+            }
+        }
+    };
     if (direct_params && direct_params->nargs > 0) {
         for (int i = 0; i < direct_params->nargs; ++i) {
             // Find the slot_id for this param's LocalVar
@@ -2417,17 +2431,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
                             QoreTypeInfo::acceptInputParam(paramTypeInfo, i, lv->getName(), val, xsink);
                             if (*xsink) {
+                                val.discard(xsink);
                                 // Error in type filtering - cleanup already-instantiated locals
-                                for (int j = i - 1; j >= 0; --j) {
-                                    auto cleanup_it = func.param_slot_ids.find(j);
-                                    if (cleanup_it != func.param_slot_ids.end()) {
-                                        uint32_t cleanup_sid = cleanup_it->second;
-                                        if (cleanup_sid < local_slot_count && locals_instantiated[cleanup_sid]) {
-                                            locals_slot_cache[cleanup_sid].discard(xsink);
-                                            locals_instantiated[cleanup_sid] = false;
-                                        }
-                                    }
-                                }
+                                cleanupDirectParamSlots(i - 1);
                                 return false;
                             }
                         }
@@ -2436,6 +2442,17 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                     locals_slot_cache[sid] = val;
                     locals_instantiated[sid] = true;
                 }
+            }
+        }
+        // The direct-param slot cache now owns refs for parameter args, and
+        // argv (created by the caller before execute()) owns refs for varargs.
+        // Drop caller temp cleanup refs before running the callee body.
+        if (direct_params->arg_cleanups) {
+            qore_rt_clear_arg_cleanups(direct_params->arg_cleanups,
+                    direct_params->nargs, xsink);
+            if (*xsink) {
+                cleanupDirectParamSlots(direct_params->nargs - 1);
+                return false;
             }
         }
     }
@@ -2617,6 +2634,16 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             }
         }
         local_load_slots[slot_id].clear();
+    };
+    auto discardValueSlot = [&](uint32_t vid) {
+        if (vid >= values.size()) {
+            return;
+        }
+        removeCleanupEntry(cleanup, vid);
+        values[vid].discard(xsink);
+        if (vid < load_slot_registered.size()) {
+            load_slot_registered[vid] = false;
+        }
     };
 
     struct LocalInstantiationCleanup {
@@ -4378,7 +4405,7 @@ load_local_done:
 
                     // Clear the container slot so cleanup doesn't try to discard it
                     // (it's held by TLS and managed separately)
-                    values[hks_inst->operands[0].id] = QoreValue();
+                    discardValueSlot(hks_inst->operands[0].id);
                 } else if (hash_val.isNothing()) {
                     LocalVar* lv;
                     bool is_closure;
@@ -4425,7 +4452,7 @@ load_local_done:
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                     }
-                    values[hks_inst->operands[0].id] = QoreValue();
+                    discardValueSlot(hks_inst->operands[0].id);
                 } else if (hash_val.getType() == NT_OBJECT) {
                     const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
                         hks_inst->key_name.c_str(), val.refSelf(), xsink);
@@ -4489,7 +4516,7 @@ load_local_done:
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                     }
-                    values[hksd_inst->operands[0].id] = QoreValue();
+                    discardValueSlot(hksd_inst->operands[0].id);
                 } else if (hash_val.isNothing()) {
                     LocalVar* lv;
                     bool is_closure;
@@ -4535,7 +4562,7 @@ load_local_done:
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                     }
-                    values[hksd_inst->operands[0].id] = QoreValue();
+                    discardValueSlot(hksd_inst->operands[0].id);
                 } else if (hash_val.getType() == NT_OBJECT) {
                     const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
                         key_str->c_str(), val.refSelf(), xsink);
@@ -4640,7 +4667,7 @@ load_local_done:
 
                     // Clear the container slot so cleanup doesn't try to discard it
                     // (it's held by TLS and managed separately)
-                    values[lis_inst->operands[0].id] = QoreValue();
+                    discardValueSlot(lis_inst->operands[0].id);
                 } else if (list_val.isNothing()) {
                     // Auto-vivify: use container's declared type so the element
                     // type comes out right (softlist<bool> → list<bool>, not list<auto>).
@@ -4688,7 +4715,7 @@ load_local_done:
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                     }
-                    values[lis_inst->operands[0].id] = QoreValue();
+                    discardValueSlot(lis_inst->operands[0].id);
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

@@ -49,8 +49,13 @@ class StatementBlock;
 //! Param values are placed directly into the IR slot cache, eliminating
 //! the TLS push/pop round-trip (instantiate → eval → uninstantiate).
 struct IRDirectParams {
-    const uint64_t* args;   //!< NaN-boxed param values
-    int nargs;              //!< number of params
+    IRDirectParams(const uint64_t* args, int nargs, uint64_t** arg_cleanups = nullptr)
+        : args(args), arg_cleanups(arg_cleanups), nargs(nargs) {
+    }
+
+    const uint64_t* args;       //!< NaN-boxed param values
+    uint64_t** arg_cleanups;    //!< caller temp cleanup slots to clear after param refs are taken
+    int nargs;                  //!< number of params
 };
 
 class QoreIRInterpreter {

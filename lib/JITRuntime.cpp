@@ -384,7 +384,7 @@ static int clearConsumedArgCleanups(uint64_t** arg_cleanups, int nargs,
     if (!arg_cleanups) {
         return 0;
     }
-    for (int i = 0; i < nargs; ++i) {
+    for (int i = nargs - 1; i >= 0; --i) {
         uint64_t* slot = arg_cleanups[i];
         if (!slot) {
             continue;
@@ -400,6 +400,11 @@ static int clearConsumedArgCleanups(uint64_t** arg_cleanups, int nargs,
         }
     }
     return 0;
+}
+
+extern "C" DLLEXPORT void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups,
+        int32_t count, ExceptionSink* xsink) {
+    clearConsumedArgCleanups(arg_cleanups, count, xsink);
 }
 
 // --- Cleanup stack for JIT/AOT compiled functions ---
@@ -442,7 +447,10 @@ extern "C" DLLEXPORT void qore_rt_cleanup_push(uint64_t** stack, int32_t* count,
     large functions (50+ cleanup allocas) to avoid O(N) error_return blocks.
 */
 extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink) {
-    for (int32_t i = 0; i < count; ++i) {
+    // Cleanup slots are registered in construction order.  Destruct in LIFO
+    // order so dependent temporaries (for example iterators) are released
+    // before the values they reference.
+    for (int32_t i = count - 1; i >= 0; --i) {
         uint64_t* slot = alloca_ptrs[i];
         QoreValue v = fromBits(*slot);
         *slot = 0;
@@ -3147,7 +3155,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_get_object_class(uint64_t obj_bits) {
 
 // Forward declaration — implementation below after instantiateFastCallParams and execJITWithDeopt
 static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBase* uvb,
-        int nargs, const uint64_t* args, ExceptionSink* xsink);
+        int nargs, const uint64_t* args, ExceptionSink* xsink,
+        uint64_t** arg_cleanups = nullptr);
 
 // Fast-path helper for closure calls with no arguments — avoids QoreListNode allocation
 extern "C" DLLEXPORT uint64_t qore_rt_call_closure_0(uint64_t ref_bits, ExceptionSink* xsink) {
@@ -3240,8 +3249,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t
     return toBits(result);
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs,
-        ExceptionSink* xsink) {
+static uint64_t qore_rt_call_closure_fast_impl(uint64_t ref_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
     if (check_stack(xsink)) {
         return toBits(QoreValue());
     }
@@ -3262,7 +3271,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint6
         const AbstractQoreFunctionVariant* variant = uf->first();
         const UserVariantBase* uvb = variant->getUserVariantBase();
         if (uvb && (uvb->hasCachedFunction() || uvb->getCachedIR())) {
-            return execClosureDirect(cb, uvb, nargs, args, xsink);
+            return execClosureDirect(cb, uvb, nargs, args, xsink, arg_cleanups);
         }
         // Fall through to execValue for closures without cached IR/JIT
     }
@@ -3289,9 +3298,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint6
             priv->pushIntern(val);
         }
     }
+    if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+        return toBits(QoreValue());
+    }
 
     QoreValue result = callref->execValue(*arg_list, xsink);
     return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    return qore_rt_call_closure_fast_impl(ref_bits, args, nullptr, nargs, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
+    return qore_rt_call_closure_fast_impl(ref_bits, args, arg_cleanups, nargs, xsink);
 }
 
 // Optimized map operations - native loops that return lists
@@ -5235,7 +5257,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     @return NaN-boxed result value
 */
 static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBase* uvb,
-        int nargs, const uint64_t* args, ExceptionSink* xsink) {
+        int nargs, const uint64_t* args, ExceptionSink* xsink, uint64_t** arg_cleanups) {
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
 
@@ -5320,6 +5342,20 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     if (sig->argvid) {
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
     }
+    if (!use_direct_params && clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+        if (sig->argvid) {
+            sig->argvid->uninstantiate(xsink);
+        }
+        if (!use_direct_params) {
+            for (int i = (int)num_params - 1; i >= 0; --i) {
+                sig->lv[i]->uninstantiate(xsink);
+            }
+        }
+        if (selfid_instantiated) {
+            selfid->uninstantiateSelf();
+        }
+        return toBits(QoreValue());
+    }
 
     // Get call name from cached IR if available, otherwise use static name
     static const std::string closure_name("<anonymous closure>");
@@ -5330,7 +5366,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
         ArgvContextHelper argv_helper(argv.release(), xsink);
         if (use_direct_params) {
             // Direct params path: pass args straight to IR slot cache, no TLS
-            IRDirectParams dp{args, nargs};
+            IRDirectParams dp(args, nargs, arg_cleanups);
             execJITWithDeopt(uvb, call_name, [ir, uvb, &dp](ExceptionSink* xs, bool& inv) -> uint64_t {
                 QoreValue ir_return_value;
                 bool ok = QoreIRInterpreter::execute(*ir, ir_return_value, xs, nullptr,
@@ -8153,8 +8189,20 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_closure_fas
     return result;
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr self_fn, QoreAOTContext* ctx,
-        int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_closure_fast_consume_args_throwing(
+        uint64_t ref_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink) {
+    uint64_t result = qore_rt_call_closure_fast_consume_args(ref_bits, args,
+        arg_cleanups, nargs, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
     // Lightweight self-recursive call for AOT: eliminates ThreadFrameBoundaryHelper,
     // ProgramThreadCountContextHelper, QoreJITStackLocation, execJITWithDeopt wrapper,
     // acceptAssignment, and execCachedFunction indirection.  Calls the AOT function
@@ -8168,6 +8216,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr sel
     const UserVariantBase* uvb = target.uvb;
     if (!uvb) {
         // Defensive fallback (should not happen for self-recursive)
+        if (arg_cleanups) {
+            return qore_rt_call_direct_aot_consume_args(ctx, slot, args,
+                    arg_cleanups, nargs, xsink);
+        }
         return qore_rt_call_direct_aot(ctx, slot, args, nargs, xsink);
     }
 
@@ -8195,6 +8247,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr sel
     }
     if (sig->argvid) {
         sig->argvid->instantiate(argv ? argv->refSelf() : nullptr);
+    }
+    if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
+        if (sig->argvid) {
+            sig->argvid->uninstantiate(xsink);
+        }
+        for (int i = (int)num_params - 1; i >= 0; --i) {
+            sig->lv[i]->uninstantiate(xsink);
+        }
+        return toBits(QoreValue());
     }
 
     // Body locals — use getBodyLocals() for AOT (same as execJITWithDeopt).
@@ -8240,6 +8301,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr sel
 
     // No return type coercion — self-recursive, same return type
     return result_bits;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr self_fn,
+        QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    return qore_rt_call_self_recursive_aot_impl(self_fn, ctx, slot, args,
+            nullptr, nargs, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot_consume_args(
+        AotFunctionPtr self_fn, QoreAOTContext* ctx, int32_t slot,
+        uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        ExceptionSink* xsink) {
+    return qore_rt_call_self_recursive_aot_impl(self_fn, ctx, slot, args,
+            arg_cleanups, nargs, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,

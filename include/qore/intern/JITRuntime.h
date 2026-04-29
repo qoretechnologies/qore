@@ -240,6 +240,9 @@ uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 //! Run all cleanup actions from an array of pointers to NaN-boxed cleanup slots.
 void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink);
 
+//! Clear caller-owned argument cleanup slots after callee ownership has been established.
+void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups, int32_t count, ExceptionSink* xsink);
+
 //! Refresh a compiled local cache from the Qore runtime stack if its valid
 //! epoch is stale.  Used by LLVM lowering to keep cache invalidation compact.
 void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tracker,
@@ -627,6 +630,10 @@ uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t arg0_bits, Exception
 //! Fast closure/callref call with N arguments — bypasses QoreListNode + dynamic_cast
 uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Fast closure/callref call with N arguments, consuming caller-owned argument cleanup refs.
+uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
 // --- AOT context-based helpers (Phase 7b) ---
 // These variants take QoreAOTContext* and a slot index instead of raw pointers.
 // At runtime, they resolve ctx->array[idx] and delegate to the existing helpers.
@@ -904,6 +911,10 @@ uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t arg0_bits, Exception
 
 //! Call a closure/call reference with N arguments (fast path, pre-evaluated args)
 uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Call a closure/call reference with N arguments and consume caller-owned argument cleanup refs.
+uint64_t qore_rt_call_closure_fast_consume_args(uint64_t ref_bits, uint64_t* args,
+        uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 } // extern "C"
 
