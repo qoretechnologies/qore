@@ -2509,8 +2509,8 @@ public class HttpAsyncSocketIoController {
 
         # tryInlineRequest returned NOTHING — dispatch to the handler_pool.
         # onHttpRequest / processNativeRequest may read the request body or
-        # perform blocking I/O, so it must run on a handler thread, not the
-        # call_dispatcher worker.
+        # block while waiting for controller-backed socket I/O, so it must run
+        # on a handler thread, not the call_dispatcher worker.
         code request_handler = sub () {
             try {
                 hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);

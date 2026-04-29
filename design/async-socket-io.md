@@ -550,9 +550,10 @@ Known failure modes include:
   `doDelete` on the Socket from the outer object sets status to `OS_DELETED` before the inner
   operation releases its ref, leaving the Socket with a non-zero ref count.
 - **Inline handler dispatch**: `onHttpRequest()` must never run inline on a `call_dispatcher` worker.
-  Body-reading requests call `processNativeRequest()` which does synchronous socket I/O — this
-  interferes with the async I/O model when run on the wrong thread.  All requests without an inline
-  result from `tryInlineRequest()` must be dispatched via `handler_pool`.
+  Body-reading requests call `processNativeRequest()`, whose Socket calls now delegate to the async
+  I/O controller but still block the caller while waiting for controller completion.  That wait must
+  run on a handler thread, not on the dispatcher or I/O thread.  All requests without an inline result
+  from `tryInlineRequest()` must be dispatched via `handler_pool`.
 ### Socket Lifecycle Guarantee
 
 The C++ layer guarantees correct socket fd cleanup — Qore-level code must not be required to call
