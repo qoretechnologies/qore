@@ -654,6 +654,8 @@ Representative bridges:
   `QoreSocket::acceptSSL()` similarly performs accept and the server TLS
   handshake inside one controller operation; the accepted socket is not returned
   to the caller until TLS negotiation has completed.
+  `QoreSocket::acceptAndReplace()` also accepts and swaps the accepted descriptor
+  into the target socket in one controller operation.
   Immediate setup/lifecycle calls such as `bind*()`, `listen()`, `shutdown()`, and
   `close()` use controller-backed execution.  Close first runs a socket-scoped
   controller cancel that waits for any deferred worker `continuePoll()` aborts, then

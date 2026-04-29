@@ -824,8 +824,8 @@ private:
 
 class QoreSocketControllerAcceptReplacePollOperation : public SocketPollOperationBase {
 public:
-    DLLLOCAL QoreSocketControllerAcceptReplacePollOperation(QoreSocket* sock, int accepted_fd)
-            : sock(sock), accepted_fd(accepted_fd) {
+    DLLLOCAL QoreSocketControllerAcceptReplacePollOperation(QoreSocket* sock, SocketSource* source)
+            : sock(sock), source(source) {
     }
 
     DLLLOCAL ~QoreSocketControllerAcceptReplacePollOperation() {
@@ -837,12 +837,37 @@ public:
     }
 
     DLLLOCAL virtual void abort(ExceptionSink*) override {
+        poll_state.reset();
         done = true;
     }
 
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink*) override {
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         if (done) {
             return nullptr;
+        }
+
+        if (accepted_fd == QORE_INVALID_SOCKET) {
+            if (!poll_state) {
+                poll_state.reset(new SocketAcceptPollState(xsink, qore_socket_private::get(*sock), source));
+                if (*xsink || !poll_state) {
+                    done = true;
+                    return nullptr;
+                }
+            }
+
+            int rc = poll_state->continuePoll(xsink);
+            if (*xsink || rc < 0) {
+                poll_state.reset();
+                done = true;
+                return nullptr;
+            }
+            if (rc) {
+                return getSocketPollInfoHash(xsink, rc);
+            }
+
+            assert(dynamic_cast<SocketAcceptPollState*>(poll_state.get()));
+            accepted_fd = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
+            poll_state.reset();
         }
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
@@ -861,7 +886,10 @@ public:
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "done" : "accept-replace";
+        if (done) {
+            return "done";
+        }
+        return accepted_fd == QORE_INVALID_SOCKET ? "accepting" : "accept-replace";
     }
 
 private:
@@ -883,6 +911,8 @@ private:
     }
 
     QoreSocket* sock;
+    SocketSource* source = nullptr;
+    std::unique_ptr<AbstractPollState> poll_state;
     int accepted_fd = QORE_INVALID_SOCKET;
     int rc = -1;
     bool done = false;
@@ -3452,11 +3482,27 @@ static QoreHashNode* qore_socket_exec_address_info(QoreSocket* s,
     return qore_socket_get_addr_info_from_output(*result, host_lookup, err, xsink);
 }
 
-static int qore_socket_exec_accept_replace_descriptor(QoreSocket* s, int descriptor, ExceptionSink* xsink) {
+static int qore_socket_exec_accept_replace(QoreSocket* s, SocketSource* source, int timeout_ms,
+        ExceptionSink* xsink) {
+    QoreHashNode* ex = nullptr;
     ValueHolder result(qore_socket_exec_poll(s,
-        new QoreSocketControllerAcceptReplacePollOperation(s, descriptor),
-        -1, "acceptAndReplace", "done", xsink), xsink);
-    return *xsink ? -1 : 0;
+        new QoreSocketControllerAcceptReplacePollOperation(s, source),
+        timeout_ms, "acceptAndReplace", "done", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (ex_holder) {
+        if (qore_socket_exec_exception_is(**ex_holder, "SOCKET-TIMEOUT")) {
+            return QSE_TIMEOUT;
+        }
+        qore_socket_raise_poll_result_exception(*ex_holder, xsink);
+        return -1;
+    }
+    if (result->isNothing()) {
+        return -1;
+    }
+    return static_cast<int>(result->getAsBigInt());
 }
 
 static int qore_socket_exec_close(QoreSocket* s) {
@@ -8679,17 +8725,8 @@ QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, SocketSource* source, Qo
 int QoreSocket::acceptAndReplace(SocketSource* source) {
     QORE_TRACE("QoreSocket::acceptAndReplace()");
     ExceptionSink xsink;
-    int descriptor = qore_socket_exec_accept_descriptor(this, source, -1, &xsink);
+    int rc = qore_socket_exec_accept_replace(this, source, -1, &xsink);
     // ignore exception; we just use a return code
-    if (xsink) {
-        xsink.clear();
-        return -1;
-    }
-    if (descriptor < 0) {
-        return -1;
-    }
-
-    int rc = qore_socket_exec_accept_replace_descriptor(this, descriptor, &xsink);
     if (xsink) {
         xsink.clear();
         return -1;
@@ -8711,15 +8748,7 @@ QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLC
 }
 
 int QoreSocket::acceptAndReplace(int timeout_ms, ExceptionSink* xsink) {
-    int descriptor = qore_socket_exec_accept_descriptor(this, 0, timeout_ms, xsink);
-    if (descriptor == QSE_TIMEOUT) {
-        return QSE_TIMEOUT;
-    }
-    if (descriptor < 0) {
-        return -1;
-    }
-
-    return qore_socket_exec_accept_replace_descriptor(this, descriptor, xsink);
+    return qore_socket_exec_accept_replace(this, nullptr, timeout_ms, xsink);
 }
 
 int QoreSocket::listen(int backlog) {
