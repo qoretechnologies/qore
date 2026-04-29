@@ -77,35 +77,18 @@ QoreHashNode* HttpIdlePollOperationPriv::continuePoll(ExceptionSink* xsink) {
         return nullptr;
     }
 
-    // Check for data or EOF via non-blocking recv peek.
-    // Do NOT use isDataAvailable() — this is an async I/O path; the event loop
-    // already told us the socket is ready.  A raw recv(MSG_PEEK) distinguishes:
-    //   > 0: data available (new request from client)
-    //     0: EOF (client closed the connection)
-    //    -1 + EAGAIN: no data yet, connection alive
-    {
-        int fd = sock_obj->getSocket();
-        if (fd >= 0) {
-            char peek_buf;
-            ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
-            if (peek_rc > 0) {
-                idle_state = IdleState::DATA_AVAILABLE;
-                return nullptr;
-            }
-            if (peek_rc == 0) {
-                // EOF — client closed the connection; close the socket
-                // immediately to prevent CLOSE_WAIT fd accumulation
-                idle_state = IdleState::CLOSED;
-                sock_obj->closeIo(xsink);
-                return nullptr;
-            }
-            // peek_rc < 0: check for real errors vs EAGAIN
-            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-                idle_state = IdleState::CLOSED;
-                sock_obj->closeIo(xsink);
-                return nullptr;
-            }
-        }
+    // Check for data, EOF, or fatal errors via the central async-safe idle
+    // probe.  This handles TLS connections with SSL_peek(), so TLS
+    // post-handshake records do not look like application data forever.
+    int idle_rc = sock_obj->checkIdleDataForAsyncPoll(xsink);
+    if (*xsink || idle_rc < 0) {
+        idle_state = IdleState::CLOSED;
+        sock_obj->closeIo(xsink);
+        return nullptr;
+    }
+    if (idle_rc > 0) {
+        idle_state = IdleState::DATA_AVAILABLE;
+        return nullptr;
     }
 
     // Need to wait for data — return poll info

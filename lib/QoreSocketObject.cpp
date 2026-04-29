@@ -5018,7 +5018,18 @@ int QoreSocketObject::checkIdleDataForAsyncPoll(ExceptionSink* xsink) {
     if (rc == 0) {
         return -1;
     }
-    return 0;
+    int e = sock_get_error();
+    if (e == EAGAIN
+#ifdef EWOULDBLOCK
+            || e == EWOULDBLOCK
+#endif
+            || e == EINTR) {
+        return 0;
+    }
+    // Fatal idle-probe errors (for example ECONNRESET) mean the connection
+    // is no longer usable.  Idle monitors close the socket without surfacing
+    // a noisy request error.
+    return -1;
 }
 
 void QoreSocketObject::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink) {

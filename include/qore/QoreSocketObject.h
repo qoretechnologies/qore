@@ -392,7 +392,10 @@ public:
         TLS record header byte (0x17 = Application Data) is seen by the raw peek but never
         consumed because it requires OpenSSL processing.
 
-        For plain (non-TLS) connections, falls back to raw recv(MSG_PEEK | MSG_DONTWAIT).
+        For plain (non-TLS) connections, falls back to raw
+        recv(MSG_PEEK | MSG_DONTWAIT).  Only EAGAIN/EWOULDBLOCK/EINTR
+        are treated as "still idle"; EOF and fatal peek errors are treated
+        as a closed connection.
 
         @return > 0  application-layer data is available (unexpected on an idle connection)
         @return   0  no application data; any TLS post-handshake record was drained
