@@ -41,7 +41,6 @@
 
 #include <cctype>
 #include <functional>
-#include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -857,28 +856,6 @@ private:
     */
     std::atomic<bool> session_closed_{false};
 
-    //! Condition variable for flow-control drain notifications
-    /** Signaled by dataProviderReadCallback when it consumes data from a streaming
-        buffer, and by onStreamCloseCallback when a stream is closed.
-
-        Uses a separate non-recursive drain_mtx_ + drain_cv_ pair with an atomic
-        generation counter to avoid POSIX UB with recursive mutexes and
-        std::condition_variable.
-
-        The generation counter prevents lost wakeups: signal sites increment
-        drain_gen_ and briefly lock drain_mtx_ before notify; the waiter checks
-        drain_gen_ under drain_mtx_ then re-checks the actual predicate under m.
-
-        Lock ordering: signal sites hold m then briefly acquire drain_mtx_;
-        the waiter holds drain_mtx_ (for CV wait) then separately acquires m
-        (never simultaneously), so no deadlock is possible.
-
-        @since %Qore 2.3
-    */
-    std::mutex drain_mtx_;
-    std::condition_variable drain_cv_;
-    std::atomic<unsigned> drain_gen_{0};
-
     //! Socket objects to wake when stream drain notifications fire
     std::mutex drain_waiters_mtx_;
     std::unordered_map<QoreObject*, size_t> drain_waiters_;
@@ -914,19 +891,21 @@ public:
     */
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
 
-    //! Wait for a stream's send buffer to drain below the backpressure threshold
-    /** Blocks the calling thread until the stream's pending_body_data drops below
-        MAX_STREAM_BUFFER, the stream is closed, or the timeout expires.
+    //! Check whether a stream's send buffer has drained below the backpressure threshold
+    /** This method is intentionally nonblocking.  Synchronous public APIs use
+        an async-controller poll operation that calls this as its readiness
+        predicate and blocks in @ref AsyncIoController::exec(), not in the
+        HTTP/2 session.
 
         @param stream_id the HTTP/2 stream ID
-        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
-        @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+        @param timeout_ms ignored; retained for internal call-site compatibility
+        @return 0 if buffer drained, 1 if it is still full, -1 if stream not found or closed
 
         @since %Qore 2.3
     */
     DLLLOCAL int waitForStreamDrain(int32_t stream_id, int timeout_ms);
 
-    //! Signal drain_cv_ that buffer space has been freed
+    //! Wake controller poll operations waiting for stream drain
     /** Called by dataProviderReadCallback and onStreamCloseCallback.
         Must be called while holding the session mutex m.
 

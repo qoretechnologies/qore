@@ -1990,7 +1990,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);
-    // Wake any handler threads blocked in waitForStreamDrain() for this stream
+    // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
     // processStreamInputStreams() will not attempt to call sendStreamData()
@@ -2593,70 +2593,19 @@ void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, Exce
 }
 
 int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
+    (void)timeout_ms;
     constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
 
-    // Phase 1: check predicate under m
-    {
-        std::lock_guard<std::recursive_mutex> lg(m);
-        auto it = pending_body_data.find(stream_id);
-        if (it == pending_body_data.end()) {
-            return -1;  // stream not found
-        }
-        size_t pending = it->second.data.size() - it->second.offset;
-        if (pending <= MAX_STREAM_BUFFER) {
-            return 0;  // buffer already below threshold
-        }
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = pending_body_data.find(stream_id);
+    if (it == pending_body_data.end()) {
+        return -1;  // stream not found
     }
-
-    if (timeout_ms == 0) {
-        return 1;  // no wait requested, buffer is full
-    }
-
-    // Phase 2: wait on drain_cv_ with generation-based wakeup
-    unsigned gen = drain_gen_.load(std::memory_order_acquire);
-    auto deadline = (timeout_ms > 0)
-        ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms)
-        : std::chrono::steady_clock::time_point::max();
-
-    while (true) {
-        {
-            std::unique_lock<std::mutex> dlock(drain_mtx_);
-            auto gen_changed = [this, gen]() {
-                return drain_gen_.load(std::memory_order_acquire) != gen;
-            };
-            if (timeout_ms < 0) {
-                drain_cv_.wait(dlock, gen_changed);
-            } else {
-                if (!drain_cv_.wait_until(dlock, deadline, gen_changed)) {
-                    return 1;  // timed out
-                }
-            }
-        }
-
-        // Re-check predicate under m
-        {
-            std::lock_guard<std::recursive_mutex> lg(m);
-            auto it = pending_body_data.find(stream_id);
-            if (it == pending_body_data.end()) {
-                return -1;  // stream gone
-            }
-            size_t pending = it->second.data.size() - it->second.offset;
-            if (pending <= MAX_STREAM_BUFFER) {
-                return 0;  // drained
-            }
-        }
-
-        // Update generation for next wait iteration
-        gen = drain_gen_.load(std::memory_order_acquire);
-    }
+    size_t pending = it->second.data.size() - it->second.offset;
+    return pending <= MAX_STREAM_BUFFER ? 0 : 1;
 }
 
 void Http2Session::notifyStreamDrain() {
-    {
-        std::lock_guard<std::mutex> dlock(drain_mtx_);
-        drain_gen_.fetch_add(1, std::memory_order_release);
-    }
-    drain_cv_.notify_all();
     wakeStreamDrainWaiters();
 }
 

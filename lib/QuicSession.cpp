@@ -2286,7 +2286,8 @@ int QuicSession::sendStreamData(int64_t stream_id, const void* data, size_t len,
 }
 
 int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
-    // Phase 1: check predicate under mtx_
+    (void)timeout_ms;
+
     {
         std::lock_guard<std::recursive_mutex> lock(mtx_);
         auto it = streaming_body_data_.find(stream_id);
@@ -2298,70 +2299,10 @@ int QuicSession::waitForStreamDrain(int64_t stream_id, int timeout_ms) {
         }
     }
 
-    if (closed_.load(std::memory_order_acquire)) {
-        return -1;  // session closing
-    }
-
-    if (timeout_ms == 0) {
-        return 1;  // no wait requested, buffer is full
-    }
-
-    // Phase 2: wait on drain_cv_ with generation-based wakeup
-    // The generation counter prevents lost wakeups: if a signal fires between
-    // releasing mtx_ above and entering wait below, the gen change is visible
-    // immediately when the waiter checks the predicate on drain_cv_.
-    unsigned gen = drain_gen_.load(std::memory_order_acquire);
-    auto deadline = (timeout_ms > 0)
-        ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms)
-        : std::chrono::steady_clock::time_point::max();
-
-    while (true) {
-        // Wait for generation change (signal from h3ReadDataCallback or streamCloseCallback)
-        {
-            std::unique_lock<std::mutex> dlock(drain_mtx_);
-            auto gen_changed = [this, gen]() {
-                return closed_.load(std::memory_order_acquire)
-                    || drain_gen_.load(std::memory_order_acquire) != gen;
-            };
-            if (timeout_ms < 0) {
-                drain_cv_.wait(dlock, gen_changed);
-            } else {
-                drain_cv_.wait_until(dlock, deadline, gen_changed);
-            }
-        }
-
-        if (closed_.load(std::memory_order_acquire)) {
-            return -1;  // session closing
-        }
-
-        // Re-check actual predicate under mtx_
-        {
-            std::lock_guard<std::recursive_mutex> lock(mtx_);
-            auto it = streaming_body_data_.find(stream_id);
-            if (it == streaming_body_data_.end()) {
-                return -1;  // stream removed
-            }
-            if (it->second.data.size() <= QUIC_MAX_STREAM_BODY) {
-                return 0;  // buffer drained
-            }
-        }
-
-        // Update generation for next wait iteration
-        gen = drain_gen_.load(std::memory_order_acquire);
-
-        // Check timeout
-        if (timeout_ms > 0 && std::chrono::steady_clock::now() >= deadline) {
-            return 1;  // timed out
-        }
-    }
+    return closed_.load(std::memory_order_acquire) ? -1 : 1;
 }
 
 void QuicSession::notifyStreamDrain() {
-    {
-        std::lock_guard<std::mutex> dlock(drain_mtx_);
-        drain_gen_.fetch_add(1, std::memory_order_release);
-    }
-    drain_cv_.notify_all();
     wakeStreamDrainWaiters();
 }
 
@@ -2680,7 +2621,7 @@ void QuicSession::markStreamComplete(int64_t stream_id) {
 
         // If stream was dispatched via headers-only mode, the handler is reading DATA
         // incrementally. Keep stream in map for continued DATA accumulation; don't push
-        // to completed_streams or erase. Notify the handler's condition variable.
+        // to completed_streams or erase. Wake controller-backed stream data waiters.
         if (it->second->dispatched) {
             printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " dispatched, keeping in map\n",
                 stream_id);
@@ -2998,7 +2939,7 @@ void QuicSession::markClosed() {
     // Wake controller-backed stream data waiters.
     notifyStreamData();
 
-    // Wake all handler threads blocked in waitForStreamDrain()
+    // Wake controller-backed waitForStreamDrain() poll operations.
     notifyStreamDrain();
 
     // Wake handler threads blocked in Queue::get() on registered datagram queues
@@ -3389,7 +3330,7 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
             }
         }
 
-        // Wake any handler threads blocked in waitForStreamDrain() for this stream
+        // Wake controller-backed waitForStreamDrain() poll operations for this stream.
         session->notifyStreamDrain();
 
         // Mark stream complete if it wasn't already (e.g. peer reset before
