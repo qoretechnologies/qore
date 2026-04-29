@@ -4990,6 +4990,12 @@ int QoreSocketObject::checkIdleData(ExceptionSink* xsink) {
 
 int QoreSocketObject::checkIdleDataForAsyncPoll(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
+    return checkIdleDataForAsyncPollLocked(xsink);
+}
+
+int QoreSocketObject::checkIdleDataForAsyncPollLocked(ExceptionSink* xsink) {
+    assert(priv->m.trylock());
+
     qore_socket_private* p = qore_socket_private::get(*priv->socket);
     if (!p->isOpen()) {
         return -1;

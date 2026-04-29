@@ -12027,30 +12027,16 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 set_non_block = false;
                 return nullptr;
             }
-            // Peek for EOF before starting header reading — matches the
-            // pattern in HttpKeepAlivePollOperationBase::continueIdlePoll()
-            {
-                int fd = sock->priv->socket->getSocket();
-                if (fd >= 0) {
-                    char peek_buf;
-                    ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
-                    if (peek_rc == 0) {
-                        // EOF — remote closed; close socket to prevent CLOSE_WAIT
-                        phase = Phase::Closed;
-                        qore_socket_close_from_controller(sock->priv->socket);
-                        sock->priv->clearNonBlock();
-                        set_non_block = false;
-                        return nullptr;
-                    }
-                    if (peek_rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK
-                            && errno != EINTR) {
-                        phase = Phase::Closed;
-                        qore_socket_close_from_controller(sock->priv->socket);
-                        sock->priv->clearNonBlock();
-                        set_non_block = false;
-                        return nullptr;
-                    }
-                }
+            int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink);
+            if (*xsink || idle_rc < 0) {
+                phase = Phase::Closed;
+                qore_socket_close_from_controller(sock->priv->socket);
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+                return nullptr;
+            }
+            if (!idle_rc) {
+                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
             }
             // Data is available — transition to header reading
             poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
@@ -12439,28 +12425,16 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
                     set_non_block = false;
                     return nullptr;
                 }
-                // Peek for EOF before starting header reading
-                {
-                    int fd = sock->priv->socket->getSocket();
-                    if (fd >= 0) {
-                        char peek_buf;
-                        ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
-                        if (peek_rc == 0) {
-                            phase = Phase::Closed;
-                            qore_socket_close_from_controller(sock->priv->socket);
-                            sock->priv->clearNonBlock();
-                            set_non_block = false;
-                            return nullptr;
-                        }
-                        if (peek_rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK
-                                && errno != EINTR) {
-                            phase = Phase::Closed;
-                            qore_socket_close_from_controller(sock->priv->socket);
-                            sock->priv->clearNonBlock();
-                            set_non_block = false;
-                            return nullptr;
-                        }
-                    }
+                int idle_rc = sock->checkIdleDataForAsyncPollLocked(xsink);
+                if (*xsink || idle_rc < 0) {
+                    phase = Phase::Closed;
+                    qore_socket_close_from_controller(sock->priv->socket);
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
+                if (!idle_rc) {
+                    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
                 }
                 // Data is available — transition to header reading
                 poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));

@@ -409,12 +409,26 @@ public:
 
     //! Internal async-poll helper for idle-data probes already running on the I/O thread.
     /** This is the nonblocking implementation used by async poll operations.
+        This method acquires the socket lock before probing.
         Public synchronous callers must use @ref checkIdleData(), which delegates
         through the async I/O controller.
 
         @since %Qore 2.3
     */
     DLLLOCAL int checkIdleDataForAsyncPoll(ExceptionSink* xsink);
+
+    //! Internal async-poll helper for idle-data probes when the socket lock is already held.
+    /** This is the lock-held variant of @ref checkIdleDataForAsyncPoll().
+
+        @param xsink exception sink; set on SSL error
+
+        @return > 0  application-layer data is available
+        @return   0  no application data; any TLS post-handshake record was drained
+        @return  -1  connection closed or error (socket already closed or xsink set)
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int checkIdleDataForAsyncPollLocked(ExceptionSink* xsink);
 
     //! Internal async-poll helper for TCP_NODELAY setup from poll operation code.
     /** Public synchronous callers must use @ref setNoDelay(), which delegates
