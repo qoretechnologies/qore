@@ -6292,6 +6292,7 @@ QoreSocket::QoreSocket(int n_sock, int n_sfamily, int n_stype, int n_prot, const
 }
 
 QoreSocket::~QoreSocket() {
+    qore_socket_exec_close(this);
     priv->deref();
 }
 
