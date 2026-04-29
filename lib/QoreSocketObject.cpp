@@ -913,8 +913,12 @@ static BinaryNode* qore_socket_object_exec_quic_stream_data(QoreSocketObject* s,
     }
 
     QoreHashNode* ex = nullptr;
+    std::string owner_name("readQuicStreamDataBlock:");
+    owner_name += std::to_string(session_id);
+    owner_name += ':';
+    owner_name += std::to_string(stream_id);
     ReferenceHolder<QoreHashNode> result(qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj,
-        timeout_ms, "readQuicStreamDataBlock", xsink, &ex), xsink);
+        timeout_ms, owner_name.c_str(), xsink, &ex), xsink);
     ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
     if (*xsink) {
         return nullptr;
@@ -3687,8 +3691,10 @@ int QoreSocketObject::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms,
     if (!h2) {
         return -1;
     }
+    std::string owner_name("waitForHttp2StreamDrain:");
+    owner_name += std::to_string(stream_id);
     return qore_socket_object_exec_stream_drain(this,
-        new QoreSocketObjectStreamDrainPollOperation(h2, stream_id), timeout_ms, "waitForHttp2StreamDrain",
+        new QoreSocketObjectStreamDrainPollOperation(h2, stream_id), timeout_ms, owner_name.c_str(),
         xsink);
 }
 
@@ -4080,9 +4086,11 @@ int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeou
         return -1;
     }
 
+    std::string owner_name("waitForQuicClientStreamDrain:");
+    owner_name += std::to_string(stream_id);
     return qore_socket_object_exec_stream_drain(this,
         new QoreSocketObjectStreamDrainPollOperation(session, stream_id), timeout_ms,
-        "waitForQuicClientStreamDrain", xsink);
+        owner_name.c_str(), xsink);
 }
 
 void QoreSocketObject::cancelQuicStream(int64_t session_id, int64_t stream_id, ExceptionSink* xsink) {
@@ -4251,9 +4259,13 @@ int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_
             (long long)session_id);
         return -1;
     }
+    std::string owner_name("waitForQuicStreamDrain:");
+    owner_name += std::to_string(session_id);
+    owner_name += ':';
+    owner_name += std::to_string(stream_id);
     return qore_socket_object_exec_stream_drain(this,
         new QoreSocketObjectStreamDrainPollOperation(session, stream_id), timeout_ms,
-        "waitForQuicStreamDrain", xsink);
+        owner_name.c_str(), xsink);
 }
 
 int QoreSocketObject::submitQuicConnectResponse(int64_t session_id, int64_t stream_id,
