@@ -40,6 +40,7 @@
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/SocketSyncPoll.h"
 
 #include <chrono>
 #include <cstdio>
@@ -286,11 +287,19 @@ void HttpClientConnectionManagerBase::closeAndDerefAfterLockDrop(
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnection", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true, xsink);
 }
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsync(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnectionAsync", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/false, xsink);
 }
 
@@ -328,6 +337,12 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         {
             std::unique_lock<std::mutex> cl(create_lock_);
             if (creating_.count(key)) {
+                SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase",
+                    wait_for_ready ? "acquireConnection" : "acquireConnectionAsync", xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+
                 auto deadline = std::chrono::steady_clock::now()
                     + std::chrono::milliseconds(opts_.connect_timeout_ms);
                 bool became_free = create_cond_.wait_until(cl, deadline,
@@ -929,6 +944,11 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "request", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return nullptr;

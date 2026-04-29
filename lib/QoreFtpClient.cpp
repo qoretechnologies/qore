@@ -103,8 +103,14 @@ static int qore_ftp_check_controller_result(const QoreHashNode* result, const ch
 }
 
 static int qore_ftp_wait_controller_queue(QoreObject* queue_obj, const char* what, ExceptionSink* xsink) {
+    const char* label = what ? what : "async I/O completion";
+    SocketSyncPoll::assertNotOnIoThread("FtpClient", label, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
     if (!queue_obj) {
-        xsink->raiseException("FTP-ASYNC-IO-ERROR", "%s did not receive an async I/O result queue", what);
+        xsink->raiseException("FTP-ASYNC-IO-ERROR", "%s did not receive an async I/O result queue", label);
         return -1;
     }
 
@@ -114,7 +120,7 @@ static int qore_ftp_wait_controller_queue(QoreObject* queue_obj, const char* wha
         return -1;
     }
     if (!queue) {
-        xsink->raiseException("FTP-ASYNC-IO-ERROR", "%s received an invalid async I/O result queue", what);
+        xsink->raiseException("FTP-ASYNC-IO-ERROR", "%s received an invalid async I/O result queue", label);
         return -1;
     }
 
@@ -124,15 +130,15 @@ static int qore_ftp_wait_controller_queue(QoreObject* queue_obj, const char* wha
         return -1;
     }
     if (timed_out) {
-        xsink->raiseException("SOCKET-TIMEOUT", "%s timed out waiting for async I/O completion", what);
+        xsink->raiseException("SOCKET-TIMEOUT", "%s timed out waiting for async I/O completion", label);
         return -1;
     }
     if (result->getType() != NT_HASH) {
         xsink->raiseException("FTP-ASYNC-IO-ERROR", "%s expected SocketPollResultInfo from async I/O, got '%s'",
-            what, result->getFullTypeName());
+            label, result->getFullTypeName());
         return -1;
     }
-    return qore_ftp_check_controller_result(result->get<const QoreHashNode>(), what, xsink);
+    return qore_ftp_check_controller_result(result->get<const QoreHashNode>(), label, xsink);
 }
 
 class TmpLocalName {

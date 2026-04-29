@@ -2120,6 +2120,49 @@ static void ut_asyncio_exec_rejects_io_thread(UnitTestCounters& c) {
     ctrl->deref(&xsink);
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
+
+static void ut_asyncio_wait_for_processing_rejects_io_thread(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    bool old = qore_set_async_io_thread_for_test(true);
+    bool processed = ctrl->waitForProcessing(0, &xsink);
+    qore_set_async_io_thread_for_test(old);
+
+    UT_ASSERT(c, !processed, "waitForProcessing returns false from async I/O thread");
+    UT_ASSERT(c, (bool)xsink, "waitForProcessing raises from async I/O thread");
+    if (xsink) {
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "ASYNC-IO-ERROR", "exception is ASYNC-IO-ERROR");
+
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        UT_ASSERT(c, !strcmp(desc->c_str(), "waitForProcessing() cannot be called from the async I/O thread"),
+            "exception describes async I/O thread rejection");
+        xsink.clear();
+    }
+
+    old = qore_set_async_io_thread_for_test(true);
+    processed = ctrl->waitForProcessing("test-key", 0, &xsink);
+    qore_set_async_io_thread_for_test(old);
+
+    UT_ASSERT(c, !processed, "keyed waitForProcessing returns false from async I/O thread");
+    UT_ASSERT(c, (bool)xsink, "keyed waitForProcessing raises from async I/O thread");
+    if (xsink) {
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "ASYNC-IO-ERROR", "keyed exception is ASYNC-IO-ERROR");
+        xsink.clear();
+    }
+
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
 #endif
 
 // ============================================================
@@ -2678,6 +2721,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_stop_clear(c);
 #ifdef DEBUG
     ut_asyncio_exec_rejects_io_thread(c);
+    ut_asyncio_wait_for_processing_rejects_io_thread(c);
 #endif
     ut_socket_async_owner_blocks_sync(c);
     ut_socket_async_owner_unowned_allows_both(c);

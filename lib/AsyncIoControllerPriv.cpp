@@ -1697,7 +1697,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             target = &getThreadForKey(thread_key);
             target->cmdq.push(std::move(cmd));
             socket_async_io_guard.release();
-            ++target->submit_seq;
             // Bump submit_seq immediately after push, BEFORE notify().  Queue
             // mutation and the I/O thread's empty checks are synchronized by m,
             // so a command visible to the I/O thread has a visible sequence bump.
@@ -1963,6 +1962,7 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
                         cmd.completion = remote_completion;
                         tp->cmdq.push(std::move(cmd));
                         ++submit_seq;
+                        ++tp->submit_seq;
                     }
                 }
             }
@@ -1999,6 +1999,7 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
                     cmd.sock_hash = sock_hash;
                     tp->cmdq.push(std::move(cmd));
                     ++submit_seq;
+                    ++tp->submit_seq;
                     live_targets.push_back(tp.get());
                 }
             }
@@ -2029,6 +2030,7 @@ int AsyncIoControllerPriv::cancelBySocketHash(const std::string& sock_hash,
                     cmd.completion = completion;
                     tp->cmdq.push(std::move(cmd));
                     ++submit_seq;
+                    ++tp->submit_seq;
                 }
             }
         }
@@ -2117,6 +2119,7 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
             cmd.close_sock = sock;
             target->cmdq.push(std::move(cmd));
             ++submit_seq;
+            ++target->submit_seq;
         }
         target->notifier->notify();
         return *xsink ? -1 : 0;
@@ -2151,6 +2154,7 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
         cmd.completion = completion;
         target->cmdq.push(std::move(cmd));
         ++submit_seq;
+        ++target->submit_seq;
     }
 
     target->notifier->notify();
@@ -2859,6 +2863,8 @@ void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
             return;
         }
         target.cmdq.push(std::move(cmd));
+        ++submit_seq;
+        ++target.submit_seq;
     }
     ASYNC_IO_TRACE("wakeSocket: hash='%s' thread=%d\n", sock_hash.c_str(), thread_idx);
     target.notifier->notify();
@@ -2945,7 +2951,7 @@ void AsyncIoControllerPriv::stopClear(ExceptionSink* xsink) {
 
 bool AsyncIoControllerPriv::waitStop(ExceptionSink* xsink) {
     AutoLocker al(m);
-    while (ctx().tid) {
+    while (anyThreadRunning()) {
         io_waiting = true;
         io_cond.wait(m);
         io_waiting = false;
@@ -2958,7 +2964,7 @@ bool AsyncIoControllerPriv::waitReady(int timeout_ms, ExceptionSink* xsink) {
     if (ready_flag) {
         return true;
     }
-    while (!ready_flag && ctx().tid && !io_exiting) {
+    while (!ready_flag && anyThreadRunning() && !io_exiting) {
         if (timeout_ms > 0) {
             int rc = io_cond.wait2(m, (int64)timeout_ms);
             if (rc) {
@@ -2972,8 +2978,14 @@ bool AsyncIoControllerPriv::waitReady(int timeout_ms, ExceptionSink* xsink) {
 }
 
 bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread()) {
+        xsink->raiseException("ASYNC-IO-ERROR",
+            "waitForProcessing() cannot be called from the async I/O thread");
+        return false;
+    }
+
     AutoLocker al(m);
-    if (!ctx().tid) {
+    if (!anyThreadRunning()) {
         return false;
     }
     // Snapshot per-thread submit counters under m so each target reflects all
@@ -3001,7 +3013,7 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
     }
     if (timeout_ms > 0) {
         int64 deadline_us = get_epoch_us() + (int64)timeout_ms * 1000;
-        while (!allDone() && ctx().tid) {
+        while (!allDone() && anyThreadRunning()) {
             int64 remaining_us = deadline_us - get_epoch_us();
             if (remaining_us <= 0) {
                 return false;
@@ -3015,13 +3027,19 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
         return allDone();
     }
     // No timeout - wait indefinitely
-    while (!allDone() && ctx().tid) {
+    while (!allDone() && anyThreadRunning()) {
         processed_cond.wait(m);
     }
     return allDone();
 }
 
 bool AsyncIoControllerPriv::waitForProcessing(const std::string& key, int timeout_ms, ExceptionSink* xsink) {
+    if (qore_on_async_io_thread()) {
+        xsink->raiseException("ASYNC-IO-ERROR",
+            "waitForProcessing() cannot be called from the async I/O thread");
+        return false;
+    }
+
     IoThreadContext& target_ctx = getThreadForKey(key);
     AutoLocker al(m);
     if (!target_ctx.tid) {
@@ -3087,7 +3105,7 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     {
         AutoLocker al(m);
-        rv->setKeyValue("running", ctx().tid != 0 && !io_exiting, xsink);
+        rv->setKeyValue("running", anyThreadRunning() && !io_exiting, xsink);
         rv->setKeyValue("autostop", autostop_flag, xsink);
         rv->setKeyValue("shutting_down", shutting_down, xsink);
         rv->setKeyValue("tid", (int64)ctx().tid, xsink);
@@ -3099,8 +3117,12 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
     if (on_async_io_thread) {
         // I/O thread — access cache directly
         ReferenceHolder<QoreListNode> keys(new QoreListNode(stringTypeInfo), xsink);
-        for (auto& it : ctx().cache) {
-            keys->push(new QoreStringNode(it.first), xsink);
+        if (current_io_thread_idx >= 0
+                && static_cast<size_t>(current_io_thread_idx) < io_threads.size()) {
+            IoThreadContext& t = *io_threads[current_io_thread_idx];
+            for (auto& it : t.cache) {
+                keys->push(new QoreStringNode(it.first), xsink);
+            }
         }
         rv->setKeyValue("cache_keys", keys.release(), xsink);
     } else {
@@ -3113,15 +3135,26 @@ QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) {
         {
             AutoLocker al(m);
             if (anyThreadRunning() && !io_exiting) {
-                completion = new AsyncOpCompletion((int)io_threads.size());
+                int live_count = 0;
                 for (auto& tp : io_threads) {
+                    if (tp->tid) {
+                        ++live_count;
+                    }
+                }
+                completion = live_count ? new AsyncOpCompletion(live_count) : nullptr;
+                for (auto& tp : io_threads) {
+                    if (!tp->tid) {
+                        continue;
+                    }
                     Command cmd;
                     cmd.cmd = IoCommand::GetInfo;
                     completion->ROreference();  // one ref per cmd
                     cmd.completion = completion;
                     tp->cmdq.push(std::move(cmd));
+                    ++submit_seq;
+                    ++tp->submit_seq;
                 }
-                do_signal = true;
+                do_signal = completion;
             }
             // If I/O not running, skip cache keys (empty)
         }
@@ -3226,7 +3259,10 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         tinfo.udata = udata.refSelf();
         timer_info_map[id] = tinfo;
 
-        ctx().cmdq.push(cmd);
+        IoThreadContext& target = ctx();
+        target.cmdq.push(cmd);
+        ++submit_seq;
+        ++target.submit_seq;
         do_signal = true;
     }
 
@@ -3262,7 +3298,10 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
             cmd.timer_id = id;
             // (completion is nullptr by default — AddTimer/CancelTimer have no waiter)
             cmd.timer_deadline_us = 0;
-            ctx().cmdq.push(cmd);
+            IoThreadContext& target = ctx();
+            target.cmdq.push(cmd);
+            ++submit_seq;
+            ++target.submit_seq;
             do_signal = true;
         }
     }

@@ -33,6 +33,7 @@
 #include <qore/HttpClientConnection.h>
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/AsyncCompletionAction.h>
+#include "qore/intern/SocketSyncPoll.h"
 
 #include <cassert>
 #include <unordered_map>
@@ -150,6 +151,11 @@ void HttpClientConnectionBase::closeConnection(ExceptionSink* xsink) {
 }
 
 bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionBase", "waitForReadyOrError", xsink);
+    if (*xsink) {
+        return false;
+    }
+
     // Delegate to the AbstractHttpPollConnectionPriv condition-variable wait.
     bool ready = AbstractHttpPollConnectionPriv::waitForReady(timeout_ms);
 

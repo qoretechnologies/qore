@@ -417,6 +417,9 @@ static bool AsyncIoController::waitReady(*timeout to) {
 //! Waits until the global singleton has processed all currently submitted operations
 /** @param to timeout for waiting; use 0 to wait indefinitely
     @return @ref True "True" if all submitted operations have been processed
+
+    @throw ASYNC-IO-ERROR if called from an async I/O controller I/O thread
+
     @since %Qore 2.3
 */
 static bool AsyncIoController::waitForProcessing(*timeout to) {

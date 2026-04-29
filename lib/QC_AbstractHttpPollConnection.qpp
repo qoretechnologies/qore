@@ -34,6 +34,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
 #include "qore/intern/QoreEventNotifier.h"
+#include "qore/intern/SocketSyncPoll.h"
 
 // Forward declaration for EventNotifier QPP type references
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -158,6 +159,10 @@ nothing AbstractHttpPollConnection::onConnectionReady() {
     and getConnectionState() to determine the reason for a False return.
 */
 bool AbstractHttpPollConnection::waitForReady(timeout timeout_ms = 30s) {
+    SocketSyncPoll::assertNotOnIoThread("AbstractHttpPollConnection", "waitForReady", xsink);
+    if (*xsink) {
+        return false;
+    }
     return priv->waitForReady((int64_t)timeout_ms);
 }
 

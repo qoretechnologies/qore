@@ -39,6 +39,7 @@
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreIoUring.h"
 #include "qore/intern/QuicCommon.h"
+#include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/qore_socket_private.h"
 
 #include <algorithm>
@@ -193,6 +194,11 @@ private:
 static QoreHashNode* http2_exec_poll_operation(qore_socket_private* sock, QoreObject* sock_obj,
         Http2SocketControllerPollable* pollable, QoreObject* op_obj, int timeout_ms, const char* owner_name,
         ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
+    SocketSyncPoll::assertNotOnIoThread("Http2Session", owner_name, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
     if (!ctl_obj) {
         return nullptr;

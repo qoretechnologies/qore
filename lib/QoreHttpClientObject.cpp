@@ -3633,6 +3633,11 @@ int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNod
 }
 
 BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHttp2StreamData", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     QoreChannel* ch = nullptr;
     {
         SafeLocker sl(priv->m);
@@ -3764,6 +3769,11 @@ bool QoreHttpClientObject::isHttp3StreamClosed(int64_t stream_id) const {
 }
 
 bool QoreHttpClientObject::isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "isHttp2DataAvailable", xsink);
+    if (*xsink) {
+        return false;
+    }
+
     QoreChannel* ch = nullptr;
     bool h2_active = false;
     {
@@ -3827,6 +3837,11 @@ int QoreHttpClientObject::sendHttp3StreamData(int64_t stream_id, const BinaryNod
 }
 
 BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHttp3StreamData", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     QoreChannel* ch = nullptr;
     {
         SafeLocker sl(priv->m);
@@ -6945,6 +6960,11 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
 }
 
 QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHTTPChunk", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (!http_priv->streaming_recv_channel) {
         // No channel — not in conn_mgr streaming mode
         return nullptr;
@@ -7012,6 +7032,11 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
 
 QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringNode* content_encoding,
         int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readServerSentEvent", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (!http_priv->streaming_recv_channel) {
         return nullptr;
     }
@@ -7063,6 +7088,11 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
 }
 
 QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHTTPChunkedBody", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (!http_priv->streaming_recv_channel) {
         return nullptr;
     }
@@ -7097,6 +7127,11 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
 }
 
 QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHTTPChunkedBodyBinary", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (!http_priv->streaming_recv_channel) {
         return nullptr;
     }
@@ -7143,6 +7178,11 @@ bool QoreHttpClientObject::hasStreamingChannel() const {
 }
 
 bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink) const {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "isDataAvailable", xsink);
+    if (*xsink) {
+        return false;
+    }
+
     if (http_priv->streaming_recv_channel) {
         // Consider buffered SSE text as immediately-pending — matches
         // readServerSentEventConnMgr which drains this buffer first.

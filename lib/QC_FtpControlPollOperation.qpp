@@ -36,6 +36,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/SocketSyncPoll.h"
 
 /** @cond INTERNAL */
 
@@ -598,6 +599,11 @@ QoreObject* FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink
 QoreHashNode* FtpControlPollOperationPriv::execOnController(ExceptionSink* xsink, const char* owner,
         int timeout_ms, bool replace) {
     assert(self);
+
+    SocketSyncPoll::assertNotOnIoThread("FtpControlPollOperation", owner ? owner : "execOnController", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
 
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
     if (*xsink || !*ctl_obj) {
