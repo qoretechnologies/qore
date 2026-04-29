@@ -1845,6 +1845,7 @@ ws.setEventQueue();
         if (!http_opts.http_version) {
             http_opts.http_version = "auto";
         }
+        normalizeHttp3ModeOption();
         # remove the "token" option and use it if the Authorization header is not set
         if ((*string token = remove http_opts.token) && !http_opts.headers.Authorization) {
             http_opts.headers.Authorization = sprintf("%s %s", http_opts.token_type ?? "Bearer", token);
@@ -2761,6 +2762,58 @@ ws.setEventQueue();
         return rh;
     }
 
+    #! Normalizes the http3_mode constructor option to match HTTPClient semantics
+    private normalizeHttp3ModeOption() {
+        if (!exists http_opts.http3_mode) {
+            http_opts.http3_mode = "auto";
+            return;
+        }
+
+        auto mode = http_opts.http3_mode;
+        if (mode.typeCode() == NT_STRING) {
+            switch (tolower(mode)) {
+                case "disabled":
+                case "0":
+                    http_opts.http3_mode = "disabled";
+                    return;
+                case "auto":
+                case "1":
+                    http_opts.http3_mode = "auto";
+                    return;
+                case "required":
+                case "2":
+                    http_opts.http3_mode = "required";
+                    return;
+            }
+            raiseError("option hash to WebSocketClient::constructor() has invalid 'http3_mode' value %y; "
+                "valid values are: 'disabled', 'auto', 'required', 0, 1, or 2", mode);
+        }
+
+        if (mode.typeCode() == NT_INT) {
+            switch (mode.toInt()) {
+                case 0:
+                    http_opts.http3_mode = "disabled";
+                    return;
+                case 1:
+                    http_opts.http3_mode = "auto";
+                    return;
+                case 2:
+                    http_opts.http3_mode = "required";
+                    return;
+            }
+            raiseError("option hash to WebSocketClient::constructor() has invalid 'http3_mode' value %d; "
+                "valid values are: 0 (disabled), 1 (auto), or 2 (required)", mode.toInt());
+        }
+
+        raiseError("option hash to WebSocketClient::constructor() has invalid 'http3_mode' type %y; "
+            "expecting string or int", mode.fullType());
+    }
+
+    #! Returns True if HTTP/3 was explicitly required by the constructor options
+    private bool isHttp3Required() {
+        return http_opts.http3_mode == "required";
+    }
+
     #! Performs the HTTP socket connection to the WebSocket server
     /** All connections use the HttpClientIo path. TLS connections with "auto" or
         explicit H2/H3 race protocols via the HCIO manager; all other connections
@@ -2781,6 +2834,7 @@ ws.setEventQueue();
                 return normalizeConnectResponse(connectViaHcioAuto(hdr, \info, reconnect));
             } catch (hash<ExceptionInfo> ex) {
                 if (http_opts.http_version == "auto"
+                        && !isHttp3Required()
                         && isHcioFallbackError(ex.err)) {
                     logInfo("HttpClientIo WebSocket failed (%s: %s); falling back to HTTP/1.1",
                         ex.err, ex.desc);
@@ -3065,7 +3119,7 @@ ws.setEventQueue();
         string protocol;
         if (force_protocol) {
             protocol = force_protocol;
-        } else if (http_opts.http3_mode == "required") {
+        } else if (isHttp3Required()) {
             protocol = "h3";
         } else {
             switch (http_opts.http_version) {

@@ -166,6 +166,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("WebSocket close handshake over HTTP/3", \testH3WsCloseHandshake());
         addTestCase("WebSocket multiple messages over HTTP/3", \testH3WsMultipleMessages());
         addTestCase("concurrent WebSocket streams over HTTP/3", \testH3WsConcurrentStreams());
+        addTestCase("required HTTP/3 WebSocket does not fall back", \testH3WsRequiredRejectsFallback());
         addTestCase("abnormal disconnect over HTTP/3", \testH3WsAbnormalDisconnect());
         addTestCase("large frame over HTTP/3", \testH3WsLargeFrame());
 
@@ -180,7 +181,7 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Helper to create an HTTP/3 server with WebSocket handler
-    private hash<auto> setupServer(EchoWsHandler ws_handler) {
+    private hash<auto> setupServer(EchoWsHandler ws_handler, bool enable_h3 = True) {
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
@@ -194,7 +195,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "service": 0,
             "cert": new SSLCertificate(CertPem),
             "key": new SSLPrivateKey(KeyPem),
-            "enable_h3": True,
+            "enable_h3": enable_h3,
         });
         server.waitForAsyncIo();
 
@@ -520,6 +521,43 @@ l50Xb2GWQesIt9k5jF5IOw==
                 assertTrue(found, sprintf("%s should contain %y", stream_tag, expected));
             }
         }
+    }
+
+    #! Test that http3_mode=required fails instead of falling back to HTTP/1.1
+    testH3WsRequiredRejectsFallback() {
+        EchoWsHandler ws_handler();
+        hash<auto> setup = setupServer(ws_handler, False);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        code cb = sub (*data msg) {
+        };
+
+        WebSocketClient wsc(cb, {
+            "url": "wss://127.0.0.1:" + setup.port,
+            "logger": mLogger,
+            "http3_mode": "required",
+            "ssl_verify_cert": False,
+            "timeout": 2s,
+            "connect_timeout": 2s,
+        });
+        on_exit {
+            try { wsc.disconnect(); } catch () {}
+            delete wsc;
+        }
+
+        bool got_error = False;
+        try {
+            wsc.connect();
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            assertRegex("^(HTTP3-CONNECT-ERROR|HTTP3-TIMEOUT|HTTPCLIENT-TIMEOUT|HTTPCLIENT-CONNECT-ERROR|QUIC-ERROR|QUIC-HANDSHAKE-TIMEOUT)$",
+                ex.err, "expected HTTP/3 or QUIC error type, got: " + ex.err);
+        }
+        assertTrue(got_error, "required HTTP/3 WebSocket connection must not fall back to HTTP/1.1");
     }
 
     #! Test abnormal disconnect (client drops without close frame)
