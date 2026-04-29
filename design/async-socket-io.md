@@ -647,6 +647,10 @@ Representative bridges:
 
 - `QoreSocket` wraps a bare `QoreSocket` in `QoreSocketControllerPollable` and runs
   `QoreSocketControllerPollOperation` through `qore_socket_exec_poll()`.
+  `QoreSocket::connect*SSL()` uses a single controller connect operation that
+  performs both the TCP/UNIX connect and the client TLS handshake, avoiding a
+  caller-thread gap where another operation could claim the socket between the
+  connect and TLS phases.
   Immediate setup/lifecycle calls such as `bind*()`, `listen()`, `shutdown()`, and
   `close()` use controller-backed execution.  Close first runs a socket-scoped
   controller cancel that waits for any deferred worker `continuePoll()` aborts, then

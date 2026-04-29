@@ -1235,20 +1235,25 @@ private:
 
 class QoreSocketControllerConnectPollOperation : public SocketPollOperationBase {
 public:
-    DLLLOCAL QoreSocketControllerConnectPollOperation(QoreSocket* sock, const char* target)
-            : sock(sock), target(target) {
+    DLLLOCAL QoreSocketControllerConnectPollOperation(QoreSocket* sock, const char* target, bool ssl = false,
+            QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr)
+            : sock(sock), target(target), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
+            pkey(pkey ? pkey->pkRefSelf() : nullptr) {
     }
 
     DLLLOCAL QoreSocketControllerConnectPollOperation(QoreSocket* sock, const char* host, const char* service,
-            int family, int socktype, int protocol)
+            int family, int socktype, int protocol, bool ssl = false, QoreSSLCertificate* cert = nullptr,
+            QoreSSLPrivateKey* pkey = nullptr)
             : sock(sock), target(host), service(service), connect_target(ConnectTarget::Inet), family(family),
-            socktype(socktype), protocol(protocol) {
+            socktype(socktype), protocol(protocol), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
+            pkey(pkey ? pkey->pkRefSelf() : nullptr) {
     }
 
     DLLLOCAL QoreSocketControllerConnectPollOperation(QoreSocket* sock, const char* path, int socktype,
-            int protocol)
+            int protocol, bool ssl = false, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr)
             : sock(sock), target(path), connect_target(ConnectTarget::Unix), socktype(socktype),
-            protocol(protocol) {
+            protocol(protocol), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
+            pkey(pkey ? pkey->pkRefSelf() : nullptr) {
     }
 
     DLLLOCAL virtual bool goalReached() const override {
@@ -1265,40 +1270,67 @@ public:
             return nullptr;
         }
 
-        if (!poll_state) {
-            poll_state.reset(startConnect(xsink));
-            if (*xsink || !poll_state) {
+        while (true) {
+            if (!poll_state) {
+                poll_state.reset(phase == Phase::Connect ? startConnect(xsink) : startSslConnect(xsink));
+                if (*xsink) {
+                    return nullptr;
+                }
+                if (!poll_state) {
+                    if (phase == Phase::Connect && ssl) {
+                        phase = Phase::Ssl;
+                        continue;
+                    }
+                    done = true;
+                    return nullptr;
+                }
+            }
+
+            int rc = poll_state->continuePoll(xsink);
+            if (*xsink || rc < 0) {
+                poll_state.reset();
                 return nullptr;
             }
-        }
-
-        int rc = poll_state->continuePoll(xsink);
-        if (*xsink || rc <= 0) {
-            poll_state.reset();
-            if (!*xsink) {
+            if (!rc) {
+                poll_state.reset();
+                if (phase == Phase::Connect && ssl) {
+                    phase = Phase::Ssl;
+                    continue;
+                }
                 done = true;
+                return nullptr;
             }
-            return nullptr;
-        }
 
-        auto* he_state = dynamic_cast<SocketConnectInetHappyEyeballsPollState*>(poll_state.get());
-        if (he_state && he_state->isRacing() && he_state->getState() == HEBS_RACING) {
-            std::vector<std::pair<int, int>> extra_fds;
-            he_state->getExtraFds(extra_fds);
-            QoreHashNode* rv = getSocketPollInfoHash(xsink, rc, extra_fds);
-            if (rv) {
-                rv->setKeyValue("poll_timeout_ms", HAPPY_EYEBALLS_DELAY_MS, xsink);
+            if (phase == Phase::Connect) {
+                auto* he_state = dynamic_cast<SocketConnectInetHappyEyeballsPollState*>(poll_state.get());
+                if (he_state && he_state->isRacing() && he_state->getState() == HEBS_RACING) {
+                    std::vector<std::pair<int, int>> extra_fds;
+                    he_state->getExtraFds(extra_fds);
+                    QoreHashNode* rv = getSocketPollInfoHash(xsink, rc, extra_fds);
+                    if (rv) {
+                        rv->setKeyValue("poll_timeout_ms", HAPPY_EYEBALLS_DELAY_MS, xsink);
+                    }
+                    return rv;
+                }
             }
-            return rv;
+
+            return getSocketPollInfoHash(xsink, rc);
         }
-        return getSocketPollInfoHash(xsink, rc);
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "connected" : "connecting";
+        if (done) {
+            return ssl ? "ssl-connected" : "connected";
+        }
+        return phase == Phase::Ssl ? "connecting-ssl" : "connecting";
     }
 
 private:
+    enum class Phase {
+        Connect,
+        Ssl,
+    };
+
     enum class ConnectTarget {
         Auto,
         Inet,
@@ -1319,6 +1351,10 @@ private:
         return nullptr;
     }
 
+    DLLLOCAL AbstractPollState* startSslConnect(ExceptionSink* xsink) {
+        return sock->startSslConnect(xsink, *cert, *pkey);
+    }
+
     QoreSocket* sock;
     std::unique_ptr<AbstractPollState> poll_state;
     std::string target;
@@ -1327,6 +1363,10 @@ private:
     int family = Q_AF_UNSPEC;
     int socktype = Q_SOCK_STREAM;
     int protocol = 0;
+    Phase phase = Phase::Connect;
+    bool ssl = false;
+    SimpleRefHolder<QoreSSLCertificate> cert;
+    SimpleRefHolder<QoreSSLPrivateKey> pkey;
     bool done = false;
 };
 
@@ -7524,28 +7564,10 @@ int QoreSocket::connect(const char* name, ExceptionSink* xsink) {
 // * QoreSocket::connectSSL("filename");
 int QoreSocket::connectSSL(ExceptionSink* xsink, const char* name, int timeout_ms, QoreSSLCertificate* cert,
         QoreSSLPrivateKey* pkey) {
-    const char* p;
-    int rc;
-
-    if ((p = strchr(name, ':'))) {
-        QoreString host(name, p - name);
-        QoreString service(p + 1);
-        // if the address is an ipv6 address like: [<addr>], then connect as ipv6
-        if (host.strlen() > 2 && host[0] == '[' && host[host.strlen() - 1] == ']') {
-            host.terminate(host.strlen() - 1);
-            //printd(5, "QoreSocket::connect(%s, %s) [ipv6]\n", host.c_str() + 1, service.c_str());
-            rc = connectINET2SSL(xsink, host.c_str() + 1, service.c_str(), AF_INET6, SOCK_STREAM, 0, timeout_ms,
-                cert, pkey);
-        } else {
-            rc = connectINET2SSL(xsink, host.c_str(), service.c_str(), AF_UNSPEC, SOCK_STREAM, 0, timeout_ms, cert,
-                pkey);
-        }
-    } else {
-        // else assume it's a file name for a UNIX domain socket
-        rc = connectUNIXSSL(xsink, name, SOCK_STREAM, 0, cert, pkey);
-    }
-
-    return rc;
+    ValueHolder rv(qore_socket_exec_poll(this,
+        new QoreSocketControllerConnectPollOperation(this, name, true, cert, pkey),
+        timeout_ms, "connectSSL", "ssl-connected", xsink), xsink);
+    return *xsink ? -1 : 0;
 }
 
 int QoreSocket::connectSSL(ExceptionSink* xsink, const char* name, QoreSSLCertificate* cert,
@@ -7555,11 +7577,14 @@ int QoreSocket::connectSSL(ExceptionSink* xsink, const char* name, QoreSSLCertif
 
 int QoreSocket::connectINETSSL(ExceptionSink* xsink, const char* host, int prt, int timeout_ms,
         QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
-    int rc = connectINET(host, prt, timeout_ms, xsink);
-    if (rc) {
-        return rc;
-    }
-    return upgradeClientToSSL(xsink, timeout_ms, cert, pkey);
+    QoreString service;
+    service.sprintf("%d", prt);
+
+    ValueHolder rv(qore_socket_exec_poll(this,
+        new QoreSocketControllerConnectPollOperation(this, host, service.c_str(), AF_UNSPEC, SOCK_STREAM, 0,
+            true, cert, pkey),
+        timeout_ms, "connectINETSSL", "ssl-connected", xsink), xsink);
+    return *xsink ? -1 : 0;
 }
 
 int QoreSocket::connectINETSSL(ExceptionSink* xsink, const char* host, int prt, QoreSSLCertificate* cert,
@@ -7569,20 +7594,19 @@ int QoreSocket::connectINETSSL(ExceptionSink* xsink, const char* host, int prt, 
 
 int QoreSocket::connectINET2SSL(ExceptionSink* xsink, const char* name, const char* service, int family,
         int sock_type, int protocol, int timeout_ms, QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
-    int rc = connectINET2(name, service, family, sock_type, protocol, timeout_ms, xsink);
-    if (rc) {
-        return rc;
-    }
-    return upgradeClientToSSL(xsink, timeout_ms, cert, pkey);
+    ValueHolder rv(qore_socket_exec_poll(this,
+        new QoreSocketControllerConnectPollOperation(this, name, service, family, sock_type, protocol,
+            true, cert, pkey),
+        timeout_ms, "connectINET2SSL", "ssl-connected", xsink), xsink);
+    return *xsink ? -1 : 0;
 }
 
 int QoreSocket::connectUNIXSSL(ExceptionSink* xsink, const char* p, int sock_type, int protocol,
         QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
-    int rc = connectUNIX(p, sock_type, protocol, xsink);
-    if (rc) {
-        return rc;
-    }
-    return upgradeClientToSSL(xsink, -1, cert, pkey);
+    ValueHolder rv(qore_socket_exec_poll(this,
+        new QoreSocketControllerConnectPollOperation(this, p, sock_type, protocol, true, cert, pkey),
+        -1, "connectUNIXSSL", "ssl-connected", xsink), xsink);
+    return *xsink ? -1 : 0;
 }
 
 int QoreSocket::sendi1(char i) {
