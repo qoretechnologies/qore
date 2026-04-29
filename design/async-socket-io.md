@@ -632,10 +632,10 @@ that relies on AUTO_RETRY for I/O retry on a non-blocking socket is incorrect.
 
 #### Invariant: sync Socket APIs must never run on the async I/O controller thread
 
-Sync Socket APIs block — either directly on a syscall or indirectly via
-`isDataAvailable()`/`isWriteFinished()`/`asyncIoWait()`.  Running any such call on the
-async I/O controller's own I/O thread would deadlock the controller: the wait primitives
-block the very thread that is supposed to deliver the readiness events.
+Sync Socket APIs block the caller until the controller-backed operation completes.
+Running any such call on the async I/O controller's own I/O thread would deadlock
+the controller: the wait primitives block the very thread that is supposed to
+deliver the readiness events.
 
 The sync Socket entry points now delegate socket I/O to the async I/O controller and then
 block the caller on controller completion.  The central primitive is
@@ -662,8 +662,11 @@ Representative bridges:
   for controller processing/cancellation instead of running a raw caller-thread `poll()`.
 - Object-backed multi-step sync helpers that submit several controller operations
   in sequence (`readHTTPChunkedBody*`, SSE reads, HTTP chunked send
-  callbacks/input streams, `sendFromInputStream`, `recvToOutputStream`, and fd
-  forwarding) hold an async ownership guard for the whole logical operation.
+  callbacks/input streams, `sendFromInputStream`, and `recvToOutputStream`) hold
+  an async ownership guard for the whole logical operation.  Descriptor
+  forwarding is a single controller poll operation that wraps the descriptor as a
+  `FileInputStream` / `FileOutputStream`, so it uses the operation's normal
+  directional non-blocking ownership rather than an outer sequence guard.
   The guard also reserves the active socket direction (`NB_SEND`, `NB_RECV`, or
   `NB_ALL`) for the caller thread while allowing the helper's nested controller
   submissions to claim transient non-blocking ownership.  Individual syscalls
