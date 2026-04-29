@@ -49,6 +49,13 @@ public bool sub is_valid_qore_file(string path) {
         # return False if we can't stat() the file
         return False;
     }
+
+    # AOT build artifacts are binary metadata/code, not parseable Qore source.
+    # Avoid probing them as text when qlib contains generated .qmod symlinks.
+    if (path =~ /\.(qmod|qo|qoa)(\.d)?$/i) {
+        return False;
+    }
+
     *string ext = (path =~ x/\.([a-z0-9]+)$/i)[0];
     if (ext && QORE_EXTENSIONS{ext}) {
         return True;

@@ -37,6 +37,7 @@ class FilesTest inherits QUnit::Test {
         addTestCase("is_valid_qore_file by magic", \testIsValidByMagic());
         addTestCase("is_valid_qore_file by alt shebang", \testIsValidByAltShebang());
         addTestCase("is_valid_qore_file invalid", \testIsValidInvalid());
+        addTestCase("is_valid_qore_file ignores AOT artifacts", \testIsValidAotArtifacts());
         addTestCase("is_valid_qore_file no ext no magic", \testIsValidNoExtNoMagic());
         addTestCase("is_valid_qore_file nonexistent", \testIsValidNonexistent());
         addTestCase("find_std_modules", \testFindStdModules());
@@ -78,6 +79,15 @@ class FilesTest inherits QUnit::Test {
     testIsValidInvalid() {
         assertEq(False, QLS::Files::is_valid_qore_file(testDataDir() + "invalid_qore_file.txt"),
             "invalid by .txt extension");
+    }
+
+    testIsValidAotArtifacts() {
+        assertEq(False, QLS::Files::is_valid_qore_file(testDataDir() + "ignored_module.qmod"),
+            "AOT module artifacts are not source files");
+        assertEq(False, QLS::Files::is_valid_qore_file(testDataDir() + "ignored_module.qmod.d"),
+            "AOT dependency files are not source files");
+        assertEq(False, QLS::Files::is_valid_qore_file(testDataDir() + "ignored_object.qo"),
+            "AOT object artifacts are not source files");
     }
 
     testIsValidNoExtNoMagic() {

@@ -593,8 +593,8 @@ enum class QoreIROpcode : uint16_t {
     //! cleanup vector) preserves OUTER-scope temps such as a `foreach` list
     //! expression's iterator temp, which must outlive the loop body.
     //!
-    //! No operands, no result.  Both opcodes are no-ops in LLVM mode (LLVM
-    //! releases temps via generated cleanup pads, not a runtime vector).
+    //! No operands, no result.  LLVM mode drains generated cleanup slots
+    //! created since the nearest mark.
     DiscardTemps        = 358,  //!< drain cleanup back to nearest PushTempMark
     PushTempMark        = 359,  //!< push UINT32_MAX sentinel onto cleanup
 
@@ -645,7 +645,13 @@ enum class QoreIROpcode : uint16_t {
     ContextRef          = 366,
     ContextRow          = 367,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (368, 369, ...)
+    //! Create an independently owned reference to an arbitrary Qore value.
+    //! Used when a value must survive cleanup code emitted before its eventual
+    //! consumer, such as return expressions evaluated before inlined on_exit
+    //! handlers.
+    RefSelf             = 368,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (369, 370, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -653,8 +659,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ContextRow);
-static_assert(QORE_IR_MAX_OPCODE == 367, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::RefSelf);
+static_assert(QORE_IR_MAX_OPCODE == 368, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)

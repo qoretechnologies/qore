@@ -976,6 +976,14 @@ QoreIRInstruction* QoreIRBuilder::createCatchCleanup(const QoreProgramLocation* 
     return inst;
 }
 
+QoreIRInstruction* QoreIRBuilder::createRefSelf(QoreIRValue value, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::RefSelf);
+    inst->loc = loc;
+    inst->operands.push_back(value);
+    inst->result = func->createValue();
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createDiscardTemps(const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::DiscardTemps);
     inst->loc = loc;

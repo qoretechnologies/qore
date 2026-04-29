@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 367,
+static_assert(QORE_IR_MAX_OPCODE == 368,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -1411,6 +1411,17 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
     //     decreff'd by decref-before-store in StoreLocal for IR-only locals)
     for (llvm::AllocaInst* alloca : fast_entry_param_allocas) {
         llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                alloca);
+        builder->CreateCall(helper, {val, xsink_arg});
+    }
+
+    // Boxed IR-only locals not represented on the runtime stack own their
+    // current alloca value directly.
+    for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                alloca);
         builder->CreateCall(helper, {val, xsink_arg});
     }
 }
@@ -1438,6 +1449,48 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
         builder->CreateCall(helper, {val, xsink_arg});
         builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
             alloca_ptr);
+    }
+}
+
+void QoreIRToLLVM::emitDiscardTemps(llvm::Module& module) {
+    TempCleanupMark mark;
+    if (!temp_cleanup_marks.empty()) {
+        mark = temp_cleanup_marks.back();
+        temp_cleanup_marks.pop_back();
+    }
+
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+
+    for (size_t i = invoke_result_allocas.size(); i > mark.invoke_alloca_count; --i) {
+        llvm::Value* alloca_ptr = invoke_result_allocas[i - 1];
+        if (persistent_cleanup_allocas.count(alloca_ptr)) {
+            continue;
+        }
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+            alloca_ptr);
+        builder->CreateCall(helper, {val, xsink_arg});
+    }
+
+    if (pending_ssa_cleanup.size() > mark.pending_ssa_count) {
+        llvm::BasicBlock* cur = builder->GetInsertBlock();
+        for (size_t i = pending_ssa_cleanup.size(); i > mark.pending_ssa_count; --i) {
+            const SsaCleanupEntry& e = pending_ssa_cleanup[i - 1];
+            if (e.def_bb == cur || dominates(e.def_bb, cur)) {
+                builder->CreateCall(helper, {e.value, xsink_arg});
+            } else {
+                llvm::AllocaInst* alloca = promoteSsaEntryToAlloca(e.result_id,
+                    module, builder->GetInsertBlock()->getParent());
+                if (alloca) {
+                    llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                        alloca);
+                    builder->CreateCall(helper, {val, xsink_arg});
+                }
+            }
+        }
+        pending_ssa_cleanup.resize(mark.pending_ssa_count);
     }
 }
 
@@ -1489,6 +1542,11 @@ void QoreIRToLLVM::registerInvokeCleanupAlloca(llvm::Value* alloca_ptr) {
     llvm::Value* gep = reg_builder.CreateGEP(ptr_type, invoke_cleanup_array, idx,
             "cleanup_slot_ptr");
     reg_builder.CreateStore(alloca_ptr, gep);
+}
+
+void QoreIRToLLVM::registerPersistentCleanupAlloca(llvm::Value* alloca_ptr) {
+    persistent_cleanup_allocas.insert(alloca_ptr);
+    registerInvokeCleanupAlloca(alloca_ptr);
 }
 
 void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module) {
@@ -1951,7 +2009,7 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
     // No entry-block alloca is allocated — SROA/mem2reg can now collapse
     // the flag-alloca forest that used to dominate HttpServer's compile time.
     if (canUseSsaCleanup(builder->GetInsertBlock())) {
-        pending_ssa_cleanup.push_back({result, builder->GetInsertBlock()});
+        pending_ssa_cleanup.push_back({result, builder->GetInsertBlock(), result_id});
         // Sentinel entry in invoke_alloca_map: some callers look up the
         // result's alloca to clear it (DotEval base release, StoreLocal
         // tracking).  Use nullptr to signal "SSA-direct, no alloca".
@@ -2156,7 +2214,7 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
         alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                 tracker);
         local_reload_trackers[key] = tracker;
-        registerInvokeCleanupAlloca(tracker);
+        registerPersistentCleanupAlloca(tracker);
         tracker_it = local_reload_trackers.find(key);
     }
 
@@ -2169,7 +2227,7 @@ void QoreIRToLLVM::ensureLocalCacheFresh(const void* key, llvm::Module& module,
         alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
                 deferred);
         local_reload_deferred[key] = deferred;
-        registerInvokeCleanupAlloca(deferred);
+        registerPersistentCleanupAlloca(deferred);
         deferred_it = local_reload_deferred.find(key);
     }
 
@@ -2219,7 +2277,7 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
         alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker);
         local_reload_trackers[key] = tracker;
         // Register for cleanup at function exit
-        registerInvokeCleanupAlloca(tracker);
+        registerPersistentCleanupAlloca(tracker);
         tracker_it = local_reload_trackers.find(key);
     }
 
@@ -2240,7 +2298,7 @@ void QoreIRToLLVM::reloadLocalFromRuntime(const void* key, llvm::Module& module,
         alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred);
         local_reload_deferred[key] = deferred;
         // Register for cleanup at function exit
-        registerInvokeCleanupAlloca(deferred);
+        registerPersistentCleanupAlloca(deferred);
         deferred_it = local_reload_deferred.find(key);
     }
 
@@ -2293,7 +2351,7 @@ void QoreIRToLLVM::retainLocalCacheValue(const void* key, llvm::Value* value,
                 nullptr, "reload_tracker");
         alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker);
         local_reload_trackers[key] = tracker;
-        registerInvokeCleanupAlloca(tracker);
+        registerPersistentCleanupAlloca(tracker);
         tracker_it = local_reload_trackers.find(key);
     }
 
@@ -2305,7 +2363,7 @@ void QoreIRToLLVM::retainLocalCacheValue(const void* key, llvm::Value* value,
                 nullptr, "reload_deferred");
         alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred);
         local_reload_deferred[key] = deferred;
-        registerInvokeCleanupAlloca(deferred);
+        registerPersistentCleanupAlloca(deferred);
         deferred_it = local_reload_deferred.find(key);
     }
 
@@ -2352,7 +2410,7 @@ void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module
                 nullptr, "reload_tracker");
         alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), tracker);
         local_reload_trackers[key] = tracker;
-        registerInvokeCleanupAlloca(tracker);
+        registerPersistentCleanupAlloca(tracker);
         tracker_it = local_reload_trackers.find(key);
     }
 
@@ -2372,7 +2430,7 @@ void QoreIRToLLVM::clearLocalReloadTracker(const void* key, llvm::Module& module
 }
 
 void QoreIRToLLVM::clearLocalCachedValue(const void* key, llvm::Module& module,
-        llvm::Function* llvm_func) {
+        llvm::Function* llvm_func, LocalCacheClearMode mode) {
     const LocalVar* var_ptr = reinterpret_cast<const LocalVar*>(key);
     if (var_ptr && var_ptr->isSelf()) {
         return;
@@ -2381,12 +2439,14 @@ void QoreIRToLLVM::clearLocalCachedValue(const void* key, llvm::Module& module,
     auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 
-    auto fast_it = fast_entry_param_allocas_by_local.find(key);
-    if (fast_it != fast_entry_param_allocas_by_local.end()) {
-        llvm::Value* old_val = builder->CreateLoad(i64_type, fast_it->second);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                fast_it->second);
-        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+    if (mode == LocalCacheClearMode::IncludeFastEntryOwner) {
+        auto fast_it = fast_entry_param_allocas_by_local.find(key);
+        if (fast_it != fast_entry_param_allocas_by_local.end()) {
+            llvm::Value* old_val = builder->CreateLoad(i64_type, fast_it->second);
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                    fast_it->second);
+            builder->CreateCall(decref_fn, {old_val, xsink_arg});
+        }
     }
 
     auto cleanup_it = preinstantiated_entry_cleanup_by_local.find(key);
@@ -2449,7 +2509,8 @@ llvm::AllocaInst* QoreIRToLLVM::emitPreDecrefAndClearTracker(uint32_t result_id,
     // Clear the reload tracker for the lvalue target local
     const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
     if (local_key) {
-        clearLocalCachedValue(local_key, module, llvm_func);
+        clearLocalCachedValue(local_key, module, llvm_func,
+            LocalCacheClearMode::DuplicateRefsOnly);
         clearLocalReloadTracker(local_key, module, llvm_func);
     }
 
@@ -2804,7 +2865,9 @@ llvm::Value* QoreIRToLLVM::emitMaybeInvoke(llvm::FunctionCallee normal_helper,
             return;
         }
         llvm::StringRef name = fn->getName();
-        if (name == "qore_rt_invoke_expr_aot"
+        if (name == "qore_rt_invoke_expr"
+                || name == "qore_rt_invoke_expr_throwing"
+                || name == "qore_rt_invoke_expr_aot"
                 || name == "qore_rt_invoke_expr_aot_throwing") {
             annotateAotExecutableExprFallback(call, inst);
         }
@@ -3553,7 +3616,9 @@ bool QoreIRToLLVM::checkNoAotExecutableExprFallback(llvm::Function* llvm_func, s
                 continue;
             }
             llvm::StringRef name = callee->getName();
-            if (name != "qore_rt_invoke_expr_aot"
+            if (name != "qore_rt_invoke_expr"
+                    && name != "qore_rt_invoke_expr_throwing"
+                    && name != "qore_rt_invoke_expr_aot"
                     && name != "qore_rt_invoke_expr_aot_throwing") {
                 continue;
             }
@@ -3635,6 +3700,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // incremental idom map.  entry_block_for_idom is set below, once the
     // LLVM function has been created and its entry block exists.
     pending_ssa_cleanup.clear();
+    temp_cleanup_marks.clear();
     immediate_dominator.clear();
     entry_block_for_idom = nullptr;
     last_call_was_invoke_eh = false;
@@ -4004,8 +4070,13 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     preinstantiated_entry_loads.clear();
     preinstantiated_entry_cleanup_allocas.clear();
     preinstantiated_entry_cleanup_by_local.clear();
+    fast_entry_param_allocas.clear();
     fast_entry_param_allocas_by_local.clear();
+    owned_ir_local_allocas.clear();
+    owned_ir_local_alloca_keys.clear();
     invoke_result_allocas.clear();
+    persistent_cleanup_allocas.clear();
+    temp_cleanup_marks.clear();
     invoke_cleanup_array = nullptr;
     invoke_cleanup_array_capacity = estimateInvokeCleanupArrayCapacity(func);
     invoke_cleanup_array_count = 0;
@@ -5822,6 +5893,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
 
+            bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
+
             // Standard (NaN-boxed) local: box the value to NaN-boxed i64.
             // Use inline boxing for int values (safe — not in PHI fixup context).
             llvm::Value* boxed;
@@ -5864,20 +5937,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
                 registerInvokeCleanupAlloca(cleanup);
             }
-            // Fast entry mode: decref old alloca value before overwrite to prevent leaks
-            // when the local is reassigned (e.g., param overwrite, loop body re-execution).
-            // In fast entry mode, the alloca is the sole owner of the value (no runtime stack
-            // copy), so it's safe to decref on overwrite.  In standard entry mode, the runtime
-            // stack also holds a reference, so decref here would cause a double-free — the
-            // runtime stack cleanup handles it instead via qore_rt_assign_local().
-            if (fast_entry_args && ir_only_locals_set && ir_only_locals_set->count(key)) {
-                llvm::Value* old_val = builder->CreateLoad(i64_type, it->second);
-                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-                builder->CreateCall(decref_fn, {old_val, xsink_arg});
-            }
             // Type handling before storing to the local alloca.
-            bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
             bool is_aot_body_local = aot_mode && aot_body_locals.count(key);
             const QoreTypeInfo* local_ti = linst->local ? linst->local->getTypeInfoForLValue() : nullptr;
 
@@ -6013,8 +6073,42 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 boxed = weak_boxed;
             }
 
+            if (is_ir_only) {
+                // IR-only locals do not publish this value to the runtime stack,
+                // so the local cache (or its associated cleanup slot) must own a
+                // reference independent of statement temporaries.
+                llvm::Value* owned_boxed = emitHelperRef(module, boxed);
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+
+                auto preinst_cleanup = preinstantiated_entry_cleanup_by_local.find(key);
+                if (preinst_cleanup != preinstantiated_entry_cleanup_by_local.end()) {
+                    // Pre-instantiated params keep ownership in their cleanup slot;
+                    // the local alloca borrows the same value.
+                    llvm::Value* old_val = builder->CreateLoad(i64_type, preinst_cleanup->second);
+                    builder->CreateStore(owned_boxed, preinst_cleanup->second);
+                    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                } else {
+                    // Fast-entry params and pure IR-only body locals own the value
+                    // directly in the local alloca.  Take the new ref before
+                    // dropping the old one so `x = x` remains safe.
+                    llvm::Value* old_val = builder->CreateLoad(i64_type, it->second);
+                    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+
+                    if (!fast_entry_param_allocas_by_local.count(key)
+                            && owned_ir_local_alloca_keys.insert(key).second) {
+                        if (auto* local_ai = llvm::dyn_cast<llvm::AllocaInst>(it->second)) {
+                            owned_ir_local_allocas.push_back(local_ai);
+                        }
+                    }
+                }
+
+                boxed = owned_boxed;
+            }
+
             if (!is_ir_only) {
-                clearLocalCachedValue(key, module, llvm_func);
+                clearLocalCachedValue(key, module, llvm_func,
+                    LocalCacheClearMode::IncludeFastEntryOwner);
                 clearLocalReloadTracker(key, module, llvm_func);
             }
             builder->CreateStore(boxed, it->second);
@@ -6178,6 +6272,39 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
             auto key = reinterpret_cast<const void*>(linst->local);
+            bool is_ir_only_local = (ir_only_locals_set && ir_only_locals_set->count(key))
+                    || ir_only_body_locals.count(key);
+            auto clear_owned_ir_only_local = [&]() -> bool {
+                if (!is_ir_only_local) {
+                    return false;
+                }
+
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+
+                auto preinst_cleanup = preinstantiated_entry_cleanup_by_local.find(key);
+                if (preinst_cleanup != preinstantiated_entry_cleanup_by_local.end()) {
+                    llvm::Value* old_val = builder->CreateLoad(i64_type, preinst_cleanup->second);
+                    builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                            preinst_cleanup->second);
+                    builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                    return true;
+                }
+
+                if (owned_ir_local_alloca_keys.count(key)
+                        || fast_entry_param_allocas_by_local.count(key)) {
+                    auto alloca_it = local_allocas.find(key);
+                    if (alloca_it != local_allocas.end()) {
+                        llvm::Value* old_val = builder->CreateLoad(i64_type, alloca_it->second);
+                        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                                alloca_it->second);
+                        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                        return true;
+                    }
+                }
+
+                return false;
+            };
 
             // Pre-instantiated or entry-block block-scoped locals: clear the value
             // on the runtime stack to trigger destructors at block scope exit.
@@ -6227,6 +6354,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred_it->second);
                     builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
                 }
+
+                // IR-only locals are not necessarily represented on the runtime
+                // stack.  If their local cache/cleanup slot owns a reference,
+                // drop it at block scope exit instead of waiting for function
+                // exit; otherwise destructors and CoW-sensitive refcounts are
+                // delayed past the source-level lifetime.
+                clear_owned_ir_only_local();
 
                 // Clear the runtime stack/cvstack entry (drops refSelf'd reference).
                 // The cleanup alloca decref above dropped the original reference from
@@ -6351,6 +6485,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i64_type, VAL_NOTHING), deferred_it2->second);
                     builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
                 }
+
+                // Drop IR-only owned local refs at source block exit.  Non-IR-only
+                // locals are handled by the runtime uninstantiate helper below.
+                clear_owned_ir_only_local();
             }
 
             // Call runtime helper to uninstantiate the local variable
@@ -6436,6 +6574,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_incref",
                     llvm::FunctionType::get(void_type, {i64_type}, false));
             builder->CreateCall(helper, {boxed});
+            return true;
+        }
+        case QoreIROpcode::RefSelf: {
+            if (inst->operands.empty()) {
+                error = "RefSelf: missing operand";
+                return false;
+            }
+            auto* val = getVal(inst->operands[0].id, error);
+            if (!val) { return false; }
+            llvm::Value* boxed = boxValue(val, inst->operands[0].id);
+            llvm::Value* retained = emitHelperRef(module, boxed);
+            values[inst->result.id] = retained;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(retained, inst->result.id, llvm_func);
             return true;
         }
         case QoreIROpcode::Decref: {
@@ -8289,7 +8441,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 {
                     const void* local_key = findLvalueRootLocalKey(lv);
                     if (local_key) {
-                        clearLocalCachedValue(local_key, module, llvm_func);
+                        clearLocalCachedValue(local_key, module, llvm_func,
+                            LocalCacheClearMode::DuplicateRefsOnly);
                         clearLocalReloadTracker(local_key, module, llvm_func);
                     }
                 }
@@ -10619,12 +10772,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* hash_boxed = boxValue(hash_v, inst->operands[0].id);
             llvm::Value* val_boxed  = boxValue(val_v,  inst->operands[1].id);
             llvm::Constant* key_c = builder->CreateGlobalString(hks_inst->key_name, "hks_key");
+            const void* container_key = hks_inst->container_lv
+                    ? reinterpret_cast<const void*>(hks_inst->container_lv)
+                    : (hks_inst->container
+                        ? reinterpret_cast<const void*>(hks_inst->container->ref.id)
+                        : nullptr);
+            if (!container_key) {
+                error = "HashKeyStore: missing container local";
+                return false;
+            }
+            clearLocalCachedValue(container_key, module, llvm_func,
+                LocalCacheClearMode::DuplicateRefsOnly);
+            clearLocalReloadTracker(container_key, module, llvm_func);
 
             llvm::Value* call_result;
             if (aot_mode) {
                 // AOT: pass ctx + pre-registered local slot index for COW update
-                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                        reinterpret_cast<const void*>(hks_inst->container->ref.id));
+                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(container_key);
                 llvm::Value* slot_val = llvm::ConstantInt::get(i32_type, slot);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, i64_type, ptr_type, i64_type, ptr_type}, false);
@@ -10636,8 +10800,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         module, llvm_func, inst);
             } else {
                 // JIT: pass LocalVar* directly
-                auto var_int = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(hks_inst->container->ref.id));
+                auto var_int = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(container_key));
                 auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false);
@@ -10659,13 +10822,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // qore_rt_hash_key_store_cow updates the LocalVar, but the hash value
             // in values[] array might be stale if COW created a copy. For single-pass
             // operations like `h{"x"} += 3`, we must update values[] immediately.
-            uint32_t hash_operand_id = inst->operands[0].id;
             // Reload the hash from the runtime after potential COW.
             // reloadLocalFromRuntime updates the alloca cache so subsequent
             // LoadLocal(h) reads the post-COW hash (not a stale cached value).
             // This is critical for both JIT and AOT modes.
-            const void* container_key =
-                reinterpret_cast<const void*>(hks_inst->container->ref.id);
             reloadLocalFromRuntime(container_key, module, llvm_func);
 
             return true;
@@ -10683,11 +10843,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* hash_boxed = boxValue(hash_v, inst->operands[0].id);
             llvm::Value* val_boxed  = boxValue(val_v,  inst->operands[1].id);
             llvm::Value* key_boxed  = boxValue(key_v,  inst->operands[2].id);
+            const void* container_key = hksd_inst->container_lv
+                    ? reinterpret_cast<const void*>(hksd_inst->container_lv)
+                    : (hksd_inst->container
+                        ? reinterpret_cast<const void*>(hksd_inst->container->ref.id)
+                        : nullptr);
+            if (!container_key) {
+                error = "HashKeyStoreDynamic: missing container local";
+                return false;
+            }
+            clearLocalCachedValue(container_key, module, llvm_func,
+                LocalCacheClearMode::DuplicateRefsOnly);
+            clearLocalReloadTracker(container_key, module, llvm_func);
 
             llvm::Value* call_result;
             if (aot_mode) {
-                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                        reinterpret_cast<const void*>(hksd_inst->container->ref.id));
+                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(container_key);
                 llvm::Value* slot_val = llvm::ConstantInt::get(i32_type, slot);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, i64_type, i64_type, i64_type, ptr_type}, false);
@@ -10698,8 +10869,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         {aot_ctx_arg, slot_val, hash_boxed, key_boxed, val_boxed, xsink_arg},
                         module, llvm_func, inst);
             } else {
-                auto var_int = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(hksd_inst->container->ref.id));
+                auto var_int = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(container_key));
                 auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i64_type, i64_type, i64_type, ptr_type}, false);
@@ -10716,8 +10886,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 trackResultForCleanup(call_result, inst->result.id, llvm_func);
             }
             emitExceptionCheck(module, llvm_func, inst);
-            const void* container_key =
-                reinterpret_cast<const void*>(hksd_inst->container->ref.id);
             reloadLocalFromRuntime(container_key, module, llvm_func);
             return true;
         }
@@ -10744,12 +10912,21 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Index is already a native i64
                 index_i64 = idx_v;
             }
+            const void* container_key = lis_inst->container
+                    ? reinterpret_cast<const void*>(lis_inst->container->ref.id)
+                    : nullptr;
+            if (!container_key) {
+                error = "ListIndexStore: missing container local";
+                return false;
+            }
+            clearLocalCachedValue(container_key, module, llvm_func,
+                LocalCacheClearMode::DuplicateRefsOnly);
+            clearLocalReloadTracker(container_key, module, llvm_func);
 
             llvm::Value* call_result;
             if (aot_mode) {
                 // AOT: pass ctx + pre-registered local slot index for COW update
-                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                        reinterpret_cast<const void*>(lis_inst->container->ref.id));
+                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(container_key);
                 llvm::Value* slot_val = llvm::ConstantInt::get(i32_type, slot);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, i64_type, i64_type, i64_type, ptr_type}, false);
@@ -10761,8 +10938,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         module, llvm_func, inst);
             } else {
                 // JIT: pass LocalVar* directly
-                auto var_int = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(lis_inst->container->ref.id));
+                auto var_int = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(container_key));
                 auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
                 auto ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i64_type, i64_type, i64_type, ptr_type}, false);
@@ -10784,8 +10960,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // reloadLocalFromRuntime updates the alloca cache so subsequent
             // LoadLocal(l) reads the post-COW list (not a stale cached value).
             // This is critical for both JIT and AOT modes.
-            const void* container_key =
-                reinterpret_cast<const void*>(lis_inst->container->ref.id);
             reloadLocalFromRuntime(container_key, module, llvm_func);
 
             return true;
@@ -11530,7 +11704,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             {
                 const void* local_key = findLvalueRootLocalKey(lvinst->lvalue);
                 if (local_key) {
-                    clearLocalCachedValue(local_key, module, llvm_func);
+                    clearLocalCachedValue(local_key, module, llvm_func,
+                        LocalCacheClearMode::DuplicateRefsOnly);
                     clearLocalReloadTracker(local_key, module, llvm_func);
                 }
             }
@@ -13773,12 +13948,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
-        // DiscardTemps / PushTempMark are no-ops in LLVM mode.  The IR
-        // interpreter manages a runtime cleanup vector; LLVM mode doesn't use
-        // that vector — temps are released through generated cleanup pads
-        // (allocas with RAII-style destruction), so nothing to do here.
-        case QoreIROpcode::DiscardTemps:
         case QoreIROpcode::PushTempMark: {
+            temp_cleanup_marks.push_back({
+                invoke_result_allocas.size(),
+                pending_ssa_cleanup.size()
+            });
+            return true;
+        }
+        case QoreIROpcode::DiscardTemps: {
+            emitDiscardTemps(module);
             return true;
         }
 
@@ -14314,7 +14492,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             const void* local_key = findLVPathRootLocalKey(path_inst);
             if (local_key) {
-                clearLocalCachedValue(local_key, module, llvm_func);
+                clearLocalCachedValue(local_key, module, llvm_func,
+                    LocalCacheClearMode::DuplicateRefsOnly);
                 clearLocalReloadTracker(local_key, module, llvm_func);
             }
 
@@ -14544,10 +14723,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->CreateCall(decref_fn, {result_val, xsink_arg});
             }
 
-            // The root local was cleared before the runtime lvalue helper so
-            // cached refs don't keep containers shared across mutation.  Refresh
-            // that known root immediately; lazy bulk invalidation can otherwise
-            // leave control-flow tests reading the cleared/stale cache.
+            // Duplicate cached refs for the root local were cleared before the
+            // runtime lvalue helper so they do not make containers look shared
+            // and force unnecessary COW. Refresh that known root immediately;
+            // lazy bulk invalidation can otherwise leave control-flow tests
+            // reading the cleared/stale cache.
             if (local_key && canReloadLocalFromRuntime(local_key, false)) {
                 reloadLocalFromRuntime(local_key, module, llvm_func, false);
             } else {

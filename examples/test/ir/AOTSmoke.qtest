@@ -82,6 +82,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module compile", \testAOTModuleCompile());
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
         addTestCase("AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
+        addTestCase("AOT module IR-only local owns invoke result",
+            \testAOTModuleIrOnlyLocalOwnsInvokeResult());
         addTestCase("AOT module pointer NULL coalescing", \testAOTModulePointerNullCoalescing());
         addTestCase("AOT module hashdecl member compound lvalue",
             \testAOTModuleHashdeclMemberCompoundLValue());
@@ -1523,6 +1525,54 @@ printf(\"sum: %d\\n\", sum);
             "so_path": so_path,
             "compiled": is_file(so_path),
         };
+    }
+
+    testAOTModuleIrOnlyLocalOwnsInvokeResult() {
+        string tmp_dir = sprintf("/tmp/aot_ir_only_local_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTLocalTempCleanup {
+    version = \"1.0\";
+    desc = \"IR-only local ownership regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public class AOTLocalTempCleanup {
+    static string restoreCodeBlocks(string result, list<string> protected_blocks) {
+        for (int i = protected_blocks.size() - 1; i >= 0; --i) {
+            result = regex_subst(result, \"<<PROTECTED_\" + string(i) + \">>\",
+                protected_blocks[i], RE_Global);
+        }
+        return result;
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTLocalTempCleanup.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTLocalTempCleanup.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "IR-only local ownership module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("1/1 functions pre-compiled"),
+            "IR-only local ownership module fully precompiled: " + result.compile_out);
+
+        string out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --modern --exec-mode=ast -l AOTLocalTempCleanup "
+            "-e 'list<string> p = (\"`code`\",); printf(\"%%y\\n\", "
+            "AOTLocalTempCleanup::restoreCodeBlocks(\"before <<PROTECTED_0>> after\", p));' 2>&1",
+            libqore_dir, tmp_dir, qore_bin));
+        assertEq("\"before `code` after\"\n", out,
+            "AOT qmod StoreLocal must keep IR-only local value alive after DiscardTemps");
     }
 
     testCrossModuleSameName() {

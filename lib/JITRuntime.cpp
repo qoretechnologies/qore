@@ -2594,8 +2594,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
     QoreValue val = fromBits(value_bits);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
-        if (h->reference_count() > 2) {
+        // HashKeyStore loads the container without taking an extra reference.
+        // Any ref beyond the lvalue's own runtime slot is real sharing and must
+        // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
+        if (h->reference_count() > 1) {
             QoreHashNode* new_h = h->copy();
             qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
             if (*xsink) {
@@ -2605,19 +2607,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
             // Release copy()'s original ref; variable holds sole ref
             new_h->deref(nullptr);
             h = new_h;
-            // DO NOT deref orig_h: LLVM cleanup-A releases the original LoadLocal ref
-        }
-        // setKeyValue() may require refcount == 1 internally
-        // Temporarily deref caller's reference if needed
-        bool had_caller_ref = h->reference_count() > 1;
-        if (had_caller_ref) {
-            h->deref(nullptr);
         }
         h->setKeyValue(key, val.refSelf(), xsink);
-        // Restore caller's reference if we borrowed it
-        if (had_caller_ref) {
-            h->refSelf();
-        }
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
         // LValueHelper::doHashLValue() including hashdecl error behavior.
@@ -2649,8 +2640,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
     QoreValue val = fromBits(value_bits);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
-        if (h->reference_count() > 2) {
+        // HashKeyStore loads the container without taking an extra reference.
+        // Any ref beyond the lvalue's own runtime slot is real sharing and must
+        // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
+        if (h->reference_count() > 1) {
             QoreHashNode* new_h = h->copy();
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
             if (*xsink) {
@@ -2660,19 +2653,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             // Release copy()'s original ref; variable holds sole ref
             new_h->deref(nullptr);
             h = new_h;
-            // DO NOT deref orig_h: LLVM cleanup-A releases the original LoadLocal ref
-        }
-        // setKeyValue() may require refcount == 1 internally
-        // Temporarily deref caller's reference if needed
-        bool had_caller_ref = h->reference_count() > 1;
-        if (had_caller_ref) {
-            h->deref(nullptr);
         }
         h->setKeyValue(key, val.refSelf(), xsink);
-        // Restore caller's reference if we borrowed it
-        if (had_caller_ref) {
-            h->refSelf();
-        }
     } else if (hv.isNothing()) {
         // Auto-vivify according to the declared lvalue type, matching
         // LValueHelper::doHashLValue() including hashdecl error behavior.
@@ -2726,8 +2708,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
 
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
-        // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
-        if (l->reference_count() > 2) {
+        // ListIndexStore loads the container without taking an extra reference.
+        // Any ref beyond the lvalue's own runtime slot is real sharing and must
+        // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
+        if (l->reference_count() > 1) {
             QoreListNode* new_l = l->copy();
             qore_rt_assign_local(var, toBits(QoreValue(new_l)), xsink);
             if (*xsink) {
@@ -2737,16 +2721,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             // Release copy()'s original ref; variable holds sole ref (refcount==1)
             new_l->deref(nullptr);
             l = new_l;
-            // DO NOT deref orig_l: LLVM cleanup-A releases the original LoadLocal ref
         }
 
-        // setEntry() requires refcount == 1, but if !COW we have refcount >= 2 (variable + caller)
-        // Temporarily deref caller's reference so setEntry sees refcount == 1
-        bool had_caller_ref = l->reference_count() > 1;
-
-        if (had_caller_ref) {
-            l->deref(nullptr);
-        }
         // Apply element type coercion if the list has a typed value type
         // (e.g. list<softint> converts "50" → 50 before storing)
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
@@ -2760,10 +2736,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
             l->setEntry(index, entry, xsink);
         } else {
             entry.discard(xsink);
-        }
-        // Restore caller's reference if we borrowed it
-        if (had_caller_ref) {
-            l->refSelf();
         }
     } else if (lv.isNothing()) {
         // Auto-vivify: create new list from NOTHING, set element, assign to variable
@@ -2807,8 +2779,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
     QoreValue val = fromBits(val_bits);
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
-        // Only COW if shared with other references (caller holds +1 from LoadLocal, variable holds +1 or more)
-        if (l->reference_count() > 2) {
+        // ListIndexStore loads the container without taking an extra reference.
+        // Any ref beyond the lvalue's own runtime slot is real sharing and must
+        // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
+        if (l->reference_count() > 1) {
             QoreListNode* new_l = l->copy();
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_l)), xsink);
             if (*xsink) {
@@ -2818,13 +2792,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             // Release copy()'s original ref; variable holds sole ref (refcount==1)
             new_l->deref(nullptr);
             l = new_l;
-            // DO NOT deref orig_l: LLVM cleanup-A releases the original LoadLocal ref
-        }
-        // setEntry() requires refcount == 1, but if !COW we have refcount >= 2 (variable + caller)
-        // Temporarily deref caller's reference so setEntry sees refcount == 1
-        bool had_caller_ref = l->reference_count() > 1;
-        if (had_caller_ref) {
-            l->deref(nullptr);
         }
         // Apply element type coercion if the list has a typed value type
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
@@ -2838,10 +2805,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
             l->setEntry(index, entry, xsink);
         } else {
             entry.discard(xsink);
-        }
-        // Restore caller's reference if we borrowed it
-        if (had_caller_ref) {
-            l->refSelf();
         }
     } else if (lv.isNothing()) {
         // Auto-vivify: create new list from NOTHING, set element, assign to variable

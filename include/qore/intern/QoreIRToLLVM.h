@@ -326,11 +326,17 @@ private:
     std::unordered_map<const void*, llvm::AllocaInst*> preinstantiated_entry_cleanup_by_local;
 
     // Allocas for fast entry param locals (Approach B).
-    // At exit, the current alloca value is loaded and decref'd.  Combined with
-    // decref-before-store in StoreLocal for IR-only locals, this correctly handles
-    // both the initial param value and any reassignments.
+    // At exit, the current alloca value is loaded and decref'd.  StoreLocal
+    // keeps IR-only boxed locals owned by their local alloca so statement-temp
+    // cleanup can run without dangling cached locals.
     std::vector<llvm::AllocaInst*> fast_entry_param_allocas;
     std::unordered_map<const void*, llvm::AllocaInst*> fast_entry_param_allocas_by_local;
+
+    // Boxed IR-only locals that are neither fast-entry params nor backed by a
+    // pre-instantiated cleanup slot. Their alloca owns the current value and
+    // must be decref'd at function exit.
+    std::vector<llvm::AllocaInst*> owned_ir_local_allocas;
+    std::unordered_set<const void*> owned_ir_local_alloca_keys;
 
     // Allocas for Invoke/ConstString results that need cleanup at function exit.
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
@@ -346,6 +352,11 @@ private:
     bool invoke_cleanup_array_overflow = false;
     // Map from value ID to invoke-result alloca (for clearing at Return)
     std::unordered_map<uint32_t, llvm::Value*> invoke_alloca_map;
+    // Cleanup allocas whose lifetime is tied to a local cache rather than an
+    // expression temporary.  They are cleaned on function/error exits, but
+    // discard.temps must not clear them while the local alloca still borrows
+    // their owned reference.
+    std::unordered_set<llvm::Value*> persistent_cleanup_allocas;
     // Map from local key (LocalVar* as void*) to invoke-result cleanup allocas
     // that hold references to values stored in this local.  Used by
     // UninstantiateLocal to clear cleanup allocas when block-scoped locals
@@ -363,8 +374,15 @@ private:
     struct SsaCleanupEntry {
         llvm::Value* value = nullptr;
         llvm::BasicBlock* def_bb = nullptr;
+        uint32_t result_id = 0;
     };
     std::vector<SsaCleanupEntry> pending_ssa_cleanup;
+
+    struct TempCleanupMark {
+        size_t invoke_alloca_count = 0;
+        size_t pending_ssa_count = 0;
+    };
+    std::vector<TempCleanupMark> temp_cleanup_marks;
 
     // Incremental block-level immediate-dominator map, populated as
     // blocks are entered during lowering.  Conservative approximation:
@@ -635,10 +653,15 @@ private:
     // Emit qore_rt_decref calls for tracked runtime call results
     void emitInvokeCleanup(llvm::Module& module);
 
+    // Emit statement/condition-boundary temp cleanup for values tracked since
+    // the latest PushTempMark.
+    void emitDiscardTemps(llvm::Module& module);
+
     // Register an alloca-backed cleanup slot and, for large functions, add its
     // address to the entry-block cleanup pointer array used by
     // qore_rt_cleanup_run_allocas().
     void registerInvokeCleanupAlloca(llvm::Value* alloca_ptr);
+    void registerPersistentCleanupAlloca(llvm::Value* alloca_ptr);
 
     // Conservative upper bound for the cleanup pointer array.  Overflow falls
     // back to the expanded cleanup path, so the estimate only affects whether
@@ -838,11 +861,16 @@ private:
     // enabling copy-on-write to skip the copy (in-place modification).
     void clearLocalReloadTracker(const void* key, llvm::Module& module, llvm::Function* llvm_func);
 
-    // Clear the cached +1 local value loaded at function entry for a
-    // pre-instantiated local. This is required before lvalue mutation such as
-    // `remove x`: otherwise the cached load keeps the old value alive after the
-    // runtime local has been cleared.
-    void clearLocalCachedValue(const void* key, llvm::Module& module, llvm::Function* llvm_func);
+    enum class LocalCacheClearMode {
+        DuplicateRefsOnly,
+        IncludeFastEntryOwner,
+    };
+
+    // Clear cached +1 local values. For fast-entry params the alloca is the
+    // local's real owner, not a duplicate cache; lvalue mutation must keep it
+    // counted so copy-on-write can detect caller sharing.
+    void clearLocalCachedValue(const void* key, llvm::Module& module,
+            llvm::Function* llvm_func, LocalCacheClearMode mode);
 
     // Resolve the root local key for structured lvalue-path instructions. In
     // AOT mode LVPath roots may carry only a slot id, so this must reverse-map

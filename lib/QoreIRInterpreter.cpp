@@ -71,7 +71,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 367,
+static_assert(QORE_IR_MAX_OPCODE == 368,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -3670,6 +3670,21 @@ next_instruction:
                 QoreValue val = getIRValue(values, id);
                 val.ref();
                 cleanup.push_back(id.id);
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::RefSelf: {
+                if (inst->operands.empty()) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "refself missing operand");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue val = getIRValue(values, inst->operands.front());
+                setOwnedValueSlot(values, cleanup, inst->result.id,
+                    val.hasNode() ? val.refSelf() : val, xsink);
                 ++ip;
                 break;
             }

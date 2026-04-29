@@ -41,7 +41,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[368] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[369] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -410,12 +410,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[368] = {
     { "Find"                          , true , false, false,  0, "Execute find expression", true , true , "FindNode", true , false, false, false, false }, // 365
     { "ContextRef"                    , true , false, false,  0, "Evaluate context field reference", false, true , "ContextrefNode", true , false, true , false, false }, // 366
     { "ContextRow"                    , true , false, false,  0, "Evaluate current context row", false, true , "ContextRowNode", true , false, true , false, false }, // 367
+    { "RefSelf"                       , false, false, false,  1, "Create owned reference to value", false, false, "ParseNode", true , false, false, false, false }, // 368
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 368,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 368"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 369,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 369"
 );
 
 //! ============================================================================

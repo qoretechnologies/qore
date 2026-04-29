@@ -513,6 +513,21 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (!lowered.isValid()) {
             return false;
         }
+        bool cleanup_before_return = catch_cleanup_depth > 0;
+        if (!cleanup_before_return) {
+            for (const auto& entry : cleanup_stack) {
+                if (entry.type == BlockCleanupEntry::Scope
+                        || entry.type == BlockCleanupEntry::RefForeachRecord
+                        || entry.type == BlockCleanupEntry::RefForeach
+                        || entry.type == BlockCleanupEntry::Context) {
+                    cleanup_before_return = true;
+                    break;
+                }
+            }
+        }
+        if (cleanup_before_return) {
+            lowered = builder.createRefSelf(lowered, stmt->loc)->result;
+        }
         // Emit block cleanups for all active scopes (fires on_exit handlers).
         // Same as ReturnNothing — CF_SKIP_LVARS, and handles RefForeach cleanup.
         if (!emitBlockCleanups(0, error, false, CF_SKIP_LVARS)) {
@@ -526,10 +541,19 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+        // Match AST-mode condition lifetime: temporaries created while
+        // evaluating the condition must be released before either branch body
+        // mutates state.  Otherwise a condition such as `if (!h{k})` can keep
+        // `h` referenced while the then-block assigns `h{k}`, forcing COW of
+        // the whole hash on every insertion.
+        builder.createPushTempMark(if_stmt->loc);
         QoreIRValue cond = lowerConditionValue(if_stmt->getCond(), error);
         if (!cond.isValid()) {
             return false;
         }
+        QoreIRValue cond_bool = builder.createUnaryOp(QoreIROpcode::ToBool, cond,
+            if_stmt->loc)->result;
+        builder.createDiscardTemps(if_stmt->loc);
         QoreIRBasicBlock* then_block = createBlock("if.then");
         QoreIRBasicBlock* merge_block = createBlock("if.merge");
         QoreIRBasicBlock* else_block = if_stmt->getElseCode() ? createBlock("if.else") : merge_block;
@@ -537,7 +561,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             error = "IR builder failed to create blocks for if";
             return false;
         }
-        builder.createBranchIf(cond, then_block, else_block);
+        builder.createBranchIf(cond_bool, then_block, else_block);
 
         builder.setBlock(then_block);
         if (!lowerStatementBlock(if_stmt->getIfCode(), error)) {
