@@ -673,7 +673,6 @@ telnet.setEventQueue();
         if (conn.isOpen()) {
             hash h = conn.getSocketInfo();
             conn.close();
-            conn.shutdown();
             log("disconnected from %s (%s)%s", h.hostname, h.address_desc, h.port ? sprintf(" port %d", h.port) : "");
         }
     }

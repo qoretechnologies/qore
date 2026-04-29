@@ -822,7 +822,6 @@ smtp.setEventQueue();
     final private disconnectIntern() {
         if (isConnected()) {
             sock.close();
-            sock.shutdown();
         }
     }
 
@@ -865,7 +864,6 @@ smtp.setEventQueue();
             logged_in = op.didAuth();
         } catch (hash<ExceptionInfo> ex) {
             sock.close();
-            sock.shutdown();
             rethrow;
         }
     }

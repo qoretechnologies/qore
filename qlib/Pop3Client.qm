@@ -1354,7 +1354,6 @@ pop3.setEventQueue();
             execPollOperation(op, sprintf("pop3-connect:%s", connect));
         } catch (hash<ExceptionInfo> ex) {
             sock.close();
-            sock.shutdown();
             rethrow;
         }
     }
@@ -1392,7 +1391,6 @@ pop3.setEventQueue();
             if (!noquit)
                 try { connectedCommandAsyncIntern("QUIT"); } catch (hash<ExceptionInfo> ex) { }
             sock.close();
-            sock.shutdown();
         }
     }
 
