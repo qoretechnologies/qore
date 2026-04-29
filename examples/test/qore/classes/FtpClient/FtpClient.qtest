@@ -261,9 +261,24 @@ class FtpTest inherits QUnit::Test {
             string before_get_timeout = ReadOnlyFile::readTextFile(local_path);
             on_exit ensureLocalFile();
 
+            string get_timeout_dest = local_path;
+            *string get_timeout_link;
+            on_exit {
+                if (exists get_timeout_link) {
+                    unlink(get_timeout_link);
+                }
+            }
+            if (PlatformOS != "Windows") {
+                get_timeout_link = tmp_location() + '/ftptest-link.' + get_random_string(12);
+                symlink(local_path, get_timeout_link);
+                assertTrue(is_link(get_timeout_link));
+                assertEq(local_path, readlink(get_timeout_link));
+                get_timeout_dest = get_timeout_link;
+            }
+
             *string err;
             try {
-                fc.get(local_path, local_path);
+                fc.get(local_path, get_timeout_dest);
             }
             catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
@@ -271,6 +286,10 @@ class FtpTest inherits QUnit::Test {
             if (exists err) {
                 assertTrue(err =~ /^(SOCKET-|FTP-)/,
                     sprintf("expected SOCKET-* or FTP-* error, got: %y", err));
+            }
+            if (exists get_timeout_link) {
+                assertTrue(is_link(get_timeout_link));
+                assertEq(local_path, readlink(get_timeout_link));
             }
             assertEq(before_get_timeout, ReadOnlyFile::readTextFile(local_path));
         }
