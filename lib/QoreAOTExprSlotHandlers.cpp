@@ -285,6 +285,457 @@ static bool write_slot_HASH_LITERAL(AOTExprSlotWriteCtx& ctx) {
     return false;
 }
 
+//! PARSE_HASH: count(u8) + [key(AOTExprKind) + value(AOTExprKind)] * N
+static bool write_slot_PARSE_HASH(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* phn = dynamic_cast<const QoreParseHashNode*>(node);
+    if (!phn) {
+        return false;
+    }
+
+    const QoreParseHashNode::nvec_t& keys = phn->getKeys();
+    const QoreParseHashNode::nvec_t& vals = phn->getValues();
+    if (keys.size() > 255 || keys.size() != vals.size()) {
+        return false;
+    }
+
+    ctx.writer.writeU8(static_cast<uint8_t>(keys.size()));
+    for (size_t i = 0; i < keys.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT parse hash serialization")) {
+            return false;
+        }
+        if (!classifyAndWriteExpr(ctx.writer, keys[i],
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+                || !classifyAndWriteExpr(ctx.writer, vals[i],
+                    ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool write_slot_PLUS(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QorePlusOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getLeft(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->getRight(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_SQUARE_BRACKET(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getLeft(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->getRight(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_EXISTS(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreExistsOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_IMPLICIT_ARG(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* ia = dynamic_cast<const QoreImplicitArgumentNode*>(node);
+    if (!ia) {
+        return false;
+    }
+    ctx.writer.writeI64(static_cast<int64_t>(ia->getOffset()));
+    return true;
+}
+
+static bool write_slot_MINUS(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreMinusOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getLeft(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->getRight(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_KEYS(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreKeysOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_MULTIPLY(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreMultiplicationOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getLeft(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->getRight(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_DIVIDE(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreDivisionOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getLeft(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->getRight(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_MODULO(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreModuloOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getLeft(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->getRight(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_IMPLICIT_ELEM(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    return dynamic_cast<const QoreImplicitElementNode*>(node) != nullptr;
+}
+
+static bool write_slot_INSTANCEOF(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* inst = dynamic_cast<const QoreInstanceOfOperatorNode*>(node);
+    if (!inst) {
+        return false;
+    }
+    const QoreTypeInfo* ti = inst->getInstanceTypeInfo();
+    const char* type_path = ctx.expr.ref1.empty()
+        ? (ti ? QoreTypeInfo::getPath(ti) : "") : ctx.expr.ref1.c_str();
+    if (!type_path || !*type_path) {
+        return false;
+    }
+    ctx.writer.writeStringRef(type_path);
+    return classifyAndWriteExpr(ctx.writer, inst->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_regex_match_slot_payload(AOTExprSlotWriteCtx& ctx, const QoreRegexMatchOperatorNode* op) {
+    QoreRegex* re = op->getRegex();
+    const char* pattern = re ? re->getPatternCStr() : nullptr;
+    if (!pattern) {
+        return false;
+    }
+    ctx.writer.writeStringRef(pattern);
+    ctx.writer.writeI64(re->getOptions());
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_REGEX_MATCH(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreRegexMatchOperatorNode*>(node);
+    if (!op || dynamic_cast<const QoreRegexNMatchOperatorNode*>(node)
+            || dynamic_cast<const QoreRegexExtractOperatorNode*>(node)) {
+        return false;
+    }
+    return write_regex_match_slot_payload(ctx, op);
+}
+
+static bool write_slot_REGEX_NMATCH(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreRegexNMatchOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return write_regex_match_slot_payload(ctx, op);
+}
+
+static bool write_slot_REGEX_EXTRACT(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreRegexExtractOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return write_regex_match_slot_payload(ctx, op);
+}
+
+static bool write_slot_PRE_INC(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node);
+    if (!op || dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_PRE_DEC(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_POST_INC(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    if (dynamic_cast<const QorePostDecrementOperatorNode*>(node)
+            || dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
+        return false;
+    }
+    QoreValue operand;
+    if (auto* op = dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
+        operand = op->getExp();
+    } else if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+        operand = op->getExp();
+    } else {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, operand,
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_POST_DEC(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    QoreValue operand;
+    if (auto* op = dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
+        operand = op->getExp();
+    } else if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+        operand = op->getExp();
+    } else {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, operand,
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+template <typename NodeT>
+static bool write_binary_slot_payload(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const NodeT*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getLeft(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->getRight(),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+template <typename NodeT>
+static bool write_unary_slot_payload(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const NodeT*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_LOG_EQ(AOTExprSlotWriteCtx& ctx) {
+    if (dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(
+            ctx.expr.child_expr.getInternalNode())) {
+        return false;
+    }
+    return write_binary_slot_payload<QoreLogicalEqualsOperatorNode>(ctx);
+}
+
+static bool write_slot_LOG_NE(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreLogicalNotEqualsOperatorNode>(ctx);
+}
+
+static bool write_slot_LOG_NOT(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreLogicalNotOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_NULL_COAL(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreNullCoalescingOperatorNode>(ctx);
+}
+
+static bool write_slot_VALUE_COAL(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreValueCoalescingOperatorNode>(ctx);
+}
+
+static bool write_slot_QUESTION(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->get(0),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(1),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(2),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_FOLDL(AOTExprSlotWriteCtx& ctx) {
+    if (dynamic_cast<const QoreFoldrOperatorNode*>(
+            ctx.expr.child_expr.getInternalNode())) {
+        return false;
+    }
+    return write_binary_slot_payload<QoreFoldlOperatorNode>(ctx);
+}
+
+static bool write_slot_FOLDR(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreFoldrOperatorNode>(ctx);
+}
+
+static bool write_slot_MAP(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreMapOperatorNode>(ctx);
+}
+
+static bool write_slot_MAP_SELECT(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreMapSelectOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->get(0),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(1),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(2),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_HASH_MAP(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreHashMapOperatorNode*>(node);
+    if (!op || dynamic_cast<const QoreHashMapSelectOperatorNode*>(node)) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->get(0),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(1),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(2),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_HASH_MAP_SELECT(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreHashMapSelectOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->get(0),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(1),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(2),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(3),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_SELECT(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreSelectOperatorNode>(ctx);
+}
+
+static bool write_slot_TRIM(AOTExprSlotWriteCtx& ctx) {
+    return write_unary_slot_payload<QoreTrimOperatorNode>(ctx);
+}
+
+static bool write_slot_CHOMP(AOTExprSlotWriteCtx& ctx) {
+    return write_unary_slot_payload<QoreChompOperatorNode>(ctx);
+}
+
+static bool write_slot_POP(AOTExprSlotWriteCtx& ctx) {
+    return write_unary_slot_payload<QorePopOperatorNode>(ctx);
+}
+
+static bool write_slot_SHIFT(AOTExprSlotWriteCtx& ctx) {
+    if (dynamic_cast<const QorePopOperatorNode*>(
+            ctx.expr.child_expr.getInternalNode())) {
+        return false;
+    }
+    return write_unary_slot_payload<QoreShiftOperatorNode>(ctx);
+}
+
+static bool write_slot_PUSH(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QorePushOperatorNode>(ctx);
+}
+
+static bool write_slot_UNSHIFT(AOTExprSlotWriteCtx& ctx) {
+    if (dynamic_cast<const QorePushOperatorNode*>(
+            ctx.expr.child_expr.getInternalNode())) {
+        return false;
+    }
+    return write_binary_slot_payload<QoreUnshiftOperatorNode>(ctx);
+}
+
+static bool write_slot_ELEMENTS(AOTExprSlotWriteCtx& ctx) {
+    return write_unary_slot_payload<QoreElementsOperatorNode>(ctx);
+}
+
+static bool write_slot_DELETE(AOTExprSlotWriteCtx& ctx) {
+    return write_unary_slot_payload<QoreDeleteOperatorNode>(ctx);
+}
+
+static bool write_slot_REMOVE(AOTExprSlotWriteCtx& ctx) {
+    return write_unary_slot_payload<QoreRemoveOperatorNode>(ctx);
+}
+
+static bool write_slot_BACKGROUND(AOTExprSlotWriteCtx& ctx) {
+    return write_unary_slot_payload<QoreBackgroundOperatorNode>(ctx);
+}
+
+static bool write_slot_CONTEXT_REF(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* cr = dynamic_cast<const ContextrefNode*>(node);
+    if (!cr && ctx.expr.ref1.empty()) {
+        return false;
+    }
+    ctx.writer.writeStringRef(cr && cr->str ? cr->str : ctx.expr.ref1.c_str());
+    return true;
+}
+
+static bool write_slot_CONTEXT_ROW(AOTExprSlotWriteCtx& ctx) {
+    return dynamic_cast<const ContextRowNode*>(ctx.expr.child_expr.getInternalNode()) != nullptr;
+}
+
+static bool write_slot_COMPLEX_CONTEXT_REF(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* ccr = dynamic_cast<const ComplexContextrefNode*>(node);
+    if (!ccr) {
+        return false;
+    }
+    ctx.writer.writeStringRef(ccr->name ? ccr->name : "");
+    ctx.writer.writeStringRef(ccr->member ? ccr->member : "");
+    ctx.writer.writeI64(static_cast<int64_t>(ccr->stack_offset));
+    return true;
+}
+
 //! HASH_DEREF: left(AOTExprKind) + right(AOTExprKind)
 static bool write_slot_HASH_DEREF(AOTExprSlotWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
@@ -523,18 +974,16 @@ static bool write_slot_PARSE_REF(AOTExprSlotWriteCtx& ctx) {
         ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
 }
 
-//! EXPR_TREE: ref1 contains binary tree blob — write inline with length prefix
+//! EXPR_TREE: read-compatible legacy marker; new AOT output must not emit it
 static bool write_slot_EXPR_TREE(AOTExprSlotWriteCtx& ctx) {
-    uint32_t blob_size = static_cast<uint32_t>(ctx.expr.ref1.size());
-    ctx.writer.writeU32(blob_size);
-    ctx.writer.writeBytes(ctx.expr.ref1.data(), blob_size);
-    return true;
+    (void)ctx;
+    return false;
 }
 
 //! GENERIC_EVAL: no additional data — unsupported marker rejected by AOT compilation
 static bool write_slot_GENERIC_EVAL(AOTExprSlotWriteCtx& ctx) {
-    (void)ctx;  // Unused
-    return true;
+    (void)ctx;
+    return false;
 }
 
 }  // namespace

@@ -1044,6 +1044,10 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_LVPATH_DELETE_EXPR, "lvpath-delete-expr"},
         {QORE_AOT_FEAT_LVPATH_PATTERN, "lvpath-pattern"},
         {QORE_AOT_FEAT_FUNC_CALL_VARIANT, "func-call-variant"},
+        {QORE_AOT_FEAT_BACKQUOTE, "backquote"},
+        {QORE_AOT_FEAT_FIND, "find"},
+        {QORE_AOT_FEAT_BACKGROUND_IR, "background-ir"},
+        {QORE_AOT_FEAT_INLINE_CALL_ARGS, "inline-call-args"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -1158,6 +1162,51 @@ static const char* dump_aot_expr_kind_name(uint8_t kind) {
         case AOTExprKind::HASH_DEREF: return "HASH_DEREF";
         case AOTExprKind::PARSE_REF: return "PARSE_REF";
         case AOTExprKind::LIST_LITERAL: return "LIST_LITERAL";
+        case AOTExprKind::PLUS: return "PLUS";
+        case AOTExprKind::SQUARE_BRACKET: return "SQUARE_BRACKET";
+        case AOTExprKind::PARSE_HASH: return "PARSE_HASH";
+        case AOTExprKind::EXISTS: return "EXISTS";
+        case AOTExprKind::IMPLICIT_ARG: return "IMPLICIT_ARG";
+        case AOTExprKind::MINUS: return "MINUS";
+        case AOTExprKind::KEYS: return "KEYS";
+        case AOTExprKind::MULTIPLY: return "MULTIPLY";
+        case AOTExprKind::DIVIDE: return "DIVIDE";
+        case AOTExprKind::MODULO: return "MODULO";
+        case AOTExprKind::IMPLICIT_ELEM: return "IMPLICIT_ELEM";
+        case AOTExprKind::INSTANCEOF: return "INSTANCEOF";
+        case AOTExprKind::REGEX_MATCH: return "REGEX_MATCH";
+        case AOTExprKind::REGEX_NMATCH: return "REGEX_NMATCH";
+        case AOTExprKind::REGEX_EXTRACT: return "REGEX_EXTRACT";
+        case AOTExprKind::PRE_INC: return "PRE_INC";
+        case AOTExprKind::PRE_DEC: return "PRE_DEC";
+        case AOTExprKind::POST_INC: return "POST_INC";
+        case AOTExprKind::POST_DEC: return "POST_DEC";
+        case AOTExprKind::LOG_EQ: return "LOG_EQ";
+        case AOTExprKind::LOG_NE: return "LOG_NE";
+        case AOTExprKind::LOG_NOT: return "LOG_NOT";
+        case AOTExprKind::TRIM: return "TRIM";
+        case AOTExprKind::CHOMP: return "CHOMP";
+        case AOTExprKind::POP: return "POP";
+        case AOTExprKind::SHIFT: return "SHIFT";
+        case AOTExprKind::PUSH: return "PUSH";
+        case AOTExprKind::UNSHIFT: return "UNSHIFT";
+        case AOTExprKind::ELEMENTS: return "ELEMENTS";
+        case AOTExprKind::DELETE: return "DELETE";
+        case AOTExprKind::REMOVE: return "REMOVE";
+        case AOTExprKind::BACKGROUND: return "BACKGROUND";
+        case AOTExprKind::CONTEXT_REF: return "CONTEXT_REF";
+        case AOTExprKind::CONTEXT_ROW: return "CONTEXT_ROW";
+        case AOTExprKind::COMPLEX_CONTEXT_REF: return "COMPLEX_CONTEXT_REF";
+        case AOTExprKind::NULL_COAL: return "NULL_COAL";
+        case AOTExprKind::VALUE_COAL: return "VALUE_COAL";
+        case AOTExprKind::QUESTION: return "QUESTION";
+        case AOTExprKind::FOLDL: return "FOLDL";
+        case AOTExprKind::FOLDR: return "FOLDR";
+        case AOTExprKind::MAP: return "MAP";
+        case AOTExprKind::MAP_SELECT: return "MAP_SELECT";
+        case AOTExprKind::HASH_MAP_OP: return "HASH_MAP";
+        case AOTExprKind::HASH_MAP_SELECT_OP: return "HASH_MAP_SELECT";
+        case AOTExprKind::SELECT: return "SELECT";
         default: break;
     }
     return "UNKNOWN";
@@ -1209,9 +1258,6 @@ static bool dump_skip_inline_expr_list(const QoreAOTBinaryReader& reader,
         AOTSlotMapDumpSummary& summary, const std::string& func_name,
         const AOTDumpExprContext& ctx) {
     for (uint8_t i = 0; i < count; ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump expression list")) {
-            return false;
-        }
         if (!dump_skip_inline_expr(reader, p, end, summary, func_name, ctx)) {
             return false;
         }
@@ -1236,7 +1282,13 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 return false;
             }
             if (!slot_form || (reader.getHeader().feature_flags & QORE_AOT_FEAT_FUNC_CALL_VARIANT) != 0) {
-                return dump_skip_string_ref(reader, p, end);
+                if (!dump_skip_string_ref(reader, p, end)) {
+                    return false;
+                }
+            }
+            if (!slot_form && (reader.getHeader().feature_flags & QORE_AOT_FEAT_INLINE_CALL_ARGS) != 0) {
+                uint8_t nargs = 0;
+                return dump_read_u8(p, end, nargs) && skip_n_args(nargs);
             }
             return true;
 
@@ -1279,6 +1331,94 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::SELF_METHOD_REF:
             return dump_skip_string_ref(reader, p, end);
 
+        case AOTExprKind::PLUS:
+        case AOTExprKind::SQUARE_BRACKET:
+        case AOTExprKind::MINUS:
+        case AOTExprKind::MULTIPLY:
+        case AOTExprKind::DIVIDE:
+        case AOTExprKind::MODULO:
+        case AOTExprKind::NULL_COAL:
+        case AOTExprKind::VALUE_COAL:
+        case AOTExprKind::FOLDL:
+        case AOTExprKind::FOLDR:
+        case AOTExprKind::MAP:
+        case AOTExprKind::SELECT:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::MAP_SELECT:
+        case AOTExprKind::HASH_MAP_OP:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::HASH_MAP_SELECT_OP:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::EXISTS:
+        case AOTExprKind::KEYS:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::IMPLICIT_ARG:
+            return dump_skip_bytes(p, end, 8);
+
+        case AOTExprKind::IMPLICIT_ELEM:
+            return true;
+
+        case AOTExprKind::INSTANCEOF:
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::REGEX_MATCH:
+        case AOTExprKind::REGEX_NMATCH:
+        case AOTExprKind::REGEX_EXTRACT:
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_bytes(p, end, 8)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::CONTEXT_REF:
+            return dump_skip_string_ref(reader, p, end);
+
+        case AOTExprKind::CONTEXT_ROW:
+            return true;
+
+        case AOTExprKind::COMPLEX_CONTEXT_REF:
+            return dump_skip_string_ref(reader, p, end)
+                && dump_skip_string_ref(reader, p, end)
+                && dump_skip_bytes(p, end, 8);
+
+        case AOTExprKind::PRE_INC:
+        case AOTExprKind::PRE_DEC:
+        case AOTExprKind::POST_INC:
+        case AOTExprKind::POST_DEC:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::LOG_EQ:
+        case AOTExprKind::LOG_NE:
+        case AOTExprKind::PUSH:
+        case AOTExprKind::UNSHIFT:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::LOG_NOT:
+        case AOTExprKind::TRIM:
+        case AOTExprKind::CHOMP:
+        case AOTExprKind::POP:
+        case AOTExprKind::SHIFT:
+        case AOTExprKind::ELEMENTS:
+        case AOTExprKind::DELETE:
+        case AOTExprKind::REMOVE:
+        case AOTExprKind::BACKGROUND:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::QUESTION:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
         case AOTExprKind::CALL_REF:
         case AOTExprKind::OBJ_METHOD_REF:
         case AOTExprKind::CONST_NOTHING:
@@ -1310,10 +1450,22 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint8_t i = 0; i < count; ++i) {
-                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump hash literal")) {
+                if (!dump_skip_string_ref(reader, p, end)
+                        || !dump_skip_inline_expr(reader, p, end, summary, func_name,
+                            child_ctx)) {
                     return false;
                 }
-                if (!dump_skip_string_ref(reader, p, end)
+            }
+            return true;
+        }
+
+        case AOTExprKind::PARSE_HASH: {
+            uint8_t count = 0;
+            if (!dump_read_u8(p, end, count)) {
+                return false;
+            }
+            for (uint8_t i = 0; i < count; ++i) {
+                if (!dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                         || !dump_skip_inline_expr(reader, p, end, summary, func_name,
                             child_ctx)) {
                     return false;
@@ -1387,9 +1539,6 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint16_t i = 0; i < nparams; ++i) {
-                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump closure parameters")) {
-                    return false;
-                }
                 if (!dump_skip_string_ref(reader, p, end)
                         || !dump_skip_string_ref(reader, p, end)) {
                     return false;
@@ -1415,9 +1564,6 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint16_t i = 0; i < ncaptured; ++i) {
-                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump closure captures")) {
-                    return false;
-                }
                 if (!dump_skip_string_ref(reader, p, end) || !dump_skip_bytes(p, end, 4)) {
                     return false;
                 }
@@ -1481,10 +1627,6 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
     summary.functions = num_funcs;
 
     for (uint32_t f = 0; f < num_funcs; ++f) {
-        if (f && !(f % 100) && qore_check_cancel(nullptr, "AOT dump slot maps")) {
-            error = "AOT dump slot maps cancelled";
-            return false;
-        }
         const uint8_t* entry_start = p;
         uint32_t entry_size = 0;
         if (!dump_read_u32(p, end, entry_size)) {
@@ -1533,28 +1675,16 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
 
         bool malformed = false;
         for (uint16_t i = 0; i < num_locals && !malformed; ++i) {
-            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump local slots")) {
-                error = "AOT dump local slots cancelled";
-                return false;
-            }
             malformed = !dump_skip_string_ref(reader, p, entry_end)
                 || !dump_skip_string_ref(reader, p, entry_end)
                 || !dump_skip_bytes(p, entry_end, 3);
         }
         for (uint16_t i = 0; i < num_globals && !malformed; ++i) {
-            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump global slots")) {
-                error = "AOT dump global slots cancelled";
-                return false;
-            }
             malformed = !dump_skip_string_ref(reader, p, entry_end)
                 || !dump_skip_string_ref(reader, p, entry_end)
                 || !dump_skip_bytes(p, entry_end, 1);
         }
         for (uint16_t i = 0; i < num_exprs && !malformed; ++i) {
-            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT dump expression slots")) {
-                error = "AOT dump expression slots cancelled";
-                return false;
-            }
             uint8_t kind = 0;
             if (!dump_read_u8(p, entry_end, kind)) {
                 malformed = true;
@@ -1633,12 +1763,7 @@ static void print_aot_slot_map_summary(const QoreAOTBinaryReader& reader) {
 
     if (!summary.expr_tree_root_kinds.empty()) {
         printf("      EXPR_TREE root nodes:\n");
-        size_t printed = 0;
         for (const auto& [kind, count] : summary.expr_tree_root_kinds) {
-            if (++printed % 100 == 0 && qore_check_cancel(nullptr, "AOT dump root-kind output")) {
-                printf("        ... output cancelled\n");
-                break;
-            }
             printf("        %-20s (%3u): %llu\n", dump_aot_expr_node_kind_name(kind), kind,
                 static_cast<unsigned long long>(count));
         }
@@ -1647,12 +1772,7 @@ static void print_aot_slot_map_summary(const QoreAOTBinaryReader& reader) {
     if (dump_sections && !summary.top_expr_kinds.empty()) {
         if (!summary.expr_tree_details.empty()) {
             printf("      EXPR_TREE details:\n");
-            size_t printed = 0;
             for (const auto& detail : summary.expr_tree_details) {
-                if (++printed % 100 == 0 && qore_check_cancel(nullptr, "AOT dump expression details output")) {
-                    printf("        ... output cancelled\n");
-                    break;
-                }
                 printf("        %s %-20s (%3u) top=%s slot=%u container=%s: %s\n",
                     detail.top_level ? "top   " : "nested",
                     dump_aot_expr_node_kind_name(detail.root_kind),
@@ -1660,30 +1780,478 @@ static void print_aot_slot_map_summary(const QoreAOTBinaryReader& reader) {
                     dump_aot_expr_kind_name(detail.top_kind),
                     detail.slot == 0xffff ? 0 : detail.slot,
                     dump_aot_expr_kind_name(detail.container_kind),
-                    detail.function.c_str());
+                detail.function.c_str());
             }
         }
         printf("      top expr slot kinds:\n");
-        size_t printed = 0;
         for (const auto& [kind, count] : summary.top_expr_kinds) {
-            if (++printed % 100 == 0 && qore_check_cancel(nullptr, "AOT dump top-kind output")) {
-                printf("        ... output cancelled\n");
-                break;
-            }
             printf("        %-20s (%3u): %llu\n", dump_aot_expr_kind_name(kind), kind,
                 static_cast<unsigned long long>(count));
         }
     }
     if (dump_sections && summary.all_expr_kinds.size() != summary.top_expr_kinds.size()) {
         printf("      all encoded expr kinds:\n");
-        size_t printed = 0;
         for (const auto& [kind, count] : summary.all_expr_kinds) {
-            if (++printed % 100 == 0 && qore_check_cancel(nullptr, "AOT dump encoded-kind output")) {
-                printf("        ... output cancelled\n");
-                break;
-            }
             printf("        %-20s (%3u): %llu\n", dump_aot_expr_kind_name(kind), kind,
                 static_cast<unsigned long long>(count));
+        }
+    }
+}
+
+static const char* dump_aot_value_tag_name(uint8_t tag) {
+    switch (static_cast<QoreAOTValueTag>(tag)) {
+        case QoreAOTValueTag::VT_NOTHING: return "NOTHING";
+        case QoreAOTValueTag::VT_NULL: return "NULL";
+        case QoreAOTValueTag::VT_BOOL: return "BOOL";
+        case QoreAOTValueTag::VT_INT64: return "INT64";
+        case QoreAOTValueTag::VT_FLOAT64: return "FLOAT64";
+        case QoreAOTValueTag::VT_STRING: return "STRING";
+        case QoreAOTValueTag::VT_ABS_DATE: return "ABS_DATE";
+        case QoreAOTValueTag::VT_REL_DATE: return "REL_DATE";
+        case QoreAOTValueTag::VT_LIST: return "LIST";
+        case QoreAOTValueTag::VT_HASH: return "HASH";
+        case QoreAOTValueTag::VT_NUMBER: return "NUMBER";
+        case QoreAOTValueTag::VT_BINARY: return "BINARY";
+        case QoreAOTValueTag::VT_OPAQUE_DEFAULT: return "OPAQUE_DEFAULT";
+        case QoreAOTValueTag::VT_ABS_DATE_REGION: return "ABS_DATE_REGION";
+        case QoreAOTValueTag::VT_ENUM: return "ENUM";
+        case QoreAOTValueTag::VT_NEW_OBJECT: return "NEW_OBJECT";
+        case QoreAOTValueTag::VT_CONST_REF: return "CONST_REF";
+        case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: return "NEW_COMPLEX_DEFAULT";
+        case QoreAOTValueTag::VT_EXPR_TREE: return "EXPR_TREE";
+    }
+    return "UNKNOWN";
+}
+
+struct AOTDefaultDumpSummary {
+    struct Detail {
+        std::string category;
+        std::string owner;
+        std::string name;
+        uint8_t tag = 0;
+        uint8_t root_kind = 0;
+        uint32_t blob_size = 0;
+    };
+
+    uint64_t defaults = 0;
+    std::map<uint8_t, uint64_t> top_value_tags;
+    std::map<uint8_t, uint64_t> all_value_tags;
+    std::vector<Detail> expr_tree_details;
+};
+
+static bool dump_skip_len_string_ref(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end) {
+    uint32_t len = 0;
+    return dump_read_u32(p, end, len) && dump_skip_string_ref(reader, p, end);
+}
+
+static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end, AOTDefaultDumpSummary& summary,
+        std::string& error, bool top_level, const char* category,
+        const std::string& owner, const std::string& name);
+
+static bool dump_skip_serialized_value_args(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end, uint32_t count,
+        AOTDefaultDumpSummary& summary, std::string& error) {
+    for (uint32_t i = 0; i < count; ++i) {
+        if (!dump_skip_serialized_value(reader, p, end, summary, error, false,
+                "", "", "")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end, AOTDefaultDumpSummary& summary,
+        std::string& error, bool top_level, const char* category,
+        const std::string& owner, const std::string& name) {
+    uint8_t tag = 0;
+    if (!dump_read_u8(p, end, tag)) {
+        error = "truncated serialized value tag";
+        return false;
+    }
+
+    ++summary.all_value_tags[tag];
+    if (top_level) {
+        ++summary.defaults;
+        ++summary.top_value_tags[tag];
+    }
+
+    auto fail = [&](const char* msg) {
+        error = msg;
+        return false;
+    };
+
+    switch (static_cast<QoreAOTValueTag>(tag)) {
+        case QoreAOTValueTag::VT_NOTHING:
+        case QoreAOTValueTag::VT_NULL:
+        case QoreAOTValueTag::VT_OPAQUE_DEFAULT:
+            return true;
+
+        case QoreAOTValueTag::VT_BOOL:
+            return dump_skip_bytes(p, end, 1) || fail("truncated bool value");
+
+        case QoreAOTValueTag::VT_INT64:
+        case QoreAOTValueTag::VT_FLOAT64:
+            return dump_skip_bytes(p, end, 8) || fail("truncated 64-bit value");
+
+        case QoreAOTValueTag::VT_STRING:
+        case QoreAOTValueTag::VT_NUMBER:
+        case QoreAOTValueTag::VT_CONST_REF:
+            return dump_skip_len_string_ref(reader, p, end)
+                || fail("truncated string reference value");
+
+        case QoreAOTValueTag::VT_ABS_DATE:
+            return dump_skip_bytes(p, end, 16) || fail("truncated absolute date value");
+
+        case QoreAOTValueTag::VT_REL_DATE:
+            return dump_skip_bytes(p, end, 56) || fail("truncated relative date value");
+
+        case QoreAOTValueTag::VT_ABS_DATE_REGION:
+            return (dump_skip_bytes(p, end, 8) && dump_skip_len_string_ref(reader, p, end))
+                || fail("truncated regional absolute date value");
+
+        case QoreAOTValueTag::VT_BINARY: {
+            uint32_t size = 0;
+            return (dump_read_u32(p, end, size) && dump_skip_bytes(p, end, size))
+                || fail("truncated binary value");
+        }
+
+        case QoreAOTValueTag::VT_LIST: {
+            uint32_t count = 0;
+            return dump_read_u32(p, end, count)
+                && dump_skip_serialized_value_args(reader, p, end, count, summary, error);
+        }
+
+        case QoreAOTValueTag::VT_HASH: {
+            uint32_t count = 0;
+            if (!dump_read_u32(p, end, count)) {
+                return fail("truncated hash value");
+            }
+            for (uint32_t i = 0; i < count; ++i) {
+                if (!dump_skip_string_ref(reader, p, end)
+                        || !dump_skip_serialized_value(reader, p, end, summary, error,
+                            false, "", "", "")) {
+                    if (error.empty()) {
+                        error = "truncated hash entry";
+                    }
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case QoreAOTValueTag::VT_ENUM:
+            return (dump_skip_len_string_ref(reader, p, end)
+                    && dump_skip_len_string_ref(reader, p, end))
+                || fail("truncated enum value");
+
+        case QoreAOTValueTag::VT_NEW_OBJECT: {
+            uint32_t nargs = 0;
+            return dump_skip_len_string_ref(reader, p, end)
+                && dump_read_u32(p, end, nargs)
+                && dump_skip_serialized_value_args(reader, p, end, nargs, summary, error);
+        }
+
+        case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: {
+            uint32_t nargs = 0;
+            return dump_skip_bytes(p, end, 1)
+                && dump_skip_len_string_ref(reader, p, end)
+                && dump_read_u32(p, end, nargs)
+                && dump_skip_serialized_value_args(reader, p, end, nargs, summary, error);
+        }
+
+        case QoreAOTValueTag::VT_EXPR_TREE: {
+            uint32_t blob_size = 0;
+            if (!dump_read_u32(p, end, blob_size)) {
+                return fail("truncated expression tree size");
+            }
+            if (!dump_need(p, end, blob_size)) {
+                return fail("expression tree blob exceeds section bounds");
+            }
+            if (top_level) {
+                summary.expr_tree_details.push_back({
+                    category ? category : "",
+                    owner,
+                    name,
+                    tag,
+                    blob_size ? static_cast<uint8_t>(*p) : static_cast<uint8_t>(0),
+                    blob_size,
+                });
+            }
+            p += blob_size;
+            return true;
+        }
+    }
+
+    error = "unknown serialized value tag " + std::to_string(static_cast<unsigned>(tag));
+    return false;
+}
+
+static std::string dump_owner_name(const char* preferred, const char* fallback) {
+    if (preferred && *preferred) {
+        return preferred;
+    }
+    if (fallback && *fallback) {
+        return fallback;
+    }
+    return "(unnamed)";
+}
+
+static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
+        AOTDefaultDumpSummary& summary, std::string& error) {
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::CLASSES);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* p = reader.getSectionData(*sec);
+    if (!p) {
+        error = "invalid CLASSES section";
+        return false;
+    }
+    const uint8_t* end = p + sec->size;
+
+    uint32_t count = 0;
+    if (!dump_read_u32(p, end, count)) {
+        error = "truncated CLASSES header";
+        return false;
+    }
+    const bool has_const_pending_flag =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
+
+    for (uint32_t i = 0; i < count; ++i) {
+        const char* name = nullptr;
+        const char* path = nullptr;
+        if (!dump_skip_string_ref(reader, p, end, &name)
+                || !dump_skip_string_ref(reader, p, end, &path)
+                || !dump_skip_bytes(p, end, 4 + 2 + 8)) {
+            error = "truncated class header";
+            return false;
+        }
+        std::string owner = dump_owner_name(path, name);
+
+        uint32_t num_bases = 0;
+        if (!dump_read_u32(p, end, num_bases)) {
+            error = "truncated class base count";
+            return false;
+        }
+        for (uint32_t j = 0; j < num_bases; ++j) {
+            if (!dump_skip_string_ref(reader, p, end) || !dump_skip_bytes(p, end, 2)) {
+                error = "truncated class base entry";
+                return false;
+            }
+        }
+
+        uint32_t num_members = 0;
+        if (!dump_read_u32(p, end, num_members)) {
+            error = "truncated class member count";
+            return false;
+        }
+        for (uint32_t j = 0; j < num_members; ++j) {
+            const char* mname = nullptr;
+            if (!dump_skip_string_ref(reader, p, end, &mname)
+                    || !dump_skip_string_ref(reader, p, end)
+                    || !dump_skip_bytes(p, end, 3)) {
+                error = "truncated class member entry";
+                return false;
+            }
+            uint8_t has_default = *(p - 1);
+            if (has_default && !dump_skip_serialized_value(reader, p, end, summary,
+                    error, true, "instance member", owner, dump_owner_name(mname, nullptr))) {
+                return false;
+            }
+        }
+
+        uint32_t num_static = 0;
+        if (!dump_read_u32(p, end, num_static)) {
+            error = "truncated static member count";
+            return false;
+        }
+        for (uint32_t j = 0; j < num_static; ++j) {
+            const char* mname = nullptr;
+            if (!dump_skip_string_ref(reader, p, end, &mname)
+                    || !dump_skip_string_ref(reader, p, end)
+                    || !dump_skip_bytes(p, end, 2)) {
+                error = "truncated static member entry";
+                return false;
+            }
+            uint8_t has_default = *(p - 1);
+            if (has_default && !dump_skip_serialized_value(reader, p, end, summary,
+                    error, true, "static member", owner, dump_owner_name(mname, nullptr))) {
+                return false;
+            }
+        }
+
+        uint32_t num_consts = 0;
+        if (!dump_read_u32(p, end, num_consts)) {
+            error = "truncated class constant count";
+            return false;
+        }
+        for (uint32_t j = 0; j < num_consts; ++j) {
+            const char* cname = nullptr;
+            if (!dump_skip_string_ref(reader, p, end, &cname)
+                    || !dump_skip_string_ref(reader, p, end)
+                    || !dump_skip_bytes(p, end, has_const_pending_flag ? 2 : 1)) {
+                error = "truncated class constant entry";
+                return false;
+            }
+            if (!dump_skip_serialized_value(reader, p, end, summary, error, true,
+                    "class constant", owner, dump_owner_name(cname, nullptr))) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+static bool dump_scan_hashdecl_defaults(const QoreAOTBinaryReader& reader,
+        AOTDefaultDumpSummary& summary, std::string& error) {
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::HASHDECLS);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* p = reader.getSectionData(*sec);
+    if (!p) {
+        error = "invalid HASHDECLS section";
+        return false;
+    }
+    const uint8_t* end = p + sec->size;
+
+    uint32_t count = 0;
+    if (!dump_read_u32(p, end, count)) {
+        error = "truncated HASHDECLS header";
+        return false;
+    }
+
+    for (uint32_t i = 0; i < count; ++i) {
+        const char* name = nullptr;
+        const char* path = nullptr;
+        if (!dump_skip_string_ref(reader, p, end, &name)
+                || !dump_skip_string_ref(reader, p, end, &path)
+                || !dump_skip_bytes(p, end, 4 + 2)
+                || !dump_skip_string_ref(reader, p, end)) {
+            error = "truncated hashdecl header";
+            return false;
+        }
+        std::string owner = dump_owner_name(path, name);
+
+        uint32_t num_members = 0;
+        if (!dump_read_u32(p, end, num_members)) {
+            error = "truncated hashdecl member count";
+            return false;
+        }
+        for (uint32_t j = 0; j < num_members; ++j) {
+            const char* mname = nullptr;
+            if (!dump_skip_string_ref(reader, p, end, &mname)
+                    || !dump_skip_string_ref(reader, p, end)) {
+                error = "truncated hashdecl member entry";
+                return false;
+            }
+            uint8_t has_default = 0;
+            if (!dump_read_u8(p, end, has_default)) {
+                error = "truncated hashdecl member default flag";
+                return false;
+            }
+            if (has_default && !dump_skip_serialized_value(reader, p, end, summary,
+                    error, true, "hashdecl member", owner, dump_owner_name(mname, nullptr))) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+static bool dump_scan_constant_defaults(const QoreAOTBinaryReader& reader,
+        AOTDefaultDumpSummary& summary, std::string& error) {
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::CONSTANTS);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* p = reader.getSectionData(*sec);
+    if (!p) {
+        error = "invalid CONSTANTS section";
+        return false;
+    }
+    const uint8_t* end = p + sec->size;
+
+    uint32_t count = 0;
+    if (!dump_read_u32(p, end, count)) {
+        error = "truncated CONSTANTS header";
+        return false;
+    }
+    for (uint32_t i = 0; i < count; ++i) {
+        const char* name = nullptr;
+        if (!dump_skip_string_ref(reader, p, end, &name)
+                || !dump_skip_string_ref(reader, p, end)
+                || !dump_skip_bytes(p, end, 4 + 3)) {
+            error = "truncated constant entry";
+            return false;
+        }
+        if (!dump_skip_serialized_value(reader, p, end, summary, error, true,
+                "constant", "", dump_owner_name(name, nullptr))) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void print_aot_default_summary(const QoreAOTBinaryReader& reader) {
+    AOTDefaultDumpSummary summary;
+    std::string error;
+    if (!dump_scan_class_defaults(reader, summary, error)
+            || !dump_scan_hashdecl_defaults(reader, summary, error)
+            || !dump_scan_constant_defaults(reader, summary, error)) {
+        printf("    serialized defaults: error: %s\n", error.c_str());
+        return;
+    }
+
+    if (!summary.defaults) {
+        printf("    serialized defaults: (none)\n");
+        return;
+    }
+
+    auto count_tag = [&](QoreAOTValueTag tag) -> uint64_t {
+        auto i = summary.top_value_tags.find(static_cast<uint8_t>(tag));
+        return i == summary.top_value_tags.end() ? 0 : i->second;
+    };
+
+    printf("    serialized defaults: total=%llu expr-tree=%llu new-object=%llu "
+           "complex-default=%llu enum=%llu const-ref=%llu\n",
+        static_cast<unsigned long long>(summary.defaults),
+        static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_EXPR_TREE)),
+        static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_NEW_OBJECT)),
+        static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT)),
+        static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_ENUM)),
+        static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_CONST_REF)));
+
+    if (dump_sections) {
+        printf("      top serialized default tags:\n");
+        for (const auto& [tag, count] : summary.top_value_tags) {
+            printf("        %-20s (%3u): %llu\n", dump_aot_value_tag_name(tag), tag,
+                static_cast<unsigned long long>(count));
+        }
+    }
+
+    if (!summary.expr_tree_details.empty()) {
+        printf("      EXPR_TREE defaults:\n");
+        size_t limit = dump_sections ? summary.expr_tree_details.size()
+            : std::min<size_t>(summary.expr_tree_details.size(), 8);
+        for (size_t i = 0; i < limit; ++i) {
+            const auto& detail = summary.expr_tree_details[i];
+            printf("        %s %s::%s root=%s (%u) size=%u\n",
+                detail.category.c_str(),
+                detail.owner.c_str(),
+                detail.name.c_str(),
+                dump_aot_expr_node_kind_name(detail.root_kind),
+                detail.root_kind,
+                detail.blob_size);
+        }
+        if (summary.expr_tree_details.size() > limit) {
+            printf("        ... +%zu\n", summary.expr_tree_details.size() - limit);
         }
     }
 }
@@ -1767,6 +2335,7 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     }
 
     print_aot_slot_map_summary(reader);
+    print_aot_default_summary(reader);
 
     printf("    sections: %u\n", reader.getSectionCount());
     if (dump_sections) {

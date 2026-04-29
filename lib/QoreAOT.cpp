@@ -57,12 +57,14 @@
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/QoreIRPrinter.h"
+#include "qore/intern/QoreAOTExprNodeRegistry.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/SelfVarrefNode.h"
 #include "qore/intern/VarRefNode.h"
+#include "qore/intern/ParseNode.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/Variable.h"
 #include "qore/intern/qore_thread_intern.h"
@@ -154,6 +156,7 @@
 #include "qore/intern/QoreMapSelectOperatorNode.h"
 #include "qore/intern/QoreHashMapOperatorNode.h"
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
+#include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
@@ -517,9 +520,11 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     flags |= QORE_AOT_FEAT_LVPATH_SLICE;
     flags |= QORE_AOT_FEAT_LVPATH_DELETE_EXPR;
     flags |= QORE_AOT_FEAT_LVPATH_PATTERN;
-    // Function-call expression slots carry the parse-time variant signature so
-    // source-stripped direct calls can bind the same variant without AST args.
+    // Function-call expression metadata carries the parse-time variant
+    // signature, and inline function-call payloads carry their argument
+    // expressions for nested calls in typed constructor payloads.
     flags |= QORE_AOT_FEAT_FUNC_CALL_VARIANT;
+    flags |= QORE_AOT_FEAT_INLINE_CALL_ARGS;
     return flags;
 }
 
@@ -641,6 +646,28 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
 //! Build a diagnostic for functions that cannot be reconstructed from binary metadata.
 static bool getFallbackRequirementReason(const AOTCompiledFuncWithSlots& f, std::string& reason) {
     bool needs_fallback = false;
+    int expr_tree_count = 0;
+    for (size_t i = 0; i < f.slot_ids.exprs.size(); ++i) {
+        if (f.slot_ids.exprs[i].kind == AOTExprKind::EXPR_TREE) {
+            ++expr_tree_count;
+            if (expr_tree_count <= 3) {
+                reason += reason.empty() ? "" : "; ";
+                reason += "slot ";
+                reason += std::to_string(i);
+                reason += " would require EXPR_TREE serialization";
+            }
+        }
+    }
+    if (expr_tree_count > 3) {
+        reason += reason.empty() ? "" : "; ";
+        reason += "and ";
+        reason += std::to_string(expr_tree_count - 3);
+        reason += " more EXPR_TREE slots";
+    }
+    if (expr_tree_count) {
+        needs_fallback = true;
+    }
+
     if (f.slot_ids.has_unsupported_exprs) {
         reason += reason.empty() ? "" : "; ";
         reason += "unsupported expression serialization";
@@ -11380,6 +11407,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.child_expr = v;
                 return id;
             }
+            id.kind = AOTExprKind::PARSE_HASH;
+            id.child_expr = v;
+            return id;
         }
     }
     if (auto* qln = dynamic_cast<const QoreListNode*>(node)) {
@@ -11398,6 +11428,246 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
         id.kind = AOTExprKind::HASH_DEREF;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QorePlusOperatorNode*>(node)) {
+        id.kind = AOTExprKind::PLUS;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        id.kind = AOTExprKind::SQUARE_BRACKET;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreExistsOperatorNode*>(node)) {
+        id.kind = AOTExprKind::EXISTS;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
+        id.kind = AOTExprKind::IMPLICIT_ARG;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreMinusOperatorNode*>(node)) {
+        id.kind = AOTExprKind::MINUS;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
+        id.kind = AOTExprKind::MULTIPLY;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreDivisionOperatorNode*>(node)) {
+        id.kind = AOTExprKind::DIVIDE;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreModuloOperatorNode*>(node)) {
+        id.kind = AOTExprKind::MODULO;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreKeysOperatorNode*>(node)) {
+        id.kind = AOTExprKind::KEYS;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreImplicitElementNode*>(node)) {
+        id.kind = AOTExprKind::IMPLICIT_ELEM;
+        id.child_expr = v;
+        return id;
+    }
+    if (auto* inst = dynamic_cast<const QoreInstanceOfOperatorNode*>(node)) {
+        const QoreTypeInfo* ti = inst->getInstanceTypeInfo();
+        const char* type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+        if (type_path && *type_path) {
+            id.kind = AOTExprKind::INSTANCEOF;
+            id.ref1 = type_path;
+            id.child_expr = v;
+            return id;
+        }
+    }
+    if (auto* regex = dynamic_cast<const QoreRegexMatchOperatorNode*>(node)) {
+        QoreRegex* re = regex->getRegex();
+        const char* pattern = re ? re->getPatternCStr() : nullptr;
+        if (pattern) {
+            if (dynamic_cast<const QoreRegexExtractOperatorNode*>(node)) {
+                id.kind = AOTExprKind::REGEX_EXTRACT;
+            } else if (dynamic_cast<const QoreRegexNMatchOperatorNode*>(node)) {
+                id.kind = AOTExprKind::REGEX_NMATCH;
+            } else {
+                id.kind = AOTExprKind::REGEX_MATCH;
+            }
+            id.ref1 = pattern;
+            id.ref2 = std::to_string(re->getOptions());
+            id.child_expr = v;
+            return id;
+        }
+    }
+    if (dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
+        id.kind = AOTExprKind::PRE_DEC;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
+        id.kind = AOTExprKind::PRE_INC;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
+        id.kind = AOTExprKind::POST_DEC;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
+        id.kind = AOTExprKind::POST_INC;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+        id.kind = AOTExprKind::POST_DEC;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+        id.kind = AOTExprKind::POST_INC;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+        id.kind = AOTExprKind::LOG_NE;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)) {
+        id.kind = AOTExprKind::LOG_EQ;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreLogicalNotOperatorNode*>(node)) {
+        id.kind = AOTExprKind::LOG_NOT;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+        id.kind = AOTExprKind::NULL_COAL;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreValueCoalescingOperatorNode*>(node)) {
+        id.kind = AOTExprKind::VALUE_COAL;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        id.kind = AOTExprKind::QUESTION;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreFoldrOperatorNode*>(node)) {
+        id.kind = AOTExprKind::FOLDR;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreFoldlOperatorNode*>(node)) {
+        id.kind = AOTExprKind::FOLDL;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreMapOperatorNode*>(node)) {
+        id.kind = AOTExprKind::MAP;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreMapSelectOperatorNode*>(node)) {
+        id.kind = AOTExprKind::MAP_SELECT;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreHashMapSelectOperatorNode*>(node)) {
+        id.kind = AOTExprKind::HASH_MAP_SELECT_OP;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreHashMapOperatorNode*>(node)) {
+        id.kind = AOTExprKind::HASH_MAP_OP;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreSelectOperatorNode*>(node)) {
+        id.kind = AOTExprKind::SELECT;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreTrimOperatorNode*>(node)) {
+        id.kind = AOTExprKind::TRIM;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreChompOperatorNode*>(node)) {
+        id.kind = AOTExprKind::CHOMP;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QorePopOperatorNode*>(node)) {
+        id.kind = AOTExprKind::POP;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreShiftOperatorNode*>(node)) {
+        id.kind = AOTExprKind::SHIFT;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QorePushOperatorNode*>(node)) {
+        id.kind = AOTExprKind::PUSH;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
+        id.kind = AOTExprKind::UNSHIFT;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreElementsOperatorNode*>(node)) {
+        id.kind = AOTExprKind::ELEMENTS;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreDeleteOperatorNode*>(node)) {
+        id.kind = AOTExprKind::DELETE;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreRemoveOperatorNode*>(node)) {
+        id.kind = AOTExprKind::REMOVE;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreBackgroundOperatorNode*>(node)) {
+        id.kind = AOTExprKind::BACKGROUND;
+        id.child_expr = v;
+        return id;
+    }
+    if (auto* cr = dynamic_cast<const ContextrefNode*>(node)) {
+        id.kind = AOTExprKind::CONTEXT_REF;
+        id.ref1 = cr->str ? cr->str : "";
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const ContextRowNode*>(node)) {
+        id.kind = AOTExprKind::CONTEXT_ROW;
+        id.child_expr = v;
+        return id;
+    }
+    if (auto* ccr = dynamic_cast<const ComplexContextrefNode*>(node)) {
+        id.kind = AOTExprKind::COMPLEX_CONTEXT_REF;
+        id.ref1 = ccr->name ? ccr->name : "";
+        id.ref2 = ccr->member ? ccr->member : "";
         id.child_expr = v;
         return id;
     }
@@ -11564,27 +11834,53 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
     }
 
-    // Try recursive expression tree serialization before marking the expression unsupported.
-    {
-        ExprTreeSerializer serializer(slots, const_reverse_map);
-        if (serializer.serialize(v)) {
-            id.kind = AOTExprKind::EXPR_TREE;
-            id.ref1 = serializer.getBuffer();
-            if (getenv("QORE_AOT_DEBUG")) {
-                fprintf(stderr, "AOT: serialized EXPR_TREE for '%s' (node type %d, %zu bytes)\n",
-                    node->getTypeName(), node->getType(), id.ref1.size());
-            }
-            return id;
-        }
-    }
-
-    // Unsupported expression type; reject the function instead of falling back to source.
+    // The old path serialized arbitrary AST as EXPR_TREE here.  That hides native
+    // lowering/classification gaps, so report the old root kind and fail instead.
     id.kind = AOTExprKind::GENERIC_EVAL;
-    id.ref1 = "unsupported expression type '";
+    id.ref1 = "unsupported native AOT expression; old fallback would require EXPR_TREE for node '";
     id.ref1 += node->getTypeName();
     id.ref1 += "' (node type ";
     id.ref1 += std::to_string(node->getType());
     id.ref1 += ")";
+    if (auto* pn = dynamic_cast<const ParseNode*>(node)) {
+        if (pn->loc && (pn->loc->getFile() || pn->loc->getSource() || pn->loc->start_line >= 0)) {
+            id.ref1 += ", location=";
+            const char* file = pn->loc->getFileValue();
+            id.ref1 += *file ? file : "<unknown>";
+            if (pn->loc->start_line >= 0) {
+                id.ref1 += ":";
+                id.ref1 += std::to_string(pn->loc->start_line);
+                if (pn->loc->end_line >= 0 && pn->loc->end_line != pn->loc->start_line) {
+                    id.ref1 += "-";
+                    id.ref1 += std::to_string(pn->loc->end_line);
+                }
+            }
+            if (pn->loc->getSource() && *pn->loc->getSource()) {
+                id.ref1 += ", source=";
+                id.ref1 += pn->loc->getSource();
+            }
+            if (pn->loc->offset) {
+                id.ref1 += ", offset=";
+                id.ref1 += std::to_string(pn->loc->offset);
+            }
+        }
+    }
+    AOTSlotMap diagnostic_slots = slots;
+    ExprTreeSerializer serializer(diagnostic_slots, const_reverse_map);
+    if (serializer.serialize(v)) {
+        const std::vector<uint8_t>& blob = serializer.getRawBuffer();
+        if (!blob.empty()) {
+            uint8_t root_kind = blob[0];
+            const auto* root_info = getAOTExprNodeKindInfo(root_kind);
+            id.ref1 += ", EXPR_TREE root=";
+            id.ref1 += root_info && root_info->name ? root_info->name : "UNKNOWN";
+            id.ref1 += " (";
+            id.ref1 += std::to_string(root_kind);
+            id.ref1 += "), blob-size=";
+            id.ref1 += std::to_string(blob.size());
+        }
+    }
+    id.ref1 += "; add a native AOTExprKind serializer/reader or lower this operation to native IR";
     printd(3, "AOT: unsupported expression type '%s' for slot serialization\n", node->getTypeName());
     if (getenv("QORE_AOT_DEBUG")) {
         fprintf(stderr, "AOT: unsupported expression type '%s' (node type %d) for slot serialization\n",
@@ -11730,7 +12026,8 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             out.exprs.resize(static_cast<size_t>(slot) + 1);
         }
         out.exprs[slot] = classifyExpression(bits, slots, const_reverse_map);
-        if (out.exprs[slot].kind == AOTExprKind::GENERIC_EVAL) {
+        if (out.exprs[slot].kind == AOTExprKind::GENERIC_EVAL
+                || out.exprs[slot].kind == AOTExprKind::EXPR_TREE) {
             out.has_unsupported_exprs = true;
             std::string detail = "slot ";
             detail += std::to_string(slot);

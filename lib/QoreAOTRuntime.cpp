@@ -90,6 +90,9 @@
 #include "qore/intern/QoreRemoveOperatorNode.h"
 #include "qore/intern/QoreBackgroundOperatorNode.h"
 #include "qore/intern/QoreInstanceOfOperatorNode.h"
+#include "qore/intern/ContextrefNode.h"
+#include "qore/intern/ContextRowNode.h"
+#include "qore/intern/ComplexContextrefNode.h"
 #include "qore/intern/QoreTrimOperatorNode.h"
 #include "qore/intern/QoreChompOperatorNode.h"
 #include "qore/intern/QorePushOperatorNode.h"
@@ -165,6 +168,7 @@
 #include "qore/intern/QoreMapSelectOperatorNode.h"
 #include "qore/intern/QoreHashMapOperatorNode.h"
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
+#include "qore/intern/QoreSelectOperatorNode.h"
 #include "qore/intern/QoreFoldlOperatorNode.h"
 #include "qore/intern/QoreRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
@@ -790,8 +794,104 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         skipOneExpr(rdr, p, e);  // right (key expression)
         return;
     }
+    if (ek == AOTExprKind::PLUS || ek == AOTExprKind::SQUARE_BRACKET
+            || ek == AOTExprKind::MULTIPLY || ek == AOTExprKind::DIVIDE
+            || ek == AOTExprKind::MODULO || ek == AOTExprKind::PUSH
+            || ek == AOTExprKind::UNSHIFT || ek == AOTExprKind::NULL_COAL
+            || ek == AOTExprKind::VALUE_COAL || ek == AOTExprKind::FOLDL
+            || ek == AOTExprKind::FOLDR || ek == AOTExprKind::MAP
+            || ek == AOTExprKind::SELECT) {
+        skipOneExpr(rdr, p, e);  // left operand
+        skipOneExpr(rdr, p, e);  // right operand
+        return;
+    }
+    if (ek == AOTExprKind::MAP_SELECT || ek == AOTExprKind::HASH_MAP_OP) {
+        skipOneExpr(rdr, p, e);
+        skipOneExpr(rdr, p, e);
+        skipOneExpr(rdr, p, e);
+        return;
+    }
+    if (ek == AOTExprKind::HASH_MAP_SELECT_OP) {
+        skipOneExpr(rdr, p, e);
+        skipOneExpr(rdr, p, e);
+        skipOneExpr(rdr, p, e);
+        skipOneExpr(rdr, p, e);
+        return;
+    }
     if (ek == AOTExprKind::PARSE_REF) {
         skipOneExpr(rdr, p, e);  // inner lvalue expression
+        return;
+    }
+    if (ek == AOTExprKind::EXISTS) {
+        skipOneExpr(rdr, p, e);  // operand
+        return;
+    }
+    if (ek == AOTExprKind::IMPLICIT_ARG) {
+        (void)QoreAOTBinaryReader::readI64(p);  // offset
+        return;
+    }
+    if (ek == AOTExprKind::KEYS) {
+        skipOneExpr(rdr, p, e);  // operand
+        return;
+    }
+    if (ek == AOTExprKind::IMPLICIT_ELEM) {
+        return;
+    }
+    if (ek == AOTExprKind::INSTANCEOF) {
+        rdr.readStringRef(p);  // type path
+        skipOneExpr(rdr, p, e);  // operand
+        return;
+    }
+    if (ek == AOTExprKind::REGEX_MATCH || ek == AOTExprKind::REGEX_NMATCH
+            || ek == AOTExprKind::REGEX_EXTRACT) {
+        rdr.readStringRef(p);  // pattern
+        (void)QoreAOTBinaryReader::readI64(p);  // options
+        skipOneExpr(rdr, p, e);  // operand
+        return;
+    }
+    if (ek == AOTExprKind::PRE_INC || ek == AOTExprKind::PRE_DEC
+            || ek == AOTExprKind::POST_INC || ek == AOTExprKind::POST_DEC) {
+        skipOneExpr(rdr, p, e);  // lvalue operand
+        return;
+    }
+    if (ek == AOTExprKind::LOG_EQ || ek == AOTExprKind::LOG_NE) {
+        skipOneExpr(rdr, p, e);  // left operand
+        skipOneExpr(rdr, p, e);  // right operand
+        return;
+    }
+    if (ek == AOTExprKind::LOG_NOT) {
+        skipOneExpr(rdr, p, e);  // operand
+        return;
+    }
+    if (ek == AOTExprKind::QUESTION) {
+        skipOneExpr(rdr, p, e);  // condition
+        skipOneExpr(rdr, p, e);  // true expression
+        skipOneExpr(rdr, p, e);  // false expression
+        return;
+    }
+    if (ek == AOTExprKind::TRIM || ek == AOTExprKind::CHOMP
+            || ek == AOTExprKind::POP || ek == AOTExprKind::SHIFT
+            || ek == AOTExprKind::ELEMENTS || ek == AOTExprKind::DELETE
+            || ek == AOTExprKind::REMOVE || ek == AOTExprKind::BACKGROUND) {
+        skipOneExpr(rdr, p, e);  // operand
+        return;
+    }
+    if (ek == AOTExprKind::CONTEXT_REF) {
+        rdr.readStringRef(p);  // member
+        return;
+    }
+    if (ek == AOTExprKind::CONTEXT_ROW) {
+        return;
+    }
+    if (ek == AOTExprKind::COMPLEX_CONTEXT_REF) {
+        rdr.readStringRef(p);  // context name
+        rdr.readStringRef(p);  // member
+        (void)QoreAOTBinaryReader::readI64(p);  // stack offset
+        return;
+    }
+    if (ek == AOTExprKind::MINUS) {
+        skipOneExpr(rdr, p, e);  // left operand
+        skipOneExpr(rdr, p, e);  // right operand
         return;
     }
     if (ek == AOTExprKind::HASH_LITERAL) {
@@ -799,6 +899,14 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         for (uint8_t i = 0; i < n; ++i) {
             rdr.readStringRef(p);  // key
             skipOneExpr(rdr, p, e);  // value (recursive)
+        }
+        return;
+    }
+    if (ek == AOTExprKind::PARSE_HASH) {
+        uint8_t n = QoreAOTBinaryReader::readU8(p);
+        for (uint8_t i = 0; i < n; ++i) {
+            skipOneExpr(rdr, p, e);  // key expression
+            skipOneExpr(rdr, p, e);  // value expression
         }
         return;
     }
@@ -883,8 +991,23 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
+    // Inline FUNC_CALL: function name + optional variant signature + optional serialized args.
+    // Expression slots use a separate compact slot payload and are not skipped here.
+    if (ek == AOTExprKind::FUNC_CALL) {
+        rdr.readStringRef(p);
+        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_FUNC_CALL_VARIANT) != 0) {
+            rdr.readStringRef(p);
+        }
+        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_INLINE_CALL_ARGS) != 0) {
+            uint8_t na = QoreAOTBinaryReader::readU8(p);
+            for (uint8_t i = 0; i < na; ++i) {
+                skipOneExpr(rdr, p, e);
+            }
+        }
+        return;
+    }
     // One-stringref kinds
-    if (ek == AOTExprKind::FUNC_CALL || ek == AOTExprKind::RUNTIME_CONST_REF
+    if (ek == AOTExprKind::RUNTIME_CONST_REF
             || ek == AOTExprKind::CONST_NUMBER || ek == AOTExprKind::CONST_BINARY
             || ek == AOTExprKind::CONST_STRING || ek == AOTExprKind::SELF_VARREF
             || ek == AOTExprKind::LOCAL_VARREF || ek == AOTExprKind::GLOBAL_VARREF) {
@@ -1385,7 +1508,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         const char* ref2 = nullptr;
 
         // Validate expression kind is known (Phase 1 validation)
-        bool kind_is_valid = (kind_byte >= 1 && kind_byte <= 40) || kind_byte == 0xFE || kind_byte == 0xFF;
+        bool kind_is_valid = (kind_byte >= 1 && kind_byte <= 86) || kind_byte == 0xFE || kind_byte == 0xFF;
         if (!kind_is_valid) {
             printd(2, "AOT buildCtx '%s': unsupported kind_byte=%d at expr slot %d\n",
                 name, kind_byte, i);
@@ -2016,6 +2139,38 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::PARSE_HASH: {
+                uint8_t num_pairs = QoreAOTBinaryReader::readU8(ptr);
+                QoreParseHashNode* phn = new QoreParseHashNode(&loc_builtin);
+                bool hash_ok = true;
+                for (uint8_t j = 0; j < num_pairs; ++j) {
+                    std::string key_err;
+                    QoreValue key = readOneExpr(reader, ptr, end, key_err, pgm,
+                        ctx->locals, num_locals, ctx->globals, num_globals);
+                    std::string val_err;
+                    QoreValue val = readOneExpr(reader, ptr, end, val_err, pgm,
+                        ctx->locals, num_locals, ctx->globals, num_globals);
+                    if (!hash_ok) {
+                        key.discard(nullptr);
+                        val.discard(nullptr);
+                    } else if (!key_err.empty() || !val_err.empty()) {
+                        printd(2, "AOT v2: PARSE_HASH error for expr slot %d of '%s': %s\n",
+                            i, name, !key_err.empty() ? key_err.c_str() : val_err.c_str());
+                        key.discard(nullptr);
+                        val.discard(nullptr);
+                        hash_ok = false;
+                    } else {
+                        phn->add(key, val, &loc_builtin);
+                    }
+                }
+                if (hash_ok) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(phn));
+                } else {
+                    phn->deref(nullptr);
+                    has_unsupported = true;
+                }
+                continue;
+            }
             case AOTExprKind::LIST_LITERAL: {
                 // count(u8) + [value(readOneExpr)] * N
                 uint8_t count = QoreAOTBinaryReader::readU8(ptr);
@@ -2113,6 +2268,459 @@ static QoreAOTContext* buildContextFromSlotMap(
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreHashObjectDereferenceOperatorNode(&loc_builtin, left, right)));
                 }
+                continue;
+            }
+            case AOTExprKind::PLUS: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QorePlusOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::SQUARE_BRACKET: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreSquareBracketsOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::EXISTS: {
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreExistsOperatorNode(&loc_builtin, operand)));
+                }
+                continue;
+            }
+            case AOTExprKind::IMPLICIT_ARG: {
+                int64_t offset = QoreAOTBinaryReader::readI64(ptr);
+                int ctor_offset = offset >= 0 ? static_cast<int>(offset + 1) : static_cast<int>(offset);
+                ctx->exprs[i] = toBitsNB(QoreValue(
+                    new QoreImplicitArgumentNode(&loc_builtin, ctor_offset)));
+                continue;
+            }
+            case AOTExprKind::MINUS: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreMinusOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::MULTIPLY: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreMultiplicationOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::DIVIDE: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreDivisionOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::MODULO: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreModuloOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::KEYS: {
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreKeysOperatorNode(&loc_builtin, operand)));
+                }
+                continue;
+            }
+            case AOTExprKind::IMPLICIT_ELEM: {
+                ctx->exprs[i] = toBitsNB(QoreValue(new QoreImplicitElementNode(&loc_builtin)));
+                continue;
+            }
+            case AOTExprKind::INSTANCEOF: {
+                const char* type_path = reader.readStringRef(ptr);
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                    continue;
+                }
+                if (!type_path || !*type_path) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                    continue;
+                }
+                std::string type_error;
+                QoreAOTTypeResolver resolver(pgm);
+                const QoreTypeInfo* ti = resolver.resolve(type_path, type_error);
+                if (!ti) {
+                    printd(0, "AOT v2: cannot resolve type '%s' for INSTANCEOF: %s\n",
+                        type_path, type_error.c_str());
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreInstanceOfOperatorNode(&loc_builtin, operand, ti)));
+                }
+                continue;
+            }
+            case AOTExprKind::REGEX_MATCH:
+            case AOTExprKind::REGEX_NMATCH:
+            case AOTExprKind::REGEX_EXTRACT: {
+                const char* pattern = reader.readStringRef(ptr);
+                int64_t options = QoreAOTBinaryReader::readI64(ptr);
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!operand_err.empty() || !pattern) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                    continue;
+                }
+                ExceptionSink xsink;
+                QoreRegex* re = new QoreRegex(pattern, options, &xsink);
+                if (xsink) {
+                    printd(0, "AOT v2: regex compile error for pattern '%s'\n", pattern);
+                    delete re;
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                    continue;
+                }
+                if (kind == AOTExprKind::REGEX_NMATCH) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreRegexNMatchOperatorNode(&loc_builtin, operand, re)));
+                } else if (kind == AOTExprKind::REGEX_EXTRACT) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreRegexExtractOperatorNode(&loc_builtin, operand, re)));
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreRegexMatchOperatorNode(&loc_builtin, operand, re)));
+                }
+                continue;
+            }
+            case AOTExprKind::PRE_INC:
+            case AOTExprKind::PRE_DEC:
+            case AOTExprKind::POST_INC:
+            case AOTExprKind::POST_DEC: {
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                    continue;
+                }
+                if (kind == AOTExprKind::PRE_INC) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QorePreIncrementOperatorNode(&loc_builtin, operand)));
+                } else if (kind == AOTExprKind::PRE_DEC) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QorePreDecrementOperatorNode(&loc_builtin, operand)));
+                } else if (kind == AOTExprKind::POST_INC) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QorePostIncrementOperatorNode(&loc_builtin, operand)));
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QorePostDecrementOperatorNode(&loc_builtin, operand)));
+                }
+                continue;
+            }
+            case AOTExprKind::LOG_EQ:
+            case AOTExprKind::LOG_NE:
+            case AOTExprKind::NULL_COAL:
+            case AOTExprKind::VALUE_COAL:
+            case AOTExprKind::FOLDL:
+            case AOTExprKind::FOLDR:
+            case AOTExprKind::MAP:
+            case AOTExprKind::SELECT: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else if (kind == AOTExprKind::NULL_COAL) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreNullCoalescingOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::VALUE_COAL) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreValueCoalescingOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::FOLDL) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreFoldlOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::FOLDR) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreFoldrOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::MAP) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreMapOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::SELECT) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreSelectOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::LOG_NE) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalNotEqualsOperatorNode(&loc_builtin, left, right)));
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalEqualsOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::MAP_SELECT: {
+                std::string map_err;
+                QoreValue map_expr = readOneExpr(reader, ptr, end, map_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string source_err;
+                QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string where_err;
+                QoreValue where_expr = readOneExpr(reader, ptr, end, where_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!map_err.empty() || !source_err.empty() || !where_err.empty()) {
+                    map_expr.discard(nullptr);
+                    source.discard(nullptr);
+                    where_expr.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreMapSelectOperatorNode(&loc_builtin, map_expr, source, where_expr)));
+                }
+                continue;
+            }
+            case AOTExprKind::HASH_MAP_OP:
+            case AOTExprKind::HASH_MAP_SELECT_OP: {
+                std::string key_err;
+                QoreValue key_expr = readOneExpr(reader, ptr, end, key_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string val_err;
+                QoreValue val_expr = readOneExpr(reader, ptr, end, val_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string source_err;
+                QoreValue source = readOneExpr(reader, ptr, end, source_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (kind == AOTExprKind::HASH_MAP_OP) {
+                    if (!key_err.empty() || !val_err.empty() || !source_err.empty()) {
+                        key_expr.discard(nullptr);
+                        val_expr.discard(nullptr);
+                        source.discard(nullptr);
+                        has_unsupported = true;
+                    } else {
+                        ctx->exprs[i] = toBitsNB(QoreValue(
+                            new QoreHashMapOperatorNode(&loc_builtin, key_expr, val_expr, source)));
+                    }
+                    continue;
+                }
+                std::string where_err;
+                QoreValue where_expr = readOneExpr(reader, ptr, end, where_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!key_err.empty() || !val_err.empty() || !source_err.empty() || !where_err.empty()) {
+                    key_expr.discard(nullptr);
+                    val_expr.discard(nullptr);
+                    source.discard(nullptr);
+                    where_expr.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreHashMapSelectOperatorNode(&loc_builtin,
+                            key_expr, val_expr, source, where_expr)));
+                }
+                continue;
+            }
+            case AOTExprKind::LOG_NOT: {
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalNotOperatorNode(&loc_builtin, operand)));
+                }
+                continue;
+            }
+            case AOTExprKind::QUESTION: {
+                std::string cond_err;
+                QoreValue cond = readOneExpr(reader, ptr, end, cond_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string true_err;
+                QoreValue true_expr = readOneExpr(reader, ptr, end, true_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string false_err;
+                QoreValue false_expr = readOneExpr(reader, ptr, end, false_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!cond_err.empty() || !true_err.empty() || !false_err.empty()) {
+                    cond.discard(nullptr);
+                    true_expr.discard(nullptr);
+                    false_expr.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreQuestionMarkOperatorNode(&loc_builtin, cond, true_expr, false_expr)));
+                }
+                continue;
+            }
+            case AOTExprKind::TRIM:
+            case AOTExprKind::CHOMP:
+            case AOTExprKind::POP:
+            case AOTExprKind::SHIFT:
+            case AOTExprKind::ELEMENTS:
+            case AOTExprKind::DELETE:
+            case AOTExprKind::REMOVE:
+            case AOTExprKind::BACKGROUND: {
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                } else if (kind == AOTExprKind::TRIM) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreTrimOperatorNode(&loc_builtin, operand)));
+                } else if (kind == AOTExprKind::CHOMP) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreChompOperatorNode(&loc_builtin, operand)));
+                } else if (kind == AOTExprKind::POP) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QorePopOperatorNode(&loc_builtin, operand)));
+                } else if (kind == AOTExprKind::SHIFT) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreShiftOperatorNode(&loc_builtin, operand)));
+                } else if (kind == AOTExprKind::ELEMENTS) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreElementsOperatorNode(&loc_builtin, operand)));
+                } else if (kind == AOTExprKind::DELETE) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreDeleteOperatorNode(&loc_builtin, operand)));
+                } else if (kind == AOTExprKind::REMOVE) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreRemoveOperatorNode(&loc_builtin, operand)));
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreBackgroundOperatorNode(&loc_builtin, operand)));
+                }
+                continue;
+            }
+            case AOTExprKind::PUSH:
+            case AOTExprKind::UNSHIFT: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else if (kind == AOTExprKind::PUSH) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QorePushOperatorNode(&loc_builtin, left, right)));
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreUnshiftOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::CONTEXT_REF: {
+                const char* member = reader.readStringRef(ptr);
+                ctx->exprs[i] = toBitsNB(QoreValue(
+                    new ContextrefNode(&loc_builtin, strdup(member ? member : ""))));
+                continue;
+            }
+            case AOTExprKind::CONTEXT_ROW: {
+                ctx->exprs[i] = toBitsNB(QoreValue(new ContextRowNode(&loc_builtin)));
+                continue;
+            }
+            case AOTExprKind::COMPLEX_CONTEXT_REF: {
+                const char* ctx_name = reader.readStringRef(ptr);
+                const char* member = reader.readStringRef(ptr);
+                int64_t stack_offset = QoreAOTBinaryReader::readI64(ptr);
+
+                std::string spec = ctx_name ? ctx_name : "";
+                spec += ":";
+                spec += member ? member : "";
+                auto* node = new ComplexContextrefNode(&loc_builtin, strdup(spec.c_str()));
+                node->stack_offset = static_cast<int>(stack_offset);
+                ctx->exprs[i] = toBitsNB(QoreValue(node));
                 continue;
             }
             case AOTExprKind::CLOSURE_CREATE: {

@@ -108,8 +108,9 @@ constexpr uint64_t QORE_AOT_FEAT_FUNC_CALL_VARIANT = 1ULL << 17; //!< FUNC_CALL 
 constexpr uint64_t QORE_AOT_FEAT_BACKQUOTE = 1ULL << 18; //!< native IR Backquote opcode
 constexpr uint64_t QORE_AOT_FEAT_FIND = 1ULL << 19; //!< native IR Find opcode
 constexpr uint64_t QORE_AOT_FEAT_BACKGROUND_IR = 1ULL << 20; //!< native IR background call metadata
+constexpr uint64_t QORE_AOT_FEAT_INLINE_CALL_ARGS = 1ULL << 21; //!< inline FUNC_CALL expression payloads include serialized argument expressions
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -836,6 +837,51 @@ enum class AOTExprKind : uint8_t {
     SELF_METHOD_REF    = 39,  //!< Self method reference (\self.method): ref1=method_name
     OBJ_METHOD_REF_EXPR = 40, //!< Object method reference (\obj.method): ref1=method_name + inline child expr
     CONST_VALUE        = 41,  //!< Serialized QoreValue constant: QoreAOTValueTag payload
+    PLUS               = 42,  //!< Plus operator: left(AOTExprKind) + right(AOTExprKind)
+    SQUARE_BRACKET     = 43,  //!< Square-bracket operator: left(AOTExprKind) + right(AOTExprKind)
+    PARSE_HASH         = 44,  //!< Parse hash: count(u8) + [key(AOTExprKind) + value(AOTExprKind)] * N
+    EXISTS             = 45,  //!< Exists operator: operand(AOTExprKind)
+    IMPLICIT_ARG       = 46,  //!< Implicit argument reference: offset(i64), -1 for argv
+    MINUS              = 47,  //!< Minus operator: left(AOTExprKind) + right(AOTExprKind)
+    KEYS               = 48,  //!< Keys operator: operand(AOTExprKind)
+    MULTIPLY           = 49,  //!< Multiplication operator: left(AOTExprKind) + right(AOTExprKind)
+    DIVIDE             = 50,  //!< Division operator: left(AOTExprKind) + right(AOTExprKind)
+    MODULO             = 51,  //!< Modulo operator: left(AOTExprKind) + right(AOTExprKind)
+    IMPLICIT_ELEM      = 52,  //!< Implicit element reference ($#): no data
+    INSTANCEOF         = 53,  //!< Instanceof operator: ref1=type_path + operand(AOTExprKind)
+    REGEX_MATCH        = 54,  //!< Regex match operator: pattern(stringref) + options(i64) + operand(AOTExprKind)
+    REGEX_NMATCH       = 55,  //!< Regex negative match operator: pattern(stringref) + options(i64) + operand(AOTExprKind)
+    REGEX_EXTRACT      = 56,  //!< Regex extract operator: pattern(stringref) + options(i64) + operand(AOTExprKind)
+    PRE_INC            = 57,  //!< Pre-increment operator: lvalue(AOTExprKind)
+    PRE_DEC            = 58,  //!< Pre-decrement operator: lvalue(AOTExprKind)
+    POST_INC           = 59,  //!< Post-increment operator: lvalue(AOTExprKind)
+    POST_DEC           = 60,  //!< Post-decrement operator: lvalue(AOTExprKind)
+    LOG_EQ             = 61,  //!< Logical equality operator: left(AOTExprKind) + right(AOTExprKind)
+    LOG_NE             = 62,  //!< Logical not-equals operator: left(AOTExprKind) + right(AOTExprKind)
+    LOG_NOT            = 63,  //!< Logical not operator: operand(AOTExprKind)
+    TRIM               = 64,  //!< Trim operator: lvalue(AOTExprKind)
+    CHOMP              = 65,  //!< Chomp operator: lvalue(AOTExprKind)
+    POP                = 66,  //!< Pop operator: lvalue(AOTExprKind)
+    SHIFT              = 67,  //!< Shift operator: lvalue(AOTExprKind)
+    PUSH               = 68,  //!< Push operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    UNSHIFT            = 69,  //!< Unshift operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    ELEMENTS           = 70,  //!< Elements operator: operand(AOTExprKind)
+    DELETE             = 71,  //!< Delete operator: lvalue(AOTExprKind)
+    REMOVE             = 72,  //!< Remove operator: lvalue(AOTExprKind)
+    BACKGROUND         = 73,  //!< Background operator: operand(AOTExprKind)
+    CONTEXT_REF        = 74,  //!< Context member reference: member(stringref)
+    CONTEXT_ROW        = 75,  //!< Current context row reference: no data
+    COMPLEX_CONTEXT_REF = 76, //!< Named context member reference: name(stringref) + member(stringref) + stack_offset(i64)
+    NULL_COAL          = 77,  //!< Null coalescing operator: left(AOTExprKind) + right(AOTExprKind)
+    VALUE_COAL         = 78,  //!< Value coalescing operator: left(AOTExprKind) + right(AOTExprKind)
+    QUESTION           = 79,  //!< Ternary operator: condition + true expression + false expression
+    FOLDL              = 80,  //!< Fold-left operator: fold expression + source expression
+    FOLDR              = 81,  //!< Fold-right operator: fold expression + source expression
+    MAP                = 82,  //!< Map operator: map expression + source expression
+    MAP_SELECT         = 83,  //!< Map-select operator: map expression + source expression + where expression
+    HASH_MAP_OP        = 84,  //!< Hash map operator: key expression + value expression + source expression
+    HASH_MAP_SELECT_OP = 85,  //!< Hash map-select operator: key expression + value expression + source + where
+    SELECT             = 86,  //!< Select operator: source expression + select expression
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression marker; rejected for new AOT objects
 };
@@ -1080,9 +1126,9 @@ struct AOTSlotIdentities {
     std::vector<AOTBodyLocalId> body_locals; //!< body locals in order
     std::vector<AOTRegexCaseSlotId> regex_cases; //!< indexed by regex case slot index
     std::vector<AOTLVPathSlotId> lv_path_insts;  //!< indexed by lv_path slot index
-    bool has_unsupported_exprs = false;   //!< true if any expression is GENERIC_EVAL
+    bool has_unsupported_exprs = false;   //!< true if any expression is GENERIC_EVAL or would need EXPR_TREE
     bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
-    std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for GENERIC_EVAL slots
+    std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for unsupported expression slots
 };
 
 //! Descriptor for a compiled function with slot identities

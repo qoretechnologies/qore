@@ -32,6 +32,52 @@
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/QorePlusOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreExistsOperatorNode.h"
+#include "qore/intern/QoreImplicitArgumentNode.h"
+#include "qore/intern/QoreMinusOperatorNode.h"
+#include "qore/intern/QoreKeysOperatorNode.h"
+#include "qore/intern/QoreMultiplicationOperatorNode.h"
+#include "qore/intern/QoreDivisionOperatorNode.h"
+#include "qore/intern/QoreModuloOperatorNode.h"
+#include "qore/intern/QoreImplicitElementNode.h"
+#include "qore/intern/QoreInstanceOfOperatorNode.h"
+#include "qore/intern/QoreRegexMatchOperatorNode.h"
+#include "qore/intern/QoreRegexNMatchOperatorNode.h"
+#include "qore/intern/QoreRegexExtractOperatorNode.h"
+#include "qore/intern/QoreRegex.h"
+#include "qore/intern/QorePreIncrementOperatorNode.h"
+#include "qore/intern/QorePreDecrementOperatorNode.h"
+#include "qore/intern/QorePostIncrementOperatorNode.h"
+#include "qore/intern/QorePostDecrementOperatorNode.h"
+#include "qore/intern/QoreIntPostIncrementOperatorNode.h"
+#include "qore/intern/QoreIntPostDecrementOperatorNode.h"
+#include "qore/intern/QoreLogicalEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalNotOperatorNode.h"
+#include "qore/intern/QoreNullCoalescingOperatorNode.h"
+#include "qore/intern/QoreValueCoalescingOperatorNode.h"
+#include "qore/intern/QoreQuestionMarkOperatorNode.h"
+#include "qore/intern/QoreFoldlOperatorNode.h"
+#include "qore/intern/QoreMapOperatorNode.h"
+#include "qore/intern/QoreMapSelectOperatorNode.h"
+#include "qore/intern/QoreHashMapOperatorNode.h"
+#include "qore/intern/QoreHashMapSelectOperatorNode.h"
+#include "qore/intern/QoreSelectOperatorNode.h"
+#include "qore/intern/QoreElementsOperatorNode.h"
+#include "qore/intern/QoreDeleteOperatorNode.h"
+#include "qore/intern/QoreRemoveOperatorNode.h"
+#include "qore/intern/QoreBackgroundOperatorNode.h"
+#include "qore/intern/QoreTrimOperatorNode.h"
+#include "qore/intern/QoreChompOperatorNode.h"
+#include "qore/intern/QorePopOperatorNode.h"
+#include "qore/intern/QoreShiftOperatorNode.h"
+#include "qore/intern/QorePushOperatorNode.h"
+#include "qore/intern/QoreUnshiftOperatorNode.h"
+#include "qore/intern/ContextrefNode.h"
+#include "qore/intern/ContextRowNode.h"
+#include "qore/intern/ComplexContextrefNode.h"
 
 class UserClosureVariant;
 QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant);
@@ -183,53 +229,145 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 40: OBJ_METHOD_REF_EXPR
     {"OBJ_METHOD_REF_EXPR", 40, true, write_slot_OBJ_METHOD_REF_EXPR, "Object method reference with expression"},
 
-    // 41-253: Unused
+    // 41: CONST_VALUE is inline-only for now.
     {nullptr, 41, false, nullptr, nullptr},
-    {nullptr, 42, false, nullptr, nullptr},
-    {nullptr, 43, false, nullptr, nullptr},
-    {nullptr, 44, false, nullptr, nullptr},
-    {nullptr, 45, false, nullptr, nullptr},
-    {nullptr, 46, false, nullptr, nullptr},
-    {nullptr, 47, false, nullptr, nullptr},
-    {nullptr, 48, false, nullptr, nullptr},
-    {nullptr, 49, false, nullptr, nullptr},
-    {nullptr, 50, false, nullptr, nullptr},
-    {nullptr, 51, false, nullptr, nullptr},
-    {nullptr, 52, false, nullptr, nullptr},
-    {nullptr, 53, false, nullptr, nullptr},
-    {nullptr, 54, false, nullptr, nullptr},
-    {nullptr, 55, false, nullptr, nullptr},
-    {nullptr, 56, false, nullptr, nullptr},
-    {nullptr, 57, false, nullptr, nullptr},
-    {nullptr, 58, false, nullptr, nullptr},
-    {nullptr, 59, false, nullptr, nullptr},
-    {nullptr, 60, false, nullptr, nullptr},
-    {nullptr, 61, false, nullptr, nullptr},
-    {nullptr, 62, false, nullptr, nullptr},
-    {nullptr, 63, false, nullptr, nullptr},
-    {nullptr, 64, false, nullptr, nullptr},
-    {nullptr, 65, false, nullptr, nullptr},
-    {nullptr, 66, false, nullptr, nullptr},
-    {nullptr, 67, false, nullptr, nullptr},
-    {nullptr, 68, false, nullptr, nullptr},
-    {nullptr, 69, false, nullptr, nullptr},
-    {nullptr, 70, false, nullptr, nullptr},
-    {nullptr, 71, false, nullptr, nullptr},
-    {nullptr, 72, false, nullptr, nullptr},
-    {nullptr, 73, false, nullptr, nullptr},
-    {nullptr, 74, false, nullptr, nullptr},
-    {nullptr, 75, false, nullptr, nullptr},
-    {nullptr, 76, false, nullptr, nullptr},
-    {nullptr, 77, false, nullptr, nullptr},
-    {nullptr, 78, false, nullptr, nullptr},
-    {nullptr, 79, false, nullptr, nullptr},
-    {nullptr, 80, false, nullptr, nullptr},
-    {nullptr, 81, false, nullptr, nullptr},
-    {nullptr, 82, false, nullptr, nullptr},
-    {nullptr, 83, false, nullptr, nullptr},
-    {nullptr, 84, false, nullptr, nullptr},
-    {nullptr, 85, false, nullptr, nullptr},
-    {nullptr, 86, false, nullptr, nullptr},
+
+    // 42: PLUS
+    {"PLUS", 42, true, write_slot_PLUS, "Plus operator"},
+
+    // 43: SQUARE_BRACKET
+    {"SQUARE_BRACKET", 43, true, write_slot_SQUARE_BRACKET, "Square-bracket operator"},
+
+    // 44: PARSE_HASH
+    {"PARSE_HASH", 44, true, write_slot_PARSE_HASH, "Parse hash literal"},
+
+    // 45: EXISTS
+    {"EXISTS", 45, true, write_slot_EXISTS, "Exists operator"},
+
+    // 46: IMPLICIT_ARG
+    {"IMPLICIT_ARG", 46, true, write_slot_IMPLICIT_ARG, "Implicit argument reference"},
+
+    // 47: MINUS
+    {"MINUS", 47, true, write_slot_MINUS, "Minus operator"},
+
+    // 48: KEYS
+    {"KEYS", 48, true, write_slot_KEYS, "Keys operator"},
+
+    // 49: MULTIPLY
+    {"MULTIPLY", 49, true, write_slot_MULTIPLY, "Multiplication operator"},
+
+    // 50: DIVIDE
+    {"DIVIDE", 50, true, write_slot_DIVIDE, "Division operator"},
+
+    // 51: MODULO
+    {"MODULO", 51, true, write_slot_MODULO, "Modulo operator"},
+
+    // 52: IMPLICIT_ELEM
+    {"IMPLICIT_ELEM", 52, true, write_slot_IMPLICIT_ELEM, "Implicit element reference"},
+
+    // 53: INSTANCEOF
+    {"INSTANCEOF", 53, true, write_slot_INSTANCEOF, "Instanceof operator"},
+
+    // 54: REGEX_MATCH
+    {"REGEX_MATCH", 54, true, write_slot_REGEX_MATCH, "Regex match operator"},
+
+    // 55: REGEX_NMATCH
+    {"REGEX_NMATCH", 55, true, write_slot_REGEX_NMATCH, "Regex negative match operator"},
+
+    // 56: REGEX_EXTRACT
+    {"REGEX_EXTRACT", 56, true, write_slot_REGEX_EXTRACT, "Regex extract operator"},
+
+    // 57: PRE_INC
+    {"PRE_INC", 57, true, write_slot_PRE_INC, "Pre-increment operator"},
+
+    // 58: PRE_DEC
+    {"PRE_DEC", 58, true, write_slot_PRE_DEC, "Pre-decrement operator"},
+
+    // 59: POST_INC
+    {"POST_INC", 59, true, write_slot_POST_INC, "Post-increment operator"},
+
+    // 60: POST_DEC
+    {"POST_DEC", 60, true, write_slot_POST_DEC, "Post-decrement operator"},
+
+    // 61: LOG_EQ
+    {"LOG_EQ", 61, true, write_slot_LOG_EQ, "Logical equality operator"},
+
+    // 62: LOG_NE
+    {"LOG_NE", 62, true, write_slot_LOG_NE, "Logical not-equals operator"},
+
+    // 63: LOG_NOT
+    {"LOG_NOT", 63, true, write_slot_LOG_NOT, "Logical not operator"},
+
+    // 64: TRIM
+    {"TRIM", 64, true, write_slot_TRIM, "Trim operator"},
+
+    // 65: CHOMP
+    {"CHOMP", 65, true, write_slot_CHOMP, "Chomp operator"},
+
+    // 66: POP
+    {"POP", 66, true, write_slot_POP, "Pop operator"},
+
+    // 67: SHIFT
+    {"SHIFT", 67, true, write_slot_SHIFT, "Shift operator"},
+
+    // 68: PUSH
+    {"PUSH", 68, true, write_slot_PUSH, "Push operator"},
+
+    // 69: UNSHIFT
+    {"UNSHIFT", 69, true, write_slot_UNSHIFT, "Unshift operator"},
+
+    // 70: ELEMENTS
+    {"ELEMENTS", 70, true, write_slot_ELEMENTS, "Elements operator"},
+
+    // 71: DELETE
+    {"DELETE", 71, true, write_slot_DELETE, "Delete operator"},
+
+    // 72: REMOVE
+    {"REMOVE", 72, true, write_slot_REMOVE, "Remove operator"},
+
+    // 73: BACKGROUND
+    {"BACKGROUND", 73, true, write_slot_BACKGROUND, "Background operator"},
+
+    // 74: CONTEXT_REF
+    {"CONTEXT_REF", 74, true, write_slot_CONTEXT_REF, "Context member reference"},
+
+    // 75: CONTEXT_ROW
+    {"CONTEXT_ROW", 75, true, write_slot_CONTEXT_ROW, "Context row reference"},
+
+    // 76: COMPLEX_CONTEXT_REF
+    {"COMPLEX_CONTEXT_REF", 76, true, write_slot_COMPLEX_CONTEXT_REF, "Named context member reference"},
+
+    // 77: NULL_COAL
+    {"NULL_COAL", 77, true, write_slot_NULL_COAL, "Null coalescing operator"},
+
+    // 78: VALUE_COAL
+    {"VALUE_COAL", 78, true, write_slot_VALUE_COAL, "Value coalescing operator"},
+
+    // 79: QUESTION
+    {"QUESTION", 79, true, write_slot_QUESTION, "Ternary operator"},
+
+    // 80: FOLDL
+    {"FOLDL", 80, true, write_slot_FOLDL, "Fold-left operator"},
+
+    // 81: FOLDR
+    {"FOLDR", 81, true, write_slot_FOLDR, "Fold-right operator"},
+
+    // 82: MAP
+    {"MAP", 82, true, write_slot_MAP, "Map operator"},
+
+    // 83: MAP_SELECT
+    {"MAP_SELECT", 83, true, write_slot_MAP_SELECT, "Map-select operator"},
+
+    // 84: HASH_MAP
+    {"HASH_MAP", 84, true, write_slot_HASH_MAP, "Hash map operator"},
+
+    // 85: HASH_MAP_SELECT
+    {"HASH_MAP_SELECT", 85, true, write_slot_HASH_MAP_SELECT, "Hash map-select operator"},
+
+    // 86: SELECT
+    {"SELECT", 86, true, write_slot_SELECT, "Select operator"},
+
+    // 87-253: Unused
     {nullptr, 87, false, nullptr, nullptr},
     {nullptr, 88, false, nullptr, nullptr},
     {nullptr, 89, false, nullptr, nullptr},

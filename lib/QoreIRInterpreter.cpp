@@ -869,13 +869,14 @@ static std::pair<bool, QoreValue> runBackgroundMetadata(
     return {false, QoreValue()};
 }
 
-static void removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
+static bool removeCleanupEntry(std::vector<uint32_t>& cleanup, uint32_t id) {
     for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
         if (*it == id) {
             cleanup.erase(std::next(it).base());
-            return;
+            return true;
         }
     }
+    return false;
 }
 
 // Sets a value slot without discarding the previous value. Only use this for
@@ -2635,12 +2636,32 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
         local_load_slots[slot_id].clear();
     };
-    auto discardValueSlot = [&](uint32_t vid) {
+    auto isClosureContainer = [](const LocalVar* lv, const VarRefNode* container) {
+        if (lv) {
+            return lv->closureUse();
+        }
+        return container
+            && (container->getType() == VT_CLOSURE
+                || (container->getType() == VT_LOCAL && container->ref.id
+                    && container->ref.id->closureUse()));
+    };
+    auto discardContainerValueSlot = [&](uint32_t vid, uint32_t container_slot_id, bool owns_slot_ref) {
         if (vid >= values.size()) {
             return;
         }
-        removeCleanupEntry(cleanup, vid);
-        values[vid].discard(xsink);
+        if (container_slot_id != UINT32_MAX
+                && container_slot_id < local_init_slots.size()
+                && local_init_slots[container_slot_id] == vid) {
+            removeCleanupEntry(cleanup, vid);
+            values[vid] = QoreValue();
+            return;
+        }
+        if (owns_slot_ref && removeCleanupEntry(cleanup, vid)) {
+            values[vid].discard(xsink);
+        } else {
+            removeCleanupEntry(cleanup, vid);
+            values[vid] = QoreValue();
+        }
         if (vid < load_slot_registered.size()) {
             load_slot_registered[vid] = false;
         }
@@ -4123,7 +4144,11 @@ load_local_done:
                 if (local_inst->result.id >= 0) {
                     local_owned_slots.insert(local_inst->result.id);
                 }
-                if (out.hasNode() && local_inst->auto_ref) {
+                // LoadClosure always materializes an owned value slot: closure
+                // args/cache hits use refSelf(), and CVV eval returns a
+                // referenced value.  Track cleanup even for lvalue loads
+                // (auto_ref=false), otherwise container mutation slots leak.
+                if (out.hasNode()) {
                     cleanup.push_back(local_inst->result.id);
                 }
                 // Track LoadLocal result slot for cleanup in UninstantiateLocal
@@ -4405,7 +4430,8 @@ load_local_done:
 
                     // Clear the container slot so cleanup doesn't try to discard it
                     // (it's held by TLS and managed separately)
-                    discardValueSlot(hks_inst->operands[0].id);
+                    discardContainerValueSlot(hks_inst->operands[0].id, hks_inst->container_slot_id,
+                        isClosureContainer(hks_inst->container_lv, hks_inst->container));
                 } else if (hash_val.isNothing()) {
                     LocalVar* lv;
                     bool is_closure;
@@ -4452,7 +4478,8 @@ load_local_done:
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                     }
-                    discardValueSlot(hks_inst->operands[0].id);
+                    discardContainerValueSlot(hks_inst->operands[0].id, hks_inst->container_slot_id,
+                        isClosureContainer(hks_inst->container_lv, hks_inst->container));
                 } else if (hash_val.getType() == NT_OBJECT) {
                     const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
                         hks_inst->key_name.c_str(), val.refSelf(), xsink);
@@ -4516,7 +4543,8 @@ load_local_done:
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                     }
-                    discardValueSlot(hksd_inst->operands[0].id);
+                    discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
+                        isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
                 } else if (hash_val.isNothing()) {
                     LocalVar* lv;
                     bool is_closure;
@@ -4562,7 +4590,8 @@ load_local_done:
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                     }
-                    discardValueSlot(hksd_inst->operands[0].id);
+                    discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
+                        isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
                 } else if (hash_val.getType() == NT_OBJECT) {
                     const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
                         key_str->c_str(), val.refSelf(), xsink);
@@ -4667,7 +4696,8 @@ load_local_done:
 
                     // Clear the container slot so cleanup doesn't try to discard it
                     // (it's held by TLS and managed separately)
-                    discardValueSlot(lis_inst->operands[0].id);
+                    discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
+                        isClosureContainer(nullptr, lis_inst->container));
                 } else if (list_val.isNothing()) {
                     // Auto-vivify: use container's declared type so the element
                     // type comes out right (softlist<bool> → list<bool>, not list<auto>).
@@ -4715,7 +4745,8 @@ load_local_done:
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
                         locals_slot_cache[csid].discard(xsink);
                     }
-                    discardValueSlot(lis_inst->operands[0].id);
+                    discardContainerValueSlot(lis_inst->operands[0].id, lis_inst->container_slot_id,
+                        isClosureContainer(nullptr, lis_inst->container));
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

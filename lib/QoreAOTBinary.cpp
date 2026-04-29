@@ -54,6 +54,51 @@
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
+#include "qore/intern/QorePlusOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreExistsOperatorNode.h"
+#include "qore/intern/QoreImplicitArgumentNode.h"
+#include "qore/intern/QoreMinusOperatorNode.h"
+#include "qore/intern/QoreKeysOperatorNode.h"
+#include "qore/intern/QoreMultiplicationOperatorNode.h"
+#include "qore/intern/QoreDivisionOperatorNode.h"
+#include "qore/intern/QoreModuloOperatorNode.h"
+#include "qore/intern/QoreImplicitElementNode.h"
+#include "qore/intern/QoreInstanceOfOperatorNode.h"
+#include "qore/intern/QoreRegexNMatchOperatorNode.h"
+#include "qore/intern/QoreRegexExtractOperatorNode.h"
+#include "qore/intern/QorePreIncrementOperatorNode.h"
+#include "qore/intern/QorePreDecrementOperatorNode.h"
+#include "qore/intern/QorePostIncrementOperatorNode.h"
+#include "qore/intern/QorePostDecrementOperatorNode.h"
+#include "qore/intern/QoreIntPostIncrementOperatorNode.h"
+#include "qore/intern/QoreIntPostDecrementOperatorNode.h"
+#include "qore/intern/QoreLogicalEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalNotOperatorNode.h"
+#include "qore/intern/QoreNullCoalescingOperatorNode.h"
+#include "qore/intern/QoreValueCoalescingOperatorNode.h"
+#include "qore/intern/QoreQuestionMarkOperatorNode.h"
+#include "qore/intern/QoreFoldlOperatorNode.h"
+#include "qore/intern/QoreMapOperatorNode.h"
+#include "qore/intern/QoreMapSelectOperatorNode.h"
+#include "qore/intern/QoreHashMapOperatorNode.h"
+#include "qore/intern/QoreHashMapSelectOperatorNode.h"
+#include "qore/intern/QoreSelectOperatorNode.h"
+#include "qore/intern/QoreElementsOperatorNode.h"
+#include "qore/intern/QoreDeleteOperatorNode.h"
+#include "qore/intern/QoreRemoveOperatorNode.h"
+#include "qore/intern/QoreBackgroundOperatorNode.h"
+#include "qore/intern/QoreTrimOperatorNode.h"
+#include "qore/intern/QoreChompOperatorNode.h"
+#include "qore/intern/QorePopOperatorNode.h"
+#include "qore/intern/QoreShiftOperatorNode.h"
+#include "qore/intern/QorePushOperatorNode.h"
+#include "qore/intern/QoreUnshiftOperatorNode.h"
+#include "qore/intern/ContextrefNode.h"
+#include "qore/intern/ContextRowNode.h"
+#include "qore/intern/ComplexContextrefNode.h"
+#include "qore/intern/ParseNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
 #include <qore/intern/ParseReferenceNode.h>
 #include "qore/intern/NewComplexTypeNode.h"
@@ -67,6 +112,7 @@
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
+#include "qore/intern/QoreAOTExprNodeRegistry.h"
 
 #include <qore/QoreObject.h>
 
@@ -76,6 +122,96 @@
 #include <numeric>
 #include <unordered_set>
 #include <zlib.h>
+
+static thread_local std::string qore_aot_expr_serialization_error;
+
+static void qoreAOTClearExprSerializationError() {
+    qore_aot_expr_serialization_error.clear();
+}
+
+static void qoreAOTSetExprSerializationError(std::string msg) {
+    if (qore_aot_expr_serialization_error.empty()) {
+        qore_aot_expr_serialization_error = std::move(msg);
+    }
+}
+
+static bool qoreAOTTakeExprSerializationError(std::string& error) {
+    if (qore_aot_expr_serialization_error.empty()) {
+        return false;
+    }
+    error = std::move(qore_aot_expr_serialization_error);
+    qore_aot_expr_serialization_error.clear();
+    return true;
+}
+
+static std::string qoreAOTDescribeExpr(const QoreValue& v) {
+    if (!v.hasNode()) {
+        std::string rv = "non-node QoreValue type ";
+        rv += std::to_string(static_cast<int>(v.getType()));
+        return rv;
+    }
+    const AbstractQoreNode* n = v.getInternalNode();
+    if (!n) {
+        return "null expression node";
+    }
+    std::string rv = "node '";
+    rv += n->getTypeName();
+    rv += "' (node type ";
+    rv += std::to_string(n->getType());
+    rv += ")";
+    if (auto* pn = dynamic_cast<const ParseNode*>(n)) {
+        if (pn->loc && (pn->loc->getFile() || pn->loc->getSource() || pn->loc->start_line >= 0)) {
+            rv += ", location=";
+            const char* file = pn->loc->getFileValue();
+            rv += *file ? file : "<unknown>";
+            if (pn->loc->start_line >= 0) {
+                rv += ":";
+                rv += std::to_string(pn->loc->start_line);
+                if (pn->loc->end_line >= 0 && pn->loc->end_line != pn->loc->start_line) {
+                    rv += "-";
+                    rv += std::to_string(pn->loc->end_line);
+                }
+            }
+            if (pn->loc->getSource() && *pn->loc->getSource()) {
+                rv += ", source=";
+                rv += pn->loc->getSource();
+            }
+            if (pn->loc->offset) {
+                rv += ", offset=";
+                rv += std::to_string(pn->loc->offset);
+            }
+        }
+    }
+    return rv;
+}
+
+static std::string qoreAOTBuildExprTreeFallbackDiagnostic(const QoreValue& expr,
+        const std::vector<AOTLocalSlotId>& parent_locals,
+        const AOTConstantReverseMap* const_reverse_map) {
+    std::string msg = "unsupported inline native AOT expression; old fallback would require EXPR_TREE for ";
+    msg += qoreAOTDescribeExpr(expr);
+
+    AOTSlotMap temp_slots;
+    for (size_t j = 0; j < parent_locals.size(); ++j) {
+        if (parent_locals[j].local_var_ptr) {
+            temp_slots.local_slots[parent_locals[j].local_var_ptr] = j;
+        }
+    }
+
+    std::vector<uint8_t> blob;
+    if (serializeExprTreeToBlob(expr, temp_slots, blob, false, const_reverse_map) && !blob.empty()) {
+        uint8_t root_kind = blob[0];
+        const auto* root_info = getAOTExprNodeKindInfo(root_kind);
+        msg += ", EXPR_TREE root=";
+        msg += root_info && root_info->name ? root_info->name : "UNKNOWN";
+        msg += " (";
+        msg += std::to_string(root_kind);
+        msg += "), blob-size=";
+        msg += std::to_string(blob.size());
+    }
+    msg += "; add a native AOTExprKind serializer/reader or lower this operation to native IR";
+    return msg;
+}
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
@@ -3505,6 +3641,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 break;
         }
         trace_generic_eval("unsupported inline non-node expression", nullptr);
+        qoreAOTSetExprSerializationError("unsupported inline native AOT expression for "
+            + qoreAOTDescribeExpr(expr)
+            + "; add a native AOTExprKind serializer/reader or lower this operation to native IR");
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
         return true;
     }
@@ -3512,6 +3651,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) {
         trace_generic_eval("missing inline expression node", nullptr);
+        qoreAOTSetExprSerializationError("unsupported inline native AOT expression for "
+            + qoreAOTDescribeExpr(expr)
+            + "; add a native AOTExprKind serializer/reader or lower this operation to native IR");
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
         return true;
     }
@@ -3558,6 +3700,20 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             }
         } else {
             writer.writeStringRef("");
+        }
+        const QoreListNode* args = call->getArgs();
+        const QoreParseListNode* pargs = call->getParseArgs();
+        size_t nargs = args ? args->size() : (pargs ? pargs->size() : 0);
+        if (nargs > 255) {
+            qoreAOTSetExprSerializationError("FUNC_CALL inline payload has more than 255 arguments");
+            return false;
+        }
+        writer.writeU8(static_cast<uint8_t>(nargs));
+        for (size_t j = 0; j < nargs; ++j) {
+            const QoreValue arg = args ? args->retrieveEntry(j) : pargs->get(j);
+            if (!classifyAndWriteExpr(writer, arg, parent_locals, parent_globals, const_reverse_map)) {
+                return false;
+            }
         }
         return true;
     }
@@ -3861,8 +4017,13 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 }
             }
             if (!const_keys) {
-                // Dynamic key expressions need EXPR_TREE serialization below;
-                // HASH_LITERAL only carries pre-stringified constant keys.
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::PARSE_HASH));
+                writer.writeU8(static_cast<uint8_t>(keys.size()));
+                for (size_t i = 0; i < keys.size(); ++i) {
+                    classifyAndWriteExpr(writer, keys[i], parent_locals, parent_globals, const_reverse_map);
+                    classifyAndWriteExpr(writer, vals[i], parent_locals, parent_globals, const_reverse_map);
+                }
+                return true;
             } else {
                 writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
                 writer.writeU8(static_cast<uint8_t>(keys.size()));
@@ -3884,6 +4045,306 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_DEREF));
         classifyAndWriteExpr(writer, hd->getLeft(), parent_locals, parent_globals, const_reverse_map);
         classifyAndWriteExpr(writer, hd->getRight(), parent_locals, parent_globals, const_reverse_map);
+        return true;
+    }
+
+    // Plus operator: used inside hash/list/constructor argument literals.
+    // Encoding it directly avoids falling back to EXPR_TREE for common
+    // expressions such as `hdr + ("Content-Type": content_type)`.
+    if (auto* plus = dynamic_cast<const QorePlusOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::PLUS));
+        classifyAndWriteExpr(writer, plus->getLeft(), parent_locals, parent_globals,
+            const_reverse_map);
+        classifyAndWriteExpr(writer, plus->getRight(), parent_locals, parent_globals,
+            const_reverse_map);
+        return true;
+    }
+
+    // Square-bracket operator: required for nested lvalues such as
+    // `\hash[key]` carried inside ParseReferenceNode metadata.
+    if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SQUARE_BRACKET));
+        classifyAndWriteExpr(writer, sq->getLeft(), parent_locals, parent_globals,
+            const_reverse_map);
+        classifyAndWriteExpr(writer, sq->getRight(), parent_locals, parent_globals,
+            const_reverse_map);
+        return true;
+    }
+    if (auto* exists = dynamic_cast<const QoreExistsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::EXISTS));
+        return classifyAndWriteExpr(writer, exists->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* ia = dynamic_cast<const QoreImplicitArgumentNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::IMPLICIT_ARG));
+        writer.writeI64(static_cast<int64_t>(ia->getOffset()));
+        return true;
+    }
+    if (auto* minus = dynamic_cast<const QoreMinusOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::MINUS));
+        classifyAndWriteExpr(writer, minus->getLeft(), parent_locals, parent_globals,
+            const_reverse_map);
+        classifyAndWriteExpr(writer, minus->getRight(), parent_locals, parent_globals,
+            const_reverse_map);
+        return true;
+    }
+    if (auto* multiply = dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::MULTIPLY));
+        classifyAndWriteExpr(writer, multiply->getLeft(), parent_locals, parent_globals,
+            const_reverse_map);
+        classifyAndWriteExpr(writer, multiply->getRight(), parent_locals, parent_globals,
+            const_reverse_map);
+        return true;
+    }
+    if (auto* divide = dynamic_cast<const QoreDivisionOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::DIVIDE));
+        classifyAndWriteExpr(writer, divide->getLeft(), parent_locals, parent_globals,
+            const_reverse_map);
+        classifyAndWriteExpr(writer, divide->getRight(), parent_locals, parent_globals,
+            const_reverse_map);
+        return true;
+    }
+    if (auto* modulo = dynamic_cast<const QoreModuloOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::MODULO));
+        classifyAndWriteExpr(writer, modulo->getLeft(), parent_locals, parent_globals,
+            const_reverse_map);
+        classifyAndWriteExpr(writer, modulo->getRight(), parent_locals, parent_globals,
+            const_reverse_map);
+        return true;
+    }
+    if (auto* keys = dynamic_cast<const QoreKeysOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::KEYS));
+        return classifyAndWriteExpr(writer, keys->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (dynamic_cast<const QoreImplicitElementNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::IMPLICIT_ELEM));
+        return true;
+    }
+    if (auto* inst = dynamic_cast<const QoreInstanceOfOperatorNode*>(node)) {
+        const QoreTypeInfo* ti = inst->getInstanceTypeInfo();
+        const char* type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+        if (type_path && *type_path) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::INSTANCEOF));
+            writer.writeStringRef(type_path);
+            return classifyAndWriteExpr(writer, inst->getExp(), parent_locals,
+                parent_globals, const_reverse_map);
+        }
+    }
+    if (auto* regex = dynamic_cast<const QoreRegexMatchOperatorNode*>(node)) {
+        AOTExprKind regex_kind = AOTExprKind::REGEX_MATCH;
+        if (dynamic_cast<const QoreRegexExtractOperatorNode*>(node)) {
+            regex_kind = AOTExprKind::REGEX_EXTRACT;
+        } else if (dynamic_cast<const QoreRegexNMatchOperatorNode*>(node)) {
+            regex_kind = AOTExprKind::REGEX_NMATCH;
+        }
+        QoreRegex* re = regex->getRegex();
+        const char* pattern = re ? re->getPatternCStr() : nullptr;
+        if (pattern) {
+            writer.writeU8(static_cast<uint8_t>(regex_kind));
+            writer.writeStringRef(pattern);
+            writer.writeI64(re->getOptions());
+            return classifyAndWriteExpr(writer, regex->getExp(), parent_locals,
+                parent_globals, const_reverse_map);
+        }
+    }
+    if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::PRE_DEC));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::PRE_INC));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreIntPostDecrementOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::POST_DEC));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreIntPostIncrementOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::POST_INC));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::POST_DEC));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::POST_INC));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_NE));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_EQ));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalNotOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_NOT));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreNullCoalescingOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::NULL_COAL));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreValueCoalescingOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::VALUE_COAL));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreQuestionMarkOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::QUESTION));
+        return classifyAndWriteExpr(writer, op->get(0), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->get(1), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->get(2), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreFoldrOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::FOLDR));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreFoldlOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::FOLDL));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreMapOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::MAP));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreMapSelectOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::MAP_SELECT));
+        return classifyAndWriteExpr(writer, op->get(0), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->get(1), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->get(2), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreHashMapSelectOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_MAP_SELECT_OP));
+        return classifyAndWriteExpr(writer, op->get(0), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->get(1), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->get(2), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->get(3), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreHashMapOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_MAP_OP));
+        return classifyAndWriteExpr(writer, op->get(0), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->get(1), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->get(2), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreSelectOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELECT));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreTrimOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::TRIM));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreChompOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CHOMP));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QorePopOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::POP));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SHIFT));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QorePushOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::PUSH));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::UNSHIFT));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreElementsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::ELEMENTS));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreDeleteOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::DELETE));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreRemoveOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::REMOVE));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreBackgroundOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::BACKGROUND));
+        return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
+            parent_globals, const_reverse_map);
+    }
+    if (auto* cr = dynamic_cast<const ContextrefNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONTEXT_REF));
+        writer.writeStringRef(cr->str ? cr->str : "");
+        return true;
+    }
+    if (dynamic_cast<const ContextRowNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONTEXT_ROW));
+        return true;
+    }
+    if (auto* ccr = dynamic_cast<const ComplexContextrefNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_CONTEXT_REF));
+        writer.writeStringRef(ccr->name ? ccr->name : "");
+        writer.writeStringRef(ccr->member ? ccr->member : "");
+        writer.writeI64(static_cast<int64_t>(ccr->stack_offset));
         return true;
     }
 
@@ -4106,7 +4567,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                             const_reverse_map);
                     };
 
-                    ::serializeIRFunction(writer, *closure_ir, writeExpr);
+                    if (!::serializeIRFunction(writer, *closure_ir, writeExpr)) {
+                        qoreAOTSetExprSerializationError("failed to serialize closure IR for "
+                            + qoreAOTDescribeExpr(expr));
+                        delete owned_ir;
+                        return false;
+                    }
                     uint32_t end_pos = writer.position();
                     writer.patchU32(size_pos, end_pos - size_pos - 4);
                 } else {
@@ -4248,19 +4714,14 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
     }
 
-    // Try EXPR_TREE serialization for operator/complex expressions
+    // The old path serialized arbitrary AST as EXPR_TREE here.  That hides
+    // native lowering/classification gaps, so make new AOT metadata fail
+    // with a diagnostic instead of emitting EXPR_TREE.
     {
-        AOTSlotMap temp_slots;
-        for (size_t j = 0; j < parent_locals.size(); ++j) {
-            if (parent_locals[j].local_var_ptr) {
-                temp_slots.local_slots[parent_locals[j].local_var_ptr] = j;
-            }
-        }
-        std::vector<uint8_t> blob;
-        if (serializeExprTreeToBlob(expr, temp_slots, blob, false, const_reverse_map)) {
-            writer.writeU8(static_cast<uint8_t>(AOTExprKind::EXPR_TREE));
-            writer.writeU32(static_cast<uint32_t>(blob.size()));
-            writer.writeBytes(blob.data(), static_cast<uint32_t>(blob.size()));
+        std::string diag = qoreAOTBuildExprTreeFallbackDiagnostic(expr, parent_locals, const_reverse_map);
+        if (diag.find("EXPR_TREE root=") != std::string::npos) {
+            qoreAOTSetExprSerializationError(std::move(diag));
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
             return true;
         }
     }
@@ -4281,6 +4742,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
 
     // Unsupported — write GENERIC_EVAL placeholder
     trace_generic_eval("unsupported inline expression node", node);
+    qoreAOTSetExprSerializationError("unsupported inline native AOT expression for "
+        + qoreAOTDescribeExpr(expr)
+        + "; add a native AOTExprKind serializer/reader or lower this operation to native IR");
     printd(3, "AOT: handler IR unsupported expr type '%s' for serialization\n",
         node->getTypeName());
     writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
@@ -4337,7 +4801,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         }
 
         // Expression slot entries (in slot order)
-        for (auto& expr : func.slot_ids.exprs) {
+        for (size_t expr_idx = 0; expr_idx < func.slot_ids.exprs.size(); ++expr_idx) {
+            auto& expr = func.slot_ids.exprs[expr_idx];
             if (const char* trace = getenv("QORE_AOT_SLOT_TRACE")) {
                 bool match = !*trace;
                 if (!match && func.name.find(trace) != std::string::npos) {
@@ -4355,22 +4820,57 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                         expr.ref1.c_str(), expr.ref2.c_str());
                 }
             }
+            if (expr.kind == AOTExprKind::EXPR_TREE || expr.kind == AOTExprKind::GENERIC_EVAL) {
+                std::string detail;
+                std::string prefix = "slot " + std::to_string(expr_idx);
+                for (const std::string& d : func.slot_ids.unsupported_expr_details) {
+                    if (d.rfind(prefix, 0) == 0) {
+                        detail = d;
+                        break;
+                    }
+                }
+                error = "AOT cannot serialize function '" + func.name
+                    + "' expression " + prefix + " without source fallback";
+                if (!detail.empty()) {
+                    error += ": ";
+                    error += detail;
+                } else if (!expr.ref1.empty()) {
+                    error += ": ";
+                    error += expr.ref1;
+                }
+                error += "; EXPR_TREE and GENERIC_EVAL are fatal for new AOT output";
+                return false;
+            }
             writer.writeU8(static_cast<uint8_t>(expr.kind));
 
             // Use registry dispatch for expression slot metadata serialization
             const auto* kinfo = getAOTExprSlotKindInfo(static_cast<uint8_t>(expr.kind));
             if (!kinfo || !kinfo->is_supported || !kinfo->write_fn) {
-                error = "unsupported expression slot kind " + std::to_string(static_cast<uint8_t>(expr.kind));
+                error = "unsupported expression slot kind " + std::to_string(static_cast<uint8_t>(expr.kind))
+                    + " in function '" + func.name + "' slot " + std::to_string(expr_idx);
                 return false;
             }
             AOTExprSlotWriteCtx wctx{writer, expr, func.slot_ids.locals, func.slot_ids.globals,
                 func_const_reverse_map};
-            if (!kinfo->write_fn(wctx)) {
+            qoreAOTClearExprSerializationError();
+            bool slot_ok = kinfo->write_fn(wctx);
+            std::string expr_error;
+            bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
+            if (!slot_ok || expr_error_set) {
                 if (error.empty()) {
                     error = "failed to serialize expression slot kind "
                         + std::to_string(static_cast<uint8_t>(expr.kind))
                         + " (" + (kinfo->name ? kinfo->name : "?")
-                        + ") in function '" + func.name + "'";
+                        + ") in function '" + func.name + "' slot "
+                        + std::to_string(expr_idx);
+                    if (expr_error_set) {
+                        error += ": ";
+                        error += expr_error;
+                    } else if (!expr.ref1.empty()) {
+                        error += " ref1='";
+                        error += expr.ref1;
+                        error += "'";
+                    }
                 }
                 return false;
             }
@@ -4405,10 +4905,18 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             // LValueRemoveHelper's detach-then-destroy semantics when needed.
             writer.writeU8(lvid.delete_lvalue_expr.hasNode() ? 1 : 0);
             if (lvid.delete_lvalue_expr.hasNode()) {
-                if (!classifyAndWriteExpr(writer, lvid.delete_lvalue_expr,
-                        func.slot_ids.locals, func.slot_ids.globals, func_const_reverse_map)) {
+                qoreAOTClearExprSerializationError();
+                bool delete_expr_ok = classifyAndWriteExpr(writer, lvid.delete_lvalue_expr,
+                    func.slot_ids.locals, func.slot_ids.globals, func_const_reverse_map);
+                std::string expr_error;
+                bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
+                if (!delete_expr_ok || expr_error_set) {
                     error = "failed to serialize LValuePath delete expression in function '"
                         + func.name + "'";
+                    if (expr_error_set) {
+                        error += ": ";
+                        error += expr_error;
+                    }
                     return false;
                 }
             }
@@ -4461,9 +4969,18 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     return classifyAndWriteExpr(w, expr, parent_locals, parent_globals,
                         func_const_reverse_map);
                 };
-                if (!serializeIRFunction(writer, *handler_ir, writeExpr)) {
-                    // Handler IR serialization failed — mark as unavailable
-                    printd(0, "AOT: handler IR serialization failed for stmt slot %d\n", i);
+                qoreAOTClearExprSerializationError();
+                bool handler_ok = serializeIRFunction(writer, *handler_ir, writeExpr);
+                std::string expr_error;
+                bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
+                if (!handler_ok || expr_error_set) {
+                    error = "failed to serialize handler IR for function '" + func.name
+                        + "' stmt slot " + std::to_string(i);
+                    if (expr_error_set) {
+                        error += ": ";
+                        error += expr_error;
+                    }
+                    return false;
                 }
                 // Patch the size field
                 uint32_t end_pos = writer.position();
