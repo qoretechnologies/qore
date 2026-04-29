@@ -136,6 +136,7 @@ class QoreSocket {
     friend class HttpClientRecvChunkedPollState;
     friend class HttpClientRecvUntilClosePollState;
     friend class HttpClientConnectSendRecvPollOperation;
+    friend class QoreSocketControllerAcceptPollOperation;
     friend class SocketAcceptPollOperation;
     friend class SocketReadHttpHeaderPollOperation;
     friend class SocketSendAndReadHeaderPollOperation;
@@ -716,7 +717,8 @@ public:
 
         @return a new QoreSocket object for the new connection (or 0 if an error occured)
 
-        @note the same as calling QoreSocket::accept() and then QoreSocket::upgradeServerToSSL() on the new socket
+        @note equivalent to calling QoreSocket::accept() and then QoreSocket::upgradeServerToSSL() on the new socket;
+        internally delegated as one async-controller operation
 
         @see
         - QoreSocket::listen()
@@ -766,7 +768,8 @@ public:
 
         @return a new QoreSocket object for the new connection (or 0 if an error or timeout occured)
 
-        @note the same as calling QoreSocket::accept() and then QoreSocket::upgradeServerToSSL() on the new socket
+        @note equivalent to calling QoreSocket::accept() and then QoreSocket::upgradeServerToSSL() on the new socket;
+        internally delegated as one async-controller operation
 
         @see
         - QoreSocket::accept(int timeout_ms, ExceptionSink* xsink)

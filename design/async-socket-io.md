@@ -651,6 +651,9 @@ Representative bridges:
   performs both the TCP/UNIX connect and the client TLS handshake, avoiding a
   caller-thread gap where another operation could claim the socket between the
   connect and TLS phases.
+  `QoreSocket::acceptSSL()` similarly performs accept and the server TLS
+  handshake inside one controller operation; the accepted socket is not returned
+  to the caller until TLS negotiation has completed.
   Immediate setup/lifecycle calls such as `bind*()`, `listen()`, `shutdown()`, and
   `close()` use controller-backed execution.  Close first runs a socket-scoped
   controller cancel that waits for any deferred worker `continuePoll()` aborts, then

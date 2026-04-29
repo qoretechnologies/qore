@@ -2067,51 +2067,98 @@ public:
             : sock(sock), source(source) {
     }
 
+    DLLLOCAL QoreSocketControllerAcceptPollOperation(QoreSocket* sock, SocketSource* source, bool ssl,
+            QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey)
+            : sock(sock), source(source), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
+            pkey(pkey ? pkey->pkRefSelf() : nullptr) {
+    }
+
+    DLLLOCAL ~QoreSocketControllerAcceptPollOperation() {
+        discardAcceptedPollable();
+    }
+
     DLLLOCAL virtual bool goalReached() const override {
         return state == SPS_ACCEPTED;
     }
 
-    DLLLOCAL virtual void abort(ExceptionSink*) override {
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
         poll_state.reset();
+        discardAcceptedPollable(xsink);
+        accepted_socket.reset();
+        descriptor = -1;
         state = SPS_NONE;
     }
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
-        if (!poll_state) {
-            if (!sock) {
-                return nullptr;
+        while (true) {
+            if (!poll_state) {
+                if (state == SPS_ACCEPTING) {
+                    if (!sock) {
+                        return nullptr;
+                    }
+                    poll_state.reset(new SocketAcceptPollState(xsink, qore_socket_private::get(*sock), source));
+                } else if (state == SPS_ACCEPTING_SSL) {
+                    assert(accepted_socket);
+                    poll_state.reset(accepted_socket->startSslAccept(xsink, *cert, *pkey));
+                } else {
+                    return nullptr;
+                }
+                if (*xsink || !poll_state) {
+                    state = SPS_NONE;
+                    return nullptr;
+                }
             }
-            poll_state.reset(new SocketAcceptPollState(xsink, qore_socket_private::get(*sock), source));
-            if (*xsink || !poll_state) {
+
+            int rc = poll_state->continuePoll(xsink);
+            if (*xsink || rc < 0) {
+                poll_state.reset();
                 state = SPS_NONE;
                 return nullptr;
             }
+            if (!rc) {
+                if (state == SPS_ACCEPTING) {
+                    assert(dynamic_cast<SocketAcceptPollState*>(poll_state.get()));
+                    descriptor = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
+                    poll_state.reset();
+                    accept_completed = true;
+                    if (ssl) {
+                        accepted_socket.reset(sock->createAcceptedSocket(descriptor));
+                        descriptor = -1;
+                        state = SPS_ACCEPTING_SSL;
+                        bumpFdGeneration();
+                        continue;
+                    }
+                } else {
+                    poll_state.reset();
+                    discardAcceptedPollable(xsink);
+                }
+                state = SPS_ACCEPTED;
+                return nullptr;
+            }
+            return state == SPS_ACCEPTING_SSL
+                ? getAcceptedSocketPollInfoHash(xsink, rc)
+                : getSocketPollInfoHash(xsink, rc);
         }
-
-        int rc = poll_state->continuePoll(xsink);
-        if (*xsink) {
-            poll_state.reset();
-            state = SPS_NONE;
-            return nullptr;
-        }
-        if (!rc) {
-            assert(dynamic_cast<SocketAcceptPollState*>(poll_state.get()));
-            descriptor = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
-            poll_state.reset();
-            state = SPS_ACCEPTED;
-            return nullptr;
-        }
-        return getSocketPollInfoHash(xsink, rc);
     }
 
     DLLLOCAL virtual QoreValue getOutput() const override {
         return descriptor >= 0 ? QoreValue((int64)descriptor) : QoreValue();
     }
 
+    DLLLOCAL QoreSocket* releaseAcceptedSocket() {
+        return accepted_socket.release();
+    }
+
+    DLLLOCAL bool hasAcceptedConnection() const {
+        return accept_completed;
+    }
+
     DLLLOCAL virtual const char* getStateImpl() const override {
         switch (state) {
             case SPS_ACCEPTING:
                 return "accepting";
+            case SPS_ACCEPTING_SSL:
+                return "accepting-ssl";
             case SPS_ACCEPTED:
                 return "accepted";
             default:
@@ -2120,11 +2167,40 @@ public:
     }
 
 private:
+    DLLLOCAL QoreHashNode* getAcceptedSocketPollInfoHash(ExceptionSink* xsink, int events) {
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        info->setKeyValue("events", events, xsink);
+        if (!accepted_pollable_obj) {
+            accepted_pollable_obj = new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(),
+                new QoreSocketControllerPollable(accepted_socket.get()));
+        }
+        info->setKeyValue("socket", accepted_pollable_obj->objectRefSelf(), xsink);
+        return info.release();
+    }
+
+    DLLLOCAL void discardAcceptedPollable(ExceptionSink* xsink = nullptr) {
+        if (!accepted_pollable_obj) {
+            return;
+        }
+        ExceptionSink local_xsink;
+        accepted_pollable_obj->deref(xsink ? xsink : &local_xsink);
+        if (local_xsink) {
+            local_xsink.clear();
+        }
+        accepted_pollable_obj = nullptr;
+    }
+
     QoreSocket* sock = nullptr;
     SocketSource* source = nullptr;
     std::unique_ptr<AbstractPollState> poll_state;
+    std::unique_ptr<QoreSocket> accepted_socket;
+    QoreObject* accepted_pollable_obj = nullptr;
     int descriptor = -1;
     int state = SPS_ACCEPTING;
+    bool ssl = false;
+    SimpleRefHolder<QoreSSLCertificate> cert;
+    SimpleRefHolder<QoreSSLPrivateKey> pkey;
+    bool accept_completed = false;
 };
 
 class QoreSocketControllerHttp2SendResponsePollOperation : public SocketPollOperationBase {
@@ -2937,6 +3013,55 @@ static int qore_socket_exec_accept_descriptor(QoreSocket* s, SocketSource* sourc
         return -1;
     }
     return static_cast<int>(descriptor);
+}
+
+static QoreSocket* qore_socket_exec_accept_ssl_socket(QoreSocket* s, SocketSource* source, int timeout_ms,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey, ExceptionSink* xsink) {
+    QoreSocketControllerAcceptPollOperation* accept_poller = new QoreSocketControllerAcceptPollOperation(s, source,
+        true, cert, pkey);
+    ReferenceHolder<SocketPollOperationBase> poller_holder(accept_poller, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    QoreSocketControllerPollable* pollable = new QoreSocketControllerPollable(s);
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), pollable),
+        xsink);
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("accept-ssl"), xsink);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(qore_socket_exec_poll_operation(*sock_obj, pollable, *op_obj, timeout_ms,
+        "acceptSSL", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (ex_holder) {
+        if (qore_socket_exec_exception_is(**ex_holder, "SOCKET-TIMEOUT")
+                && !accept_poller->hasAcceptedConnection()) {
+            return nullptr;
+        }
+        qore_socket_raise_poll_result_exception(*ex_holder, xsink);
+        return nullptr;
+    }
+
+    QoreSocket* rv = accept_poller->releaseAcceptedSocket();
+    if (!rv) {
+        xsink->raiseException("SOCKET-ACCEPT-ERROR",
+            "async acceptSSL operation did not return an accepted socket");
+    }
+    return rv;
 }
 
 QoreSocket* QoreSocket::createAcceptedSocket(int descriptor) {
@@ -8547,17 +8672,7 @@ QoreSocket* QoreSocket::accept(SocketSource* source, ExceptionSink* xsink) {
 // accepts a new connection, negotiates an SSL connection, and returns the new socket
 QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, SocketSource* source, QoreSSLCertificate* cert,
         QoreSSLPrivateKey* pkey) {
-    QoreSocket* s = accept(source, xsink);
-    if (!s)
-        return nullptr;
-
-    if (s->upgradeServerToSSL(xsink, -1, cert, pkey)) {
-        assert(*xsink);
-        delete s;
-        return nullptr;
-    }
-
-    return s;
+    return qore_socket_exec_accept_ssl_socket(this, source, -1, cert, pkey, xsink);
 }
 
 // accept a connection and replace the socket with the new connection
@@ -8592,16 +8707,7 @@ QoreSocket* QoreSocket::accept(int timeout_ms, ExceptionSink* xsink) {
 
 QoreSocket* QoreSocket::acceptSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLCertificate* cert,
         QoreSSLPrivateKey* pkey) {
-    std::unique_ptr<QoreSocket> s(accept(timeout_ms, xsink));
-    if (!s.get())
-        return nullptr;
-
-    if (s->upgradeServerToSSL(xsink, timeout_ms, cert, pkey)) {
-        assert(*xsink);
-        return nullptr;
-    }
-
-    return s.release();
+    return qore_socket_exec_accept_ssl_socket(this, nullptr, timeout_ms, cert, pkey, xsink);
 }
 
 int QoreSocket::acceptAndReplace(int timeout_ms, ExceptionSink* xsink) {
