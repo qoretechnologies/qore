@@ -1589,6 +1589,15 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProtocolSwitched(ExceptionSink
 QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsink) {
     empty_read_count = 0;
 
+    // Take ownership of stream_action atomically and clear stream_action /
+    // active_stream_count / active_sid in the same critical section.  This
+    // closes a race against abort() / notifyPendingStreams() which read
+    // stream_action under the same lock: if the clear were deferred to a
+    // later block (as it used to be), abort() running between the two
+    // blocks would see stream_action still set, call executeError(
+    // "HTTP1-ABORT") on it, and reject the Future before this method
+    // could resolve it with the response.  The local @c action keeps a
+    // ref so we can dispatch outside the lock.
     int stream_id;
     AbstractAsyncAction* action = nullptr;
     {
@@ -1596,9 +1605,14 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         stream_id = active_sid;
         action = stream_action;
         if (action) {
-            action->ref();
+            // local takes the existing refcount slot from stream_action;
+            // clearing stream_action without deref keeps the count balanced.
+            stream_action = nullptr;
             response_dispatched = true;
         }
+        --active_stream_count;
+        active_sid = 0;
+        active_method.clear();
     }
 
     // Convert binary body to string for text-based content types
@@ -1631,18 +1645,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     printd(5, "Http1ClientPollOperationPriv::dispatchResponse() stream_id=%d status=%d\n",
         stream_id, response_status_code);
 
-    // Clean up per-request state BEFORE dispatching
     bool close = connection_close;
-    {
-        AutoLocker al(stream_lock);
-        if (stream_action) {
-            stream_action->deref(xsink);
-            stream_action = nullptr;
-        }
-        --active_stream_count;
-        active_sid = 0;
-        active_method.clear();
-    }
     req_state = ReqState::IDLE;
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
