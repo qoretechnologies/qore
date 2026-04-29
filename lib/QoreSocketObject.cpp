@@ -66,6 +66,25 @@ static bool qore_socket_object_exec_exception_is(const QoreHashNode& ex, const c
     return ex_err.getType() == NT_STRING && !strcmp(ex_err.get<const QoreStringNode>()->c_str(), err);
 }
 
+static void qore_socket_object_wake_async_controller(QoreSocketObject* s) {
+    if (qore_on_async_io_thread()) {
+        return;
+    }
+
+    ExceptionSink xsink;
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        !xsink && ctl_obj
+            ? static_cast<AsyncIoControllerPriv*>(
+                (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink))
+            : nullptr,
+        &xsink);
+    if (!xsink && ctrl) {
+        ctrl->wakeSocket(s->getIoIdentityHash());
+    }
+    xsink.clear();
+}
+
 static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s, QoreObject* sock_obj,
         QoreObject* op_obj, int timeout_ms, const char* owner_name, ExceptionSink* xsink,
         QoreHashNode** ex_out = nullptr) {
@@ -3316,7 +3335,11 @@ int32_t QoreSocketObject::submitHttp2PushPromise(int32_t stream_id, const char* 
 
     strcase_str_map_t h2_headers;
     qore_socket_object_set_h2_headers(h2_headers, headers);
-    return h2->submitPushPromise(stream_id, path, h2_headers, xsink);
+    int32_t rv = h2->submitPushPromise(stream_id, path, h2_headers, xsink);
+    if (rv >= 0 && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 int QoreSocketObject::submitHttp2Response(int32_t stream_id, int status_code,
@@ -3330,7 +3353,11 @@ int QoreSocketObject::submitHttp2Response(int32_t stream_id, int status_code,
 
     strcase_str_map_t h2_headers;
     qore_socket_object_set_h2_headers(h2_headers, headers);
-    return h2->submitResponse(stream_id, status_code, h2_headers, body, body_len, xsink);
+    int rv = h2->submitResponse(stream_id, status_code, h2_headers, body, body_len, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 int QoreSocketObject::submitHttp2ConnectResponse(int32_t stream_id, int status_code,
@@ -3343,7 +3370,11 @@ int QoreSocketObject::submitHttp2ConnectResponse(int32_t stream_id, int status_c
 
     strcase_str_map_t h2_headers;
     qore_socket_object_set_h2_headers(h2_headers, headers);
-    return h2->submitConnectResponse(stream_id, status_code, h2_headers, xsink);
+    int rv = h2->submitConnectResponse(stream_id, status_code, h2_headers, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 int32_t QoreSocketObject::submitHttp2Request(const QoreHashNode* headers, const void* body,
@@ -3404,7 +3435,12 @@ int32_t QoreSocketObject::submitHttp2Request(const QoreHashNode* headers, const 
         return -1;
     }
 
-    return h2->submitRequest(method.c_str(), path.c_str(), h2_headers, body, body_len, xsink, streaming);
+    int32_t stream_id = h2->submitRequest(method.c_str(), path.c_str(), h2_headers, body, body_len, xsink,
+        streaming);
+    if (stream_id >= 0 && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return stream_id;
 }
 
 void QoreSocketObject::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink) {
@@ -3413,7 +3449,10 @@ void QoreSocketObject::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink
         xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
         return;
     }
-    h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+    int rv = h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
 }
 
 void QoreSocketObject::setHttp2StreamStreaming(int32_t stream_id) {
@@ -3446,6 +3485,7 @@ int QoreSocketObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* d
         xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %d buffer full: data dropped", stream_id);
         return -1;
     }
+    qore_socket_object_wake_async_controller(this);
     return 0;
 }
 
@@ -3468,7 +3508,11 @@ int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* t
 
     strcase_str_map_t trailer_map;
     qore_socket_object_set_h2_headers(trailer_map, trailers);
-    return h2->submitTrailers(stream_id, trailer_map, xsink);
+    int rv = h2->submitTrailers(stream_id, trailer_map, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
@@ -3542,7 +3586,11 @@ int QoreSocketObject::submitHttp2StreamingResponseHeadersAsync(int32_t stream_id
     }
     strcase_str_map_t header_map;
     qore_socket_object_set_h2_headers(header_map, headers);
-    return h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+    int rv = h2->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 int QoreSocketObject::sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNode* data,
@@ -3563,6 +3611,7 @@ int QoreSocketObject::sendHttp2StreamDataAsync(int32_t stream_id, const BinaryNo
             "stream %d buffer full: data dropped", stream_id);
         return -1;
     }
+    qore_socket_object_wake_async_controller(this);
     return 0;
 }
 
@@ -3575,7 +3624,11 @@ int QoreSocketObject::sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNo
     }
     strcase_str_map_t trailer_map;
     qore_socket_object_set_h2_headers(trailer_map, trailers);
-    return h2->submitTrailers(stream_id, trailer_map, xsink);
+    int rv = h2->submitTrailers(stream_id, trailer_map, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 void QoreSocketObject::cleanupHttp2StreamAsync(int32_t stream_id) {
@@ -3591,6 +3644,9 @@ int QoreSocketObject::resetHttp2StreamAsync(int32_t stream_id, ExceptionSink* xs
         return 0;
     }
     int rv = h2->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
     if (rv != 0) {
         printd(2, "resetHttp2StreamAsync() submitRstStream failed for stream %d (rv=%d), "
             "cleaning up local state anyway\n", stream_id, rv);
@@ -3662,7 +3718,11 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
     }
 
     h2->setStreamInputStream(stream_id, body, xsink, content_length);
-    return *xsink ? -1 : 0;
+    if (*xsink) {
+        return -1;
+    }
+    qore_socket_object_wake_async_controller(this);
+    return 0;
 }
 
 bool QoreSocketObject::isHttp2StreamClosed(int32_t stream_id) const {
@@ -4035,7 +4095,11 @@ int64_t QoreSocketObject::submitQuicRequest(const char* method, const char* path
         }
     }
 
-    return session->submitRequest(method, path, hdr_map, body, body_len, xsink);
+    int64_t stream_id = session->submitRequest(method, path, hdr_map, body, body_len, xsink);
+    if (stream_id >= 0 && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return stream_id;
 }
 
 int64_t QoreSocketObject::submitQuicRequestStreaming(const char* method, const char* path,
@@ -4057,7 +4121,11 @@ int64_t QoreSocketObject::submitQuicRequestStreaming(const char* method, const c
         }
     }
 
-    return session->submitRequestStreaming(method, path, hdr_map, xsink);
+    int64_t stream_id = session->submitRequestStreaming(method, path, hdr_map, xsink);
+    if (stream_id >= 0 && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return stream_id;
 }
 
 int QoreSocketObject::sendQuicClientStreamData(int64_t stream_id, const void* data,
@@ -4068,7 +4136,11 @@ int QoreSocketObject::sendQuicClientStreamData(int64_t stream_id, const void* da
         return -1;
     }
 
-    return session->sendStreamData(stream_id, data, len, end_stream, xsink);
+    int rv = session->sendStreamData(stream_id, data, len, end_stream, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 bool QoreSocketObject::isQuicSessionClosed() const {
@@ -4106,7 +4178,10 @@ void QoreSocketObject::cancelQuicStream(int64_t session_id, int64_t stream_id, E
         return;
     }
 
-    session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, xsink);
+    int rv = session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
 }
 
 int QoreSocketObject::submitQuicResponse(int64_t session_id, int64_t stream_id, int status_code,
@@ -4128,7 +4203,11 @@ int QoreSocketObject::submitQuicResponse(int64_t session_id, int64_t stream_id, 
         }
     }
 
-    return session->submitResponse(stream_id, status_code, hdr_map, body, body_len, xsink);
+    int rv = session->submitResponse(stream_id, status_code, hdr_map, body, body_len, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 int64_t QoreSocketObject::getFirstQuicSessionId(ExceptionSink* xsink) const {
@@ -4144,7 +4223,10 @@ void QoreSocketObject::submitQuicShutdownNotice(int64_t session_id, ExceptionSin
                               (long long)session_id);
         return;
     }
-    session->submitShutdownNotice(xsink);
+    int rv = session->submitShutdownNotice(xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
 }
 
 void QoreSocketObject::submitQuicShutdown(int64_t session_id, ExceptionSink* xsink) {
@@ -4154,7 +4236,10 @@ void QoreSocketObject::submitQuicShutdown(int64_t session_id, ExceptionSink* xsi
                               (long long)session_id);
         return;
     }
-    session->submitShutdown(xsink);
+    int rv = session->submitShutdown(xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
 }
 
 QoreHashNode* QoreSocketObject::getQuicSessionGoawayState(int64_t session_id, ExceptionSink* xsink) {
@@ -4219,7 +4304,11 @@ int QoreSocketObject::submitQuicResponseStreaming(int64_t session_id, int64_t st
         }
     }
 
-    return session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
+    int rv = session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 int QoreSocketObject::submitQuicStreamData(int64_t session_id, int64_t stream_id,
@@ -4231,7 +4320,11 @@ int QoreSocketObject::submitQuicStreamData(int64_t session_id, int64_t stream_id
         return -1;
     }
 
-    return session->sendStreamData(stream_id, data, len, end_stream, xsink);
+    int rv = session->sendStreamData(stream_id, data, len, end_stream, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 void QoreSocketObject::setQuicStreamInputStream(int64_t session_id, int64_t stream_id,
@@ -4250,6 +4343,9 @@ void QoreSocketObject::setQuicStreamInputStream(int64_t session_id, int64_t stre
     }
 
     session->setStreamInputStream(stream_id, body, xsink);
+    if (!*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
 }
 
 int QoreSocketObject::waitForQuicStreamDrain(int64_t session_id, int64_t stream_id,
@@ -4292,7 +4388,11 @@ int QoreSocketObject::submitQuicConnectResponse(int64_t session_id, int64_t stre
         }
     }
 
-    return session->submitConnectResponse(stream_id, status_code, hdr_map, xsink);
+    int rv = session->submitConnectResponse(stream_id, status_code, hdr_map, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 QoreValue QoreSocketObject::readQuicConnectStreamData(int64_t session_id, int64_t stream_id,
@@ -4390,7 +4490,11 @@ int QoreSocketObject::resetQuicStream(int64_t session_id, int64_t stream_id,
             (long long)session_id);
         return -1;
     }
-    return session->resetStream(stream_id);
+    int rv = session->resetStream(stream_id);
+    if (!rv) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 int QoreSocketObject::submitQuicDatagram(int64_t session_id, int64_t stream_id,
@@ -4403,7 +4507,11 @@ int QoreSocketObject::submitQuicDatagram(int64_t session_id, int64_t stream_id,
     }
     const uint8_t* ptr = data ? reinterpret_cast<const uint8_t*>(data->getPtr()) : nullptr;
     size_t len = data ? data->size() : 0;
-    return session->submitDatagram(stream_id, ptr, len, xsink);
+    int rv = session->submitDatagram(stream_id, ptr, len, xsink);
+    if (!rv && !*xsink) {
+        qore_socket_object_wake_async_controller(this);
+    }
+    return rv;
 }
 
 QoreValue QoreSocketObject::readQuicDatagram(int64_t session_id, int64_t stream_id,
