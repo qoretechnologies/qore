@@ -1,0 +1,110 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class DataProviderSimulationTest
+
+class TestSimulationRecorder inherits AbstractSimulationRecorder {
+    private {
+        list<hash<auto>> actions = ();
+    }
+
+    record(string app, string action, auto input, string fidelity = "app-simulator") {
+        actions += {
+            "app": app,
+            "action": action,
+            "input": input,
+            "fidelity": fidelity,
+        };
+    }
+
+    list<hash<auto>> recorded(*string app, *string action) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> i in (actions) {
+            if ((!app || i.app == app) && (!action || i.action == action)) {
+                rv += i;
+            }
+        }
+        return rv;
+    }
+}
+
+class NoResponseRequestProvider inherits AbstractDataProvider {
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "NoResponseRequestProvider",
+            "supports_request": True,
+        };
+    }
+
+    string getName() {
+        return "no-response-request";
+    }
+
+    private *AbstractDataProviderType getRequestTypeImpl() {
+        return AbstractDataProviderType::get(AutoType);
+    }
+
+    private *AbstractDataProviderType getResponseTypeImpl() {
+        return AbstractDataProviderType::get(NothingType);
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
+class DataProviderSimulationTest inherits QUnit::Test {
+    constructor() : Test("DataProviderSimulationTest", "1.0", \ARGV) {
+        addTestCase("default request simulation records and returns example data",
+            \testDefaultRequestSimulation());
+        addTestCase("request simulation handles no response data",
+            \testRequestSimulationWithNoResponse());
+        addTestCase("volatile fields default to none",
+            \testDefaultVolatileFields());
+
+        set_return_value(main());
+    }
+
+    testDefaultRequestSimulation() {
+        AbstractDataProvider provider = DataProvider::getFactoryObject("null");
+        TestSimulationRecorder recorder();
+
+        auto result = provider.simulateRequest("Null", "call", {"value": 1},
+            recorder);
+
+        assertEq({"a": "any value", "b": "any value"}, result);
+
+        list<hash<auto>> actions = recorder.recorded("Null", "call");
+        assertEq(1, actions.size());
+        assertEq("Null", actions[0].app);
+        assertEq("call", actions[0].action);
+        assertEq({"value": 1}, actions[0].input);
+        assertEq("example", actions[0].fidelity);
+        assertEq((), recorder.recorded("Other", "call"));
+    }
+
+    testRequestSimulationWithNoResponse() {
+        NoResponseRequestProvider provider();
+        TestSimulationRecorder recorder();
+
+        auto result = provider.simulateRequest("NoResponse", "call",
+            {"value": 1}, recorder);
+
+        assertEq(NULL, result);
+
+        list<hash<auto>> actions = recorder.recorded("NoResponse", "call");
+        assertEq(1, actions.size());
+        assertEq({"value": 1}, actions[0].input);
+        assertEq("example", actions[0].fidelity);
+    }
+
+    testDefaultVolatileFields() {
+        AbstractDataProvider provider = DataProvider::getFactoryObject("null");
+        assertEq((), provider.getSimulationVolatileFields("Null", "call"));
+    }
+}

@@ -44,6 +44,26 @@ public const UpsertResultUnchanged = "unchanged";
 public const UpsertResultDeleted = "deleted";
 #/@}
 
+#! Base class for recording simulated data-provider requests
+/** @since DataProvider 3.4
+*/
+public class AbstractSimulationRecorder {
+    #! Records a simulated data-provider action
+    /** @param app the data-provider application name
+        @param action the data-provider action name
+        @param input the input data passed to the action
+        @param fidelity the simulation fidelity marker
+    */
+    abstract record(string app, string action, auto input, string fidelity = "app-simulator");
+
+    #! Returns recorded simulated data-provider actions
+    /** @param app optional data-provider application filter
+        @param action optional data-provider action filter
+        @return recorded simulated actions matching the optional filters
+    */
+    abstract list<hash<auto>> recorded(*string app, *string action);
+}
+
 #! Base option info with common fields shared by DataProviderOptionInfo, ActionOptionInfo, and ConnectionOptionInfo
 /** @since %DataProvider 3.1
 */
@@ -3989,6 +4009,41 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return {};
     }
 
+    #! Returns simulated response data for a request without side effects
+    /** The default implementation records the attempted action with fidelity
+        \c "example" and returns structural example data based on the provider
+        capabilities. Data-provider subclasses can override
+        \c simulateRequestImpl() to provide app-specific dry-run behavior.
+
+        @param app stable data-provider application name used in recorder entries
+        @param action data-provider action name
+        @param input input record passed to the action
+        @param recorder simulation recorder owned by the caller
+
+        @return simulated response data
+
+        @throw DRY-RUN-NOT-SUPPORTED when no structural example can be produced
+
+        @since DataProvider 3.4
+    */
+    auto simulateRequest(string app, string action, auto input, AbstractSimulationRecorder recorder) {
+        return simulateRequestImpl(app, action, input, recorder);
+    }
+
+    #! Returns volatile input paths for simulated action signature hashing
+    /** Returned paths are relative to the action input root.
+
+        @param app stable data-provider application name
+        @param action data-provider action name
+
+        @return volatile input paths that callers should remove before hashing
+
+        @since DataProvider 3.4
+    */
+    softlist<string> getSimulationVolatileFields(string app, string action) {
+        return getSimulationVolatileFieldsImpl(app, action);
+    }
+
     #! Returns connection info if the data provider supports connections, otherwise returns @ref NOTHING
     /** @return connection info if the data provider supports connections, otherwise returns @ref NOTHING
 
@@ -6913,6 +6968,58 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     */
     private hash<auto> getExampleRecordDataWithOptionsImpl(*hash<auto> options) {
         return getExampleRecordDataImpl();
+    }
+
+    #! Returns simulated response data for a request without side effects
+    /** @param app stable data-provider application name used in recorder entries
+        @param action data-provider action name
+        @param input input record passed to the action
+        @param recorder simulation recorder owned by the caller
+
+        @return simulated response data
+
+        @since DataProvider 3.4
+    */
+    private auto simulateRequestImpl(string app, string action, auto input, AbstractSimulationRecorder recorder) {
+        if (supportsRequest()) {
+            recorder.record(app, action, input, "example");
+            if (exists (auto rv = getExampleResponseData())) {
+                return rv;
+            }
+            return NULL;
+        }
+        if (supportsCreate()) {
+            recorder.record(app, action, input, "example");
+            return getExampleRecordData();
+        }
+        if (supportsUpsert()) {
+            recorder.record(app, action, input, "example");
+            return UpsertResultInserted;
+        }
+        if (supportsUpdate() || supportsDelete()) {
+            recorder.record(app, action, input, "example");
+            return 1;
+        }
+        if (supportsRead()) {
+            recorder.record(app, action, input, "example");
+            return getExampleRecordData();
+        }
+
+        recorder.record(app, action, input, "unsupported");
+        throw "DRY-RUN-NOT-SUPPORTED", sprintf("data provider %y of class %y cannot simulate action %y",
+            getName(), self.className(), action);
+    }
+
+    #! Returns volatile input paths for simulated action signature hashing
+    /** @param app stable data-provider application name
+        @param action data-provider action name
+
+        @return volatile input paths that callers should remove before hashing
+
+        @since DataProvider 3.4
+    */
+    private softlist<string> getSimulationVolatileFieldsImpl(string app, string action) {
+        return ();
     }
 
     #! Returns reference data of the given kind if available
