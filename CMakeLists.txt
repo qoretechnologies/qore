@@ -2210,9 +2210,11 @@ qore_user_module("qlib/GrokRestClient.qm" "ConnectionProvider;Mime;RestClient;Re
 qore_user_module("qlib/HuggingFaceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/PerplexityRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
+qore_user_module("qlib/SegmentRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LemlistRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ShipStationRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/SendCloudRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/SystemeIoRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/CustomerIoRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/InstantlyRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2284,6 +2286,7 @@ qore_user_module("qlib/GrokDataProvider" "GrokRestClient;ConnectionProvider;Mime
 qore_user_module("qlib/HuggingFaceDataProvider" "HuggingFaceRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "huggingface-logo.svg")
 qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient;DataProvider" "openai-logo.svg")
 qore_user_module("qlib/PerplexityDataProvider" "PerplexityRestClient;ConnectionProvider;Mime;RestClient;DataProvider" "perplexity-logo.svg")
+qore_user_module("qlib/SegmentDataProvider" "SegmentRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "segment-logo.svg")
 
 # base 9 modules
 qore_user_module("qlib/GoogleCalendarDataProvider" "GoogleDataProvider;GoogleRestClient;RestClient;DataProvider" "google-calendar-logo.svg")
@@ -2293,6 +2296,7 @@ qore_user_module("qlib/ZohoInventoryDataProvider" "ZohoInventoryRestClient;RestC
 qore_user_module("qlib/ZohoInvoiceDataProvider" "ZohoInvoiceRestClient;RestClient;DataProvider" "zohoinvoice-logo.svg")
 qore_user_module("qlib/LemlistDataProvider" "LemlistRestClient;RestClient;DataProvider" "lemlist-logo.svg")
 qore_user_module("qlib/ShipStationDataProvider" "ShipStationRestClient;RestClient;DataProvider" "shipstation-logo.svg")
+qore_user_module("qlib/SendCloudDataProvider" "SendCloudRestClient;RestClient;DataProvider" "sendcloud-logo.svg")
 qore_user_module("qlib/SystemeIoDataProvider" "SystemeIoRestClient;RestClient;DataProvider" "systemeio-logo.svg")
 qore_user_module("qlib/CustomerIoDataProvider" "CustomerIoRestClient;RestClient;DataProvider" "customerio-logo.svg")
 qore_user_module("qlib/InstantlyDataProvider" "InstantlyRestClient;RestClient;DataProvider" "instantly-logo.svg")
