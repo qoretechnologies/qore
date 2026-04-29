@@ -35,6 +35,7 @@ public class WooCommerceDeleteCouponRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the coupon to delete",
                 "required": True,
                 "example_value": 789,
+                "ref_data": "coupons",
             },
             "force": {
                 "display_name": "Force",

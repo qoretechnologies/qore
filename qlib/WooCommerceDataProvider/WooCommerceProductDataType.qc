@@ -165,25 +165,25 @@ public class WooCommerceProductDataType inherits HashDataType {
             "categories": {
                 "display_name": "Categories",
                 "short_desc": "Product categories",
-                "type": new ListDataType("Categories", AutoHashType, True),
+                "type": new ListDataType("Categories", new WooCommerceCategoryDataType(), True),
                 "desc": "List of categories the product belongs to",
             },
             "tags": {
                 "display_name": "Tags",
                 "short_desc": "Product tags",
-                "type": new ListDataType("Tags", AutoHashType, True),
+                "type": new ListDataType("Tags", new WooCommerceTagDataType(), True),
                 "desc": "List of tags assigned to the product",
             },
             "images": {
                 "display_name": "Images",
                 "short_desc": "Product images",
-                "type": new ListDataType("Images", AutoHashType, True),
+                "type": new ListDataType("Images", new WooCommerceImageDataType(), True),
                 "desc": "List of product images",
             },
             "attributes": {
                 "display_name": "Attributes",
                 "short_desc": "Product attributes",
-                "type": new ListDataType("Attributes", AutoHashType, True),
+                "type": new ListDataType("Attributes", new WooCommerceProductAttributeDataType(), True),
                 "desc": "List of product attributes (e.g., color, size)",
             },
             "variations": {
@@ -213,7 +213,7 @@ public class WooCommerceProductDataType inherits HashDataType {
             "meta_data": {
                 "display_name": "Meta Data",
                 "short_desc": "Product metadata",
-                "type": new ListDataType("MetaData", AutoHashType, True),
+                "type": new ListDataType("MetaData", new WooCommerceMetaDataType(), True),
                 "desc": "List of metadata key-value pairs associated with the product",
             },
         };

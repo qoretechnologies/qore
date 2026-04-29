@@ -30,7 +30,7 @@ public class WooCommerceCustomersTotalsDataProvider inherits WooCommerceDataProv
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "customers-totals",
+            "name": "get-customers-totals",
             "desc": "Retrieves WooCommerce customer totals by role",
             "type": "WooCommerceCustomersTotalsDataProvider",
             "supports_request": True,
@@ -59,7 +59,7 @@ public class WooCommerceCustomersTotalsDataProvider inherits WooCommerceDataProv
 
     #! Returns the provider name
     string getName() {
-        return "customers-totals";
+        return "get-customers-totals";
     }
 
     #! Returns the provider description

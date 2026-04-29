@@ -30,7 +30,7 @@ public class WooCommerceOrdersTotalsDataProvider inherits WooCommerceDataProvide
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "orders-totals",
+            "name": "get-orders-totals",
             "desc": "Retrieves WooCommerce order totals by status",
             "type": "WooCommerceOrdersTotalsDataProvider",
             "supports_request": True,
@@ -59,7 +59,7 @@ public class WooCommerceOrdersTotalsDataProvider inherits WooCommerceDataProvide
 
     #! Returns the provider name
     string getName() {
-        return "orders-totals";
+        return "get-orders-totals";
     }
 
     #! Returns the provider description

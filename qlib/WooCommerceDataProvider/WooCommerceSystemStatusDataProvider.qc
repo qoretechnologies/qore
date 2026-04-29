@@ -30,7 +30,7 @@ public class WooCommerceSystemStatusDataProvider inherits WooCommerceDataProvide
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "system-status",
+            "name": "get-system-status",
             "desc": "Retrieves WooCommerce system status information",
             "type": "WooCommerceSystemStatusDataProvider",
             "supports_request": True,
@@ -59,7 +59,7 @@ public class WooCommerceSystemStatusDataProvider inherits WooCommerceDataProvide
 
     #! Returns the provider name
     string getName() {
-        return "system-status";
+        return "get-system-status";
     }
 
     #! Returns the provider description

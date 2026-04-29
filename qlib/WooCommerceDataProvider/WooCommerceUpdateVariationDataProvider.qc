@@ -35,6 +35,9 @@ public class WooCommerceUpdateVariationRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the parent product",
                 "required": True,
                 "example_value": 456,
+                "ref_data": "products",
+                "has_dependents": True,
+                "on_change": ("refetch",),
             },
             "id": {
                 "display_name": "Variation ID",
@@ -42,6 +45,8 @@ public class WooCommerceUpdateVariationRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the variation to update",
                 "required": True,
                 "example_value": 789,
+                "ref_data": "variations",
+                "depends_on": ("product_id",),
             },
             "regular_price": {
                 "display_name": "Regular Price",
@@ -75,7 +80,7 @@ public class WooCommerceUpdateVariationRequestDataType inherits HashDataType {
             },
             "attributes": {
                 "display_name": "Attributes",
-                "type": new ListDataType("Attributes", AutoHashType, True),
+                "type": new ListDataType("Attributes", new WooCommerceVariationAttributeDataType(), True),
                 "desc": "List of variation attributes",
             },
             "weight": {

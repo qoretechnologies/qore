@@ -35,12 +35,16 @@ public class WooCommerceUpdateWebhookRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the webhook to update",
                 "required": True,
                 "example_value": 142,
+                "ref_data": "webhooks",
             },
             "topic": {
                 "display_name": "Topic",
                 "type": StringOrNothingType,
-                "desc": "The webhook topic",
+                "desc": "The webhook topic (e.g. `order.created`, `product.updated`); pick a known topic "
+                    "or supply a custom `action.<hook>` value",
                 "example_value": "order.updated",
+                "allowed_values": WebhookTopicAllowedValues,
+                "allowed_values_creatable": True,
             },
             "delivery_url": {
                 "display_name": "Delivery URL",

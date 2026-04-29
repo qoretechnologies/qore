@@ -35,6 +35,7 @@ public class WooCommerceListOrderNotesRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the order",
                 "required": True,
                 "example_value": 1234,
+                "ref_data": "orders",
             },
             "type": {
                 "display_name": "Type",

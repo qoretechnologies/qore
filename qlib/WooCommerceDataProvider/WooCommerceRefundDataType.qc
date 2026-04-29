@@ -69,13 +69,13 @@ public class WooCommerceRefundDataType inherits HashDataType {
             "line_items": {
                 "display_name": "Line Items",
                 "short_desc": "Refunded line items",
-                "type": new ListDataType("LineItems", AutoHashType, True),
+                "type": new ListDataType("LineItems", new WooCommerceLineItemDataType(), True),
                 "desc": "List of line items that were refunded",
             },
             "meta_data": {
                 "display_name": "Meta Data",
                 "short_desc": "Refund metadata",
-                "type": new ListDataType("MetaData", AutoHashType, True),
+                "type": new ListDataType("MetaData", new WooCommerceMetaDataType(), True),
                 "desc": "List of metadata key-value pairs associated with the refund",
             },
         };

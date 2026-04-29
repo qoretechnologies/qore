@@ -71,14 +71,14 @@ public class WooCommerceOrdersDataProvider inherits WooCommerceDataProviderBase 
             "after": <DataProviderOptionInfo>{
                 "display_name": "After",
                 "short_desc": "Filter by date (after)",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Limit response to orders placed after a given ISO8601 date string",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to orders placed after the given date",
             },
             "before": <DataProviderOptionInfo>{
                 "display_name": "Before",
                 "short_desc": "Filter by date (before)",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Limit response to orders placed before a given ISO8601 date string",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to orders placed before the given date",
             },
             "search": <DataProviderOptionInfo>{
                 "display_name": "Search",
@@ -120,6 +120,49 @@ public class WooCommerceOrdersDataProvider inherits WooCommerceDataProviderBase 
                     <AllowedValueInfo>{"value": "title", "desc": "Sort by title"},
                     <AllowedValueInfo>{"value": "slug", "desc": "Sort by slug"},
                 ),
+            },
+            "modified_after": <DataProviderOptionInfo>{
+                "display_name": "Modified After",
+                "short_desc": "Filter by modification date (after)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to orders modified after the given date",
+            },
+            "modified_before": <DataProviderOptionInfo>{
+                "display_name": "Modified Before",
+                "short_desc": "Filter by modification date (before)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to orders modified before the given date",
+            },
+            "dates_are_gmt": <DataProviderOptionInfo>{
+                "display_name": "Dates Are GMT",
+                "short_desc": "Interpret date filters as GMT",
+                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
+                "desc": "If `True`, the `after`/`before`/`modified_after`/`modified_before` filters are "
+                    "interpreted as GMT timestamps",
+            },
+            "include": <DataProviderOptionInfo>{
+                "display_name": "Include",
+                "short_desc": "Include only specific order IDs",
+                "type": new ListDataType("OrderIncludeIds", SoftIntType, True),
+                "desc": "Limit results to the specified order IDs",
+            },
+            "exclude": <DataProviderOptionInfo>{
+                "display_name": "Exclude",
+                "short_desc": "Exclude specific order IDs",
+                "type": new ListDataType("OrderExcludeIds", SoftIntType, True),
+                "desc": "Exclude the specified order IDs from the result set",
+            },
+            "parent": <DataProviderOptionInfo>{
+                "display_name": "Parent",
+                "short_desc": "Include only orders with these parent IDs",
+                "type": new ListDataType("OrderParentIds", SoftIntType, True),
+                "desc": "Limit results to orders whose `parent_id` is in this list",
+            },
+            "parent_exclude": <DataProviderOptionInfo>{
+                "display_name": "Parent Exclude",
+                "short_desc": "Exclude orders with these parent IDs",
+                "type": new ListDataType("OrderParentExcludeIds", SoftIntType, True),
+                "desc": "Exclude orders whose `parent_id` is in this list",
             },
         };
     }
@@ -163,6 +206,11 @@ public class WooCommerceOrdersDataProvider inherits WooCommerceDataProviderBase 
         hash<auto> params = {} + search_options;
         if (!params.per_page) {
             params.per_page = DefaultPageSize;
+        }
+        foreach string key in (("after", "before", "modified_after", "modified_before")) {
+            if (params{key}) {
+                params{key} = format_date("YYYY-MM-DDTHH:mm:SS", params{key});
+            }
         }
         auto result = doGet("orders", params);
         return new DefaultRecordIterator(new ListHashIterator(result.typeCode() == NT_LIST ? result : ()),

@@ -31,15 +31,13 @@ public class WooCommerceSalesReportRequestDataType inherits HashDataType {
         const Fields = {
             "date_min": {
                 "display_name": "Date Min",
-                "type": StringOrNothingType,
-                "desc": "Start date for the report in YYYY-MM-DD format",
-                "example_value": "2026-01-01",
+                "type": DateOrNothingType,
+                "desc": "Start date for the report",
             },
             "date_max": {
                 "display_name": "Date Max",
-                "type": StringOrNothingType,
-                "desc": "End date for the report in YYYY-MM-DD format",
-                "example_value": "2026-03-31",
+                "type": DateOrNothingType,
+                "desc": "End date for the report",
             },
             "period": {
                 "display_name": "Period",
@@ -65,7 +63,7 @@ public class WooCommerceSalesReportDataProvider inherits WooCommerceDataProvider
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "sales-report",
+            "name": "get-sales-report",
             "desc": "Retrieves a WooCommerce sales report",
             "type": "WooCommerceSalesReportDataProvider",
             "supports_request": True,
@@ -97,7 +95,7 @@ public class WooCommerceSalesReportDataProvider inherits WooCommerceDataProvider
 
     #! Returns the provider name
     string getName() {
-        return "sales-report";
+        return "get-sales-report";
     }
 
     #! Returns the provider description
@@ -108,8 +106,8 @@ public class WooCommerceSalesReportDataProvider inherits WooCommerceDataProvider
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         *hash<auto> params;
-        if (req.date_min) { params.date_min = req.date_min; }
-        if (req.date_max) { params.date_max = req.date_max; }
+        if (req.date_min) { params.date_min = format_date("YYYY-MM-DD", req.date_min); }
+        if (req.date_max) { params.date_max = format_date("YYYY-MM-DD", req.date_max); }
         if (req.period) { params.period = req.period; }
         auto result = doGet("reports/sales", params);
         # API returns a list; return first element

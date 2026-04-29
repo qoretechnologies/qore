@@ -135,7 +135,7 @@ public class WooCommerceCouponDataType inherits HashDataType {
             "meta_data": {
                 "display_name": "Meta Data",
                 "short_desc": "Coupon metadata",
-                "type": new ListDataType("MetaData", AutoHashType, True),
+                "type": new ListDataType("MetaData", new WooCommerceMetaDataType(), True),
                 "desc": "List of metadata key-value pairs associated with the coupon",
             },
         };

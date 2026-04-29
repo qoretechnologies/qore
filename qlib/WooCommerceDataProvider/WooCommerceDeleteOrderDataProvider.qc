@@ -35,6 +35,7 @@ public class WooCommerceDeleteOrderRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the order to delete",
                 "required": True,
                 "example_value": 1234,
+                "ref_data": "orders",
             },
             "force": {
                 "display_name": "Force",

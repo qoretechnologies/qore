@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore WooCommerceDataProvider module definition
 
-/*  WooCommerceDeleteWebhookDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
+/*  WooCommerceDeleteTaxRateDataProvider.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -25,22 +25,22 @@
 #! Contains all public definitions in the WooCommerceDataProvider module
 public namespace WooCommerceDataProvider {
 
-#! Request type for deleting a webhook
-public class WooCommerceDeleteWebhookRequestDataType inherits HashDataType {
+#! Request type for deleting a tax rate
+public class WooCommerceDeleteTaxRateRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "id": {
-                "display_name": "Webhook ID",
+                "display_name": "Tax Rate ID",
                 "type": IntType,
-                "desc": "The unique identifier for the webhook to delete",
+                "desc": "The unique identifier for the tax rate to delete",
                 "required": True,
-                "example_value": 142,
-                "ref_data": "webhooks",
+                "example_value": 72,
+                "ref_data": "tax_rates",
             },
             "force": {
                 "display_name": "Force",
                 "type": SoftBoolOrNothingType,
-                "desc": "If `True`, permanently delete the webhook",
+                "desc": "Required to be `True` since tax rates do not support trash",
                 "default_value": True,
                 "example_value": True,
             },
@@ -52,67 +52,55 @@ public class WooCommerceDeleteWebhookRequestDataType inherits HashDataType {
     }
 }
 
-#! Data provider for deleting a WooCommerce webhook
-public class WooCommerceDeleteWebhookDataProvider inherits WooCommerceDataProviderBase {
+#! Data provider for deleting a WooCommerce tax rate
+public class WooCommerceDeleteTaxRateDataProvider inherits WooCommerceDataProviderBase {
     public {
-        #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "delete",
-            "desc": "Deletes a WooCommerce webhook",
-            "type": "WooCommerceDeleteWebhookDataProvider",
+            "name": "delete-tax-rate",
+            "desc": "Deletes a WooCommerce tax rate",
+            "type": "WooCommerceDeleteTaxRateDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,
         };
 
-        #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
 
-        #! Request type
-        static WooCommerceDeleteWebhookRequestDataType RequestType();
+        static WooCommerceDeleteTaxRateRequestDataType RequestType();
 
-        #! Response type
-        static WooCommerceWebhookDataType ResponseType();
+        static WooCommerceTaxRateDataType ResponseType();
     }
 
-    #! Creates the object with a REST client
     constructor(WooCommerceRestClient::WooCommerceRestClient rest)
             : WooCommerceDataProviderBase(rest) {
     }
 
-    #! Creates the object with a connection
     constructor(WooCommerceRestClient::WooCommerceRestConnection conn) : WooCommerceDataProviderBase(conn) {
     }
 
-    #! Creates the object with options
     constructor(*hash<auto> options) : WooCommerceDataProviderBase(options) {
     }
 
-    #! Returns the provider name
     string getName() {
-        return "delete";
+        return "delete-tax-rate";
     }
 
-    #! Returns the provider description
     *string getDesc() {
-        return "Deletes a WooCommerce webhook";
+        return "Deletes a WooCommerce tax rate";
     }
 
-    #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doDelete(sprintf("webhooks/%d", req.id), {"force": req.force ?? True ? "true" : "false"});
+        return doDelete(sprintf("taxes/%d", req.id),
+            {"force": req.force ?? True ? "true" : "false"});
     }
 
-    #! Returns the request type
     private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
         return RequestType;
     }
 
-    #! Returns the response type
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
         return ResponseType;
     }
 
-    #! Returns static provider info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;
     }
