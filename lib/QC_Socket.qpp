@@ -7173,7 +7173,11 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = 
         }
     }
 
-    return s->submitHttp2Request(headers, body_ptr, body_len, xsink, streaming);
+    int stream_id = s->submitHttp2Request(headers, body_ptr, body_len, xsink, streaming);
+    if (!*xsink && stream_id >= 0) {
+        socket_wake_async_controller(self);
+    }
+    return stream_id;
 }
 
 //! Cancels a pending HTTP/2 stream
@@ -7450,7 +7454,11 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
         return -1;
     }
-    return s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
+    int64_t stream_id = s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
+    if (!*xsink && stream_id >= 0) {
+        socket_wake_async_controller(self);
+    }
+    return stream_id;
 }
 
 //! Submits a streaming HTTP/3 request (headers only, no END_STREAM) on the client QUIC session
@@ -7477,7 +7485,11 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     @since %Qore 2.3
 */
 int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers) {
-    return s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
+    int64_t stream_id = s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
+    if (!*xsink && stream_id >= 0) {
+        socket_wake_async_controller(self);
+    }
+    return stream_id;
 }
 
 //! Returns @ref True if the QUIC session on this socket is closed or absent
@@ -7531,7 +7543,11 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
     if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
         return -1;
     }
-    return s->sendQuicClientStreamData(stream_id, body_ptr, body_len, (bool)end_stream, xsink);
+    int rc = s->sendQuicClientStreamData(stream_id, body_ptr, body_len, (bool)end_stream, xsink);
+    if (!*xsink && rc >= 0) {
+        socket_wake_async_controller(self);
+    }
+    return rc;
 }
 
 //! Waits for a client-side HTTP/3 streaming body buffer to drain
