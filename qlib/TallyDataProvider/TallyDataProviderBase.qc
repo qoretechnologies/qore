@@ -114,6 +114,7 @@ public class TallyDataProviderBase inherits DataProvider::AbstractDataProvider {
             "workspaces": True,
             "webhooks": True,
             "submissions": True,
+            "webhook_events": True,
         };
     }
 
@@ -124,6 +125,7 @@ public class TallyDataProviderBase inherits DataProvider::AbstractDataProvider {
             case "workspaces": return getReferenceWorkspaces();
             case "webhooks": return getReferenceWebhooks();
             case "submissions": return getReferenceSubmissions(action_opts.form_id);
+            case "webhook_events": return getReferenceWebhookEvents(action_opts.webhook_id);
         }
     }
 
@@ -177,6 +179,34 @@ public class TallyDataProviderBase inherits DataProvider::AbstractDataProvider {
                     "desc": sprintf("%s (ID: %s, Form: %s, Enabled: %y)", display_name, wh.id,
                         wh.formId ?? "unknown", wh.isEnabled),
                     "value": string(wh.id),
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Returns available webhook events for the given webhook (cascading reference data)
+    /** Returns NOTHING when no webhook_id is set so the dropdown stays empty until the user
+        selects a webhook.
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceWebhookEvents(*string webhook_id) {
+        if (!webhook_id.val()) {
+            return;
+        }
+        list<hash<AllowedValueInfo>> rv = ();
+        hash<auto> response = doRestCommand("GET", "webhooks/" + webhook_id + "/events");
+        if (response.body.events) {
+            foreach hash<auto> event in (response.body.events) {
+                string display_name = event.createdAt
+                    ? sprintf("Event %s (%s, %s)", event.id, event.deliveryStatus ?? "unknown",
+                        event.createdAt)
+                    : sprintf("Event %s", event.id);
+                rv += <AllowedValueInfo>{
+                    "display_name": display_name,
+                    "short_desc": display_name,
+                    "desc": sprintf("%s (ID: %s, Status: %s, Retries: %d)", display_name, event.id,
+                        event.deliveryStatus ?? "unknown", event.retry ?? 0),
+                    "value": string(event.id),
                 };
             }
         }

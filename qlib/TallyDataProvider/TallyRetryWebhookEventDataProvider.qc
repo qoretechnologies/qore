@@ -107,7 +107,7 @@ public class TallyRetryWebhookEventDataProvider inherits TallyDataProviderBase {
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        doRestCommand("POST", "webhooks/" + req.webhook_id + "/events/" + req.event_id + "/retry");
+        doRestCommand("POST", "webhooks/" + req.webhook_id + "/events/" + req.event_id);
         return {
             "status": "retried",
             "webhook_id": req.webhook_id,

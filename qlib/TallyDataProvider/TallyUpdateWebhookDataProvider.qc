@@ -39,13 +39,15 @@ public class TallyUpdateWebhookRequestDataType inherits HashDataType {
                 "display_name": "Form ID",
                 "short_desc": "The form this webhook is attached to",
                 "desc": "The ID of the form that triggers this webhook",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
             },
             "url": {
                 "display_name": "URL",
-                "short_desc": "Updated endpoint URL",
+                "short_desc": "Endpoint URL",
                 "desc": "The destination URL where webhook events will be delivered",
-                "type": AbstractDataProviderTypeMap."*string",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
                 "example_value": "https://example.com/webhook",
             },
             "eventTypes": {
@@ -54,6 +56,7 @@ public class TallyUpdateWebhookRequestDataType inherits HashDataType {
                 "desc": "List of event types to subscribe to; the only valid value is "
                     "`FORM_RESPONSE`",
                 "type": new ListDataType(AbstractDataProviderTypeMap."string", True),
+                "required": True,
                 "element_allowed_values": (
                     <AllowedValueInfo>{"value": "FORM_RESPONSE", "display_name": "Form Response"},
                 ),
@@ -63,7 +66,8 @@ public class TallyUpdateWebhookRequestDataType inherits HashDataType {
                 "display_name": "Is Enabled",
                 "short_desc": "Enable or disable the webhook",
                 "desc": "Set to `True` to enable or `False` to disable the webhook",
-                "type": AbstractDataProviderTypeMap."*bool",
+                "type": AbstractDataProviderTypeMap."bool",
+                "required": True,
             },
             "signingSecret": {
                 "display_name": "Signing Secret",

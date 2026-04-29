@@ -219,7 +219,16 @@ public class TallyRestConnection inherits RestClient::RestConnection {
 
     #! creates the TallyRestConnection object
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+            : RestConnection(TallyRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref TallyRestConnection::constructor()
+    /** Tally has a single fixed endpoint, so the URL is always forced to the canonical
+        @ref DefaultUrl regardless of any value persisted in the connection config; this
+        also bypasses the framework's @c auto_url localhost fallback.
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        return config + {"url": DefaultUrl};
     }
 
     #! returns \c "tally"

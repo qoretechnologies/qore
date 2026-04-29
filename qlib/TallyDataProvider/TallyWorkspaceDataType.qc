@@ -92,14 +92,14 @@ public class TallyWorkspaceDataType inherits HashDataType {
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",
-                "desc": "ISO 8601 timestamp when the workspace was created",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the workspace was created",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "updatedAt": {
                 "display_name": "Updated At",
                 "short_desc": "Last update timestamp",
-                "desc": "ISO 8601 timestamp when the workspace was last updated",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the workspace was last updated",
+                "type": AbstractDataProviderTypeMap."*date",
             },
         };
     }

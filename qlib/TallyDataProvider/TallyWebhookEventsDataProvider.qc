@@ -32,7 +32,6 @@ public const TallyWebhookEventsSearchOptions = {
         "type": AbstractDataProviderTypeMap."string",
         "desc": "The ID of the webhook to retrieve delivery events for",
         "required": True,
-        "preselected": True,
     },
     "page": <DataProviderOptionInfo>{
         "display_name": "Page",

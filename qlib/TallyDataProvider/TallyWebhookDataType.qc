@@ -84,20 +84,20 @@ public class TallyWebhookDataType inherits HashDataType {
             "lastSyncedAt": {
                 "display_name": "Last Synced At",
                 "short_desc": "Last sync timestamp",
-                "desc": "ISO 8601 timestamp of the last successful webhook delivery",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp of the last successful webhook delivery",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",
-                "desc": "ISO 8601 timestamp when the webhook was created",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the webhook was created",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "updatedAt": {
                 "display_name": "Updated At",
                 "short_desc": "Last update timestamp",
-                "desc": "ISO 8601 timestamp when the webhook was last updated",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the webhook was last updated",
+                "type": AbstractDataProviderTypeMap."*date",
             },
         };
     }

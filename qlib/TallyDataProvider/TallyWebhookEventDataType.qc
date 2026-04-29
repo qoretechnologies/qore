@@ -88,20 +88,22 @@ public class TallyWebhookEventDataType inherits HashDataType {
             "payload": {
                 "display_name": "Payload",
                 "short_desc": "Webhook event payload",
-                "desc": "The full payload that was (or would be) delivered to the webhook URL",
-                "type": AbstractDataProviderTypeMap."auto",
+                "desc": "The full payload that was (or would be) delivered to the webhook URL; "
+                    "for `FORM_RESPONSE` events this contains `eventId`, `eventType`, `createdAt`, "
+                    "and a `data` object with respondent info and submitted fields",
+                "type": new TallyWebhookEventPayloadDataType(AutoHashOrNothingType),
             },
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",
-                "desc": "ISO 8601 timestamp when the event was created",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the event was created",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "updatedAt": {
                 "display_name": "Updated At",
                 "short_desc": "Last update timestamp",
-                "desc": "ISO 8601 timestamp when the event was last updated",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the event was last updated",
+                "type": AbstractDataProviderTypeMap."*date",
             },
         };
     }

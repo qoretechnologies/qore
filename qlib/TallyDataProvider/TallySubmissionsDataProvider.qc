@@ -32,7 +32,6 @@ public const TallySubmissionsSearchOptions = {
         "type": AbstractDataProviderTypeMap."string",
         "desc": "The ID of the form to retrieve submissions from",
         "required": True,
-        "preselected": True,
     },
     "page": <DataProviderOptionInfo>{
         "display_name": "Page",

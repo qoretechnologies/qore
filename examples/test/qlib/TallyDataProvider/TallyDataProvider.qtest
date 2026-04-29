@@ -207,18 +207,18 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertTrue(exists action.options.eventTypes.element_allowed_values,
             "create-webhook eventTypes has element_allowed_values");
 
-        # test update-webhook action: id has webhooks ref_data; body fields are optional
+        # test update-webhook action: id has webhooks ref_data; the Tally PATCH endpoint
+        # treats formId/url/eventTypes/isEnabled as required on every call
         action = DataProviderActionCatalog::getAppAction(
             TallyDataProvider::TallyDataProvider::AppName, "update-webhook"
         );
         assertEq("webhooks", action.options.id.ref_data,
             "update-webhook id uses webhooks ref_data");
         assertEq(True, action.options.id.required);
-        # PATCH body fields are optional - per Tally API
-        assertFalse(action.options.formId.required, "update-webhook formId is optional");
-        assertFalse(action.options.url.required, "update-webhook url is optional");
-        assertFalse(action.options.eventTypes.required, "update-webhook eventTypes is optional");
-        assertFalse(action.options.isEnabled.required, "update-webhook isEnabled is optional");
+        assertTrue(action.options.formId.required, "update-webhook formId is required");
+        assertTrue(action.options.url.required, "update-webhook url is required");
+        assertTrue(action.options.eventTypes.required, "update-webhook eventTypes is required");
+        assertTrue(action.options.isEnabled.required, "update-webhook isEnabled is required");
 
         # test delete-webhook action: id has webhooks ref_data
         action = DataProviderActionCatalog::getAppAction(
@@ -683,18 +683,19 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("updated", resp.status);
         assertEq("wh1", resp.id);
 
-        # verify partial update works (only id + isEnabled) - body fields are optional
+        # verify a follow-up update with the same required fields succeeds
         rest.response_body = {};
         resp = dp.doRequest({
             "id": "wh1",
+            "formId": "f1",
+            "url": "https://example.com/updated",
+            "eventTypes": ("FORM_RESPONSE",),
             "isEnabled": True,
         });
         assertEq("PATCH", rest.last_method);
         assertEq("webhooks/wh1", rest.last_path);
-        assertFalse(rest.last_request.hasKey("id"), "id stripped from partial PATCH body");
+        assertFalse(rest.last_request.hasKey("id"), "id stripped from second PATCH body");
         assertEq(True, rest.last_request.isEnabled);
-        assertFalse(exists rest.last_request.formId, "formId not in partial PATCH body");
-        assertFalse(exists rest.last_request.url, "url not in partial PATCH body");
 %endif
     }
 
@@ -790,7 +791,7 @@ public class TallyDataProviderTest inherits QUnit::Test {
         });
 
         assertEq("POST", rest.last_method);
-        assertEq("webhooks/wh1/events/evt1/retry", rest.last_path);
+        assertEq("webhooks/wh1/events/evt1", rest.last_path);
         assertEq("retried", resp.status);
         assertEq("wh1", resp.webhook_id);
         assertEq("evt1", resp.event_id);

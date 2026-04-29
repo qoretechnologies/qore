@@ -275,7 +275,6 @@ module TallyDataProvider {
                     "short_desc": "The form to list submissions for",
                     "type": AbstractDataProviderTypeMap."string",
                     "desc": "The ID of the form to retrieve submissions from",
-                    "preselected": True,
                     "required": True,
                     "ref_data": "forms",
                 },
@@ -343,7 +342,6 @@ module TallyDataProvider {
                     "short_desc": "The form to list questions for",
                     "type": AbstractDataProviderTypeMap."string",
                     "desc": "The ID of the form to retrieve questions from",
-                    "preselected": True,
                     "required": True,
                     "ref_data": "forms",
                 },
@@ -382,8 +380,9 @@ module TallyDataProvider {
             "action": "update-webhook",
             "display_name": "Update Webhook",
             "short_desc": "Update a webhook",
-            "desc": "Update an existing webhook configuration; all body fields are optional so a "
-                "partial update can change only what's needed",
+            "desc": "Update an existing webhook configuration. The Tally API requires `formId`, "
+                "`url`, `eventTypes`, and `isEnabled` to be supplied on every update; supply the "
+                "current value for any field that should not change",
             "action_code": DPAT_API,
             "groups": ("Webhooks",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
@@ -392,17 +391,10 @@ module TallyDataProvider {
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 TallyUpdateWebhookRequestDataType::Fields{"formId",}, {
-                    "preselected": True,
                     "ref_data": "forms",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                TallyUpdateWebhookRequestDataType::Fields{"url", "isEnabled"}, {
-                    "preselected": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                TallyUpdateWebhookRequestDataType::Fields - (
-                    "id", "formId", "url", "isEnabled",
-                )
+                TallyUpdateWebhookRequestDataType::Fields - ("id", "formId")
             ),
             "output_type": TallyUpdateWebhookDataProvider::ResponseType,
         });
@@ -498,9 +490,14 @@ module TallyDataProvider {
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 TallyRetryWebhookEventRequestDataType::Fields{"webhook_id",}, {
                     "ref_data": "webhooks",
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                TallyRetryWebhookEventRequestDataType::Fields{"event_id",}
+                TallyRetryWebhookEventRequestDataType::Fields{"event_id",}, {
+                    "ref_data": "webhook_events",
+                    "depends_on": ("webhook_id",),
+                }
             ),
             "output_type": TallyRetryWebhookEventDataProvider::ResponseType,
         });
@@ -638,7 +635,6 @@ module TallyDataProvider {
                     "short_desc": "The form to watch for submissions",
                     "type": AbstractDataProviderTypeMap."string",
                     "desc": "The ID of the form to watch for new submissions",
-                    "preselected": True,
                     "required": True,
                     "ref_data": "forms",
                 },

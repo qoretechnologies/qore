@@ -80,14 +80,14 @@ public class TallyFormDataType inherits HashDataType {
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",
-                "desc": "ISO 8601 timestamp when the form was created",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the form was created",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "updatedAt": {
                 "display_name": "Updated At",
                 "short_desc": "Last update timestamp",
-                "desc": "ISO 8601 timestamp when the form was last updated",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the form was last updated",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "settings": {
                 "display_name": "Settings",
