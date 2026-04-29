@@ -938,7 +938,8 @@ static BinaryNode* qore_socket_object_exec_quic_stream_data(QoreSocketObject* s,
 }
 
 static QoreValue qore_socket_object_exec_quic_datagram(QoreSocketObject* s,
-        QoreSocketObjectQuicDatagramPollOperation* datagram_poller, int timeout_ms, ExceptionSink* xsink) {
+        QoreSocketObjectQuicDatagramPollOperation* datagram_poller, int timeout_ms, int64_t session_id,
+        int64_t stream_id, ExceptionSink* xsink) {
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
         qore_socket_object_make_poll_op(*sock_obj, datagram_poller, "quic-datagram", xsink), xsink);
@@ -947,8 +948,12 @@ static QoreValue qore_socket_object_exec_quic_datagram(QoreSocketObject* s,
     }
 
     QoreHashNode* ex = nullptr;
+    std::string owner_name("readQuicDatagram:");
+    owner_name += std::to_string(session_id);
+    owner_name += ':';
+    owner_name += std::to_string(stream_id);
     ReferenceHolder<QoreHashNode> result(qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj,
-        timeout_ms, "readQuicDatagram", xsink, &ex), xsink);
+        timeout_ms, owner_name.c_str(), xsink, &ex), xsink);
     ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
     if (*xsink) {
         return QoreValue();
@@ -4410,7 +4415,7 @@ QoreValue QoreSocketObject::readQuicDatagram(int64_t session_id, int64_t stream_
         return QoreValue();
     }
     return qore_socket_object_exec_quic_datagram(this,
-        new QoreSocketObjectQuicDatagramPollOperation(session, stream_id), timeout_ms, xsink);
+        new QoreSocketObjectQuicDatagramPollOperation(session, stream_id), timeout_ms, session_id, stream_id, xsink);
 }
 
 void QoreSocketObject::registerQuicDatagramQueue(int64_t session_id, int64_t stream_id,
