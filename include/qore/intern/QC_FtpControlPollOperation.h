@@ -253,6 +253,9 @@ public:
     //! Returns the accepted socket (not ref'd — caller must ref if needed)
     DLLLOCAL QoreSocketObject* getAcceptedSocket() const { return client_sock; }
 
+    //! Returns the listener socket (not ref'd; caller must not deref)
+    DLLLOCAL QoreSocketObject* getListenerSocket() const { return listener; }
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 

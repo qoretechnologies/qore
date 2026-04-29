@@ -121,6 +121,9 @@ public:
     //! Returns true when the transfer is complete
     DLLLOCAL bool isDone() const { return data_state == FtpDataState::DONE; }
 
+    //! Returns the data socket (not ref'd; caller must not deref)
+    DLLLOCAL QoreSocketObject* getDataSocket() const { return data_sock; }
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
