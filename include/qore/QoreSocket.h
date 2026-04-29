@@ -452,7 +452,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
@@ -476,7 +477,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
@@ -498,7 +500,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectUNIX()
@@ -521,7 +524,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectUNIX()
@@ -546,6 +550,9 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
+        @note equivalent to calling QoreSocket::connectINET2() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
+
         @see QoreSocket::connect()
         @see QoreSocket::connectUNIX()
         @see QoreSocket::connectSSL()
@@ -565,7 +572,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connectUNIX() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connectUNIX() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
@@ -588,7 +596,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connectUNIX() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connectUNIX() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
