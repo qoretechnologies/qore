@@ -35,6 +35,8 @@
 
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/QoreSocketObject.h"
+#include "qore/InputStream.h"
+#include "qore/OutputStream.h"
 
 #include <string>
 
@@ -88,6 +90,28 @@ public:
         SocketPollOperationBase* connect_op, bool secure_data,
         BinaryNode* send_data);
 
+    //! Creates a receive-to-stream data poll operation
+    /** @param self the QoreObject wrapping this private data
+        @param data_sock the data socket (ref'd by caller, ownership transferred)
+        @param connect_op the in-progress connect operation (ref'd by caller, ownership transferred)
+        @param secure_data true to upgrade data channel to TLS after connect
+        @param recv_output_stream the output stream to receive into (ref'd by caller, ownership transferred)
+    */
+    DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
+        SocketPollOperationBase* connect_op, bool secure_data,
+        OutputStream* recv_output_stream);
+
+    //! Creates a send-from-stream data poll operation
+    /** @param self the QoreObject wrapping this private data
+        @param data_sock the data socket (ref'd by caller, ownership transferred)
+        @param connect_op the in-progress connect operation (ref'd by caller, ownership transferred)
+        @param secure_data true to upgrade data channel to TLS after connect
+        @param send_input_stream the input stream to send (ref'd by caller, ownership transferred)
+    */
+    DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
+        SocketPollOperationBase* connect_op, bool secure_data,
+        InputStream* send_input_stream);
+
     //! Creates a receive data poll operation on an already-connected socket (adopt-socket)
     /** Used for PORT mode where the socket comes from SocketAcceptPollOperation.
         Starts directly in RECEIVING state (no CONNECTING phase).
@@ -106,6 +130,24 @@ public:
     */
     DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
         bool secure_data, BinaryNode* send_data);
+
+    //! Creates a receive-to-stream data poll operation on an already-connected socket (adopt-socket)
+    /** @param self the QoreObject wrapping this private data
+        @param data_sock the already-connected data socket (not ref'd — raw pointer)
+        @param secure_data true to upgrade to TLS before transfer
+        @param recv_output_stream the output stream to receive into (ref'd by caller, ownership transferred)
+    */
+    DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
+        bool secure_data, OutputStream* recv_output_stream);
+
+    //! Creates a send-from-stream data poll operation on an already-connected socket (adopt-socket)
+    /** @param self the QoreObject wrapping this private data
+        @param data_sock the already-connected data socket (not ref'd — raw pointer)
+        @param secure_data true to upgrade to TLS before transfer
+        @param send_input_stream the input stream to send (ref'd by caller, ownership transferred)
+    */
+    DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
+        bool secure_data, InputStream* send_input_stream);
 
     DLLLOCAL virtual ~FtpDataPollOperationPriv();
 
@@ -137,9 +179,11 @@ private:
 
     // Receive buffer (RETR/LIST)
     SimpleRefHolder<BinaryNode> recv_data;
+    SimpleRefHolder<OutputStream> recv_output_stream;
 
     // Send buffer (STOR)
     SimpleRefHolder<BinaryNode> send_data;
+    SimpleRefHolder<InputStream> send_input_stream;
     size_t send_offset = 0;
 
 public:
