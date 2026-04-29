@@ -597,7 +597,10 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 // Read the ALPN result from the tunneled+SSL socket.
                 QoreSocketObject* h1_sock = h1->getSocketPriv();
                 SimpleRefHolder<QoreStringNode> alpn(
-                    h1_sock ? h1_sock->getAlpnProtocol() : nullptr);
+                    h1_sock ? h1_sock->getAlpnProtocol(xsink) : nullptr);
+                if (*xsink) {
+                    return nullptr;
+                }
                 std::string alpn_id;
                 if (alpn && !alpn->empty()) {
                     alpn_id = alpn->c_str();

@@ -5873,8 +5873,7 @@ bool Socket::isOpen() [flags=CONSTANT] {
     established
 */
 *string Socket::getSSLCipherName() [flags=CONSTANT] {
-    const char *str = s->getSSLCipherName();
-    return str ? new QoreStringNode(str) : 0;
+    return s->getSSLCipherNameString(xsink);
 }
 
 //! Returns the version string of the cipher for an encrypted connection or @ref nothing if a secure connection has not been established
@@ -5887,8 +5886,7 @@ bool Socket::isOpen() [flags=CONSTANT] {
     not been established
 */
 *string Socket::getSSLCipherVersion() [flags=CONSTANT] {
-    const char *str = s->getSSLCipherVersion();
-    return str ? new QoreStringNode(str) : 0;
+    return s->getSSLCipherVersionString(xsink);
 }
 
 //! Returns @ref True if the connection is a secure TLS/SSL connection
@@ -5900,7 +5898,7 @@ bool b = sock.isSecure();
     @return @ref True if the connection is encrypted, @ref False if not
 */
 bool Socket::isSecure() [flags=CONSTANT] {
-    return s->isSecure();
+    return s->isSecure(xsink);
 }
 
 //! Sets the ALPN (Application-Layer Protocol Negotiation) protocols to offer during TLS negotiation
@@ -5933,7 +5931,7 @@ if (proto == "h2") {
     @since %Qore 2.2
 */
 *string Socket::getAlpnProtocol() [flags=CONSTANT] {
-    return s->getAlpnProtocol();
+    return s->getAlpnProtocol(xsink);
 }
 
 //! Returns @ref True if the connection is using HTTP/2 (negotiated via ALPN)
@@ -5949,7 +5947,7 @@ if (sock.isHttp2()) {
     @since %Qore 2.2
 */
 bool Socket::isHttp2() [flags=CONSTANT] {
-    return s->isHttp2();
+    return s->isHttp2(xsink);
 }
 
 //! Returns a string code giving the result of verifying the remote certificate or @ref nothing if an encrypted connection is not currently established
@@ -5961,7 +5959,10 @@ bool Socket::isHttp2() [flags=CONSTANT] {
     @return A string code giving the result of verifying the peer's certificate. No value is returned if a secure connection has not been established.  The set of possible return values is made up of the keys of the @ref X509_VerificationReasons hash. This hash can also be used to generate a textual description of the verification result.
 */
 *string Socket::verifyPeerCertificate() [flags=CONSTANT] {
-    const char *c = getSSLCVCode(s->verifyPeerCertificate());
+    const char *c = getSSLCVCode(s->verifyPeerCertificate(xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
     return c ? new QoreStringNode(c) : 0;
 }
 
@@ -6513,7 +6514,7 @@ bool Socket::captureRemoteCertificates(bool set = True) {
     @since %Qore 0.9.3
 */
 *SSLCertificate Socket::getRemoteCertificate() {
-    return s->getRemoteCertificate();
+    return s->getRemoteCertificate(xsink);
 }
 
 //! Returns an integer connection ID that is incremented every time the socket is disconnected

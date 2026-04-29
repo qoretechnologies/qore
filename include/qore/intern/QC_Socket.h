@@ -59,6 +59,8 @@ public:
     QoreSSLCertificate* cert = nullptr;
     QoreSSLPrivateKey* pk = nullptr;
     mutable QoreThreadLock m;
+    std::string ssl_cipher_name_cache;
+    std::string ssl_cipher_version_cache;
     unsigned non_block_flags = 0;
     int non_block_accept_count = 0;
     int async_io_count = 0;
@@ -490,6 +492,29 @@ public:
 
     //! Returns true if an HTTP/2 server session is active; must be called on the async I/O controller path
     DLLLOCAL bool isH2ServerSessionForAsyncPoll() const;
+
+    //! Parses ALPN protocol names into caller-owned storage.
+    DLLLOCAL static int parseAlpnProtocols(const QoreListNode* protocols, std::vector<std::string>& proto_list,
+            ExceptionSink* xsink) {
+        if (!protocols || !protocols->size()) {
+            xsink->raiseException("SOCKET-ALPN-ERROR", "protocol list is empty");
+            return -1;
+        }
+
+        ConstListIterator li(protocols);
+        while (li.next()) {
+            QoreStringValueHelper str(li.getValue());
+            if (!str->empty()) {
+                proto_list.push_back(str->c_str());
+            }
+        }
+
+        if (proto_list.empty()) {
+            xsink->raiseException("SOCKET-ALPN-ERROR", "no valid protocols in list");
+            return -1;
+        }
+        return 0;
+    }
 
     //! Builds the HTTP response status line and sets the legacy response-uri info key
     DLLLOCAL void getSendHttpResponseStatusLine(QoreString& hdr, QoreHashNode* info, int code, const char* desc,

@@ -224,7 +224,7 @@ QoreHashNode* HttpAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* x
         // Check if SSL handshake was already performed during accept
         // (happens when the listener socket has SSL configured — startPollAccept()
         // automatically upgrades the accepted socket to SSL)
-        if (client_sock->isSecure()) {
+        if (client_sock->isSecureForAsyncPoll()) {
             if (checkAlpn(xsink)) {
                 return nullptr;
             }
@@ -296,7 +296,7 @@ int HttpAcceptPollOperationPriv::startSslHandshake(ExceptionSink* xsink) {
     // Set ALPN protocols based on http_version mode
     ReferenceHolder<QoreListNode> alpn(buildAlpnList(), xsink);
     if (alpn) {
-        client_sock->setAlpnProtocols(*alpn, xsink);
+        client_sock->setAlpnProtocolsForAsyncPoll(*alpn, xsink);
         if (*xsink) {
             accept_state = AcceptState::COMPLETE;
             return -1;
@@ -329,7 +329,7 @@ int HttpAcceptPollOperationPriv::startSslHandshake(ExceptionSink* xsink) {
 
 int HttpAcceptPollOperationPriv::checkAlpn(ExceptionSink* xsink) {
     // Get the negotiated ALPN protocol from the client socket
-    SimpleRefHolder<QoreStringNode> proto(client_sock->getAlpnProtocol());
+    SimpleRefHolder<QoreStringNode> proto(client_sock->getAlpnProtocolForAsyncPoll());
     if (proto && proto->size()) {
         negotiated_protocol = proto->c_str();
         is_http2 = (negotiated_protocol == "h2");

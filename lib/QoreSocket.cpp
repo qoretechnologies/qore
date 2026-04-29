@@ -6893,27 +6893,13 @@ bool QoreSocket::isSecure() const {
 }
 
 int QoreSocket::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink) {
-    if (!protocols || !protocols->size()) {
-        xsink->raiseException("SOCKET-ALPN-ERROR", "protocol list is empty");
-        return -1;
-    }
-
     std::vector<std::string> proto_list;
-    ConstListIterator li(protocols);
-    while (li.next()) {
-        QoreStringValueHelper str(li.getValue());
-        if (!str->empty()) {
-            proto_list.push_back(str->c_str());
-        }
-    }
-
-    if (proto_list.empty()) {
-        xsink->raiseException("SOCKET-ALPN-ERROR", "no valid protocols in list");
+    if (my_socket_priv::parseAlpnProtocols(protocols, proto_list, xsink)) {
         return -1;
     }
 
     // Store protocols for use during SSL upgrade
-    priv->alpn_protocols = proto_list;
+    priv->alpn_protocols = std::move(proto_list);
     return 0;
 }
 

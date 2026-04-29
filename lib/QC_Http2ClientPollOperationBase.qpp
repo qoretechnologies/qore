@@ -447,7 +447,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
 
     if (current_op->goalReached()) {
         // Check ALPN negotiated protocol
-        SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocol());
+        SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocolForAsyncPoll());
         if (!alpn || strcmp(alpn->c_str(), "h2") != 0) {
             SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
             desc->sprintf("HTTP/2 not negotiated via ALPN: got %s",

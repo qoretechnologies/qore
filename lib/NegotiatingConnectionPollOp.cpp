@@ -175,7 +175,7 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
         target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
 
     // TCP + SSL handshake done.  Read the negotiated ALPN protocol.
-    SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocol());
+    SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocolForAsyncPoll());
     std::string alpn_id;
     if (alpn && !alpn->empty()) {
         alpn_id = alpn->c_str();

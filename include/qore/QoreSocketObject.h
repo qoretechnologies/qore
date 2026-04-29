@@ -380,6 +380,10 @@ public:
     DLLEXPORT const char* getSSLCipherName();
     DLLEXPORT const char* getSSLCipherVersion();
     DLLEXPORT bool isSecure();
+    DLLLOCAL QoreStringNode* getSSLCipherNameString(ExceptionSink* xsink);
+    DLLLOCAL QoreStringNode* getSSLCipherVersionString(ExceptionSink* xsink);
+    DLLLOCAL bool isSecure(ExceptionSink* xsink);
+    DLLLOCAL bool isSecureForAsyncPoll() const;
 
     //! Checks for data on an idle HTTP/1.1 keepalive connection in an async-I/O-safe way.
     /** For TLS connections, uses SSL_peek (which processes TLS post-handshake records such
@@ -432,6 +436,7 @@ public:
         @since %Qore 2.2
     */
     DLLEXPORT void setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink);
+    DLLLOCAL void setAlpnProtocolsForAsyncPoll(const QoreListNode* protocols, ExceptionSink* xsink);
 
     //! Returns the negotiated ALPN protocol after a TLS connection is established
     /** @return The negotiated protocol string, or nullptr if no protocol was negotiated
@@ -439,6 +444,8 @@ public:
         @since %Qore 2.2
     */
     DLLEXPORT QoreStringNode* getAlpnProtocol() const;
+    DLLLOCAL QoreStringNode* getAlpnProtocol(ExceptionSink* xsink) const;
+    DLLLOCAL QoreStringNode* getAlpnProtocolForAsyncPoll() const;
 
     //! Returns true if the connection is using HTTP/2 (negotiated via ALPN)
     /** @return true if HTTP/2, false otherwise
@@ -446,6 +453,7 @@ public:
         @since %Qore 2.2
     */
     DLLEXPORT bool isHttp2() const;
+    DLLLOCAL bool isHttp2(ExceptionSink* xsink) const;
 
     //! Submits an HTTP/2 PUSH_PROMISE frame for server push
     /** @since %Qore 2.2
@@ -625,6 +633,7 @@ public:
     DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
     DLLEXPORT long verifyPeerCertificate();
+    DLLLOCAL long verifyPeerCertificate(ExceptionSink* xsink);
     DLLEXPORT int getSocket();
     DLLEXPORT void setEncoding(const QoreEncoding* id);
     DLLEXPORT const QoreEncoding* getEncoding() const;
@@ -669,6 +678,7 @@ public:
     DLLEXPORT bool getAcceptAllCertificates() const;
     DLLEXPORT bool captureRemoteCertificates(bool set);
     DLLEXPORT QoreObject* getRemoteCertificate() const;
+    DLLLOCAL QoreObject* getRemoteCertificate(ExceptionSink* xsink) const;
     DLLEXPORT int64 getConnectionId() const;
 
     //! Sets the maximum body size for chunked HTTP reads (0 = unlimited)
