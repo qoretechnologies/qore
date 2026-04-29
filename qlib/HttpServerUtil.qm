@@ -1586,6 +1586,7 @@ public class AbstractStreamRequest {
 
     #! handles the request
     hash<HttpHandlerResponseInfo> handleRequest() {
+        bool chunked_recv_aborted = False;
         # handle message body
         if (exists body) {
             hash<auto> dh = {
@@ -1693,10 +1694,39 @@ public class AbstractStreamRequest {
             recvImpl({"hdr": NOTHING});
         } else {
             if (hdr."transfer-encoding" == "chunked") {
-                if (hdr."content-encoding") {
-                    s.readHTTPChunkedBodyBinaryWithCallback(\recv(), timeout_ms);
-                } else {
-                    s.readHTTPChunkedBodyWithCallback(\recv(), timeout_ms);
+                # HTTP/1.1 chunked reading: the native socket library controls
+                # the chunk loop via readHTTPChunkedBody*WithCallback(), so
+                # unlike HTTP/2/3 (which have explicit loops with
+                # hasRecvError() checks), there is no opportunity to check for
+                # handler errors between chunks.  Wrap the recv() callback so
+                # that an error detected during chunk processing (e.g.
+                # COLUMN-ERROR) throws immediately, aborting the native reader
+                # and allowing the server to send the error response and close
+                # the connection.
+                code chunked_recv = sub (hash<auto> v) {
+                    recv(v);
+                    if (hasRecvError()) {
+                        throw "HTTP1-STREAM-RECV-ERROR",
+                            "stream handler detected error during chunked body "
+                            "processing";
+                    }
+                };
+                try {
+                    if (hdr."content-encoding") {
+                        s.readHTTPChunkedBodyBinaryWithCallback(chunked_recv,
+                            timeout_ms);
+                    } else {
+                        s.readHTTPChunkedBodyWithCallback(chunked_recv,
+                            timeout_ms);
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err != "HTTP1-STREAM-RECV-ERROR") {
+                        rethrow;
+                    }
+                    chunked_recv_aborted = True;
+                    # Aborted mid-body: signal end-of-data so the handler can
+                    # build the error response and clean up (e.g. rollback)
+                    recvImpl({"hdr": NOTHING});
                 }
             } else {
                 # signal end of data
@@ -1704,7 +1734,15 @@ public class AbstractStreamRequest {
             }
         }
 
-        return sendResponse();
+        hash<HttpHandlerResponseInfo> resp = sendResponse();
+        if (chunked_recv_aborted) {
+            # Force connection close: the socket has unread chunked data
+            # from the client, so keep-alive would desynchronize the
+            # protocol
+            resp.close = True;
+            resp.hdr.Connection = "close";
+        }
+        return resp;
     }
 
     #! called to create the response hash with optional chunked streaming setup
