@@ -46,6 +46,7 @@
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/qore_socket_private.h"
 
+#include <atomic>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -53,13 +54,14 @@
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "qore/intern/AsyncIoControllerPriv.h"
 
 #define FTPDEBUG 5
+
+static std::atomic<unsigned long long> ftp_get_tmp_seq{0};
 
 //! to set the FTP mode
 enum qore_ftp_mode {
@@ -171,6 +173,78 @@ static void qore_ftp_raise_file_open_error(ExceptionSink& open_xsink, const char
     xsink->raiseException("FTP-FILE-OPEN-ERROR", "%s", msg.c_str());
 }
 
+static int qore_ftp_write_temp_file_to_local_path(const char* tmp_path, const char* local_path,
+        ExceptionSink* xsink) {
+    int ifd = ::open(tmp_path, O_RDONLY);
+    if (ifd < 0) {
+        xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", errno, "cannot open temporary file '%s'", tmp_path);
+        return -1;
+    }
+
+    int ofd = ::open(local_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (ofd < 0) {
+        int en = errno;
+        ::close(ifd);
+        xsink->raiseErrnoException("FTP-FILE-OPEN-ERROR", en, "%s", local_path);
+        return -1;
+    }
+
+    char buf[65536];
+    unsigned cancel_check = 0;
+    while (true) {
+        ssize_t nr = ::read(ifd, buf, sizeof(buf));
+        if (nr < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            int en = errno;
+            ::close(ifd);
+            ::close(ofd);
+            xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", en, "error reading temporary file");
+            return -1;
+        }
+        if (!nr) {
+            break;
+        }
+
+        const char* ptr = buf;
+        ssize_t remaining = nr;
+        while (remaining) {
+            if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "FTP file write")) {
+                ::close(ifd);
+                ::close(ofd);
+                return -1;
+            }
+            ssize_t nw = ::write(ofd, ptr, remaining);
+            if (nw < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                int en = errno;
+                ::close(ifd);
+                ::close(ofd);
+                xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", en, "error writing file");
+                return -1;
+            }
+            if (!nw) {
+                ::close(ifd);
+                ::close(ofd);
+                xsink->raiseException("FTP-FILE-WRITE-ERROR", "short write while writing file");
+                return -1;
+            }
+            ptr += nw;
+            remaining -= nw;
+        }
+    }
+
+    ::close(ifd);
+    if (::close(ofd)) {
+        xsink->raiseErrnoException("FTP-FILE-WRITE-ERROR", errno, "error closing file");
+        return -1;
+    }
+    return 0;
+}
+
 class FtpStreamThreadAssignmentGuard {
 public:
     DLLLOCAL FtpStreamThreadAssignmentGuard(StreamBase* stream, ExceptionSink* xsink) : stream(stream), xsink(xsink) {
@@ -236,6 +310,36 @@ public:
 private:
     const char* str;
     char* tmp_str = nullptr;
+};
+
+class FtpLocalTempPath {
+public:
+    DLLLOCAL FtpLocalTempPath(const char* final_path)
+            : path("%s.qore-ftp-tmp.%ld.%d.%llu", final_path, (long)getpid(), q_gettid(),
+                ftp_get_tmp_seq.fetch_add(1, std::memory_order_relaxed) + 1) {
+    }
+
+    DLLLOCAL ~FtpLocalTempPath() {
+        cleanup();
+    }
+
+    DLLLOCAL const char* c_str() const {
+        return path.c_str();
+    }
+
+    DLLLOCAL void cleanup() {
+        if (!active) {
+            return;
+        }
+        active = false;
+        if (::unlink(path.c_str()) && errno != ENOENT) {
+            printd(5, "FtpLocalTempPath::cleanup() unlink('%s') failed: %s\n", path.c_str(), strerror(errno));
+        }
+    }
+
+private:
+    QoreStringMaker path;
+    bool active = true;
 };
 
 class FtpResp {
@@ -1810,9 +1914,13 @@ int QoreFtpClient::get(const char* remotepath, const char* localname, ExceptionS
     printd(5, "QoreFtpClient::get(%s, %s)\n", remotepath, localname ? localname : "NULL");
 
     TmpLocalName ln(localname, remotepath);
+    FtpLocalTempPath tmp_path(*ln);
     QoreSandboxManagerHelper smh;
-    if (smh && !smh->checkFilesystemAccess(*ln, QSEC_WRITE | QSEC_CREATE, xsink)) {
-        return -1;
+    if (smh) {
+        if (!smh->checkFilesystemAccess(*ln, QSEC_WRITE | QSEC_CREATE, xsink)
+                || !smh->checkFilesystemAccess(tmp_path.c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
+            return -1;
+        }
     }
 
     SafeLocker sl(priv->m);
@@ -1820,21 +1928,34 @@ int QoreFtpClient::get(const char* remotepath, const char* localname, ExceptionS
         return -1;
     }
 
-    SimpleRefHolder<QoreStringNode> path(new QoreStringNode(*ln));
+    SimpleRefHolder<QoreStringNode> path(new QoreStringNode(tmp_path.c_str()));
     ExceptionSink open_xsink;
-    SimpleRefHolder<FileOutputStream> os(new FileOutputStream(*path, false, 0644, QCS_DEFAULT, &open_xsink));
+    SimpleRefHolder<FileOutputStream> os(new FileOutputStream(*path, O_WRONLY | O_CREAT | O_EXCL, 0644,
+        QCS_DEFAULT, &open_xsink));
     if (open_xsink) {
-        qore_ftp_raise_file_open_error(open_xsink, *ln, xsink);
+        qore_ftp_raise_file_open_error(open_xsink, tmp_path.c_str(), xsink);
         return -1;
     }
 
     int rv = priv->getAsyncBlocking(remotepath, *os, xsink);
     sl.unlock();
     if (rv) {
+        if (!os->isClosed()) {
+            ExceptionSink close_xsink;
+            os->close(&close_xsink);
+            if (close_xsink) {
+                close_xsink.clear();
+            }
+        }
         return rv;
     }
     os->close(xsink);
-    return *xsink ? -1 : 0;
+    os.discard();
+    if (*xsink) {
+        return -1;
+    }
+
+    return qore_ftp_write_temp_file_to_local_path(tmp_path.c_str(), *ln, xsink);
 }
 
 // public locked

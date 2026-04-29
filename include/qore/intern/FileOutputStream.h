@@ -49,6 +49,11 @@ public:
       f.open2(xsink, fileName->getBuffer(), O_WRONLY | (append ? O_APPEND : O_TRUNC) | O_CREAT, mode, encoding);
    }
 
+   DLLLOCAL FileOutputStream(const QoreStringNode *fileName, int flags, int mode, const QoreEncoding* encoding,
+         ExceptionSink *xsink) {
+      f.open2(xsink, fileName->getBuffer(), flags, mode, encoding);
+   }
+
    DLLLOCAL FileOutputStream(int fd) {
       f.makeSpecial(fd);
    }
