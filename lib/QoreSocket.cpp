@@ -2551,6 +2551,149 @@ private:
     bool done = false;
 };
 
+class QoreSocketControllerTlsStatePollOperation : public SocketPollOperationBase {
+public:
+    enum class Action {
+        GetCipherName,
+        GetCipherVersion,
+        IsSecure,
+        SetAlpnProtocols,
+        ClearAlpnProtocols,
+        GetAlpnProtocol,
+        IsHttp2,
+        VerifyPeerCertificate,
+        GetRemoteCertificate,
+    };
+
+    DLLLOCAL QoreSocketControllerTlsStatePollOperation(QoreSocket* sock, Action action)
+            : sock(sock), action(action) {
+    }
+
+    DLLLOCAL QoreSocketControllerTlsStatePollOperation(QoreSocket* sock, std::vector<std::string>&& protocols)
+            : sock(sock), action(Action::SetAlpnProtocols), protocols(std::move(protocols)) {
+    }
+
+    DLLLOCAL ~QoreSocketControllerTlsStatePollOperation() override {
+        ExceptionSink xsink;
+        output.discard(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        output.discard(xsink);
+        output = defaultValue();
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink*) override {
+        if (done) {
+            return nullptr;
+        }
+
+        qore_socket_private* priv = qore_socket_private::get(*sock);
+        switch (action) {
+            case Action::GetCipherName:
+                setStringValue(priv->ssl ? priv->ssl->getCipherName() : nullptr);
+                break;
+
+            case Action::GetCipherVersion:
+                setStringValue(priv->ssl ? priv->ssl->getCipherVersion() : nullptr);
+                break;
+
+            case Action::IsSecure:
+                output = static_cast<bool>(priv->ssl);
+                break;
+
+            case Action::SetAlpnProtocols:
+                priv->alpn_protocols = protocols;
+                output = 0;
+                break;
+
+            case Action::ClearAlpnProtocols:
+                priv->alpn_protocols.clear();
+                output = 0;
+                break;
+
+            case Action::GetAlpnProtocol:
+                setAlpnValue(priv);
+                break;
+
+            case Action::IsHttp2:
+                output = priv->ssl ? priv->ssl->isHttp2() : false;
+                break;
+
+            case Action::VerifyPeerCertificate:
+                output = priv->ssl ? static_cast<int64>(priv->ssl->verifyPeerCertificate()) : static_cast<int64>(-1);
+                break;
+
+            case Action::GetRemoteCertificate:
+                if (priv->remote_cert) {
+                    priv->remote_cert->ref();
+                    output = priv->remote_cert;
+                }
+                break;
+        }
+
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return output.refSelf();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "tls-state-done" : "querying-tls-state";
+    }
+
+private:
+    DLLLOCAL QoreValue defaultValue() const {
+        switch (action) {
+            case Action::IsSecure:
+            case Action::IsHttp2:
+                return false;
+            case Action::SetAlpnProtocols:
+            case Action::ClearAlpnProtocols:
+            case Action::VerifyPeerCertificate:
+                return static_cast<int64>(-1);
+            case Action::GetCipherName:
+            case Action::GetCipherVersion:
+            case Action::GetAlpnProtocol:
+            case Action::GetRemoteCertificate:
+                return QoreValue();
+        }
+        return QoreValue();
+    }
+
+    DLLLOCAL void setStringValue(const char* str) {
+        if (str && *str) {
+            output = new QoreStringNode(str);
+        }
+    }
+
+    DLLLOCAL void setAlpnValue(qore_socket_private* priv) {
+        if (!priv->ssl) {
+            return;
+        }
+        std::string proto = priv->ssl->getAlpnProtocol();
+        if (!proto.empty()) {
+            output = new QoreStringNode(proto.c_str());
+        }
+    }
+
+    QoreSocket* sock;
+    QoreValue output;
+    Action action;
+    std::vector<std::string> protocols;
+    bool done = false;
+};
+
 static QoreHashNode* qore_socket_exec_poll_operation(QoreObject* sock_obj, QoreSocketControllerPollable* pollable,
         QoreObject* op_obj, int timeout_ms, const char* owner_name, ExceptionSink* xsink,
         QoreHashNode** ex_out = nullptr) {
@@ -2644,6 +2787,46 @@ static QoreValue qore_socket_exec_poll(QoreSocket* s, SocketPollOperationBase* p
         return QoreValue();
     }
     return poller->getOutput();
+}
+
+static QoreStringNode* qore_socket_exec_tls_state_string(QoreSocket* s,
+        QoreSocketControllerTlsStatePollOperation::Action action, const char* owner_name, ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_exec_poll(s, new QoreSocketControllerTlsStatePollOperation(s, action), -1,
+        owner_name, "tls-state", xsink), xsink);
+    if (*xsink || rv->isNothing()) {
+        return nullptr;
+    }
+    return rv->take<QoreStringNode>();
+}
+
+static bool qore_socket_exec_tls_state_bool(QoreSocket* s,
+        QoreSocketControllerTlsStatePollOperation::Action action, const char* owner_name, ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_exec_poll(s, new QoreSocketControllerTlsStatePollOperation(s, action), -1,
+        owner_name, "tls-state", xsink), xsink);
+    return *xsink ? false : rv->getAsBool();
+}
+
+static int64 qore_socket_exec_tls_state_int(QoreSocket* s,
+        QoreSocketControllerTlsStatePollOperation::Action action, const char* owner_name, ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_exec_poll(s, new QoreSocketControllerTlsStatePollOperation(s, action), -1,
+        owner_name, "tls-state", xsink), xsink);
+    return *xsink ? -1 : rv->getAsBigInt();
+}
+
+static QoreObject* qore_socket_exec_tls_state_object(QoreSocket* s,
+        QoreSocketControllerTlsStatePollOperation::Action action, const char* owner_name, ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_exec_poll(s, new QoreSocketControllerTlsStatePollOperation(s, action), -1,
+        owner_name, "tls-state", xsink), xsink);
+    if (*xsink || rv->isNothing()) {
+        return nullptr;
+    }
+    return rv->take<QoreObject>();
+}
+
+static int qore_socket_exec_tls_state_no_output(QoreSocket* s, QoreSocketControllerTlsStatePollOperation* poller,
+        const char* owner_name, ExceptionSink* xsink) {
+    ValueHolder rv(qore_socket_exec_poll(s, poller, -1, owner_name, "tls-state", xsink), xsink);
+    return *xsink ? -1 : 0;
 }
 
 static int64 qore_socket_exec_http2_enqueue_int(QoreSocket* s,
@@ -6875,21 +7058,54 @@ bool QoreSocket::isOpen() const {
 }
 
 const char* QoreSocket::getSSLCipherName() const {
-    if (!priv->ssl) {
+    if (qore_on_async_io_thread()) {
+        return priv->ssl ? priv->ssl->getCipherName() : nullptr;
+    }
+
+    ExceptionSink xsink;
+    SimpleRefHolder<QoreStringNode> str(qore_socket_exec_tls_state_string(const_cast<QoreSocket*>(this),
+        QoreSocketControllerTlsStatePollOperation::Action::GetCipherName, "getSSLCipherName", &xsink));
+    AutoLocker al(priv->tls_state_cache_m);
+    if (xsink || !str) {
+        xsink.clear();
+        priv->ssl_cipher_name_cache.clear();
         return nullptr;
     }
-    return priv->ssl->getCipherName();
+    priv->ssl_cipher_name_cache = str->c_str();
+    return priv->ssl_cipher_name_cache.c_str();
 }
 
 const char* QoreSocket::getSSLCipherVersion() const {
-    if (!priv->ssl) {
+    if (qore_on_async_io_thread()) {
+        return priv->ssl ? priv->ssl->getCipherVersion() : nullptr;
+    }
+
+    ExceptionSink xsink;
+    SimpleRefHolder<QoreStringNode> str(qore_socket_exec_tls_state_string(const_cast<QoreSocket*>(this),
+        QoreSocketControllerTlsStatePollOperation::Action::GetCipherVersion, "getSSLCipherVersion", &xsink));
+    AutoLocker al(priv->tls_state_cache_m);
+    if (xsink || !str) {
+        xsink.clear();
+        priv->ssl_cipher_version_cache.clear();
         return nullptr;
     }
-    return priv->ssl->getCipherVersion();
+    priv->ssl_cipher_version_cache = str->c_str();
+    return priv->ssl_cipher_version_cache.c_str();
 }
 
 bool QoreSocket::isSecure() const {
-    return (bool)priv->ssl;
+    if (qore_on_async_io_thread()) {
+        return (bool)priv->ssl;
+    }
+
+    ExceptionSink xsink;
+    bool rv = qore_socket_exec_tls_state_bool(const_cast<QoreSocket*>(this),
+        QoreSocketControllerTlsStatePollOperation::Action::IsSecure, "isSecure", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return false;
+    }
+    return rv;
 }
 
 int QoreSocket::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* xsink) {
@@ -6898,31 +7114,63 @@ int QoreSocket::setAlpnProtocols(const QoreListNode* protocols, ExceptionSink* x
         return -1;
     }
 
-    // Store protocols for use during SSL upgrade
-    priv->alpn_protocols = std::move(proto_list);
-    return 0;
+    if (qore_on_async_io_thread()) {
+        priv->alpn_protocols = std::move(proto_list);
+        return 0;
+    }
+
+    return qore_socket_exec_tls_state_no_output(this,
+        new QoreSocketControllerTlsStatePollOperation(this, std::move(proto_list)), "setAlpnProtocols", xsink);
 }
 
 void QoreSocket::clearAlpnProtocols() {
-    priv->alpn_protocols.clear();
+    if (qore_on_async_io_thread()) {
+        priv->alpn_protocols.clear();
+        return;
+    }
+
+    ExceptionSink xsink;
+    qore_socket_exec_tls_state_no_output(this,
+        new QoreSocketControllerTlsStatePollOperation(this,
+            QoreSocketControllerTlsStatePollOperation::Action::ClearAlpnProtocols),
+        "clearAlpnProtocols", &xsink);
+    if (xsink) {
+        xsink.clear();
+    }
 }
 
 QoreStringNode* QoreSocket::getAlpnProtocol() const {
-    if (!priv->ssl) {
+    if (qore_on_async_io_thread()) {
+        if (!priv->ssl) {
+            return nullptr;
+        }
+        std::string proto = priv->ssl->getAlpnProtocol();
+        return proto.empty() ? nullptr : new QoreStringNode(proto.c_str());
+    }
+
+    ExceptionSink xsink;
+    QoreStringNode* rv = qore_socket_exec_tls_state_string(const_cast<QoreSocket*>(this),
+        QoreSocketControllerTlsStatePollOperation::Action::GetAlpnProtocol, "getAlpnProtocol", &xsink);
+    if (xsink) {
+        xsink.clear();
         return nullptr;
     }
-    std::string proto = priv->ssl->getAlpnProtocol();
-    if (proto.empty()) {
-        return nullptr;
-    }
-    return new QoreStringNode(proto.c_str());
+    return rv;
 }
 
 bool QoreSocket::isHttp2() const {
-    if (!priv->ssl) {
+    if (qore_on_async_io_thread()) {
+        return priv->ssl ? priv->ssl->isHttp2() : false;
+    }
+
+    ExceptionSink xsink;
+    bool rv = qore_socket_exec_tls_state_bool(const_cast<QoreSocket*>(this),
+        QoreSocketControllerTlsStatePollOperation::Action::IsHttp2, "isHttp2", &xsink);
+    if (xsink) {
+        xsink.clear();
         return false;
     }
-    return priv->ssl->isHttp2();
+    return rv;
 }
 
 int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
@@ -7055,10 +7303,18 @@ int QoreSocket::waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, Excep
 }
 
 long QoreSocket::verifyPeerCertificate() const {
-    if (!priv->ssl) {
+    if (qore_on_async_io_thread()) {
+        return priv->ssl ? priv->ssl->verifyPeerCertificate() : -1;
+    }
+
+    ExceptionSink xsink;
+    int64 rv = qore_socket_exec_tls_state_int(const_cast<QoreSocket*>(this),
+        QoreSocketControllerTlsStatePollOperation::Action::VerifyPeerCertificate, "verifyPeerCertificate", &xsink);
+    if (xsink) {
+        xsink.clear();
         return -1;
     }
-    return priv->ssl->verifyPeerCertificate();
+    return static_cast<long>(rv);
 }
 
 // hardcoded to SOCK_STREAM (tcp only)
@@ -8539,11 +8795,22 @@ bool QoreSocket::captureRemoteCertificates(bool set) {
 }
 
 QoreObject* QoreSocket::getRemoteCertificate() const {
-    if (priv->remote_cert) {
-        priv->remote_cert->ref();
-        return priv->remote_cert;
+    if (qore_on_async_io_thread()) {
+        if (priv->remote_cert) {
+            priv->remote_cert->ref();
+            return priv->remote_cert;
+        }
+        return nullptr;
     }
-    return nullptr;
+
+    ExceptionSink xsink;
+    QoreObject* rv = qore_socket_exec_tls_state_object(const_cast<QoreSocket*>(this),
+        QoreSocketControllerTlsStatePollOperation::Action::GetRemoteCertificate, "getRemoteCertificate", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    return rv;
 }
 
 int64 QoreSocket::getConnectionId() const {
