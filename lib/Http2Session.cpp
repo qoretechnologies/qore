@@ -107,7 +107,9 @@ public:
     }
 
     DLLLOCAL virtual void closeIo(ExceptionSink*) override {
+        sock->prepareForClose();
         if (sock->isOpen()) {
+            sock->shutdown_direct();
             sock->close();
         }
     }
