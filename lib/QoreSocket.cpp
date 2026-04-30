@@ -170,6 +170,26 @@ static bool qore_socket_is_accepting(qore_socket_private* priv) {
 #endif
 }
 
+static int qore_socket_poll_fd_now(int fd, short events, const char* err, const char* desc, ExceptionSink* xsink) {
+    unsigned loop = 0;
+    while (true) {
+        struct pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = events;
+        pfd.revents = 0;
+
+        int rc = ::poll(&pfd, 1, 0);
+        if (rc >= 0) {
+            return rc > 0 ? 1 : 0;
+        }
+        if (errno == EINTR && ++loop < max_nonblock_ops) {
+            continue;
+        }
+        xsink->raiseException(err, "poll() on %s fd failed: %s", desc, strerror(errno));
+        return -1;
+    }
+}
+
 static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
@@ -1808,14 +1828,9 @@ public:
 
                     if (is_pollable) {
                         assert(stream_fd >= 0);
-                        struct pollfd pfd;
-                        pfd.fd = stream_fd;
-                        pfd.events = POLLIN;
-                        pfd.revents = 0;
-                        int poll_rv = ::poll(&pfd, 1, 0);
+                        int poll_rv = qore_socket_poll_fd_now(stream_fd, POLLIN, "SOCKET-SEND-ERROR", "stream",
+                            xsink);
                         if (poll_rv < 0) {
-                            xsink->raiseException("SOCKET-SEND-ERROR", "poll() on stream fd failed: %s",
-                                strerror(errno));
                             phase = Phase::Error;
                             return nullptr;
                         }
@@ -2142,14 +2157,9 @@ public:
                     while (write_offset < current_chunk->size()) {
                         if (is_pollable) {
                             assert(output_fd >= 0);
-                            struct pollfd pfd;
-                            pfd.fd = output_fd;
-                            pfd.events = POLLOUT;
-                            pfd.revents = 0;
-                            int poll_rv = ::poll(&pfd, 1, 0);
+                            int poll_rv = qore_socket_poll_fd_now(output_fd, POLLOUT, "SOCKET-RECV-ERROR",
+                                "output stream", xsink);
                             if (poll_rv < 0) {
-                                xsink->raiseException("SOCKET-RECV-ERROR", "poll() on output stream fd failed: %s",
-                                    strerror(errno));
                                 phase = Phase::Error;
                                 return nullptr;
                             }
@@ -10988,14 +10998,9 @@ QoreHashNode* SocketSendInputStreamPollOperation::continuePoll(ExceptionSink* xs
 
                 if (is_pollable) {
                     assert(stream_fd >= 0);
-                    struct pollfd pfd;
-                    pfd.fd = stream_fd;
-                    pfd.events = POLLIN;
-                    pfd.revents = 0;
-                    int poll_rv = ::poll(&pfd, 1, 0);
+                    int poll_rv = qore_socket_poll_fd_now(stream_fd, POLLIN, "SOCKET-SEND-ERROR", "stream",
+                        xsink);
                     if (poll_rv < 0) {
-                        xsink->raiseException("SOCKET-SEND-ERROR", "poll() on stream fd failed: %s",
-                            strerror(errno));
                         phase = Phase::Error;
                         return nullptr;
                     }
@@ -11260,14 +11265,9 @@ QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::continuePoll(Except
 
                 if (is_pollable) {
                     assert(stream_fd >= 0);
-                    struct pollfd pfd;
-                    pfd.fd = stream_fd;
-                    pfd.events = POLLIN;
-                    pfd.revents = 0;
-                    int poll_rv = ::poll(&pfd, 1, 0);
+                    int poll_rv = qore_socket_poll_fd_now(stream_fd, POLLIN, "SOCKET-SEND-ERROR", "stream",
+                        xsink);
                     if (poll_rv < 0) {
-                        xsink->raiseException("SOCKET-SEND-ERROR", "poll() on stream fd failed: %s",
-                            strerror(errno));
                         phase = Phase::Error;
                         return nullptr;
                     }
@@ -11613,14 +11613,9 @@ QoreHashNode* SocketRecvOutputStreamPollOperation::continuePoll(ExceptionSink* x
                 while (write_offset < current_chunk->size()) {
                     if (is_pollable) {
                         assert(output_fd >= 0);
-                        struct pollfd pfd;
-                        pfd.fd = output_fd;
-                        pfd.events = POLLOUT;
-                        pfd.revents = 0;
-                        int poll_rv = ::poll(&pfd, 1, 0);
+                        int poll_rv = qore_socket_poll_fd_now(output_fd, POLLOUT, "SOCKET-RECV-ERROR",
+                            "output stream", xsink);
                         if (poll_rv < 0) {
-                            xsink->raiseException("SOCKET-RECV-ERROR", "poll() on output stream fd failed: %s",
-                                strerror(errno));
                             phase = Phase::Error;
                             return nullptr;
                         }
@@ -11764,14 +11759,9 @@ QoreHashNode* SocketWriteOutputStreamPollOperation::continuePoll(ExceptionSink* 
     while (phase == Phase::Write && write_offset < data->size()) {
         if (is_pollable) {
             assert(output_fd >= 0);
-            struct pollfd pfd;
-            pfd.fd = output_fd;
-            pfd.events = POLLOUT;
-            pfd.revents = 0;
-            int poll_rv = ::poll(&pfd, 1, 0);
+            int poll_rv = qore_socket_poll_fd_now(output_fd, POLLOUT, "SOCKET-WRITE-ERROR", "output stream",
+                xsink);
             if (poll_rv < 0) {
-                xsink->raiseException("SOCKET-WRITE-ERROR", "poll() on output stream fd failed: %s",
-                    strerror(errno));
                 phase = Phase::Error;
                 return nullptr;
             }
@@ -12823,19 +12813,13 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
 
                 if (is_pollable) {
                     // Non-blocking read for pollable streams.
-                    // Use inline poll(0) to check if data is available without blocking,
+                    // Probe readiness without blocking,
                     // then readNonBlock() to get the data. This distinguishes:
                     // - poll ready + readNonBlock returns 0 → true EOF
                     // - poll not ready → would block, yield to event loop
                     assert(stream_fd >= 0);
-                    struct pollfd pfd;
-                    pfd.fd = stream_fd;
-                    pfd.events = POLLIN;
-                    pfd.revents = 0;
-                    int poll_rv = ::poll(&pfd, 1, 0);
+                    int poll_rv = qore_socket_poll_fd_now(stream_fd, POLLIN, "HTTP-STREAM-ERROR", "stream", xsink);
                     if (poll_rv < 0) {
-                        xsink->raiseException("HTTP-STREAM-ERROR",
-                            "poll() on stream fd failed: %s", strerror(errno));
                         phase = Phase::Error;
                         return nullptr;
                     }
@@ -13897,19 +13881,13 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
 
                 if (is_pollable) {
                     // Non-blocking read for pollable streams.
-                    // Use inline poll(0) to check if data is available without blocking,
+                    // Probe readiness without blocking,
                     // then readNonBlock() to get the data. This distinguishes:
                     // - poll ready + readNonBlock returns 0 → true EOF
                     // - poll not ready → would block, yield to event loop for socket I/O
                     assert(stream_fd >= 0);
-                    struct pollfd pfd;
-                    pfd.fd = stream_fd;
-                    pfd.events = POLLIN;
-                    pfd.revents = 0;
-                    int poll_rv = poll(&pfd, 1, 0);
+                    int poll_rv = qore_socket_poll_fd_now(stream_fd, POLLIN, "HTTP2-ERROR", "stream", xsink);
                     if (poll_rv < 0) {
-                        xsink->raiseException("HTTP2-ERROR", "poll() on stream fd failed: %s",
-                            strerror(errno));
                         // Send RST_STREAM to notify client of the error
                         ExceptionSink rst_xsink;
                         sock->resetHttp2StreamAsync(stream_id, NGHTTP2_INTERNAL_ERROR, &rst_xsink);
