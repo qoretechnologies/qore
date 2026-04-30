@@ -911,6 +911,8 @@ struct qore_httpclient_priv {
             std::string proxy_url = getConnMgrProxyUrl();
             if (opts.protocol != want_proto
                     || opts.proxy_url != proxy_url
+                    || opts.connect_timeout_ms != connect_timeout_ms
+                    || opts.request_timeout_ms != timeout
                     || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
                     || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
                     || opts.client_cert != msock->cert
@@ -5654,14 +5656,7 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
     opts.client_cert = msock->cert;
     opts.client_key = msock->pk;
-    if (proxy_connection.has_url()) {
-        char buf[512];
-        snprintf(buf, sizeof(buf), "%s://%s:%d",
-            proxy_connection.ssl ? "https" : "http",
-            proxy_connection.host.c_str(),
-            proxy_connection.port);
-        opts.proxy_url = buf;
-    }
+    opts.proxy_url = getConnMgrProxyUrl();
 
     HttpClientConnectionManagerBase mgr(opts, xsink);
     if (*xsink) {
