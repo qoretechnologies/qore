@@ -121,6 +121,7 @@
 #include "qore/intern/QoreIRVerifier.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
+#include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 
 #include <qore/QoreObject.h>
@@ -305,6 +306,97 @@ extern void collectAllStatementLocals(const StatementBlock* block, std::vector<L
 // deserializeClasses() and cleared on exit.
 static thread_local const std::unordered_map<std::string, QoreClass*>*
     g_aot_pending_class_map = nullptr;
+
+static constexpr const char* AOT_BINARY_CLASS_REF_MODULE_PREFIX = "@qore-module:";
+static constexpr size_t AOT_BINARY_CLASS_REF_MODULE_PREFIX_LEN = 13;
+
+static const char* qoreAOTClassRefPath(const char* class_ref) {
+    if (!class_ref) {
+        return nullptr;
+    }
+    if (!strncmp(class_ref, AOT_BINARY_CLASS_REF_MODULE_PREFIX,
+            AOT_BINARY_CLASS_REF_MODULE_PREFIX_LEN)) {
+        const char* module_start = class_ref + AOT_BINARY_CLASS_REF_MODULE_PREFIX_LEN;
+        const char* sep = strchr(module_start, '\n');
+        if (sep) {
+            return sep + 1;
+        }
+    }
+    return class_ref;
+}
+
+static std::string qoreAOTDescribeClassRef(const char* class_ref) {
+    const char* path = qoreAOTClassRefPath(class_ref);
+    if (!class_ref || path == class_ref) {
+        return path ? path : "(null)";
+    }
+
+    const char* module_start = class_ref + AOT_BINARY_CLASS_REF_MODULE_PREFIX_LEN;
+    const char* sep = strchr(module_start, '\n');
+    std::string rv(path && *path ? path : "(null)");
+    rv += " [module ";
+    rv.append(module_start, sep ? sep - module_start : 0);
+    rv += "]";
+    return rv;
+}
+
+static const QoreClass* qoreAOTFindClassInMap(
+        const std::unordered_map<std::string, QoreClass*>* class_map,
+        const char* class_ref) {
+    if (!class_map || !class_ref || !*class_ref) {
+        return nullptr;
+    }
+
+    auto lookup = [class_map](const char* path) -> const QoreClass* {
+        if (!path || !*path) {
+            return nullptr;
+        }
+        auto it = class_map->find(path);
+        return it != class_map->end() ? it->second : nullptr;
+    };
+
+    if (const QoreClass* qc = lookup(class_ref)) {
+        return qc;
+    }
+
+    const char* path = qoreAOTClassRefPath(class_ref);
+    if (path != class_ref) {
+        if (const QoreClass* qc = lookup(path)) {
+            return qc;
+        }
+    }
+
+    if (path && *path) {
+        if (!strncmp(path, "::", 2)) {
+            if (const QoreClass* qc = lookup(path + 2)) {
+                return qc;
+            }
+        } else {
+            std::string absolute_path("::");
+            absolute_path += path;
+            auto it = class_map->find(absolute_path);
+            if (it != class_map->end()) {
+                return it->second;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+static const QoreClass* qoreAOTResolveClassRefForDeserialization(
+        QoreProgram* pgm,
+        const char* class_ref,
+        const std::unordered_map<std::string, QoreClass*>* extra_class_map = nullptr,
+        bool pseudo = false) {
+    if (const QoreClass* qc = qoreAOTFindClassInMap(extra_class_map, class_ref)) {
+        return qc;
+    }
+    if (const QoreClass* qc = qoreAOTFindClassInMap(g_aot_pending_class_map, class_ref)) {
+        return qc;
+    }
+    return qore_aot_resolve_class_ref(pgm, class_ref, pseudo);
+}
 
 // Pending fixup for param defaults that reference a static method
 // whose class is still pending commit at the time the variant signature is
@@ -506,22 +598,9 @@ static bool readDeferredMemberDefault(
         args.push_back(arg);
     }
 
-    // Try to resolve class: first in committed program, then in the
-    // in-progress class map populated during deserializeClasses.
-    const QoreClass* qc = nullptr;
-    {
-        ExceptionSink xs;
-        qc = getProgram()->findClass(class_path, &xs);
-        if (xs.isException()) {
-            xs.clear();
-        }
-    }
-    if (!qc && g_aot_pending_class_map) {
-        auto it = g_aot_pending_class_map->find(class_path);
-        if (it != g_aot_pending_class_map->end()) {
-            qc = it->second;
-        }
-    }
+    // Try to resolve class in the in-progress class maps first, then via the
+    // AOT class-ref resolver for committed program/module classes.
+    const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(getProgram(), class_path);
     if (qc) {
         // Resolvable now: construct ScopedObjectCallNode immediately.
         QoreParseListNode* parse_args = nullptr;
@@ -1807,25 +1886,15 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 }
             }
 
-            // Resolve the class. Try the program's committed-class map
-            // first; fall back to the deserializer's in-progress class map
-            // for forward references (e.g. `OtherClass m();` in a class that
-            // is deserialized before `OtherClass`). The in-progress map is
-            // installed by deserializeClasses() via g_aot_pending_class_map.
-            ExceptionSink xsink;
-            const QoreClass* qc = getProgram()->findClass(class_path, &xsink);
-            if (xsink.isException()) {
-                xsink.clear();
-            }
-            if (!qc && g_aot_pending_class_map) {
-                auto it = g_aot_pending_class_map->find(class_path);
-                if (it != g_aot_pending_class_map->end()) {
-                    qc = it->second;
-                }
-            }
+            // Resolve the class through the same encoded class-ref path used
+            // by call sites and slots. This preserves module ownership for
+            // private classes referenced by defaults.
+            const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(
+                getProgram(), class_path);
             if (!qc) {
-                printd(0, "AOT readValue VT_NEW_OBJECT: cannot resolve class '%s'\n",
-                    class_path ? class_path : "(null)");
+                error = "cannot resolve new_object default class '";
+                error += qoreAOTDescribeClassRef(class_path);
+                error += "'";
                 delete parse_args;
                 return QoreValue();
             }
@@ -5312,6 +5381,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
 
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
         const AOTConstantReverseMap* const_reverse_map, std::string& error) {
+    std::string registry_error;
+    if (!qore_aot_validate_expr_registries(registry_error)) {
+        error = "AOT expression registry validation failed: " + registry_error;
+        return false;
+    }
+
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SLOT_MAPS);
 
     // Number of function entries
@@ -6474,12 +6549,9 @@ bool QoreAOTBinaryDeserializer::commitClasses(std::string& error) {
 // resolves the BCA (base-class constructor argument) expression blobs.
 bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
     {
-        qore_program_private* pp = qore_program_private::get(*pgm);
         for (const auto& pd : pending_smd) {
-            const qore_ns_private* found_ns = nullptr;
             const QoreClass* qc = !pd.class_path.empty()
-                ? qore_root_ns_private::runtimeFindClass(*pp->RootNS,
-                    pd.class_path.c_str(), found_ns)
+                ? qoreAOTResolveClassRefForDeserialization(pgm, pd.class_path.c_str())
                 : nullptr;
             const QoreMethod* m = nullptr;
             if (qc && !pd.method_name.empty()) {
@@ -6491,10 +6563,12 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
                 }
             }
             if (!m) {
-                printd(0, "AOT deser: cannot resolve deferred static method "
-                    "default '%s::%s()'\n",
-                    pd.class_path.c_str(), pd.method_name.c_str());
-                continue;
+                error = "cannot resolve deferred static method default '";
+                error += qoreAOTDescribeClassRef(pd.class_path.c_str());
+                error += "::";
+                error += pd.method_name;
+                error += "()'";
+                return false;
             }
             UserSignature* sig = pd.uvb->getUserSignature();
             arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
@@ -7030,20 +7104,8 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
 
             // Resolve a pending forward-referenced NewObject default if any.
             if (!pim.pending_new_class_path.empty()) {
-                const QoreClass* target = nullptr;
-                {
-                    ExceptionSink xs;
-                    target = getProgram()->findClass(pim.pending_new_class_path.c_str(), &xs);
-                    if (xs.isException()) {
-                        xs.clear();
-                    }
-                }
-                if (!target) {
-                    auto it = all_class_map.find(pim.pending_new_class_path);
-                    if (it != all_class_map.end()) {
-                        target = it->second;
-                    }
-                }
+                const QoreClass* target = qoreAOTResolveClassRefForDeserialization(
+                    getProgram(), pim.pending_new_class_path.c_str(), &all_class_map);
                 if (target) {
                     QoreParseListNode* parse_args = nullptr;
                     if (!pim.pending_new_args.empty()) {
@@ -7062,7 +7124,8 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                 } else {
                     printd(0, "AOT deser: cannot resolve pending NewObject class '%s' for "
                         "instance member '%s' in class '%s'\n",
-                        pim.pending_new_class_path.c_str(), pim.name.c_str(), qc->getName());
+                        qoreAOTDescribeClassRef(pim.pending_new_class_path.c_str()).c_str(),
+                        pim.name.c_str(), qc->getName());
                     for (auto& v : pim.pending_new_args) {
                         v.discard(nullptr);
                     }
@@ -7241,20 +7304,8 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
 
             // Resolve a pending forward-referenced NewObject default if any
             if (!psm.pending_new_class_path.empty()) {
-                const QoreClass* target = nullptr;
-                {
-                    ExceptionSink xs;
-                    target = getProgram()->findClass(psm.pending_new_class_path.c_str(), &xs);
-                    if (xs.isException()) {
-                        xs.clear();
-                    }
-                }
-                if (!target) {
-                    auto it = all_class_map.find(psm.pending_new_class_path);
-                    if (it != all_class_map.end()) {
-                        target = it->second;
-                    }
-                }
+                const QoreClass* target = qoreAOTResolveClassRefForDeserialization(
+                    getProgram(), psm.pending_new_class_path.c_str(), &all_class_map);
                 if (target) {
                     QoreParseListNode* parse_args = nullptr;
                     if (!psm.pending_new_args.empty()) {
@@ -7273,7 +7324,8 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                 } else {
                     printd(0, "AOT deser: cannot resolve pending NewObject class '%s' for "
                         "static member '%s' in class '%s'\n",
-                        psm.pending_new_class_path.c_str(), psm.name.c_str(), qc->getName());
+                        qoreAOTDescribeClassRef(psm.pending_new_class_path.c_str()).c_str(),
+                        psm.name.c_str(), qc->getName());
                     for (auto& v : psm.pending_new_args) {
                         v.discard(nullptr);
                     }
@@ -7530,10 +7582,8 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             // Resolve deferred VT_NEW_OBJECT: build the ScopedObjectCallNode
             // for `Class(args)` defaults now that the class is registered.
             if (!phm.pending_new_class_path.empty()) {
-                qore_program_private* pp = qore_program_private::get(*pgm);
-                const qore_ns_private* found_ns = nullptr;
-                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                    *pp->RootNS, phm.pending_new_class_path.c_str(), found_ns);
+                const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(
+                    pgm, phm.pending_new_class_path.c_str());
                 if (qc) {
                     QoreParseListNode* parse_args = nullptr;
                     if (!phm.pending_new_args.empty()) {
@@ -7548,8 +7598,8 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                 } else {
                     printd(0, "AOT deser: class '%s' not found for hashdecl "
                         "'%s' member '%s' default\n",
-                        phm.pending_new_class_path.c_str(), hd->getName(),
-                        phm.name.c_str());
+                        qoreAOTDescribeClassRef(phm.pending_new_class_path.c_str()).c_str(),
+                        hd->getName(), phm.name.c_str());
                     for (auto& a : phm.pending_new_args) {
                         a.discard(nullptr);
                     }
@@ -8395,10 +8445,8 @@ static bool readAndSetupVariantSignature(
             // through the normal AbstractFunctionCallNode dispatch.
             const char* class_path = reader.readStringRef(ptr);
             const char* mname = reader.readStringRef(ptr);
-            qore_program_private* pp = qore_program_private::get(*pgm);
-            const qore_ns_private* found_ns = nullptr;
             const QoreClass* qc = (class_path && *class_path)
-                ? qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns)
+                ? qoreAOTResolveClassRefForDeserialization(pgm, class_path)
                 : nullptr;
             const QoreMethod* m = nullptr;
             if (qc && mname && *mname) {
@@ -8431,11 +8479,15 @@ static bool readAndSetupVariantSignature(
                     // before any call can execute.
                     param_defaults[j] = QoreValue(true);
                 } else {
-                    printd(0, "AOT deser: cannot resolve default static method "
-                        "'%s::%s()' (no deferred-defaults context)\n",
-                        class_path ? class_path : "(null)",
-                        mname ? mname : "(null)");
-                    param_defaults[j] = QoreValue(true);
+                    error = "cannot resolve default static method '";
+                    error += qoreAOTDescribeClassRef(class_path);
+                    error += "::";
+                    error += mname ? mname : "(null)";
+                    error += "()' and no deferred-defaults context is active";
+                    for (uint32_t k = 0; k < j; ++k) {
+                        param_defaults[k].discard(nullptr);
+                    }
+                    return false;
                 }
             }
         } else if (has_default == 5) {

@@ -11826,6 +11826,18 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.child_expr = v;
         return id;
     }
+    if (dynamic_cast<const QoreWeakAssignmentOperatorNode*>(node)) {
+        id.kind = AOTExprKind::GENERIC_EVAL;
+        id.ref1 = "unsupported native AOT weak assignment expression; "
+            "add a native AOTExprKind serializer/reader for weak assignment or lower this operation to native IR";
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreAssignmentOperatorNode*>(node)) {
+        id.kind = AOTExprKind::ASSIGN;
+        id.child_expr = v;
+        return id;
+    }
     if (dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
         id.kind = AOTExprKind::SQUARE_BRACKET;
         id.child_expr = v;

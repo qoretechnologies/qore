@@ -1070,7 +1070,8 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
             || ek == AOTExprKind::UNSHIFT || ek == AOTExprKind::NULL_COAL
             || ek == AOTExprKind::VALUE_COAL || ek == AOTExprKind::FOLDL
             || ek == AOTExprKind::FOLDR || ek == AOTExprKind::MAP
-            || ek == AOTExprKind::SELECT || ek == AOTExprKind::LOG_AND
+            || ek == AOTExprKind::SELECT || ek == AOTExprKind::RANGE
+            || ek == AOTExprKind::ASSIGN || ek == AOTExprKind::LOG_AND
             || ek == AOTExprKind::LOG_OR) {
         skipOneExpr(rdr, p, e);  // left operand
         skipOneExpr(rdr, p, e);  // right operand
@@ -2851,7 +2852,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::FOLDL:
             case AOTExprKind::FOLDR:
             case AOTExprKind::MAP:
-            case AOTExprKind::SELECT: {
+            case AOTExprKind::SELECT:
+            case AOTExprKind::ASSIGN: {
                 std::string left_err;
                 QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
                     ctx->locals, num_locals, ctx->globals, num_globals);
@@ -2880,6 +2882,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else if (kind == AOTExprKind::SELECT) {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreSelectOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::ASSIGN) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreAssignmentOperatorNode(&loc_builtin, left, right)));
                 } else if (kind == AOTExprKind::LOG_NE) {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreLogicalNotEqualsOperatorNode(&loc_builtin, left, right)));

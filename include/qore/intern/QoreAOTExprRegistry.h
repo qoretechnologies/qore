@@ -81,7 +81,7 @@ typedef QoreValue (*AOTExprReadFn)(AOTExprReadCtx& ctx);
 //! Registry entry for an expression kind
 struct QoreAOTExprKindInfo {
     const char* name;                   //!< Human-readable name ("FUNC_CALL", etc.)
-    uint8_t kind_value;                 //!< AOTExprKind value (0-33, 0xFE, 0xFF)
+    uint8_t kind_value;                 //!< AOTExprKind value
     bool is_supported;                  //!< Whether this kind has serialization support
     AOTExprWriteFn write_fn;            //!< Write handler (nullptr if not supported)
     AOTExprReadFn read_fn;              //!< Read handler (nullptr if not supported)
@@ -92,6 +92,11 @@ struct QoreAOTExprKindInfo {
 //! @param kind_byte Raw AOTExprKind value (0-255)
 //! @return Pointer to QoreAOTExprKindInfo, or nullptr if out of range
 const QoreAOTExprKindInfo* getAOTExprKindInfo(uint8_t kind_byte);
+
+//! Validate inline-expression and slot-expression registries for drift.
+//! @param error receives a precise diagnostic on failure
+//! @return true if both registries are internally consistent
+bool qore_aot_validate_expr_registries(std::string& error);
 
 //! Full registry table (256 entries to cover all uint8_t values)
 extern const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256];

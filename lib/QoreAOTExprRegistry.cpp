@@ -30,10 +30,13 @@
 
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
+#include "qore/intern/QoreAOTExprSlotRegistry.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/NewComplexTypeNode.h"
 #include "qore/intern/ConstantList.h"
+
+#include <cstring>
 
 // ============================================================================
 // Expression Kind Handlers (Phase 3.2 - Extracted from serialization code)
@@ -64,6 +67,67 @@ const QoreAOTExprKindInfo* getAOTExprKindInfo(uint8_t kind_byte) {
         return nullptr;
     }
     return &AOT_EXPR_KIND_REGISTRY[kind_byte];
+}
+
+bool qore_aot_validate_expr_registries(std::string& error) {
+    for (unsigned i = 0; i < 256; ++i) {
+        const auto& expr = AOT_EXPR_KIND_REGISTRY[i];
+        const auto& slot = AOT_EXPR_SLOT_KIND_REGISTRY[i];
+
+        if (expr.kind_value != i) {
+            error = "inline expression registry index " + std::to_string(i)
+                + " has kind value " + std::to_string(expr.kind_value);
+            return false;
+        }
+        if (slot.kind_value != i) {
+            error = "slot expression registry index " + std::to_string(i)
+                + " has kind value " + std::to_string(slot.kind_value);
+            return false;
+        }
+
+        if (expr.is_supported) {
+            if (!expr.name || !*expr.name) {
+                error = "inline expression registry index " + std::to_string(i)
+                    + " is supported without a name";
+                return false;
+            }
+            if (!expr.write_fn || !expr.read_fn) {
+                error = "inline expression registry entry '" + std::string(expr.name)
+                    + "' is supported without read/write handlers";
+                return false;
+            }
+        }
+
+        if (slot.is_supported) {
+            if (!slot.name || !*slot.name) {
+                error = "slot expression registry index " + std::to_string(i)
+                    + " is supported without a name";
+                return false;
+            }
+            if (!slot.write_fn) {
+                error = "slot expression registry entry '" + std::string(slot.name)
+                    + "' is supported without a write handler";
+                return false;
+            }
+        }
+
+        if (expr.is_supported != slot.is_supported) {
+            const char* name = expr.name ? expr.name : (slot.name ? slot.name : "<unnamed>");
+            error = "AOT expression registry support mismatch for kind "
+                + std::to_string(i) + " (" + name + "): inline="
+                + (expr.is_supported ? "supported" : "unsupported") + ", slot="
+                + (slot.is_supported ? "supported" : "unsupported");
+            return false;
+        }
+
+        if (expr.is_supported && std::strcmp(expr.name, slot.name)) {
+            error = "AOT expression registry name mismatch for kind " + std::to_string(i)
+                + ": inline='" + expr.name + "', slot='" + slot.name + "'";
+            return false;
+        }
+    }
+
+    return true;
 }
 
 // ============================================================================

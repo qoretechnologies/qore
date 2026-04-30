@@ -71,6 +71,8 @@
 #include "qore/intern/QoreHashMapOperatorNode.h"
 #include "qore/intern/QoreHashMapSelectOperatorNode.h"
 #include "qore/intern/QoreSelectOperatorNode.h"
+#include "qore/intern/QoreRangeOperatorNode.h"
+#include "qore/intern/QoreAssignmentOperatorNode.h"
 #include "qore/intern/QoreElementsOperatorNode.h"
 #include "qore/intern/QoreDeleteOperatorNode.h"
 #include "qore/intern/QoreRemoveOperatorNode.h"
@@ -395,9 +397,13 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 93: CALLREF_CALL
     {"CALLREF_CALL", 93, true, write_slot_CALLREF_CALL, "Call reference call"},
 
-    // 94-253: Unused
-    {nullptr, 94, false, nullptr, nullptr},
-    {nullptr, 95, false, nullptr, nullptr},
+    // 94: RANGE
+    {"RANGE", 94, true, write_slot_RANGE, "Range operator"},
+
+    // 95: ASSIGN
+    {"ASSIGN", 95, true, write_slot_ASSIGN, "Assignment operator"},
+
+    // 96-253: Unused
     {nullptr, 96, false, nullptr, nullptr},
     {nullptr, 97, false, nullptr, nullptr},
     {nullptr, 98, false, nullptr, nullptr},

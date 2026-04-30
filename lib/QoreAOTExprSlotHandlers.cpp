@@ -716,6 +716,18 @@ static bool write_slot_SELECT(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreSelectOperatorNode>(ctx);
 }
 
+static bool write_slot_RANGE(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreRangeOperatorNode>(ctx);
+}
+
+static bool write_slot_ASSIGN(AOTExprSlotWriteCtx& ctx) {
+    if (dynamic_cast<const QoreWeakAssignmentOperatorNode*>(
+            ctx.expr.child_expr.getInternalNode())) {
+        return false;
+    }
+    return write_binary_slot_payload<QoreAssignmentOperatorNode>(ctx);
+}
+
 static bool write_slot_TRIM(AOTExprSlotWriteCtx& ctx) {
     return write_unary_slot_payload<QoreTrimOperatorNode>(ctx);
 }
