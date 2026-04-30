@@ -3802,6 +3802,11 @@ static int qore_socket_exec_send_http_response(QoreSocket* s, QoreHashNode* info
 
     stream_id = static_cast<int32_t>(h2_stream->getAsBigInt());
     if (stream_id > 0) {
+        QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_SEND);
+        if (!io_guard) {
+            return -1;
+        }
+
         QoreString status_line(priv->enc);
         status_line.sprintf("HTTP/%s %03d %s", http_version, code, desc);
         if (info) {
