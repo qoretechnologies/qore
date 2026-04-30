@@ -1205,8 +1205,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # Without this, N threads all finding no reusable connection would each create
             # their own, flooding the server with N handshakes when 1 suffices.
             # The wait is bounded by connect_timeout; on timeout, the waiting thread
-            # takes over creation to prevent indefinite blocking when the creator stalls
-            # (e.g., stuck in blocking DNS/getaddrinfo).
+            # takes over creation to prevent indefinite blocking when the creator stalls.
             {
                 AutoLock al(create_mutex);
                 if (creating{key}) {
@@ -1304,9 +1303,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
             }
 
-            # Create connection outside the write lock — constructor may do DNS
-            # resolution (getaddrinfo) which can block and would stall all pool
-            # operations if done under the lock
+            # Create connection outside the write lock so constructor-side setup cannot
+            # stall unrelated pool operations.
             HttpClientConnection conn;
             if (protocol == "happy-eyeballs") {
                 conn = createConnectionHappyEyeballs(url_info, key);
