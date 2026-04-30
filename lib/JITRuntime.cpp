@@ -5441,9 +5441,14 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                 val = eval_arg.getReferencedValue();
             }
 
-            // Apply type filter like the standard path in lib/Function.cpp:404-410
+            // Match CodeEvaluationHelper::prepareDefaultArgs() for actual args:
+            // typed params must always run through acceptInputParam(), not just
+            // when mayRequireFilter() predicts a mapping filter.  Reference
+            // targets such as reference<softint> can coerce the referenced value
+            // even though the argument itself is already an NT_REFERENCE.
             const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
-            if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+            if (paramTypeInfo && (QoreTypeInfo::hasType(paramTypeInfo)
+                    || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val))) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
                 if (*xsink) {
                     val.discard(xsink);
