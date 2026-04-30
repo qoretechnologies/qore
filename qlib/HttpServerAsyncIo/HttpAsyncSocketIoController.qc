@@ -1114,12 +1114,12 @@ public class HttpAsyncSocketIoController {
 
         # Check if this is an HTTP/2 connection
         if (output.is_http2) {
-            # Get peer info safely - no DNS lookup
+            # Get peer info through controller-backed c-ares DNS.
             hash<auto> cx = {"peer": {"address": "unknown", "address_desc": "unknown", "port": 0}, "socket": {"address": "unknown", "address_desc": "unknown", "port": 0}};
             if (sock.isOpen()) {
                 try {
                     cx = {
-                        "peer": sock.getPeerInfo(False),    # No DNS blocking
+                        "peer": sock.getPeerInfo(),
                         "socket": sock.getSocketInfo(),
                     };
                 } catch (hash<ExceptionInfo> ex) {
@@ -1151,12 +1151,12 @@ public class HttpAsyncSocketIoController {
         }
 
         # HTTP/1.x path (no SSL)
-        # Get peer info safely - no DNS lookup
+        # Get peer info through controller-backed c-ares DNS.
         hash<auto> cx = {"peer": {"address": "unknown", "address_desc": "unknown", "port": 0}, "socket": {"address": "unknown", "address_desc": "unknown", "port": 0}};
         if (sock.isOpen()) {
             try {
                 cx = {
-                    "peer": sock.getPeerInfo(False),    # No DNS blocking
+                    "peer": sock.getPeerInfo(),
                     "socket": sock.getSocketInfo(),
                 };
             } catch (hash<ExceptionInfo> ex) {
@@ -1761,12 +1761,12 @@ public class HttpAsyncSocketIoController {
         # SSL handshake complete - socket is now stable and validated
         Socket sock = result.sock;
 
-        # Now safe to get peer info - socket established, DNS disabled
+        # Now safe to get peer info; DNS is controller-backed through c-ares.
         hash<auto> peer_info = {"address": "unknown", "address_desc": "unknown", "port": 0};
         hash<auto> socket_info = {"address": "unknown", "address_desc": "unknown", "port": 0};
         if (sock.isOpen()) {
             try {
-                peer_info = sock.getPeerInfo(False);      # host_lookup=False - no DNS blocking
+                peer_info = sock.getPeerInfo();
                 socket_info = sock.getSocketInfo();
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::DEBUG, "Could not get peer info after SSL handshake for %s: %s: %s",

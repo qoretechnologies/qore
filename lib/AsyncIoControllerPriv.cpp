@@ -5677,13 +5677,27 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
         // Same socket object - check if underlying fd changed (e.g., reconnection to
         // a different host during multi-step poll operations like OAuth2 token refresh)
         bool fd_changed = false;
+        int union_events = computeEventUnion(t, sock_hash);
         AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
             socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
         if (s) {
             int curr_fd = s->getPollableDescriptor();
             ASYNC_IO_TRACE("updateEventLoop key='%s' same_sock fd=%d\n", key.c_str(), curr_fd);
             auto fd_it = t.registered_fds.find(sock_hash);
-            if (fd_it != t.registered_fds.end() && fd_it->second != curr_fd) {
+            if (curr_fd < 0 || !union_events) {
+                if (fd_it != t.registered_fds.end()) {
+                    releaseFdIfOwner(t, fd_it->second, sock_hash, xsink);
+                    t.registered_fds.erase(fd_it);
+                    fd_changed = true;
+                }
+                t.registered_events[sock_hash] = union_events;
+            } else if (fd_it == t.registered_fds.end()) {
+                t.loop->add(curr_fd, union_events, socket, xsink);
+                t.registered_fds[sock_hash] = curr_fd;
+                t.fd_to_sock_hash[curr_fd] = sock_hash;
+                t.registered_events[sock_hash] = union_events;
+                fd_changed = true;
+            } else if (fd_it->second != curr_fd) {
                 fd_changed = true;
                 printd(2, "AsyncIoControllerPriv::updateEventLoopRegistration() "
                     "fd changed for socket '%s': %d -> %d\n",
@@ -5698,7 +5712,6 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
                 // does the same.  remove() silently handles EBADF/ENOENT.
                 releaseFdIfOwner(t, fd_it->second, sock_hash, xsink);
                 // Add new fd to EventLoop
-                int union_events = computeEventUnion(t, sock_hash);
                 t.loop->add(curr_fd, union_events, socket, xsink);
                 t.registered_fds[sock_hash] = curr_fd;
                 t.fd_to_sock_hash[curr_fd] = sock_hash;
@@ -5776,9 +5789,11 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
             int fd = s->getPollableDescriptor();
             ASYNC_IO_TRACE("updateEventLoop NEW key='%s' sock='%s' fd=%d events=%d\n",
                 key.c_str(), sock_hash.c_str(), fd, union_events);
-            t.loop->add(fd, union_events, socket, xsink);
-            t.registered_fds[sock_hash] = fd;
-            t.fd_to_sock_hash[fd] = sock_hash;
+            if (fd >= 0 && union_events) {
+                t.loop->add(fd, union_events, socket, xsink);
+                t.registered_fds[sock_hash] = fd;
+                t.fd_to_sock_hash[fd] = sock_hash;
+            }
             s->deref(xsink);
         } else {
             ASYNC_IO_TRACE("updateEventLoop NEW key='%s' sock='%s' NO_FD (not pollable)\n",
@@ -5886,11 +5901,26 @@ void AsyncIoControllerPriv::applyEventUnion(IoThreadContext& t, QoreObject* sock
     auto it = t.registered_events.find(sock_hash);
     int prev_events = it != t.registered_events.end() ? it->second : 0;
     if (union_events != prev_events) {
-        AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
-            socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
-        if (s) {
-            t.loop->modify(s->getPollableDescriptor(), union_events, xsink);
-            s->deref(xsink);
+        auto fd_it = t.registered_fds.find(sock_hash);
+        if (!union_events) {
+            if (fd_it != t.registered_fds.end()) {
+                releaseFdIfOwner(t, fd_it->second, sock_hash, xsink);
+                t.registered_fds.erase(fd_it);
+            }
+        } else if (fd_it != t.registered_fds.end()) {
+            t.loop->modify(fd_it->second, union_events, xsink);
+        } else {
+            AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
+                socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
+            if (s) {
+                int fd = s->getPollableDescriptor();
+                if (fd >= 0) {
+                    t.loop->add(fd, union_events, socket, xsink);
+                    t.registered_fds[sock_hash] = fd;
+                    t.fd_to_sock_hash[fd] = sock_hash;
+                }
+                s->deref(xsink);
+            }
         }
         t.registered_events[sock_hash] = union_events;
     }

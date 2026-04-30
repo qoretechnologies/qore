@@ -39,9 +39,9 @@ fi
 
 find / -path "${QORE_SRC_DIR}/build" -prune -o -name "libqore.so*" -exec rm -f {} \; 2>/dev/null || true
 
-if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi; then
-    echo && echo "-- installing Kerberos 5 development headers --"
-    apk add --no-cache krb5-dev
+if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi libcares; then
+    echo && echo "-- installing Kerberos 5 and c-ares development headers --"
+    apk add --no-cache krb5-dev c-ares-dev
 fi
 
 # build or install Qore

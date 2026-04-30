@@ -34,10 +34,13 @@
 // FIXME: change int to size_t where applicable! (ex: int rc = recv())
 
 #include <cctype>
+#include <climits>
+#include <algorithm>
 #include <atomic>
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <qore/Qore.h>
 #include <qore/QoreSocket.h>
 #include <qore/QoreSocketObject.h>
@@ -58,6 +61,8 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/CompressionTransforms.h"
 #include "qore/intern/QoreLibIntern.h"
+
+#include <ares.h>
 
 // maximum number of non-blocking network operations before returning
 constexpr unsigned max_nonblock_ops = 32;
@@ -784,7 +789,7 @@ private:
 };
 
 static QoreHashNode* qore_socket_make_sockaddr_output(const struct sockaddr_storage& addr, socklen_t len,
-        const std::string& socketname) {
+        const std::string& socketname, const std::string& hostname = std::string()) {
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
     BinaryNode* b = new BinaryNode();
     b->append(&addr, sizeof(addr));
@@ -792,6 +797,9 @@ static QoreHashNode* qore_socket_make_sockaddr_output(const struct sockaddr_stor
     h->setKeyValue("len", static_cast<int64>(len), nullptr);
     if (!socketname.empty()) {
         h->setKeyValue("socketname", new QoreStringNode(socketname), nullptr);
+    }
+    if (!hostname.empty()) {
+        h->setKeyValue("hostname", new QoreStringNode(hostname), nullptr);
     }
     return h;
 }
@@ -803,8 +811,8 @@ public:
         Socket,
     };
 
-    DLLLOCAL QoreSocketControllerAddressInfoPollOperation(QoreSocket* sock, Action action)
-            : sock(sock), action(action) {
+    DLLLOCAL QoreSocketControllerAddressInfoPollOperation(QoreSocket* sock, Action action, bool host_lookup)
+            : sock(sock), action(action), host_lookup(host_lookup) {
     }
 
     DLLLOCAL virtual bool goalReached() const override {
@@ -820,35 +828,77 @@ public:
             return nullptr;
         }
 
-        qore_socket_private* priv = qore_socket_private::get(*sock);
-        int rc = action == Action::Peer
-            ? priv->getPeerSockAddr(xsink, addr, len)
-            : priv->getSocketSockAddr(xsink, addr, len);
-        if (!rc) {
+        if (!success) {
+            qore_socket_private* priv = qore_socket_private::get(*sock);
+            int rc = action == Action::Peer
+                ? priv->getPeerSockAddr(xsink, addr, len)
+                : priv->getSocketSockAddr(xsink, addr, len);
+            if (rc) {
+                done = true;
+                return nullptr;
+            }
             socketname = priv->socketname;
             success = true;
+            if (host_lookup && (addr.ss_family == AF_INET || addr.ss_family == AF_INET6)) {
+                resolver = std::make_unique<QoreCaresNameInfoResolver>(addr, len);
+            } else {
+                done = true;
+                return nullptr;
+            }
         }
+
+        assert(resolver);
+        int rc = resolver->continuePoll(xsink);
+        if (*xsink || rc < 0) {
+            done = true;
+            resolver.reset();
+            return nullptr;
+        }
+        if (rc) {
+            return getResolverPollInfo(xsink);
+        }
+
+        hostname = resolver->getHostname();
+        resolver.reset();
         done = true;
         return nullptr;
     }
 
     DLLLOCAL virtual QoreValue getOutput() const override {
-        return success ? qore_socket_make_sockaddr_output(addr, len, socketname) : QoreValue();
+        return success ? qore_socket_make_sockaddr_output(addr, len, socketname, hostname) : QoreValue();
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override {
         if (done) {
             return "done";
         }
+        if (resolver) {
+            return action == Action::Peer ? "resolving-peer-info" : "resolving-socket-info";
+        }
         return action == Action::Peer ? "getting-peer-info" : "getting-socket-info";
     }
 
 private:
+    DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const {
+        std::vector<std::pair<int, int>> extra_fds;
+        resolver->getExtraFds(extra_fds);
+        QoreHashNode* rv = getSocketPollInfoHash(xsink, 0, extra_fds);
+        if (*xsink) {
+            return nullptr;
+        }
+        int poll_timeout_ms = resolver->getPollTimeoutMs();
+        rv->setKeyValue("poll_timeout_ms", poll_timeout_ms >= 0 ? poll_timeout_ms : 1, xsink);
+        return rv;
+    }
+
     QoreSocket* sock;
     Action action;
+    bool host_lookup;
+    std::unique_ptr<QoreCaresNameInfoResolver> resolver;
     struct sockaddr_storage addr = {};
     socklen_t len = 0;
     std::string socketname;
+    std::string hostname;
     bool done = false;
     bool success = false;
 };
@@ -1646,12 +1696,18 @@ public:
 
             if (phase == Phase::Connect) {
                 auto* he_state = dynamic_cast<SocketConnectInetHappyEyeballsPollState*>(poll_state.get());
-                if (he_state && he_state->isRacing() && he_state->getState() == HEBS_RACING) {
+                if (he_state && (he_state->getState() == HEBS_RESOLVING
+                        || (he_state->isRacing() && he_state->getState() == HEBS_RACING))) {
                     std::vector<std::pair<int, int>> extra_fds;
                     he_state->getExtraFds(extra_fds);
-                    QoreHashNode* rv = getSocketPollInfoHash(xsink, rc, extra_fds);
+                    bumpFdGeneration();
+                    QoreHashNode* rv = getSocketPollInfoHash(xsink, he_state->getPrimaryPollEvents(rc),
+                        extra_fds);
                     if (rv) {
-                        rv->setKeyValue("poll_timeout_ms", HAPPY_EYEBALLS_DELAY_MS, xsink);
+                        int poll_timeout_ms = he_state->getPollTimeoutMs();
+                        if (poll_timeout_ms >= 0) {
+                            rv->setKeyValue("poll_timeout_ms", poll_timeout_ms, xsink);
+                        }
                     }
                     return rv;
                 }
@@ -3834,8 +3890,8 @@ static int qore_socket_exec_setup_no_exception(QoreSocket* s, QoreSocketControll
     return rc;
 }
 
-static QoreHashNode* qore_socket_get_addr_info_from_output(const QoreValue output, bool host_lookup,
-        const char* err, ExceptionSink* xsink) {
+static QoreHashNode* qore_socket_get_addr_info_from_output(const QoreValue output, const char* err,
+        ExceptionSink* xsink) {
     if (output.getType() != NT_HASH) {
         xsink->raiseException(err, "expected address information from async socket operation, got '%s'",
             output.getFullTypeName());
@@ -3871,14 +3927,21 @@ static QoreHashNode* qore_socket_get_addr_info_from_output(const QoreValue outpu
         socketname = socketname_value.get<const QoreStringNode>()->c_str();
     }
 
-    return qore_socket_private::getAddrInfo(addr, static_cast<socklen_t>(raw_len), host_lookup, socketname);
+    std::string hostname;
+    QoreValue hostname_value = h->getKeyValue("hostname");
+    if (hostname_value.getType() == NT_STRING) {
+        hostname = hostname_value.get<const QoreStringNode>()->c_str();
+    }
+
+    return qore_socket_private::makeAddrInfo(addr, static_cast<socklen_t>(raw_len), socketname,
+        hostname.empty() ? nullptr : hostname.c_str());
 }
 
 static QoreHashNode* qore_socket_exec_address_info(QoreSocket* s,
         QoreSocketControllerAddressInfoPollOperation::Action action, bool host_lookup, const char* owner_name,
         const char* err, ExceptionSink* xsink) {
     QoreSocketControllerAddressInfoPollOperation* poller = new QoreSocketControllerAddressInfoPollOperation(s,
-        action);
+        action, host_lookup);
 
     ValueHolder result(qore_socket_exec_poll(s,
         poller, -1, owner_name, "done", xsink), xsink);
@@ -3886,7 +3949,7 @@ static QoreHashNode* qore_socket_exec_address_info(QoreSocket* s,
         return nullptr;
     }
 
-    return qore_socket_get_addr_info_from_output(*result, host_lookup, err, xsink);
+    return qore_socket_get_addr_info_from_output(*result, err, xsink);
 }
 
 static int qore_socket_exec_accept_replace(QoreSocket* s, SocketSource* source, int timeout_ms,
@@ -5469,6 +5532,319 @@ void SocketSource::setAll(QoreObject *o, ExceptionSink* xsink) {
    return priv->setAll(o, xsink);
 }
 
+static int qore_cares_library_init(ExceptionSink* xsink) {
+    static std::once_flag init_once;
+    static int init_status = ARES_SUCCESS;
+    std::call_once(init_once, []() {
+        init_status = ares_library_init(ARES_LIB_INIT_ALL);
+    });
+    if (init_status != ARES_SUCCESS) {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "c-ares initialization failed: %s",
+            ares_strerror(init_status));
+        return -1;
+    }
+    return 0;
+}
+
+class QoreCaresAddrInfoResolver {
+public:
+    DLLLOCAL QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type, int protocol)
+            : host(std::move(host)), service(std::move(service)), family(family), type(type), protocol(protocol) {
+    }
+
+    DLLLOCAL ~QoreCaresAddrInfoResolver() {
+        if (result) {
+            ares_freeaddrinfo(result);
+            result = nullptr;
+        }
+        if (channel) {
+            ares_destroy(channel);
+            channel = nullptr;
+        }
+    }
+
+    DLLLOCAL int continuePoll(ExceptionSink* xsink) {
+        if (!started && start(xsink)) {
+            return -1;
+        }
+        if (done) {
+            return status == ARES_SUCCESS ? 0 : -1;
+        }
+
+        process(xsink);
+        if (*xsink) {
+            return -1;
+        }
+        return done ? (status == ARES_SUCCESS ? 0 : -1) : 1;
+    }
+
+    DLLLOCAL const std::vector<SocketResolvedAddrInfo>& getAddresses() const {
+        return addrs;
+    }
+
+    DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const {
+        if (!channel || done) {
+            return;
+        }
+
+        for (auto& [fd, events] : fd_events) {
+            fds.push_back({fd, events});
+        }
+    }
+
+    DLLLOCAL int getPollTimeoutMs() const {
+        if (!channel || done) {
+            return -1;
+        }
+
+        struct timeval tv;
+        struct timeval* tvp = ares_timeout(channel, nullptr, &tv);
+        if (!tvp) {
+            return -1;
+        }
+        int64_t ms = static_cast<int64_t>(tvp->tv_sec) * 1000 + (tvp->tv_usec + 999) / 1000;
+        return ms <= 0 ? 1 : static_cast<int>(std::min<int64_t>(ms, INT_MAX));
+    }
+
+private:
+    DLLLOCAL int start(ExceptionSink* xsink) {
+        if (qore_cares_library_init(xsink)) {
+            return -1;
+        }
+
+        struct ares_options options = {};
+        options.sock_state_cb = sockStateCallback;
+        options.sock_state_cb_data = this;
+
+        int rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+        if (rc != ARES_SUCCESS) {
+            xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "ares_init_options() failed: %s",
+                ares_strerror(rc));
+            return -1;
+        }
+
+        struct ares_addrinfo_hints hints = {};
+        hints.ai_family = family;
+        hints.ai_socktype = type;
+        hints.ai_protocol = protocol;
+
+        started = true;
+        ares_getaddrinfo(channel, host.c_str(), service.c_str(), &hints, callback, this);
+        if (done) {
+            return status == ARES_SUCCESS ? 0 : raiseError(xsink);
+        }
+        return 0;
+    }
+
+    DLLLOCAL void process(ExceptionSink* xsink) {
+        std::vector<std::pair<int, int>> fds;
+        getExtraFds(fds);
+        if (fds.empty()) {
+            ares_process_fd(channel, ARES_SOCKET_BAD, ARES_SOCKET_BAD);
+        } else {
+            for (auto& [fd, events] : fds) {
+                ares_socket_t rfd = (events & SOCK_POLLIN) ? fd : ARES_SOCKET_BAD;
+                ares_socket_t wfd = (events & SOCK_POLLOUT) ? fd : ARES_SOCKET_BAD;
+                ares_process_fd(channel, rfd, wfd);
+                if (done) {
+                    break;
+                }
+            }
+        }
+        if (done && status != ARES_SUCCESS) {
+            raiseError(xsink);
+        }
+    }
+
+    DLLLOCAL static void callback(void* arg, int status, int, struct ares_addrinfo* res) {
+        reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->complete(status, res);
+    }
+
+    DLLLOCAL static void sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable) {
+        reinterpret_cast<QoreCaresAddrInfoResolver*>(arg)->updateFd(socket_fd, readable, writable);
+    }
+
+    DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable) {
+        int events = 0;
+        if (readable) {
+            events |= SOCK_POLLIN;
+        }
+        if (writable) {
+            events |= SOCK_POLLOUT;
+        }
+        int fd = static_cast<int>(socket_fd);
+        if (events) {
+            fd_events[fd] = events;
+        } else {
+            fd_events.erase(fd);
+        }
+    }
+
+    DLLLOCAL void complete(int new_status, struct ares_addrinfo* res) {
+        status = new_status;
+        result = res;
+        if (status == ARES_SUCCESS && result) {
+            for (struct ares_addrinfo_node* n = result->nodes; n; n = n->ai_next) {
+                if (!n->ai_addr || n->ai_addrlen <= 0
+                        || n->ai_addrlen > static_cast<ares_socklen_t>(sizeof(struct sockaddr_storage))) {
+                    continue;
+                }
+                SocketResolvedAddrInfo ai;
+                ai.family = n->ai_family;
+                ai.socktype = n->ai_socktype;
+                ai.protocol = n->ai_protocol;
+                ai.addrlen = static_cast<socklen_t>(n->ai_addrlen);
+                memcpy(&ai.addr, n->ai_addr, n->ai_addrlen);
+                addrs.push_back(ai);
+            }
+            if (addrs.empty()) {
+                status = ARES_ENODATA;
+            }
+        }
+        done = true;
+    }
+
+    DLLLOCAL int raiseError(ExceptionSink* xsink) const {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+            "ares_getaddrinfo(node: '%s', service: '%s', address_family: %d='%s') error: %s",
+            host.c_str(), service.c_str(), family, q_af_to_str(family), ares_strerror(status));
+        return -1;
+    }
+
+    std::string host;
+    std::string service;
+    int family;
+    int type;
+    int protocol;
+    ares_channel_t* channel = nullptr;
+    struct ares_addrinfo* result = nullptr;
+    std::vector<SocketResolvedAddrInfo> addrs;
+    std::unordered_map<int, int> fd_events;
+    int status = ARES_SUCCESS;
+    bool started = false;
+    bool done = false;
+};
+
+QoreCaresNameInfoResolver::QoreCaresNameInfoResolver(const struct sockaddr_storage& addr, socklen_t len, int flags)
+        : addr(addr), len(len), flags(flags) {
+}
+
+QoreCaresNameInfoResolver::~QoreCaresNameInfoResolver() {
+    if (channel) {
+        ares_destroy(channel);
+        channel = nullptr;
+    }
+}
+
+int QoreCaresNameInfoResolver::continuePoll(ExceptionSink* xsink) {
+    if (!started && start(xsink)) {
+        return -1;
+    }
+    if (done) {
+        return 0;
+    }
+
+    process();
+    return done ? 0 : 1;
+}
+
+void QoreCaresNameInfoResolver::getExtraFds(std::vector<std::pair<int, int>>& fds) const {
+    if (!channel || done) {
+        return;
+    }
+
+    for (auto& [fd, events] : fd_events) {
+        fds.push_back({fd, events});
+    }
+}
+
+int QoreCaresNameInfoResolver::getPollTimeoutMs() const {
+    if (!channel || done) {
+        return -1;
+    }
+
+    struct timeval tv;
+    struct timeval* tvp = ares_timeout(channel, nullptr, &tv);
+    if (!tvp) {
+        return -1;
+    }
+    int64_t ms = static_cast<int64_t>(tvp->tv_sec) * 1000 + (tvp->tv_usec + 999) / 1000;
+    return ms <= 0 ? 1 : static_cast<int>(std::min<int64_t>(ms, INT_MAX));
+}
+
+int QoreCaresNameInfoResolver::start(ExceptionSink* xsink) {
+    if (qore_cares_library_init(xsink)) {
+        return -1;
+    }
+
+    struct ares_options options = {};
+    options.sock_state_cb = sockStateCallback;
+    options.sock_state_cb_data = this;
+
+    int rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+    if (rc != ARES_SUCCESS) {
+        xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR", "ares_init_options() failed: %s",
+            ares_strerror(rc));
+        return -1;
+    }
+
+    started = true;
+    ares_socklen_t alen = len ? static_cast<ares_socklen_t>(len)
+        : static_cast<ares_socklen_t>(qore_get_in_len(reinterpret_cast<struct sockaddr*>(&addr)));
+    ares_getnameinfo(channel, reinterpret_cast<const struct sockaddr*>(&addr), alen, flags, callback, this);
+    return 0;
+}
+
+void QoreCaresNameInfoResolver::process() {
+    std::vector<std::pair<int, int>> fds;
+    getExtraFds(fds);
+    if (fds.empty()) {
+        ares_process_fd(channel, ARES_SOCKET_BAD, ARES_SOCKET_BAD);
+        return;
+    }
+
+    for (auto& [fd, events] : fds) {
+        ares_socket_t rfd = (events & SOCK_POLLIN) ? fd : ARES_SOCKET_BAD;
+        ares_socket_t wfd = (events & SOCK_POLLOUT) ? fd : ARES_SOCKET_BAD;
+        ares_process_fd(channel, rfd, wfd);
+        if (done) {
+            break;
+        }
+    }
+}
+
+void QoreCaresNameInfoResolver::callback(void* arg, int status, int, char* node, char*) {
+    reinterpret_cast<QoreCaresNameInfoResolver*>(arg)->complete(status, node);
+}
+
+void QoreCaresNameInfoResolver::sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable) {
+    reinterpret_cast<QoreCaresNameInfoResolver*>(arg)->updateFd(socket_fd, readable, writable);
+}
+
+void QoreCaresNameInfoResolver::updateFd(ares_socket_t socket_fd, int readable, int writable) {
+    int events = 0;
+    if (readable) {
+        events |= SOCK_POLLIN;
+    }
+    if (writable) {
+        events |= SOCK_POLLOUT;
+    }
+    int fd = static_cast<int>(socket_fd);
+    if (events) {
+        fd_events[fd] = events;
+    } else {
+        fd_events.erase(fd);
+    }
+}
+
+void QoreCaresNameInfoResolver::complete(int new_status, char* node) {
+    status = new_status;
+    if (status == ARES_SUCCESS && node && *node) {
+        hostname = node;
+    }
+    done = true;
+}
+
 // --- Happy Eyeballs (RFC 8305) async poll state ---
 
 SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState(ExceptionSink* xsink,
@@ -5476,46 +5852,14 @@ SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState
         : sock(sock), host(host), service(service) {
     assert(xsink);
 
-    family = q_get_af(family);
-    type = q_get_sock_type(type);
+    this->family = q_get_af(family);
+    this->type = q_get_sock_type(type);
+    this->protocol = protocol;
 
     // close socket if already open
     qore_socket_close_private_from_controller(sock);
 
     sock->do_resolve_event(host, service);
-
-    if (ai.getInfo(xsink, host, service, family, 0, type, protocol)) {
-        assert(*xsink);
-        return;
-    }
-
-    struct addrinfo* aip = ai.getAddrInfo();
-
-    // emit all "resolved" events
-    if (sock->event_queue) {
-        for (struct addrinfo* p = aip; p; p = p->ai_next) {
-            sock->do_resolved_event(p->ai_addr);
-        }
-    }
-
-    prt = q_get_port_from_addr(aip->ai_addr);
-
-    // Sort addresses: interleave IPv6 and IPv4
-    qore_socket_private::sortAddressesHappyEyeballs(aip, sorted_addrs, multi_family);
-
-    printd(5, "SocketConnectInetHappyEyeballsPollState::ctor() host: %s service: %s addrs: %zu multi_family: %d\n",
-        host, service, sorted_addrs.size(), (int)multi_family);
-
-    // Start first connection attempt
-    int rc = startNextConnect(xsink);
-    if (rc < 0 && !*xsink) {
-        qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host, service);
-    }
-    if (rc == 0) {
-        // Immediate connection — done
-        he_state = HEBS_CONNECTED;
-        assignWinner(xsink);
-    }
 }
 
 SocketConnectInetHappyEyeballsPollState::~SocketConnectInetHappyEyeballsPollState() {
@@ -5523,6 +5867,28 @@ SocketConnectInetHappyEyeballsPollState::~SocketConnectInetHappyEyeballsPollStat
 }
 
 int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) {
+    if (he_state == HEBS_RESOLVING) {
+        int rc = continueResolve(xsink);
+        if (*xsink || rc) {
+            return *xsink ? -1 : SOCK_POLLIN;
+        }
+
+        rc = startNextConnect(xsink);
+        if (rc < 0 && !*xsink) {
+            qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", nullptr, host.c_str(),
+                service.c_str());
+        }
+        if (rc <= 0) {
+            if (rc == 0) {
+                he_state = HEBS_CONNECTED;
+                assignWinner(xsink);
+            }
+            return rc;
+        }
+        he_state = HEBS_RACING;
+        return SOCK_POLLOUT;
+    }
+
     if (he_state == HEBS_CONNECTED) {
         return 0;
     }
@@ -5612,6 +5978,13 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
 }
 
 void SocketConnectInetHappyEyeballsPollState::getExtraFds(std::vector<std::pair<int, int>>& fds) const {
+    if (he_state == HEBS_RESOLVING) {
+        if (resolver) {
+            resolver->getExtraFds(fds);
+        }
+        return;
+    }
+
     // Return all active fds that are NOT the primary sock->sock fd
     for (auto& a : active_attempts) {
         if (a.fd != QORE_INVALID_SOCKET && a.fd != sock->sock) {
@@ -5620,23 +5993,101 @@ void SocketConnectInetHappyEyeballsPollState::getExtraFds(std::vector<std::pair<
     }
 }
 
+int SocketConnectInetHappyEyeballsPollState::getPollTimeoutMs() const {
+    if (he_state == HEBS_RESOLVING) {
+        return resolver ? resolver->getPollTimeoutMs() : 1;
+    }
+    return he_state == HEBS_RACING ? HAPPY_EYEBALLS_DELAY_MS : -1;
+}
+
+int SocketConnectInetHappyEyeballsPollState::getPrimaryPollEvents(int rc) const {
+    return he_state == HEBS_RESOLVING ? 0 : rc;
+}
+
+int SocketConnectInetHappyEyeballsPollState::continueResolve(ExceptionSink* xsink) {
+    if (!resolver) {
+        resolver.reset(new QoreCaresAddrInfoResolver(host, service, family, type, protocol));
+    }
+
+    int rc = resolver->continuePoll(xsink);
+    if (*xsink || rc) {
+        return *xsink ? -1 : rc;
+    }
+
+    return finishResolve(xsink);
+}
+
+int SocketConnectInetHappyEyeballsPollState::finishResolve(ExceptionSink* xsink) {
+    addrs = resolver->getAddresses();
+    resolver.reset();
+    if (addrs.empty()) {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+            "ares_getaddrinfo(node: '%s', service: '%s', address_family: %d='%s') returned no addresses",
+            host.c_str(), service.c_str(), family, q_af_to_str(family));
+        return -1;
+    }
+
+    // emit all "resolved" events
+    if (sock->event_queue) {
+        for (auto& ai : addrs) {
+            sock->do_resolved_event(reinterpret_cast<const struct sockaddr*>(&ai.addr));
+        }
+    }
+
+    prt = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&addrs.front().addr));
+
+    std::vector<size_t> v6, v4, other;
+    for (size_t i = 0; i < addrs.size(); ++i) {
+        if (addrs[i].family == AF_INET6) {
+            v6.push_back(i);
+        } else if (addrs[i].family == AF_INET) {
+            v4.push_back(i);
+        } else {
+            other.push_back(i);
+        }
+    }
+
+    multi_family = !v6.empty() && !v4.empty();
+
+    size_t i6 = 0, i4 = 0;
+    while (i6 < v6.size() || i4 < v4.size()) {
+        if (i6 < v6.size()) {
+            sorted_addrs.push_back(v6[i6++]);
+        }
+        if (i4 < v4.size()) {
+            sorted_addrs.push_back(v4[i4++]);
+        }
+    }
+    for (size_t i : other) {
+        sorted_addrs.push_back(i);
+    }
+
+    he_state = HEBS_FIRST_CONNECT;
+
+    printd(5, "SocketConnectInetHappyEyeballsPollState::finishResolve() host: %s service: %s addrs: %zu "
+        "multi_family: %d\n", host.c_str(), service.c_str(), sorted_addrs.size(), (int)multi_family);
+    return 0;
+}
+
 int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsink) {
     while (next_addr_idx < sorted_addrs.size()) {
-        struct addrinfo* p = sorted_addrs[next_addr_idx];
+        SocketResolvedAddrInfo& p = addrs[sorted_addrs[next_addr_idx]];
 
         // Check sandbox network security restrictions
         QoreSandboxManagerHelper smh;
         if (smh) {
-            int proto = (p->ai_socktype == SOCK_STREAM) ? QSEC_NET_TCP :
-                        (p->ai_socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
-            if (!smh->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
+            int proto = (p.socktype == SOCK_STREAM) ? QSEC_NET_TCP :
+                        (p.socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
+            if (!smh->checkNetworkAccess(reinterpret_cast<const struct sockaddr*>(&p.addr), p.addrlen, proto,
+                    xsink)) {
                 return -1;
             }
         }
 
-        sock->do_connect_event(p->ai_family, p->ai_addr, host.c_str(), service.c_str(), prt);
+        sock->do_connect_event(p.family, reinterpret_cast<const struct sockaddr*>(&p.addr), host.c_str(),
+            service.c_str(), prt);
 
-        int fd = create_nonblocking_socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        int fd = create_nonblocking_socket(p.family, p.socktype, p.protocol);
         if (fd == QORE_INVALID_SOCKET) {
             ++next_addr_idx;
             continue;
@@ -5644,7 +6095,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
 
         int rc;
         while (true) {
-            rc = ::connect(fd, p->ai_addr, p->ai_addrlen);
+            rc = ::connect(fd, reinterpret_cast<const struct sockaddr*>(&p.addr), p.addrlen);
             if (!rc || sock_get_error() != EINTR) {
                 break;
             }
@@ -5705,15 +6156,15 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
     auto& winner = active_attempts[winning_idx];
     assert(winner.fd != QORE_INVALID_SOCKET);
 
-    struct addrinfo* wp = sorted_addrs[winner.addr_idx];
+    SocketResolvedAddrInfo& wp = addrs[sorted_addrs[winner.addr_idx]];
 
     // Assign winning fd to socket (may already be sock->sock if first attempt won)
     sock->sock = winner.fd;
     winner.fd = QORE_INVALID_SOCKET;
     sock->resetCloseInterrupt();
-    sock->sfamily = wp->ai_family;
-    sock->stype = wp->ai_socktype;
-    sock->sprot = wp->ai_protocol;
+    sock->sfamily = wp.family;
+    sock->stype = wp.socktype;
+    sock->sprot = wp.protocol;
     sock->port = prt;
 
     // Close all other fds
@@ -5722,7 +6173,7 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
     sock->confirmConnected(host.c_str());
 
     printd(5, "SocketConnectInetHappyEyeballsPollState::assignWinner() host: %s family: %s\n",
-        host.c_str(), q_af_to_str(wp->ai_family));
+        host.c_str(), q_af_to_str(wp.family));
 }
 
 void SocketConnectInetHappyEyeballsPollState::closeAllFds() {
@@ -9857,8 +10308,15 @@ QoreHashNode* SocketConnectPollOperation::continuePoll(ExceptionSink* xsink) {
             return nullptr;
         }
     } else {
-        // throw an exception and exit if the object is no longer open or valid
-        if (sock->priv->checkOpen(xsink)) {
+        auto* he_state = state == SPS_CONNECTING
+            ? dynamic_cast<SocketConnectInetHappyEyeballsPollState*>(poll_state.get())
+            : nullptr;
+        bool resolving = he_state && he_state->getState() == HEBS_RESOLVING;
+        // During async DNS resolution there is not yet a primary socket fd.
+        // Once resolution finishes, connect opens the first nonblocking fd and
+        // the normal open check applies again.
+        int rc = resolving ? sock->priv->checkValid(xsink) : sock->priv->checkOpen(xsink);
+        if (rc) {
             return nullptr;
         }
     }
@@ -9870,16 +10328,20 @@ QoreHashNode* SocketConnectPollOperation::continuePoll(ExceptionSink* xsink) {
                 if (*xsink) {
                     break;
                 }
-                // Check if the inner state is Happy Eyeballs racing — if so, include extra fds
-                // and a poll timeout for the 250ms connection attempt delay
+                // Happy Eyeballs can be waiting on c-ares resolver fds before a
+                // primary socket exists, or on extra racing connect fds.
                 auto* he_state = dynamic_cast<SocketConnectInetHappyEyeballsPollState*>(poll_state.get());
-                if (he_state && he_state->isRacing() && he_state->getState() == HEBS_RACING) {
+                if (he_state && (he_state->getState() == HEBS_RESOLVING
+                        || (he_state->isRacing() && he_state->getState() == HEBS_RACING))) {
                     std::vector<std::pair<int, int>> extra_fds;
                     he_state->getExtraFds(extra_fds);
-                    rv = getSocketPollInfoHash(xsink, rc, extra_fds);
+                    bumpFdGeneration();
+                    rv = getSocketPollInfoHash(xsink, he_state->getPrimaryPollEvents(rc), extra_fds);
                     if (rv) {
-                        // Set poll_timeout_ms for the 250ms stagger if more addresses remain
-                        rv->setKeyValue("poll_timeout_ms", HAPPY_EYEBALLS_DELAY_MS, xsink);
+                        int poll_timeout_ms = he_state->getPollTimeoutMs();
+                        if (poll_timeout_ms >= 0) {
+                            rv->setKeyValue("poll_timeout_ms", poll_timeout_ms, xsink);
+                        }
                     }
                 } else {
                     rv = getSocketPollInfoHash(xsink, rc);

@@ -448,6 +448,25 @@ find_package(BZip2 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 
+# c-ares is required for asynchronous DNS resolution in socket I/O.
+pkg_check_modules(CARES QUIET libcares)
+if(CARES_FOUND)
+    message(STATUS "Found c-ares: ${CARES_VERSION}")
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${CARES_LIBRARIES})
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${CARES_INCLUDE_DIRS})
+else()
+    find_path(CARES_INCLUDE_DIR ares.h)
+    find_library(CARES_LIBRARY NAMES cares)
+    if(CARES_INCLUDE_DIR AND CARES_LIBRARY)
+        message(STATUS "Found c-ares: ${CARES_LIBRARY}")
+        list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${CARES_INCLUDE_DIR})
+        list(APPEND LIBQORE_OPTIONAL_LIBS ${CARES_LIBRARY})
+    else()
+        message(FATAL_ERROR "c-ares is required for asynchronous DNS resolution. Please install libcares-dev (Debian/Ubuntu), c-ares-devel (Fedora/RHEL/openSUSE), or c-ares-dev (Alpine)")
+    endif()
+endif()
+set(HAVE_CARES TRUE)
+
 # Kerberos 5 / GSSAPI support is required.  Prefer pkg-config where it is
 # available, then fall back to krb5-config and finally direct header/library
 # lookup for platforms without pkg-config metadata.

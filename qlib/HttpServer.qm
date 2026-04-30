@@ -212,9 +212,9 @@ log("started listener on %s", lh.desc);
       - requires Qore built with Brotli and/or Zstd support
     - return HTTP 204 when a handler returns code 200 with no response body
     - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
-      - disabled DNS hostname lookups in \c getPeerInfo() calls to prevent blocking the I/O thread
+      - DNS hostname lookups in \c getPeerInfo() are now delegated to controller-backed c-ares resolution
       - moved \c getPeerInfo() calls to after SSL handshake completion when socket is stable
-      - peer info now shows IP addresses instead of hostnames in logs
+      - peer info can include hostnames without blocking the I/O thread
     - removed high-frequency INFO log messages from async I/O hot paths to reduce log spam
     - fixed async I/O cache leak when clients disconnect during SSL handshake
     - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were

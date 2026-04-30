@@ -59,9 +59,13 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <memory>
 #include <unordered_map>
+#include <vector>
 #include <strings.h>
 #include <sys/time.h>
+
+#include <ares.h>
 
 #ifdef DARWIN
 #include <sys/event.h>
@@ -323,6 +327,52 @@ constexpr int HAPPY_EYEBALLS_DELAY_MS = 250;
 constexpr int HEBS_FIRST_CONNECT = 0;
 constexpr int HEBS_RACING = 1;
 constexpr int HEBS_CONNECTED = 2;
+constexpr int HEBS_RESOLVING = 3;
+
+struct SocketResolvedAddrInfo {
+    int family = AF_UNSPEC;
+    int socktype = SOCK_STREAM;
+    int protocol = 0;
+    socklen_t addrlen = 0;
+    struct sockaddr_storage addr = {};
+};
+
+class QoreCaresAddrInfoResolver;
+
+class QoreCaresNameInfoResolver {
+public:
+    DLLLOCAL QoreCaresNameInfoResolver(const struct sockaddr_storage& addr, socklen_t len, int flags = 0);
+    DLLLOCAL ~QoreCaresNameInfoResolver();
+
+    //! Returns 0 when done, 1 when polling must continue, -1 on initialization error
+    DLLLOCAL int continuePoll(ExceptionSink* xsink);
+
+    DLLLOCAL const std::string& getHostname() const {
+        return hostname;
+    }
+
+    DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const;
+    DLLLOCAL int getPollTimeoutMs() const;
+
+private:
+    DLLLOCAL int start(ExceptionSink* xsink);
+    DLLLOCAL void process();
+    DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable);
+    DLLLOCAL void complete(int new_status, char* node);
+
+    DLLLOCAL static void callback(void* arg, int status, int, char* node, char*);
+    DLLLOCAL static void sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable);
+
+    struct sockaddr_storage addr = {};
+    socklen_t len = 0;
+    int flags = 0;
+    ares_channel_t* channel = nullptr;
+    std::unordered_map<int, int> fd_events;
+    std::string hostname;
+    int status = ARES_SUCCESS;
+    bool started = false;
+    bool done = false;
+};
 
 //! Happy Eyeballs (RFC 8305) connection racing poll state for async I/O
 /** Races IPv6 and IPv4 connections with a 250ms stagger.  Manages multiple
@@ -347,6 +397,12 @@ public:
     //! Returns extra fds that need to be polled for write readiness (connect completion)
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const;
 
+    //! Returns the operation-specific poll timeout, or -1 when no timeout is needed
+    DLLLOCAL int getPollTimeoutMs() const;
+
+    //! Returns the primary socket events to poll for the current state
+    DLLLOCAL int getPrimaryPollEvents(int rc) const;
+
     //! Returns true if there are multiple address families to race
     DLLLOCAL bool isRacing() const {
         return multi_family;
@@ -363,16 +419,27 @@ private:
         size_t addr_idx = 0;
     };
 
-    QoreAddrInfo ai;
+    std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
     qore_socket_private* sock;
     std::string host, service;
-    std::vector<struct addrinfo*> sorted_addrs;
+    std::vector<SocketResolvedAddrInfo> addrs;
+    std::vector<size_t> sorted_addrs;
     std::vector<ConnAttempt> active_attempts;
     size_t next_addr_idx = 0;
+    int family = AF_UNSPEC;
+    int type = SOCK_STREAM;
+    int protocol = 0;
     int prt = -1;
-    int he_state = HEBS_FIRST_CONNECT;
+    int he_state = HEBS_RESOLVING;
     int winning_idx = -1;
     bool multi_family = false;
+
+    //! Continue asynchronous DNS resolution
+    /** Returns 0 when resolved, 1 when polling must continue, -1 on error */
+    DLLLOCAL int continueResolve(ExceptionSink* xsink);
+
+    //! Handles resolver completion and initializes Happy Eyeballs address ordering
+    DLLLOCAL int finishResolve(ExceptionSink* xsink);
 
     //! Start a non-blocking connect to the next address in sorted_addrs
     /** Returns 0 on immediate connect, 1 on EINPROGRESS, -1 on error */
@@ -2277,17 +2344,25 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL static QoreHashNode* getAddrInfo(const struct sockaddr_storage& addr, socklen_t len, bool host_lookup,
             const std::string& socketname) {
+        const char* hostname = nullptr;
+        char host[NI_MAXHOST + 1];
+        if ((addr.ss_family == AF_INET || addr.ss_family == AF_INET6) && host_lookup
+                && !getnameinfo((struct sockaddr*)&addr, qore_get_in_len((struct sockaddr*)&addr), host,
+                    sizeof(host), 0, 0, 0)) {
+            hostname = host;
+        }
+        return makeAddrInfo(addr, len, socketname, hostname);
+    }
+
+    DLLLOCAL static QoreHashNode* makeAddrInfo(const struct sockaddr_storage& addr, socklen_t len,
+            const std::string& socketname, const char* hostname = nullptr) {
         QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
         if (addr.ss_family == AF_INET || addr.ss_family == AF_INET6) {
-            if (host_lookup) {
-                char host[NI_MAXHOST + 1];
-
-                if (!getnameinfo((struct sockaddr*)&addr, qore_get_in_len((struct sockaddr*)&addr), host, sizeof(host), 0, 0, 0)) {
-                    QoreStringNode* hoststr = new QoreStringNode(host);
-                    h->setKeyValue("hostname", hoststr, 0);
-                    h->setKeyValue("hostname_desc", QoreAddrInfo::getAddressDesc(addr.ss_family, hoststr->c_str()), 0);
-                }
+            if (hostname && *hostname) {
+                QoreStringNode* hoststr = new QoreStringNode(hostname);
+                h->setKeyValue("hostname", hoststr, 0);
+                h->setKeyValue("hostname_desc", QoreAddrInfo::getAddressDesc(addr.ss_family, hoststr->c_str()), 0);
             }
 
             // get ipv4 or ipv6 address

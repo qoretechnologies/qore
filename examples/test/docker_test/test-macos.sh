@@ -29,7 +29,7 @@ elif [ "$PM" = "homebrew" ]; then
     # Add keg-only package paths so CMake/find_program can locate them
     export PATH="${HB}/opt/bison/bin:${HB}/opt/flex/bin:${PATH}"
     # Ensure linker and pkg-config find Homebrew libraries (including keg-only)
-    KEG_PKGS=(openssl@3 libxml2 libxslt zlib bzip2 expat readline ncurses libffi sqlite openldap krb5 libarchive curl libtool ossp-uuid libyaml)
+    KEG_PKGS=(openssl@3 libxml2 libxslt zlib bzip2 expat readline ncurses libffi sqlite openldap krb5 c-ares libarchive curl libtool ossp-uuid libyaml)
     for pkg in "${KEG_PKGS[@]}"; do
         kp="$(brew --prefix "$pkg" 2>/dev/null)" || continue
         [ -d "$kp/lib/pkgconfig" ] && export PKG_CONFIG_PATH="$kp/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
@@ -47,7 +47,7 @@ elif [ "$PM" = "homebrew" ]; then
     # build aborts at find_package(Eigen3 REQUIRED) if it isn't
     # present.  brew install is idempotent (no-op if already installed)
     # so this is safe to run on a fresh image too.
-    REQUIRED_BREW_PKGS=(eigen krb5)
+    REQUIRED_BREW_PKGS=(eigen krb5 c-ares)
     for pkg in "${REQUIRED_BREW_PKGS[@]}"; do
         if ! brew list "$pkg" >/dev/null 2>&1; then
             echo "=== Installing missing Homebrew package: $pkg ==="

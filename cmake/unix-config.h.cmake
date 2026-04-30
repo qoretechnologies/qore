@@ -213,6 +213,9 @@
 #cmakedefine HAVE_ZSTD
 #cmakedefine HAVE_LZ4
 
+/* c-ares - asynchronous DNS resolution */
+#cmakedefine HAVE_CARES
+
 /* io_uring - async file I/O (Linux only) */
 #cmakedefine HAVE_IO_URING
 
