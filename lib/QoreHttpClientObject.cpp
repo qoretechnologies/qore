@@ -861,6 +861,18 @@ struct qore_httpclient_priv {
     //! Buffer for accumulating partial SSE event text across channel messages
     std::string sse_recv_buffer;
 
+    DLLLOCAL std::string getConnMgrProxyUrl() const {
+        if (!proxy_connection.has_url()) {
+            return std::string();
+        }
+
+        std::string rv(proxy_connection.ssl ? "https://" : "http://");
+        rv += proxy_connection.host;
+        rv += ':';
+        rv += std::to_string(proxy_connection.port);
+        return rv;
+    }
+
     //! Returns the connection manager, creating it lazily if needed.
     DLLLOCAL HttpClientConnectionManagerBase& getConnMgr(ExceptionSink* xsink) {
         // Check if SSL settings or the effective protocol changed since
@@ -896,7 +908,9 @@ struct qore_httpclient_priv {
             } else {
                 want_proto = HttpClientProtocol::H1;
             }
+            std::string proxy_url = getConnMgrProxyUrl();
             if (opts.protocol != want_proto
+                    || opts.proxy_url != proxy_url
                     || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
                     || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
                     || opts.client_cert != msock->cert
@@ -951,14 +965,7 @@ struct qore_httpclient_priv {
             opts.client_cert = msock->cert;
             opts.client_key = msock->pk;
             // Proxy URL from the existing connection info
-            if (proxy_connection.has_url()) {
-                char buf[512];
-                snprintf(buf, sizeof(buf), "%s://%s:%d",
-                    proxy_connection.ssl ? "https" : "http",
-                    proxy_connection.host.c_str(),
-                    proxy_connection.port);
-                opts.proxy_url = buf;
-            }
+            opts.proxy_url = getConnMgrProxyUrl();
             conn_mgr.reset(new HttpClientConnectionManagerBase(opts, xsink));
             // New manager: clear user-disconnect flag (which may have been
             // left set by a prior resetConnMgr — see resetConnMgr comments)

@@ -385,6 +385,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("UNIX socket conn_mgr test", \unixSocketConnMgrTest());
         addTestCase("UNIX socket proxy conn_mgr test", \unixSocketProxyConnMgrTest());
         addTestCase("UNIX socket setURL reset test", \unixSocketSetURLResetTest());
+        addTestCase("proxy URL conn_mgr reset test", \proxyUrlConnMgrResetTest());
         addTestCase("conn_mgr isConnected test", \connMgrIsConnectedTest());
         addTestCase("upgrade isDataAvailable test", \upgradeIsDataAvailableTest());
         addTestCase("chunked HEAD test", \chunkedHeadTest());
@@ -955,6 +956,78 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertEq("GET", hdr.method);
         assertEq("/tcp-after-unix", hdr.path);
         assertEq(sprintf("localhost:%d", port), hdr.host);
+    }
+
+    proxyUrlConnMgrResetTest() {
+        Queue origin_q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                origin_q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                origin_q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\ndr");
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                origin_q.push(ex);
+            }
+        }();
+
+        Queue proxy_q();
+        background sub () {
+            try {
+                Socket proxy();
+                proxy.bind(0);
+                proxy.listen();
+                proxy_q.push(proxy.getSocketInfo().port);
+
+                Socket peer = proxy.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                proxy_q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\npx");
+                peer.close();
+                proxy.close();
+            } catch (hash<ExceptionInfo> ex) {
+                proxy_q.push(ex);
+            }
+        }();
+
+        int origin_port = origin_q.get();
+        int proxy_port = proxy_q.get();
+        HTTPClient hc({
+            "url": "http://localhost:" + origin_port,
+            "proxy": "http://localhost:" + proxy_port,
+            "timeout": 5s,
+        });
+
+        *string body = hc.get("/via-proxy");
+        assertEq("px", body);
+
+        auto proxy_hdr = proxy_q.get();
+        if (proxy_hdr.typeCode() == NT_HASH && proxy_hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", proxy_hdr.err, proxy_hdr.desc));
+        }
+        assertEq("GET", proxy_hdr.method);
+        assertEq(sprintf("http://localhost:%d/via-proxy", origin_port), proxy_hdr.path);
+
+        hc.clearProxyURL();
+        body = hc.get("/direct");
+        assertEq("dr", body);
+
+        auto origin_hdr = origin_q.get();
+        if (origin_hdr.typeCode() == NT_HASH && origin_hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", origin_hdr.err, origin_hdr.desc));
+        }
+        assertEq("GET", origin_hdr.method);
+        assertEq("/direct", origin_hdr.path);
+        assertEq(sprintf("localhost:%d", origin_port), origin_hdr.host);
     }
 
     connMgrIsConnectedTest() {
