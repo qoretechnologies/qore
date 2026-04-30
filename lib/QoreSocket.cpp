@@ -199,6 +199,32 @@ static int qore_socket_poll_fd_now(int fd, short events, const char* err, const 
     return qore_socket_poll_fd_revents_now(fd, events, revents, err, desc, xsink);
 }
 
+// returns 0 = connected, 1 = still in progress, -1 = error
+static int qore_socket_check_connect_ready(int fd) {
+    int val = 0;
+    socklen_t lon = sizeof(val);
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon) == QORE_SOCKET_ERROR) {
+        return -1;
+    }
+
+    if (val) {
+        errno = val;
+        return -1;
+    }
+
+    // Try a zero-byte send to confirm connection.  This is needed on macOS,
+    // where poll() may report writable readiness before connect completion.
+    int rc = ::send(fd, nullptr, 0, 0);
+    if (rc) {
+        if (errno == EINPROGRESS || errno == EAGAIN || errno == ENOTCONN) {
+            return 1;
+        }
+        return -1;
+    }
+
+    return 0;
+}
+
 static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
@@ -5594,27 +5620,7 @@ int SocketConnectInetHappyEyeballsPollState::checkAttempt(size_t idx) {
     int fd = active_attempts[idx].fd;
     assert(fd != QORE_INVALID_SOCKET);
 
-    // Check SO_ERROR
-    int val = 0;
-    socklen_t lon = sizeof(val);
-    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)(&val), &lon) != 0) {
-        return -1;
-    }
-    if (val != 0) {
-        errno = val;
-        return -1;
-    }
-
-    // Try a zero-byte send to confirm connection (needed on macOS)
-    int rc = send(fd, nullptr, 0, 0);
-    if (rc != 0) {
-        if (errno == EINPROGRESS || errno == EAGAIN || errno == ENOTCONN) {
-            return 1; // still in progress
-        }
-        return -1;
-    }
-
-    return 0; // connected
+    return qore_socket_check_connect_ready(fd);
 }
 
 void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink) {
@@ -5776,28 +5782,11 @@ int SocketConnectUnixPollState::checkConnection(ExceptionSink* xsink) {
 
     // The async I/O controller calls this state after writable readiness.
     // When continuePoll() reaches this immediately after EINPROGRESS, the
-    // SO_ERROR / zero-byte send checks below still report "try again" without
+    // SO_ERROR / zero-byte send checks still report "try again" without
     // running a second raw poll/select wait inside the poll operation.
-    socklen_t lon = sizeof(int);
-    int val;
-    if (getsockopt(sock->sock, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)(&val), &lon) == QORE_SOCKET_ERROR) {
-        return -1;
-    }
-
-    if (val) {
-        errno = val;
-        return -1;
-    }
-
-    // try a zero-byte send
-    int rc = send(sock->sock, nullptr, 0, 0);
+    int rc = qore_socket_check_connect_ready(sock->sock);
     if (rc) {
-        // NOTE: an ENOTCONN error can be returned on Darwin / macOS even though poll() reports the connection is ready
-        // for writing
-        if (errno == EINPROGRESS || errno == EAGAIN || errno == ENOTCONN) {
-            return 1;
-        }
-        return -1;
+        return rc;
     }
 
     // connected successfully within the timeout period
