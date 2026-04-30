@@ -1,0 +1,49 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../../qlib/QUnit.qm
+
+%exec-class Test
+
+class Test inherits QUnit::Test {
+    constructor() : QUnit::Test("Socket resolveAddrInfo", "1.0") {
+        addTestCase("numeric host", \testNumericHost());
+        addTestCase("passive wildcard", \testPassiveWildcard());
+        addTestCase("numeric host error", \testNumericHostError());
+        set_return_value(main());
+    }
+
+    testNumericHost() {
+        list<hash<auto>> l = Socket::resolveAddrInfo("127.0.0.1", "0", AF_INET,
+            AI_NUMERICHOST | AI_NUMERICSERV);
+        assertGt(0, l.size());
+        assertAddressInfo(l[0], True);
+        assertEq("127.0.0.1", l[0].address);
+        assertEq(AF_INET, l[0].family);
+        assertEq(0, l[0].port);
+    }
+
+    testPassiveWildcard() {
+        list<hash<auto>> l = Socket::resolveAddrInfo(NOTHING, "0", AF_UNSPEC,
+            AI_PASSIVE | AI_NUMERICSERV);
+        assertGt(0, l.size());
+        assertAddressInfo(l[0], True);
+        assertEq(0, l[0].port);
+    }
+
+    testNumericHostError() {
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", \Socket::resolveAddrInfo(),
+            ("not-an-address", "80", AF_INET, AI_NUMERICHOST | AI_NUMERICSERV));
+    }
+
+    private assertAddressInfo(hash<auto> h, bool expect_port) {
+        assertTrue(exists h.address);
+        assertTrue(exists h.address_desc);
+        assertTrue(exists h.family);
+        assertTrue(exists h.familystr);
+        assertTrue(exists h.addrlen);
+        assertEq(expect_port, exists h.port);
+    }
+}

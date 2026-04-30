@@ -54,6 +54,7 @@
 #include "qore/intern/FileOutputStream.h"
 #include "qore/intern/QC_Queue.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QoreEventNotifier.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/AsyncCompletionAction.h"
@@ -70,6 +71,7 @@ constexpr unsigned max_nonblock_ops = 32;
 static std::atomic<uint64_t> qore_socket_sync_exec_seq{0};
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
+extern QoreClass* QC_EVENTNOTIFIER;
 
 static int qore_socket_close_private_from_controller(qore_socket_private* priv);
 
@@ -3213,7 +3215,7 @@ private:
     bool done = false;
 };
 
-static QoreHashNode* qore_socket_exec_poll_operation(QoreObject* sock_obj, QoreSocketControllerPollable* pollable,
+static QoreHashNode* qore_socket_exec_poll_operation(QoreObject* sock_obj, AbstractPollableIoObjectBase* pollable,
         QoreObject* op_obj, int timeout_ms, const char* owner_name, ExceptionSink* xsink,
         QoreHashNode** ex_out = nullptr) {
     SocketSyncPoll::assertNotOnIoThread("Socket", owner_name, xsink);
@@ -5753,6 +5755,172 @@ private:
     bool started = false;
     bool done = false;
 };
+
+static QoreListNode* qore_socket_resolved_addrinfo_to_list(const std::vector<SocketResolvedAddrInfo>& addrs,
+        bool has_service) {
+    QoreListNode* l = new QoreListNode(autoHashTypeInfo);
+
+    for (const SocketResolvedAddrInfo& ai : addrs) {
+        const struct sockaddr* addr = reinterpret_cast<const struct sockaddr*>(&ai.addr);
+        QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+        qore_hash_private* hh = qore_hash_private::get(*h);
+
+        QoreStringNode* addr_str = q_addr_to_string2(addr);
+        if (addr_str) {
+            hh->setKeyValueIntern("address", addr_str);
+            hh->setKeyValueIntern("address_desc", QoreAddrInfo::getAddressDesc(ai.family, addr_str->getBuffer()));
+        }
+
+        hh->setKeyValueIntern("family", ai.family);
+        hh->setKeyValueIntern("familystr", new QoreStringNode(QoreAddrInfo::getFamilyName(ai.family)));
+        hh->setKeyValueIntern("addrlen", static_cast<int64>(ai.addrlen));
+        if (has_service) {
+            int port = q_get_port_from_addr(addr);
+            if (port != -1) {
+                hh->setKeyValueIntern("port", port);
+            }
+        }
+
+        l->push(h, nullptr);
+    }
+
+    return l;
+}
+
+class QoreSocketControllerResolveAddrInfoPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketControllerResolveAddrInfoPollOperation(const char* node, const char* service, int family,
+            int socktype, int protocol, int flags)
+            : node(node ? node : ""), service(service ? service : ""), has_node(node), has_service(service),
+            family(q_get_af(family)), socktype(q_get_sock_type(socktype)), protocol(protocol), flags(flags) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+        resolver.reset();
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        if (!resolver) {
+            resolver = std::make_unique<QoreCaresAddrInfoResolver>(
+                has_node ? node.c_str() : nullptr,
+                has_service ? service.c_str() : nullptr,
+                family, socktype, protocol, flags);
+        }
+
+        int rc = resolver->continuePoll(xsink);
+        if (*xsink || rc < 0) {
+            done = true;
+            resolver.reset();
+            return nullptr;
+        }
+        if (rc) {
+            return getResolverPollInfo(xsink);
+        }
+
+        addrs = resolver->getAddresses();
+        resolver.reset();
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return done ? qore_socket_resolved_addrinfo_to_list(addrs, has_service) : QoreValue();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        if (done) {
+            return "done";
+        }
+        return resolver ? "resolving-addrinfo" : "starting-addrinfo";
+    }
+
+private:
+    DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const {
+        std::vector<std::pair<int, int>> extra_fds;
+        resolver->getExtraFds(extra_fds);
+        QoreHashNode* rv = getSocketPollInfoHash(xsink, 0, extra_fds);
+        if (*xsink) {
+            return nullptr;
+        }
+        int poll_timeout_ms = resolver->getPollTimeoutMs();
+        rv->setKeyValue("poll_timeout_ms", poll_timeout_ms >= 0 ? poll_timeout_ms : 1, xsink);
+        return rv;
+    }
+
+    std::string node;
+    std::string service;
+    bool has_node = false;
+    bool has_service = false;
+    int family = AF_UNSPEC;
+    int socktype = SOCK_STREAM;
+    int protocol = 0;
+    int flags = 0;
+    std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
+    std::vector<SocketResolvedAddrInfo> addrs;
+    bool done = false;
+};
+
+QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node, const char* service,
+        int family, int flags, int socktype, int protocol, int timeout_ms) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(
+        new QoreSocketControllerResolveAddrInfoPollOperation(node, service, family, socktype, protocol, flags),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreEventNotifier> notifier_holder(new QoreEventNotifier(xsink), xsink);
+    if (*xsink || !notifier_holder->isValid()) {
+        return nullptr;
+    }
+    QoreEventNotifier* notifier_raw = *notifier_holder;
+    notifier_raw->ref();
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder), xsink);
+    poller_holder->setSelf(*op_obj);
+    SocketPollOperationBase* poller = *poller_holder;
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("resolve-addrinfo"), xsink);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_exec_poll_operation(*sock_obj, *notifier_holder, *op_obj, timeout_ms, "resolveAddrInfo", xsink),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ValueHolder rv(poller->getOutput(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (rv->isNothing()) {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+            "async address resolution completed without returning address info");
+        return nullptr;
+    }
+    if (rv->getType() != NT_LIST) {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+            "expected a list from async address resolution, got '%s'", rv->getFullTypeName());
+        return nullptr;
+    }
+    return rv.release().get<QoreListNode>();
+}
 
 QoreCaresNameInfoResolver::QoreCaresNameInfoResolver(const struct sockaddr_storage& addr, socklen_t len, int flags)
         : addr(addr), len(len), flags(flags) {

@@ -2600,10 +2600,53 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             sprintf("internal error: retry loop exhausted without a decision");
     }
 
-    private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
-            *reference<hash<string, string>> errmap) {
-        list<auto> al = getaddrinfo(info.node, info.service, info.family, AIFlags);
+    private Future resolveINETListenerAddressesAsync(hash<HttpListenerOptionInfo> info) {
+        Promise p();
+        Future f = p.getFuture();
 
+        try {
+            getGlobalAsyncCtrl().submitTask(sub () {
+                try {
+                    list<auto> al;
+                    if (!info.node && info.family == AF_UNSPEC) {
+                        *hash<ExceptionInfo> first_ex;
+                        try {
+                            al += Qore::Socket::resolveAddrInfo(NOTHING, info.service, AF_INET6, AIFlags);
+                        } catch (hash<ExceptionInfo> ex) {
+                            first_ex = ex;
+                        }
+                        try {
+                            al += Qore::Socket::resolveAddrInfo(NOTHING, info.service, AF_INET, AIFlags);
+                        } catch (hash<ExceptionInfo> ex) {
+                            if (!first_ex) {
+                                first_ex = ex;
+                            }
+                        }
+                        if (!al.size()) {
+                            if (!first_ex) {
+                                throw "QOREADDRINFO-GETINFO-ERROR",
+                                    sprintf("async address resolution for wildcard service %y returned no addresses",
+                                        info.service);
+                            }
+                            throw first_ex.err, first_ex.desc, first_ex.arg;
+                        }
+                    } else {
+                        al = Qore::Socket::resolveAddrInfo(info.node, info.service, info.family, AIFlags);
+                    }
+                    p.set(al);
+                } catch (hash<ExceptionInfo> ex) {
+                    p.setError(ex.err, ex.desc, ex.arg);
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+
+        return f;
+    }
+
+    private list<hash<auto>> addINETListenersInternResolved(hash<HttpListenerOptionInfo> info, list<auto> al,
+            *reference<hash<string, string>> errmap) {
         # sort ipv6 addresses first in list
         al = sort(al, int sub (hash<auto> l, hash<auto> r) {
             return l.family === AF_INET6 ? -1 : 0;
@@ -2651,6 +2694,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         return rv;
+    }
+
+    private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
+            *reference<hash<string, string>> errmap) {
+        return addINETListenersInternResolved(info, resolveINETListenerAddressesAsync(info).get(), \errmap);
     }
 
     private hash<HttpResponseInfo> noHandlerError(hash<auto> cx, hash<auto> hdr, auto body) {

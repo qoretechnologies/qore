@@ -6583,6 +6583,33 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     return s->getHttp2MaxRequestBodySize();
 }
 
+//! Resolves address information through the async I/O controller
+/** This method delegates the address lookup to the global async I/O controller and blocks the caller until the
+    controller-backed operation completes.  It returns the same address fields used by the \c getaddrinfo() function:
+    \c "address", \c "address_desc", \c "family", \c "familystr", \c "addrlen", and, when \a service is supplied,
+    \c "port".
+
+    @param node the node name for the lookup
+    @param service the service name (from \c /etc/services, for example) or port number
+    @param family a hint for the address family, \c AF_UNSPEC means any family
+    @param flags hint flags as per the \c getaddrinfo() call: \c AI_ADDRCONFIG, \c AI_ALL, \c AI_CANONNAME,
+    \c AI_NUMERICHOST, \c AI_NUMERICSERV, \c AI_PASSIVE, \c AI_V4MAPPED
+    @param socktype a hint for the type of socket; 0 = any socket type
+    @param protocol a hint for the protocol number; 0 = the default protocol
+    @param timeout_ms the timeout for the controller-backed resolution operation; -1 = never timeout
+
+    @throw QOREADDRINFO-GETINFO-ERROR error looking up either nodename or servicename (or not known)
+    @throw ASYNC-IO-ERROR called from the async I/O thread or the global async I/O controller is unavailable
+
+    @since %Qore 2.3
+ */
+static list<hash<auto>> Socket::resolveAddrInfo(*string node, *softstring service,
+        softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0,
+        timeout timeout_ms = -1) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : nullptr,
+        service ? service->c_str() : nullptr, family, flags, socktype, protocol, timeout_ms);
+}
+
 //! Parse the given string as a Server Sent Event (SSE) string
 /** @param str the string to parse as a Server Sent Event (SSE) string
 
