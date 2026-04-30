@@ -25,15 +25,107 @@
 #! Contains all public definitions in the PdfCoDataProvider module
 public namespace PdfCoDataProvider {
 
+#! A single parsed object (field or table) returned by the document parser
+public class PdfCoParsedObjectDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "name": {
+                "type": StringOrNothingType,
+                "display_name": "Name",
+                "short_desc": "Field identifier from the parser template",
+                "desc": "Field identifier as defined in the document parser template",
+            },
+            "objectType": {
+                "type": StringOrNothingType,
+                "display_name": "Object Type",
+                "short_desc": "Kind of parsed object (`field` or `table`)",
+                "desc": "Kind of parsed object: `field` for scalar values, `table` for tabular data",
+            },
+            "value": {
+                "type": AbstractDataProviderTypeMap."any",
+                "display_name": "Value",
+                "short_desc": "Extracted value (string, number, or empty)",
+                "desc": "Extracted value for the object. Type depends on the template definition; "
+                    "may be a string, number, or empty string.",
+            },
+            "pageIndex": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Page Index",
+                "short_desc": "Zero-based page index where the object was found",
+                "desc": "Zero-based page index where the object was located",
+            },
+            "rectangle": {
+                "type": SoftAutoListOrNothingType,
+                "display_name": "Rectangle",
+                "short_desc": "Bounding rectangle as `[x1, y1, x2, y2]`",
+                "desc": "Bounding rectangle as `[x1, y1, x2, y2]` four-element coordinate array",
+            },
+            "rows": {
+                "type": SoftAutoListOrNothingType,
+                "display_name": "Rows",
+                "short_desc": "Parsed table rows (only for `table` objects)",
+                "desc": "Parsed table rows; populated only when `objectType` is `table`",
+            },
+        };
+    }
+
+    constructor() : HashDataType("ParsedObject") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Body payload returned by the document parser
+public class PdfCoDocumentParserBodyDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "objects": {
+                "type": new SoftListDataType("ParsedObjects", new PdfCoParsedObjectDataType(), True),
+                "display_name": "Objects",
+                "short_desc": "List of parsed objects extracted from the document",
+                "desc": "List of parsed objects extracted from the document using the configured "
+                    "template",
+            },
+            "templateName": {
+                "type": StringOrNothingType,
+                "display_name": "Template Name",
+                "short_desc": "Name of the parser template used",
+                "desc": "Name of the document parser template that was used",
+            },
+            "templateVersion": {
+                "type": StringOrNothingType,
+                "display_name": "Template Version",
+                "short_desc": "Version of the parser template used",
+                "desc": "Version of the document parser template that was used",
+            },
+            "timestamp": {
+                "type": StringOrNothingType,
+                "display_name": "Timestamp",
+                "short_desc": "ISO 8601 timestamp when parsing completed",
+                "desc": "ISO 8601 timestamp indicating when parsing completed",
+            },
+            "elapsed": {
+                "type": SoftFloatOrNothingType,
+                "display_name": "Elapsed Seconds",
+                "short_desc": "Parsing duration in seconds",
+                "desc": "Parsing duration in seconds",
+            },
+        };
+    }
+
+    constructor() : HashDataType("DocumentParserBody") {
+        addQoreFields(Fields);
+    }
+}
+
 #! Response data type for PDF.co document parser operations
 public class PdfCoDocumentParserResponseDataType inherits HashDataType {
     public {
         #! Field definitions for the document parser response
         const Fields = {
             "body": {
-                "type": AutoHashOrNothingType,
+                "type": (new PdfCoDocumentParserBodyDataType()).getOrNothingType(),
                 "display_name": "Body",
-                "short_desc": "Parsed document data containing objects, template name, version, and timestamp",
+                "short_desc": "Parsed document data with objects, template name, version, and timestamp",
                 "desc": "Parsed document data containing `objects`, `templateName`, `templateVersion`, "
                     "and `timestamp` extracted using the configured document parser template",
             },

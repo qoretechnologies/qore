@@ -49,6 +49,7 @@ public class PdfCoParseDocumentRequestDataType inherits HashDataType {
                 "display_name": "Template ID",
                 "short_desc": "Document parser template ID",
                 "desc": "Document parser template ID to use",
+                "ref_data": "document_parser_templates",
             },
             "template": {
                 "type": StringOrNothingType,

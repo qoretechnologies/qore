@@ -50,7 +50,6 @@ public class PdfCoSearchAndReplaceWithImageRequestDataType inherits HashDataType
                 "short_desc": "The text string to search for",
                 "desc": "The text string to search for",
                 "required": True,
-                "preselected": True,
             },
             "replaceImage": {
                 "type": StringType,
@@ -58,7 +57,26 @@ public class PdfCoSearchAndReplaceWithImageRequestDataType inherits HashDataType
                 "short_desc": "URL to the replacement image",
                 "desc": "URL to the replacement image",
                 "required": True,
-                "preselected": True,
+            },
+            "regex": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Regex",
+                "short_desc": "Interpret search string as a regular expression",
+                "desc": "Set to `True` to interpret `searchString` as a regular expression "
+                    "(default: `False`)",
+            },
+            "caseSensitive": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Case Sensitive",
+                "short_desc": "Use case-sensitive matching",
+                "desc": "Set to `False` to disable case-sensitive matching (default: `True`)",
+            },
+            "replacementLimit": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Replacement Limit",
+                "short_desc": "Maximum number of replacements",
+                "desc": "Maximum number of replacements to perform. `0` means unlimited "
+                    "(default: `0`).",
             },
             "pages": {
                 "type": StringOrNothingType,
@@ -72,6 +90,26 @@ public class PdfCoSearchAndReplaceWithImageRequestDataType inherits HashDataType
                 "short_desc": "PDF file password",
                 "desc": "PDF file password if the document is protected",
                 "sensitive": True,
+            },
+            "httpusername": {
+                "type": StringOrNothingType,
+                "display_name": "HTTP Username",
+                "short_desc": "HTTP basic-auth username for the source URL",
+                "desc": "Username for HTTP basic-auth on a protected source URL",
+                "sensitive": True,
+            },
+            "httppassword": {
+                "type": StringOrNothingType,
+                "display_name": "HTTP Password",
+                "short_desc": "HTTP basic-auth password for the source URL",
+                "desc": "Password for HTTP basic-auth on a protected source URL",
+                "sensitive": True,
+            },
+            "callback": {
+                "type": StringOrNothingType,
+                "display_name": "Callback URL",
+                "short_desc": "Webhook URL for async completion notification",
+                "desc": "Webhook URL that PDF.co calls when an async job completes",
             },
             "async": {
                 "type": SoftBoolOrNothingType,

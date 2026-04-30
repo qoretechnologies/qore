@@ -45,16 +45,18 @@ public class PdfCoReadBarcodeRequestDataType inherits HashDataType {
                 "required_groups": ("source",),
             },
             "type": {
-                "type": StringOrNothingType,
+                "type": StringType,
                 "display_name": "Barcode Type",
                 "short_desc": "Primary barcode type to detect",
-                "desc": "Primary barcode type to detect (default: `QRCode`)",
-                "preselected": True,
+                "desc": "Primary barcode type to detect. Use `types` to detect more than one "
+                    "type at once.",
+                "required": True,
+                "example_value": "QRCode",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "QRCode", "desc": "QR Code"},
                     <AllowedValueInfo>{"value": "Code128", "desc": "Code 128"},
                     <AllowedValueInfo>{"value": "Code39", "desc": "Code 39"},
-                    <AllowedValueInfo>{"value": "Datamatrix", "desc": "Data Matrix"},
+                    <AllowedValueInfo>{"value": "DataMatrix", "desc": "Data Matrix"},
                     <AllowedValueInfo>{"value": "PDF417", "desc": "PDF417"},
                     <AllowedValueInfo>{"value": "EAN13", "desc": "EAN-13"},
                     <AllowedValueInfo>{"value": "EAN8", "desc": "EAN-8"},
@@ -63,16 +65,37 @@ public class PdfCoReadBarcodeRequestDataType inherits HashDataType {
                 ),
             },
             "types": {
-                "type": StringOrNothingType,
-                "display_name": "Barcode Types",
-                "short_desc": "Comma-separated list of barcode types to detect",
-                "desc": "Comma-separated list of barcode types to detect (overrides `type`)",
+                "type": new ListDataType("BarcodeTypeList", SoftStringType, True),
+                "display_name": "Additional Barcode Types",
+                "short_desc": "Additional barcode types to detect alongside the primary type",
+                "desc": "Additional barcode types to detect alongside the primary `type`. "
+                    "Sent to the API as a comma-separated string.",
             },
             "pages": {
                 "type": StringOrNothingType,
                 "display_name": "Pages",
                 "short_desc": "Page indices for barcode scanning",
                 "desc": "Page indices as comma-separated values or ranges",
+            },
+            "httpusername": {
+                "type": StringOrNothingType,
+                "display_name": "HTTP Username",
+                "short_desc": "HTTP basic-auth username for the source URL",
+                "desc": "Username for HTTP basic-auth on a protected source URL",
+                "sensitive": True,
+            },
+            "httppassword": {
+                "type": StringOrNothingType,
+                "display_name": "HTTP Password",
+                "short_desc": "HTTP basic-auth password for the source URL",
+                "desc": "Password for HTTP basic-auth on a protected source URL",
+                "sensitive": True,
+            },
+            "callback": {
+                "type": StringOrNothingType,
+                "display_name": "Callback URL",
+                "short_desc": "Webhook URL for async completion notification",
+                "desc": "Webhook URL that PDF.co calls when an async job completes",
             },
             "async": {
                 "type": SoftBoolOrNothingType,
@@ -137,6 +160,9 @@ public class PdfCoReadBarcodeDataProvider inherits PdfCoDataProviderBase {
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         req = uploadFileIfNeeded(req);
+        if (req.types.typeCode() == NT_LIST) {
+            req.types = (foldl $1 + "," + $2, req.types);
+        }
         return doPost("barcode/read/from/url", req);
     }
 

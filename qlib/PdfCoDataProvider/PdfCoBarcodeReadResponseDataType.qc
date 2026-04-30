@@ -25,17 +25,72 @@
 #! Contains all public definitions in the PdfCoDataProvider module
 public namespace PdfCoDataProvider {
 
+#! Element type for a single detected barcode
+public class PdfCoBarcodeResultDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "Value": {
+                "type": StringOrNothingType,
+                "display_name": "Value",
+                "short_desc": "Decoded barcode content",
+                "desc": "The decoded barcode content as a string",
+            },
+            "TypeName": {
+                "type": StringOrNothingType,
+                "display_name": "Type Name",
+                "short_desc": "Human-readable barcode type",
+                "desc": "Human-readable barcode type (e.g. `QRCode`, `Code128`)",
+            },
+            "Type": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Type",
+                "short_desc": "Numeric barcode type code",
+                "desc": "Numeric code identifying the barcode type",
+            },
+            "Page": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Page",
+                "short_desc": "Page index where the barcode appears",
+                "desc": "Page index where the barcode appears (0-indexed)",
+            },
+            "Confidence": {
+                "type": SoftFloatOrNothingType,
+                "display_name": "Confidence",
+                "short_desc": "Detection confidence score",
+                "desc": "Detection confidence score in the `0`-`1` range",
+            },
+            "Rect": {
+                "type": StringOrNothingType,
+                "display_name": "Rectangle",
+                "short_desc": "Bounding-box coordinates",
+                "desc": "Bounding-box coordinates as a string of the form "
+                    "`{X=...,Y=...,Width=...,Height=...}`",
+            },
+            "File": {
+                "type": StringOrNothingType,
+                "display_name": "File",
+                "short_desc": "Source file URL",
+                "desc": "URL of the source file the barcode was read from",
+            },
+        };
+    }
+
+    constructor() : HashDataType("PdfCoBarcodeResult") {
+        addQoreFields(Fields);
+    }
+}
+
 #! Response data type for PDF.co barcode read operations
 public class PdfCoBarcodeReadResponseDataType inherits HashDataType {
     public {
         #! Field definitions for the barcode read response
         const Fields = {
             "barcodes": {
-                "type": SoftAutoListOrNothingType,
+                "type": new SoftListDataType("Barcodes", new PdfCoBarcodeResultDataType(), True),
                 "display_name": "Barcodes",
-                "short_desc": "List of detected barcodes with value, type, page, confidence, and position data",
-                "desc": "List of detected barcodes, each containing `Value`, `Type`, `Page`, "
-                    "`Confidence`, and position data (`Rect`)",
+                "short_desc": "List of detected barcodes",
+                "desc": "List of detected barcodes, each containing `Value`, `TypeName`, `Type`, "
+                    "`Page`, `Confidence`, and position data (`Rect`)",
             },
             "pageCount": {
                 "type": SoftIntOrNothingType,

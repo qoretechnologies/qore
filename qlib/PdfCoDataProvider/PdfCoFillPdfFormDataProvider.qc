@@ -51,7 +51,6 @@ public class PdfCoFillPdfFormRequestDataType inherits HashDataType {
                 "short_desc": "Form field name/value pairs to fill",
                 "desc": "Form field name/value pairs to fill in the PDF form",
                 "required": True,
-                "preselected": True,
             },
             "fieldsString": {
                 "type": StringOrNothingType,

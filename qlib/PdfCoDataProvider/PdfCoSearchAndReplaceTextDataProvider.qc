@@ -44,21 +44,43 @@ public class PdfCoSearchAndReplaceTextRequestDataType inherits HashDataType {
                 "desc": "URL to the source PDF file",
                 "required_groups": ("source",),
             },
-            "searchString": {
-                "type": StringType,
-                "display_name": "Search String",
-                "short_desc": "The text string to search for",
-                "desc": "The text string to search for",
+            "searchStrings": {
+                "type": new ListDataType("SearchStrings", SoftStringType, False),
+                "display_name": "Search Strings",
+                "short_desc": "Strings to search for in the PDF",
+                "desc": "Array of strings to search for in the PDF document. Each entry "
+                    "matches a corresponding entry in `replaceStrings` by index.",
                 "required": True,
-                "preselected": True,
+                "example_value": ("invoice number",),
             },
-            "replaceString": {
-                "type": StringType,
-                "display_name": "Replace String",
-                "short_desc": "The text string to replace matches with",
-                "desc": "The text string to replace matches with",
+            "replaceStrings": {
+                "type": new ListDataType("ReplaceStrings", SoftStringType, False),
+                "display_name": "Replace Strings",
+                "short_desc": "Replacement strings paired with searchStrings by index",
+                "desc": "Array of replacement strings paired with `searchStrings` by index. "
+                    "Must have the same number of entries as `searchStrings`.",
                 "required": True,
-                "preselected": True,
+                "example_value": ("INV-12345",),
+            },
+            "regex": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Regex",
+                "short_desc": "Interpret search strings as regular expressions",
+                "desc": "Set to `True` to interpret each entry in `searchStrings` as a regular "
+                    "expression (default: `False`)",
+            },
+            "caseSensitive": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Case Sensitive",
+                "short_desc": "Use case-sensitive matching",
+                "desc": "Set to `False` to disable case-sensitive matching (default: `True`)",
+            },
+            "replacementLimit": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Replacement Limit",
+                "short_desc": "Maximum number of replacements per search string",
+                "desc": "Maximum number of replacements to perform for each entry. `0` means "
+                    "unlimited (default: `0`).",
             },
             "pages": {
                 "type": StringOrNothingType,
@@ -71,6 +93,20 @@ public class PdfCoSearchAndReplaceTextRequestDataType inherits HashDataType {
                 "display_name": "Password",
                 "short_desc": "PDF file password",
                 "desc": "PDF file password if the document is protected",
+                "sensitive": True,
+            },
+            "httpusername": {
+                "type": StringOrNothingType,
+                "display_name": "HTTP Username",
+                "short_desc": "HTTP basic-auth username for the source URL",
+                "desc": "Username for HTTP basic-auth on a protected source URL",
+                "sensitive": True,
+            },
+            "httppassword": {
+                "type": StringOrNothingType,
+                "display_name": "HTTP Password",
+                "short_desc": "HTTP basic-auth password for the source URL",
+                "desc": "Password for HTTP basic-auth on a protected source URL",
                 "sensitive": True,
             },
             "async": {

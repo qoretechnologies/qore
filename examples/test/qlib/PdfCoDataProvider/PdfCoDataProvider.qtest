@@ -479,7 +479,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         assertEq("PdfCo", appInfo.name);
         assertEq("pdfco", appInfo.scheme);
 
-        # Verify all 27 actions are registered
+        # Verify all 26 actions are registered
         *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("PdfCo");
         hash<string, bool> actionMap;
         map actionMap{$1.action} = True, actions;

@@ -50,7 +50,6 @@ public class PdfCoAddPasswordRequestDataType inherits HashDataType {
                 "short_desc": "Owner password for full document control",
                 "desc": "Owner password for full document control (editing, printing permissions)",
                 "required": True,
-                "preselected": True,
                 "sensitive": True,
             },
             "userPassword": {
@@ -65,10 +64,69 @@ public class PdfCoAddPasswordRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Encryption Algorithm",
                 "short_desc": "Encryption algorithm to use",
-                "desc": "Encryption algorithm to use",
+                "desc": "Encryption algorithm to use (default: `AES_128bit`)",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "AES128", "desc": "AES 128-bit encryption"},
-                    <AllowedValueInfo>{"value": "AES256", "desc": "AES 256-bit encryption"},
+                    <AllowedValueInfo>{"value": "RC4_40bit", "desc": "RC4 40-bit (legacy)"},
+                    <AllowedValueInfo>{"value": "RC4_128bit", "desc": "RC4 128-bit (legacy)"},
+                    <AllowedValueInfo>{"value": "AES_128bit", "desc": "AES 128-bit (recommended)"},
+                    <AllowedValueInfo>{"value": "AES_256bit", "desc": "AES 256-bit"},
+                ),
+            },
+            "allowPrintDocument": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Allow Printing",
+                "short_desc": "Allow printing the document",
+                "desc": "Set to `True` to allow printing the document (requires `ownerPassword`)",
+            },
+            "allowFillForms": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Allow Filling Forms",
+                "short_desc": "Allow filling interactive form fields",
+                "desc": "Set to `True` to allow filling interactive form fields "
+                    "(requires `ownerPassword`)",
+            },
+            "allowModifyDocument": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Allow Modifying Document",
+                "short_desc": "Allow modifying the document",
+                "desc": "Set to `True` to allow modifying the document (requires `ownerPassword`)",
+            },
+            "allowContentExtraction": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Allow Content Extraction",
+                "short_desc": "Allow copying content from the document",
+                "desc": "Set to `True` to allow copying text and graphics from the document "
+                    "(requires `ownerPassword`)",
+            },
+            "allowModifyAnnotations": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Allow Modifying Annotations",
+                "short_desc": "Allow modifying annotations and forms",
+                "desc": "Set to `True` to allow interacting with annotations and form fields "
+                    "(requires `ownerPassword`)",
+            },
+            "allowAccessibilitySupport": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Allow Accessibility Support",
+                "short_desc": "Allow content extraction for accessibility",
+                "desc": "Set to `True` to allow content extraction for accessibility tools "
+                    "(requires `ownerPassword`)",
+            },
+            "allowAssemblyDocument": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Allow Assembling Document",
+                "short_desc": "Allow assembling the document",
+                "desc": "Set to `True` to allow inserting, rotating, or deleting pages and "
+                    "creating bookmarks and thumbnails (requires `ownerPassword`)",
+            },
+            "printQuality": {
+                "type": StringOrNothingType,
+                "display_name": "Print Quality",
+                "short_desc": "Maximum allowed print quality",
+                "desc": "Maximum allowed print quality (requires `ownerPassword`)",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "HighResolution", "desc": "High-resolution printing allowed"},
+                    <AllowedValueInfo>{"value": "LowResolution", "desc": "Low-resolution printing only"},
                 ),
             },
             "async": {

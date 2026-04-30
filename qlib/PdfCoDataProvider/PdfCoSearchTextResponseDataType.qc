@@ -25,16 +25,64 @@
 #! Contains all public definitions in the PdfCoDataProvider module
 public namespace PdfCoDataProvider {
 
+#! Element type for a single search-text match
+public class PdfCoSearchMatchDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "text": {
+                "type": StringOrNothingType,
+                "display_name": "Text",
+                "short_desc": "The matched text",
+                "desc": "The matched text from the search",
+            },
+            "left": {
+                "type": SoftFloatOrNothingType,
+                "display_name": "Left",
+                "short_desc": "Left coordinate of the match",
+                "desc": "Left coordinate of the match in points",
+            },
+            "top": {
+                "type": SoftFloatOrNothingType,
+                "display_name": "Top",
+                "short_desc": "Top coordinate of the match",
+                "desc": "Top coordinate of the match in points",
+            },
+            "width": {
+                "type": SoftFloatOrNothingType,
+                "display_name": "Width",
+                "short_desc": "Width of the bounding box",
+                "desc": "Width of the bounding box in points",
+            },
+            "height": {
+                "type": SoftFloatOrNothingType,
+                "display_name": "Height",
+                "short_desc": "Height of the bounding box",
+                "desc": "Height of the bounding box in points",
+            },
+            "pageIndex": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Page Index",
+                "short_desc": "Page index where the match was found",
+                "desc": "Page index where the match was found (0-indexed)",
+            },
+        };
+    }
+
+    constructor() : HashDataType("PdfCoSearchMatch") {
+        addQoreFields(Fields);
+    }
+}
+
 #! Response data type for the PDF.co search text action
 public class PdfCoSearchTextResponseDataType inherits HashDataType {
     public {
         #! Field definitions for the search text response
         const Fields = {
             "body": {
-                "type": AutoListOrNothingType,
+                "type": new SoftListDataType("SearchMatches", new PdfCoSearchMatchDataType(), True),
                 "display_name": "Search Results",
                 "short_desc": "List of found text occurrences with position data",
-                "desc": "List of found text occurrences, each containing the matched text "
+                "desc": "List of found text occurrences, each containing the matched `text` "
                     "and position coordinates (`left`, `top`, `width`, `height`, `pageIndex`)",
             },
             "pageCount": {

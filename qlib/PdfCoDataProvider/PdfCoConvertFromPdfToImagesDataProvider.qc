@@ -50,7 +50,6 @@ public class PdfCoConvertFromPdfToImagesRequestDataType inherits HashDataType {
                 "short_desc": "Image output format",
                 "desc": "Image output format",
                 "required": True,
-                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "jpg", "desc": "JPEG format"},
                     <AllowedValueInfo>{"value": "png", "desc": "PNG format"},

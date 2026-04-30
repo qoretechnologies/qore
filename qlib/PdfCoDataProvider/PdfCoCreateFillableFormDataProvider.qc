@@ -51,7 +51,6 @@ public class PdfCoCreateFillableFormRequestDataType inherits HashDataType {
                 "short_desc": "Form field definitions to add",
                 "desc": "Form field definitions to add to the PDF",
                 "required": True,
-                "preselected": True,
             },
             "password": {
                 "type": StringOrNothingType,

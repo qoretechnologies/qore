@@ -44,13 +44,40 @@ public class PdfCoSearchAndDeleteTextRequestDataType inherits HashDataType {
                 "desc": "URL to the source PDF file",
                 "required_groups": ("source",),
             },
-            "searchString": {
-                "type": StringType,
-                "display_name": "Search String",
-                "short_desc": "The text string to find and delete from the PDF",
-                "desc": "The text string to find and delete from the PDF",
+            "searchStrings": {
+                "type": new ListDataType("SearchStrings", SoftStringType, False),
+                "display_name": "Search Strings",
+                "short_desc": "Strings to find and delete from the PDF",
+                "desc": "Array of strings to find and delete from the PDF document",
                 "required": True,
-                "preselected": True,
+                "example_value": ("confidential",),
+            },
+            "regex": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Regex",
+                "short_desc": "Interpret search strings as regular expressions",
+                "desc": "Set to `True` to interpret each entry in `searchStrings` as a regular "
+                    "expression (default: `False`)",
+            },
+            "caseSensitive": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Case Sensitive",
+                "short_desc": "Use case-sensitive matching",
+                "desc": "Set to `False` to disable case-sensitive matching (default: `True`)",
+            },
+            "replacementLimit": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Replacement Limit",
+                "short_desc": "Maximum number of deletions per search string",
+                "desc": "Maximum number of deletions to perform for each entry. `0` means "
+                    "unlimited (default: `0`).",
+            },
+            "MakeUnsearchable": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Make Unsearchable",
+                "short_desc": "Replace pages with images so deleted text cannot be recovered",
+                "desc": "Set to `True` to make the output PDF unsearchable by replacing all pages "
+                    "with images so the deleted text cannot be recovered (default: `False`)",
             },
             "pages": {
                 "type": StringOrNothingType,
@@ -64,6 +91,26 @@ public class PdfCoSearchAndDeleteTextRequestDataType inherits HashDataType {
                 "short_desc": "PDF file password",
                 "desc": "PDF file password if the document is protected",
                 "sensitive": True,
+            },
+            "httpusername": {
+                "type": StringOrNothingType,
+                "display_name": "HTTP Username",
+                "short_desc": "HTTP basic-auth username for the source URL",
+                "desc": "Username for HTTP basic-auth on a protected source URL",
+                "sensitive": True,
+            },
+            "httppassword": {
+                "type": StringOrNothingType,
+                "display_name": "HTTP Password",
+                "short_desc": "HTTP basic-auth password for the source URL",
+                "desc": "Password for HTTP basic-auth on a protected source URL",
+                "sensitive": True,
+            },
+            "callback": {
+                "type": StringOrNothingType,
+                "display_name": "Callback URL",
+                "short_desc": "Webhook URL for async completion notification",
+                "desc": "Webhook URL that PDF.co calls when an async job completes",
             },
             "async": {
                 "type": SoftBoolOrNothingType,

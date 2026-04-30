@@ -50,7 +50,31 @@ public class PdfCoSearchTextRequestDataType inherits HashDataType {
                 "short_desc": "The text string to search for in the PDF",
                 "desc": "The text string to search for in the PDF",
                 "required": True,
-                "preselected": True,
+            },
+            "regexSearch": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Regex Search",
+                "short_desc": "Treat searchString as a regular expression",
+                "desc": "Set to `True` to interpret `searchString` as a regular expression "
+                    "(default: `False`)",
+            },
+            "wordMatchingMode": {
+                "type": StringOrNothingType,
+                "display_name": "Word Matching Mode",
+                "short_desc": "Word boundary matching mode",
+                "desc": "Word boundary matching mode for the search",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "None", "desc": "Exact substring match (default)"},
+                    <AllowedValueInfo>{"value": "SmartMatch", "desc": "Flexible word boundary match"},
+                    <AllowedValueInfo>{"value": "ExactMatch", "desc": "Strict whole-word match"},
+                ),
+            },
+            "inline": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Inline",
+                "short_desc": "Include results directly in the response",
+                "desc": "Set to `True` to include results directly in the response instead of "
+                    "uploading them to a URL",
             },
             "pages": {
                 "type": StringOrNothingType,

@@ -50,7 +50,6 @@ public class PdfCoRemovePasswordRequestDataType inherits HashDataType {
                 "short_desc": "Current password of the PDF document",
                 "desc": "The current password of the PDF document",
                 "required": True,
-                "preselected": True,
                 "sensitive": True,
             },
             "async": {

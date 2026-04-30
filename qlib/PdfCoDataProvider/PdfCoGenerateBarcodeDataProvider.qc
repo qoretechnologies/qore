@@ -35,12 +35,11 @@ public class PdfCoGenerateBarcodeRequestDataType inherits HashDataType {
                 "short_desc": "Barcode type to generate",
                 "desc": "Barcode type to generate",
                 "required": True,
-                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "QRCode", "desc": "QR Code"},
                     <AllowedValueInfo>{"value": "Code128", "desc": "Code 128"},
                     <AllowedValueInfo>{"value": "Code39", "desc": "Code 39"},
-                    <AllowedValueInfo>{"value": "Datamatrix", "desc": "Data Matrix"},
+                    <AllowedValueInfo>{"value": "DataMatrix", "desc": "Data Matrix"},
                     <AllowedValueInfo>{"value": "PDF417", "desc": "PDF417"},
                     <AllowedValueInfo>{"value": "EAN13", "desc": "EAN-13"},
                     <AllowedValueInfo>{"value": "EAN8", "desc": "EAN-8"},
@@ -54,7 +53,6 @@ public class PdfCoGenerateBarcodeRequestDataType inherits HashDataType {
                 "short_desc": "String value to encode",
                 "desc": "String value to encode inside the barcode",
                 "required": True,
-                "preselected": True,
             },
             "decorationImage": {
                 "type": StringOrNothingType,

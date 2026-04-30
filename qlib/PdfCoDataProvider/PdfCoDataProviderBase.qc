@@ -95,6 +95,49 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
         rest.setLogger(logger);
     }
 
+    #! Returns the supported reference data types for this provider
+    *hash<string, bool> getSupportedReferenceData() {
+        return {
+            "document_parser_templates": True,
+        };
+    }
+
+    #! Returns reference data of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when working with an app action
+
+        @return a list of allowed values for this data
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        switch (type) {
+            case "document_parser_templates":
+                return getReferenceDocumentParserTemplates();
+        }
+    }
+
+    #! Returns available document parser templates as reference data
+    private *list<hash<AllowedValueInfo>> getReferenceDocumentParserTemplates() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("pdf/documentparser/templates");
+            if (response.templates) {
+                foreach hash<auto> tpl in (response.templates) {
+                    string display_name = tpl.title ?? sprintf("Template %s", tpl.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": tpl.description ?? display_name,
+                        "desc": sprintf("%s (ID: %s, type: %s)", display_name, tpl.id,
+                            tpl.type ?? "unknown"),
+                        "value": int(tpl.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
+    }
+
     #! Uploads file content if provided, replacing it with a temporary URL
     /** If the request contains a \c file field (FileDataType hash with \c name, \c content,
         \c mime_type), uploads the file via the \c /file/upload/base64 endpoint and replaces

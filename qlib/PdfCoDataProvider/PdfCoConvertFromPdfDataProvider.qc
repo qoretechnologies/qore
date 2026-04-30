@@ -50,7 +50,6 @@ public class PdfCoConvertFromPdfRequestDataType inherits HashDataType {
                 "short_desc": "Output format for conversion",
                 "desc": "Output format for conversion",
                 "required": True,
-                "preselected": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "csv", "desc": "Convert to CSV format"},
                     <AllowedValueInfo>{"value": "json", "desc": "Convert to JSON format"},
