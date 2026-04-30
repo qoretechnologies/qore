@@ -301,6 +301,26 @@ public:
         nsl.reset();
     }
 
+    //! Returns true iff this namespace has no content.
+    /** Used to drop empty module-tagged stubs that arise when a child
+        Program inherits a parent namespace tree under parse options
+        (PO_NO_INHERIT_USER_CLASSES etc.) that strip every member of the
+        copied namespace.  Such empty stubs would otherwise shadow the
+        real module's namespace during get_module_root_ns lookup and
+        cause Java/Kotlin compiles to see 0 classes for the package.
+    */
+    DLLLOCAL bool isEmpty() const {
+        return classList.empty()
+            && hashDeclList.empty()
+            && enumList.empty()
+            && constant.empty()
+            && func_list.empty()
+            && var_list.vmap.empty()
+            && typedefMap.empty()
+            && nsl.empty()
+            && class_handler == nullptr;
+    }
+
     //! Recursively resolves cross-namespace parent hashdecl pointers in this namespace and all child namespaces
     /** This must be called after the entire namespace tree is constructed.
         @param root the root namespace to use for lookups
