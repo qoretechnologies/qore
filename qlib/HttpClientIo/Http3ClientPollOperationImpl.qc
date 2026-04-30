@@ -653,28 +653,20 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             sock.setPrivateKey(client_pk);
         }
 
-        int family = Http3ClientPollOperation::resolveAddressFamily(url_info.host);
+        int family = Http3ClientPollOperation::selectLocalBindFamily(url_info.host);
         string bind_addr = family == AF_INET6 ? "::" : "0.0.0.0";
         sock.bindINET(bind_addr, "0", True, family, SOCK_DGRAM);
 
         return sock;
     }
 
-    #! Internal: resolves the address family for a hostname
-    private static int resolveAddressFamily(string host) {
+    #! Internal: selects the local bind family without performing DNS
+    private static int selectLocalBindFamily(string host) {
         if (host =~ /^\[.*\]$/) {
             return AF_INET6;
         }
         if (host =~ /:/) {
             return AF_INET6;
-        }
-        try {
-            list<hash<auto>> addrs = getaddrinfo(host, NOTHING, AF_UNSPEC, AI_ADDRCONFIG);
-            if (addrs) {
-                return addrs[0].family;
-            }
-        } catch () {
-            # Fall back to IPv4 if resolution fails
         }
         return AF_INET;
     }

@@ -1229,8 +1229,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
             # We are the designated creator for this key.
             # Resolve protocol and check capacity under the write lock, then release
-            # it before creating the connection (constructor may call getaddrinfo()
-            # which can block)
+            # it before creating the connection.
             string protocol;
             {
                 AutoWriteLock al(pool_lock);
