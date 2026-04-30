@@ -39,12 +39,43 @@
 #include "qore/intern/QoreTimeZoneManager.h"
 #include "qore/QoreValue.h"
 
+#include <cstdio>
+
 // Forward declarations for recursive serialization functions
 // serializeIRFunction declared in QoreAOTBinary.h
 // deserializeIRFunction declared in QoreAOTBinary.h
 
 // Forward decl for getLocalTypePath
 const char* getLocalTypePath(const LocalVar* lv);
+
+static std::string formatAOTDateOffset(int utc_offset) {
+    char buf[16];
+    char sign = utc_offset < 0 ? '-' : '+';
+    int offset = utc_offset < 0 ? -utc_offset : utc_offset;
+    int hours = offset / 3600;
+    int minutes = (offset % 3600) / 60;
+    int seconds = offset % 60;
+    if (seconds) {
+        snprintf(buf, sizeof(buf), "%c%02d:%02d:%02d", sign, hours, minutes, seconds);
+    } else {
+        snprintf(buf, sizeof(buf), "%c%02d:%02d", sign, hours, minutes);
+    }
+    return buf;
+}
+
+static std::string getAOTDateZoneName(const AbstractQoreZoneInfo* zone) {
+    if (dynamic_cast<const QoreOffsetZoneInfo*>(zone)) {
+        return formatAOTDateOffset(AbstractQoreZoneInfo::getUTCOffset(zone));
+    }
+
+    const char* region = AbstractQoreZoneInfo::getRegionName(zone);
+    if (region && *region) {
+        return region;
+    }
+
+    int utc_offset = AbstractQoreZoneInfo::getUTCOffset(zone);
+    return utc_offset ? formatAOTDateOffset(utc_offset) : "UTC";
+}
 
 static const AbstractQoreZoneInfo* readAOTDateZone(const char* zone_name) {
     if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
@@ -377,10 +408,10 @@ static bool writeConst(AOTInstWriteCtx& ctx) {
                 ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_seconds));
                 ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_us));
             } else {
-                const char* zone_name = ci->constant.date_zone_set
-                    ? AbstractQoreZoneInfo::getRegionName(ci->constant.date_zone)
+                std::string zone_name = ci->constant.date_zone_set
+                    ? getAOTDateZoneName(ci->constant.date_zone)
                     : "";
-                ctx.writer.writeStringRef(zone_name ? zone_name : "");
+                ctx.writer.writeStringRef(zone_name.c_str());
             }
             break;
         case QoreIRConstant::Kind::Enum:

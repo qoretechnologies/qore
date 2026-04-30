@@ -170,6 +170,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure strip source date literal",
             \testClosureStripSourceDateLiteral());
         addTestCase("AOT UTC date literal zone", \testUTCDateLiteralZone());
+        addTestCase("AOT fixed-offset date literal zone", \testFixedOffsetDateLiteralZone());
         addTestCase("AOT strip source class cast lvalue",
             \testStripSourceClassCastLValue());
         addTestCase("AOT closure strip source logical and/or",
@@ -4653,6 +4654,26 @@ exit(0);
             "UTC date literal strip-source output matches interpreter");
         assertEq("20150830T123600Z\n", result.run_out,
             "UTC date literal preserves the explicit UTC zone");
+    }
+
+    testFixedOffsetDateLiteralZone() {
+        string code = "%modern
+string sub fixed_offset_date() {
+    date d = 2025-05-21T09:48:57+02:00;
+    return d.format(\"IF\");
+}
+
+printf(\"%s\\n\", fixed_offset_date());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "fixed-offset date literal strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "fixed-offset date literal strip-source output matches interpreter");
+        assertEq("2025-05-21T09:48:57+02:00\n", result.run_out,
+            "fixed-offset date literal preserves the explicit offset zone");
     }
 
     testStripSourceClassCastLValue() {

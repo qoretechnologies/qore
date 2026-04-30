@@ -83,6 +83,7 @@ static_assert(QORE_IR_MAX_OPCODE == 369,
 #include <limits>
 #include <llvm/Support/raw_ostream.h>
 
+#include <cstdio>
 #include <cstring>
 
 // NaN-boxing constants matching QoreValue.h
@@ -98,6 +99,35 @@ static constexpr uint64_t VAL_TRUE           = 0xFFFB000000000003ULL;
 // 48-bit signed integer range
 static constexpr int64_t INT48_MIN           = -(1LL << 47);
 static constexpr int64_t INT48_MAX           = (1LL << 47) - 1;
+
+static std::string formatLLVMDateOffset(int utc_offset) {
+    char buf[16];
+    char sign = utc_offset < 0 ? '-' : '+';
+    int offset = utc_offset < 0 ? -utc_offset : utc_offset;
+    int hours = offset / 3600;
+    int minutes = (offset % 3600) / 60;
+    int seconds = offset % 60;
+    if (seconds) {
+        snprintf(buf, sizeof(buf), "%c%02d:%02d:%02d", sign, hours, minutes, seconds);
+    } else {
+        snprintf(buf, sizeof(buf), "%c%02d:%02d", sign, hours, minutes);
+    }
+    return buf;
+}
+
+static std::string getLLVMDateZoneName(const AbstractQoreZoneInfo* zone) {
+    if (dynamic_cast<const QoreOffsetZoneInfo*>(zone)) {
+        return formatLLVMDateOffset(AbstractQoreZoneInfo::getUTCOffset(zone));
+    }
+
+    const char* region = AbstractQoreZoneInfo::getRegionName(zone);
+    if (region && *region) {
+        return region;
+    }
+
+    int utc_offset = AbstractQoreZoneInfo::getUTCOffset(zone);
+    return utc_offset ? formatLLVMDateOffset(utc_offset) : "UTC";
+}
 
 void QoreIRToLLVM::initTypes() {
     i64_type = llvm::Type::getInt64Ty(ctx);
@@ -9729,10 +9759,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* us_val = llvm::ConstantInt::get(i64_type, cinst->constant.date_microseconds);
             llvm::Value* rel_val = llvm::ConstantInt::get(i64_type,
                     cinst->constant.date_is_relative ? 1 : 0);
-            const char* zone_name = (!cinst->constant.date_is_relative && cinst->constant.date_zone_set)
-                ? AbstractQoreZoneInfo::getRegionName(cinst->constant.date_zone)
+            std::string zone_name = (!cinst->constant.date_is_relative && cinst->constant.date_zone_set)
+                ? getLLVMDateZoneName(cinst->constant.date_zone)
                 : "";
-            llvm::Value* zone_ptr = builder->CreateGlobalStringPtr(zone_name ? zone_name : "");
+            llvm::Value* zone_ptr = builder->CreateGlobalStringPtr(zone_name);
             auto helper = module.getOrInsertFunction("qore_rt_make_date_ex",
                     llvm::FunctionType::get(i64_type,
                         {i64_type, i64_type, ptr_type, i64_type, i64_type, i64_type, i64_type, i64_type, i64_type,

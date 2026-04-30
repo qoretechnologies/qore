@@ -79,7 +79,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v2: added BCA (Base Class Constructor Arguments) serialization for constructors
 //! v3: added timezone metadata for IR date constants
 //! v4: all serialized cast expression kinds carry their inner expression
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 4;
+//! v5: fixed-offset IR date constants serialize their UTC offset instead of an empty zone name
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 5;
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;

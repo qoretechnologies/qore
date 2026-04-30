@@ -82,7 +82,7 @@ protected:
     DLLLOCAL virtual int getUTCOffsetImpl(int64 epoch_offset, bool& is_dst, const char*& zone_name) const = 0;
 
     //! for creating offset zones
-    DLLLOCAL AbstractQoreZoneInfo(int n_utcoff, const std::string& n_name) : utcoff(n_utcoff), has_dst(false) {
+    DLLLOCAL AbstractQoreZoneInfo(int n_utcoff, const std::string& n_name) : name(n_name), utcoff(n_utcoff), has_dst(false) {
     }
 
 public:
