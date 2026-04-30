@@ -3632,6 +3632,11 @@ static bool qore_socket_object_exec_process_sse_char(my_socket_priv* priv, QoreS
 
 static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketObject* s, int timeout_ms,
         ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "readServerSentEvent", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
     if (!async_guard) {
@@ -3650,6 +3655,10 @@ static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketOb
         if (*xsink) {
             return nullptr;
         }
+        if (!data->size()) {
+            se_closed("Socket", "readServerSentEvent", xsink);
+            return nullptr;
+        }
         char c = *static_cast<const char*>(data->getPtr());
         if (qore_socket_object_exec_process_sse_char(priv, str, eol_count, c)) {
             break;
@@ -3661,6 +3670,11 @@ static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketOb
 
 static QoreHashNode* qore_socket_object_exec_read_server_sent_event_encoded(QoreSocketObject* s,
         const QoreStringNode* content_encoding, int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "readServerSentEvent", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     SimpleRefHolder<Transform> transform(CompressionTransforms::getDecompressor(content_encoding, xsink));
     if (*xsink) {
         return nullptr;
