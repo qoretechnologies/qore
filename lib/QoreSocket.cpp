@@ -373,7 +373,7 @@ public:
     DLLLOCAL QoreSocketRawAsyncIoGuard(qore_socket_private& priv, ExceptionSink* xsink, unsigned direction)
             : priv(priv), direction(direction & NB_ALL) {
         SocketSyncPoll::assertNotOnIoThread("Socket", "sync", xsink);
-        if (xsink && *xsink) {
+        if (qore_on_async_io_thread() || (xsink && *xsink)) {
             return;
         }
         active = this->direction && !priv.startAsyncSequenceIo(xsink, this->direction);

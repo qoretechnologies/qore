@@ -3262,7 +3262,7 @@ public:
     QoreSocketObjectAsyncIoGuard(my_socket_priv& priv, ExceptionSink* xsink, unsigned direction)
             : priv(priv), direction(direction) {
         SocketSyncPoll::assertNotOnIoThread("Socket", "sync", xsink);
-        if (xsink && *xsink) {
+        if (qore_on_async_io_thread() || (xsink && *xsink)) {
             return;
         }
         AutoLocker al(priv.m);
