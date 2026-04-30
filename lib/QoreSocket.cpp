@@ -126,6 +126,50 @@ void se_closed(const char* cname, const char* mname, ExceptionSink* xsink) {
     xsink->raiseException("SOCKET-CLOSED", "error in %s::%s(): remote end closed the connection", cname, mname);
 }
 
+static int qore_socket_plain_data_available(qore_socket_private* priv, const char* mname, ExceptionSink* xsink) {
+    unsigned loop = 0;
+    while (true) {
+        char c;
+        ssize_t rc = ::recv(priv->sock, &c, 1, MSG_PEEK | MSG_DONTWAIT);
+        if (rc > 0) {
+            return 1;
+        }
+        if (rc == 0) {
+            priv->close();
+            se_closed("Socket", mname, xsink);
+            return -1;
+        }
+
+        int e = sock_get_error();
+        if (e == EINTR) {
+            if (++loop >= max_nonblock_ops) {
+                return 0;
+            }
+            continue;
+        }
+        if (e == EAGAIN
+#ifdef EWOULDBLOCK
+                || e == EWOULDBLOCK
+#endif
+                ) {
+            return 0;
+        }
+
+        xsink->raiseErrnoException("SOCKET-RECV-ERROR", e, "error while executing Socket::%s()", mname);
+        return -1;
+    }
+}
+
+static bool qore_socket_is_accepting(qore_socket_private* priv) {
+#ifdef SO_ACCEPTCONN
+    int val = 0;
+    socklen_t len = sizeof(val);
+    return !getsockopt(priv->sock, SOL_SOCKET, SO_ACCEPTCONN, (GETSOCKOPT_ARG_4)&val, &len) && val;
+#else
+    return false;
+#endif
+}
+
 static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
@@ -418,13 +462,27 @@ public:
             return getSocketPollInfoHash(xsink, rc);
         }
 
-        if (!waiting) {
-            waiting = true;
-            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        if (qore_socket_is_accepting(priv)) {
+            if (!waiting) {
+                waiting = true;
+                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+            }
+
+            ready = true;
+            return nullptr;
         }
 
-        ready = true;
-        return nullptr;
+        int data_available = qore_socket_plain_data_available(priv, "isDataAvailable", xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (data_available > 0) {
+            ready = true;
+            return nullptr;
+        }
+
+        waiting = true;
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
     }
 
     DLLLOCAL virtual QoreValue getOutput() const override {
@@ -10631,13 +10689,28 @@ QoreHashNode* SocketDataAvailablePollOperation::continuePoll(ExceptionSink* xsin
         return getSocketPollInfoHash(xsink, rc);
     }
 
-    if (!waiting) {
-        waiting = true;
-        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    if (qore_socket_is_accepting(sp)) {
+        if (!waiting) {
+            waiting = true;
+            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        }
+
+        complete(true);
+        return nullptr;
     }
 
-    complete(true);
-    return nullptr;
+    int data_available = qore_socket_plain_data_available(sp, "isDataAvailable", xsink);
+    if (*xsink) {
+        complete(false);
+        return nullptr;
+    }
+    if (data_available > 0) {
+        complete(true);
+        return nullptr;
+    }
+
+    waiting = true;
+    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
 }
 
 SocketSendPollOperation::SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock)

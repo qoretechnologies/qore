@@ -170,6 +170,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("concurrent sync send/recv test", \concurrentSyncSendRecvTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
+        addTestCase("isDataAvailable close test", \isDataAvailableCloseTest());
         addTestCase("poll test", \pollTest());
         addTestCase("tls13 test", \tls13Test());
         addTestCase("connection ID", \connectionIdTest());
@@ -913,6 +914,30 @@ class SocketTest inherits QUnit::Test {
 
         string str0 = s2.recv(-1);
         assertEq(str, str0);
+    }
+
+    isDataAvailableCloseTest() {
+        Socket server();
+
+        if (server.bind("127.0.0.1:0", True)) {
+            throw "SOCKET-BIND-ERROR", strerror();
+        }
+        server.listen();
+        int port = server.getSocketInfo().port;
+        Counter cnt(1);
+
+        background sub () {
+            on_exit cnt.dec();
+            Socket client();
+            client.connect("127.0.0.1:" + port, 10s);
+            client.close();
+        }();
+
+        Socket peer = server.accept(10s);
+        assertThrows("SOCKET-CLOSED", sub () {
+            peer.isDataAvailable(5s);
+        });
+        cnt.waitForZero(5s);
     }
 
     pollTest() {
