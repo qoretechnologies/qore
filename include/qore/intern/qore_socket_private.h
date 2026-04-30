@@ -115,6 +115,8 @@ DLLLOCAL int sock_get_error();
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,
     const char* service, int family = Q_AF_UNSPEC, int flags = 0, int socktype = Q_SOCK_STREAM,
     int protocol = 0, int timeout_ms = -1);
+DLLLOCAL QoreHashNode* qore_socket_resolve_hostbyaddr_asyncio(ExceptionSink* xsink,
+    const struct sockaddr_storage& addr, socklen_t len, int timeout_ms = -1);
 DLLLOCAL void qore_socket_error(ExceptionSink* xsink, const char* err, const char* cdesc, const char* mname = nullptr,
     const char* host = nullptr, const char* svc = nullptr, const struct sockaddr *addr = nullptr);
 DLLLOCAL void qore_socket_error_intern(int rc, ExceptionSink* xsink, const char* err, const char* cdesc,

@@ -48,6 +48,9 @@
 #include <sys/param.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
 #ifdef __linux__
 #include <poll.h>
 #include <spawn.h>
@@ -203,6 +206,85 @@ static QoreHashNode* q_gethostbyname_to_hash_asyncio(const char* host) {
     rh->setKeyValueIntern("addresses", addresses.release());
 
     return result.release();
+}
+
+static int q_gethost_lookup_family(int type) {
+    if (type >= 0) {
+        return type;
+    }
+
+    switch (type) {
+        case Q_AF_UNSPEC:
+            return AF_UNSPEC;
+        case Q_AF_INET6:
+            return AF_INET6;
+    }
+
+    return AF_INET;
+}
+
+static int q_gethostbyaddr_sockaddr(ExceptionSink* xsink, const char* addr, int type,
+        struct sockaddr_storage& sa, socklen_t& len) {
+    type = q_gethost_lookup_family(type);
+    memset(&sa, 0, sizeof(sa));
+
+    void* dst = nullptr;
+    if (type == AF_INET) {
+        struct sockaddr_in* in = reinterpret_cast<struct sockaddr_in*>(&sa);
+        in->sin_family = AF_INET;
+        dst = &in->sin_addr;
+        len = sizeof(struct sockaddr_in);
+    } else if (type == AF_INET6) {
+        struct sockaddr_in6* in6 = reinterpret_cast<struct sockaddr_in6*>(&sa);
+        in6->sin6_family = AF_INET6;
+        dst = &in6->sin6_addr;
+        len = sizeof(struct sockaddr_in6);
+    } else {
+        xsink->raiseException("GETHOSTBYADDR-ERROR",
+            "%d is an invalid address type (valid types are AF_INET=%d, AF_INET6=%d)", type, AF_INET, AF_INET6);
+        return -1;
+    }
+
+    int rc = inet_pton(type, addr, dst);
+    if (rc == 0) {
+        xsink->raiseException("GETHOSTBYADDR-ERROR", "'%s' is not a valid address for %s addresses", addr,
+            type == AF_INET ? "AF_INET (IPv4)" : "AF_INET6 (IPv6)");
+        return -1;
+    }
+    if (rc < 0) {
+        return -1;
+    }
+
+    return type;
+}
+
+static QoreStringNode* q_gethostbyaddr_to_string_asyncio(ExceptionSink* xsink, const char* addr, int type) {
+    struct sockaddr_storage sa;
+    socklen_t len = 0;
+    if (q_gethostbyaddr_sockaddr(xsink, addr, type, sa, len) < 0) {
+        return nullptr;
+    }
+
+    ExceptionSink lookup_xsink;
+    ReferenceHolder<QoreHashNode> result(qore_socket_resolve_hostbyaddr_asyncio(&lookup_xsink, sa, len),
+        &lookup_xsink);
+    if (lookup_xsink || !result) {
+        lookup_xsink.clear();
+        return nullptr;
+    }
+
+    const QoreStringNode* name = q_get_hash_string_value(**result, "name");
+    return name ? name->stringRefSelf() : nullptr;
+}
+
+static QoreHashNode* q_gethostbyaddr_to_hash_asyncio(ExceptionSink* xsink, const char* addr, int type) {
+    struct sockaddr_storage sa;
+    socklen_t len = 0;
+    if (q_gethostbyaddr_sockaddr(xsink, addr, type, sa, len) < 0) {
+        return nullptr;
+    }
+
+    return qore_socket_resolve_hostbyaddr_asyncio(xsink, sa, len);
 }
 
 /** @defgroup library_option_constants Qore Library Option Constants
@@ -1277,6 +1359,8 @@ nothing gethostbyname() [flags=RUNTIME_NOOP] {
 
     @return the official hostname corresponding to the network addressed passed as an argument
 
+    @note delegates to the global async I/O controller and blocks until the async reverse DNS lookup completes
+
     @par Example:
     @code{.py}
 *string hostname = gethostbyaddr("192.168.0.33");
@@ -1289,7 +1373,7 @@ if (!exists hostname)
     @see gethostbyaddr_long() for a version of this function that returns all host information, including all hostname aliases and all addresses
  */
 *string gethostbyaddr(string addr, softint type = AF_INET) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyaddr_to_string(xsink, addr->c_str(), type);
+   return q_gethostbyaddr_to_string_asyncio(xsink, addr->c_str(), type);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1333,6 +1417,8 @@ nothing gethostbyname_long() [flags=RUNTIME_NOOP] {
 
     @return @ref host_information_hash "a hash" representing all host and address information corresponding to the address and address type passed as arguments
 
+    @note delegates to the global async I/O controller and blocks until the async reverse DNS lookup completes
+
     @par Example:
     @code{.py}
 *hash<auto> ah = gethostbyaddr_long("192.168.0.33");
@@ -1345,7 +1431,7 @@ if (!ah)
     @see gethostbyaddr() for a simpler version of this function that returns just a single hostname for the address
  */
 *hash<auto> gethostbyaddr_long(string addr, softint type = AF_INET) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyaddr_to_hash(xsink, addr->c_str(), type);
+   return q_gethostbyaddr_to_hash_asyncio(xsink, addr->c_str(), type);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments

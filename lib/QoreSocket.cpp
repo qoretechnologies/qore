@@ -5938,6 +5938,351 @@ QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const c
     return rv.release().get<QoreListNode>();
 }
 
+struct SocketResolvedHostByAddrInfo {
+    int family = AF_UNSPEC;
+    int length = 0;
+    int status = ARES_SUCCESS;
+    std::string name;
+    std::vector<std::string> aliases;
+    std::vector<std::string> addresses;
+};
+
+static QoreHashNode* qore_socket_resolved_hostbyaddr_to_hash(const SocketResolvedHostByAddrInfo& info) {
+    if (info.name.empty()) {
+        return nullptr;
+    }
+
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    qore_hash_private* hh = qore_hash_private::get(*h);
+
+    hh->setKeyValueIntern("name", new QoreStringNode(info.name));
+
+    QoreListNode* aliases = new QoreListNode(stringTypeInfo);
+    for (const std::string& alias : info.aliases) {
+        aliases->push(new QoreStringNode(alias), nullptr);
+    }
+    hh->setKeyValueIntern("aliases", aliases);
+
+    switch (info.family) {
+        case AF_INET:
+            hh->setKeyValueIntern("typename", new QoreStringNode("ipv4"));
+            hh->setKeyValueIntern("type", AF_INET);
+            hh->setKeyValueIntern("len", info.length ? info.length : 4);
+            break;
+        case AF_INET6:
+            hh->setKeyValueIntern("typename", new QoreStringNode("ipv6"));
+            hh->setKeyValueIntern("type", AF_INET6);
+            hh->setKeyValueIntern("len", info.length ? info.length : 16);
+            break;
+        default:
+            hh->setKeyValueIntern("typename", new QoreStringNode("unknown"));
+            break;
+    }
+
+    QoreListNode* addresses = new QoreListNode(stringTypeInfo);
+    for (const std::string& address : info.addresses) {
+        addresses->push(new QoreStringNode(address), nullptr);
+    }
+    hh->setKeyValueIntern("addresses", addresses);
+
+    return h;
+}
+
+class QoreCaresHostByAddrResolver {
+public:
+    DLLLOCAL QoreCaresHostByAddrResolver(const struct sockaddr_storage& addr, socklen_t len)
+            : addr(addr), len(len) {
+        info.family = addr.ss_family;
+    }
+
+    DLLLOCAL ~QoreCaresHostByAddrResolver() {
+        if (channel) {
+            ares_destroy(channel);
+            channel = nullptr;
+        }
+    }
+
+    DLLLOCAL int continuePoll(ExceptionSink* xsink) {
+        if (!started && start(xsink)) {
+            return -1;
+        }
+        if (done) {
+            return 0;
+        }
+
+        process();
+        return done ? 0 : 1;
+    }
+
+    DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const {
+        if (!channel || done) {
+            return;
+        }
+
+        for (auto& [fd, events] : fd_events) {
+            fds.push_back({fd, events});
+        }
+    }
+
+    DLLLOCAL int getPollTimeoutMs() const {
+        if (!channel || done) {
+            return -1;
+        }
+        struct timeval tv;
+        struct timeval* tvp = ares_timeout(channel, nullptr, &tv);
+        if (!tvp) {
+            return -1;
+        }
+        int64_t ms = static_cast<int64_t>(tvp->tv_sec) * 1000 + (tvp->tv_usec + 999) / 1000;
+        return ms <= 0 ? 1 : static_cast<int>(std::min<int64_t>(ms, INT_MAX));
+    }
+
+    DLLLOCAL const SocketResolvedHostByAddrInfo& getInfo() const {
+        return info;
+    }
+
+private:
+    DLLLOCAL int start(ExceptionSink* xsink) {
+        if (qore_cares_library_init(xsink)) {
+            return -1;
+        }
+
+        if (addr.ss_family != AF_INET && addr.ss_family != AF_INET6) {
+            xsink->raiseException("GETHOSTBYADDR-ERROR", "invalid address family for reverse lookup: %d",
+                addr.ss_family);
+            return -1;
+        }
+
+        struct ares_options options = {};
+        options.sock_state_cb = sockStateCallback;
+        options.sock_state_cb_data = this;
+
+        int rc = ares_init_options(&channel, &options, ARES_OPT_SOCK_STATE_CB);
+        if (rc != ARES_SUCCESS) {
+            xsink->raiseException("GETHOSTBYADDR-ERROR", "ares_init_options() failed: %s", ares_strerror(rc));
+            return -1;
+        }
+
+        void* raw_addr = qore_get_in_addr(reinterpret_cast<struct sockaddr*>(&addr));
+        info.length = addr.ss_family == AF_INET ? sizeof(struct in_addr) : sizeof(struct in6_addr);
+
+        char ifname[INET6_ADDRSTRLEN];
+        if (inet_ntop(addr.ss_family, raw_addr, ifname, sizeof(ifname))) {
+            info.addresses.push_back(ifname);
+        }
+
+        started = true;
+        ares_gethostbyaddr(channel, raw_addr, info.length, addr.ss_family, callback, this);
+        return 0;
+    }
+
+    DLLLOCAL void process() {
+        std::vector<std::pair<int, int>> fds;
+        getExtraFds(fds);
+        if (fds.empty()) {
+            ares_process_fd(channel, ARES_SOCKET_BAD, ARES_SOCKET_BAD);
+            return;
+        }
+
+        for (auto& [fd, events] : fds) {
+            ares_socket_t rfd = (events & SOCK_POLLIN) ? fd : ARES_SOCKET_BAD;
+            ares_socket_t wfd = (events & SOCK_POLLOUT) ? fd : ARES_SOCKET_BAD;
+            ares_process_fd(channel, rfd, wfd);
+            if (done) {
+                break;
+            }
+        }
+    }
+
+    DLLLOCAL void complete(int new_status, struct hostent* he) {
+        info.status = new_status;
+        if (info.status == ARES_SUCCESS && he) {
+            info.family = he->h_addrtype;
+            info.length = he->h_length;
+            if (he->h_name && *he->h_name) {
+                info.name = he->h_name;
+            }
+            if (he->h_aliases) {
+                for (char** a = he->h_aliases; *a; ++a) {
+                    info.aliases.push_back(*a);
+                }
+            }
+            if (he->h_addr_list) {
+                std::vector<std::string> addresses;
+                char buf[INET6_ADDRSTRLEN];
+                for (char** a = he->h_addr_list; *a; ++a) {
+                    if (inet_ntop(he->h_addrtype, *a, buf, sizeof(buf))) {
+                        addresses.push_back(buf);
+                    }
+                }
+                if (!addresses.empty()) {
+                    info.addresses = std::move(addresses);
+                }
+            }
+        }
+        done = true;
+    }
+
+    DLLLOCAL void updateFd(ares_socket_t socket_fd, int readable, int writable) {
+        int events = 0;
+        if (readable) {
+            events |= SOCK_POLLIN;
+        }
+        if (writable) {
+            events |= SOCK_POLLOUT;
+        }
+        int fd = static_cast<int>(socket_fd);
+        if (events) {
+            fd_events[fd] = events;
+        } else {
+            fd_events.erase(fd);
+        }
+    }
+
+    DLLLOCAL static void callback(void* arg, int status, int, struct hostent* he) {
+        reinterpret_cast<QoreCaresHostByAddrResolver*>(arg)->complete(status, he);
+    }
+
+    DLLLOCAL static void sockStateCallback(void* arg, ares_socket_t socket_fd, int readable, int writable) {
+        reinterpret_cast<QoreCaresHostByAddrResolver*>(arg)->updateFd(socket_fd, readable, writable);
+    }
+
+    struct sockaddr_storage addr = {};
+    socklen_t len = 0;
+    ares_channel_t* channel = nullptr;
+    std::unordered_map<int, int> fd_events;
+    SocketResolvedHostByAddrInfo info;
+    bool started = false;
+    bool done = false;
+};
+
+class QoreSocketControllerResolveHostByAddrPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketControllerResolveHostByAddrPollOperation(const struct sockaddr_storage& addr, socklen_t len)
+            : addr(addr), len(len) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+        if (!resolver) {
+            resolver = std::make_unique<QoreCaresHostByAddrResolver>(addr, len);
+        }
+
+        int rc = resolver->continuePoll(xsink);
+        if (*xsink || rc < 0) {
+            done = true;
+            resolver.reset();
+            return nullptr;
+        }
+        if (rc) {
+            return getResolverPollInfo(xsink);
+        }
+
+        info = resolver->getInfo();
+        resolver.reset();
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return done && info.status == ARES_SUCCESS ? qore_socket_resolved_hostbyaddr_to_hash(info) : QoreValue();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        if (done) {
+            return "done";
+        }
+        return resolver ? "resolving-hostbyaddr" : "starting-hostbyaddr";
+    }
+
+    DLLLOCAL int getStatus() const {
+        return info.status;
+    }
+
+private:
+    DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const {
+        std::vector<std::pair<int, int>> extra_fds;
+        resolver->getExtraFds(extra_fds);
+        QoreHashNode* rv = getSocketPollInfoHash(xsink, 0, extra_fds);
+        if (*xsink) {
+            return nullptr;
+        }
+        int poll_timeout_ms = resolver->getPollTimeoutMs();
+        rv->setKeyValue("poll_timeout_ms", poll_timeout_ms >= 0 ? poll_timeout_ms : 1, xsink);
+        return rv;
+    }
+
+    struct sockaddr_storage addr = {};
+    socklen_t len = 0;
+    std::unique_ptr<QoreCaresHostByAddrResolver> resolver;
+    SocketResolvedHostByAddrInfo info;
+    bool done = false;
+};
+
+QoreHashNode* qore_socket_resolve_hostbyaddr_asyncio(ExceptionSink* xsink, const struct sockaddr_storage& addr,
+        socklen_t len, int timeout_ms) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(
+        new QoreSocketControllerResolveHostByAddrPollOperation(addr, len), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreEventNotifier> notifier_holder(new QoreEventNotifier(xsink), xsink);
+    if (*xsink || !notifier_holder->isValid()) {
+        return nullptr;
+    }
+    QoreEventNotifier* notifier_raw = *notifier_holder;
+    notifier_raw->ref();
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder), xsink);
+    poller_holder->setSelf(*op_obj);
+    QoreSocketControllerResolveHostByAddrPollOperation* poller =
+        static_cast<QoreSocketControllerResolveHostByAddrPollOperation*>(*poller_holder);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("resolve-hostbyaddr"), xsink);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        qore_socket_exec_poll_operation(*sock_obj, *notifier_holder, *op_obj, timeout_ms, "resolveHostByAddr",
+            xsink),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ValueHolder rv(poller->getOutput(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (rv->isNothing()) {
+        xsink->raiseException("GETHOSTBYADDR-ERROR", "gethostbyaddr() failed: %s",
+            ares_strerror(poller->getStatus()));
+        return nullptr;
+    }
+    if (rv->getType() != NT_HASH) {
+        xsink->raiseException("GETHOSTBYADDR-ERROR", "expected a hash from async reverse address resolution, got '%s'",
+            rv->getFullTypeName());
+        return nullptr;
+    }
+    return rv.release().get<QoreHashNode>();
+}
+
 QoreCaresNameInfoResolver::QoreCaresNameInfoResolver(const struct sockaddr_storage& addr, socklen_t len, int flags)
         : addr(addr), len(len), flags(flags) {
 }
