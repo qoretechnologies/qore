@@ -65,6 +65,19 @@ uint64_t qore_rt_sub_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 //! Multiply two QoreValues with dynamic type dispatch
 uint64_t qore_rt_mul_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 
+//! Add two QoreValues with compound-assignment dynamic dispatch
+uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+
+//! Subtract two QoreValues with compound-assignment dynamic dispatch
+uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+
+//! Multiply two QoreValues with compound-assignment dynamic dispatch
+uint64_t qore_rt_mul_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
+
+uint64_t qore_rt_add_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_sub_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
+uint64_t qore_rt_mul_assign_any_throwing(uint64_t left, uint64_t right, ExceptionSink* xsink);
+
 //! Divide two QoreValues with dynamic type dispatch
 uint64_t qore_rt_div_any(uint64_t left, uint64_t right, ExceptionSink* xsink);
 

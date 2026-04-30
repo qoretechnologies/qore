@@ -235,6 +235,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_mul_any(uint64_t left, uint64_t right, Exc
     return toBits(result);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_add_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::AddAssignAny, lv, rv, xsink);
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_sub_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::SubAssignAny, lv, rv, xsink);
+    return toBits(result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_mul_assign_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    QoreValue lv = fromBits(left);
+    QoreValue rv = fromBits(right);
+    QoreValue result = QoreIRInterpreter::evalBinary(QoreIROpcode::MulAssignAny, lv, rv, xsink);
+    return toBits(result);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_div_any(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
@@ -11117,9 +11138,9 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_ternary_op_throw
     return result;
 }
 
-// add_any/sub_any/mul_any/div_any/mod_any: used by emitAnyArithFastPath +
-// emitAnyCompoundAssignFastPath on the slow path when operands aren't both
-// int48 or both float.
+// add_any/sub_any/mul_any/div_any/mod_any: used by emitAnyArithFastPath.
+// Compound assignment has separate helpers because its dynamic semantics can
+// differ from plain binary operations (for example timeout +=/-= date).
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_add_any_throwing(
         uint64_t left, uint64_t right, ExceptionSink* xsink) {
     uint64_t result = qore_rt_add_any(left, right, xsink);
@@ -11141,6 +11162,33 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_sub_any_throwing
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_mul_any_throwing(
         uint64_t left, uint64_t right, ExceptionSink* xsink) {
     uint64_t result = qore_rt_mul_any(left, right, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_add_assign_any_throwing(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_add_assign_any(left, right, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_sub_assign_any_throwing(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_sub_assign_any(left, right, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_mul_assign_any_throwing(
+        uint64_t left, uint64_t right, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_mul_assign_any(left, right, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

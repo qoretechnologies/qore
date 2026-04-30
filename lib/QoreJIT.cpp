@@ -227,6 +227,12 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any));
     addSymbol("qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any));
     addSymbol("qore_rt_mul_any", reinterpret_cast<void*>(&qore_rt_mul_any));
+    addSymbol("qore_rt_add_assign_any", reinterpret_cast<void*>(&qore_rt_add_assign_any));
+    addSymbol("qore_rt_sub_assign_any", reinterpret_cast<void*>(&qore_rt_sub_assign_any));
+    addSymbol("qore_rt_mul_assign_any", reinterpret_cast<void*>(&qore_rt_mul_assign_any));
+    addSymbol("qore_rt_add_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_add_assign_any_throwing));
+    addSymbol("qore_rt_sub_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_sub_assign_any_throwing));
+    addSymbol("qore_rt_mul_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_mul_assign_any_throwing));
     addSymbol("qore_rt_div_any", reinterpret_cast<void*>(&qore_rt_div_any));
     addSymbol("qore_rt_mod_any", reinterpret_cast<void*>(&qore_rt_mod_any));
     addSymbol("qore_rt_div_int", reinterpret_cast<void*>(&qore_rt_div_int));

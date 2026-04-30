@@ -12454,7 +12454,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCompoundAssignFastPath(
                 llvm::Instruction::Add, llvm::Instruction::FAdd,
-                "qore_rt_add_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, true);
+                "qore_rt_add_assign_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, true);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -12468,7 +12468,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCompoundAssignFastPath(
                 llvm::Instruction::Sub, llvm::Instruction::FSub,
-                "qore_rt_sub_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, false);
+                "qore_rt_sub_assign_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, false);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -12482,7 +12482,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitAnyCompoundAssignFastPath(
                 llvm::Instruction::Mul, llvm::Instruction::FMul,
-                "qore_rt_mul_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, false);
+                "qore_rt_mul_assign_any", inst, lhs_boxed, rhs_boxed, llvm_func, module, false);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
