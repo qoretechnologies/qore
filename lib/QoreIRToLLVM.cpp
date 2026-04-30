@@ -8728,28 +8728,34 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         // === Rethrow ===
         case QoreIROpcode::Rethrow: {
             const auto* rethrow_inst = static_cast<const QoreIRThrowInstruction*>(inst);
-            if (!rethrow_inst->operands.empty()) {
-                // Rethrow with args: replaceTop() + rethrow + catch_end
-                llvm::Value* args_val = getVal(rethrow_inst->operands[0].id, error);
-                if (!args_val) {
-                    return false;
+            int catch_cleanup_start = 0;
+            if (!rethrow_inst->synthetic) {
+                if (!rethrow_inst->operands.empty()) {
+                    // Rethrow with args: replaceTop() + rethrow + catch_end
+                    llvm::Value* args_val = getVal(rethrow_inst->operands[0].id, error);
+                    if (!args_val) {
+                        return false;
+                    }
+                    args_val = boxValue(args_val, rethrow_inst->operands[0].id);
+                    auto rethrow_args_helper = module.getOrInsertFunction("qore_rt_rethrow_with_args",
+                            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                    builder->CreateCall(rethrow_args_helper, {args_val, xsink_arg});
+                } else {
+                    // Plain rethrow: copy exception from td->catchException into xsink,
+                    // clean up catch scope.  qore_rt_rethrow() handles 1 catch scope.
+                    auto rethrow_helper = module.getOrInsertFunction("qore_rt_rethrow",
+                            llvm::FunctionType::get(void_type, {ptr_type}, false));
+                    builder->CreateCall(rethrow_helper, {xsink_arg});
                 }
-                args_val = boxValue(args_val, rethrow_inst->operands[0].id);
-                auto rethrow_args_helper = module.getOrInsertFunction("qore_rt_rethrow_with_args",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-                builder->CreateCall(rethrow_args_helper, {args_val, xsink_arg});
-            } else {
-                // Plain rethrow: copy exception from td->catchException into xsink,
-                // clean up catch scope.  qore_rt_rethrow() handles 1 catch scope.
-                auto rethrow_helper = module.getOrInsertFunction("qore_rt_rethrow",
-                        llvm::FunctionType::get(void_type, {ptr_type}, false));
-                builder->CreateCall(rethrow_helper, {xsink_arg});
+                catch_cleanup_start = 1;
             }
-            // Clean up additional catch scopes beyond the innermost one
-            if (rethrow_inst->catch_depth > 1) {
+            // Synthetic rethrows (foreach/context cleanup) only propagate the
+            // exception already in xsink.  They must not read td->catchException,
+            // but still need to release any catch scopes recorded on the IR node.
+            if (rethrow_inst->catch_depth > catch_cleanup_start) {
                 auto catch_end_helper = module.getOrInsertFunction("qore_rt_catch_end",
                         llvm::FunctionType::get(void_type, {ptr_type}, false));
-                for (int i = 1; i < rethrow_inst->catch_depth; ++i) {
+                for (int i = catch_cleanup_start; i < rethrow_inst->catch_depth; ++i) {
                     builder->CreateCall(catch_end_helper, {xsink_arg});
                 }
             }
@@ -14460,7 +14466,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     "qore_rt_ref_foreach_cleanup_throwing", rfc_ft);
             emitMaybeInvoke(helper, helper_throwing,
                     {state_val, xsink_arg}, module, llvm_func, inst);
-            emitExceptionCheck(module, llvm_func, inst);
+            // Cleanup is also used while an exception is already pending in
+            // xsink.  Match the IR interpreter: do not short-circuit after the
+            // helper, so the following synthetic rethrow can route the pending
+            // exception to the enclosing handler.
             return true;
         }
 
