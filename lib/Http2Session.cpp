@@ -93,9 +93,14 @@ static bool http2_poll_exception_is(const QoreHashNode& ex, const char* err) {
 class Http2SocketControllerPollable : public AbstractPollableIoObjectBase {
 public:
     DLLLOCAL Http2SocketControllerPollable(qore_socket_private* sock) : sock(sock) {
+        sock->ref();
         QoreString tmp;
         qore_get_ptr_hash(tmp, sock);
         identity_hash = tmp.c_str();
+    }
+
+    DLLLOCAL ~Http2SocketControllerPollable() {
+        sock->deref();
     }
 
     DLLLOCAL virtual int getPollableDescriptor() const override {
