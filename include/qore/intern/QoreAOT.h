@@ -464,6 +464,18 @@ DLLLOCAL bool qore_is_aot_user_module(const char* name);
 */
 DLLLOCAL QoreProgram* qore_aot_get_module_pgm(const char* name);
 
+//! Encodes a class reference for AOT metadata.
+/** Module-originated classes include the owning module name so runtime
+    resolution can fall back to the module-private program when the class was
+    not imported into the target program (for example private helper classes
+    referenced by public module methods).
+ */
+DLLLOCAL std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo = false);
+
+//! Resolves a class reference emitted by qore_aot_encode_class_ref().
+DLLLOCAL const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
+        const char* class_ref, bool pseudo = false);
+
 //! Clears namespace/global/static data for all registered AOT user modules.
 /** AOT user modules are loaded as binary modules, so they are skipped by
     QoreModuleManager::delUser().  This helper lets shutdown clear their global

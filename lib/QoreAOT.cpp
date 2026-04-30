@@ -174,6 +174,27 @@ extern void collectAllStatementLocals(const StatementBlock* block, std::vector<L
 extern void removeBlockLocalsFromBodyLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, const UserSignature* sig);
 
+static constexpr const char* AOT_CLASS_REF_MODULE_PREFIX = "@qore-module:";
+
+std::string qore_aot_encode_class_ref(const QoreClass* qc, bool pseudo) {
+    if (!qc) {
+        return std::string();
+    }
+
+    std::string path = pseudo ? qc->getPath() : qc->getNamespacePath();
+    const qore_class_private* qcp = qore_class_private::get(*qc);
+    const char* module = qcp ? qcp->getModuleName() : nullptr;
+    if (!module || !*module) {
+        return path;
+    }
+
+    std::string rv(AOT_CLASS_REF_MODULE_PREFIX);
+    rv += module;
+    rv += '\n';
+    rv += path;
+    return rv;
+}
+
 //! AOT compile-time optimization Phase 1: emit_debug_info flag.
 //! Returns true if DWARF debug info should be emitted (default: true).
 //! Opt-out via QORE_AOT_NO_DEBUG_INFO=1 (qcc --strip-debug-info flag sets this).
@@ -1715,6 +1736,25 @@ static AOTConstantReverseMap buildConstantReverseMap(qore_ns_private* root_ns) {
     return crm;
 }
 
+static void collectLocalModuleRoots(std::vector<std::pair<std::string, qore_ns_private*>>& roots,
+        const std::unordered_set<std::string>& local_module_names, qore_ns_private* root_ns) {
+    for (const std::string& mod : local_module_names) {
+        QoreProgram* module_pgm = MM.findUserModuleProgram(mod.c_str());
+        if (!module_pgm) {
+            continue;
+        }
+        RootQoreNamespace* module_root = module_pgm->getRootNS();
+        if (!module_root) {
+            continue;
+        }
+        qore_ns_private* module_root_priv = qore_ns_private::get(*module_root);
+        if (module_root_priv == root_ns) {
+            continue;
+        }
+        roots.emplace_back(mod, module_root_priv);
+    }
+}
+
 static std::string makeAOTConstantFQN(const std::string& container_path, const std::string& item_name) {
     return container_path.empty() ? item_name : container_path + "::" + item_name;
 }
@@ -2142,7 +2182,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 }
             }
 
-            ++total_funcs;
             const char* fname = func->getName();
             std::string function_name;
             ns->getPath(function_name);
@@ -2156,6 +2195,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             if (!compiled_keys->insert(variant_key).second) {
                 continue;
             }
+            ++total_funcs;
             QoreIRFunction* ir_func = nullptr;
             std::string lower_error;
             int rc = tryLowerFunction(uvb, function_name.c_str(), pgm, ir_func, lower_error, func);
@@ -2447,7 +2487,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     continue;
                 }
 
-                ++total_funcs;
                 // Strip leading :: from class_path if present (getPath() returns ::ClassName)
                 const char* class_name = class_path;
                 if (class_name[0] == ':' && class_name[1] == ':') {
@@ -2466,6 +2505,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 if (!compiled_keys->insert(variant_key).second) {
                     continue;
                 }
+                ++total_funcs;
                 QoreIRFunction* ir_func = nullptr;
                 std::string lower_error;
                 int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
@@ -2658,6 +2698,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             AOTCompiledInitFunc::TargetType target_type,
             const std::string& container_path, const std::string& item_name) {
         if (fatal_error && !fatal_error->empty()) {
+            return;
+        }
+        if (!compiled_keys->insert(init_name).second) {
             return;
         }
         QoreIRFunction* ir_func = nullptr;
@@ -3644,21 +3687,36 @@ bool QoreAOT::compile(QoreProgram* pgm,
     extractAllDependencies(source_text, source_len, nullptr, &local_module_names,
         &local_module_paths, label);
     filterLoadableLocalModules(local_module_names, local_module_paths, pp);
+    std::vector<std::pair<std::string, qore_ns_private*>> local_module_roots;
+    collectLocalModuleRoots(local_module_roots, local_module_names, root_ns);
 
     // Build reverse map from constant value pointers to fully-qualified names
     // for serializing QoreObject/complex constant references in expression trees
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
+    for (auto& root : local_module_roots) {
+        buildConstantReverseMapImpl(root.second, const_reverse_map);
+    }
 
     // Pass "" as compile_module to filter out module-originated functions/classes;
     // module functions are available at runtime via runTimeLoadModule().  Relative
     // %requires modules are embedded in the executable instead, so compile the
     // same local-module keep set that serialization keeps below.
     std::string fatal_lowering_error;
+    std::set<std::string> compiled_keys;
     compileNamespaceFunctions(root_ns, pgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
-        total_ir_insts_all, &const_reverse_map, nullptr, "",
+        total_ir_insts_all, &const_reverse_map, &compiled_keys, "",
         nullptr, false, nullptr, nullptr, &fatal_lowering_error,
         local_module_names.empty() ? nullptr : &local_module_names);
+    for (auto& root : local_module_roots) {
+        compileNamespaceFunctions(root.second, pgm, ctx, *module, di_builder, di_cu,
+            compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
+            total_ir_insts_all, &const_reverse_map, &compiled_keys, root.first.c_str(),
+            nullptr, false, nullptr, nullptr, &fatal_lowering_error, nullptr);
+        if (!fatal_lowering_error.empty()) {
+            break;
+        }
+    }
     if (!fatal_lowering_error.empty()) {
         error = fatal_lowering_error;
         return false;
@@ -10454,7 +10512,7 @@ class ExprTreeSerializer {
         // StaticClassVarRefNode: namespace-qualified ClassName::var
         if (auto* scv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_VAR));
-            writeStr(scv->qc.getNamespacePath());
+            writeStr(qore_aot_encode_class_ref(&scv->qc));
             writeStr(scv->str);
             writeU16(0);
             return true;
@@ -10552,11 +10610,7 @@ class ExprTreeSerializer {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SELF_CALL));
             const QoreMethod* method = sfc->getMethod();
             const QoreClass* qc = method ? method->getClass() : sfc->getClass();
-            // getNamespacePath() walks the live namespace tree so classes
-            // whose qpp `ns=` annotation doesn't match the actual runtime
-            // location (e.g. astparser's `ns=astparser` but installed
-            // under ::Qore) resolve correctly.
-            writeStr(qc ? qc->getNamespacePath() : std::string());
+            writeStr(qore_aot_encode_class_ref(qc));
             // Strip class prefix from method name if present
             // (e.g., "LoggerWrapper::debug" → "debug")
             const char* mname = sfc->getName();
@@ -10580,8 +10634,7 @@ class ExprTreeSerializer {
             const QoreMethod* method = smc->getMethod();
             if (method) {
                 const QoreClass* qc = method->getClass();
-                // See SelfFunctionCallNode note re: getNamespacePath().
-                writeStr(qc ? qc->getNamespacePath() : std::string());
+                writeStr(qore_aot_encode_class_ref(qc));
             } else {
                 writeStr("");
             }
@@ -10604,9 +10657,8 @@ class ExprTreeSerializer {
             MethodCallNode* mc = de->getMethodCall();
             writeStr(mc ? mc->getName() : "");
             // Serialize class path for method resolution at deserialization time
-            // (see SelfFunctionCallNode for getNamespacePath() rationale).
             const QoreClass* dot_qc = mc ? mc->getClass() : nullptr;
-            writeStr(dot_qc ? dot_qc->getNamespacePath() : std::string());
+            writeStr(qore_aot_encode_class_ref(dot_qc, mc && mc->isPseudo()));
             writeU8(mc && mc->isPseudo() ? 1 : 0);
             // children[0] = target expression, [1..] = args
             size_t count_pos = buf.size();
@@ -10631,8 +10683,7 @@ class ExprTreeSerializer {
         if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NEW));
             const QoreClass* qc = no->getClass();
-            // See SelfFunctionCallNode note re: getNamespacePath().
-            writeStr(qc ? qc->getNamespacePath() : std::string());
+            writeStr(qore_aot_encode_class_ref(qc));
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t arg_count = 0;
@@ -10647,8 +10698,7 @@ class ExprTreeSerializer {
         // ScopedObjectCallNode: new Namespace::ClassName(args)
         if (auto* so = dynamic_cast<const ScopedObjectCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SCOPED_NEW));
-            // See SelfFunctionCallNode note re: getNamespacePath().
-            writeStr(so->oc ? so->oc->getNamespacePath() : std::string());
+            writeStr(qore_aot_encode_class_ref(so->oc));
             size_t count_pos = buf.size();
             writeU16(0);
             uint16_t arg_count = 0;
@@ -11232,8 +11282,7 @@ class ExprTreeSerializer {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_BOUND_METH_REF));
             const QoreMethod* method = mcr->getMethod();
             const QoreClass* qc = method ? method->getClass() : nullptr;
-            // See SelfFunctionCallNode note re: getNamespacePath().
-            writeStr(qc ? qc->getNamespacePath() : std::string());
+            writeStr(qore_aot_encode_class_ref(qc));
             writeStr(method ? method->getName() : "");
             writeU16(0);
             return true;
@@ -11242,8 +11291,7 @@ class ExprTreeSerializer {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_STATIC_METH_REF));
             const QoreMethod* method = scr->getMethod();
             const QoreClass* qc = method ? method->getClass() : nullptr;
-            // See SelfFunctionCallNode note re: getNamespacePath().
-            writeStr(qc ? qc->getNamespacePath() : std::string());
+            writeStr(qore_aot_encode_class_ref(qc));
             writeStr(method ? method->getName() : "");
             writeU16(0);
             return true;
@@ -11419,6 +11467,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.kind = AOTExprKind::CONST_NOTHING;
             return id;
         }
+        if (v.isNull()) {
+            id.kind = AOTExprKind::CONST_NULL;
+            return id;
+        }
         id.kind = AOTExprKind::GENERIC_EVAL;
         id.ref1 = "unsupported non-node expression type ";
         id.ref1 += std::to_string(static_cast<int>(v.getType()));
@@ -11468,8 +11520,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // declaring method class for inherited/self and explicit base calls.
         const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
         if (qc) {
-            // See NewObjectCallNode note re: getNamespacePath().
-            id.ref1 = qc->getNamespacePath();
+            id.ref1 = qore_aot_encode_class_ref(qc);
         }
         // Preserve the full method name including any class prefix for base class calls
         // (e.g., "AbstractDataField::getExampleValue" stays qualified so that the NamedScope
@@ -11486,8 +11537,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (method) {
             const QoreClass* qc = method->getClass();
             if (qc) {
-                // See NewObjectCallNode note re: getNamespacePath().
-                id.ref1 = qc->getNamespacePath();
+                id.ref1 = qore_aot_encode_class_ref(qc);
             }
         }
         id.ref2 = call->getName();
@@ -11508,14 +11558,15 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
         id.kind = AOTExprKind::NEW_OBJECT;
         const QoreClass* qc = no->getClass();
-        // getNamespacePath() walks the live namespace tree (vs
+        // qore_aot_encode_class_ref() preserves module-private ownership and
+        // otherwise uses getNamespacePath(), which walks the live namespace tree (vs
         // getPath() which returns the qpp-baked-in path — stale for
         // classes whose module installs the ns as a child of Qore,
         // e.g. astparser's AstParser lives at Qore::astparser::AstParser
         // but getPath() returns "::astparser::AstParser").  No leading
         // `::` so the runtime resolver uses priority-1 (from Qore) +
         // priority-2 (closest-to-root) fallback semantics.
-        id.ref1 = qc ? qc->getNamespacePath() : "";
+        id.ref1 = qore_aot_encode_class_ref(qc);
         // Variant signature for runtime disambiguation
         const auto* variant = no->getVariant();
         if (variant && variant->getSignature()) {
@@ -11546,9 +11597,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
         if (qc) {
             id.kind = AOTExprKind::NEW_OBJECT;
-            // See the NewObjectCallNode branch above for why this uses
-            // getNamespacePath() rather than getPath().
-            id.ref1 = qc->getNamespacePath();
+            id.ref1 = qore_aot_encode_class_ref(qc);
             const auto* variant = vrn->getVariant();
             if (variant && variant->getSignature()) {
                 auto* sig = variant->getSignature();
@@ -12049,8 +12098,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* sc = dynamic_cast<const ScopedObjectCallNode*>(node)) {
         id.kind = AOTExprKind::SCOPED_NEW_OBJECT;
         if (sc->oc) {
-            // See NewObjectCallNode note re: getNamespacePath().
-            id.ref1 = sc->oc->getNamespacePath();
+            id.ref1 = qore_aot_encode_class_ref(sc->oc);
         }
         const auto* variant = sc->getVariant();
         if (variant && variant->getSignature()) {
@@ -12072,8 +12120,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // StaticClassVarRefNode: static class variable reference
     if (auto* sv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
         id.kind = AOTExprKind::STATIC_VARREF;
-        // See NewObjectCallNode note re: getNamespacePath().
-        id.ref1 = sv->qc.getNamespacePath();
+        id.ref1 = qore_aot_encode_class_ref(&sv->qc);
         id.ref2 = sv->str;
         return id;
     }
@@ -12091,16 +12138,14 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             // Pseudo-classes are not attached to the namespace tree, so
             // getNamespacePath() can be empty. Serialize their constructor
             // path so the runtime pseudo-class resolver can recover qc/method.
-            id.ref1 = qc ? (mc->isPseudo() ? qc->getPath() : qc->getNamespacePath()) : "";
+            id.ref1 = qore_aot_encode_class_ref(qc, mc->isPseudo());
             const QoreMethod* method = mc->getMethod();
             id.ref2 = method ? method->getName() : (mc->getName() ? mc->getName() : "");
             if (const AbstractQoreFunctionVariant* variant = mc->getVariant()) {
                 if (AbstractFunctionSignature* sig = variant->getSignature()) {
                     const QoreClass* variant_class = variant->getClass();
                     id.ref2.append("\n");
-                    id.ref2.append(variant_class
-                        ? (mc->isPseudo() ? variant_class->getPath() : variant_class->getNamespacePath())
-                        : "");
+                    id.ref2.append(qore_aot_encode_class_ref(variant_class, mc->isPseudo()));
                     id.ref2.append("\n");
                     id.ref2.append(sig->getSignatureText());
                 }
@@ -12128,7 +12173,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::CAST_CLASS;
         // See NewObjectCallNode note re: getNamespacePath(); "object" is
         // the generic cast<object>(...) sentinel when there is no class.
-        id.ref1 = cast_qc ? cast_qc->getNamespacePath() : "object";
+        id.ref1 = cast_qc ? qore_aot_encode_class_ref(cast_qc) : "object";
         id.flags = cc->isOrNothing() ? 1 : 0;
         return id;
     }
@@ -12162,8 +12207,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::BOUND_METHOD_REF;
         const QoreMethod* method = mcr->getMethod();
         const QoreClass* qc = method ? method->getClass() : nullptr;
-        // See NewObjectCallNode note re: getNamespacePath().
-        id.ref1 = qc ? qc->getNamespacePath() : "";
+        id.ref1 = qore_aot_encode_class_ref(qc);
         id.ref2 = method ? method->getName() : "";
         return id;
     }
@@ -12171,8 +12215,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::STATIC_METHOD_REF;
         const QoreMethod* method = scr->getMethod();
         const QoreClass* qc = method ? method->getClass() : nullptr;
-        // See NewObjectCallNode note re: getNamespacePath().
-        id.ref1 = qc ? qc->getNamespacePath() : "";
+        id.ref1 = qore_aot_encode_class_ref(qc);
         id.ref2 = method ? method->getName() : "";
         return id;
     }

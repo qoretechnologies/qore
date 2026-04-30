@@ -200,6 +200,8 @@ extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, 
 // Defined in QoreAOT.cpp - generates unique variant key with parameter types
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
 
+static std::string describeAOTClassRef(const char* class_ref);
+
 static const AbstractQoreZoneInfo* runtimeReadAOTDateZone(const char* zone_name) {
     if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
         return nullptr;
@@ -373,11 +375,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 return 0;
             }
             // Look up class, then find static method
-            const qore_ns_private* found_ns = nullptr;
-            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *pp->RootNS, ref1, found_ns);
+            const QoreClass* qc = qore_aot_resolve_class_ref(pgm, ref1, false);
             if (!qc) {
-                printd(0, "AOT v2: cannot resolve class '%s' for static method '%s'\n", ref1, ref2);
+                std::string class_desc = describeAOTClassRef(ref1);
+                printd(0, "AOT v2: cannot resolve class '%s' for static method '%s'\n",
+                    class_desc.c_str(), ref2);
                 return 0;
             }
             const QoreMethod* m = qc->findStaticMethod(ref2);
@@ -411,14 +413,12 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             // Look up class, then find method
             const QoreClass* qc = nullptr;
             if (ref1 && *ref1) {
-                const qore_ns_private* found_ns = nullptr;
-                // Strip leading :: from class path (compile vs runtime namespace prefix)
-                const char* class_path = (ref1[0] == ':' && ref1[1] == ':') ? ref1 + 2 : ref1;
-                qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+                qc = qore_aot_resolve_class_ref(pgm, ref1, false);
             }
             if (!qc) {
+                std::string class_desc = describeAOTClassRef(ref1);
                 printd(1, "AOT SLOT: cannot resolve class '%s' for self method '%s'\n",
-                    ref1 ? ref1 : "(null)", ref2);
+                    class_desc.c_str(), ref2);
                 return 0;
             }
             if (!strcmp(ref2, "copy")) {
@@ -446,13 +446,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            // Strip leading :: from class path (compile vs runtime namespace prefix)
-            const char* class_path = (ref1[0] == ':' && ref1[1] == ':') ? ref1 + 2 : ref1;
-            const qore_ns_private* found_ns = nullptr;
-            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *pp->RootNS, class_path, found_ns);
+            const QoreClass* qc = qore_aot_resolve_class_ref(pgm, ref1, false);
             if (!qc) {
-                printd(0, "AOT v2: cannot resolve class '%s' for new object\n", ref1);
+                std::string class_desc = describeAOTClassRef(ref1);
+                printd(0, "AOT v2: cannot resolve class '%s' for new object\n",
+                    class_desc.c_str());
                 return 0;
             }
             const QoreMethod* cons = qc->getConstructor();
@@ -483,11 +481,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            const qore_ns_private* found_ns = nullptr;
-            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *pp->RootNS, ref1, found_ns);
+            const QoreClass* qc = qore_aot_resolve_class_ref(pgm, ref1, false);
             if (!qc) {
-                printd(0, "AOT v2: cannot resolve class '%s' for scoped new object\n", ref1);
+                std::string class_desc = describeAOTClassRef(ref1);
+                printd(0, "AOT v2: cannot resolve class '%s' for scoped new object\n",
+                    class_desc.c_str());
                 return 0;
             }
             ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, nullptr);
@@ -557,13 +555,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !ref2) {
                 return 0;
             }
-            // Strip leading :: from class path (compile vs runtime namespace prefix)
-            const char* class_path = (ref1[0] == ':' && ref1[1] == ':') ? ref1 + 2 : ref1;
-            const qore_ns_private* found_ns = nullptr;
-            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *pp->RootNS, class_path, found_ns);
+            const QoreClass* qc = qore_aot_resolve_class_ref(pgm, ref1, false);
             if (!qc) {
-                printd(0, "AOT v2: cannot resolve class '%s' for static var '%s'\n", ref1, ref2);
+                std::string class_desc = describeAOTClassRef(ref1);
+                printd(0, "AOT v2: cannot resolve class '%s' for static var '%s'\n",
+                    class_desc.c_str(), ref2);
                 return 0;
             }
             // Walk the class hierarchy to find the static member.  Source code like
@@ -730,11 +726,11 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
                 auto* node = new QoreClassCastOperatorNode(&loc_builtin, nullptr, QoreValue(), or_nothing);
                 return toBitsNB(QoreValue(node));
             }
-            const qore_ns_private* found_ns = nullptr;
-            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *pp->RootNS, ref1, found_ns);
+            const QoreClass* qc = qore_aot_resolve_class_ref(pgm, ref1, false);
             if (!qc) {
-                printd(0, "AOT v2: cannot resolve class '%s' for cast\n", ref1);
+                std::string class_desc = describeAOTClassRef(ref1);
+                printd(0, "AOT v2: cannot resolve class '%s' for cast\n",
+                    class_desc.c_str());
                 return 0;
             }
             auto* node = new QoreClassCastOperatorNode(&loc_builtin, qc, QoreValue(), or_nothing);
@@ -808,6 +804,83 @@ static const QoreClass* findPseudoClassByPath(const char* path) {
     return nullptr;
 }
 
+static constexpr const char* AOT_CLASS_REF_MODULE_PREFIX = "@qore-module:";
+static constexpr size_t AOT_CLASS_REF_MODULE_PREFIX_LEN = 13;
+
+struct AOTClassRef {
+    const char* path = nullptr;
+    const char* module = nullptr;
+    std::string path_storage;
+    std::string module_storage;
+};
+
+static AOTClassRef decodeAOTClassRef(const char* class_ref) {
+    AOTClassRef ref;
+    if (!class_ref) {
+        return ref;
+    }
+
+    if (!strncmp(class_ref, AOT_CLASS_REF_MODULE_PREFIX,
+            AOT_CLASS_REF_MODULE_PREFIX_LEN)) {
+        const char* module_start = class_ref + AOT_CLASS_REF_MODULE_PREFIX_LEN;
+        const char* sep = strchr(module_start, '\n');
+        if (sep) {
+            ref.module_storage.assign(module_start, sep - module_start);
+            ref.path_storage.assign(sep + 1);
+            ref.module = ref.module_storage.c_str();
+            ref.path = ref.path_storage.c_str();
+            return ref;
+        }
+    }
+
+    ref.path = class_ref;
+    return ref;
+}
+
+static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
+        const char* class_path, bool pseudo) {
+    if (!pgm || !class_path || !*class_path) {
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+        *pp->RootNS, class_path, found_ns);
+    if (!qc && class_path[0] == ':' && class_path[1] == ':') {
+        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS,
+            class_path + 2, found_ns);
+    }
+    if (!qc && pseudo) {
+        qc = findPseudoClassByPath(class_path);
+    }
+    return qc;
+}
+
+const QoreClass* qore_aot_resolve_class_ref(QoreProgram* pgm,
+        const char* class_ref, bool pseudo) {
+    AOTClassRef ref = decodeAOTClassRef(class_ref);
+    const QoreClass* qc = resolveAOTClassRefInProgram(pgm, ref.path, pseudo);
+    if (qc || !ref.module || !*ref.module) {
+        return qc;
+    }
+
+    QoreProgram* module_pgm = MM.findUserModuleProgram(ref.module);
+    return resolveAOTClassRefInProgram(module_pgm, ref.path, pseudo);
+}
+
+static std::string describeAOTClassRef(const char* class_ref) {
+    AOTClassRef ref = decodeAOTClassRef(class_ref);
+    if (!ref.module || !*ref.module) {
+        return ref.path ? ref.path : "(null)";
+    }
+    std::string rv(ref.path ? ref.path : "(null)");
+    rv += " [module ";
+    rv += ref.module;
+    rv += "]";
+    return rv;
+}
+
 struct AOTEncodedMethodRef {
     const char* method_name = nullptr;
     const char* variant_class_path = nullptr;
@@ -843,16 +916,7 @@ struct AOTEncodedMethodRef {
 };
 
 static const QoreClass* findAOTClassByPath(QoreProgram* pgm, const char* class_path, bool pseudo) {
-    if (!pgm || !class_path || !*class_path) {
-        return nullptr;
-    }
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
-    if (!qc && pseudo) {
-        qc = findPseudoClassByPath(class_path);
-    }
-    return qc;
+    return qore_aot_resolve_class_ref(pgm, class_path, pseudo);
 }
 
 static bool splitAOTStaticVarPath(const std::string& full_name, std::string& class_path,
@@ -1411,9 +1475,7 @@ class ExprTreeDeserializer {
         if (name.empty()) {
             return nullptr;
         }
-        qore_program_private* pp = qore_program_private::get(*pgm);
-        const qore_ns_private* found_ns = nullptr;
-        return qore_root_ns_private::runtimeFindClass(*pp->RootNS, name.c_str(), found_ns);
+        return qore_aot_resolve_class_ref(pgm, name.c_str(), false);
     }
 
     //! Deserialize a single QoreValue from the blob
@@ -1741,10 +1803,29 @@ static QoreAOTContext* buildContextFromSlotMap(
     };
     std::vector<DeferredExprTree> deferred_expr_trees;
     bool closure_ir_missing = false;
+    struct ExprUnsupportedTraceGuard {
+        bool enabled;
+        const char* func_name;
+        int slot;
+        uint8_t kind_byte;
+        const char* kind_name;
+        uint8_t& has_unsupported;
+        uint8_t initially_unsupported;
+
+        ~ExprUnsupportedTraceGuard() {
+            if (enabled && !initially_unsupported && has_unsupported) {
+                fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] kind=%s(%u) marked unsupported\n",
+                    func_name, slot, kind_name ? kind_name : "UNKNOWN", kind_byte);
+            }
+        }
+    };
     for (int i = 0; i < num_exprs; ++i) {
         const uint8_t* before_expr = ptr;  // Track ptr position for validation
         uint8_t kind_byte = QoreAOTBinaryReader::readU8(ptr);
         AOTExprKind kind = static_cast<AOTExprKind>(kind_byte);
+        const auto* expr_kind_info = getAOTExprKindInfo(kind_byte);
+        const char* expr_kind_name = expr_kind_info && expr_kind_info->name
+            ? expr_kind_info->name : "UNKNOWN";
         const char* ref1 = nullptr;
         const char* ref2 = nullptr;
 
@@ -1754,12 +1835,14 @@ static QoreAOTContext* buildContextFromSlotMap(
             printd(2, "AOT buildCtx '%s': unsupported kind_byte=%d at expr slot %d\n",
                 name, kind_byte, i);
             if (trace_slot_reg) {
-                fprintf(stderr, "[aot-slot-reg] '%s': unsupported expr kind byte %u at slot %d\n",
-                    name, kind_byte, i);
+                fprintf(stderr, "[aot-slot-reg] '%s': unsupported expr kind byte %u (%s) at slot %d\n",
+                    name, kind_byte, expr_kind_name, i);
             }
             has_unsupported = true;
             break;
         }
+        ExprUnsupportedTraceGuard unsupported_trace{
+            trace_slot_reg, name, i, kind_byte, expr_kind_name, has_unsupported, has_unsupported};
 
         switch (kind) {
             case AOTExprKind::NEW_OBJECT:
@@ -1773,9 +1856,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const QoreClass* qc = nullptr;
                 const AbstractQoreFunctionVariant* resolved_variant = nullptr;
                 if (ref1 && *ref1) {
-                    const qore_ns_private* found_ns = nullptr;
-                    qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, ref1, found_ns);
+                    qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc && ref2 && *ref2) {
                         // Match variant by signature
                         const QoreMethod* cons = qc->getConstructor();
@@ -1802,8 +1883,13 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                 }
                 if (!qc) {
+                    std::string class_desc = describeAOTClassRef(ref1);
                     printd(0, "AOT v2: cannot resolve class '%s' for new object\n",
-                        ref1 ? ref1 : "(null)");
+                        class_desc.c_str());
+                    if (trace_slot_reg) {
+                        fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] %s cannot resolve class '%s' variant='%s'\n",
+                            name, i, expr_kind_name, class_desc.c_str(), ref2 ? ref2 : "");
+                    }
                     has_unsupported = true;
                     continue;
                 }
@@ -2104,9 +2190,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ref2 = reader.readStringRef(ptr);   // method_name
                 const QoreMethod* method = nullptr;
                 if (ref1 && *ref1) {
-                    const qore_ns_private* found_ns = nullptr;
-                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, ref1, found_ns);
+                    const QoreClass* qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc && ref2 && *ref2) {
                         method = qc->findMethod(ref2);
                         if (!method) {
@@ -2130,9 +2214,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ref2 = reader.readStringRef(ptr);   // method_name
                 const QoreMethod* method = nullptr;
                 if (ref1 && *ref1) {
-                    const qore_ns_private* found_ns = nullptr;
-                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, ref1, found_ns);
+                    const QoreClass* qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc && ref2 && *ref2) {
                         method = qc->findStaticMethod(ref2);
                         if (!method) {
@@ -2252,9 +2334,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 // Resolve class and method, create node with args
                 if (ref1 && method_name) {
-                    const qore_ns_private* found_ns = nullptr;
-                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, ref1, found_ns);
+                    const QoreClass* qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc) {
                         const QoreMethod* m = qc->findStaticMethod(method_name);
                         if (!m) {
@@ -3071,9 +3151,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Resolve class for method context
                 const QoreClass* closure_class = nullptr;
                 if (class_type_path && *class_type_path) {
-                    const qore_ns_private* found_ns = nullptr;
-                    closure_class = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, class_type_path, found_ns);
+                    closure_class = qore_aot_resolve_class_ref(pgm, class_type_path, false);
                 }
 
                 // Construct UserClosureFunction + UserClosureVariant FIRST
@@ -3337,6 +3415,9 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::CONST_NOTHING:
                 ctx->exprs[i] = toBitsNB(QoreValue());
+                continue;
+            case AOTExprKind::CONST_NULL:
+                ctx->exprs[i] = toBitsNB(QoreValue(null()));
                 continue;
             case AOTExprKind::CALL_REF:
             case AOTExprKind::OBJ_METHOD_REF:
@@ -4365,12 +4446,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             const QoreMethod* method = nullptr;
             const QoreClass* qc = nullptr;
             if (class_path && *class_path) {
-                qore_program_private* pp = qore_program_private::get(*pgm);
-                const qore_ns_private* found_ns = nullptr;
-                qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
-                if (!qc) {
-                    qc = findPseudoClassByPath(class_path);
-                }
+                qc = findAOTClassByPath(pgm, class_path, true);
                 if (qc && method_name && *method_name) {
                     method = qc->findMethod(method_name);
                     if (!method) {
@@ -4405,12 +4481,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             const QoreMethod* method = nullptr;
             const QoreClass* qc = nullptr;
             if (class_path && *class_path) {
-                qore_program_private* pp = qore_program_private::get(*pgm);
-                const qore_ns_private* found_ns = nullptr;
-                qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
-                if (!qc) {
-                    qc = findPseudoClassByPath(class_path);
-                }
+                qc = findAOTClassByPath(pgm, class_path, true);
                 if (qc && method_name && *method_name) {
                     method = qc->findMethod(method_name);
                     if (!method) {
@@ -4439,9 +4510,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
 
             const QoreMethod* method = nullptr;
             if (class_path && *class_path) {
-                qore_program_private* pp = qore_program_private::get(*pgm);
-                const qore_ns_private* found_ns = nullptr;
-                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+                const QoreClass* qc = findAOTClassByPath(pgm, class_path, false);
                 if (qc && method_name && *method_name) {
                     method = qc->findStaticMethod(method_name);
                 }

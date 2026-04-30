@@ -252,7 +252,8 @@ static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
-        ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
+        std::string class_ref = qore_aot_encode_class_ref(qc);
+        ctx.writer.writeStringRef(class_ref.c_str());
         ctx.writer.writeStringRef(call->getName());
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -306,11 +307,9 @@ static QoreValue read_expr_self_method_call(AOTExprReadCtx& ctx) {
     if (last_sep && last_sep > method_ref && *(last_sep - 1) == ':') {
         method_name = last_sep + 1;
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
     const QoreClass* qc = nullptr;
     if (class_path && *class_path) {
-        const qore_ns_private* found_ns = nullptr;
-        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     }
     if (!qc) {
         if (pln) {
@@ -359,7 +358,8 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
         const QoreMethod* method = call->getMethod();
         if (method) {
             const QoreClass* qc = method->getClass();
-            ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
+            std::string class_ref = qore_aot_encode_class_ref(qc);
+            ctx.writer.writeStringRef(class_ref.c_str());
         } else {
             ctx.writer.writeStringRef("");
         }
@@ -411,10 +411,7 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
         }
         return QoreValue();
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_path, found_ns);
+    const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
         if (args_list) {
             args_list->deref(nullptr);
@@ -472,7 +469,8 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
         if (qc) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
-            ctx.writer.writeStringRef(qc->getNamespacePath().c_str());
+            std::string class_ref = qore_aot_encode_class_ref(qc);
+            ctx.writer.writeStringRef(class_ref.c_str());
             const QoreListNode* args = vrn->getArgs();
             size_t nargs = args ? args->size() : 0;
             if (nargs > 255) {
@@ -495,7 +493,8 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
     if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
         const QoreClass* qc = no->getClass();
-        ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
+        std::string class_ref = qore_aot_encode_class_ref(qc);
+        ctx.writer.writeStringRef(class_ref.c_str());
         ctx.writer.writeU8(0);
         return true;
     }
@@ -526,10 +525,7 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
         }
         return QoreValue();
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_path, found_ns);
+    const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
         if (args_list) {
             args_list->deref(nullptr);
@@ -865,10 +861,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     // Resolve class for method context
     const QoreClass* closure_class = nullptr;
     if (class_type_path && *class_type_path) {
-        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-        const qore_ns_private* found_ns = nullptr;
-        closure_class = qore_root_ns_private::runtimeFindClass(
-            *pp->RootNS, class_type_path, found_ns);
+        closure_class = qore_aot_resolve_class_ref(ctx.pgm, class_type_path, false);
     }
 
     // Construct UserClosureFunction + UserClosureVariant
@@ -1053,8 +1046,8 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::BOUND_METHOD_REF));
         const QoreMethod* method = mcr->getMethod();
         const QoreClass* qc = method ? method->getClass() : nullptr;
-        std::string class_path = qc ? qc->getNamespacePath() : std::string();
-        ctx.writer.writeStringRef(class_path.c_str());
+        std::string class_ref = qore_aot_encode_class_ref(qc);
+        ctx.writer.writeStringRef(class_ref.c_str());
         ctx.writer.writeStringRef(method ? method->getName() : "");
         return true;
     }
@@ -1062,8 +1055,8 @@ static bool write_expr_call_ref(AOTExprWriteCtx& ctx) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
         const QoreMethod* method = scr->getMethod();
         const QoreClass* qc = method ? method->getClass() : nullptr;
-        std::string class_path = qc ? qc->getNamespacePath() : std::string();
-        ctx.writer.writeStringRef(class_path.c_str());
+        std::string class_ref = qore_aot_encode_class_ref(qc);
+        ctx.writer.writeStringRef(class_ref.c_str());
         ctx.writer.writeStringRef(method ? method->getName() : "");
         return true;
     }
@@ -1215,12 +1208,7 @@ static const QoreMethod* read_aot_method_ref_target(AOTExprReadCtx& ctx, const c
         return nullptr;
     }
 
-    const char* resolved_class_path = (class_path[0] == ':' && class_path[1] == ':')
-        ? class_path + 2 : class_path;
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, resolved_class_path, found_ns);
+    const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
         ctx.error = std::string("cannot resolve class '") + class_path + "' for "
             + kind + " method reference";
@@ -1264,8 +1252,8 @@ static bool write_expr_bound_method_ref(AOTExprWriteCtx& ctx) {
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::BOUND_METHOD_REF));
     const QoreMethod* method = mcr->getMethod();
     const QoreClass* qc = method ? method->getClass() : nullptr;
-    std::string class_path = qc ? qc->getNamespacePath() : std::string();
-    ctx.writer.writeStringRef(class_path.c_str());
+    std::string class_ref = qore_aot_encode_class_ref(qc);
+    ctx.writer.writeStringRef(class_ref.c_str());
     ctx.writer.writeStringRef(method ? method->getName() : "");
     return true;
 }
@@ -1287,8 +1275,8 @@ static bool write_expr_static_method_ref(AOTExprWriteCtx& ctx) {
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
     const QoreMethod* method = scr->getMethod();
     const QoreClass* qc = method ? method->getClass() : nullptr;
-    std::string class_path = qc ? qc->getNamespacePath() : std::string();
-    ctx.writer.writeStringRef(class_path.c_str());
+    std::string class_ref = qore_aot_encode_class_ref(qc);
+    ctx.writer.writeStringRef(class_ref.c_str());
     ctx.writer.writeStringRef(method ? method->getName() : "");
     return true;
 }
@@ -1356,7 +1344,8 @@ static bool write_expr_static_varref(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* sv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_VARREF));
-        ctx.writer.writeStringRef(sv->qc.getNamespacePath().c_str());
+        std::string class_ref = qore_aot_encode_class_ref(&sv->qc);
+        ctx.writer.writeStringRef(class_ref.c_str());
         ctx.writer.writeStringRef(sv->str.c_str());
         return true;
     }
@@ -1369,11 +1358,7 @@ static QoreValue read_expr_static_varref(AOTExprReadCtx& ctx) {
     if (!class_name || !var_name) {
         return QoreValue();
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const char* class_path = (class_name[0] == ':' && class_name[1] == ':') ? class_name + 2 : class_name;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_path, found_ns);
+    const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_name, false);
     if (!qc) {
         return QoreValue();
     }
@@ -1409,7 +1394,8 @@ static bool write_expr_scoped_new_object(AOTExprWriteCtx& ctx) {
     if (auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
         if (socn->oc) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
-            ctx.writer.writeStringRef(socn->oc->getNamespacePath().c_str());
+            std::string class_ref = qore_aot_encode_class_ref(socn->oc);
+            ctx.writer.writeStringRef(class_ref.c_str());
             const QoreListNode* args = socn->getArgs();
             if (args && args->size() > 255) {
                 return false;
@@ -1452,10 +1438,7 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
         }
         return QoreValue();
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_path, found_ns);
+    const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
         if (args_list) {
             args_list->deref(nullptr);
@@ -2135,7 +2118,8 @@ static bool write_expr_cast_class(AOTExprWriteCtx& ctx) {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(cc->getCastTypeInfo());
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_CLASS));
         // A null class pointer represents the generic cast<object>(...) case.
-        ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "object");
+        std::string class_ref = qc ? qore_aot_encode_class_ref(qc) : "object";
+        ctx.writer.writeStringRef(class_ref.c_str());
         ctx.writer.writeU8(cc->isOrNothing() ? 1 : 0);
         return write_expr_cast_inner(ctx, cc->getExp());
     }
@@ -2156,10 +2140,7 @@ static QoreValue read_expr_cast_class(AOTExprReadCtx& ctx) {
     if (!strcmp(class_path, "object")) {
         return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, nullptr, inner, or_nothing != 0));
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-        *pp->RootNS, class_path, found_ns);
+    const QoreClass* qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, false);
     if (!qc) {
         inner.discard(nullptr);
         return QoreValue();
@@ -2274,7 +2255,25 @@ static bool write_expr_const_nothing(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_const_nothing(AOTExprReadCtx& ctx) {
+    (void)ctx;
     return QoreValue();
+}
+
+// ============================================================================
+// CONST_NULL (34)
+// ============================================================================
+
+static bool write_expr_const_null(AOTExprWriteCtx& ctx) {
+    if (!ctx.expr.hasNode() && ctx.expr.getType() == NT_NULL) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NULL));
+        return true;
+    }
+    return false;
+}
+
+static QoreValue read_expr_const_null(AOTExprReadCtx& ctx) {
+    (void)ctx;
+    return QoreValue(null());
 }
 
 // ============================================================================
@@ -2416,10 +2415,7 @@ static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
     const QoreClass* resolved_qc = nullptr;
     const QoreMethod* resolved_m = nullptr;
     if (class_path && *class_path) {
-        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-        const qore_ns_private* found_ns = nullptr;
-        resolved_qc = qore_root_ns_private::runtimeFindClass(
-            *pp->RootNS, class_path, found_ns);
+        resolved_qc = qore_aot_resolve_class_ref(ctx.pgm, class_path, is_pseudo != 0);
         if (resolved_qc) {
             resolved_m = resolved_qc->findMethod(method_name);
             if (!resolved_m) {

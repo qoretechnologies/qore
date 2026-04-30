@@ -173,8 +173,8 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
     // 33: LIST_LITERAL
     {"LIST_LITERAL", 33, true, write_expr_list_literal, read_expr_list_literal, "List literal"},
 
-    // 34-253: Unused/Reserved
-    {nullptr, 34, false, nullptr, nullptr, nullptr},
+    // 34: CONST_NULL
+    {"CONST_NULL", 34, true, write_expr_const_null, read_expr_const_null, "NULL constant"},
 
     // 35: DOT_EVAL_TARGET (classifyAndWriteExpr writes this for inline dot-eval expressions)
     {"DOT_EVAL_TARGET", 35, true, write_expr_dot_eval_target, read_expr_dot_eval_target, "Dot-eval method target (inline)"},

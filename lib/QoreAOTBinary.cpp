@@ -1179,7 +1179,7 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             const AbstractQoreNode* node = v.getInternalNode();
             const ScopedObjectCallNode* socn = dynamic_cast<const ScopedObjectCallNode*>(node);
             if (socn && socn->oc) {
-                std::string class_path = socn->oc->getNamespacePath();
+                std::string class_path = qore_aot_encode_class_ref(socn->oc);
                 const QoreListNode* args = socn->getArgs();
                 uint32_t nargs = args ? static_cast<uint32_t>(args->size()) : 0;
 
@@ -2437,7 +2437,26 @@ struct AOTSerializeState {
         bool is_static;
     };
     std::vector<MethodInfo> methods;
+
+    std::unordered_set<std::string> class_keys;
+    std::unordered_set<std::string> hashdecl_keys;
+    std::unordered_set<std::string> enum_keys;
+    std::unordered_set<std::string> typedef_keys;
+    std::unordered_set<std::string> constant_keys;
+    std::unordered_set<std::string> global_keys;
+    std::unordered_set<std::string> function_keys;
 };
+
+static std::string makeNamespaceItemKey(const qore_ns_private* ns, const char* name) {
+    std::string key = ns && !ns->path.empty() ? ns->path : std::string();
+    if (!key.empty() && name && *name) {
+        key += "::";
+    }
+    if (name) {
+        key += name;
+    }
+    return key;
+}
 
 //! Helper to check if an item should be skipped (from a different module than the one being compiled)
 /** @param item_module the module name of the item (from getModuleName())
@@ -2513,6 +2532,12 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                     continue;
                 }
 
+                std::string class_key = priv->path.empty()
+                    ? makeNamespaceItemKey(ns, cls->getName()) : priv->path;
+                if (!state.class_keys.insert(class_key).second) {
+                    continue;
+                }
+
                 uint32_t class_idx = static_cast<uint32_t>(state.classes.size());
                 state.classes.push_back({cls, priv, ns_idx});
 
@@ -2549,7 +2574,13 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                         continue;
                     }
                 }
-                state.hashdecls.push_back({hd, ns_idx});
+                std::string key = hd->getNamespacePath();
+                if (key.empty()) {
+                    key = makeNamespaceItemKey(ns, hdi.getName());
+                }
+                if (state.hashdecl_keys.insert(key).second) {
+                    state.hashdecls.push_back({hd, ns_idx});
+                }
             }
         }
     }
@@ -2572,7 +2603,13 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                         continue;
                     }
                 }
-                state.enums.push_back({ed, ns_idx});
+                std::string key = ed->getNamespacePath();
+                if (key.empty()) {
+                    key = makeNamespaceItemKey(ns, eli.getName());
+                }
+                if (state.enum_keys.insert(key).second) {
+                    state.enums.push_back({ed, ns_idx});
+                }
             }
         }
     }
@@ -2589,7 +2626,10 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                     && shouldSkipByCompileFile(ti.second->loc->getFile(), compile_file)) {
                 continue;
             }
-            state.typedefs.push_back({ti.first, ti.second->typeInfo, ti.second->pub, ns_idx});
+            std::string key = makeNamespaceItemKey(ns, ti.first.c_str());
+            if (state.typedef_keys.insert(key).second) {
+                state.typedefs.push_back({ti.first, ti.second->typeInfo, ti.second->pub, ns_idx});
+            }
         }
     }
 
@@ -2608,7 +2648,10 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                         && shouldSkipByCompileFile(ce->loc->getFile(), compile_file)) {
                     continue;
                 }
-                state.constants.push_back({ce, ns_idx});
+                std::string key = makeNamespaceItemKey(ns, ce->getName());
+                if (state.constant_keys.insert(key).second) {
+                    state.constants.push_back({ce, ns_idx});
+                }
             }
         }
     }
@@ -2628,7 +2671,10 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                     continue;
                 }
             }
-            state.globals.push_back({var, ns_idx});
+            std::string key = makeNamespaceItemKey(ns, vi.first);
+            if (state.global_keys.insert(key).second) {
+                state.globals.push_back({var, ns_idx});
+            }
         }
     }
 
@@ -2668,7 +2714,10 @@ static void collectItems(AOTSerializeState& state, qore_ns_private* ns, uint32_t
                     continue;
                 }
             }
-            state.functions.push_back({entry, func, ns_idx});
+            std::string key = makeNamespaceItemKey(ns, func->getName());
+            if (state.function_keys.insert(key).second) {
+                state.functions.push_back({entry, func, ns_idx});
+            }
         }
     }
 
@@ -2985,8 +3034,8 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     const char* mname = smcn->getName();
                     if (no_args && qc && mname && *mname) {
                         writer.writeU8(6);  // expression default: static method call
-                        // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
-                        writer.writeStringRef(qc->getNamespacePath().c_str());
+                        std::string class_ref = qore_aot_encode_class_ref(qc);
+                        writer.writeStringRef(class_ref.c_str());
                         writer.writeStringRef(mname);
                         continue;
                     }
@@ -3802,10 +3851,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                             bca->classid, access, true);
                                     }
                                 }
-                                // getNamespacePath() walks the live namespace tree; see QoreAOT.cpp
-                                // NewObjectCallNode note.
-                                std::string base_path = base_cls
-                                    ? base_cls->getNamespacePath() : std::string();
+                                std::string base_path = qore_aot_encode_class_ref(base_cls);
                                 writer.writeStringRef(base_path.c_str());
                                 writer.writeU16(static_cast<uint16_t>(
                                     bca->loc ? bca->loc->start_line : 0));
@@ -3821,8 +3867,7 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 writer.writeU16(num_args);
 
                                 const QoreClass* method_class = mi.method->getClass();
-                                std::string method_class_path = method_class
-                                    ? method_class->getNamespacePath() : std::string();
+                                std::string method_class_path = qore_aot_encode_class_ref(method_class);
                                 for (uint16_t ai = 0; ai < num_args; ++ai) {
                                     QoreValue arg_val = args->retrieveEntry(ai);
                                     if (!writeNativeBCAArgBlob(writer, arg_val, bca_locals, &program_crm,
@@ -4117,8 +4162,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
         const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
-        // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
-        writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
+        std::string class_ref = qore_aot_encode_class_ref(qc);
+        writer.writeStringRef(class_ref.c_str());
         writer.writeStringRef(call->getName());
         const QoreListNode* args = call->getArgs();
         const QoreParseListNode* pargs = call->getParseArgs();
@@ -4144,8 +4189,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreMethod* method = call->getMethod();
         if (method) {
             const QoreClass* qc = method->getClass();
-            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
-            writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
+            std::string class_ref = qore_aot_encode_class_ref(qc);
+            writer.writeStringRef(class_ref.c_str());
         } else {
             writer.writeStringRef("");
         }
@@ -4165,8 +4210,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
         if (qc) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
-            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
-            writer.writeStringRef(qc->getNamespacePath().c_str());
+            std::string class_ref = qore_aot_encode_class_ref(qc);
+            writer.writeStringRef(class_ref.c_str());
             const QoreListNode* args = vrn->getArgs();
             if (!write_qore_arg_list(args)) {
                 return false;
@@ -4291,7 +4336,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // StaticClassVarRefNode: static class variable reference
     if (auto* sv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_VARREF));
-        writer.writeStringRef(sv->qc.getNamespacePath().c_str());
+        std::string class_ref = qore_aot_encode_class_ref(&sv->qc);
+        writer.writeStringRef(class_ref.c_str());
         writer.writeStringRef(sv->str.c_str());
         return true;
     }
@@ -4315,8 +4361,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
         if (socn->oc) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
-            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
-            writer.writeStringRef(socn->oc->getNamespacePath().c_str());
+            std::string class_ref = qore_aot_encode_class_ref(socn->oc);
+            writer.writeStringRef(class_ref.c_str());
             // Try evaluated args first, fall back to parse args
             return write_args_prefer_qore(socn->getArgs(), socn->getParseArgs());
         }
@@ -4326,8 +4372,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
         const QoreClass* qc = no->getClass();
-        // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
-        writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
+        std::string class_ref = qore_aot_encode_class_ref(qc);
+        writer.writeStringRef(class_ref.c_str());
         // Serialize constructor args if available
         return write_args_prefer_qore(no->getArgs(), no->getParseArgs());
     }
@@ -4916,9 +4962,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* cc = dynamic_cast<const QoreClassCastOperatorNode*>(node)) {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(cc->getCastTypeInfo());
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_CLASS));
-        // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.  A null
-        // class pointer represents the generic cast<object>(...) case.
-        writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "object");
+        std::string class_ref = qc ? qore_aot_encode_class_ref(qc) : "object";
+        writer.writeStringRef(class_ref.c_str());
         writer.writeU8(cc->isOrNothing() ? 1 : 0);
         QoreValue inner = cc->getExp();
         if (inner.hasNode()) {
@@ -5103,7 +5148,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::BOUND_METHOD_REF));
         const QoreMethod* method = mcr->getMethod();
         const QoreClass* qc = method ? method->getClass() : nullptr;
-        std::string class_path = qc ? qc->getNamespacePath() : std::string();
+        std::string class_path = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_path.c_str());
         writer.writeStringRef(method ? method->getName() : "");
         return true;
@@ -5112,7 +5157,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::STATIC_METHOD_REF));
         const QoreMethod* method = scr->getMethod();
         const QoreClass* qc = method ? method->getClass() : nullptr;
-        std::string class_path = qc ? qc->getNamespacePath() : std::string();
+        std::string class_path = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_path.c_str());
         writer.writeStringRef(method ? method->getName() : "");
         return true;
@@ -5182,9 +5227,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             const QoreClass* qc = mc->getClass();
             std::string class_path;
             if (qc) {
-                // Pseudo-classes are not in the namespace tree; getPath() is
-                // the path matched by the AOT pseudo-class resolver.
-                class_path = mc->isPseudo() ? qc->getPath() : qc->getNamespacePath();
+                class_path = qore_aot_encode_class_ref(qc, mc->isPseudo());
             }
             writer.writeStringRef(class_path.c_str());
             writer.writeStringRef(mc->getName() ? mc->getName() : "");
@@ -8844,11 +8887,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                             // Resolve base class by path
                             entry.classid = 0;
                             if (base_path && base_path[0]) {
-                                ExceptionSink xsink;
-                                const QoreClass* base_cls = pgm->findClass(base_path, &xsink);
-                                if (xsink.isException()) {
-                                    xsink.clear();
-                                }
+                                const QoreClass* base_cls = qore_aot_resolve_class_ref(pgm, base_path, false);
                                 if (base_cls) {
                                     entry.classid = base_cls->getID();
                                 }
@@ -9246,6 +9285,20 @@ bool QoreAOTBinaryDeserializer::resolveBCAExpressions(std::string& error) {
         BCAList* bcal = new BCAList();
         for (size_t bca_index = 0; bca_index < pbca.entries.size(); ++bca_index) {
             auto& entry = pbca.entries[bca_index];
+            if (!entry.classid && !entry.base_path.empty()) {
+                if (const QoreClass* base_cls = qore_aot_resolve_class_ref(pgm, entry.base_path.c_str(), false)) {
+                    entry.classid = base_cls->getID();
+                } else {
+                    error = "cannot resolve base constructor class '";
+                    error += entry.base_path;
+                    error += "' for class '";
+                    error += pbca.qc ? pbca.qc->getNamespacePath() : "<unknown>";
+                    error += "'";
+                    delete bcal;
+                    return false;
+                }
+            }
+
             // Deserialize arg blobs now that all methods are committed.  New
             // objects use native inline AOT expression blobs; legacy objects
             // without QORE_AOT_FEAT_BCA_NATIVE_ARGS still use EXPR_TREE.
@@ -9428,6 +9481,45 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     state.root_ns = root_ns;  // Store root namespace for program-wide CRM building
     collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules, compile_file);
 
+    std::vector<qore_ns_private*> extra_roots;
+    bool debug_local_modules = getenv("QORE_AOT_DEBUG_LOCAL_MODULES") != nullptr;
+    if (debug_local_modules && keep_modules) {
+        fprintf(stderr, "AOT local module metadata: root collection classes=%zu methods=%zu keep_modules=%zu\n",
+            state.classes.size(), state.methods.size(), keep_modules->size());
+        for (const std::string& mod : *keep_modules) {
+            fprintf(stderr, "AOT local module metadata: keep '%s'\n", mod.c_str());
+        }
+    }
+    if (module_name && !*module_name && keep_modules && !compile_file) {
+        for (const std::string& mod : *keep_modules) {
+            QoreProgram* module_pgm = MM.findUserModuleProgram(mod.c_str());
+            if (debug_local_modules) {
+                fprintf(stderr, "AOT local module metadata: lookup '%s' -> %p\n",
+                    mod.c_str(), module_pgm);
+            }
+            if (module_pgm) {
+                RootQoreNamespace* module_root = module_pgm->getRootNS();
+                if (!module_root) {
+                    continue;
+                }
+                qore_ns_private* module_root_priv = qore_ns_private::get(*module_root);
+                if (module_root_priv == root_ns) {
+                    continue;
+                }
+                size_t before_classes = state.classes.size();
+                size_t before_methods = state.methods.size();
+                extra_roots.push_back(module_root_priv);
+                collectItems(state, module_root_priv, UINT32_MAX, mod.c_str(), nullptr, nullptr);
+                if (debug_local_modules) {
+                    fprintf(stderr,
+                        "AOT local module metadata: collected '%s' root='%s' classes +%zu methods +%zu\n",
+                        mod.c_str(), module_root_priv->name.c_str(),
+                        state.classes.size() - before_classes, state.methods.size() - before_methods);
+                }
+            }
+        }
+    }
+
     // Build a program-wide constant reverse map once and make it available to
     // the writer so writeValue() can encode node-pointer references (e.g. an
     // object inside a parse-time-folded hash literal) as VT_CONST_REF entries
@@ -9436,6 +9528,9 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     AOTConstantReverseMap program_crm;
     if (root_ns) {
         buildProgramConstantReverseMapImpl(root_ns, program_crm);
+    }
+    for (qore_ns_private* extra_root : extra_roots) {
+        buildProgramConstantReverseMapImpl(extra_root, program_crm);
     }
     writer.const_reverse_map = &program_crm;
 
