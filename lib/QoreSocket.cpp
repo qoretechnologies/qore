@@ -204,6 +204,7 @@ static int qore_socket_check_connect_ready(int fd) {
     int val = 0;
     socklen_t lon = sizeof(val);
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon) == QORE_SOCKET_ERROR) {
+        sock_get_error();
         return -1;
     }
 
