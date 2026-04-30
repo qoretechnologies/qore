@@ -137,6 +137,7 @@ class QoreSocket {
     friend class HttpClientRecvUntilClosePollState;
     friend class HttpClientConnectSendRecvPollOperation;
     friend class QoreSocketControllerAcceptPollOperation;
+    friend class QoreSocketControllerAcceptReplacePollOperation;
     friend class SocketAcceptPollOperation;
     friend class SocketReadHttpHeaderPollOperation;
     friend class SocketSendAndReadHeaderPollOperation;

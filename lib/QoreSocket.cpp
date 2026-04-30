@@ -1106,16 +1106,13 @@ public:
             : sock(sock), source(source) {
     }
 
-    DLLLOCAL ~QoreSocketControllerAcceptReplacePollOperation() {
-        closeAcceptedFd();
-    }
-
     DLLLOCAL virtual bool goalReached() const override {
         return done;
     }
 
     DLLLOCAL virtual void abort(ExceptionSink*) override {
         poll_state.reset();
+        accepted_socket.reset();
         done = true;
     }
 
@@ -1124,7 +1121,7 @@ public:
             return nullptr;
         }
 
-        if (accepted_fd == QORE_INVALID_SOCKET) {
+        if (!accepted_socket) {
             if (!poll_state) {
                 poll_state.reset(new SocketAcceptPollState(xsink, qore_socket_private::get(*sock), source));
                 if (*xsink || !poll_state) {
@@ -1144,15 +1141,18 @@ public:
             }
 
             assert(dynamic_cast<SocketAcceptPollState*>(poll_state.get()));
-            accepted_fd = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
+            int accepted_fd = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
             poll_state.reset();
+            accepted_socket.reset(sock->createAcceptedSocket(accepted_fd));
         }
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
+        qore_socket_private* accepted_priv = qore_socket_private::get(*accepted_socket);
         priv->close_internal();
         assert(priv->sock == QORE_INVALID_SOCKET);
-        priv->sock = accepted_fd;
-        accepted_fd = QORE_INVALID_SOCKET;
+        priv->sock = accepted_priv->sock;
+        accepted_priv->sock = QORE_INVALID_SOCKET;
+        accepted_socket.reset();
         priv->resetCloseInterrupt();
         rc = 0;
         done = true;
@@ -1167,31 +1167,14 @@ public:
         if (done) {
             return "done";
         }
-        return accepted_fd == QORE_INVALID_SOCKET ? "accepting" : "accept-replace";
+        return accepted_socket ? "accept-replace" : "accepting";
     }
 
 private:
-    DLLLOCAL void closeAcceptedFd() {
-        if (accepted_fd == QORE_INVALID_SOCKET) {
-            return;
-        }
-        while (true) {
-#ifdef _Q_WINDOWS
-            int close_rc = ::closesocket(accepted_fd);
-#else
-            int close_rc = ::close(accepted_fd);
-#endif
-            if (!close_rc || sock_get_error() != EINTR) {
-                break;
-            }
-        }
-        accepted_fd = QORE_INVALID_SOCKET;
-    }
-
     QoreSocket* sock;
     SocketSource* source = nullptr;
     std::unique_ptr<AbstractPollState> poll_state;
-    int accepted_fd = QORE_INVALID_SOCKET;
+    std::unique_ptr<QoreSocket> accepted_socket;
     int rc = -1;
     bool done = false;
 };
