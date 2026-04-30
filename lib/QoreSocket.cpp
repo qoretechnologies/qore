@@ -2573,7 +2573,11 @@ public:
     }
 
     DLLLOCAL virtual void abort(ExceptionSink*) override {
+        bool close_socket = h2_state == H2S_SENDING || h2_state == H2S_FLUSHING;
         h2_state = H2S_NONE;
+        if (close_socket) {
+            qore_socket_close_from_controller(sock);
+        }
     }
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
