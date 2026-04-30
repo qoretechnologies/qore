@@ -70,6 +70,7 @@
 #include <qore/intern/qore_thread_intern.h>
 #include <qore/intern/QoreTypeInfo.h>
 #include <qore/intern/QoreTypeSpec.h>
+#include <qore/intern/QoreTimeZoneManager.h>
 #include <qore/intern/OnBlockExitStatement.h>
 #include <qore/intern/QoreException.h>
 #include <qore/intern/StatementBlock.h>
@@ -2691,6 +2692,47 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_date(int64_t date_microseconds, int64
         int64_t epoch_seconds = date_microseconds / 1000000;
         int us = static_cast<int>(date_microseconds % 1000000);
         dt = DateTimeNode::makeAbsolute(currentTZ(), epoch_seconds, us);
+    }
+    return toBits(QoreValue(dt));
+}
+
+static const AbstractQoreZoneInfo* qore_rt_resolve_date_zone(const char* zone_name) {
+    if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
+        return nullptr;
+    }
+
+    ExceptionSink xsink;
+    const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
+        ? QTZM.findCreateOffsetZone(zone_name, &xsink)
+        : QTZM.findLoadRegion(zone_name, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    return zone;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_date_ex(int64_t date_microseconds, int64_t is_relative,
+        const char* zone_name, int64_t rel_years, int64_t rel_months, int64_t rel_days, int64_t rel_hours,
+        int64_t rel_minutes, int64_t rel_seconds, int64_t rel_us) {
+    DateTimeNode* dt;
+    if (is_relative) {
+        dt = DateTimeNode::makeRelative(
+            static_cast<int>(rel_years),
+            static_cast<int>(rel_months),
+            static_cast<int>(rel_days),
+            static_cast<int>(rel_hours),
+            static_cast<int>(rel_minutes),
+            static_cast<int>(rel_seconds),
+            static_cast<int>(rel_us));
+    } else {
+        int64_t epoch_seconds = date_microseconds / 1000000;
+        int us = static_cast<int>(date_microseconds % 1000000);
+        if (us < 0) {
+            --epoch_seconds;
+            us += 1000000;
+        }
+        dt = DateTimeNode::makeAbsolute(qore_rt_resolve_date_zone(zone_name), epoch_seconds, us);
     }
     return toBits(QoreValue(dt));
 }

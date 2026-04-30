@@ -23,7 +23,7 @@ class ContextStatementTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("ContextStatementTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 
         addTestCase("basic context iteration", \testBasic());
         addTestCase("where filter", \testWhere());

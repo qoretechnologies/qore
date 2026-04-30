@@ -17,7 +17,7 @@ class AOTSmokeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("AOTSmokeTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         # Determine the directory containing libqore (for compile/link)
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("AOT hello world", \testHelloWorld());
@@ -169,6 +169,7 @@ class AOTSmokeTest inherits QUnit::Test {
             \testClosureStripSourceRegexSubst());
         addTestCase("AOT closure strip source date literal",
             \testClosureStripSourceDateLiteral());
+        addTestCase("AOT UTC date literal zone", \testUTCDateLiteralZone());
         addTestCase("AOT closure strip source logical and/or",
             \testClosureStripSourceLogicalAndOr());
         addTestCase("AOT closure strip source call reference call",
@@ -4634,6 +4635,22 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "closure date literal strip-source output matches interpreter");
+    }
+
+    testUTCDateLiteralZone() {
+        string code = "%modern
+date d = 2015-08-30T12:36:00Z;
+printf(\"%s\\n\", d.format(\"YYYYMMDDTHHmmSS\") + \"Z\");
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "UTC date literal strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "UTC date literal strip-source output matches interpreter");
+        assertEq("20150830T123600Z\n", result.run_out,
+            "UTC date literal preserves the explicit UTC zone");
     }
 
     testClosureStripSourceLogicalAndOr() {

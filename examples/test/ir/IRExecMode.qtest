@@ -20,7 +20,7 @@ class IRExecModeTest inherits QUnit::Test {
     }
 
     testIrExecModeError() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -47,7 +47,7 @@ class IRExecModeTest inherits QUnit::Test {
     }
 
     testJitExecModeError() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -74,7 +74,7 @@ class IRExecModeTest inherits QUnit::Test {
     }
 
     testTieredSilentDemotion() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -100,7 +100,7 @@ class IRExecModeTest inherits QUnit::Test {
     }
 
     testAstModeExitsClean() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;

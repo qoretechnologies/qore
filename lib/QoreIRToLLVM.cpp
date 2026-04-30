@@ -295,6 +295,12 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // Date construction helper: (i64, i64) -> i64
     module.getOrInsertFunction("qore_rt_make_date",
             llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
+    // Zone-preserving date construction helper:
+    // (epoch_us, is_relative, zone_name, rel_y, rel_mo, rel_d, rel_h, rel_m, rel_s, rel_us) -> i64
+    module.getOrInsertFunction("qore_rt_make_date_ex",
+            llvm::FunctionType::get(i64_type,
+                {i64_type, i64_type, ptr_type, i64_type, i64_type, i64_type, i64_type, i64_type, i64_type, i64_type},
+                false));
 
     // Specialized access helpers (Phase 5b)
     // hash_key_access: (i64, ptr, ptr) -> i64
@@ -9723,9 +9729,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* us_val = llvm::ConstantInt::get(i64_type, cinst->constant.date_microseconds);
             llvm::Value* rel_val = llvm::ConstantInt::get(i64_type,
                     cinst->constant.date_is_relative ? 1 : 0);
-            auto helper = module.getOrInsertFunction("qore_rt_make_date",
-                    llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {us_val, rel_val});
+            const char* zone_name = (!cinst->constant.date_is_relative && cinst->constant.date_zone_set)
+                ? AbstractQoreZoneInfo::getRegionName(cinst->constant.date_zone)
+                : "";
+            llvm::Value* zone_ptr = builder->CreateGlobalStringPtr(zone_name ? zone_name : "");
+            auto helper = module.getOrInsertFunction("qore_rt_make_date_ex",
+                    llvm::FunctionType::get(i64_type,
+                        {i64_type, i64_type, ptr_type, i64_type, i64_type, i64_type, i64_type, i64_type, i64_type,
+                            i64_type},
+                        false));
+            llvm::Value* result = builder->CreateCall(helper, {
+                us_val,
+                rel_val,
+                zone_ptr,
+                llvm::ConstantInt::get(i64_type, cinst->constant.rel_years),
+                llvm::ConstantInt::get(i64_type, cinst->constant.rel_months),
+                llvm::ConstantInt::get(i64_type, cinst->constant.rel_days),
+                llvm::ConstantInt::get(i64_type, cinst->constant.rel_hours),
+                llvm::ConstantInt::get(i64_type, cinst->constant.rel_minutes),
+                llvm::ConstantInt::get(i64_type, cinst->constant.rel_seconds),
+                llvm::ConstantInt::get(i64_type, cinst->constant.rel_us),
+            });
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

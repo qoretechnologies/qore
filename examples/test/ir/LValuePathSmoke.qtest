@@ -34,7 +34,7 @@ class LValuePathSmokeTest inherits QUnit::Test {
     }
 
     private string runInMode(string code, string mode) {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return "";

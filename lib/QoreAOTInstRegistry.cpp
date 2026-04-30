@@ -36,6 +36,7 @@
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 #include "qore/intern/StaticClassVarRefNode.h"
+#include "qore/intern/QoreTimeZoneManager.h"
 #include "qore/QoreValue.h"
 
 // Forward declarations for recursive serialization functions
@@ -44,6 +45,22 @@
 
 // Forward decl for getLocalTypePath
 const char* getLocalTypePath(const LocalVar* lv);
+
+static const AbstractQoreZoneInfo* readAOTDateZone(const char* zone_name) {
+    if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
+        return nullptr;
+    }
+
+    ExceptionSink xsink;
+    const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
+        ? QTZM.findCreateOffsetZone(zone_name, &xsink)
+        : QTZM.findLoadRegion(zone_name, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    return zone;
+}
 
 //! Resolve a pseudo-class by its serialized path (e.g. "::Qore::<value>").
 //! Pseudo-classes are not in the normal namespace hierarchy, so runtimeFindClass()
@@ -359,6 +376,11 @@ static bool writeConst(AOTInstWriteCtx& ctx) {
                 ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_minutes));
                 ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_seconds));
                 ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_us));
+            } else {
+                const char* zone_name = ci->constant.date_zone_set
+                    ? AbstractQoreZoneInfo::getRegionName(ci->constant.date_zone)
+                    : "";
+                ctx.writer.writeStringRef(zone_name ? zone_name : "");
             }
             break;
         case QoreIRConstant::Kind::Enum:
@@ -410,6 +432,12 @@ static std::unique_ptr<QoreIRInstruction> readConst(
                 ci->constant.rel_minutes = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
                 ci->constant.rel_seconds = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
                 ci->constant.rel_us = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
+            } else {
+                const char* zone_name = ctx.reader.readStringRef(ctx.ptr);
+                if (zone_name && *zone_name) {
+                    ci->constant.date_zone = readAOTDateZone(zone_name);
+                    ci->constant.date_zone_set = true;
+                }
             }
             break;
         case QoreIRConstant::Kind::Enum: {

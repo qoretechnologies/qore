@@ -16,7 +16,7 @@ class JITSmokeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("JITSmokeTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         addTestCase("JIT integer arithmetic", \testJitIntArithmetic());
         addTestCase("JIT integer comparisons", \testJitIntComparisons());
         addTestCase("JIT float arithmetic", \testJitFloatArithmetic());

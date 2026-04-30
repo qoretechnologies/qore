@@ -338,6 +338,7 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
 
     // Date construction helper
     addSymbol("qore_rt_make_date", reinterpret_cast<void*>(&qore_rt_make_date));
+    addSymbol("qore_rt_make_date_ex", reinterpret_cast<void*>(&qore_rt_make_date_ex));
 
     // Enum construction helper
     addSymbol("qore_rt_make_enum", reinterpret_cast<void*>(&qore_rt_make_enum));

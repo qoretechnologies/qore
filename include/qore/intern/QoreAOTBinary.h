@@ -77,7 +77,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! Current binary format version
 //! v1: initial format with full 128-bit parse options + source hash
 //! v2: added BCA (Base Class Constructor Arguments) serialization for constructors
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 2;
+//! v3: added timezone metadata for IR date constants
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 3;
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
@@ -201,7 +202,7 @@ struct QoreAOTSectionHeader {
 //! Binary file header (60 bytes total, no version dispatch needed)
 struct QoreAOTBinaryHeader {
     uint32_t magic;              //!< QORE_AOT_BINARY_MAGIC
-    uint16_t version;            //!< QORE_AOT_BINARY_VERSION (always 1)
+    uint16_t version;            //!< QORE_AOT_BINARY_VERSION
     uint16_t flags;              //!< QORE_AOT_FLAG_*
     int64_t parse_options_lo;    //!< low 64 bits of parse options (0-63)
     uint32_t section_count;      //!< number of sections

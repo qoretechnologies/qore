@@ -18,7 +18,7 @@ class Phase4bSmokeTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("Phase4bSmokeTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         # Type profiling tests
         addTestCase("type profiling int correctness", \testTypeProfilingInt());
         addTestCase("type profiling float correctness", \testTypeProfilingFloat());

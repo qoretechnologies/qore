@@ -177,6 +177,7 @@
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/QoreClosureParseNode.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreTimeZoneManager.h"
 #include <qore/QoreNumberNode.h>
 #include <qore/BinaryNode.h>
 
@@ -198,6 +199,22 @@ extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, 
 
 // Defined in QoreAOT.cpp - generates unique variant key with parameter types
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
+
+static const AbstractQoreZoneInfo* runtimeReadAOTDateZone(const char* zone_name) {
+    if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
+        return nullptr;
+    }
+
+    ExceptionSink xsink;
+    const AbstractQoreZoneInfo* zone = (*zone_name == '+' || *zone_name == '-')
+        ? QTZM.findCreateOffsetZone(zone_name, &xsink)
+        : QTZM.findLoadRegion(zone_name, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    return zone;
+}
 
 static std::string getAOTTypePathForLValue(const QoreTypeInfo* ti) {
     if (!ti) {
@@ -4177,6 +4194,21 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 case QoreIRConstant::Kind::Date:
                     ci->constant.date_microseconds = QoreAOTBinaryReader::readI64(ptr);
                     ci->constant.date_is_relative = QoreAOTBinaryReader::readU8(ptr) != 0;
+                    if (ci->constant.date_is_relative) {
+                        ci->constant.rel_years = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+                        ci->constant.rel_months = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+                        ci->constant.rel_days = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+                        ci->constant.rel_hours = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+                        ci->constant.rel_minutes = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+                        ci->constant.rel_seconds = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+                        ci->constant.rel_us = static_cast<int>(QoreAOTBinaryReader::readU32(ptr));
+                    } else {
+                        const char* zone_name = reader.readStringRef(ptr);
+                        if (zone_name && *zone_name) {
+                            ci->constant.date_zone = runtimeReadAOTDateZone(zone_name);
+                            ci->constant.date_zone_set = true;
+                        }
+                    }
                     break;
                 case QoreIRConstant::Kind::Enum: {
                     const char* enum_path = reader.readStringRef(ptr);

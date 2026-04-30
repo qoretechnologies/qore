@@ -31,7 +31,7 @@ class BackgroundOperatorTest inherits QUnit::Test {
     }
 
     constructor() : QUnit::Test("BackgroundOperatorTest", "1.0", \ARGV) {
-        qore_bin = ENV.QORE_BIN ?? QORE_ARGV[0] ?? "qore";
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
 
         addTestCase("self method call", \testSelfCall());
         addTestCase("self method call (zero args)", \testSelfCallZeroArgs());

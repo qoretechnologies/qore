@@ -266,7 +266,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrControlFlowSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -310,7 +310,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrTryCatchSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -348,7 +348,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRangeMaybeSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -388,7 +388,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMaybeNothingGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -423,7 +423,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDeleteGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -458,7 +458,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
 
     testIrFoldMapSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -492,7 +492,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrFoldlGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -526,7 +526,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMapSelectSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -559,7 +559,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMapWithIteratorObjects() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -593,7 +593,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrLvalueOpSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -639,7 +639,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrStoreLocalSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -676,7 +676,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrShiftSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -712,7 +712,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListShiftUnshiftSpliceSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -762,7 +762,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrLValueShiftAssignSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -799,7 +799,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashListSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -838,7 +838,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashMapSelectSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -871,7 +871,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashMapUntypedListIterator() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -904,7 +904,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashMapTypedAssignmentUntypedIterator() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -937,7 +937,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRangeSliceSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -971,7 +971,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRangeSliceMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1017,7 +1017,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRangeGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1053,7 +1053,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRangeTypedSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1091,7 +1091,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRangeGuardExceptionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1130,7 +1130,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateRangeSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1164,7 +1164,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateRangeGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1200,7 +1200,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMapSelectGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1236,7 +1236,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrAbsoluteEqGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1272,7 +1272,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRemoveGuardThrowSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1311,7 +1311,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1346,7 +1346,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrContainerGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1399,7 +1399,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrContainerDerefSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1432,7 +1432,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashMapSelectGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1470,7 +1470,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrObjectFieldSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1506,7 +1506,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrFunctionCallSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1539,7 +1539,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMethodCallSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1573,7 +1573,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrCastSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1612,7 +1612,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrCastLValueSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1647,7 +1647,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrCastObjectSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1683,7 +1683,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrExistsElementsSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1718,7 +1718,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHelperOpsSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1765,7 +1765,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRegexGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1798,7 +1798,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashOpAssignSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1835,7 +1835,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListOpAssignSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1871,7 +1871,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrOpAssignMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1908,7 +1908,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrObjectOpAssignMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1946,7 +1946,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrObjectContainerOpAssignSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -1984,7 +1984,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMultiMemberNodeStoreSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2024,7 +2024,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrThrowRethrowSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2063,7 +2063,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRethrowOutsideCatchSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2093,7 +2093,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRethrowWithArgsSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2137,7 +2137,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrOnErrorDirectCallHandledException() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2186,7 +2186,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrGuardMismatchSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2223,7 +2223,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrGuardExceptionFlowSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2262,7 +2262,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrLogicalGuardExceptionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2302,7 +2302,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateShiftGuardExceptionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2341,7 +2341,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrShiftAssignGuardExceptionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2379,7 +2379,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMapGuardExceptionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2418,7 +2418,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrTernaryMixedSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2452,7 +2452,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrUnaryPlusSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2485,7 +2485,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrUnaryMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2519,7 +2519,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrBitwiseModSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2556,7 +2556,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrBitwiseOpAssignSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2605,7 +2605,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrCompareOpsSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2646,7 +2646,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrLogicalShortCircuitSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2680,7 +2680,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrStringCompareSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2717,7 +2717,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrCoalescingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2754,7 +2754,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrUnaryLogicalSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2790,7 +2790,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMixedCompareSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2829,7 +2829,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrNullNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2868,7 +2868,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrAssertSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2911,7 +2911,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         # smoke test now exercises the 'context' path only. 'summarize' will be
         # covered separately once IR lowering for context is complete and the
         # legacy summarize path is retired.
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2945,7 +2945,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrObjectHashListOpSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -2979,7 +2979,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRangeForeachSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3015,7 +3015,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrExistsSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3051,7 +3051,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrCollectionOpsSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3092,7 +3092,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDotEvalSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3126,7 +3126,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrNestedExceptionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3165,7 +3165,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateShiftSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3200,7 +3200,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateShiftOperatorSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3235,7 +3235,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3270,7 +3270,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashRangeSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3307,7 +3307,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRegexSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3341,7 +3341,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRegexExtractSubstSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3375,7 +3375,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRegexExtractNoMatchSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3408,7 +3408,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMiscOperatorSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3452,7 +3452,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrCastFailureSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3489,7 +3489,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListEdgeSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3529,7 +3529,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateCompareSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3564,7 +3564,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrContainerEdgeSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3598,7 +3598,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashEdgeSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3634,7 +3634,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateArithmeticSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3667,7 +3667,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3702,7 +3702,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashMissingRemoveSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3736,7 +3736,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateRangeSliceSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3771,7 +3771,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListRemoveSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3804,7 +3804,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateRangeReverseSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3838,7 +3838,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListKeysSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3872,7 +3872,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateEqualsSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3905,7 +3905,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListExtractSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3938,7 +3938,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashKeysSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -3972,7 +3972,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateRangeEqualitySmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4007,7 +4007,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashMergeSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4041,7 +4041,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListConcatSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4075,7 +4075,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashOverlaySmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4109,7 +4109,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListSliceSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4142,7 +4142,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashOpAssignSmoke2() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4175,7 +4175,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListAppendSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4208,7 +4208,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListAppendMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4241,7 +4241,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashAppendMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4274,7 +4274,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListShiftEmptySmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4308,7 +4308,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateGuardCompareSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4342,7 +4342,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListUnshiftEmptySmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4375,7 +4375,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrDateRangeMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4415,7 +4415,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListExtractEmptySmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4449,7 +4449,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashDeleteMissingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4482,7 +4482,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashRemoveListSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4516,7 +4516,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashDerefSmoke2() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4549,7 +4549,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListReplaceSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4583,7 +4583,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashReplaceSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4616,7 +4616,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListDeleteIndexSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4649,7 +4649,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashDeleteValueSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4682,7 +4682,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListPushPopSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4716,7 +4716,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashExistsSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4750,7 +4750,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListExtractLengthSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4783,7 +4783,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashRemoveValueSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4816,7 +4816,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashAppendSmoke2() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4850,7 +4850,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrListAppendSmoke2() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4884,7 +4884,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRemoveMissingKeySmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4917,7 +4917,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrTypedMaybeNothingGuardSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4955,7 +4955,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrTypedCompareMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -4991,7 +4991,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMapSelectMaybeNothingSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5024,7 +5024,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrObjectConstructionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5062,7 +5062,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrClosureCallSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5097,7 +5097,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrReferenceArgumentSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5131,7 +5131,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrReferenceShiftAssignment() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5167,7 +5167,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrRuntimeConstantSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5200,7 +5200,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrBackquoteSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5232,7 +5232,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrTypedListConstructionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5266,7 +5266,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrTypedHashConstructionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5298,7 +5298,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrHashdeclConstructionSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5331,7 +5331,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrClosureCaptureSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5367,7 +5367,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     private testIrExceptionTypePreserveSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5405,7 +5405,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     private testIrNestedExceptionTypeSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5447,7 +5447,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     private testIrCompoundAssignInTrySmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5485,7 +5485,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     private testIrHashSliceSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5518,7 +5518,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMapDotEvalInTrySmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5560,7 +5560,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMapHashBoolValueSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5605,7 +5605,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrMapOptionalHashPairIterator() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5642,7 +5642,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrClosureDefaultArgsSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5679,7 +5679,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     }
 
     testIrClosureDefaultArgOmittedSmoke() {
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5737,7 +5737,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         # This is a regression for IR mode where lowerAssignment() was missing the
         # isReference() check that all compound operators have.
 
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5774,7 +5774,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         # The Invoke-path StoreLValue handler must flush local slot caches after writing
         # through a reference, since the target variable's cached value becomes stale.
 
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5836,7 +5836,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         # causing RUNTIME-TYPE-ERROR when assigning result to typed containers
         # Root cause: lowerHashMapNative() passed inner type to createMakeHash instead of full type
 
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5881,7 +5881,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         # result type should NOT be optional. With anyTypeInfo (hasType=false), or_nothing must be false.
         # Root cause: setReturnTypeInfo() treated QTI_WILDCARD (from anyTypeInfo) as "can return NOTHING"
 
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5918,7 +5918,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         # Regression test for IR exception callstack regression (issue #4051)
         # Verifies that exception callstacks are populated correctly and not corrupted
 
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -5987,7 +5987,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         # Regression test: compound assignment on typed locals (list, hash) forced to
         # the lvalue path must repopulate the IR slot cache after the operation.
         # Without the fix, the slot cache retains NOTHING and subsequent reads fail.
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
@@ -6049,7 +6049,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
     testIrCompoundAssignInTryCatch() {
         # Regression test: compound assignments inside try/catch go through the Invoke
         # handler path — verify slot cache is properly invalidated.
-        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
             return;
