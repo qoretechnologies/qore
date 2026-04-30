@@ -1168,7 +1168,7 @@ public:
 
         qore_socket_private* priv = qore_socket_private::get(*sock);
         qore_socket_private* accepted_priv = qore_socket_private::get(*accepted_socket);
-        priv->close_internal();
+        qore_socket_close_private_from_controller(priv);
         assert(priv->sock == QORE_INVALID_SOCKET);
         priv->sock = accepted_priv->sock;
         accepted_priv->sock = QORE_INVALID_SOCKET;
@@ -4798,7 +4798,7 @@ SSLSocketHelperHelper::~SSLSocketHelperHelper() {
 }
 
 void SSLSocketHelperHelper::error() {
-    // s->ssl may already be nullptr if handleErrorIntern() → qs.close() was called
+    // s->ssl may already be nullptr if handleErrorIntern() closed the socket.
     // during SSL negotiation, which derefs ssl and nulls s->ssl; in that case the
     // SSLSocketReferenceHelper in setIntern() already deleted the object on deref
     if (s->ssl) {
@@ -5142,7 +5142,7 @@ int SSLSocketHelper::sysCallError(ExceptionSink* xsink, int rc, const char* mnam
             // close the socket if connection reset received
             // do not access "this" after the connection is closed since the SSLSocketHelper has been deleted
             if (qs.isOpen() && sock_get_error() == ECONNRESET)
-                qs.close();
+                qore_socket_close_private_from_controller(&qs);
 #endif
         } else {
             xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the openssl library reported " \
@@ -7443,7 +7443,7 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             // close the local socket unconditionally
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
-                qs.close();
+                qore_socket_close_private_from_controller(&qs);
             }
             break;
         } else if (err == SSL_ERROR_SYSCALL) {
@@ -7463,13 +7463,13 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             // close the local socket unconditionally
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
-                qs.close();
+                qore_socket_close_private_from_controller(&qs);
             }
             // in case there is no exception when reading, the remote end closed the connection
             rc = *xsink ? QSE_SSL_ERR : 0;
             break;
         } else if (err == SSL_ERROR_SSL) {
-            // must call sslError() before qs.close() — close_internal() derefs ssl which would
+            // must call sslError() before closing; close_internal() derefs ssl, which would
             // bring refs down to 1, violating sslError()'s assert(refs > 1) invariant
             if (!sslError(xsink, mname, get_action_method(action), action == WRITE)) {
                 xsink->raiseErrnoException("SOCKET-SSL-ERROR", sock_get_error(), "error in Socket::%s(): the " \
@@ -7477,7 +7477,7 @@ int SSLSocketHelper::doNonBlockingIo(ExceptionSink* xsink, const char* mname, vo
             }
             // For HTTP/2, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
-                qs.close();
+                qore_socket_close_private_from_controller(&qs);
             }
             rc = QSE_SSL_ERR;
             break;
@@ -7540,7 +7540,7 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char*
         // This could be a timeout or the end of a read operation, not necessarily a connection close.
         // Let the HTTP/2 layer handle connection lifecycle.
         if (!qs.h2_session) {
-            qs.close();
+            qore_socket_close_private_from_controller(&qs);
         }
         if (always_error) {
             xsink->raiseException("SOCKET-SSL-ERROR", "error in Socket::%s(): the %s() call could not be " \
@@ -7565,7 +7565,7 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char*
             //printd(5, "SSLSocketHelper::handleErrorIntern() Socket::%s() (%s) socket closed by remote end\n", mname, func);
             // For HTTP/2 connections, let the HTTP/2 layer handle connection lifecycle
             if (!qs.h2_session) {
-                qs.close();
+                qore_socket_close_private_from_controller(&qs);
             }
         }
 #endif
