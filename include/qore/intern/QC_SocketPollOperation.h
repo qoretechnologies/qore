@@ -1488,14 +1488,11 @@ public:
     //! "data" must be passed already referenced; ownership transfers to the poll state
     DLLLOCAL SocketSendToPollOperation(ExceptionSink* xsink, const char* host, int port, int family,
         BinaryNode* data, QoreSocketObject* sock);
+    DLLLOCAL ~SocketSendToPollOperation() override;
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
-            if (set_non_block) {
-                sock->clearNonBlock();
-            }
-            poll_state.reset();
-            sock->deref(xsink);
+            cleanup(xsink);
             delete this;
         }
     }
@@ -1505,12 +1502,25 @@ public:
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override {
-        return sent ? "sent" : "sending";
+        if (sent) {
+            return "sent";
+        }
+        return resolver ? "resolving" : "sending";
     }
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override;
 
 private:
+    DLLLOCAL void cleanup(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const;
+    DLLLOCAL int startSendToPollState(ExceptionSink* xsink);
+
+    std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
+    std::string host;
+    std::string service;
+    int family = AF_UNSPEC;
+    BinaryNode* data = nullptr;
     struct sockaddr_storage dest_addr{};
     socklen_t dest_addr_len = 0;
     bool sent = false;

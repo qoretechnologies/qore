@@ -15340,72 +15340,155 @@ QoreHashNode* SocketRecvFromPollOperation::continuePoll(ExceptionSink* xsink) {
 
 SocketSendToPollOperation::SocketSendToPollOperation(ExceptionSink* xsink, const char* host, int port, int family,
         BinaryNode* data, QoreSocketObject* sock)
-        : SocketPollSocketOperationBase(sock) {
+        : SocketPollSocketOperationBase(sock), host(host), family(q_get_af(family)), data(data) {
     AutoLocker al(sock->priv->m);
 
     // throw an exception and exit if the object is no longer open or valid
     if (sock->priv->checkOpen(xsink)) {
         data->deref();
+        this->data = nullptr;
+        return;
+    }
+    if (qore_socket_private::get(*sock->priv->socket)->stype != SOCK_DGRAM) {
+        xsink->raiseException("SOCKET-SENDTO-ERROR", "sendto() is only valid for UDP (SOCK_DGRAM) sockets");
+        data->deref();
+        this->data = nullptr;
         return;
     }
 
-    // Resolve the destination address
-    QoreAddrInfo ai;
-    QoreString service_str;
-    service_str.sprintf("%d", port);
-    if (ai.getInfo(xsink, host, service_str.c_str(), family, 0, SOCK_DGRAM, 0)) {
+    service = std::to_string(port);
+}
+
+SocketSendToPollOperation::~SocketSendToPollOperation() = default;
+
+void SocketSendToPollOperation::cleanup(ExceptionSink* xsink) {
+    if (data) {
         data->deref();
-        return;
+        data = nullptr;
+    }
+    resolver.reset();
+    if (set_non_block) {
+        sock->clearNonBlock();
+        set_non_block = false;
+    }
+    poll_state.reset();
+    sock->deref(xsink);
+}
+
+void SocketSendToPollOperation::abort(ExceptionSink* xsink) {
+    if (data) {
+        data->deref();
+        data = nullptr;
+    }
+    resolver.reset();
+    SocketPollSocketOperationBase::abort(xsink);
+}
+
+QoreHashNode* SocketSendToPollOperation::getResolverPollInfo(ExceptionSink* xsink) const {
+    std::vector<std::pair<int, int>> extra_fds;
+    resolver->getExtraFds(extra_fds);
+    QoreHashNode* rv = getSocketPollInfoHash(xsink, 0, extra_fds);
+    if (*xsink) {
+        return nullptr;
+    }
+    int poll_timeout_ms = resolver->getPollTimeoutMs();
+    rv->setKeyValue("poll_timeout_ms", poll_timeout_ms >= 0 ? poll_timeout_ms : 1, xsink);
+    return rv;
+}
+
+int SocketSendToPollOperation::startSendToPollState(ExceptionSink* xsink) {
+    assert(data);
+    const std::vector<SocketResolvedAddrInfo>& addrs = resolver->getAddresses();
+    if (addrs.empty()) {
+        xsink->raiseException("SOCKET-SENDTO-ERROR", "could not resolve destination address '%s:%s'",
+            host.c_str(), service.c_str());
+        return -1;
     }
 
-    struct addrinfo* aip = ai.getAddrInfo();
-    if (!aip) {
-        xsink->raiseException("SOCKET-SENDTO-ERROR", "could not resolve destination address '%s:%d'", host, port);
-        data->deref();
-        return;
+    const SocketResolvedAddrInfo& ai = addrs.front();
+    memcpy(&dest_addr, &ai.addr, ai.addrlen);
+    dest_addr_len = ai.addrlen;
+    resolver.reset();
+
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkOpen(xsink)) {
+        return -1;
+    }
+    if (sock->priv->setNonBlock(xsink)) {
+        return -1;
     }
 
-    // Copy resolved address for error reporting
-    memcpy(&dest_addr, aip->ai_addr, aip->ai_addrlen);
-    dest_addr_len = aip->ai_addrlen;
-
-    if (!sock->priv->setNonBlock(xsink)) {
-        // startSendTo takes ownership of the BinaryNode reference
-        poll_state.reset(sock->priv->socket->startSendTo(xsink, data,
-            (const struct sockaddr*)&dest_addr, dest_addr_len));
-        if (!poll_state) {
-            sock->priv->clearNonBlock();
-        } else {
-            set_non_block = true;
-        }
-    } else {
-        data->deref();
+    // startSendTo takes ownership of the BinaryNode reference if it returns a state.
+    AbstractPollState* ps = sock->priv->socket->startSendTo(xsink, data,
+        reinterpret_cast<const struct sockaddr*>(&dest_addr), dest_addr_len);
+    if (!ps) {
+        sock->priv->clearNonBlock();
+        return -1;
     }
+
+    poll_state.reset(ps);
+    data = nullptr;
+    if (*xsink) {
+        poll_state.reset();
+        sock->priv->clearNonBlock();
+        return -1;
+    }
+
+    set_non_block = true;
+    return 0;
 }
 
 QoreHashNode* SocketSendToPollOperation::continuePoll(ExceptionSink* xsink) {
-    AutoLocker al(sock->priv->m);
-
-    // throw an exception and exit if the object is no longer open or valid
-    if (sock->priv->checkOpen(xsink)) {
+    if (sent) {
         return nullptr;
     }
 
     if (!poll_state) {
-        return nullptr;
+        if (!resolver) {
+            resolver = std::make_unique<QoreCaresAddrInfoResolver>(host, service, family, SOCK_DGRAM, 0);
+        }
+
+        int rc = resolver->continuePoll(xsink);
+        if (*xsink || rc < 0) {
+            return nullptr;
+        }
+        if (rc) {
+            return getResolverPollInfo(xsink);
+        }
+        if (startSendToPollState(xsink)) {
+            if (data) {
+                data->deref();
+                data = nullptr;
+            }
+            return nullptr;
+        }
     }
 
-    // see if we are able to continue
-    int rc = poll_state->continuePoll(xsink);
-    if (*xsink || !rc) {
-        // release the AbstractPollState value
-        poll_state.reset();
-        sock->priv->clearNonBlock();
-        set_non_block = false;
-        if (!*xsink) {
-            sent = true;
+    {
+        AutoLocker al(sock->priv->m);
+
+        // throw an exception and exit if the object is no longer open or valid
+        if (sock->priv->checkOpen(xsink)) {
+            return nullptr;
         }
-        return nullptr;
+
+        if (!poll_state) {
+            return nullptr;
+        }
+
+        // see if we are able to continue
+        int rc = poll_state->continuePoll(xsink);
+        if (*xsink || !rc) {
+            // release the AbstractPollState value
+            poll_state.reset();
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+            if (!*xsink) {
+                sent = true;
+            }
+            return nullptr;
+        }
+        return getSocketPollInfoHash(xsink, rc);
     }
-    return getSocketPollInfoHash(xsink, rc);
+    return nullptr;
 }
