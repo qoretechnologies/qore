@@ -43,7 +43,8 @@
     @param sin_addr host's IP address will be saved here
     @return 0 in case of success, non-zero in case of error
 
-    @note utilizes \c getaddrinfo(3) internally instead of \c gethostbyname(3)
+    @note delegates internally to the async I/O controller-backed address resolver instead of
+    \c gethostbyname(3)
  */
 DLLEXPORT int q_gethostbyname(const char* host, struct in_addr* sin_addr);
 
@@ -52,7 +53,8 @@ DLLEXPORT int q_gethostbyname(const char* host, struct in_addr* sin_addr);
     @param host host's name
     @return hash containing info about host; nullptr in case of error
 
-    @note utilizes \c getaddrinfo(3) internally instead of \c gethostbyname(3)
+    @note delegates internally to the async I/O controller-backed address resolver instead of
+    \c gethostbyname(3)
  */
 DLLEXPORT QoreHashNode* q_gethostbyname_to_hash(const char* host);
 
@@ -61,7 +63,8 @@ DLLEXPORT QoreHashNode* q_gethostbyname_to_hash(const char* host);
     @param host host's name
     @return host's IP address; nullptr in case of error
 
-    @note utilizes \c getaddrinfo(3) internally instead of \c gethostbyname(3)
+    @note delegates internally to the async I/O controller-backed address resolver instead of
+    \c gethostbyname(3)
  */
 DLLEXPORT QoreStringNode* q_gethostbyname_to_string(const char* host);
 
@@ -72,11 +75,16 @@ DLLEXPORT QoreStringNode* q_gethostbyname_to_string(const char* host);
     @param type IP address type
     @return host's name (string returned must be freed); nullptr in case of error
 
-    @note utilizes \c getnameinfo(3) internally instead of \c gethostbyaddr(3)
+    @note delegates internally to the async I/O controller-backed reverse address resolver instead of
+    \c gethostbyaddr(3)
  */
 DLLEXPORT char* q_gethostbyaddr(const char* addr, int len, int type);
 
 //! thread-safe gethostbyaddr (0/NULL = error)
+/**
+    @note delegates internally to the async I/O controller-backed reverse address resolver instead of
+    \c gethostbyaddr(3)
+ */
 DLLEXPORT QoreHashNode* q_gethostbyaddr_to_hash(ExceptionSink* xsink, const char* addr, int type = Q_AF_INET);
 
 //! Get host's name from IP address.
@@ -86,7 +94,8 @@ DLLEXPORT QoreHashNode* q_gethostbyaddr_to_hash(ExceptionSink* xsink, const char
     @param type IP address type
     @return host's name; nullptr in case of error
 
-    @note utilizes \c getnameinfo(3) internally instead of \c gethostbyaddr(3)
+    @note delegates internally to the async I/O controller-backed reverse address resolver instead of
+    \c gethostbyaddr(3)
  */
 DLLEXPORT QoreStringNode* q_gethostbyaddr_to_string(ExceptionSink* xsink, const char* addr, int type = Q_AF_INET);
 
@@ -123,6 +132,9 @@ DLLEXPORT int q_addr_to_string2(const struct sockaddr* ai_addr, QoreString& str)
 DLLEXPORT int q_get_port_from_addr(const struct sockaddr* ai_addr);
 
 //! returns address info as a hash
+/**
+    @note delegates internally to the async I/O controller-backed address resolver
+ */
 DLLEXPORT QoreListNode* q_getaddrinfo_to_list(ExceptionSink* xsink, const char* node, const char* service, int family = Q_AF_UNSPEC, int flags = 0, int socktype = Q_SOCK_STREAM);
 
 //! adds the address family as "type" and a descriptive name as "typename" to the hash; writes "unknown" if the address family is unknown
