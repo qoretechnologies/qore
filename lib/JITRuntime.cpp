@@ -2339,6 +2339,47 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list(ExceptionSink* xsink) {
     return toBits(QoreValue(list));
 }
 
+static const QoreTypeInfo* qore_rt_resolve_element_type_path(const char* type_path, const char* op,
+        ExceptionSink* xsink) {
+    if (!type_path || !*type_path) {
+        return autoTypeInfo;
+    }
+
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        if (xsink) {
+            xsink->raiseException("AOT-TYPE-ERROR",
+                "%s cannot resolve list element type '%s' without a current Program", op, type_path);
+        }
+        return nullptr;
+    }
+
+    std::string error;
+    QoreAOTTypeResolver resolver(pgm);
+    const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+    if (!ti && xsink) {
+        xsink->raiseException("AOT-TYPE-ERROR",
+            "%s cannot resolve list element type '%s': %s", op, type_path, error.c_str());
+    }
+    return ti;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list_typed(const QoreTypeInfo* element_type,
+        ExceptionSink* xsink) {
+    QoreListNode* list = new QoreListNode(element_type ? element_type : autoTypeInfo);
+    return toBits(QoreValue(list));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list_by_type_path(const char* element_type_path,
+        ExceptionSink* xsink) {
+    const QoreTypeInfo* element_type = qore_rt_resolve_element_type_path(element_type_path,
+        "CreateEmptyList", xsink);
+    if (!element_type) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_create_empty_list_typed(element_type, xsink);
+}
+
 extern "C" DLLEXPORT void qore_rt_list_append(uint64_t list_bits, uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue list_val = fromBits(list_bits);
     QoreValue value = fromBits(value_bits);
@@ -2354,21 +2395,19 @@ extern "C" DLLEXPORT void qore_rt_list_append(uint64_t list_bits, uint64_t value
     }
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_list_push(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink) {
-    QoreValue list_val = fromBits(list_bits);
-    QoreValue push_val = fromBits(val_bits);
-
+static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
+        const QoreTypeInfo* element_type, ExceptionSink* xsink) {
     if (list_val.getType() == NT_LIST) {
         QoreListNode* l = list_val.get<QoreListNode>();
         l->push(push_val.refSelf(), xsink);
         // Return same list with a new reference for the caller to own
         l->ref();
-        return list_bits;
+        return toBits(list_val);
     }
 
     if (list_val.isNothing()) {
         // Auto-vivify empty list (already has refcount 1 from new)
-        QoreListNode* l = new QoreListNode(autoTypeInfo);
+        QoreListNode* l = new QoreListNode(element_type ? element_type : autoTypeInfo);
         l->push(push_val.refSelf(), xsink);
         QoreValue result(l);
         return toBits(result);
@@ -2379,6 +2418,32 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_push(uint64_t list_bits, uint64_t val
         "the lvalue argument to push is type \"%s\"; expecting \"list\"",
         list_val.getTypeName());
     return toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_push_typed(uint64_t list_bits, uint64_t val_bits,
+        const QoreTypeInfo* element_type, ExceptionSink* xsink) {
+    return qore_rt_list_push_impl(fromBits(list_bits), fromBits(val_bits), element_type, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_push(uint64_t list_bits, uint64_t val_bits, ExceptionSink* xsink) {
+    return qore_rt_list_push_typed(list_bits, val_bits, autoTypeInfo, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_push_by_type_path(uint64_t list_bits, uint64_t val_bits,
+        const char* element_type_path, ExceptionSink* xsink) {
+    QoreValue list_val = fromBits(list_bits);
+    QoreValue push_val = fromBits(val_bits);
+    if (!list_val.isNothing()) {
+        return qore_rt_list_push_impl(list_val, push_val, autoTypeInfo, xsink);
+    }
+
+    const QoreTypeInfo* element_type = qore_rt_resolve_element_type_path(element_type_path,
+        "ListPush", xsink);
+    if (!element_type) {
+        return toBits(QoreValue());
+    }
+
+    return qore_rt_list_push_impl(list_val, push_val, element_type, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_switch_regex_match(uint64_t regex_case_ptr, uint64_t switch_val_bits, ExceptionSink* xsink) {
@@ -3291,6 +3356,24 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_push_throwi
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_push_typed_throwing(
+        uint64_t list_bits, uint64_t val_bits, const QoreTypeInfo* element_type, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_list_push_typed(list_bits, val_bits, element_type, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_push_by_type_path_throwing(
+        uint64_t list_bits, uint64_t val_bits, const char* element_type_path, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_list_push_by_type_path(list_bits, val_bits, element_type_path, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_list_index_access_throwing(
         uint64_t list_val, int64_t index, ExceptionSink* xsink) {
     uint64_t result = qore_rt_list_index_access(list_val, index, xsink);
@@ -3393,11 +3476,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_get_value_noref(uint64_t list_val, in
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_sized_list(int64_t capacity, ExceptionSink* xsink) {
-    QoreListNode* list = new QoreListNode(autoTypeInfo);
+    return qore_rt_create_sized_list_typed(capacity, autoTypeInfo, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_create_sized_list_typed(int64_t capacity,
+        const QoreTypeInfo* element_type, ExceptionSink* xsink) {
+    QoreListNode* list = new QoreListNode(element_type ? element_type : autoTypeInfo);
     if (capacity > 0) {
         qore_list_private::get(*list)->reserve(static_cast<size_t>(capacity));
     }
     return toBits(QoreValue(list));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_create_sized_list_by_type_path(int64_t capacity,
+        const char* element_type_path, ExceptionSink* xsink) {
+    const QoreTypeInfo* element_type = qore_rt_resolve_element_type_path(element_type_path,
+        "CreateSizedList", xsink);
+    if (!element_type) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_create_sized_list_typed(capacity, element_type, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_list_set_int(uint64_t list_bits, int64_t index, int64_t value) {

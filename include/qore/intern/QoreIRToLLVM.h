@@ -618,6 +618,10 @@ private:
     // Get a declared runtime helper function
     llvm::FunctionCallee getHelper(llvm::Module& module, const char* name, llvm::FunctionType* ft);
 
+    // Return either a JIT-safe QoreTypeInfo* constant or an AOT-safe type-path string.
+    llvm::Value* getTypeInfoPointerArg(const QoreTypeInfo* ti);
+    llvm::Value* getTypePathArg(const QoreTypeInfo* ti);
+
     // Collect all unique LocalVar* pointers from the IR function
     void collectLocals(const QoreIRFunction& func);
 

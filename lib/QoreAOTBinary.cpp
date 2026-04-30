@@ -6158,6 +6158,9 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     if (dynamic_cast<const QoreIRExprInstruction*>(inst)) {
         return QoreIRInstGroup::Expr;
     }
+    if (inst->element_type) {
+        return QoreIRInstGroup::TypedBase;
+    }
     // Default: base instruction (no extra fields)
     return QoreIRInstGroup::Base;
 }

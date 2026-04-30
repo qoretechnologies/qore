@@ -2158,6 +2158,7 @@ enum class QoreIRInstGroup : uint8_t {
     Find = 61,              //!< QoreIRFindInstruction
     Background = 62,        //!< QoreIRBackgroundInstruction
     ContextRef = 63,        //!< QoreIRContextRefInstruction
+    TypedBase = 64,         //!< QoreIRInstruction with element_type metadata
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

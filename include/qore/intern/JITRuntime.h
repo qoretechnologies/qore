@@ -330,6 +330,24 @@ uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* ty
 //! MakeHashConstKeys: takes array of const keys and NaN-boxed values with optional parse-time type info, returns NaN-boxed hash
 uint64_t qore_rt_make_hash_const_keys(const char** keys, uint64_t* vals, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink);
 
+//! Create an empty list with an optional element type; nullptr means auto.
+uint64_t qore_rt_create_empty_list_typed(const QoreTypeInfo* element_type, ExceptionSink* xsink);
+
+//! AOT-safe variant of qore_rt_create_empty_list_typed() using a serialized element type path.
+uint64_t qore_rt_create_empty_list_by_type_path(const char* element_type_path, ExceptionSink* xsink);
+
+//! Push to a list with an optional element type used when auto-vivifying from NOTHING.
+uint64_t qore_rt_list_push_typed(uint64_t list_bits, uint64_t val_bits, const QoreTypeInfo* element_type,
+        ExceptionSink* xsink);
+uint64_t qore_rt_list_push_typed_throwing(uint64_t list_bits, uint64_t val_bits, const QoreTypeInfo* element_type,
+        ExceptionSink* xsink);
+
+//! AOT-safe list push variant using a serialized element type path.
+uint64_t qore_rt_list_push_by_type_path(uint64_t list_bits, uint64_t val_bits, const char* element_type_path,
+        ExceptionSink* xsink);
+uint64_t qore_rt_list_push_by_type_path_throwing(uint64_t list_bits, uint64_t val_bits,
+        const char* element_type_path, ExceptionSink* xsink);
+
 // --- Statement execution helpers ---
 
 //! Execute a statement (foreach, on_block_exit, context, etc.)
@@ -622,6 +640,9 @@ uint64_t qore_rt_list_get_value(uint64_t list_val, int64_t index, ExceptionSink*
 
 //! Create a list with pre-allocated capacity; returns NaN-boxed QoreListNode*.
 uint64_t qore_rt_create_sized_list(int64_t capacity, ExceptionSink* xsink);
+uint64_t qore_rt_create_sized_list_typed(int64_t capacity, const QoreTypeInfo* element_type, ExceptionSink* xsink);
+uint64_t qore_rt_create_sized_list_by_type_path(int64_t capacity, const char* element_type_path,
+        ExceptionSink* xsink);
 
 //! Set int element in list at index (for pre-sized typed map output). No bounds check.
 void qore_rt_list_set_int(uint64_t list_bits, int64_t index, int64_t value);

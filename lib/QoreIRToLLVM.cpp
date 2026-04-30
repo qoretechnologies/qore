@@ -138,6 +138,18 @@ void QoreIRToLLVM::initTypes() {
     void_type = llvm::Type::getVoidTy(ctx);
 }
 
+llvm::Value* QoreIRToLLVM::getTypeInfoPointerArg(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+    }
+    llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(ti));
+    return builder->CreateIntToPtr(ti_ptr, ptr_type);
+}
+
+llvm::Value* QoreIRToLLVM::getTypePathArg(const QoreTypeInfo* ti) {
+    return builder->CreateGlobalStringPtr(ti ? QoreTypeInfo::getPath(ti) : "");
+}
+
 void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // Arithmetic helpers: (i64, i64, ptr) -> i64
     auto* arith_ft = llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false);
@@ -359,9 +371,15 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // list_get_value: (i64, i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_list_get_value",
             llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-    // create_sized_list: (i64, ptr) -> i64
-    module.getOrInsertFunction("qore_rt_create_sized_list",
-            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+    // typed list construction helpers: type argument is either QoreTypeInfo* (JIT) or type path (AOT)
+    module.getOrInsertFunction("qore_rt_create_empty_list_typed",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_create_empty_list_by_type_path",
+            llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_create_sized_list_typed",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_create_sized_list_by_type_path",
+            llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
     // list_set_int: (i64, i64, i64) -> void
     module.getOrInsertFunction("qore_rt_list_set_int",
             llvm::FunctionType::get(void_type, {i64_type, i64_type, i64_type}, false));
@@ -8400,9 +8418,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!val) { return false; }
                 llvm::Value* list_boxed = boxValue(list, inv->operands[0].id);
                 llvm::Value* val_boxed = boxValue(val, inv->operands[1].id);
-                auto push_fn = module.getOrInsertFunction("qore_rt_list_push",
-                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
-                result = builder->CreateCall(push_fn, {list_boxed, val_boxed, xsink_arg});
+                llvm::Value* type_arg = aot_mode
+                    ? getTypePathArg(inv->element_type) : getTypeInfoPointerArg(inv->element_type);
+                const char* helper_name = aot_mode ? "qore_rt_list_push_by_type_path" : "qore_rt_list_push_typed";
+                auto push_fn = module.getOrInsertFunction(helper_name,
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type, ptr_type}, false));
+                result = builder->CreateCall(push_fn, {list_boxed, val_boxed, type_arg, xsink_arg});
                 // ListPush doesn't modify locals — no reload needed
 
             } else if (inv->invoke_opcode == QoreIROpcode::InstanceOfBool) {
@@ -10326,9 +10347,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::CreateEmptyList: {
-            auto helper = module.getOrInsertFunction("qore_rt_create_empty_list",
-                    llvm::FunctionType::get(i64_type, {ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {xsink_arg});
+            const char* helper_name = aot_mode
+                ? "qore_rt_create_empty_list_by_type_path" : "qore_rt_create_empty_list_typed";
+            auto helper = module.getOrInsertFunction(helper_name,
+                    llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+            llvm::Value* type_arg = aot_mode
+                ? getTypePathArg(inst->element_type) : getTypeInfoPointerArg(inst->element_type);
+            llvm::Value* result = builder->CreateCall(helper, {type_arg, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -10353,13 +10378,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!val) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
             llvm::Value* val_boxed = boxValue(val, inst->operands[1].id);
+            llvm::Value* type_arg = aot_mode
+                ? getTypePathArg(inst->element_type) : getTypeInfoPointerArg(inst->element_type);
+            const char* helper_name = aot_mode ? "qore_rt_list_push_by_type_path" : "qore_rt_list_push_typed";
+            const char* throwing_name = aot_mode
+                ? "qore_rt_list_push_by_type_path_throwing" : "qore_rt_list_push_typed_throwing";
             auto push_ft = llvm::FunctionType::get(i64_type,
-                    {i64_type, i64_type, ptr_type}, false);
-            auto push_fn = module.getOrInsertFunction("qore_rt_list_push", push_ft);
-            auto push_fn_throwing = module.getOrInsertFunction(
-                    "qore_rt_list_push_throwing", push_ft);
+                    {i64_type, i64_type, ptr_type, ptr_type}, false);
+            auto push_fn = module.getOrInsertFunction(helper_name, push_ft);
+            auto push_fn_throwing = module.getOrInsertFunction(throwing_name, push_ft);
             llvm::Value* result = emitMaybeInvoke(push_fn, push_fn_throwing,
-                    {list_boxed, val_boxed, xsink_arg}, module, llvm_func, inst);
+                    {list_boxed, val_boxed, type_arg, xsink_arg}, module, llvm_func, inst);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);
@@ -10370,9 +10399,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* cap = getVal(inst->operands[0].id, error);
             if (!cap) { return false; }
             llvm::Value* cap_int = ensureIntTypeInline(cap, inst->operands[0].id);
-            auto helper = module.getOrInsertFunction("qore_rt_create_sized_list",
-                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {cap_int, xsink_arg});
+            const char* helper_name = aot_mode
+                ? "qore_rt_create_sized_list_by_type_path" : "qore_rt_create_sized_list_typed";
+            auto helper = module.getOrInsertFunction(helper_name,
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+            llvm::Value* type_arg = aot_mode
+                ? getTypePathArg(inst->element_type) : getTypeInfoPointerArg(inst->element_type);
+            llvm::Value* result = builder->CreateCall(helper, {cap_int, type_arg, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
             trackResultForCleanup(result, inst->result.id, llvm_func);

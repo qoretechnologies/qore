@@ -391,6 +391,37 @@ static std::unique_ptr<QoreIRInstruction> readBase(
 }
 
 // ============================================================================
+// Group 64: TypedBase - Base instruction with element_type metadata
+// ============================================================================
+
+static bool writeTypedBase(AOTInstWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.inst->element_type ? QoreTypeInfo::getPath(ctx.inst->element_type) : "");
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readTypedBase(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    auto inst = std::make_unique<QoreIRInstruction>(static_cast<QoreIROpcode>(opcode_raw));
+    const char* type_path = ctx.reader.readStringRef(ctx.ptr);
+    if (type_path && *type_path) {
+        std::string type_error;
+        QoreAOTTypeResolver type_resolver(ctx.pgm);
+        inst->element_type = type_resolver.resolve(type_path, type_error);
+        if (!inst->element_type) {
+            ctx.error = std::string("cannot resolve instruction element type '") + type_path
+                + "': " + type_error;
+            return nullptr;
+        }
+    }
+    inst->result = QoreIRValue(result_id);
+    inst->operands = std::move(operands);
+    inst->exception_target = exc_target;
+    return inst;
+}
+
+// ============================================================================
 // Group 1: Const - Constant value with kind dispatch
 // ============================================================================
 
@@ -3263,8 +3294,12 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     { "ContextRef", 63, true, false, writeContextRef, readContextRef,
       "Native context reference" },
 
-    // Remaining 64-255: Unsupported/undefined
-    UNUSED_ENTRY(64), UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
+    // Index 64: TypedBase
+    { "TypedBase", 64, true, false, writeTypedBase, readTypedBase,
+      "Base instruction with element type metadata" },
+
+    // Remaining 65-255: Unsupported/undefined
+    UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
     UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
     UNUSED_ENTRY(72), UNUSED_ENTRY(73), UNUSED_ENTRY(74), UNUSED_ENTRY(75),
     UNUSED_ENTRY(76), UNUSED_ENTRY(77), UNUSED_ENTRY(78), UNUSED_ENTRY(79),
