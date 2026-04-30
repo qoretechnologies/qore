@@ -66,6 +66,8 @@ static std::atomic<uint64_t> qore_socket_sync_exec_seq{0};
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
+static int qore_socket_close_private_from_controller(qore_socket_private* priv);
+
 #ifdef _Q_WINDOWS
 static int qore_windows_set_errno(int rc);
 #endif
@@ -139,8 +141,7 @@ static int qore_socket_plain_data_available(qore_socket_private* priv, const cha
             return 1;
         }
         if (rc == 0) {
-            priv->prepareForClose();
-            priv->close();
+            qore_socket_close_private_from_controller(priv);
             se_closed("Socket", mname, xsink);
             return -1;
         }
@@ -5748,7 +5749,7 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     assert(xsink);
 
     // close socket if already open
-    sock->close_internal();
+    qore_socket_close_private_from_controller(sock);
     assert(sock->sock == QORE_INVALID_SOCKET);
 
     addr.sun_family = AF_UNIX;
@@ -8891,6 +8892,8 @@ static int qore_socket_bind_name_direct(QoreSocket* s, const char* name, bool re
     qore_socket_private* priv = qore_socket_private::get(*s);
     ExceptionSink xsink;
     //printd(5, "QoreSocket::bind(%s)\n", name);
+    qore_socket_close_private_from_controller(priv);
+
     // see if there is a port specifier
     const char* p = strrchr(name, ':');
     int rc;
@@ -8919,18 +8922,22 @@ static int qore_socket_bind_name_direct(QoreSocket* s, const char* name, bool re
 
 static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int socktype, int protocol,
         ExceptionSink* xsink) {
-    return qore_socket_private::get(*s)->bindUNIX(xsink, name, socktype, protocol);
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    qore_socket_close_private_from_controller(priv);
+    return priv->bindUNIX(xsink, name, socktype, protocol);
 }
 
 static int qore_socket_bind_inet_direct(QoreSocket* s, const char* name, const char* service, bool reuseaddr,
         int family, int socktype, int protocol, ExceptionSink* xsink) {
-    return qore_socket_private::get(*s)->bindINET(xsink, name, service, reuseaddr, family, socktype, protocol);
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    qore_socket_close_private_from_controller(priv);
+    return priv->bindINET(xsink, name, service, reuseaddr, family, socktype, protocol);
 }
 
 static int qore_socket_bind_port_direct(QoreSocket* s, int prt, bool reuseaddr) {
     qore_socket_private* priv = qore_socket_private::get(*s);
     ExceptionSink xsink;
-    priv->close();
+    qore_socket_close_private_from_controller(priv);
     QoreString service;
     service.sprintf("%d", prt);
     int rc = priv->bindINET(&xsink, 0, service.c_str(), reuseaddr);
@@ -8944,6 +8951,7 @@ static int qore_socket_bind_interface_port_direct(QoreSocket* s, const char* ifa
     qore_socket_private* priv = qore_socket_private::get(*s);
     ExceptionSink xsink;
     printd(5, "QoreSocket::bind(%s, %d)\n", iface, prt);
+    qore_socket_close_private_from_controller(priv);
     QoreString service;
     service.sprintf("%d", prt);
     int rc = priv->bindINET(&xsink, iface, service.c_str(), reuseaddr);
@@ -8976,7 +8984,7 @@ static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr
     // close if it's already been opened as an INET socket or with different parameters
     if (priv->sock != QORE_INVALID_SOCKET && (priv->sfamily != AF_INET || priv->stype != SOCK_STREAM
         || priv->sprot != 0))
-        priv->close();
+        qore_socket_close_private_from_controller(priv);
 
     // try to open socket if necessary
     if (priv->sock == QORE_INVALID_SOCKET && priv->openINET())
@@ -9010,7 +9018,7 @@ static int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, co
     // close if it's already been opened as an INET socket or with different parameters
     if (priv->sock != QORE_INVALID_SOCKET && (priv->sfamily != family || priv->stype != sock_type
         || priv->sprot != protocol))
-        priv->close();
+        qore_socket_close_private_from_controller(priv);
 
     // try to open socket if necessary
     if (priv->sock == QORE_INVALID_SOCKET && priv->openINET(family, sock_type, protocol))
