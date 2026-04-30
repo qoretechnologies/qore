@@ -384,6 +384,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("poll test", \pollTest());
         addTestCase("UNIX socket conn_mgr test", \unixSocketConnMgrTest());
         addTestCase("UNIX socket proxy conn_mgr test", \unixSocketProxyConnMgrTest());
+        addTestCase("UNIX socket setURL reset test", \unixSocketSetURLResetTest());
         addTestCase("conn_mgr isConnected test", \connMgrIsConnectedTest());
         addTestCase("upgrade isDataAvailable test", \upgradeIsDataAvailableTest());
         addTestCase("chunked HEAD test", \chunkedHeadTest());
@@ -908,6 +909,52 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertEq("GET", hdr.method);
         assertEq("http://" + encoded_path + "/unix-proxy?x=1", hdr.path);
         assertEq(encoded_path, hdr.host);
+    }
+
+    unixSocketSetURLResetTest() {
+%ifdef Windows
+        testSkip("skipping because UNIX socket URLs are not available on Windows");
+%endif
+
+        string path = sprintf("%s%sqore-httpclient-reset-%d-%s.sock", tmp_location(), DirSep, getpid(),
+            get_random_string(12));
+        string encoded_path = encode_url(path, True);
+
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\nok");
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int port = q.get();
+        HTTPClient hc({"url": "http://socket=" + encoded_path, "timeout": 5s});
+        hc.setURL("http://localhost:" + port);
+
+        hash<auto> info;
+        *string body = hc.get("/tcp-after-unix", NOTHING, \info);
+        assertEq("ok", body);
+
+        auto hdr = q.get();
+        if (hdr.typeCode() == NT_HASH && hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", hdr.err, hdr.desc));
+        }
+        assertEq("GET", hdr.method);
+        assertEq("/tcp-after-unix", hdr.path);
+        assertEq(sprintf("localhost:%d", port), hdr.host);
     }
 
     connMgrIsConnectedTest() {
