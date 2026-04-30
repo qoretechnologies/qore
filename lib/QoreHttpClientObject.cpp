@@ -7390,10 +7390,12 @@ void QoreHttpClientObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreVal
 }
 
 void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    http_priv->disconnect_unlocked();
-    http_priv->resetConnMgr();
-    priv->invalidate();
+    {
+        AutoLocker al(priv->m);
+        http_priv->disconnect_unlocked();
+        http_priv->resetConnMgr();
+        priv->invalidate();
+    }
     priv->socket->cleanup(xsink);
 }
 

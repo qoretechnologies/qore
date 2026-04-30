@@ -9320,7 +9320,12 @@ Queue* QoreSocket::getQueue() {
 
 void QoreSocket::cleanup(ExceptionSink* xsink) {
     qore_socket_exec_close(this);
-    priv->cleanupQueues(xsink);
+    if (priv->outer_lock) {
+        AutoLocker al(*priv->outer_lock);
+        priv->cleanupQueues(xsink);
+    } else {
+        priv->cleanupQueues(xsink);
+    }
 }
 
 int64 QoreSocket::getObjectIDForEvents() const {

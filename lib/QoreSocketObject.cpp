@@ -4279,8 +4279,10 @@ BinaryNode* QoreSocketObject::drainPendingBuffer() {
 }
 
 void QoreSocketObject::invalidate(ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    priv->invalidate();
+    {
+        AutoLocker al(priv->m);
+        priv->invalidate();
+    }
     priv->socket->cleanup(xsink);
 }
 
