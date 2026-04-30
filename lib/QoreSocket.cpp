@@ -139,6 +139,7 @@ static int qore_socket_plain_data_available(qore_socket_private* priv, const cha
             return 1;
         }
         if (rc == 0) {
+            priv->prepareForClose();
             priv->close();
             se_closed("Socket", mname, xsink);
             return -1;
@@ -403,10 +404,13 @@ static int qore_socket_set_socket_timeout_direct(QoreSocket* s, int optname, int
 static int qore_socket_get_socket_timeout_direct(QoreSocket* s, int optname);
 static int qore_socket_get_port_direct(QoreSocket* s);
 
-static int qore_socket_close_from_controller(QoreSocket* s) {
-    qore_socket_private* priv = qore_socket_private::get(*s);
+static int qore_socket_close_private_from_controller(qore_socket_private* priv) {
     priv->prepareForClose();
     return priv->close();
+}
+
+static int qore_socket_close_from_controller(QoreSocket* s) {
+    return qore_socket_close_private_from_controller(qore_socket_private::get(*s));
 }
 
 static void qore_socket_wake_async_controller(qore_socket_private* priv) {
@@ -5475,7 +5479,7 @@ SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState
     type = q_get_sock_type(type);
 
     // close socket if already open
-    sock->close();
+    qore_socket_close_private_from_controller(sock);
 
     sock->do_resolve_event(host, service);
 
@@ -6166,7 +6170,7 @@ int SocketRecvPacketPollState::continuePoll(ExceptionSink* xsink) {
                 bin->setSize(realsize);
                 // done if we have received no data ((rc == 0) => EOF)
                 if (!rc) {
-                    sock->close();
+                    qore_socket_close_private_from_controller(sock);
                     io = true;
                     return 0;
                 }
@@ -6429,7 +6433,7 @@ int SocketRecvSomePollState::continuePoll(ExceptionSink* xsink) {
             return 0;
         }
         if (rc == 0) {
-            sock->close();
+            qore_socket_close_private_from_controller(sock);
             io = true;
             return 0;
         }
