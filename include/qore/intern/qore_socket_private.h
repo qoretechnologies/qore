@@ -2235,49 +2235,6 @@ struct qore_socket_private : public QoreReferenceCounter {
 #endif // windows
     }
 
-    DLLLOCAL int bindINET(ExceptionSink* xsink, const char* name, const char* service, bool reuseaddr = true, int family = AF_UNSPEC, int socktype = SOCK_STREAM, int protocol = 0) {
-        assert(xsink);
-        family = q_get_af(family);
-        socktype = q_get_sock_type(socktype);
-
-        close();
-
-        QoreAddrInfo ai;
-        do_resolve_event(name, service);
-        if (ai.getInfo(xsink, name, service, family, AI_PASSIVE, socktype, protocol))
-            return -1;
-
-        struct addrinfo* aip = ai.getAddrInfo();
-        // first emit all "resolved" events
-        if (event_queue)
-            for (struct addrinfo* p = aip; p; p = p->ai_next)
-                do_resolved_event(p->ai_addr);
-
-        // try to open socket if necessary
-        if (openINET(aip->ai_family, aip->ai_socktype, protocol)) {
-            qore_socket_error(xsink, "SOCKET-BINDINET-ERROR", "error opening socket for bind", 0, name, service);
-            return -1;
-        }
-
-        int prt = q_get_port_from_addr(aip->ai_addr);
-
-        int en = 0;
-        // iterate through addresses and bind to the first interface possible
-        for (struct addrinfo* p = aip; p; p = p->ai_next) {
-            if (!bindIntern(p->ai_addr, p->ai_addrlen, prt, reuseaddr)) {
-            //printd(5, "qore_socket_private::bindINET(family: %d) bound: name: %s service: %s f: %d st: %d p: %d\n", family, name ? name : "(null)", service ? service : "(null)", p->ai_family, p->ai_socktype, p->ai_protocol);
-                return 0;
-            }
-
-            en = sock_get_raw_error();
-            //printd(5, "qore_socket_private::bindINET() failed to bind: name: %s service: %s f: %d st: %d p: %d, errno: %d (%s)\n", name ? name : "(null)", service ? service : "(null)", p->ai_family, p->ai_socktype, p->ai_protocol, en, strerror(en));
-        }
-
-        // if no bind was possible, then raise an exception
-        qore_socket_error_intern(en, xsink, "SOCKET-BIND-ERROR", "error binding on socket", 0, name, service);
-        return -1;
-    }
-
     DLLLOCAL int getPeerSockAddr(ExceptionSink* xsink, struct sockaddr_storage& addr, socklen_t& len) const {
         assert(xsink);
         if (sock == QORE_INVALID_SOCKET) {

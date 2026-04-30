@@ -3644,7 +3644,7 @@ nothing Socket::connectUNIXSSL(string path, softint socktype = SOCK_STREAM, soft
 
     This method tries to automatically pick the appropriate address family from the arguments; note that a hostname or address in square brackets (ex: \c "[localhost]") will be looked up and bound as an IPv6 address; additionally, the method recognizes ipv6 addresses by embedded colons (:) in the address string and binds them as such.
 
-    Internally, the getaddrinfo() function is used to look up bind addresses; internal \c bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
+    Internally, bind addresses are resolved by the socket async I/O controller; internal \c bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
 
     @par Example:
     @code{.py} # bind to a UNIX socket on the local system and reuse the address, check return code
@@ -3705,7 +3705,7 @@ nothing Socket::bindUNIX(string path, softint socktype = SOCK_STREAM, softint pr
 //! Opens and binds the socket to the given IPv4 or IPv6 interface (or if no interface is given, then to all interfaces on the local system) and port (the port number will be derived from the service name if a numeric port number is not given)
 /** Opens and binds the socket to a port, interface and port (if the interface string has a format \c "host:port"), or UNIX domain socket file (if no port or service name appears in the bind string). If the second parameter is @ref True, then the socket will set the \c SO_REUSEADDR option, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state).
 
-    Internally, the getaddrinfo() function is used to look up bind addresses; internal bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
+    Internally, bind addresses are resolved by the socket async I/O controller; internal bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
 
     If any errors occur, an exception is thrown.
 
