@@ -390,12 +390,8 @@ private:
 };
 
 static int qore_socket_bind_name_direct(QoreSocket* s, const char* name, bool reuseaddr);
-static int qore_socket_bind_port_direct(QoreSocket* s, int port, bool reuseaddr);
-static int qore_socket_bind_interface_port_direct(QoreSocket* s, const char* iface, int port, bool reuseaddr);
 static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int socktype, int protocol,
         ExceptionSink* xsink);
-static int qore_socket_bind_inet_direct(QoreSocket* s, const char* name, const char* service, bool reuseaddr,
-        int family, int socktype, int protocol, ExceptionSink* xsink);
 static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr* addr, int size,
         ExceptionSink* xsink);
 static int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, const struct sockaddr* addr,
@@ -947,10 +943,17 @@ public:
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, int port, bool reuseaddr)
             : sock(sock), action(Action::BindPort), reuseaddr(reuseaddr), port(port) {
+        service = std::to_string(port);
+        has_service = true;
+        socktype = SOCK_STREAM;
     }
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const char* iface, int port, bool reuseaddr)
             : sock(sock), action(Action::BindInterfacePort), name(iface), reuseaddr(reuseaddr), port(port) {
+        has_name = true;
+        service = std::to_string(port);
+        has_service = true;
+        socktype = SOCK_STREAM;
     }
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const char* name, int socktype, int protocol)
@@ -990,6 +993,8 @@ public:
             : sock(sock), action(getAction(config_action)), value(value) {
     }
 
+    DLLLOCAL ~QoreSocketControllerSetupPollOperation() override;
+
     DLLLOCAL virtual bool goalReached() const override {
         return done;
     }
@@ -1008,18 +1013,14 @@ public:
                 rc = qore_socket_bind_name_direct(sock, name.c_str(), reuseaddr);
                 break;
             case Action::BindPort:
-                rc = qore_socket_bind_port_direct(sock, port, reuseaddr);
-                break;
+                return continueBindInet(xsink);
             case Action::BindInterfacePort:
-                rc = qore_socket_bind_interface_port_direct(sock, name.c_str(), port, reuseaddr);
-                break;
+                return continueBindInet(xsink);
             case Action::BindUnix:
                 rc = qore_socket_bind_unix_direct(sock, name.c_str(), socktype, protocol, xsink);
                 break;
             case Action::BindInet:
-                rc = qore_socket_bind_inet_direct(sock, has_name ? name.c_str() : nullptr,
-                    has_service ? service.c_str() : nullptr, reuseaddr, family, socktype, protocol, xsink);
-                break;
+                return continueBindInet(xsink);
             case Action::BindSockaddr:
                 rc = qore_socket_bind_sockaddr_direct(sock, reinterpret_cast<const struct sockaddr*>(&addr),
                     addr_size, xsink);
@@ -1094,10 +1095,16 @@ public:
         if (isConfigAction()) {
             return "configuring";
         }
+        if (resolver) {
+            return "resolving";
+        }
         return "binding";
     }
 
 private:
+    DLLLOCAL QoreHashNode* continueBindInet(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const;
+
     DLLLOCAL static Action getAction(ConfigAction config_action) {
         switch (config_action) {
             case ConfigAction::SetNoDelay:
@@ -1167,6 +1174,9 @@ private:
     int addr_size = 0;
     sockaddr_storage addr = {};
     int rc = -1;
+    std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
+    std::vector<SocketResolvedAddrInfo> bind_inet_addrs;
+    bool bind_inet_resolved = false;
     bool done = false;
 };
 
@@ -5548,8 +5558,20 @@ static int qore_cares_library_init(ExceptionSink* xsink) {
 
 class QoreCaresAddrInfoResolver {
 public:
-    DLLLOCAL QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type, int protocol)
-            : host(std::move(host)), service(std::move(service)), family(family), type(type), protocol(protocol) {
+    DLLLOCAL QoreCaresAddrInfoResolver(std::string host, std::string service, int family, int type, int protocol,
+            int flags = 0)
+            : host(std::move(host)), service(std::move(service)), has_host(true), has_service(true), family(family),
+            type(type), protocol(protocol), flags(flags) {
+    }
+
+    DLLLOCAL QoreCaresAddrInfoResolver(const char* host, const char* service, int family, int type, int protocol,
+            int flags = 0)
+            : host(host ? host : ""), service(service ? service : ""), has_host(host), has_service(service),
+            family(family), type(type), protocol(protocol), flags(flags) {
+        if (!host && (flags & AI_PASSIVE)) {
+            this->host = family == AF_INET6 ? "::" : "0.0.0.0";
+            has_host = true;
+        }
     }
 
     DLLLOCAL ~QoreCaresAddrInfoResolver() {
@@ -5624,12 +5646,14 @@ private:
         }
 
         struct ares_addrinfo_hints hints = {};
+        hints.ai_flags = flags;
         hints.ai_family = family;
         hints.ai_socktype = type;
         hints.ai_protocol = protocol;
 
         started = true;
-        ares_getaddrinfo(channel, host.c_str(), service.c_str(), &hints, callback, this);
+        ares_getaddrinfo(channel, has_host ? host.c_str() : nullptr, has_service ? service.c_str() : nullptr,
+            &hints, callback, this);
         if (done) {
             return status == ARES_SUCCESS ? 0 : raiseError(xsink);
         }
@@ -5707,15 +5731,19 @@ private:
     DLLLOCAL int raiseError(ExceptionSink* xsink) const {
         xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
             "ares_getaddrinfo(node: '%s', service: '%s', address_family: %d='%s') error: %s",
-            host.c_str(), service.c_str(), family, q_af_to_str(family), ares_strerror(status));
+            has_host ? host.c_str() : "", has_service ? service.c_str() : "", family, q_af_to_str(family),
+            ares_strerror(status));
         return -1;
     }
 
     std::string host;
     std::string service;
+    bool has_host = false;
+    bool has_service = false;
     int family;
     int type;
     int protocol;
+    int flags;
     ares_channel_t* channel = nullptr;
     struct ares_addrinfo* result = nullptr;
     std::vector<SocketResolvedAddrInfo> addrs;
@@ -9378,38 +9406,133 @@ static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int soc
     return priv->bindUNIX(xsink, name, socktype, protocol);
 }
 
-static int qore_socket_bind_inet_direct(QoreSocket* s, const char* name, const char* service, bool reuseaddr,
-        int family, int socktype, int protocol, ExceptionSink* xsink) {
+static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name, const char* service,
+        bool reuseaddr, int protocol, std::vector<SocketResolvedAddrInfo>& addrs, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
     qore_socket_close_private_from_controller(priv);
-    return priv->bindINET(xsink, name, service, reuseaddr, family, socktype, protocol);
+
+    if (addrs.empty()) {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR",
+            "ares_getaddrinfo(node: '%s', service: '%s') returned no addresses", name ? name : "",
+            service ? service : "");
+        return -1;
+    }
+
+    if (priv->event_queue) {
+        for (auto& ai : addrs) {
+            priv->do_resolved_event(reinterpret_cast<const struct sockaddr*>(&ai.addr));
+        }
+    }
+
+    const SocketResolvedAddrInfo& first = addrs.front();
+    if (priv->openINET(first.family, first.socktype, protocol)) {
+        qore_socket_error(xsink, "SOCKET-BINDINET-ERROR", "error opening socket for bind", 0, name, service);
+        return -1;
+    }
+
+    int prt = q_get_port_from_addr(reinterpret_cast<const struct sockaddr*>(&first.addr));
+    int en = 0;
+    for (auto& ai : addrs) {
+        if (!priv->bindIntern(reinterpret_cast<struct sockaddr*>(&ai.addr), ai.addrlen, prt, reuseaddr)) {
+            return 0;
+        }
+        en = sock_get_raw_error();
+    }
+
+    qore_socket_error_intern(en, xsink, "SOCKET-BIND-ERROR", "error binding on socket", 0, name, service);
+    return -1;
 }
 
-static int qore_socket_bind_port_direct(QoreSocket* s, int prt, bool reuseaddr) {
-    qore_socket_private* priv = qore_socket_private::get(*s);
-    ExceptionSink xsink;
-    qore_socket_close_private_from_controller(priv);
-    QoreString service;
-    service.sprintf("%d", prt);
-    int rc = priv->bindINET(&xsink, 0, service.c_str(), reuseaddr);
-    // ignore exception; we just use a return code
-    if (xsink)
-        xsink.clear();
-    return rc;
+QoreSocketControllerSetupPollOperation::~QoreSocketControllerSetupPollOperation() = default;
+
+QoreHashNode* QoreSocketControllerSetupPollOperation::getResolverPollInfo(ExceptionSink* xsink) const {
+    std::vector<std::pair<int, int>> extra_fds;
+    resolver->getExtraFds(extra_fds);
+    QoreHashNode* rv = getSocketPollInfoHash(xsink, 0, extra_fds);
+    if (*xsink) {
+        return nullptr;
+    }
+    int poll_timeout_ms = resolver->getPollTimeoutMs();
+    rv->setKeyValue("poll_timeout_ms", poll_timeout_ms >= 0 ? poll_timeout_ms : 1, xsink);
+    return rv;
 }
 
-static int qore_socket_bind_interface_port_direct(QoreSocket* s, const char* iface, int prt, bool reuseaddr) {
-    qore_socket_private* priv = qore_socket_private::get(*s);
-    ExceptionSink xsink;
-    printd(5, "QoreSocket::bind(%s, %d)\n", iface, prt);
-    qore_socket_close_private_from_controller(priv);
-    QoreString service;
-    service.sprintf("%d", prt);
-    int rc = priv->bindINET(&xsink, iface, service.c_str(), reuseaddr);
-    // ignore exception; we just use a return code
-    if (xsink)
-        xsink.clear();
-    return rc;
+QoreHashNode* QoreSocketControllerSetupPollOperation::continueBindInet(ExceptionSink* xsink) {
+    if (!bind_inet_resolved) {
+        if (!resolver) {
+            qore_socket_private::get(*sock)->do_resolve_event(has_name ? name.c_str() : nullptr,
+                has_service ? service.c_str() : nullptr);
+            resolver = std::make_unique<QoreCaresAddrInfoResolver>(
+                has_name ? name.c_str() : nullptr,
+                has_service ? service.c_str() : nullptr,
+                q_get_af(family), q_get_sock_type(socktype), protocol, AI_PASSIVE);
+        }
+
+        int rrc = resolver->continuePoll(xsink);
+        if (*xsink || rrc < 0) {
+            done = true;
+            return nullptr;
+        }
+        if (rrc) {
+            return getResolverPollInfo(xsink);
+        }
+
+        bind_inet_addrs = resolver->getAddresses();
+        resolver.reset();
+        bind_inet_resolved = true;
+    }
+
+    rc = qore_socket_bind_inet_resolved_direct(sock, has_name ? name.c_str() : nullptr,
+        has_service ? service.c_str() : nullptr, reuseaddr, protocol, bind_inet_addrs, xsink);
+    done = true;
+    return nullptr;
+}
+
+SocketSetupPollOperation::~SocketSetupPollOperation() = default;
+
+QoreHashNode* SocketSetupPollOperation::getResolverPollInfo(ExceptionSink* xsink) const {
+    std::vector<std::pair<int, int>> extra_fds;
+    resolver->getExtraFds(extra_fds);
+    QoreHashNode* rv = getSocketPollInfoHash(xsink, 0, extra_fds);
+    if (*xsink) {
+        return nullptr;
+    }
+    int poll_timeout_ms = resolver->getPollTimeoutMs();
+    rv->setKeyValue("poll_timeout_ms", poll_timeout_ms >= 0 ? poll_timeout_ms : 1, xsink);
+    return rv;
+}
+
+QoreHashNode* SocketSetupPollOperation::continueBindInet(ExceptionSink* xsink) {
+    if (!bind_inet_resolved) {
+        if (!resolver) {
+            qore_socket_private::get(*sock->priv->socket)->do_resolve_event(has_name ? name.c_str() : nullptr,
+                has_service ? service.c_str() : nullptr);
+            resolver = std::make_unique<QoreCaresAddrInfoResolver>(
+                has_name ? name.c_str() : nullptr,
+                has_service ? service.c_str() : nullptr,
+                q_get_af(family), q_get_sock_type(socktype), protocol, AI_PASSIVE);
+        }
+
+        int rrc = resolver->continuePoll(xsink);
+        if (*xsink || rrc < 0) {
+            clearNonBlockLocked();
+            done = true;
+            return nullptr;
+        }
+        if (rrc) {
+            return getResolverPollInfo(xsink);
+        }
+
+        bind_inet_addrs = resolver->getAddresses();
+        resolver.reset();
+        bind_inet_resolved = true;
+    }
+
+    rc = qore_socket_bind_inet_resolved_direct(sock->priv->socket, has_name ? name.c_str() : nullptr,
+        has_service ? service.c_str() : nullptr, reuseaddr, protocol, bind_inet_addrs, xsink);
+    clearNonBlockLocked();
+    done = true;
+    return nullptr;
 }
 
 static int qore_socket_bind_check_sandbox(const struct sockaddr* addr, int size, int socktype,
@@ -10952,12 +11075,18 @@ SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSoc
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int port,
         bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindPort), reuseaddr(reuseaddr),
         port(port) {
+    service = std::to_string(port);
+    has_service = true;
+    socktype = SOCK_STREAM;
     init(xsink, true);
 }
 
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* iface,
         int port, bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindInterfacePort),
         name(iface), has_name(true), reuseaddr(reuseaddr), port(port) {
+    service = std::to_string(port);
+    has_service = true;
+    socktype = SOCK_STREAM;
     init(xsink, true);
 }
 
@@ -11084,18 +11213,14 @@ QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
             rc = qore_socket_bind_name_direct(sock->priv->socket, name.c_str(), reuseaddr);
             break;
         case Action::BindPort:
-            rc = qore_socket_bind_port_direct(sock->priv->socket, port, reuseaddr);
-            break;
+            return continueBindInet(xsink);
         case Action::BindInterfacePort:
-            rc = qore_socket_bind_interface_port_direct(sock->priv->socket, name.c_str(), port, reuseaddr);
-            break;
+            return continueBindInet(xsink);
         case Action::BindUnix:
             rc = qore_socket_bind_unix_direct(sock->priv->socket, name.c_str(), socktype, protocol, xsink);
             break;
         case Action::BindInet:
-            rc = qore_socket_bind_inet_direct(sock->priv->socket, has_name ? name.c_str() : nullptr,
-                has_service ? service.c_str() : nullptr, reuseaddr, family, socktype, protocol, xsink);
-            break;
+            return continueBindInet(xsink);
         case Action::Listen:
             rc = qore_socket_listen_direct(sock->priv->socket, backlog);
             break;

@@ -211,6 +211,7 @@ public:
     DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, int backlog);
     DLLLOCAL SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, ConfigAction config_action,
         int64 value = 0);
+    DLLLOCAL ~SocketSetupPollOperation() override;
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -234,7 +235,8 @@ public:
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override {
-        return done ? "done" : action == Action::Listen ? "listening" : isConfigAction() ? "configuring" : "binding";
+        return done ? "done" : action == Action::Listen ? "listening" : isConfigAction() ? "configuring"
+            : resolver ? "resolving" : "binding";
     }
 
     DLLLOCAL int getRc() const {
@@ -247,6 +249,8 @@ private:
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
     DLLLOCAL int initLocked(ExceptionSink* xsink);
     DLLLOCAL void clearNonBlockLocked();
+    DLLLOCAL QoreHashNode* continueBindInet(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const;
 
     Action action;
     std::string name;
@@ -261,8 +265,11 @@ private:
     int backlog = 0;
     int64 value = 0;
     int rc = -1;
+    std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
+    std::vector<SocketResolvedAddrInfo> bind_inet_addrs;
     bool done = false;
     bool initialized = false;
+    bool bind_inet_resolved = false;
     int controller_deferred_tid = -1;
 };
 
