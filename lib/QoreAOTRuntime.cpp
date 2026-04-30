@@ -2128,110 +2128,18 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::CAST_COMPLEX_LIST:
             case AOTExprKind::CAST_CLASS:
             case AOTExprKind::CAST_ENUM: {
-                // Cast operator: resolve type from path and reconstruct cast node
-                ref1 = reader.readStringRef(ptr);   // type/class path
-                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
-                uint8_t has_inner = QoreAOTBinaryReader::readU8(ptr);
-                QoreValue inner;
-                if (has_inner) {
-                    std::string inner_err;
-                    inner = readOneExpr(reader, ptr, end, inner_err, pgm,
-                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
-                    if (!inner_err.empty()) {
-                        printd(0, "AOT v2: error reading cast inner expression for '%s': %s\n",
-                            ref1 ? ref1 : "", inner_err.c_str());
-                        inner.discard(nullptr);
-                        has_unsupported = true;
-                        continue;
-                    }
+                // Slot-map cast payloads are compact: type path + flags.  The
+                // evaluated input is carried by the native IR operand, unlike
+                // inline nested expressions which also serialize an inner expr.
+                ref1 = reader.readStringRef(ptr);
+                uint8_t flags = QoreAOTBinaryReader::readU8(ptr);
+                uint64_t bits = resolveCastExprSlot(kind, ref1, (flags & 1) != 0, pgm);
+                if (bits) {
+                    ctx->exprs[i] = bits;
+                    continue;
                 }
-                if (ref1 && *ref1) {
-                    std::string resolve_error;
-                    QoreAOTTypeResolver resolver(pgm);
-                    const QoreTypeInfo* ti = resolver.resolve(ref1, resolve_error);
-                    QoreCastOperatorNode* cast_node = nullptr;
-                    switch (kind) {
-                        case AOTExprKind::CAST_CLASS: {
-                            if (!strcmp(ref1, "object")) {
-                                cast_node = new QoreClassCastOperatorNode(
-                                    &loc_builtin, nullptr, inner, or_nothing != 0);
-                            } else {
-                                const qore_ns_private* found_ns = nullptr;
-                                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                                    *pp->RootNS, ref1, found_ns);
-                                if (qc) {
-                                    cast_node = new QoreClassCastOperatorNode(
-                                        &loc_builtin, qc, inner, or_nothing != 0);
-                                }
-                            }
-                            break;
-                        }
-                        case AOTExprKind::CAST_HASHDECL: {
-                            if (!strcmp(ref1, "hash")) {
-                                if (!inner.hasNode()) {
-                                    inner = QoreValue(new QoreHashNode(autoTypeInfo));
-                                }
-                                cast_node = new QoreHashDeclCastOperatorNode(
-                                    &loc_builtin, nullptr, inner, or_nothing != 0);
-                                break;
-                            }
-                            const TypedHashDecl* hd = ti
-                                ? QoreTypeInfo::getUniqueReturnHashDecl(ti) : nullptr;
-                            if (!hd && ref1) {
-                                // Fallback: resolve hashdecl by namespace path directly
-                                if (pgm) {
-                                    const QoreNamespace* pns = nullptr;
-                                    hd = pgm->findHashDecl(ref1, pns);
-                                }
-                                if (!hd) {
-                                    const qore_ns_private* found_ns = nullptr;
-                                    hd = qore_root_ns_private::runtimeFindHashDecl(
-                                        *pp->RootNS, ref1, found_ns);
-                                }
-                            }
-                            if (hd) {
-                                if (!inner.hasNode()) {
-                                    inner = QoreValue(new QoreHashNode(autoTypeInfo));
-                                }
-                                cast_node = new QoreHashDeclCastOperatorNode(
-                                    &loc_builtin, hd, inner, or_nothing != 0);
-                            }
-                            break;
-                        }
-                        case AOTExprKind::CAST_COMPLEX_HASH:
-                            if (ti) {
-                                cast_node = new QoreComplexHashCastOperatorNode(
-                                    &loc_builtin, ti, inner, or_nothing != 0);
-                            }
-                            break;
-                        case AOTExprKind::CAST_COMPLEX_LIST:
-                            if (!strcmp(ref1, "list")) {
-                                cast_node = new QoreComplexListCastOperatorNode(
-                                    &loc_builtin, nullptr, inner, or_nothing != 0);
-                            } else if (ti) {
-                                cast_node = new QoreComplexListCastOperatorNode(
-                                    &loc_builtin, ti, inner, or_nothing != 0);
-                            }
-                            break;
-                        case AOTExprKind::CAST_ENUM: {
-                            const QoreEnumDecl* ed = ti
-                                ? QoreTypeInfo::getUniqueReturnEnum(ti) : nullptr;
-                            if (ed) {
-                                cast_node = new QoreEnumCastOperatorNode(
-                                    &loc_builtin, ed, ti, inner, or_nothing != 0);
-                            }
-                            break;
-                        }
-                        default:
-                            break;
-                    }
-                    if (cast_node) {
-                        ctx->exprs[i] = toBitsNB(QoreValue(cast_node));
-                        continue;
-                    }
-                }
-                inner.discard(nullptr);
-                printd(0, "AOT v2: cannot resolve cast type '%s'\n", ref1 ? ref1 : "(null)");
+                printd(0, "AOT v2: cannot resolve cast slot kind %d type '%s'\n",
+                    static_cast<int>(kind), ref1 ? ref1 : "(null)");
                 has_unsupported = true;
                 continue;
             }
