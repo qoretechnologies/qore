@@ -66,7 +66,6 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QuicSession.h"
 
-#include <poll.h>
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/QoreLibIntern.h"
 
@@ -81,7 +80,6 @@
 #include <utility>
 
 #include <fcntl.h>
-#include <poll.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -6084,6 +6082,7 @@ public:
         if (notifier) {
             notifier->ref();
             notifier->notify();  // signal immediately so first continuePoll completes
+            connect_mode_pre_notified = true;
         }
         if (client_obj) {
             client_obj->ref();
@@ -6298,19 +6297,17 @@ public:
             return nullptr;
         }
         // Check if notifier has been signaled (for connect mode where
-        // there's no future to check)
+        // there's no future to check).  The async controller already calls
+        // continuePoll() when the notifier fd is readable; avoid a nested
+        // zero-timeout poll here.
         if (!future && notifier) {
-            // Non-blocking check: try to peek the notifier fd
-            int fd = notifier->fd();
-            if (fd >= 0) {
-                struct pollfd pfd = {fd, POLLIN, 0};
-                int rc = ::poll(&pfd, 1, 0);
-                if (rc > 0 && (pfd.revents & POLLIN)) {
-                    notifier->acknowledge(xsink);
-                    done = true;
-                    return nullptr;
-                }
+            if (!connect_mode_pre_notified && !connect_mode_wait_armed) {
+                connect_mode_wait_armed = true;
+                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
             }
+            notifier->acknowledge(xsink);
+            done = true;
+            return nullptr;
         }
 
         // Return poll info pointing to the notifier fd (retrieved from
@@ -6319,20 +6316,24 @@ public:
         return getSocketPollInfoHash(xsink, SOCK_POLLIN);
     }
 
-    //! Handles WAITING_CONNECT phase.  Peeks the notifier fd; on signal,
+    //! Handles WAITING_CONNECT phase.  Waits for notifier readiness, then
     //! submits the request and transitions to WAITING_RESPONSE.
     DLLLOCAL QoreHashNode* continueWaitingConnect(ExceptionSink* xsink) {
-        // Non-blocking peek on the notifier fd.  If not yet signaled, stay
-        // in WAITING_CONNECT.
-        int fd = notifier->fd();
-        if (fd >= 0) {
-            struct pollfd pfd = {fd, POLLIN, 0};
-            int rc = ::poll(&pfd, 1, 0);
-            if (!(rc > 0 && (pfd.revents & POLLIN))) {
-                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
-            }
+        // The first controller pass arms the notifier fd; later passes are
+        // driven by the async controller when the notifier becomes readable.
+        bool decided = pending_conn->isClosed() || pending_conn->isReady();
+        if (!decided && !waiting_connect_armed) {
+            waiting_connect_armed = true;
+            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
         }
         notifier->acknowledge(xsink);
+        if (*xsink) {
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+        waiting_connect_armed = false;
 
         // Connection reached a decided state (READY or CLOSED).
         if (pending_conn->isClosed()) {
@@ -6514,6 +6515,8 @@ private:
     qore_httpclient_priv* priv_ref = nullptr;  // back-ref for user-disconnect detection
     mutable bool done = false;
     bool connect_mode = false;
+    bool connect_mode_pre_notified = false;
+    bool connect_mode_wait_armed = false;
     //! HTTPClient QoreObject (ref'd) — used to detect OBJECT-ALREADY-DELETED
     //! when the client is destroyed while the poll op is still active.
     QoreObject* client_obj = nullptr;
@@ -6523,6 +6526,7 @@ private:
     //! Phase tracks sendRecv mode progress (WAITING_CONNECT →
     //! WAITING_RESPONSE → DONE).  Unused for @ref connect_mode.
     Phase phase = Phase::WAITING_RESPONSE;
+    bool waiting_connect_armed = false;
 
     //! Fields valid only while @ref phase == WAITING_CONNECT.  Cleared by
     //! @ref clearPending when the request is submitted (or the op aborts).
