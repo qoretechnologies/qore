@@ -844,6 +844,20 @@ struct qore_socket_private : public QoreReferenceCounter {
     */
     uint32_t fd_generation = 0;
 
+    //! Directional ownership for controller-backed raw socket I/O sections.
+    /** Bare QoreSocket instances do not have the QoreSocketObject mutex and
+        non-blocking flags, but synchronous raw socket methods now delegate to
+        the async I/O controller as well.  This per-direction owner prevents two
+        callers from interleaving controller-backed receive or send operations on
+        the same raw socket while still allowing nested helper calls from the
+        owning thread.
+
+        @since %Qore 2.3
+    */
+    mutable QoreThreadLock async_sequence_m;
+    int async_sequence_owner_tid[3] = {-1, -1, -1};
+    int async_sequence_count[3] = {0, 0, 0};
+
 #ifdef DEBUG
     //! Debug-only: when true, the next controller wait simulates an fd swap.
     /** Tests set this flag via the debug Socket API to exercise the
@@ -1084,6 +1098,15 @@ struct qore_socket_private : public QoreReferenceCounter {
     DLLLOCAL bool isOpen() {
         return sock != QORE_INVALID_SOCKET;
     }
+
+    //! Throws an exception if another thread owns controller-backed I/O in @a direction
+    DLLLOCAL int checkAsyncSequenceAllowedForTid(ExceptionSink* xsink, unsigned direction, int tid) const;
+
+    //! Starts a directional controller-backed I/O section for the current thread
+    DLLLOCAL int startAsyncSequenceIo(ExceptionSink* xsink, unsigned direction);
+
+    //! Clears a directional controller-backed I/O section for the current thread
+    DLLLOCAL void clearAsyncSequenceIo(unsigned direction);
 
     DLLLOCAL int32_t getH2ActiveStreamId() const {
         bool use_thread_map;

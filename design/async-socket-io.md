@@ -669,19 +669,24 @@ Representative bridges:
   from the controller I/O thread.
 - `Socket::poll()` maps each list entry to a controller-backed poll operation and waits
   for controller processing/cancellation instead of running a raw caller-thread `poll()`.
-- Object-backed multi-step sync helpers that submit several controller operations
-  in sequence (`readHTTPChunkedBody*`, SSE reads, HTTP chunked send
-  callbacks/input streams, `sendFromInputStream`, and `recvToOutputStream`) hold
-  an async ownership guard for the whole logical operation.  Descriptor
-  forwarding is a single controller poll operation that wraps the descriptor as a
-  `FileInputStream` / `FileOutputStream`, so it uses the operation's normal
-  directional non-blocking ownership rather than an outer sequence guard.
+- Object-backed and raw `QoreSocket` multi-step sync helpers that submit several
+  controller operations in sequence (`readHTTPChunkedBody*`, SSE reads, HTTP
+  chunked send callbacks/input streams, `sendFromInputStream`, and
+  `recvToOutputStream`) hold an async ownership guard for the whole logical
+  operation.  Descriptor forwarding is a single controller poll operation that
+  wraps the descriptor as a `FileInputStream` / `FileOutputStream`, so it uses
+  the operation's normal directional non-blocking ownership rather than an outer
+  sequence guard.
   The guard also reserves the active socket direction (`NB_SEND`, `NB_RECV`, or
   `NB_ALL`) for the caller thread while allowing the helper's nested controller
   submissions to claim transient non-blocking ownership.  Individual syscalls
   still run in controller poll operations; same-direction async operations from
   other threads are rejected while the sequence is active, while opposite-direction
   full-duplex operations remain possible.
+- Bare `QoreSocket` instances do not have the `QoreSocketObject` mutex or
+  non-blocking flag state, so raw sync bridge helpers use `qore_socket_private`
+  directional controller ownership to provide the same same-direction exclusion
+  for controller-backed send, receive, connect, and SSL bridge sections.
 - Receive-side controller peeks such as `QoreSocketObject::checkIdleData()` also
   claim `NB_RECV`, so they cannot bypass a receive sequence reservation.
 - `Socket::poll()` treats closed/deleted entries as `SOCK_POLLERR` both inside

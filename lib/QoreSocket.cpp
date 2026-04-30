@@ -121,6 +121,125 @@ static bool qore_socket_exec_exception_is(const QoreHashNode& ex, const char* er
     return ex_err.getType() == NT_STRING && !strcmp(ex_err.get<const QoreStringNode>()->c_str(), err);
 }
 
+static int qore_socket_private_check_async_sequence_allowed_intern(const qore_socket_private& priv,
+        ExceptionSink* xsink, unsigned direction, int tid) {
+    int index = my_socket_priv::getAsyncSequenceIndex(direction);
+    if (priv.async_sequence_count[index] && priv.async_sequence_owner_tid[index] != tid) {
+        xsink->raiseException("SOCKET-ASYNC-MODE-ERROR",
+            "cannot start a controller-backed %s operation while TID %d owns a controller-backed %s operation "
+            "on the socket",
+            my_socket_priv::getNonBlockDirectionName(direction), priv.async_sequence_owner_tid[index],
+            my_socket_priv::getNonBlockDirectionName(direction));
+        return -1;
+    }
+    return 0;
+}
+
+int qore_socket_private::checkAsyncSequenceAllowedForTid(ExceptionSink* xsink, unsigned direction, int tid) const {
+    AutoLocker al(async_sequence_m);
+
+    unsigned flags = direction & NB_ALL;
+    if ((flags & NB_SEND) && qore_socket_private_check_async_sequence_allowed_intern(*this, xsink, NB_SEND, tid)) {
+        return -1;
+    }
+    if ((flags & NB_RECV) && qore_socket_private_check_async_sequence_allowed_intern(*this, xsink, NB_RECV, tid)) {
+        return -1;
+    }
+    if ((flags & NB_CONNECT)
+            && qore_socket_private_check_async_sequence_allowed_intern(*this, xsink, NB_CONNECT, tid)) {
+        return -1;
+    }
+    return 0;
+}
+
+static void qore_socket_private_start_async_sequence_io_intern(qore_socket_private& priv, unsigned direction,
+        int tid) {
+    int index = my_socket_priv::getAsyncSequenceIndex(direction);
+    assert(!priv.async_sequence_count[index] || priv.async_sequence_owner_tid[index] == tid);
+    if (!priv.async_sequence_count[index]) {
+        priv.async_sequence_owner_tid[index] = tid;
+    }
+    ++priv.async_sequence_count[index];
+}
+
+int qore_socket_private::startAsyncSequenceIo(ExceptionSink* xsink, unsigned direction) {
+    AutoLocker al(async_sequence_m);
+
+    int tid = q_gettid();
+    unsigned flags = direction & NB_ALL;
+    if ((flags & NB_SEND) && qore_socket_private_check_async_sequence_allowed_intern(*this, xsink, NB_SEND, tid)) {
+        return -1;
+    }
+    if ((flags & NB_RECV) && qore_socket_private_check_async_sequence_allowed_intern(*this, xsink, NB_RECV, tid)) {
+        return -1;
+    }
+    if ((flags & NB_CONNECT)
+            && qore_socket_private_check_async_sequence_allowed_intern(*this, xsink, NB_CONNECT, tid)) {
+        return -1;
+    }
+
+    if (flags & NB_SEND) {
+        qore_socket_private_start_async_sequence_io_intern(*this, NB_SEND, tid);
+    }
+    if (flags & NB_RECV) {
+        qore_socket_private_start_async_sequence_io_intern(*this, NB_RECV, tid);
+    }
+    if (flags & NB_CONNECT) {
+        qore_socket_private_start_async_sequence_io_intern(*this, NB_CONNECT, tid);
+    }
+    return 0;
+}
+
+static void qore_socket_private_clear_async_sequence_io_intern(qore_socket_private& priv, unsigned direction,
+        int tid) {
+    int index = my_socket_priv::getAsyncSequenceIndex(direction);
+    assert(priv.async_sequence_count[index] > 0);
+    assert(priv.async_sequence_owner_tid[index] == tid);
+    --priv.async_sequence_count[index];
+    if (!priv.async_sequence_count[index]) {
+        priv.async_sequence_owner_tid[index] = -1;
+    }
+}
+
+void qore_socket_private::clearAsyncSequenceIo(unsigned direction) {
+    AutoLocker al(async_sequence_m);
+
+    int tid = q_gettid();
+    unsigned flags = direction & NB_ALL;
+    if (flags & NB_SEND) {
+        qore_socket_private_clear_async_sequence_io_intern(*this, NB_SEND, tid);
+    }
+    if (flags & NB_RECV) {
+        qore_socket_private_clear_async_sequence_io_intern(*this, NB_RECV, tid);
+    }
+    if (flags & NB_CONNECT) {
+        qore_socket_private_clear_async_sequence_io_intern(*this, NB_CONNECT, tid);
+    }
+}
+
+class QoreSocketRawAsyncIoGuard {
+public:
+    DLLLOCAL QoreSocketRawAsyncIoGuard(qore_socket_private& priv, ExceptionSink* xsink, unsigned direction)
+            : priv(priv), direction(direction & NB_ALL) {
+        active = this->direction && !priv.startAsyncSequenceIo(xsink, this->direction);
+    }
+
+    DLLLOCAL ~QoreSocketRawAsyncIoGuard() {
+        if (active) {
+            priv.clearAsyncSequenceIo(direction);
+        }
+    }
+
+    DLLLOCAL explicit operator bool() const {
+        return active;
+    }
+
+private:
+    qore_socket_private& priv;
+    unsigned direction;
+    bool active = false;
+};
+
 static int qore_socket_bind_name_direct(QoreSocket* s, const char* name, bool reuseaddr);
 static int qore_socket_bind_port_direct(QoreSocket* s, int port, bool reuseaddr);
 static int qore_socket_bind_interface_port_direct(QoreSocket* s, const char* iface, int port, bool reuseaddr);
@@ -3012,6 +3131,12 @@ static bool qore_socket_exec_http2_stream_state(QoreSocket* s,
 
 static int qore_socket_exec_accept_descriptor(QoreSocket* s, SocketSource* source, int timeout_ms,
         ExceptionSink* xsink) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     QoreHashNode* ex = nullptr;
     ValueHolder result(qore_socket_exec_poll(s,
         new QoreSocketControllerAcceptPollOperation(s, source),
@@ -3047,6 +3172,12 @@ static int qore_socket_exec_accept_descriptor(QoreSocket* s, SocketSource* sourc
 
 static QoreSocket* qore_socket_exec_accept_ssl_socket(QoreSocket* s, SocketSource* source, int timeout_ms,
         QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey, ExceptionSink* xsink) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return nullptr;
+    }
+
     QoreSocketControllerAcceptPollOperation* accept_poller = new QoreSocketControllerAcceptPollOperation(s, source,
         true, cert, pkey);
     ReferenceHolder<SocketPollOperationBase> poller_holder(accept_poller, xsink);
@@ -3117,6 +3248,12 @@ static int qore_socket_exec_send_bytes(QoreSocket* s, const void* data, size_t s
         return 0;
     }
 
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_SEND);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(s,
         new QoreSocketControllerSendBytesPollOperation(s, data, size, http1_method),
         timeout_ms, "send", "send", xsink), xsink);
@@ -3124,7 +3261,7 @@ static int qore_socket_exec_send_bytes(QoreSocket* s, const void* data, size_t s
         return -1;
     }
     if (source > 0) {
-        qore_socket_private::get(*s)->do_data_event(QORE_EVENT_SOCKET_DATA_SENT, source, data, size);
+        priv->do_data_event(QORE_EVENT_SOCKET_DATA_SENT, source, data, size);
     }
     return 0;
 }
@@ -3148,6 +3285,12 @@ static BinaryNode* qore_socket_exec_recv_binary(QoreSocket* s, qore_offset_t siz
         return nullptr;
     }
 
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
+        return nullptr;
+    }
+
     ValueHolder result(qore_socket_exec_poll(s,
         new QoreSocketControllerRecvPollOperation(s,
             size > 0 ? QoreSocketControllerRecvPollOperation::Action::Recv
@@ -3168,13 +3311,19 @@ static BinaryNode* qore_socket_exec_recv_binary(QoreSocket* s, qore_offset_t siz
 
     BinaryNode* bin = result.release().get<BinaryNode>();
     if (source > 0) {
-        qore_socket_private::get(*s)->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *bin);
+        priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *bin);
     }
     return bin;
 }
 
 static BinaryNode* qore_socket_exec_recv_some_binary(QoreSocket* s, size_t size, int timeout_ms,
         const char* owner_name, ExceptionSink* xsink, int source = QORE_SOURCE_SOCKET) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
+        return nullptr;
+    }
+
     ValueHolder result(qore_socket_exec_poll(s,
         new QoreSocketControllerRecvPollOperation(s, QoreSocketControllerRecvPollOperation::Action::RecvSome,
             size, false, "receiving", "received"),
@@ -3193,7 +3342,7 @@ static BinaryNode* qore_socket_exec_recv_some_binary(QoreSocket* s, size_t size,
 
     BinaryNode* bin = result.release().get<BinaryNode>();
     if (source > 0) {
-        qore_socket_private::get(*s)->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *bin);
+        priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *bin);
     }
     return bin;
 }
@@ -3236,6 +3385,12 @@ static int qore_socket_exec_send_input_stream_poll(QoreSocket* s, InputStream* i
         return -1;
     }
 
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_SEND);
+    if (!io_guard) {
+        return -1;
+    }
+
     QoreSocketInputStreamRefGuard caller_ref(is, xsink);
     is->ref();
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -3269,6 +3424,12 @@ static int qore_socket_exec_recv_output_stream_poll(QoreSocket* s, OutputStream*
     }
     if (!os->isIoThreadSafe()) {
         xsink->raiseException("SOCKET-RECV-ERROR", "OutputStream is not I/O thread safe");
+        return -1;
+    }
+
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
         return -1;
     }
 
@@ -3307,6 +3468,12 @@ static QoreStringNode* qore_socket_exec_recv_string(QoreSocket* s, qore_offset_t
         return nullptr;
     }
 
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
+        return nullptr;
+    }
+
     ValueHolder result(qore_socket_exec_poll(s,
         new QoreSocketControllerRecvPollOperation(s,
             size > 0 ? QoreSocketControllerRecvPollOperation::Action::Recv
@@ -3327,13 +3494,19 @@ static QoreStringNode* qore_socket_exec_recv_string(QoreSocket* s, qore_offset_t
 
     QoreStringNode* str = result.release().get<QoreStringNode>();
     if (source > 0) {
-        qore_socket_private::get(*s)->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *str);
+        priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *str);
     }
     return str;
 }
 
 static QoreStringNode* qore_socket_exec_recv_until_string(QoreSocket* s, const char* pattern, size_t pattern_size,
         int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
+        return nullptr;
+    }
+
     ValueHolder result(qore_socket_exec_poll(s,
         new QoreSocketControllerRecvPollOperation(s, pattern, pattern_size, true, "receiving", "received"),
         timeout_ms, owner_name, "received", xsink), xsink);
@@ -3352,6 +3525,12 @@ static QoreStringNode* qore_socket_exec_recv_until_string(QoreSocket* s, const c
 }
 
 static bool qore_socket_exec_is_data_available(QoreSocket* s, int timeout_ms, ExceptionSink* xsink) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
+        return false;
+    }
+
     QoreHashNode* ex = nullptr;
     ValueHolder result(qore_socket_exec_poll(s,
         new QoreSocketControllerDataAvailablePollOperation(s),
@@ -3370,8 +3549,26 @@ static bool qore_socket_exec_is_data_available(QoreSocket* s, int timeout_ms, Ex
     return result->getAsBool();
 }
 
+static unsigned qore_socket_exec_readiness_direction(int events) {
+    unsigned direction = 0;
+    if (events & SOCK_POLLIN) {
+        direction |= NB_RECV;
+    }
+    if (events & SOCK_POLLOUT) {
+        direction |= NB_SEND;
+    }
+    return direction;
+}
+
 static int qore_socket_exec_wait_readiness(QoreSocket* s, int timeout_ms, int events, const char* owner_name,
         const char* waiting_state, const char* ready_state, ExceptionSink* xsink) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    unsigned direction = qore_socket_exec_readiness_direction(events);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, direction);
+    if (direction && !io_guard) {
+        return -1;
+    }
+
     QoreHashNode* ex = nullptr;
     ValueHolder result(qore_socket_exec_poll(s,
         new QoreSocketControllerReadinessPollOperation(s, events, owner_name, waiting_state, ready_state),
@@ -3484,6 +3681,12 @@ static QoreHashNode* qore_socket_exec_address_info(QoreSocket* s,
 
 static int qore_socket_exec_accept_replace(QoreSocket* s, SocketSource* source, int timeout_ms,
         ExceptionSink* xsink) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     QoreHashNode* ex = nullptr;
     ValueHolder result(qore_socket_exec_poll(s,
         new QoreSocketControllerAcceptReplacePollOperation(s, source),
@@ -3785,6 +3988,12 @@ static int qore_socket_exec_send_http_message_callback(QoreSocket* s, QoreHashNo
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         const ResolvedCallReferenceNode* send_callback, int source, int timeout_ms, bool* aborted,
         ExceptionSink* xsink) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_SEND);
+    if (!io_guard) {
+        return -1;
+    }
+
     if (qore_socket_exec_send_http_chunked_headers(s, info, method, path, http_version, headers, source,
             timeout_ms, xsink)) {
         return -1;
@@ -3890,6 +4099,11 @@ static int qore_socket_exec_read_http_chunked_trailers(QoreSocket* s, QoreHashNo
 static QoreHashNode* qore_socket_exec_read_http_chunked_body(QoreSocket* s, int timeout_ms,
         bool binary_body, bool read_once, const char* owner_name, int source, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
+        return nullptr;
+    }
+
     if (priv->http_exp_chunked_body) {
         priv->http_exp_chunked_body = false;
     }
@@ -4004,6 +4218,11 @@ static bool qore_socket_exec_process_sse_char(qore_socket_private* priv, QoreStr
 
 static QoreHashNode* qore_socket_exec_read_server_sent_event(QoreSocket* s, int timeout_ms, ExceptionSink* xsink) {
     qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
+        return nullptr;
+    }
+
     QoreString str(QCS_UTF8);
     int eol_count = 0;
     unsigned cancel_check = 0;
@@ -4037,6 +4256,11 @@ static QoreHashNode* qore_socket_exec_read_server_sent_event_encoded(QoreSocket*
     }
 
     qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
+        return nullptr;
+    }
+
     QoreString str(QCS_UTF8);
     int eol_count = 0;
 
@@ -7246,6 +7470,11 @@ int QoreSocket::shutdown() {
 }
 
 int QoreSocket::shutdownSSL(ExceptionSink* xsink) {
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerSslShutdownPollOperation(this), -1, "shutdownSSL", "ssl-shutdown", xsink),
         xsink);
@@ -7533,6 +7762,11 @@ int QoreSocket::connectINET(const char* host, int prt, int timeout_ms, Exception
     QoreString service;
     service.sprintf("%d", prt);
 
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerConnectPollOperation(this, host, service.c_str(), AF_UNSPEC, SOCK_STREAM, 0),
         timeout_ms, "connectINET", "connected", xsink), xsink);
@@ -7548,6 +7782,11 @@ int QoreSocket::connectINET(const char* host, int prt, ExceptionSink* xsink) {
 
 int QoreSocket::connectINET2(const char* name, const char* service, int family, int socktype, int protocol,
         int timeout_ms, ExceptionSink* xsink) {
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerConnectPollOperation(this, name, service, family, socktype, protocol),
         timeout_ms, "connectINET2", "connected", xsink), xsink);
@@ -7559,6 +7798,11 @@ int QoreSocket::connectUNIX(const char* p, ExceptionSink* xsink) {
 }
 
 int QoreSocket::connectUNIX(const char* p, int sock_type, int protocol, ExceptionSink* xsink) {
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerConnectPollOperation(this, p, sock_type, protocol),
         -1, "connectUNIX", "connected", xsink), xsink);
@@ -7717,6 +7961,11 @@ AbstractPollState* QoreSocket::startSslAccept(ExceptionSink* xsink, QoreSSLCerti
 // for AF_UNIX sockets:
 // * QoreSocket::connect("filename");
 int QoreSocket::connect(const char* name, int timeout_ms, ExceptionSink* xsink) {
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerConnectPollOperation(this, name), timeout_ms, "connect", "connected", xsink),
         xsink);
@@ -7735,6 +7984,11 @@ int QoreSocket::connect(const char* name, ExceptionSink* xsink) {
 // * QoreSocket::connectSSL("filename");
 int QoreSocket::connectSSL(ExceptionSink* xsink, const char* name, int timeout_ms, QoreSSLCertificate* cert,
         QoreSSLPrivateKey* pkey) {
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerConnectPollOperation(this, name, true, cert, pkey),
         timeout_ms, "connectSSL", "ssl-connected", xsink), xsink);
@@ -7751,6 +8005,11 @@ int QoreSocket::connectINETSSL(ExceptionSink* xsink, const char* host, int prt, 
     QoreString service;
     service.sprintf("%d", prt);
 
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerConnectPollOperation(this, host, service.c_str(), AF_UNSPEC, SOCK_STREAM, 0,
             true, cert, pkey),
@@ -7765,6 +8024,11 @@ int QoreSocket::connectINETSSL(ExceptionSink* xsink, const char* host, int prt, 
 
 int QoreSocket::connectINET2SSL(ExceptionSink* xsink, const char* name, const char* service, int family,
         int sock_type, int protocol, int timeout_ms, QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerConnectPollOperation(this, name, service, family, sock_type, protocol,
             true, cert, pkey),
@@ -7774,6 +8038,11 @@ int QoreSocket::connectINET2SSL(ExceptionSink* xsink, const char* name, const ch
 
 int QoreSocket::connectUNIXSSL(ExceptionSink* xsink, const char* p, int sock_type, int protocol,
         QoreSSLCertificate* cert, QoreSSLPrivateKey* pkey) {
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerConnectPollOperation(this, p, sock_type, protocol, true, cert, pkey),
         -1, "connectUNIXSSL", "ssl-connected", xsink), xsink);
@@ -8388,6 +8657,11 @@ int QoreSocket::asyncIoWait(int timeout_ms, bool read, bool write) const {
 
 int QoreSocket::upgradeClientToSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLCertificate* cert,
         QoreSSLPrivateKey* pkey) {
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerSslUpgradePollOperation(this, false, cert, pkey),
         timeout_ms, "upgradeClientToSSL", "ssl-upgraded", xsink), xsink);
@@ -8396,6 +8670,11 @@ int QoreSocket::upgradeClientToSSL(ExceptionSink* xsink, int timeout_ms, QoreSSL
 
 int QoreSocket::upgradeServerToSSL(ExceptionSink* xsink, int timeout_ms, QoreSSLCertificate* cert,
         QoreSSLPrivateKey* pkey) {
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
     ValueHolder rv(qore_socket_exec_poll(this,
         new QoreSocketControllerSslUpgradePollOperation(this, true, cert, pkey),
         timeout_ms, "upgradeServerToSSL", "ssl-upgraded", xsink), xsink);
