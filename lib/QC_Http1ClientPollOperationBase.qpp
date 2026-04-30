@@ -1536,6 +1536,18 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
             }
         }
 
+        // SocketRecvPacketPollState closes the socket on EOF (see
+        // lib/QoreSocket.cpp:1894).  After that close, neither the recv
+        // loop nor the new SocketRecvDataPollOperation constructor below
+        // can do anything useful — both surface as SOCKET-NOT-OPEN to the
+        // I/O controller, which routes through handleConnectionResult →
+        // conn.close() → poll_op.abort() → HTTP1-ABORT for the still-
+        // active stream.  Dispatch the body end now while the response
+        // state is intact.
+        if (!sock_obj || sock_obj->getSocket() < 0) {
+            return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
+        }
+
         if (has_data) {
             // Read more data
             releaseCurrentOp(xsink);
@@ -1550,22 +1562,11 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
             return handleRecvBodyClose(xsink);
         }
 
-        if (streaming_active_io) {
-            // Empty read in streaming mode — re-poll for more data
-            releaseCurrentOp(xsink);
-            sock_obj->ref();
-            current_op = new SocketRecvDataPollOperation(xsink, sock_obj, false);
-            if (*xsink) {
-                current_op->deref(xsink);
-                current_op = nullptr;
-                return nullptr;
-            }
-            current_op->setSelf(*self);
-            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
-        }
-
-        // Empty read in non-streaming mode — server closed connection
-        return dispatchResponse(xsink);
+        // Empty read — the read state machine reached its goal but produced
+        // no new bytes.  This only happens after the EOF close above, but
+        // that case is handled at the top of this block; reaching here is
+        // the safe fallback path.
+        return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
     }
 
     // Read operation ended without goalReached (likely EOF)
