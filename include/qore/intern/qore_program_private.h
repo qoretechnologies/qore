@@ -60,6 +60,7 @@ class QoreSandboxManager;
 #include <cerrno>
 #include <cstdarg>
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <set>
 
@@ -2538,11 +2539,8 @@ public:
     DLLLOCAL static QoreProgram* resolveProgramId(unsigned programId) {
         printd(5, "qore_program_private::resolveProgramId(%x)\n", programId);
         QoreAutoRWReadLocker al(&lck_programMap);
-        for (qore_program_to_object_map_t::iterator i = qore_program_to_object_map.begin(); i != qore_program_to_object_map.end(); i++) {
-            if (i->first->priv->programId == programId)
-                return i->first;
-        }
-        return nullptr;
+        programid_to_program_map_t::iterator i = programid_to_program_map.find(programId);
+        return i == programid_to_program_map.end() ? nullptr : i->second;
     }
 
     DLLLOCAL bool checkAllowDebugging(ExceptionSink *xsink) {
@@ -2805,6 +2803,11 @@ private:
 
     typedef std::map<QoreProgram*, QoreObject*> qore_program_to_object_map_t;
     static qore_program_to_object_map_t qore_program_to_object_map;
+    // Parallel programId -> QoreProgram* map maintained alongside
+    // qore_program_to_object_map under lck_programMap.  Provides O(1)
+    // resolveProgramId() lookup instead of an O(N) linear scan.
+    typedef std::unordered_map<unsigned, QoreProgram*> programid_to_program_map_t;
+    static programid_to_program_map_t programid_to_program_map;
     static QoreRWLock lck_programMap; // to protect program list manipulation
     static volatile unsigned programIdCounter;   // to generate programId
     unsigned programId;
