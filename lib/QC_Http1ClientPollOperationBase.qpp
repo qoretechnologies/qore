@@ -1651,23 +1651,28 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
 
+    // If the server requested connection close, mark the connection closed
+    // BEFORE resolving the response Future.  Otherwise a consumer thread
+    // waking from action->execute() can call acquireStream() on this same
+    // connection (still marked Ready in the pool) before the close fires,
+    // landing a new stream_action that the subsequent abort() in
+    // closeImpl() rejects with HTTP1-ABORT.
+    if (close) {
+        h1_state.store(H1State::CLOSED, std::memory_order_release);
+        if (connection_priv) {
+            connection_priv->setClosed();
+        }
+        connection_priv = nullptr;
+    }
+
     // Dispatch to action
     if (action) {
         action->execute(resp.release(), xsink);
         action->deref(xsink);
     }
 
-    // Check if server requested connection close
     if (close) {
         printd(5, "Http1ClientPollOperationPriv::dispatchResponse() connection close\n");
-        h1_state.store(H1State::CLOSED, std::memory_order_release);
-        // Notify the connection base (and via it, the manager) that this
-        // connection is closed so findReusableLocked skips it and
-        // onClosedHook evicts it from the pool.
-        if (connection_priv) {
-            connection_priv->setClosed();
-        }
-        connection_priv = nullptr;
         return nullptr;
     }
 
@@ -1763,6 +1768,18 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
     releaseCurrentOp(xsink);
     resetResponseState(xsink);
 
+    // Mark the connection closed before completing the action — see
+    // dispatchResponse() for the full race rationale (consumer thread
+    // waking from action->execute() can land a new stream on a connection
+    // that is about to be evicted).
+    if (close) {
+        h1_state.store(H1State::CLOSED, std::memory_order_release);
+        if (connection_priv) {
+            connection_priv->setClosed();
+        }
+        connection_priv = nullptr;
+    }
+
     if (action) {
         ReferenceHolder<QoreHashNode> end_resp(new QoreHashNode(autoTypeInfo), xsink);
         end_resp->setKeyValue("end_stream", true, xsink);
@@ -1777,12 +1794,6 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
 
     if (close) {
         printd(5, "Http1ClientPollOperationPriv::dispatchStreamingEnd() connection close\n");
-        h1_state.store(H1State::CLOSED, std::memory_order_release);
-        // Notify connection base so manager evicts from pool
-        if (connection_priv) {
-            connection_priv->setClosed();
-        }
-        connection_priv = nullptr;
         return nullptr;
     }
 
