@@ -170,6 +170,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure strip source date literal",
             \testClosureStripSourceDateLiteral());
         addTestCase("AOT UTC date literal zone", \testUTCDateLiteralZone());
+        addTestCase("AOT strip source class cast lvalue",
+            \testStripSourceClassCastLValue());
         addTestCase("AOT closure strip source logical and/or",
             \testClosureStripSourceLogicalAndOr());
         addTestCase("AOT closure strip source call reference call",
@@ -4651,6 +4653,33 @@ exit(0);
             "UTC date literal strip-source output matches interpreter");
         assertEq("20150830T123600Z\n", result.run_out,
             "UTC date literal preserves the explicit UTC zone");
+    }
+
+    testStripSourceClassCastLValue() {
+        string code = "%modern
+
+class R {
+    public {
+        bool flag = False;
+    }
+}
+
+sub setflag(object r) {
+    cast<R>(r).flag = True;
+}
+
+R r();
+setflag(r);
+printf(\"%y\\n\", r.flag);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "class cast lvalue strip-source: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "class cast lvalue strip-source: all pre-compiled: " + result.compile_out);
+        assertEq("True\n", result.run_out,
+            "class cast lvalue strip-source assignment works");
     }
 
     testClosureStripSourceLogicalAndOr() {

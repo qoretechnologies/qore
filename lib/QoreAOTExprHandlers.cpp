@@ -1976,6 +1976,33 @@ static QoreValue read_expr_parse_ref(AOTExprReadCtx& ctx) {
 // CAST_HASHDECL (24)
 // ============================================================================
 
+static bool write_expr_cast_inner(AOTExprWriteCtx& ctx, QoreValue inner) {
+    if (inner.hasNode()) {
+        ctx.writer.writeU8(1);
+        return ::classifyAndWriteExpr(ctx.writer, inner,
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+    }
+    ctx.writer.writeU8(0);
+    return true;
+}
+
+static bool read_expr_cast_inner(AOTExprReadCtx& ctx, QoreValue& inner) {
+    uint8_t has_inner = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (!has_inner) {
+        return true;
+    }
+    std::string inner_err;
+    inner = readOneExpr(ctx.reader, ctx.ptr, ctx.end, inner_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    if (!inner_err.empty()) {
+        ctx.error = inner_err;
+        inner.discard(nullptr);
+        inner = QoreValue();
+        return false;
+    }
+    return true;
+}
+
 static bool write_expr_cast_hashdecl(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
@@ -1984,18 +2011,7 @@ static bool write_expr_cast_hashdecl(AOTExprWriteCtx& ctx) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_HASHDECL));
             ctx.writer.writeStringRef(hd ? hd->getNamespacePath().c_str() : "hash");
             ctx.writer.writeU8(hdc->isOrNothing() ? 1 : 0);
-            // Serialize the inner expression being cast
-            QoreValue inner = hdc->getExp();
-            if (inner.hasNode()) {
-                ctx.writer.writeU8(1);
-                if (!::classifyAndWriteExpr(ctx.writer, inner,
-                        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
-                    return false;
-                }
-            } else {
-                ctx.writer.writeU8(0);
-            }
-            return true;
+            return write_expr_cast_inner(ctx, hdc->getExp());
         }
     }
     return false;
@@ -2004,17 +2020,9 @@ static bool write_expr_cast_hashdecl(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_cast_hashdecl(AOTExprReadCtx& ctx) {
     const char* hashdecl_path = ctx.reader.readStringRef(ctx.ptr);
     uint8_t or_nothing = QoreAOTBinaryReader::readU8(ctx.ptr);
-    // Read inner expression (added for sub-expression serialization)
-    uint8_t has_inner = QoreAOTBinaryReader::readU8(ctx.ptr);
     QoreValue inner;
-    if (has_inner) {
-        std::string inner_err;
-        inner = readOneExpr(ctx.reader, ctx.ptr, ctx.end, inner_err, ctx.pgm,
-            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
-        if (!inner_err.empty()) {
-            ctx.error = inner_err;
-            return QoreValue();
-        }
+    if (!read_expr_cast_inner(ctx, inner)) {
+        return QoreValue();
     }
     if (!hashdecl_path || !*hashdecl_path) {
         inner.discard(nullptr);
@@ -2049,7 +2057,7 @@ static bool write_expr_cast_complex_hash(AOTExprWriteCtx& ctx) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_HASH));
         ctx.writer.writeStringRef(QoreTypeInfo::getPath(chc->getCastTypeInfo()));
         ctx.writer.writeU8(chc->isOrNothing() ? 1 : 0);
-        return true;
+        return write_expr_cast_inner(ctx, chc->getExp());
     }
     return false;
 }
@@ -2057,16 +2065,22 @@ static bool write_expr_cast_complex_hash(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_cast_complex_hash(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     uint8_t or_nothing = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreValue inner;
+    if (!read_expr_cast_inner(ctx, inner)) {
+        return QoreValue();
+    }
     if (!type_path || !*type_path) {
+        inner.discard(nullptr);
         return QoreValue();
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
     const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
     if (!ti) {
+        inner.discard(nullptr);
         return QoreValue();
     }
-    auto* node = new QoreComplexHashCastOperatorNode(&loc_builtin, ti, QoreValue(), or_nothing != 0);
+    auto* node = new QoreComplexHashCastOperatorNode(&loc_builtin, ti, inner, or_nothing != 0);
     return QoreValue(node);
 }
 
@@ -2081,7 +2095,7 @@ static bool write_expr_cast_complex_list(AOTExprWriteCtx& ctx) {
         const QoreTypeInfo* ti = clc->getCastTypeInfo();
         ctx.writer.writeStringRef(ti ? QoreTypeInfo::getPath(ti) : "list");
         ctx.writer.writeU8(clc->isOrNothing() ? 1 : 0);
-        return true;
+        return write_expr_cast_inner(ctx, clc->getExp());
     }
     return false;
 }
@@ -2089,19 +2103,25 @@ static bool write_expr_cast_complex_list(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_cast_complex_list(AOTExprReadCtx& ctx) {
     const char* type_path = ctx.reader.readStringRef(ctx.ptr);
     uint8_t or_nothing = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreValue inner;
+    if (!read_expr_cast_inner(ctx, inner)) {
+        return QoreValue();
+    }
     if (!type_path || !*type_path) {
+        inner.discard(nullptr);
         return QoreValue();
     }
     if (!strcmp(type_path, "list")) {
-        return QoreValue(new QoreComplexListCastOperatorNode(&loc_builtin, nullptr, QoreValue(), or_nothing != 0));
+        return QoreValue(new QoreComplexListCastOperatorNode(&loc_builtin, nullptr, inner, or_nothing != 0));
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
     const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
     if (!ti) {
+        inner.discard(nullptr);
         return QoreValue();
     }
-    auto* node = new QoreComplexListCastOperatorNode(&loc_builtin, ti, QoreValue(), or_nothing != 0);
+    auto* node = new QoreComplexListCastOperatorNode(&loc_builtin, ti, inner, or_nothing != 0);
     return QoreValue(node);
 }
 
@@ -2117,7 +2137,7 @@ static bool write_expr_cast_class(AOTExprWriteCtx& ctx) {
         // A null class pointer represents the generic cast<object>(...) case.
         ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "object");
         ctx.writer.writeU8(cc->isOrNothing() ? 1 : 0);
-        return true;
+        return write_expr_cast_inner(ctx, cc->getExp());
     }
     return false;
 }
@@ -2125,20 +2145,26 @@ static bool write_expr_cast_class(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_cast_class(AOTExprReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     uint8_t or_nothing = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreValue inner;
+    if (!read_expr_cast_inner(ctx, inner)) {
+        return QoreValue();
+    }
     if (!class_path || !*class_path) {
+        inner.discard(nullptr);
         return QoreValue();
     }
     if (!strcmp(class_path, "object")) {
-        return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, nullptr, QoreValue(), or_nothing != 0));
+        return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, nullptr, inner, or_nothing != 0));
     }
     qore_program_private* pp = qore_program_private::get(*ctx.pgm);
     const qore_ns_private* found_ns = nullptr;
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
         *pp->RootNS, class_path, found_ns);
     if (!qc) {
+        inner.discard(nullptr);
         return QoreValue();
     }
-    auto* node = new QoreClassCastOperatorNode(&loc_builtin, qc, QoreValue(), or_nothing != 0);
+    auto* node = new QoreClassCastOperatorNode(&loc_builtin, qc, inner, or_nothing != 0);
     return QoreValue(node);
 }
 
@@ -2152,7 +2178,7 @@ static bool write_expr_cast_enum(AOTExprWriteCtx& ctx) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_ENUM));
         ctx.writer.writeStringRef(QoreTypeInfo::getPath(ec->getCastTypeInfo()));
         ctx.writer.writeU8(ec->isOrNothing() ? 1 : 0);
-        return true;
+        return write_expr_cast_inner(ctx, ec->getExp());
     }
     return false;
 }
@@ -2160,20 +2186,27 @@ static bool write_expr_cast_enum(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_cast_enum(AOTExprReadCtx& ctx) {
     const char* enum_path = ctx.reader.readStringRef(ctx.ptr);
     uint8_t or_nothing = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreValue inner;
+    if (!read_expr_cast_inner(ctx, inner)) {
+        return QoreValue();
+    }
     if (!enum_path || !*enum_path) {
+        inner.discard(nullptr);
         return QoreValue();
     }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
     const QoreTypeInfo* ti = type_resolver.resolve(enum_path, type_error);
     if (!ti) {
+        inner.discard(nullptr);
         return QoreValue();
     }
     const QoreEnumDecl* ed = QoreTypeInfo::getUniqueReturnEnum(ti);
     if (!ed) {
+        inner.discard(nullptr);
         return QoreValue();
     }
-    auto* node = new QoreEnumCastOperatorNode(&loc_builtin, ed, ti, QoreValue(), or_nothing != 0);
+    auto* node = new QoreEnumCastOperatorNode(&loc_builtin, ed, ti, inner, or_nothing != 0);
     return QoreValue(node);
 }
 

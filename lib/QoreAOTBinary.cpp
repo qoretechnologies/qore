@@ -4838,6 +4838,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_HASH));
         writer.writeStringRef(QoreTypeInfo::getPath(chc->getCastTypeInfo()));
         writer.writeU8(chc->isOrNothing() ? 1 : 0);
+        QoreValue inner = chc->getExp();
+        if (inner.hasNode()) {
+            writer.writeU8(1);
+            if (!write_inline_expr(inner)) {
+                return false;
+            }
+        } else {
+            writer.writeU8(0);
+        }
         return true;
     }
 
@@ -4847,6 +4856,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreTypeInfo* ti = clc->getCastTypeInfo();
         writer.writeStringRef(ti ? QoreTypeInfo::getPath(ti) : "list");
         writer.writeU8(clc->isOrNothing() ? 1 : 0);
+        QoreValue inner = clc->getExp();
+        if (inner.hasNode()) {
+            writer.writeU8(1);
+            if (!write_inline_expr(inner)) {
+                return false;
+            }
+        } else {
+            writer.writeU8(0);
+        }
         return true;
     }
 
@@ -4858,6 +4876,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         // class pointer represents the generic cast<object>(...) case.
         writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "object");
         writer.writeU8(cc->isOrNothing() ? 1 : 0);
+        QoreValue inner = cc->getExp();
+        if (inner.hasNode()) {
+            writer.writeU8(1);
+            if (!write_inline_expr(inner)) {
+                return false;
+            }
+        } else {
+            writer.writeU8(0);
+        }
         return true;
     }
 
@@ -4866,6 +4893,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_ENUM));
         writer.writeStringRef(QoreTypeInfo::getPath(ec->getCastTypeInfo()));
         writer.writeU8(ec->isOrNothing() ? 1 : 0);
+        QoreValue inner = ec->getExp();
+        if (inner.hasNode()) {
+            writer.writeU8(1);
+            if (!write_inline_expr(inner)) {
+                return false;
+            }
+        } else {
+            writer.writeU8(0);
+        }
         return true;
     }
 

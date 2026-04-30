@@ -1183,12 +1183,16 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         rdr.readStringRef(p);
         return;
     }
-    // Cast kinds: stringref + u8
+    // Cast kinds: stringref + u8 or_nothing + u8 has_inner + optional inner expression
     if (ek == AOTExprKind::CAST_HASHDECL || ek == AOTExprKind::CAST_COMPLEX_HASH
             || ek == AOTExprKind::CAST_COMPLEX_LIST || ek == AOTExprKind::CAST_CLASS
             || ek == AOTExprKind::CAST_ENUM) {
         rdr.readStringRef(p);
         QoreAOTBinaryReader::readU8(p);
+        uint8_t has_inner = QoreAOTBinaryReader::readU8(p);
+        if (has_inner) {
+            skipOneExpr(rdr, p, e);
+        }
         return;
     }
     // Inline constants
@@ -2127,6 +2131,20 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Cast operator: resolve type from path and reconstruct cast node
                 ref1 = reader.readStringRef(ptr);   // type/class path
                 uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
+                uint8_t has_inner = QoreAOTBinaryReader::readU8(ptr);
+                QoreValue inner;
+                if (has_inner) {
+                    std::string inner_err;
+                    inner = readOneExpr(reader, ptr, end, inner_err, pgm,
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                    if (!inner_err.empty()) {
+                        printd(0, "AOT v2: error reading cast inner expression for '%s': %s\n",
+                            ref1 ? ref1 : "", inner_err.c_str());
+                        inner.discard(nullptr);
+                        has_unsupported = true;
+                        continue;
+                    }
+                }
                 if (ref1 && *ref1) {
                     std::string resolve_error;
                     QoreAOTTypeResolver resolver(pgm);
@@ -2136,22 +2154,25 @@ static QoreAOTContext* buildContextFromSlotMap(
                         case AOTExprKind::CAST_CLASS: {
                             if (!strcmp(ref1, "object")) {
                                 cast_node = new QoreClassCastOperatorNode(
-                                    &loc_builtin, nullptr, QoreValue(), or_nothing != 0);
+                                    &loc_builtin, nullptr, inner, or_nothing != 0);
                             } else {
                                 const qore_ns_private* found_ns = nullptr;
                                 const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
                                     *pp->RootNS, ref1, found_ns);
                                 if (qc) {
                                     cast_node = new QoreClassCastOperatorNode(
-                                        &loc_builtin, qc, QoreValue(), or_nothing != 0);
+                                        &loc_builtin, qc, inner, or_nothing != 0);
                                 }
                             }
                             break;
                         }
                         case AOTExprKind::CAST_HASHDECL: {
                             if (!strcmp(ref1, "hash")) {
+                                if (!inner.hasNode()) {
+                                    inner = QoreValue(new QoreHashNode(autoTypeInfo));
+                                }
                                 cast_node = new QoreHashDeclCastOperatorNode(
-                                    &loc_builtin, nullptr, QoreValue(), or_nothing != 0);
+                                    &loc_builtin, nullptr, inner, or_nothing != 0);
                                 break;
                             }
                             const TypedHashDecl* hd = ti
@@ -2169,24 +2190,27 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 }
                             }
                             if (hd) {
+                                if (!inner.hasNode()) {
+                                    inner = QoreValue(new QoreHashNode(autoTypeInfo));
+                                }
                                 cast_node = new QoreHashDeclCastOperatorNode(
-                                    &loc_builtin, hd, QoreValue(), or_nothing != 0);
+                                    &loc_builtin, hd, inner, or_nothing != 0);
                             }
                             break;
                         }
                         case AOTExprKind::CAST_COMPLEX_HASH:
                             if (ti) {
                                 cast_node = new QoreComplexHashCastOperatorNode(
-                                    &loc_builtin, ti, QoreValue(), or_nothing != 0);
+                                    &loc_builtin, ti, inner, or_nothing != 0);
                             }
                             break;
                         case AOTExprKind::CAST_COMPLEX_LIST:
                             if (!strcmp(ref1, "list")) {
                                 cast_node = new QoreComplexListCastOperatorNode(
-                                    &loc_builtin, nullptr, QoreValue(), or_nothing != 0);
+                                    &loc_builtin, nullptr, inner, or_nothing != 0);
                             } else if (ti) {
                                 cast_node = new QoreComplexListCastOperatorNode(
-                                    &loc_builtin, ti, QoreValue(), or_nothing != 0);
+                                    &loc_builtin, ti, inner, or_nothing != 0);
                             }
                             break;
                         case AOTExprKind::CAST_ENUM: {
@@ -2194,7 +2218,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 ? QoreTypeInfo::getUniqueReturnEnum(ti) : nullptr;
                             if (ed) {
                                 cast_node = new QoreEnumCastOperatorNode(
-                                    &loc_builtin, ed, ti, QoreValue(), or_nothing != 0);
+                                    &loc_builtin, ed, ti, inner, or_nothing != 0);
                             }
                             break;
                         }
@@ -2206,6 +2230,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                         continue;
                     }
                 }
+                inner.discard(nullptr);
                 printd(0, "AOT v2: cannot resolve cast type '%s'\n", ref1 ? ref1 : "(null)");
                 has_unsupported = true;
                 continue;

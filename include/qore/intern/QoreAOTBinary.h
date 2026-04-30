@@ -78,7 +78,8 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v1: initial format with full 128-bit parse options + source hash
 //! v2: added BCA (Base Class Constructor Arguments) serialization for constructors
 //! v3: added timezone metadata for IR date constants
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 3;
+//! v4: all serialized cast expression kinds carry their inner expression
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 4;
 
 //! On-disk header size (60 bytes)
 constexpr uint32_t QORE_AOT_HEADER_SIZE = 60;
@@ -843,11 +844,11 @@ enum class AOTExprKind : uint8_t {
     HASH_LITERAL       = 21,  //!< Hash literal: num_pairs(u8) + [key_str(stringref) + value(AOTExprKind)] * N
     HASH_DEREF         = 22,  //!< Hash/object dereference: left(AOTExprKind) + right(AOTExprKind)
     PARSE_REF          = 23,  //!< Parse reference (\var): [type_path if QORE_AOT_FEAT_PARSE_REF_TYPE] + inner_lvalue(AOTExprKind)
-    CAST_HASHDECL      = 24,  //!< Hashdecl cast: ref1=hashdecl_path, u8 or_nothing
-    CAST_COMPLEX_HASH  = 25,  //!< Complex hash cast: ref1=type_path, u8 or_nothing
-    CAST_COMPLEX_LIST  = 26,  //!< Complex list cast: ref1=type_path, u8 or_nothing
-    CAST_CLASS         = 27,  //!< Class cast: ref1=class_path, u8 or_nothing
-    CAST_ENUM          = 28,  //!< Enum cast: ref1=enum_path, u8 or_nothing
+    CAST_HASHDECL      = 24,  //!< Hashdecl cast: ref1=hashdecl_path, u8 or_nothing, u8 has_inner, inner?
+    CAST_COMPLEX_HASH  = 25,  //!< Complex hash cast: ref1=type_path, u8 or_nothing, u8 has_inner, inner?
+    CAST_COMPLEX_LIST  = 26,  //!< Complex list cast: ref1=type_path, u8 or_nothing, u8 has_inner, inner?
+    CAST_CLASS         = 27,  //!< Class cast: ref1=class_path, u8 or_nothing, u8 has_inner, inner?
+    CAST_ENUM          = 28,  //!< Enum cast: ref1=enum_path, u8 or_nothing, u8 has_inner, inner?
     CONST_INT          = 29,  //!< Integer constant: i64 value (8 bytes LE)
     CONST_FLOAT        = 30,  //!< Float constant: f64 value (8 bytes LE, IEEE 754)
     CONST_BOOL         = 31,  //!< Boolean constant: u8 value (0 or 1)
