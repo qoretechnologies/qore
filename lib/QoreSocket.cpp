@@ -1314,7 +1314,11 @@ public:
     }
 
     DLLLOCAL virtual void abort(ExceptionSink*) override {
+        bool close_socket = poll_state && abortNeedsClose(*poll_state);
         poll_state.reset();
+        if (close_socket) {
+            qore_socket_close_from_controller(sock);
+        }
         done = true;
     }
 
@@ -1367,6 +1371,9 @@ public:
 
 protected:
     DLLLOCAL virtual AbstractPollState* createPollState(ExceptionSink* xsink) = 0;
+    DLLLOCAL virtual bool abortNeedsClose(const AbstractPollState&) const {
+        return false;
+    }
 
     QoreSocket* sock;
 
@@ -1401,6 +1408,11 @@ protected:
             }
         }
         return sock->startSend(xsink, reinterpret_cast<const char*>(data->getPtr()), data->size());
+    }
+
+    DLLLOCAL virtual bool abortNeedsClose(const AbstractPollState& poll_state) const override {
+        const SocketSendPollState& send_state = static_cast<const SocketSendPollState&>(poll_state);
+        return send_state.getBytesSent() > 0;
     }
 
 private:
@@ -1533,6 +1545,22 @@ protected:
                 assert(false);
         }
         return nullptr;
+    }
+
+    DLLLOCAL virtual bool abortNeedsClose(const AbstractPollState& poll_state) const override {
+        switch (action) {
+            case Action::Recv:
+                return static_cast<const SocketRecvPollState&>(poll_state).getBytesReceived() > 0;
+            case Action::RecvPacket:
+                return static_cast<const SocketRecvPacketPollState&>(poll_state).getBytesReceived() > 0;
+            case Action::RecvSome:
+                return static_cast<const SocketRecvSomePollState&>(poll_state).getBytesReceived() > 0;
+            case Action::RecvUntilBytes:
+                return static_cast<const SocketRecvUntilBytesPollState&>(poll_state).getBytesReceived() > 0;
+            default:
+                assert(false);
+        }
+        return false;
     }
 
 private:
