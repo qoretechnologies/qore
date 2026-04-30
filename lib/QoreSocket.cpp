@@ -1663,6 +1663,7 @@ public:
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
+            poll_state.reset();
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
             }
@@ -1951,6 +1952,7 @@ public:
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
         if (ROdereference()) {
+            poll_state.reset();
             if (output_stream && !need_reassign) {
                 output_stream->unassignThread(xsink);
             }
@@ -10529,6 +10531,7 @@ int SocketDataAvailablePollOperation::initLocked(ExceptionSink* xsink) {
 void SocketDataAvailablePollOperation::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
         clearNonBlock();
+        poll_state.reset();
         sock->deref(xsink);
         delete this;
     }

@@ -63,6 +63,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -98,6 +99,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -129,6 +131,7 @@ public:
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -214,6 +217,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -365,6 +369,7 @@ public:
             // this object actually reaches delete — and we're that path.
             // An explicit discard() before delete makes the release explicit
             // and survives any future reordering in the destructor chain.
+            poll_state.reset();
             accepted_socket_obj = nullptr;
             accepted_socket.discard();
             sock->deref(xsink);
@@ -494,6 +499,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -592,6 +598,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -661,6 +668,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
             }
@@ -763,6 +771,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -817,6 +826,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -880,6 +890,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock(NB_SEND);
             }
+            poll_state.reset();
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
             }
@@ -973,6 +984,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock(NB_SEND);
             }
+            poll_state.reset();
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
             }
@@ -1068,6 +1080,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock(NB_RECV);
             }
+            poll_state.reset();
             if (output_stream && !need_reassign) {
                 output_stream->unassignThread(xsink);
             }
@@ -1233,6 +1246,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
             }
@@ -1336,6 +1350,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -1428,6 +1443,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -1478,6 +1494,7 @@ public:
             if (set_non_block) {
                 sock->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -1545,6 +1562,7 @@ public:
                 AutoLocker al(sock->priv->m);
                 sock->priv->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -1718,6 +1736,7 @@ public:
                 AutoLocker al(sock->priv->m);
                 sock->priv->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -1895,6 +1914,7 @@ public:
                 AutoLocker al(sock->priv->m);
                 sock->priv->clearNonBlock();
             }
+            poll_state.reset();
             sock->deref(xsink);
             delete this;
         }
@@ -2005,6 +2025,7 @@ public:
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
+            poll_state.reset();
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
             }
