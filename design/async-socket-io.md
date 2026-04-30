@@ -686,7 +686,8 @@ Representative bridges:
 - Bare `QoreSocket` instances do not have the `QoreSocketObject` mutex or
   non-blocking flag state, so raw sync bridge helpers use `qore_socket_private`
   directional controller ownership to provide the same same-direction exclusion
-  for controller-backed send, receive, connect, and SSL bridge sections.
+  for controller-backed send, receive, accept, connect, setup/lifecycle, and SSL
+  bridge sections.
 - Receive-side controller peeks such as `QoreSocketObject::checkIdleData()` also
   claim `NB_RECV`, so they cannot bypass a receive sequence reservation.
 - `Socket::poll()` treats closed/deleted entries as `SOCK_POLLERR` both inside

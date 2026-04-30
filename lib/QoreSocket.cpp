@@ -3606,7 +3606,18 @@ static int qore_socket_get_setup_rc(const QoreValue result, ExceptionSink* xsink
 
 static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOperation* poller,
         const char* owner_name, ExceptionSink* xsink) {
-    ValueHolder result(qore_socket_exec_poll(s, poller, -1, owner_name, "done", xsink), xsink);
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+    if (!io_guard) {
+        return -1;
+    }
+
+    ValueHolder result(qore_socket_exec_poll(s, poller_holder.release(), -1, owner_name, "done", xsink), xsink);
     if (*xsink) {
         return -1;
     }
