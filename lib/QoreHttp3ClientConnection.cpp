@@ -42,6 +42,7 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QuicSession.h"
+#include "qore/intern/QoreLibIntern.h"
 
 #include <cstdio>
 
@@ -59,71 +60,35 @@ static constexpr int64_t HE_CONNECTION_ATTEMPT_DELAY_NS = 250'000'000LL;
 extern QoreClass* QC_HTTP3CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP3CLIENTPOLLOPERATIONBASE;
 
-//! Resolve the target hostname and return a list of candidate address
-//! families to attempt for happy-eyeballs (RFC 8305).
-/** Probes the hostname with @c AI_NUMERICHOST first (fast path for literal
-    IPs); falls back to a full resolution when the target is a name.  Returns
-    at most one AF_INET6 and one AF_INET entry in the order mandated by
-    RFC 8305 §4 (v6 before v4), so the primary attempt is v6 when both
-    exist — matching the TCP path's @c sortAddressesHappyEyeballs behavior.
-    Returns a single-entry vector when only one family resolves, and a
-    fallback @c AF_INET entry when resolution fails entirely (preserves
-    the legacy default — subsequent @c SocketQuicClientPollOperation will
-    re-resolve and surface any getaddrinfo error).
+//! Return candidate address families to attempt for happy-eyeballs (RFC 8305).
+/** Literal IPs only need their own family.  Hostnames return both IPv6 and IPv4
+    candidates in RFC 8305 order; the per-family SocketQuicClientPollOperation
+    instances resolve names asynchronously with c-ares and surface DNS errors.
 */
 static std::vector<int> resolveCandidateFamilies(const char* host) {
     std::vector<int> out;
-    bool have_v6 = false;
-    bool have_v4 = false;
 
-    // Fast path: literal IP address — only its own family is reachable.
-    {
-        struct addrinfo hints{};
-        hints.ai_flags = AI_NUMERICHOST;
-        hints.ai_family = AF_UNSPEC;
-        struct addrinfo* res = nullptr;
-        int rc = getaddrinfo(host, nullptr, &hints, &res);
-        if (rc == 0 && res) {
-            out.push_back(res->ai_family);
-            freeaddrinfo(res);
+    if (host) {
+        std::string h(host);
+        if (h.size() >= 2 && h.front() == '[' && h.back() == ']') {
+            h = h.substr(1, h.size() - 2);
+        }
+
+        struct in6_addr addr6;
+        if (inet_pton(AF_INET6, h.c_str(), &addr6) == 1) {
+            out.push_back(AF_INET6);
             return out;
         }
-        if (res) {
-            freeaddrinfo(res);
+
+        struct in_addr addr4;
+        if (inet_pton(AF_INET, h.c_str(), &addr4) == 1) {
+            out.push_back(AF_INET);
+            return out;
         }
     }
 
-    // Slow path: hostname — enumerate all resolved families and mark
-    // v6/v4 availability for interleaving.
-    {
-        struct addrinfo hints{};
-        hints.ai_family = AF_UNSPEC;
-        struct addrinfo* res = nullptr;
-        int rc = getaddrinfo(host, nullptr, &hints, &res);
-        if (rc == 0) {
-            for (struct addrinfo* p = res; p; p = p->ai_next) {
-                if (p->ai_family == AF_INET6) {
-                    have_v6 = true;
-                } else if (p->ai_family == AF_INET) {
-                    have_v4 = true;
-                }
-            }
-        }
-        if (res) {
-            freeaddrinfo(res);
-        }
-    }
-
-    // RFC 8305 §4: v6 first, v4 second.
-    if (have_v6) {
-        out.push_back(AF_INET6);
-    }
-    if (have_v4) {
-        out.push_back(AF_INET);
-    }
-    if (out.empty()) {
-        out.push_back(AF_INET);  // fallback — preserves legacy default
-    }
+    out.push_back(AF_INET6);
+    out.push_back(AF_INET);
     return out;
 }
 
