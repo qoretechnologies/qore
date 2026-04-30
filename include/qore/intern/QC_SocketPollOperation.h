@@ -583,7 +583,7 @@ public:
     */
     DLLLOCAL SocketHttp2SendResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         const Http2SessionPtr& h2_session, int32_t stream_id, int status_code,
-        const QoreHashNode* headers, const BinaryNode* body, bool is_connect = false);
+        const QoreHashNode* headers, const BinaryNode* body, bool is_connect = false, bool defer_init = false);
 
     DLLLOCAL ~SocketHttp2SendResponsePollOperation();
 
@@ -602,6 +602,10 @@ public:
     }
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
+
+    DLLLOCAL int initLocked(ExceptionSink* xsink);
 
     DLLLOCAL virtual const char* getStateImpl() const override {
         switch (h2_state) {
@@ -624,6 +628,9 @@ private:
     std::vector<std::pair<std::string, std::string>> hdr_pairs;
     SimpleRefHolder<BinaryNode> body;
     bool is_connect = false;
+    bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 
     DLLLOCAL virtual bool abortNeedsClose() const override { return true; }
 };

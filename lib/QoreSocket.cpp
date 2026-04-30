@@ -13396,31 +13396,9 @@ Http2SessionPtr SocketHttp2ServerPollOperation::takeSession() {
 
 SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(ExceptionSink* xsink,
         QoreSocketObject* sock, const Http2SessionPtr& h2_session_param, int32_t stream_id, int status_code,
-        const QoreHashNode* headers, const BinaryNode* body, bool is_connect)
+        const QoreHashNode* headers, const BinaryNode* body, bool is_connect, bool defer_init)
         : SocketPollSocketOperationBase(sock), h2_session(h2_session_param), stream_id(stream_id),
           status_code(status_code), is_connect(is_connect) {
-
-    AutoLocker al(sock->priv->m);
-
-    // Get HTTP/2 session from socket (stored by previous read operation)
-    Http2Session* session = sock->priv->socket->priv->h2_session.get();
-    if (!session) {
-        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available; startPollSendHttp2Response() must be "
-            "called after startPollReadHttp2Request() completes on an active HTTP/2 connection");
-        return;
-    }
-    h2_session = sock->priv->socket->priv->h2_session;
-
-    // Check if socket is open and valid
-    if (sock->priv->checkOpen(xsink)) {
-        return;
-    }
-
-    // Set non-blocking mode
-    if (sock->priv->setNonBlock(xsink)) {
-        return;
-    }
-    set_non_block = true;
 
     // Build headers as vector of pairs to support duplicate header names (e.g., set-cookie)
     if (headers) {
@@ -13443,6 +13421,11 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
         }
     }
 
+    init(xsink, defer_init);
+    if (*xsink) {
+        return;
+    }
+
     if (body && body->size()) {
         this->body = new BinaryNode;
         this->body->append(body->getPtr(), body->size());
@@ -13450,6 +13433,46 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
 }
 
 SocketHttp2SendResponsePollOperation::~SocketHttp2SendResponsePollOperation() {
+}
+
+void SocketHttp2SendResponsePollOperation::init(ExceptionSink* xsink, bool defer_init) {
+    controller_deferred_init = defer_init;
+    controller_deferred_tid = defer_init ? q_gettid() : -1;
+    if (defer_init) {
+        return;
+    }
+
+    AutoLocker al(sock->priv->m);
+    initLocked(xsink);
+}
+
+int SocketHttp2SendResponsePollOperation::initLocked(ExceptionSink* xsink) {
+    assert(sock->priv->m.trylock());
+    if (initialized) {
+        return 0;
+    }
+    initialized = true;
+
+    Http2Session* session = sock->priv->socket->priv->h2_session.get();
+    if (!session) {
+        xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available; startPollSendHttp2Response() must be "
+            "called after startPollReadHttp2Request() completes on an active HTTP/2 connection");
+        return -1;
+    }
+    h2_session = sock->priv->socket->priv->h2_session;
+
+    if (sock->priv->checkOpen(xsink)) {
+        return -1;
+    }
+
+    int rc = controller_deferred_init
+        ? sock->priv->setNonBlockFromAsyncController(xsink, NB_ALL, controller_deferred_tid)
+        : sock->priv->setNonBlock(xsink);
+    if (rc) {
+        return -1;
+    }
+    set_non_block = true;
+    return 0;
 }
 
 QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* xsink) {
@@ -13462,6 +13485,13 @@ QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* 
             }
         }
     };
+
+    if (!initialized) {
+        AutoLocker al(sock->priv->m);
+        if (initLocked(xsink)) {
+            return nullptr;
+        }
+    }
 
     {
         AutoLocker al(sock->priv->m);

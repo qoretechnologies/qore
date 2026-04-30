@@ -3727,7 +3727,8 @@ static int qore_socket_object_exec_send_http_response(QoreSocketObject* s, QoreH
 
         s->ref();
         return qore_socket_object_exec_send_poll(s,
-            new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, code, headers, *body_bin),
+            new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, code, headers, *body_bin, false,
+                true),
             timeout_ms, xsink);
     }
 
