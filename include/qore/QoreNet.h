@@ -140,7 +140,7 @@ DLLEXPORT QoreListNode* q_getaddrinfo_to_list(ExceptionSink* xsink, const char* 
 //! adds the address family as "type" and a descriptive name as "typename" to the hash; writes "unknown" if the address family is unknown
 DLLEXPORT void q_af_to_hash(int af, QoreHashNode& h, ExceptionSink* xsink);
 
-//! provides an interface to getaddrinfo
+//! provides a getaddrinfo-compatible interface backed by the async I/O controller address resolver
 class QoreAddrInfo {
 protected:
    struct addrinfo* ai;
@@ -156,7 +156,7 @@ public:
    //! clears the current results, if any
    DLLEXPORT void clear();
 
-   //! get address info with the given parameters, if any errors occur, a Qore-language exception is thrown
+   //! get address info with the given parameters using the async I/O controller resolver
    /** @param xsink if any errors occur, Qore-language exception info is added to this object
        @param node the node name for the lookup
        @param service the service name (from /etc/services, for example) or port number

@@ -53,6 +53,8 @@ class Test inherits QUnit::Test {
         assertTrue(exists h.address_desc);
         assertTrue(exists h.family);
         assertTrue(exists h.familystr);
+        assertTrue(exists h.socktype);
+        assertTrue(exists h.protocol);
         assertTrue(exists h.addrlen);
         assertEq(expect_port, exists h.port);
     }

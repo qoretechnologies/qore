@@ -5789,6 +5789,8 @@ static QoreListNode* qore_socket_resolved_addrinfo_to_list(const std::vector<Soc
 
         hh->setKeyValueIntern("family", ai.family);
         hh->setKeyValueIntern("familystr", new QoreStringNode(QoreAddrInfo::getFamilyName(ai.family)));
+        hh->setKeyValueIntern("socktype", ai.socktype);
+        hh->setKeyValueIntern("protocol", ai.protocol);
         hh->setKeyValueIntern("addrlen", static_cast<int64>(ai.addrlen));
         if (has_service) {
             int port = q_get_port_from_addr(addr);

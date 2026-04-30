@@ -435,6 +435,128 @@ QoreListNode* q_getaddrinfo_to_list(ExceptionSink* xsink, const char* node, cons
     return qore_socket_resolve_addrinfo_asyncio(xsink, node, service, family, flags, socktype, 0, -1);
 }
 
+static void q_net_free_addrinfo(struct addrinfo* ai) {
+    while (ai) {
+        struct addrinfo* next = ai->ai_next;
+        free(ai->ai_addr);
+        free(ai->ai_canonname);
+        free(ai);
+        ai = next;
+    }
+}
+
+static int q_net_append_addrinfo_node(ExceptionSink* xsink, struct addrinfo*& head, struct addrinfo*& tail,
+        const QoreHashNode& h, int flags, int default_socktype, int default_protocol, bool has_svc) {
+    const QoreStringNode* address = q_net_get_hash_string_value(h, "address");
+    if (!address) {
+        return 0;
+    }
+
+    int family = q_net_get_hash_int_value(h, "family", AF_UNSPEC);
+    size_t addr_size;
+    void* addr_dst;
+    struct sockaddr* sa;
+    if (family == AF_INET) {
+        struct sockaddr_in* in = static_cast<struct sockaddr_in*>(calloc(1, sizeof(struct sockaddr_in)));
+        if (!in) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        in->sin_family = AF_INET;
+        if (has_svc) {
+            int port = q_net_get_hash_int_value(h, "port", 0);
+            in->sin_port = htons(port);
+        }
+        addr_size = sizeof(struct sockaddr_in);
+        addr_dst = &in->sin_addr;
+        sa = reinterpret_cast<struct sockaddr*>(in);
+    } else if (family == AF_INET6) {
+        struct sockaddr_in6* in6 = static_cast<struct sockaddr_in6*>(calloc(1, sizeof(struct sockaddr_in6)));
+        if (!in6) {
+            xsink->outOfMemory();
+            return -1;
+        }
+        in6->sin6_family = AF_INET6;
+        if (has_svc) {
+            int port = q_net_get_hash_int_value(h, "port", 0);
+            in6->sin6_port = htons(port);
+        }
+        addr_size = sizeof(struct sockaddr_in6);
+        addr_dst = &in6->sin6_addr;
+        sa = reinterpret_cast<struct sockaddr*>(in6);
+    } else {
+        return 0;
+    }
+
+    if (inet_pton(family, address->c_str(), addr_dst) != 1) {
+        free(sa);
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "invalid resolver address for %s: '%s'",
+            q_af_to_str(family), address->c_str());
+        return -1;
+    }
+
+    struct addrinfo* ai = static_cast<struct addrinfo*>(calloc(1, sizeof(struct addrinfo)));
+    if (!ai) {
+        free(sa);
+        xsink->outOfMemory();
+        return -1;
+    }
+
+    ai->ai_flags = flags;
+    ai->ai_family = family;
+    ai->ai_socktype = q_net_get_hash_int_value(h, "socktype", default_socktype);
+    ai->ai_protocol = q_net_get_hash_int_value(h, "protocol", default_protocol);
+    ai->ai_addrlen = addr_size;
+    ai->ai_addr = sa;
+
+    const QoreStringNode* canonname = q_net_get_hash_string_value(h, "canonname");
+    if (canonname && *canonname->c_str()) {
+        ai->ai_canonname = strdup(canonname->c_str());
+        if (!ai->ai_canonname) {
+            q_net_free_addrinfo(ai);
+            xsink->outOfMemory();
+            return -1;
+        }
+    }
+
+    if (tail) {
+        tail->ai_next = ai;
+    } else {
+        head = ai;
+    }
+    tail = ai;
+    return 0;
+}
+
+static struct addrinfo* q_net_addrinfo_list_to_addrinfo(ExceptionSink* xsink, const QoreListNode& l, int flags,
+        int socktype, int protocol, bool has_svc) {
+    struct addrinfo* head = nullptr;
+    struct addrinfo* tail = nullptr;
+
+    unsigned cancel_check = 0;
+    ConstListIterator li(l);
+    while (li.next()) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "QoreAddrInfo::getInfo")) {
+            q_net_free_addrinfo(head);
+            return nullptr;
+        }
+
+        const QoreHashNode* h = q_net_get_hash(li.getValue());
+        if (!h) {
+            continue;
+        }
+        if (q_net_append_addrinfo_node(xsink, head, tail, *h, flags, socktype, protocol, has_svc)) {
+            q_net_free_addrinfo(head);
+            return nullptr;
+        }
+    }
+
+    if (!head) {
+        xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "async address resolution returned no usable addresses");
+    }
+    return head;
+}
+
 QoreAddrInfo::QoreAddrInfo() : ai(0), has_svc(false) {
 }
 
@@ -444,7 +566,7 @@ QoreAddrInfo::~QoreAddrInfo() {
 
 void QoreAddrInfo::clear() {
     if (ai) {
-        freeaddrinfo(ai);
+        q_net_free_addrinfo(ai);
         ai = 0;
         has_svc = false;
     }
@@ -457,34 +579,33 @@ int QoreAddrInfo::getInfo(ExceptionSink* xsink, const char* node, const char* se
     if (ai)
         clear();
 
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof hints); // make sure the struct is empty
-
-    hints.ai_family = family;
-    hints.ai_flags = flags;
-    hints.ai_socktype = socktype;
-    hints.ai_protocol = protocol;
-
-    // retry on transient system-level errors (EINTR: interrupted by signal, EAGAIN: resolver temporarily unavailable)
-    int status;
-    int retries = 0;
-    static const int GETADDRINFO_MAX_RETRIES = 10;
-    do {
-        status = getaddrinfo(node, service, &hints, &ai);
-    } while (status == EAI_SYSTEM && (errno == EINTR || errno == EAGAIN) && ++retries < GETADDRINFO_MAX_RETRIES);
-
-    if (status) {
+    ExceptionSink local_xsink;
+    ExceptionSink* real_xsink = xsink ? xsink : &local_xsink;
+    ReferenceHolder<QoreListNode> addrs(qore_socket_resolve_addrinfo_asyncio(real_xsink, node, service, family,
+        flags, socktype, protocol, -1), real_xsink);
+    if (*real_xsink) {
+        if (!xsink) {
+            local_xsink.clear();
+        }
+        return -1;
+    }
+    if (!addrs) {
         if (xsink) {
-            if (status == EAI_SYSTEM)
-                xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "getaddrinfo(node: '%s', service: '%s', address_family: %d='%s', flags: %d) error: %s (errno: %d: %s)", node ? node : "", service ? service : "", family, q_af_to_str(family), flags, gai_strerror(status), errno, strerror(errno));
-            else
-                xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "getaddrinfo(node: '%s', service: '%s', address_family: %d='%s', flags: %d) error: %s", node ? node : "", service ? service : "", family, q_af_to_str(family), flags, gai_strerror(status));
+            xsink->raiseException("QOREADDRINFO-GETINFO-ERROR", "async address resolution returned no result");
         }
         return -1;
     }
 
-    if (service)
-        has_svc = true;
+    has_svc = service;
+    ai = q_net_addrinfo_list_to_addrinfo(real_xsink, **addrs, flags, socktype, protocol, has_svc);
+    if (*real_xsink) {
+        clear();
+        if (!xsink) {
+            local_xsink.clear();
+        }
+        return -1;
+    }
+
     return 0;
 }
 
@@ -511,6 +632,8 @@ QoreListNode* QoreAddrInfo::getList() const {
 
         hh->setKeyValueIntern("family", p->ai_family);
         hh->setKeyValueIntern("familystr", new QoreStringNode(family));
+        hh->setKeyValueIntern("socktype", p->ai_socktype);
+        hh->setKeyValueIntern("protocol", p->ai_protocol);
         hh->setKeyValueIntern("addrlen", p->ai_addrlen);
         if (has_svc) {
             int port = q_get_port_from_addr(p->ai_addr);

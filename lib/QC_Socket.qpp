@@ -6586,8 +6586,8 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
 //! Resolves address information through the async I/O controller
 /** This method delegates the address lookup to the global async I/O controller and blocks the caller until the
     controller-backed operation completes.  It returns the same address fields used by the \c getaddrinfo() function:
-    \c "address", \c "address_desc", \c "family", \c "familystr", \c "addrlen", and, when \a service is supplied,
-    \c "port".
+    \c "address", \c "address_desc", \c "family", \c "familystr", \c "socktype", \c "protocol", \c "addrlen", and,
+    when \a service is supplied, \c "port".
 
     @param node the node name for the lookup
     @param service the service name (from \c /etc/services, for example) or port number
