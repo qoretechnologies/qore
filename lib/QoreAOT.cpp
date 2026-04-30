@@ -35,6 +35,7 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreDir.h"
 #include <qore/QoreObject.h>
+#include <qore/Qore.h>
 #include <iostream>
 #include <chrono>
 
@@ -44,6 +45,7 @@
 #include <cstdio>
 #include <cstring>
 #include <set>
+#include <unordered_map>
 #include <unordered_set>
 #include <unistd.h>
 
@@ -257,7 +259,12 @@ static bool isAOTSelfRecursiveEligible(const QoreIRFunction* ir_func,
 // Forward declaration
 static std::vector<std::string> extractAllDependencies(const char* source, int source_len,
     std::vector<std::string>* reexport_deps = nullptr,
-    std::unordered_set<std::string>* local_module_names = nullptr);
+    std::unordered_set<std::string>* local_module_names = nullptr,
+    std::unordered_map<std::string, std::string>* local_module_paths = nullptr,
+    const char* source_label = nullptr);
+static void filterLoadableLocalModules(std::unordered_set<std::string>& local_module_names,
+    const std::unordered_map<std::string, std::string>& local_module_paths,
+    const qore_program_private* pp);
 
 // Phase 4 slice 10: llvm::object::ObjectFile for reading fragment
 // metadata out of `.qo` ELF symbol tables at compile time (`-L<dir>`
@@ -1620,12 +1627,16 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     @param compile_module the module being compiled (nullptr = compile all, "" = script-local only)
     @return true if the item should be skipped
 */
-static inline bool shouldSkipModuleItem(const char* item_module, const char* compile_module) {
+static inline bool shouldSkipModuleItem(const char* item_module, const char* compile_module,
+        const std::unordered_set<std::string>* keep_modules = nullptr) {
     if (!compile_module) {
         return false;  // compile all
     }
     if (!item_module) {
         return false;  // script-local items always included
+    }
+    if (keep_modules && keep_modules->count(item_module)) {
+        return false;
     }
     // Skip items from modules different from the one being compiled
     return strcmp(item_module, compile_module) != 0;
@@ -1842,7 +1853,8 @@ static AOTConstantReverseMap buildPendingSafeConstantReverseMap(qore_ns_private*
 
 static void collectPendingInitConstantFQNs(qore_ns_private* ns,
         std::unordered_set<std::string>& pending_fqns,
-        const char* compile_module, const char* compile_file) {
+        const char* compile_module, const char* compile_file,
+        const std::unordered_set<std::string>* keep_modules = nullptr) {
     if (!ns) {
         return;
     }
@@ -1856,7 +1868,7 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
         if (!ce || !ce->isUser() || !ce->hasInitExpr()) {
             continue;
         }
-        if (shouldSkipModuleItem(ce->getModuleName(), compile_module)) {
+        if (shouldSkipModuleItem(ce->getModuleName(), compile_module, keep_modules)) {
             continue;
         }
         if (compile_file && ce->loc && shouldSkipByFile(ce->loc->getFile(), compile_file)) {
@@ -1882,7 +1894,7 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
             continue;
         }
         qore_class_private* qcp = qore_class_private::get(*qc);
-        if (shouldSkipModuleItem(qcp->getModuleName(), compile_module)) {
+        if (shouldSkipModuleItem(qcp->getModuleName(), compile_module, keep_modules)) {
             continue;
         }
         if (compile_file && qcp->loc && shouldSkipByFile(qcp->loc->getFile(), compile_file)) {
@@ -1917,7 +1929,7 @@ static void collectPendingInitConstantFQNs(qore_ns_private* ns,
     for (auto& ni : ns->nsl.nsmap) {
         if (ni.second) {
             collectPendingInitConstantFQNs(qore_ns_private::get(*ni.second), pending_fqns,
-                compile_module, compile_file);
+                compile_module, compile_file, keep_modules);
         }
     }
 }
@@ -2027,7 +2039,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         bool metadata_only = false,
         const std::unordered_set<std::string>* pending_init_constant_fqns = nullptr,
         const AOTConstantReverseMap* init_base_const_reverse_map = nullptr,
-        std::string* fatal_error = nullptr) {
+        std::string* fatal_error = nullptr,
+        const std::unordered_set<std::string>* keep_modules = nullptr) {
     if (fatal_error && !fatal_error->empty()) {
         return;
     }
@@ -2042,7 +2055,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     std::unordered_set<std::string> local_pending_init_constant_fqns;
     if (!pending_init_constant_fqns) {
         collectPendingInitConstantFQNs(ns, local_pending_init_constant_fqns,
-            compile_module, compile_file);
+            compile_module, compile_file, keep_modules);
         pending_init_constant_fqns = &local_pending_init_constant_fqns;
     }
 
@@ -2105,7 +2118,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         }
 
         // Skip functions from other modules
-        if (shouldSkipModuleItem(func->getModuleName(), compile_module)) {
+        if (shouldSkipModuleItem(func->getModuleName(), compile_module, keep_modules)) {
             continue;
         }
 
@@ -2400,7 +2413,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         qore_class_private* qcp = qore_class_private::get(*qc);
 
         // Skip classes from other modules
-        if (shouldSkipModuleItem(qcp->getModuleName(), compile_module)) {
+        if (shouldSkipModuleItem(qcp->getModuleName(), compile_module, keep_modules)) {
             continue;
         }
         // Phase 4 slice 4: per-file filter — class declarations are
@@ -2869,7 +2882,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             if (!ce->isUser() || !ce->hasInitExpr()) {
                 continue;
             }
-            if (shouldSkipModuleItem(ce->getModuleName(), compile_module)) {
+            if (shouldSkipModuleItem(ce->getModuleName(), compile_module, keep_modules)) {
                 continue;
             }
             if (compile_file && ce->loc
@@ -2891,7 +2904,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 continue;
             }
             qore_class_private* qcp = qore_class_private::get(*qc);
-            if (shouldSkipModuleItem(qcp->getModuleName(), compile_module)) {
+            if (shouldSkipModuleItem(qcp->getModuleName(), compile_module, keep_modules)) {
                 continue;
             }
             if (compile_file && qcp->loc
@@ -2932,7 +2945,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             if (!ce->isUser() || !ce->hasInitExpr()) {
                 continue;
             }
-            if (shouldSkipModuleItem(ce->getModuleName(), compile_module)) {
+            if (shouldSkipModuleItem(ce->getModuleName(), compile_module, keep_modules)) {
                 continue;
             }
             if (compile_file && ce->loc
@@ -2961,7 +2974,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 continue;
             }
             qore_class_private* qcp = qore_class_private::get(*qc);
-            if (shouldSkipModuleItem(qcp->getModuleName(), compile_module)) {
+            if (shouldSkipModuleItem(qcp->getModuleName(), compile_module, keep_modules)) {
                 continue;
             }
             if (compile_file && qcp->loc
@@ -3021,7 +3034,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
                 failed_count, total_ir_insts_all, const_reverse_map, compiled_keys,
                 compile_module, compile_file, metadata_only, pending_init_constant_fqns,
-                init_base_const_reverse_map, fatal_error);
+                init_base_const_reverse_map, fatal_error, keep_modules);
             if (fatal_error && !fatal_error->empty()) {
                 return;
             }
@@ -3626,18 +3639,26 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    std::unordered_set<std::string> local_module_names;
+    std::unordered_map<std::string, std::string> local_module_paths;
+    extractAllDependencies(source_text, source_len, nullptr, &local_module_names,
+        &local_module_paths, label);
+    filterLoadableLocalModules(local_module_names, local_module_paths, pp);
 
     // Build reverse map from constant value pointers to fully-qualified names
     // for serializing QoreObject/complex constant references in expression trees
     AOTConstantReverseMap const_reverse_map = buildConstantReverseMap(root_ns);
 
     // Pass "" as compile_module to filter out module-originated functions/classes;
-    // module functions are available at runtime via runTimeLoadModule()
+    // module functions are available at runtime via runTimeLoadModule().  Relative
+    // %requires modules are embedded in the executable instead, so compile the
+    // same local-module keep set that serialization keeps below.
     std::string fatal_lowering_error;
     compileNamespaceFunctions(root_ns, pgm, ctx, *module, di_builder, di_cu,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count, failed_count,
         total_ir_insts_all, &const_reverse_map, nullptr, "",
-        nullptr, false, nullptr, nullptr, &fatal_lowering_error);
+        nullptr, false, nullptr, nullptr, &fatal_lowering_error,
+        local_module_names.empty() ? nullptr : &local_module_names);
     if (!fatal_lowering_error.empty()) {
         error = fatal_lowering_error;
         return false;
@@ -3781,7 +3802,6 @@ bool QoreAOT::compile(QoreProgram* pgm,
         // Serialize dependencies from the parsed program's feature lists.
         // This captures ALL module dependencies including those from %include'd files,
         // which extractAllDependencies() would miss since it only scans raw source text.
-        std::unordered_set<std::string> local_module_names;
         std::vector<std::string> all_deps;
         {
             qore_program_private* pp = qore_program_private::get(*pgm);
@@ -3796,9 +3816,6 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     all_deps.push_back(feat);
                 }
             }
-            // Also scan raw source for local module paths (./foo, ../foo) since these
-            // can't be loaded by name at runtime and need to be kept in metadata
-            extractAllDependencies(source_text, source_len, nullptr, &local_module_names);
         }
         serializeDependencies(writer, all_deps);
 
@@ -3962,6 +3979,168 @@ bool QoreAOT::compile(QoreProgram* pgm,
     return true;
 }
 
+static bool aotFileExists(const std::string& path) {
+    struct stat sb;
+    return !stat(path.c_str(), &sb) && S_ISREG(sb.st_mode);
+}
+
+static std::string aotCanonicalPath(const std::string& path) {
+    char* rp = realpath(path.c_str(), nullptr);
+    if (!rp) {
+        return path;
+    }
+    std::string rv(rp);
+    free(rp);
+    return rv;
+}
+
+static std::string aotDirname(const char* path) {
+    if (!path || !*path) {
+        return ".";
+    }
+    std::string p(path);
+    size_t slash = p.rfind('/');
+    if (slash == std::string::npos) {
+        return ".";
+    }
+    if (!slash) {
+        return "/";
+    }
+    return p.substr(0, slash);
+}
+
+static std::string aotCanonicalLocalRequirePath(const std::string& raw_path,
+        const char* source_label) {
+    if (raw_path.empty() || raw_path[0] == '/') {
+        return aotCanonicalPath(raw_path);
+    }
+
+    std::string source_path = source_label ? source_label : "";
+    char* rp = source_path.empty() ? nullptr : realpath(source_path.c_str(), nullptr);
+    if (rp) {
+        source_path = rp;
+        free(rp);
+    }
+    std::string combined = aotDirname(source_path.c_str()) + "/" + raw_path;
+    return aotCanonicalPath(combined);
+}
+
+static void aotAppendUniquePath(std::vector<std::string>& paths,
+        std::unordered_set<std::string>& seen, const std::string& path) {
+    if (path.empty()) {
+        return;
+    }
+    std::string canon = aotCanonicalPath(path);
+    if (seen.insert(canon).second) {
+        paths.push_back(std::move(canon));
+    }
+}
+
+static void aotAppendModuleDirList(std::vector<std::string>& paths,
+        std::unordered_set<std::string>& seen, const char* dir_list) {
+    if (!dir_list || !*dir_list) {
+        return;
+    }
+    const char* p = dir_list;
+    while (*p) {
+        const char* start = p;
+        while (*p && *p != ':') {
+            ++p;
+        }
+        if (p > start) {
+            aotAppendUniquePath(paths, seen, std::string(start, p - start));
+        }
+        if (*p == ':') {
+            ++p;
+        }
+    }
+}
+
+static void aotCollectEffectiveModuleDirs(std::vector<std::string>& paths,
+        const qore_program_private* pp) {
+    std::unordered_set<std::string> seen;
+    if (pp) {
+        for (const std::string& p : pp->prepended_module_paths) {
+            aotAppendUniquePath(paths, seen, p);
+        }
+    }
+    aotAppendModuleDirList(paths, seen, getenv("QORE_MODULE_DIR"));
+    aotAppendUniquePath(paths, seen, qore_user_module_ver_dir);
+    aotAppendUniquePath(paths, seen, qore_module_ver_dir);
+    aotAppendUniquePath(paths, seen, qore_user_module_dir);
+    aotAppendUniquePath(paths, seen, qore_module_dir);
+    if (pp) {
+        for (const std::string& p : pp->appended_module_paths) {
+            aotAppendUniquePath(paths, seen, p);
+        }
+    }
+}
+
+static bool aotPathIsUnderDir(const std::string& path, const std::string& dir) {
+    if (dir.empty() || path.size() < dir.size() || path.compare(0, dir.size(), dir)) {
+        return false;
+    }
+    return path.size() == dir.size() || path[dir.size()] == '/';
+}
+
+static bool aotModuleExistsInDir(const std::string& dir, const std::string& module_name) {
+    std::string base = dir + "/" + module_name;
+    return aotFileExists(base + ".qmod")
+        || aotFileExists(base + ".qm")
+        || aotFileExists(base + "/" + module_name + ".qmod")
+        || aotFileExists(base + "/" + module_name + ".qm");
+}
+
+static bool aotModuleFindableByName(const std::string& module_name,
+        const qore_program_private* pp) {
+    std::vector<std::string> module_dirs;
+    aotCollectEffectiveModuleDirs(module_dirs, pp);
+    for (const std::string& dir : module_dirs) {
+        if (aotModuleExistsInDir(dir, module_name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void filterLoadableLocalModules(std::unordered_set<std::string>& local_module_names,
+        const std::unordered_map<std::string, std::string>& local_module_paths,
+        const qore_program_private* pp) {
+    if (local_module_names.empty()) {
+        return;
+    }
+
+    std::vector<std::string> module_dirs;
+    aotCollectEffectiveModuleDirs(module_dirs, pp);
+
+    for (auto it = local_module_names.begin(); it != local_module_names.end();) {
+        bool erase = false;
+        auto path_it = local_module_paths.find(*it);
+        if (path_it != local_module_paths.end()) {
+            for (const std::string& dir : module_dirs) {
+                if (aotPathIsUnderDir(path_it->second, dir)) {
+                    erase = true;
+                    break;
+                }
+            }
+
+            // Qore's in-tree qlib tests often require qlib modules by a
+            // relative source path.  A source-stripped executable must still
+            // treat those as normal load-by-name qlib dependencies, not as
+            // embedded test-local modules.
+            if (!erase && path_it->second.find("/qlib/") != std::string::npos) {
+                erase = aotModuleFindableByName(*it, pp);
+            }
+        }
+
+        if (erase) {
+            it = local_module_names.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 //! Extract ALL module dependencies from source (including reexport)
 /** For strip-source mode, we need to serialize all dependencies so they can be loaded
     at runtime before deserializing the namespace tree.
@@ -3969,7 +4148,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
 */
 static std::vector<std::string> extractAllDependencies(const char* source, int source_len,
         std::vector<std::string>* reexport_deps,
-        std::unordered_set<std::string>* local_module_names) {
+        std::unordered_set<std::string>* local_module_names,
+        std::unordered_map<std::string, std::string>* local_module_paths,
+        const char* source_label) {
     std::vector<std::string> deps;
     const char* p = source;
     const char* end = source + source_len;
@@ -4054,6 +4235,10 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
                     // since they can't be loaded by name at runtime)
                     if (is_local && local_module_names) {
                         local_module_names->insert(dep_name);
+                        if (local_module_paths) {
+                            local_module_paths->insert_or_assign(dep_name,
+                                aotCanonicalLocalRequirePath(raw_path, source_label));
+                        }
                     }
                     deps.push_back(dep_name);
                     if (is_reexport && reexport_deps) {
