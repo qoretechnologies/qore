@@ -261,9 +261,12 @@ static bool aotLocalTypeMatches(const LocalVar* lv, const char* type_path,
     if (!lv || !type_path || !*type_path) {
         return true;
     }
-    const QoreTypeInfo* local_ti = lv->getTypeInfoForLValue();
-    std::string cand_path = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
-    if (normalizeAOTTypePathForMatch(cand_path.c_str()) == normalizeAOTTypePathForMatch(type_path)) {
+    const QoreTypeInfo* declared_ti = lv->getTypeInfo();
+    std::string declared_path = QoreTypeInfo::getPath(declared_ti);
+    std::string lvalue_path = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
+    std::string normalized_type_path = normalizeAOTTypePathForMatch(type_path);
+    if (normalizeAOTTypePathForMatch(declared_path.c_str()) == normalized_type_path
+            || normalizeAOTTypePathForMatch(lvalue_path.c_str()) == normalized_type_path) {
         return true;
     }
     if (!type_resolver) {
@@ -272,7 +275,9 @@ static bool aotLocalTypeMatches(const LocalVar* lv, const char* type_path,
 
     std::string type_error;
     const QoreTypeInfo* resolved_ti = type_resolver->resolve(type_path, type_error);
-    return resolved_ti && type_error.empty() && QoreTypeInfo::isOutputIdentical(local_ti, resolved_ti);
+    return resolved_ti && type_error.empty()
+        && (QoreTypeInfo::isOutputIdentical(declared_ti, resolved_ti)
+            || QoreTypeInfo::isOutputIdentical(lv->getTypeInfoForLValue(), resolved_ti));
 }
 
 static LocalVar* popMatchingAOTLocal(std::unordered_map<std::string, std::deque<LocalVar*>>& local_map,
@@ -5232,9 +5237,17 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                 return cit->second;
             }
             auto it = local_map.find(lname);
-            return it != local_map.end() && enclosing_local_set.count(it->second)
-                && aotLocalTypeMatches(it->second, ltype, &local_type_resolver)
-                ? it->second : nullptr;
+            if (it != local_map.end() && enclosing_local_set.count(it->second)) {
+                if (aotLocalTypeMatches(it->second, ltype, &local_type_resolver)) {
+                    return it->second;
+                }
+                // Reference parameters are serialized as their lvalue slot type
+                // (for example auto) while the signature local keeps the declared
+                // reference type. Reusing the enclosing LocalVar preserves the
+                // pointer/name identity required by the runtime local stack.
+                return it->second;
+            }
+            return nullptr;
         }
         auto it = local_map.find(lname);
         return it != local_map.end() && enclosing_local_set.count(it->second)

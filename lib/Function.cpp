@@ -2806,6 +2806,7 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
     // the slot cache from caller-provided values.
     bool all_params_ir_only = true;
     bool all_params_have_slots = true;
+    bool all_params_direct_safe = true;
     for (unsigned i = 0; i < signature.numParams(); ++i) {
         auto it = func->local_var_slots.find(signature.lv[i]);
         if (it != func->local_var_slots.end()) {
@@ -2819,11 +2820,17 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
         if (!func->ir_only_locals.count(key)) {
             all_params_ir_only = false;
         }
+        if (signature.lv[i]->closureUse()
+                || QoreTypeInfo::isReference(signature.lv[i]->getTypeInfo())) {
+            all_params_direct_safe = false;
+        }
     }
     // If function uses argv (variadic), inline direct path would always pass NOTHING for argv.
     // Ineligible: must go through qore_rt_call_fast which builds argv from excess args.
-    // Direct params eligible: all params ir_only AND all have slot IDs AND not variadic
-    func->direct_params_eligible = all_params_ir_only && all_params_have_slots && !signature.argvid;
+    // Direct params eligible: all params ir_only, all have slot IDs,
+    // none need TLS lvalue semantics, and not variadic.
+    func->direct_params_eligible = all_params_ir_only && all_params_have_slots
+        && all_params_direct_safe && !signature.argvid;
 
     cached_ir = func;
     current_tier.store(TIER_IR, std::memory_order_release);
