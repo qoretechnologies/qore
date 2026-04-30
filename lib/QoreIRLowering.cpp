@@ -3997,8 +3997,17 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         inst->operands = operands;
         return inst->result;
     }
-    // Pre-evaluated hash/list constants (e.g., const hashes/lists containing runtime objects)
+    // QoreListNode/QoreHashNode can still contain unevaluated entries, for
+    // example single-argument `rethrow expr` wraps expr in a needs-eval list.
+    // Lower container elements natively first so AOT serialization does not
+    // treat evaluable entries as unsupported constant payloads.
     if (dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node)) {
+        QoreIRValue value = lowerContainerLiteral(expr, error);
+        if (value.isValid() || !error.empty()) {
+            return value;
+        }
+        // Preserve the old path for concrete constants that cannot be rebuilt
+        // from native operands, such as constant objects in containers.
         return builder.createLoadConstant(nullptr, expr, nullptr)->result;
     }
     error = std::string("unsupported expression node for IR lowering: ")

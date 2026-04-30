@@ -1904,6 +1904,9 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
 
 static bool writeLoadConst(AOTInstWriteCtx& ctx) {
     auto* lci = static_cast<const QoreIRLoadConstantInstruction*>(ctx.inst);
+    if (lci->expr.needsEval()) {
+        return ctx.writeExpr(ctx.writer, lci->expr);
+    }
     // Direct parse-time objects (for example class constants such as
     // LoggerLevel::LevelInfo) must be resolved through the constant reverse map.
     // writeValue() cannot serialize arbitrary objects and encodes unsupported
