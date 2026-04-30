@@ -929,7 +929,14 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
             ctx.writer.writeValue(sig->getDefaultArgList()[p]);
         }
     }
-    ctx.writer.writeU8(sig->hasVarargs() ? 1 : 0);
+    uint16_t closure_flags = 0;
+    if (variant->hasVarargs()) {
+        closure_flags |= 0x0001;
+    }
+    if (sig->hasVarargs()) {
+        closure_flags |= 0x0004;
+    }
+    ctx.writer.writeU16(closure_flags);
 
     // Write captured variable names and parent slot indices (from LVarSet)
     const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();

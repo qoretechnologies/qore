@@ -836,7 +836,17 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
             defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
         }
     }
-    bool closure_has_varargs = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    bool closure_sig_has_varargs = false;
+    bool closure_needs_extra_args = false;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
+        uint16_t closure_flags = QoreAOTBinaryReader::readU16(ctx.ptr);
+        closure_needs_extra_args = (closure_flags & 0x0001) != 0;
+        closure_sig_has_varargs = (closure_flags & 0x0004) != 0;
+    } else {
+        bool old_varargs = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+        closure_sig_has_varargs = old_varargs;
+        closure_needs_extra_args = old_varargs;
+    }
 
     // Read captured variable names and parent slot indices
     uint16_t num_captured = QoreAOTBinaryReader::readU16(ctx.ptr);
@@ -880,7 +890,10 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_sig->setupFromAOTMetadata(
         ctx.pgm, ret_type,
         std::move(param_names), std::move(param_types), std::move(defaults),
-        closure_has_varargs, closure_class);
+        closure_sig_has_varargs, closure_class);
+    if (closure_needs_extra_args) {
+        closure_variant->setFlag(QCF_USES_EXTRA_ARGS);
+    }
 
     // Build enclosing locals map for IR deserialization
     std::unordered_map<std::string, LocalVar*> enclosing_locals;

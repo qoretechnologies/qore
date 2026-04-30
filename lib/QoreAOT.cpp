@@ -635,6 +635,10 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // records.  Legacy EXPR_TREE blobs are still readable for old objects but
     // are not emitted by new AOT output.
     flags |= QORE_AOT_FEAT_BCA_NATIVE_ARGS;
+    // Closure expression metadata must preserve both the declared signature
+    // ellipsis and the variant-level QCF_USES_EXTRA_ARGS flag set when the
+    // closure body references argv/$N.
+    flags |= QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS;
     return flags;
 }
 

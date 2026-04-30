@@ -3126,7 +3126,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                         defaults[p] = reader.readValue(ptr, end, val_error);
                     }
                 }
-                bool closure_has_varargs = QoreAOTBinaryReader::readU8(ptr) != 0;
+                bool closure_sig_has_varargs = false;
+                bool closure_needs_extra_args = false;
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
+                    uint16_t closure_flags = QoreAOTBinaryReader::readU16(ptr);
+                    closure_needs_extra_args = (closure_flags & 0x0001) != 0;
+                    closure_sig_has_varargs = (closure_flags & 0x0004) != 0;
+                } else {
+                    bool old_varargs = QoreAOTBinaryReader::readU8(ptr) != 0;
+                    closure_sig_has_varargs = old_varargs;
+                    closure_needs_extra_args = old_varargs;
+                }
 
                 // Read captured variable names and parent slot indices
                 uint16_t num_captured = QoreAOTBinaryReader::readU16(ptr);
@@ -3182,7 +3192,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 closure_sig->setupFromAOTMetadata(
                     pgm, ret_type,
                     std::move(param_names), std::move(param_types), std::move(defaults),
-                    closure_has_varargs, closure_class);
+                    closure_sig_has_varargs, closure_class);
+                if (closure_needs_extra_args) {
+                    closure_variant->setFlag(QCF_USES_EXTRA_ARGS);
+                }
 
                 // Build enclosing locals map so IR deserialization reuses the same
                 // LocalVar* objects that the parent function and closure signature use.

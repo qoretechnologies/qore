@@ -3162,6 +3162,9 @@ static bool aotValueTagPreservesMemberDefault(const QoreValue& v) {
     if (!v.hasNode()) {
         return true;
     }
+    if (v.isEnum()) {
+        return true;
+    }
 
     switch (v.getType()) {
         case NT_BOOLEAN:
@@ -3171,13 +3174,88 @@ static bool aotValueTagPreservesMemberDefault(const QoreValue& v) {
         case NT_DATE:
         case NT_NUMBER:
         case NT_BINARY:
-        case NT_LIST:
-        case NT_HASH:
-        case NT_OBJECT:
-        case NT_SCOPE_REF:
             return true;
+        case NT_LIST: {
+            const QoreListNode* list = v.get<const QoreListNode>();
+            if (!list) {
+                return true;
+            }
+            for (size_t i = 0; i < list->size(); ++i) {
+                if (!aotValueTagPreservesMemberDefault(list->retrieveEntry(i))) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        case NT_HASH: {
+            const QoreHashNode* hash = v.get<const QoreHashNode>();
+            if (!hash) {
+                return true;
+            }
+            ConstHashIterator hi(*hash);
+            while (hi.next()) {
+                if (!aotValueTagPreservesMemberDefault(hi.get())) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        case NT_SCOPE_REF: {
+            const AbstractQoreNode* node = v.getInternalNode();
+            if (const auto* socn = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+                const QoreListNode* args = socn->getArgs();
+                if (!args) {
+                    return true;
+                }
+                for (size_t i = 0; i < args->size(); ++i) {
+                    if (!aotValueTagPreservesMemberDefault(args->retrieveEntry(i))) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (const auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+                if (ncl->args.isNothing()) {
+                    return true;
+                }
+                const QoreListNode* args = ncl->args.getType() == NT_LIST
+                    ? ncl->args.get<const QoreListNode>() : nullptr;
+                if (!args) {
+                    return false;
+                }
+                for (size_t i = 0; i < args->size(); ++i) {
+                    if (!aotValueTagPreservesMemberDefault(args->retrieveEntry(i))) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (const auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+                if (!nch->args) {
+                    return true;
+                }
+                for (size_t i = 0; i < nch->args->size(); ++i) {
+                    if (!aotValueTagPreservesMemberDefault(nch->args->get(i))) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            if (const auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
+                if (!nhd->args) {
+                    return true;
+                }
+                for (size_t i = 0; i < nhd->args->size(); ++i) {
+                    if (!aotValueTagPreservesMemberDefault(nhd->args->get(i))) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
         default:
-            return v.isEnum();
+            return false;
     }
 }
 
@@ -5101,7 +5179,14 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                         writer.writeValue(sig->getDefaultArgList()[p]);
                     }
                 }
-                writer.writeU8(sig->hasVarargs() ? 1 : 0);
+                uint16_t closure_flags = 0;
+                if (variant->hasVarargs()) {
+                    closure_flags |= 0x0001;
+                }
+                if (sig->hasVarargs()) {
+                    closure_flags |= 0x0004;
+                }
+                writer.writeU16(closure_flags);
 
                 // Write captured variable names and parent slot indices
                 const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
