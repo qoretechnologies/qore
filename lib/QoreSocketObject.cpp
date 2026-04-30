@@ -6041,6 +6041,11 @@ void QoreSocketObject::setQuicStreamInputStream(int64_t session_id, int64_t stre
         InputStream* body, ExceptionSink* xsink) {
     SimpleRefHolder<InputStream> body_holder(body);
 
+    if (!body->isIoThreadSafe()) {
+        xsink->raiseException("QUIC-ERROR", "InputStream is not I/O thread safe");
+        return;
+    }
+
     body->unassignThread(xsink);
     if (*xsink) {
         return;

@@ -2591,6 +2591,15 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
 void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink,
         int64_t content_length) {
     std::lock_guard<std::recursive_mutex> lg(m);
+    if (!is->isIoThreadSafe()) {
+        xsink->raiseException("HTTP2-ERROR", "InputStream is not I/O thread safe");
+        return;
+    }
+    if (is->supportsNonBlockingIo() && is->getPollableDescriptor() < 0) {
+        xsink->raiseException("HTTP2-ERROR",
+            "InputStream reports non-blocking I/O support but returned no pollable descriptor");
+        return;
+    }
     auto [it, inserted] = stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
     it->second.content_length = content_length;
     has_active_input_streams_.store(true, std::memory_order_release);

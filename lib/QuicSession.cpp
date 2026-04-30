@@ -4421,6 +4421,15 @@ int QuicSession::h3ShutdownCallback(nghttp3_conn* /* conn */, int64_t id,
 
 void QuicSession::setStreamInputStream(int64_t stream_id, InputStream* is, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (!is->isIoThreadSafe()) {
+        xsink->raiseException("QUIC-ERROR", "InputStream is not I/O thread safe");
+        return;
+    }
+    if (is->supportsNonBlockingIo() && is->getPollableDescriptor() < 0) {
+        xsink->raiseException("QUIC-ERROR",
+            "InputStream reports non-blocking I/O support but returned no pollable descriptor");
+        return;
+    }
     stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
     has_active_input_streams_.store(true, std::memory_order_release);
     printd(5, "QuicSession::setStreamInputStream() stream_id=" QLLD " pollable=%d fd=%d\n",

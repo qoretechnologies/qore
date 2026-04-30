@@ -68,6 +68,18 @@ static constexpr int64_t QUIC_NO_TIMER_POLL_MS = 1000;
 */
 static constexpr int QUIC_CLIENT_RECV_BUDGET = 32;
 
+static int quic_input_stream_pollable_descriptor(InputStream* is, const char* err, ExceptionSink* xsink) {
+    if (!is->supportsNonBlockingIo()) {
+        return -1;
+    }
+
+    int fd = is->getPollableDescriptor();
+    if (fd < 0) {
+        xsink->raiseException(err, "InputStream reports non-blocking I/O support but returned no pollable descriptor");
+    }
+    return fd;
+}
+
 //! Set the "poll_timeout_ms" key on a poll info hash based on the next QUIC timer expiry.
 /** Translates the ngtcp2 timer expiry into a poll timeout hint so the I/O
     thread's poll() wakes when the QUIC retransmission/PTO timer fires.
@@ -2395,7 +2407,18 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
       status_code(status_code),
       input_stream(input_stream), input_stream_obj(input_stream_obj),
       chunk_size(chunk_size > 0 ? chunk_size : 16384),
-      is_pollable(input_stream->supportsNonBlockingIo()) {
+      is_pollable(false) {
+    if (!input_stream->isIoThreadSafe()) {
+        xsink->raiseException("QUIC-ERROR", "InputStream is not I/O thread safe");
+        return;
+    }
+
+    stream_fd = quic_input_stream_pollable_descriptor(input_stream, "QUIC-ERROR", xsink);
+    if (*xsink) {
+        return;
+    }
+    is_pollable = stream_fd >= 0;
+
     AutoLocker al(sock->priv->m);
 
     // Validate socket
@@ -2453,14 +2476,6 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     if (enableQuicPktinfo(fd, local_addr_.ss_family) < 0) {
         printd(0, "SocketQuicSendStreamingResponsePollOperation: enableQuicPktinfo() failed: "
             "errno=%d (%s)\n", errno, strerror(errno));
-    }
-
-    // Cache the pollable file descriptor for non-blocking reads
-    if (is_pollable) {
-        stream_fd = input_stream->getPollableDescriptor();
-        if (stream_fd < 0) {
-            is_pollable = false;
-        }
     }
 
     // Thread affinity: QPP wrapper calls unassignThread() after construction

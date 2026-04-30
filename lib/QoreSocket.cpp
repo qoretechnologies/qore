@@ -66,6 +66,30 @@ static std::atomic<uint64_t> qore_socket_sync_exec_seq{0};
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
+static int qore_input_stream_pollable_descriptor(InputStream* is, const char* err, ExceptionSink* xsink) {
+    if (!is->supportsNonBlockingIo()) {
+        return -1;
+    }
+
+    int fd = is->getPollableDescriptor();
+    if (fd < 0) {
+        xsink->raiseException(err, "InputStream reports non-blocking I/O support but returned no pollable descriptor");
+    }
+    return fd;
+}
+
+static int qore_output_stream_pollable_descriptor(OutputStream* os, const char* err, ExceptionSink* xsink) {
+    if (!os->supportsNonBlockingIo()) {
+        return -1;
+    }
+
+    int fd = os->getPollableDescriptor();
+    if (fd < 0) {
+        xsink->raiseException(err, "OutputStream reports non-blocking I/O support but returned no pollable descriptor");
+    }
+    return fd;
+}
+
 void se_in_op(const char* cname, const char* meth, ExceptionSink* xsink) {
     assert(xsink);
     xsink->raiseException("SOCKET-IN-CALLBACK", "calls to %s::%s() cannot be made from a callback on an operation on "
@@ -1652,13 +1676,11 @@ public:
             return;
         }
 
-        is_pollable = input_stream->supportsNonBlockingIo();
-        if (is_pollable) {
-            stream_fd = input_stream->getPollableDescriptor();
-            if (stream_fd < 0) {
-                is_pollable = false;
-            }
+        stream_fd = qore_input_stream_pollable_descriptor(input_stream, "SOCKET-SEND-ERROR", xsink);
+        if (*xsink) {
+            return;
         }
+        is_pollable = stream_fd >= 0;
     }
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
@@ -1941,13 +1963,11 @@ public:
             return;
         }
 
-        is_pollable = output_stream->supportsNonBlockingIo();
-        if (is_pollable) {
-            output_fd = output_stream->getPollableDescriptor();
-            if (output_fd < 0) {
-                is_pollable = false;
-            }
+        output_fd = qore_output_stream_pollable_descriptor(output_stream, "SOCKET-RECV-ERROR", xsink);
+        if (*xsink) {
+            return;
         }
+        is_pollable = output_fd >= 0;
     }
 
     DLLLOCAL void deref(ExceptionSink* xsink) override {
@@ -10744,13 +10764,11 @@ void SocketSendInputStreamPollOperation::init(ExceptionSink* xsink, bool defer_i
         return;
     }
 
-    is_pollable = input_stream->supportsNonBlockingIo();
-    if (is_pollable) {
-        stream_fd = input_stream->getPollableDescriptor();
-        if (stream_fd < 0) {
-            is_pollable = false;
-        }
+    stream_fd = qore_input_stream_pollable_descriptor(*input_stream, "SOCKET-SEND-ERROR", xsink);
+    if (*xsink) {
+        return;
     }
+    is_pollable = stream_fd >= 0;
 
     if (defer_init) {
         return;
@@ -11034,13 +11052,11 @@ void SocketSendHttpChunkedInputStreamPollOperation::init(ExceptionSink* xsink, b
         return;
     }
 
-    is_pollable = input_stream->supportsNonBlockingIo();
-    if (is_pollable) {
-        stream_fd = input_stream->getPollableDescriptor();
-        if (stream_fd < 0) {
-            is_pollable = false;
-        }
+    stream_fd = qore_input_stream_pollable_descriptor(*input_stream, "SOCKET-SEND-ERROR", xsink);
+    if (*xsink) {
+        return;
     }
+    is_pollable = stream_fd >= 0;
 
     if (defer_init) {
         return;
@@ -11325,13 +11341,11 @@ void SocketRecvOutputStreamPollOperation::init(ExceptionSink* xsink, bool defer_
         return;
     }
 
-    is_pollable = output_stream->supportsNonBlockingIo();
-    if (is_pollable) {
-        output_fd = output_stream->getPollableDescriptor();
-        if (output_fd < 0) {
-            is_pollable = false;
-        }
+    output_fd = qore_output_stream_pollable_descriptor(*output_stream, "SOCKET-RECV-ERROR", xsink);
+    if (*xsink) {
+        return;
     }
+    is_pollable = output_fd >= 0;
 
     if (defer_init) {
         return;
@@ -11586,13 +11600,11 @@ SocketWriteOutputStreamPollOperation::SocketWriteOutputStreamPollOperation(Excep
         return;
     }
 
-    is_pollable = output_stream->supportsNonBlockingIo();
-    if (is_pollable) {
-        output_fd = output_stream->getPollableDescriptor();
-        if (output_fd < 0) {
-            is_pollable = false;
-        }
+    output_fd = qore_output_stream_pollable_descriptor(output_stream, "SOCKET-WRITE-ERROR", xsink);
+    if (*xsink) {
+        return;
     }
+    is_pollable = output_fd >= 0;
 }
 
 QoreHashNode* SocketWriteOutputStreamPollOperation::getPollInfo(ExceptionSink* xsink) {
@@ -12593,11 +12605,16 @@ SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOpe
           fused(fused),
           idle_timeout_ms(idle_timeout_ms), header_output(xsink) {
 
-    // Cache pollable descriptor info
-    stream_fd = is->getPollableDescriptor();
-    if (stream_fd < 0) {
-        is_pollable = false;
+    if (!is->isIoThreadSafe()) {
+        xsink->raiseException("HTTP-STREAM-ERROR", "InputStream is not I/O thread safe");
+        return;
     }
+
+    stream_fd = qore_input_stream_pollable_descriptor(is, "HTTP-STREAM-ERROR", xsink);
+    if (*xsink) {
+        return;
+    }
+    is_pollable = stream_fd >= 0;
 
     AutoLocker al(sock->priv->m);
 
@@ -13646,7 +13663,18 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
           status_code(status_code),
           input_stream(input_stream), input_stream_obj(input_stream_obj),
           chunk_size(chunk_size > 0 ? chunk_size : 16384),
-          is_pollable(input_stream->supportsNonBlockingIo()) {
+          is_pollable(false) {
+
+    if (!input_stream->isIoThreadSafe()) {
+        xsink->raiseException("HTTP-STREAM-ERROR", "InputStream is not I/O thread safe");
+        return;
+    }
+
+    stream_fd = qore_input_stream_pollable_descriptor(input_stream, "HTTP-STREAM-ERROR", xsink);
+    if (*xsink) {
+        return;
+    }
+    is_pollable = stream_fd >= 0;
 
     AutoLocker al(sock->priv->m);
 
@@ -13688,14 +13716,6 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
                     }
                 }
             }
-        }
-    }
-
-    // Cache the pollable file descriptor for non-blocking reads
-    if (is_pollable) {
-        stream_fd = input_stream->getPollableDescriptor();
-        if (stream_fd < 0) {
-            is_pollable = false;
         }
     }
 

@@ -914,7 +914,7 @@ public:
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
-            : input_stream(is), stream_fd(is->getPollableDescriptor()),
+            : input_stream(is), stream_fd(is->supportsNonBlockingIo() ? is->getPollableDescriptor() : -1),
               is_pollable(stream_fd >= 0) {}
     };
 
