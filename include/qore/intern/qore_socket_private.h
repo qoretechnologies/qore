@@ -101,7 +101,10 @@ static constexpr int SOCK_POLLOUT   = (1 << 1);
 static constexpr int SOCK_POLLERR   = (1 << 2);
 static constexpr int SOCK_POLLTIMER = (1 << 3);
 
+struct qore_socket_private;
+
 DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const char* type = "target");
+DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
 DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, ExceptionSink* xsink);
 DLLLOCAL int sock_get_raw_error();
 DLLLOCAL int sock_get_error();

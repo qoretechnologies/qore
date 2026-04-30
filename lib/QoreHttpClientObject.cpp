@@ -1236,9 +1236,20 @@ struct qore_httpclient_priv {
         }
     }
 
-    DLLLOCAL void disconnect_unlocked() {
-        if (msock->socket->isOpen()) {
-            msock->socket->close();
+    DLLLOCAL static void closeReferencedSocket(qore_socket_private* close_priv) {
+        if (!close_priv) {
+            return;
+        }
+        qore_socket_exec_close_private(close_priv);
+        close_priv->deref();
+    }
+
+    DLLLOCAL qore_socket_private* disconnect_unlocked_prepare_close() {
+        qore_socket_private* close_priv = msock->socket->priv;
+        if (close_priv->isOpen()) {
+            close_priv->ref();
+        } else {
+            close_priv = nullptr;
         }
         proxy_connected = false;
         persistent = false;
@@ -1247,6 +1258,11 @@ struct qore_httpclient_priv {
         clearH2ConnectStream();
         clearH3ConnectStream();
         clearStreamingChannel();
+        return close_priv;
+    }
+
+    DLLLOCAL void disconnect_unlocked() {
+        closeReferencedSocket(disconnect_unlocked_prepare_close());
     }
 
     //! User-initiated conn_mgr reset.  Drains the pool so pending poll ops
@@ -1292,12 +1308,16 @@ struct qore_httpclient_priv {
         }
 
         my_socket_priv* adopted_msock = my_socket_priv::getPriv(*adopted_priv);
+        qore_socket_private* close_priv = nullptr;
         {
             AutoLocker al(msock->m);
             AutoLocker bl(adopted_msock->m);
 
-            if (msock->socket->isOpen()) {
-                msock->socket->close();
+            close_priv = msock->socket->priv;
+            if (close_priv->isOpen()) {
+                close_priv->ref();
+            } else {
+                close_priv = nullptr;
             }
 
             QoreSocket* old_socket = msock->socket;
@@ -1330,6 +1350,7 @@ struct qore_httpclient_priv {
             clearStreamingChannel();
         }
 
+        closeReferencedSocket(close_priv);
         adopted_obj->deref(xsink);
         return *xsink ? -1 : 0;
     }
@@ -3012,11 +3033,18 @@ bool QoreHttpClientObject::getUseConnectionManager() const {
 }
 
 int QoreHttpClientObject::setURL(const char* str, ExceptionSink* xsink) {
-    SafeLocker sl(priv->m);
-    // disconnect immediately if not using a proxy
-    if (!http_priv->proxy_connection.has_url())
-        http_priv->disconnect_unlocked();
-    return http_priv->setUrlUnlocked(str, xsink);
+    qore_socket_private* close_priv = nullptr;
+    int rc;
+    {
+        SafeLocker sl(priv->m);
+        // disconnect immediately if not using a proxy
+        if (!http_priv->proxy_connection.has_url()) {
+            close_priv = http_priv->disconnect_unlocked_prepare_close();
+        }
+        rc = http_priv->setUrlUnlocked(str, xsink);
+    }
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
+    return rc;
 }
 
 QoreStringNode* QoreHttpClientObject::getUrl(int64 code) {
@@ -3945,18 +3973,26 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
 }
 
 int QoreHttpClientObject::setProxyURL(const char* proxy, ExceptionSink* xsink)  {
-    SafeLocker sl(priv->m);
+    qore_socket_private* close_priv = nullptr;
+    int rc;
 
-    if (priv->checkNonBlock(xsink)) {
-        return -1;
-    }
+    {
+        SafeLocker sl(priv->m);
 
-    http_priv->disconnect_unlocked();
-    if (!proxy || !proxy[0]) {
-        http_priv->proxy_connection.clear();
-        return 0;
+        if (priv->checkNonBlock(xsink)) {
+            return -1;
+        }
+
+        close_priv = http_priv->disconnect_unlocked_prepare_close();
+        if (!proxy || !proxy[0]) {
+            http_priv->proxy_connection.clear();
+            rc = 0;
+        } else {
+            rc = http_priv->setProxyUrlUnlocked(proxy, xsink);
+        }
     }
-    return http_priv->setProxyUrlUnlocked(proxy, xsink);
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
+    return rc;
 }
 
 QoreStringNode* QoreHttpClientObject::getProxyURL()  {
@@ -4037,6 +4073,7 @@ bool QoreHttpClientObject::isProxySecure() const {
 
 int QoreHttpClientObject::connect(ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", "connect", xsink);
+    qore_socket_private* close_priv = nullptr;
     SafeLocker sl(priv->m);
 
     if (priv->checkNonBlock(xsink)) {
@@ -4046,17 +4083,22 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
     // Connect through the conn_mgr, then adopt an H1 connection back into
     // the inherited Socket so explicit connect()+Socket-method use remains
     // compatible with the legacy HTTPClient API.
-    http_priv->disconnect_unlocked();
+    close_priv = http_priv->disconnect_unlocked_prepare_close();
     sl.unlock();
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
     return http_priv->connectViaConnMgr(xsink, true);
 }
 
 void QoreHttpClientObject::disconnect() {
-    SafeLocker sl(priv->m);
-    http_priv->disconnect_unlocked();
-    // User-initiated disconnect: reset conn_mgr so pending poll ops fail
-    // with SOCKET-NOT-OPEN and new connections are created on next request
-    http_priv->resetConnMgr();
+    qore_socket_private* close_priv = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        close_priv = http_priv->disconnect_unlocked_prepare_close();
+        // User-initiated disconnect: reset conn_mgr so pending poll ops fail
+        // with SOCKET-NOT-OPEN and new connections are created on next request
+        http_priv->resetConnMgr();
+    }
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
 }
 
 void qore_httpclient_priv::parseAltSvc(const char* value, const char* host, int port) {
@@ -7390,12 +7432,14 @@ void QoreHttpClientObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreVal
 }
 
 void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
+    qore_socket_private* close_priv = nullptr;
     {
         AutoLocker al(priv->m);
-        http_priv->disconnect_unlocked();
+        close_priv = http_priv->disconnect_unlocked_prepare_close();
         http_priv->resetConnMgr();
         priv->invalidate();
     }
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
     priv->socket->cleanup(xsink);
 }
 

@@ -432,7 +432,12 @@ static void qore_socket_wake_async_controller(qore_socket_private* priv) {
 
 class QoreSocketControllerPollable : public AbstractPollableIoObjectBase {
 public:
-    DLLLOCAL QoreSocketControllerPollable(QoreSocket* sock) : priv(qore_socket_private::get(*sock)) {
+    DLLLOCAL QoreSocketControllerPollable(QoreSocket* sock, bool use_outer_lock = true)
+            : QoreSocketControllerPollable(qore_socket_private::get(*sock), use_outer_lock) {
+    }
+
+    DLLLOCAL QoreSocketControllerPollable(qore_socket_private* priv, bool use_outer_lock = true)
+            : priv(priv), close_lock(use_outer_lock ? priv->outer_lock : nullptr) {
         priv->ref();
         QoreString tmp;
         qore_get_ptr_hash(tmp, priv);
@@ -453,9 +458,11 @@ public:
 
     DLLLOCAL virtual void closeIo(ExceptionSink*) override {
         priv->prepareForClose();
-        if (priv->isOpen()) {
-            priv->shutdown_direct();
-            priv->close();
+        if (close_lock) {
+            AutoLocker al(*close_lock);
+            closeIoLocked();
+        } else {
+            closeIoLocked();
         }
     }
 
@@ -476,7 +483,15 @@ public:
     }
 
 private:
+    DLLLOCAL void closeIoLocked() {
+        if (priv->isOpen()) {
+            priv->shutdown_direct();
+            priv->close();
+        }
+    }
+
     qore_socket_private* priv;
+    QoreThreadLock* close_lock;
     std::string identity_hash;
 };
 
@@ -3898,7 +3913,7 @@ static int qore_socket_exec_accept_replace(QoreSocket* s, SocketSource* source, 
     return static_cast<int>(result->getAsBigInt());
 }
 
-static int qore_socket_exec_close(QoreSocket* s) {
+int qore_socket_exec_close_private(qore_socket_private* priv) {
     ExceptionSink xsink;
 
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
@@ -3913,13 +3928,18 @@ static int qore_socket_exec_close(QoreSocket* s) {
         return -1;
     }
 
-    ReferenceHolder<QoreSocketControllerPollable> pollable(new QoreSocketControllerPollable(s), &xsink);
+    ReferenceHolder<QoreSocketControllerPollable> pollable(
+        new QoreSocketControllerPollable(priv, !qore_on_async_io_thread()), &xsink);
     int rc = ctrl->close(*pollable, &xsink);
     if (xsink) {
         xsink.clear();
         return -1;
     }
     return rc;
+}
+
+static int qore_socket_exec_close(QoreSocket* s) {
+    return qore_socket_exec_close_private(qore_socket_private::get(*s));
 }
 
 static int qore_socket_exec_check_http1_allowed(QoreSocket* s, const char* mname, ExceptionSink* xsink) {
