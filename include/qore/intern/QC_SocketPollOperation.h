@@ -167,7 +167,6 @@ private:
 class SocketSetupPollOperation : public SocketPollSocketOperationBase {
 private:
     enum class Action {
-        BindName,
         BindPort,
         BindInterfacePort,
         BindUnix,

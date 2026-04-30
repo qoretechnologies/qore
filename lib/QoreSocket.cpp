@@ -389,7 +389,7 @@ private:
     bool active = false;
 };
 
-static int qore_socket_bind_name_direct(QoreSocket* s, const char* name, bool reuseaddr);
+static bool qore_socket_parse_bind_name(const char* bind_name, std::string& host, std::string& service, int& family);
 static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int socktype, int protocol,
         ExceptionSink* xsink);
 static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr* addr, int size,
@@ -902,7 +902,6 @@ private:
 class QoreSocketControllerSetupPollOperation : public SocketPollOperationBase {
 private:
     enum class Action {
-        BindName,
         BindPort,
         BindInterfacePort,
         BindUnix,
@@ -938,7 +937,12 @@ public:
     };
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, const char* name, bool reuseaddr)
-            : sock(sock), action(Action::BindName), name(name), reuseaddr(reuseaddr) {
+            : sock(sock), action(Action::BindUnix), name(name), has_name(true), reuseaddr(reuseaddr),
+            socktype(SOCK_STREAM) {
+        if (qore_socket_parse_bind_name(name, this->name, service, family)) {
+            action = Action::BindInet;
+            has_service = true;
+        }
     }
 
     DLLLOCAL QoreSocketControllerSetupPollOperation(QoreSocket* sock, int port, bool reuseaddr)
@@ -1009,9 +1013,6 @@ public:
         }
 
         switch (action) {
-            case Action::BindName:
-                rc = qore_socket_bind_name_direct(sock, name.c_str(), reuseaddr);
-                break;
             case Action::BindPort:
                 return continueBindInet(xsink);
             case Action::BindInterfacePort:
@@ -9367,36 +9368,26 @@ int QoreSocket::upgradeServerToSSL(ExceptionSink* xsink, int timeout_ms, QoreSSL
     return *xsink ? -1 : 0;
 }
 
-static int qore_socket_bind_name_direct(QoreSocket* s, const char* name, bool reuseaddr) {
-    qore_socket_private* priv = qore_socket_private::get(*s);
-    ExceptionSink xsink;
-    //printd(5, "QoreSocket::bind(%s)\n", name);
-    qore_socket_close_private_from_controller(priv);
+static bool qore_socket_parse_bind_name(const char* bind_name, std::string& host, std::string& service,
+        int& family) {
+    const char* p = strrchr(bind_name, ':');
+    if (!p) {
+        return false;
+    }
 
-    // see if there is a port specifier
-    const char* p = strrchr(name, ':');
-    int rc;
-    if (p) {
-        QoreString host(name, p - name);
-        QoreString service(p + 1);
+    host.assign(bind_name, p - bind_name);
+    service = p + 1;
 
-        // if the address is an ipv6 address like: [<addr>], then bind as ipv6
-        if (host.strlen() > 2 && host[0] == '[' && host[host.strlen() - 1] == ']') {
-            host.terminate(host.strlen() - 1);
-            rc = priv->bindINET(&xsink, host.c_str() + 1, service.c_str(), reuseaddr, AF_INET6, SOCK_STREAM);
-        } else {
-            // assume an ipv6 address if there is a ':' character in the hostname, otherwise bind ipv4
-            rc = priv->bindINET(&xsink, host.c_str(), service.c_str(), reuseaddr, strchr(host.c_str(), ':')
-                ? AF_INET6
-                : AF_INET, SOCK_STREAM);
-        }
-    } else
-        rc = priv->bindUNIX(&xsink, name, SOCK_STREAM);
-
-    // ignore exception; we just use a return code
-    if (xsink)
-        xsink.clear();
-    return rc;
+    // If the address is bracketed like [<addr>]:<port>, bind as IPv6.
+    if (host.size() > 2 && host.front() == '[' && host.back() == ']') {
+        host.erase(host.size() - 1);
+        host.erase(0, 1);
+        family = AF_INET6;
+    } else {
+        // Otherwise preserve the legacy parser: a colon in the host portion means IPv6, else IPv4.
+        family = host.find(':') == std::string::npos ? AF_INET : AF_INET6;
+    }
+    return true;
 }
 
 static int qore_socket_bind_unix_direct(QoreSocket* s, const char* name, int socktype, int protocol,
@@ -11067,8 +11058,12 @@ QoreHashNode* SocketShutdownSslPollOperation::continuePoll(ExceptionSink* xsink)
 }
 
 SocketSetupPollOperation::SocketSetupPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, const char* name,
-        bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindName), name(name),
-        has_name(true), reuseaddr(reuseaddr) {
+        bool reuseaddr) : SocketPollSocketOperationBase(sock), action(Action::BindUnix), name(name),
+        has_name(true), reuseaddr(reuseaddr), socktype(SOCK_STREAM) {
+    if (qore_socket_parse_bind_name(name, this->name, service, family)) {
+        action = Action::BindInet;
+        has_service = true;
+    }
     init(xsink, true);
 }
 
@@ -11209,9 +11204,6 @@ QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
     }
 
     switch (action) {
-        case Action::BindName:
-            rc = qore_socket_bind_name_direct(sock->priv->socket, name.c_str(), reuseaddr);
-            break;
         case Action::BindPort:
             return continueBindInet(xsink);
         case Action::BindInterfacePort:
