@@ -1202,7 +1202,7 @@ public:
         bool close_socket = data && data->size();
         data = nullptr;
         if (close_socket) {
-            sock->close();
+            sock->closeIo(xsink);
         }
         phase = Phase::Error;
     }
