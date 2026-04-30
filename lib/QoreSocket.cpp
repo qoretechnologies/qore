@@ -170,7 +170,8 @@ static bool qore_socket_is_accepting(qore_socket_private* priv) {
 #endif
 }
 
-static int qore_socket_poll_fd_now(int fd, short events, const char* err, const char* desc, ExceptionSink* xsink) {
+static int qore_socket_poll_fd_revents_now(int fd, short events, short& revents, const char* err, const char* desc,
+        ExceptionSink* xsink) {
     unsigned loop = 0;
     while (true) {
         struct pollfd pfd;
@@ -180,14 +181,22 @@ static int qore_socket_poll_fd_now(int fd, short events, const char* err, const 
 
         int rc = ::poll(&pfd, 1, 0);
         if (rc >= 0) {
+            revents = rc > 0 ? pfd.revents : 0;
             return rc > 0 ? 1 : 0;
         }
-        if (errno == EINTR && ++loop < max_nonblock_ops) {
+        int e = errno;
+        if (e == EINTR && ++loop < max_nonblock_ops) {
             continue;
         }
-        xsink->raiseException(err, "poll() on %s fd failed: %s", desc, strerror(errno));
+        revents = 0;
+        xsink->raiseException(err, "poll() on %s fd failed: %s", desc, strerror(e));
         return -1;
     }
+}
+
+static int qore_socket_poll_fd_now(int fd, short events, const char* err, const char* desc, ExceptionSink* xsink) {
+    short revents;
+    return qore_socket_poll_fd_revents_now(fd, events, revents, err, desc, xsink);
 }
 
 static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
@@ -6458,15 +6467,16 @@ int SocketRecvUntilBytesPollState::doRecv(ExceptionSink* xsink) {
                 if (++loop >= max_nonblock_ops) {
                     return SOCK_POLLIN;
                 }
-                struct pollfd pfd;
-                pfd.fd = sock->sock;
-                pfd.events = POLLIN | POLLERR | POLLHUP;
-                pfd.revents = 0;
-                int prc = ::poll(&pfd, 1, 0);
-                if (prc <= 0 || !(pfd.revents & (POLLIN | POLLERR | POLLHUP))) {
+                short revents;
+                int prc = qore_socket_poll_fd_revents_now(sock->sock, POLLIN | POLLERR | POLLHUP, revents,
+                    "SOCKET-RECV-ERROR", "socket", xsink);
+                if (prc < 0) {
+                    return -1;
+                }
+                if (!prc || !(revents & (POLLIN | POLLERR | POLLHUP))) {
                     return SOCK_POLLIN;
                 }
-                if (pfd.revents & (POLLERR | POLLHUP)) {
+                if (revents & (POLLERR | POLLHUP)) {
                     return 0;
                 }
                 continue;
