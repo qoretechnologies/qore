@@ -86,7 +86,7 @@ public:
 
    DLLLOCAL bool supportsNonBlockingIo() const override { return true; }
 
-   DLLLOCAL int getPollableDescriptor() const override { return f.getFD(); }
+   DLLLOCAL int getPollableDescriptor() const override { return f.isOpen() ? f.getFD() : -1; }
 
    //! Non-blocking write — sets O_NONBLOCK for the duration of the write and restores it.
    /** @note Stream classes are single-threaded by design (enforced by thread affinity checks).
@@ -95,7 +95,7 @@ public:
        dup()), the flag change is visible to all descriptors sharing the same file description.
    */
    DLLLOCAL int64 writeNonBlock(const void* ptr, int64 count, ExceptionSink* xsink) override {
-      int fd = f.getFD();
+      int fd = f.isOpen() ? f.getFD() : -1;
       if (fd < 0) {
          xsink->raiseException("FILE-WRITE-ERROR", "file is not open");
          return -1;

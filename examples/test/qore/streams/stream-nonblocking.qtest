@@ -117,6 +117,8 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         assertTrue(fos.supportsNonBlockingIo(), "FileOutputStream supports non-blocking I/O");
         assertTrue(fos.isIoThreadSafe(), "FileOutputStream is I/O-thread-safe");
         assertTrue(fos.getPollableDescriptor() > 0, "FileOutputStream has valid fd");
+        fos.close();
+        assertEq(-1, fos.getPollableDescriptor(), "closed FileOutputStream descriptor is -1");
     }
 
     testOutputStreamDefaults() {

@@ -1850,6 +1850,15 @@ class SocketTest inherits QUnit::Test {
         assertThrows("SOCKET-SEND-ERROR", sub() {
             client.sendHTTPResponse(200, "OK", "1.1", {"Transfer-Encoding": "chunked"}, is, 1);
         });
+
+        string closed_output_path = tmp_location() + DirSep + "qore-socket-closed-output-" + get_random_string(12);
+        on_exit unlink(closed_output_path);
+        FileOutputStream closed_os(closed_output_path);
+        closed_os.close();
+        assertThrows("SOCKET-RECV-ERROR", sub() {
+            peer.recvToOutputStream(closed_os, 1, 10s);
+        });
+
         assertFalse(peer.isDataAvailable(100ms));
 
         client.send("1\r\nx\r\n0\r\n\r\n", 10s);
