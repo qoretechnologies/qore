@@ -5948,6 +5948,20 @@ int QoreSocketObject::sendQuicClientStreamData(int64_t stream_id, const void* da
         "sendQuicClientStreamData", xsink));
 }
 
+int QoreSocketObject::sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, const void* data,
+        size_t len, bool end_stream, ExceptionSink* xsink) {
+    if (!qore_on_async_io_thread()) {
+        return sendQuicClientStreamData(stream_id, data, len, end_stream, xsink);
+    }
+
+    std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no active QUIC session on this socket");
+        return -1;
+    }
+    return session->sendStreamData(stream_id, data, len, end_stream, xsink);
+}
+
 int QoreSocketObject::setQuicClientStreamStreaming(int64_t stream_id, ExceptionSink* xsink) {
     if (qore_on_async_io_thread()) {
         std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(this);

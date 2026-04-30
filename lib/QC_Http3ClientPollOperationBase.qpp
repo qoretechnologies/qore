@@ -816,7 +816,7 @@ void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* m
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendQuicClientStreamData(stream_id,
+            int rv = sock_ptr->sendQuicClientStreamDataForAsyncPoll(stream_id,
                 (*holder)->getPtr(), (*holder)->size(), false, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path

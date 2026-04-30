@@ -791,6 +791,17 @@ public:
     DLLEXPORT int sendQuicClientStreamData(int64_t stream_id, const void* data, size_t len,
         bool end_stream, ExceptionSink* xsink);
 
+    //! Internal async-poll helper for client-side HTTP/3 stream DATA enqueue.
+    /** Public synchronous callers must use @ref sendQuicClientStreamData(), which
+        delegates through the async I/O controller. Poll operations use this
+        helper so I/O-thread protocol callbacks can enqueue DATA directly on
+        the already-owned QUIC session.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL int sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, const void* data, size_t len,
+        bool end_stream, ExceptionSink* xsink);
+
     //! Mark a client-side HTTP/3 stream for incremental response body delivery
     /** Internal helper for HTTP/3 client connection code; delegates the
         QuicSession mutation to the async I/O controller.
