@@ -55,6 +55,7 @@
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QorePlusOperatorNode.h"
+#include "qore/intern/QoreRangeOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
 #include "qore/intern/QoreExistsOperatorNode.h"
 #include "qore/intern/QoreImplicitArgumentNode.h"
@@ -73,8 +74,14 @@
 #include "qore/intern/QorePostDecrementOperatorNode.h"
 #include "qore/intern/QoreIntPostIncrementOperatorNode.h"
 #include "qore/intern/QoreIntPostDecrementOperatorNode.h"
+#include "qore/intern/QoreLogicalAndOperatorNode.h"
+#include "qore/intern/QoreLogicalOrOperatorNode.h"
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOperatorNode.h"
+#include "qore/intern/QoreLogicalGreaterThanOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalGreaterThanOrEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalNotOperatorNode.h"
 #include "qore/intern/QoreNullCoalescingOperatorNode.h"
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
@@ -95,9 +102,11 @@
 #include "qore/intern/QoreShiftOperatorNode.h"
 #include "qore/intern/QorePushOperatorNode.h"
 #include "qore/intern/QoreUnshiftOperatorNode.h"
+#include "qore/intern/QoreAssignmentOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
+#include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/ParseNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
 #include <qore/intern/ParseReferenceNode.h>
@@ -209,8 +218,79 @@ static std::string qoreAOTBuildExprTreeFallbackDiagnostic(const QoreValue& expr,
         msg += "), blob-size=";
         msg += std::to_string(blob.size());
     }
-    msg += "; add a native AOTExprKind serializer/reader or lower this operation to native IR";
+    msg += "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
+        "operation to native IR";
     return msg;
+}
+
+static std::string qoreAOTQuoteDetail(const std::string& s) {
+    constexpr size_t max_len = 240;
+    if (s.size() <= max_len) {
+        return s;
+    }
+    return s.substr(0, max_len) + "...";
+}
+
+static std::string qoreAOTDescribeLocation(const QoreProgramLocation* loc) {
+    if (!loc) {
+        return "<unknown>";
+    }
+
+    std::string rv;
+    const char* file = loc->getFileValue();
+    rv += (file && *file) ? file : "<unknown>";
+    if (loc->start_line >= 0) {
+        rv += ":";
+        rv += std::to_string(loc->start_line);
+        if (loc->end_line >= 0 && loc->end_line != loc->start_line) {
+            rv += "-";
+            rv += std::to_string(loc->end_line);
+        }
+    }
+    if (loc->getSource() && *loc->getSource()) {
+        rv += ", source=";
+        rv += loc->getSource();
+    }
+    if (loc->offset) {
+        rv += ", offset=";
+        rv += std::to_string(loc->offset);
+    }
+    return rv;
+}
+
+static void qoreAOTAppendExprSlotContext(std::string& error, const AOTExprSlotId& expr,
+        size_t expr_idx) {
+    error += "; slot-index=";
+    error += std::to_string(expr_idx);
+    if (!expr.ref1.empty()) {
+        error += "; ref1='";
+        error += qoreAOTQuoteDetail(expr.ref1);
+        error += "'";
+    }
+    if (!expr.ref2.empty()) {
+        error += "; ref2='";
+        error += qoreAOTQuoteDetail(expr.ref2);
+        error += "'";
+    }
+    if (expr.flags) {
+        error += "; flags=0x";
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%02x", expr.flags);
+        error += buf;
+    }
+    if (expr.child_expr) {
+        error += "; child=";
+        error += qoreAOTDescribeExpr(expr.child_expr);
+    }
+    if (expr.call_args) {
+        error += "; call-args=";
+        error += std::to_string(expr.call_args->size());
+    }
+    if (expr.parse_args) {
+        error += "; parse-args=";
+        error += std::to_string(expr.parse_args->size());
+    }
+    error += "; no fallback marker was emitted";
 }
 
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
@@ -368,6 +448,25 @@ static bool readDeferredMemberDefault(
         default_val = QoreValue();
         return true;
     }
+    if (tag_byte == static_cast<uint8_t>(QoreAOTValueTag::VT_EXPR_NATIVE)) {
+        // Native default expressions use the binary string pool for symbol
+        // references, so defer materializing them until the member-resolution
+        // pass where the owning reader is still available.
+        ++ptr;  // consume tag
+        if (ptr + 4 > end) {
+            error = "unexpected end of data reading native expr size";
+            return false;
+        }
+        uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+        if (ptr + blob_size > end) {
+            error = "native expr blob exceeds section bounds";
+            return false;
+        }
+        pim.pending_expr_native_blob.assign(ptr, ptr + blob_size);
+        ptr += blob_size;
+        default_val = QoreValue();
+        return true;
+    }
     if (tag_byte != static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT)) {
         // Normal case: use the standard reader
         default_val = reader.readValue(ptr, end, error);
@@ -466,6 +565,39 @@ static void resolveDeferredExprTreeDefault(std::vector<uint8_t>& blob,
     (void)kind;
     (void)owner_name;
     (void)member_name;
+}
+
+static void resolveDeferredNativeExprDefault(const QoreAOTBinaryReader& reader,
+        std::vector<uint8_t>& blob, QoreValue& default_val, QoreProgram* pgm,
+        const char* kind, const char* owner_name, const char* member_name,
+        bool wrap_const_ref_in_rcr = false, LocalVar** locals = nullptr,
+        int num_locals = 0) {
+    if (blob.empty()) {
+        return;
+    }
+    if (default_val.hasNode()) {
+        default_val.discard(nullptr);
+        default_val = QoreValue();
+    }
+
+    bool old_wrap = reader.wrap_const_ref_in_rcr;
+    reader.wrap_const_ref_in_rcr = wrap_const_ref_in_rcr;
+    const uint8_t* p = blob.data();
+    const uint8_t* end = p + blob.size();
+    std::string error;
+    QoreValue v = readOneExpr(reader, p, end, error, pgm, locals, num_locals, nullptr, 0);
+    reader.wrap_const_ref_in_rcr = old_wrap;
+
+    if (!error.empty() || p != end) {
+        printd(0, "AOT deser: native default expression for %s '%s::%s' failed: %s%s\n",
+            kind ? kind : "member", owner_name ? owner_name : "(unknown)",
+            member_name ? member_name : "(unknown)", error.c_str(),
+            p != end ? " (trailing payload bytes)" : "");
+        v.discard(nullptr);
+    } else {
+        default_val = v;
+    }
+    blob.clear();
 }
 
 static constexpr const char* AOT_CONST_PATH_PREFIX = "@qore-aot-const-path:";
@@ -1861,6 +1993,30 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             return rv;
         }
 
+        case QoreAOTValueTag::VT_EXPR_NATIVE: {
+            if (ptr + 4 > end) {
+                error = "unexpected end of data reading native expr size";
+                return QoreValue();
+            }
+            uint32_t blob_size = QoreAOTBinaryReader::readU32(ptr);
+            if (ptr + blob_size > end) {
+                error = "native expr blob exceeds section bounds";
+                return QoreValue();
+            }
+            const uint8_t* blob = ptr;
+            const uint8_t* blob_end = ptr + blob_size;
+            ptr = blob_end;
+            const uint8_t* ep = blob;
+            QoreValue rv = readOneExpr(*this, ep, blob_end, error, getProgram(),
+                nullptr, 0, nullptr, 0);
+            if (error.empty() && ep != blob_end) {
+                error = "native expr default did not consume its payload";
+                rv.discard(nullptr);
+                return QoreValue();
+            }
+            return rv;
+        }
+
         default:
             error = "unknown value tag: " + std::to_string(static_cast<int>(tag))
                 + " at offset " + std::to_string(ptr - 1 - end);
@@ -2612,8 +2768,9 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     // line numbers instead of 0.  Gated on QORE_AOT_FEAT_SIG_LINES so older
     // readers skip these bytes and newer readers expect them.  Stored as
     // int16_t to match QoreProgramLineLocation's on-heap representation.
+    UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(v)->getUserVariantBase();
     int16_t sig_first = 0, sig_last = 0;
-    if (UserVariantBase* uvb = const_cast<AbstractQoreFunctionVariant*>(v)->getUserVariantBase()) {
+    if (uvb) {
         if (UserSignature* usig = uvb->getUserSignature()) {
             if (const QoreProgramLocation* vloc = usig->getParseLocation()) {
                 sig_first = vloc->start_line;
@@ -2624,8 +2781,48 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     writer.writeU16(static_cast<uint16_t>(sig_first));
     writer.writeU16(static_cast<uint16_t>(sig_last));
 
+    // Function-entry StatementBlock line range.  This is distinct from the
+    // signature location: source-stripped AOT keeps no executable body, but
+    // ProgramControl::findFunctionStatementId() must still resolve to a stable
+    // statement id with source-like entry location metadata.
+    int16_t entry_first = 0, entry_last = 0;
+    if (uvb) {
+        if (StatementBlock* sb = uvb->getStatementBlock()) {
+            if (const QoreProgramLocation* sloc = sb->loc) {
+                entry_first = sloc->start_line;
+                entry_last = sloc->end_line;
+            }
+        }
+    }
+    writer.writeU16(static_cast<uint16_t>(entry_first));
+    writer.writeU16(static_cast<uint16_t>(entry_last));
+
     // params
     const arg_vec_t& defaults = sig->getDefaultArgList();
+    auto write_native_expr_default = [&writer](const QoreValue& dv) -> bool {
+        uint32_t start_pos = writer.position();
+        writer.writeU8(1);
+        writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_EXPR_NATIVE));
+        uint32_t size_pos = writer.position();
+        writer.writeU32(0);
+        uint32_t payload_pos = writer.position();
+
+        static const std::vector<AOTLocalSlotId> no_locals;
+        static const std::vector<AOTGlobalSlotId> no_globals;
+        qoreAOTClearExprSerializationError();
+        bool ok = classifyAndWriteExpr(writer, dv, no_locals, no_globals,
+            writer.const_reverse_map);
+        std::string expr_error;
+        bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
+        if (!ok || expr_error_set || writer.position() == payload_pos) {
+            writer.truncate(start_pos);
+            return false;
+        }
+
+        writer.patchU32(size_pos, writer.position() - payload_pos);
+        return true;
+    };
+
     for (uint32_t i = 0; i < np; ++i) {
         // param name
         const char* pname = sig->getName(i);
@@ -2795,7 +2992,12 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     }
                 }
 
-                // Fallback: unclassifiable complex expression — write opaque
+                // Prefer native expression metadata; otherwise keep the legacy
+                // opaque default marker instead of fabricating an executable fallback.
+                if (write_native_expr_default(dv)) {
+                    continue;
+                }
+
                 writer.writeU8(1);
                 writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
             } else {
@@ -2861,25 +3063,90 @@ static bool aotValueTagPreservesMemberDefault(const QoreValue& v) {
     }
 }
 
-static bool writeMemberDefaultValue(QoreAOTBinaryWriter& writer, const QoreValue& v) {
+enum class AOTMemberDefaultEncoding {
+    Value,
+    NativeExpr,
+};
+
+static bool writeNativeMemberDefaultExpr(QoreAOTBinaryWriter& writer, const QoreValue& v,
+        const std::vector<AOTLocalSlotId>* parent_locals, std::string* error) {
+    uint32_t start_pos = writer.position();
+    writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_EXPR_NATIVE));
+    uint32_t size_pos = writer.position();
+    writer.writeU32(0);
+    uint32_t payload_pos = writer.position();
+
+    static const std::vector<AOTLocalSlotId> no_locals;
+    static const std::vector<AOTGlobalSlotId> no_globals;
+    const std::vector<AOTLocalSlotId>& locals = parent_locals ? *parent_locals : no_locals;
+    qoreAOTClearExprSerializationError();
+    bool ok = classifyAndWriteExpr(writer, v, locals, no_globals,
+        writer.const_reverse_map);
+    std::string expr_error;
+    bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
+
+    // classifyAndWriteExpr reports unsupported expressions by setting the
+    // thread-local diagnostic and returning false before writing fallback
+    // markers.  Roll back to keep the value stream well-formed.
+    if (!ok || expr_error_set || writer.position() == payload_pos) {
+        writer.truncate(start_pos);
+        if (error) {
+            if (expr_error_set) {
+                *error = expr_error;
+            } else if (!ok) {
+                *error = "classifyAndWriteExpr returned false without a nested expression diagnostic";
+            } else {
+                *error = "native expression serializer produced an empty payload";
+            }
+        }
+        return false;
+    }
+
+    writer.patchU32(size_pos, writer.position() - payload_pos);
+    return true;
+}
+
+static bool writeMemberDefaultValue(QoreAOTBinaryWriter& writer, const QoreValue& v,
+        const char* owner_kind, const char* owner_name, const char* member_name,
+        std::string& error, AOTMemberDefaultEncoding* encoding = nullptr,
+        const std::vector<AOTLocalSlotId>* parent_locals = nullptr) {
     if (!aotValueTagPreservesMemberDefault(v)) {
-        AOTSlotMap slots;
-        std::vector<uint8_t> blob;
-        if (serializeExprTreeToBlob(v, slots, blob, false, writer.const_reverse_map)
-                && !blob.empty()) {
-            writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_EXPR_TREE));
-            writer.writeU32(static_cast<uint32_t>(blob.size()));
-            writer.writeBytes(blob.data(), static_cast<uint32_t>(blob.size()));
+        std::string native_error;
+        if (writeNativeMemberDefaultExpr(writer, v, parent_locals, &native_error)) {
+            if (encoding) {
+                *encoding = AOTMemberDefaultEncoding::NativeExpr;
+            }
             return true;
         }
+
+        error = "AOT cannot serialize ";
+        error += owner_kind ? owner_kind : "member-owner";
+        error += " '";
+        error += owner_name ? owner_name : "<unknown>";
+        error += "' member '";
+        error += member_name ? member_name : "<unknown>";
+        error += "' default without fallback";
+        if (!native_error.empty()) {
+            error += ": ";
+            error += native_error;
+        }
+        error += "; default=";
+        error += qoreAOTDescribeExpr(v);
+        error += "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
+            "member default to native IR";
+        return false;
     }
 
     writer.writeValue(v);
-    return false;
+    if (encoding) {
+        *encoding = AOTMemberDefaultEncoding::Value;
+    }
+    return true;
 }
 
 //! Write CLASSES section
-static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state) {
+static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state,
+        std::string& error) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::CLASSES);
 
     uint32_t count = static_cast<uint32_t>(state.classes.size());
@@ -2933,6 +3200,12 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             }
         }
         writer.writeU32(num_members);
+        std::vector<AOTLocalSlotId> member_default_locals;
+        member_default_locals.push_back(AOTLocalSlotId{});
+        member_default_locals.back().name = "self";
+        member_default_locals.back().type_path = getTypePath(priv->typeInfo);
+        member_default_locals.back().flags = 0x04;
+        member_default_locals.back().local_var_ptr = &priv->selfid;
         for (auto& mi : priv->members.member_list) {
             if (!mi.second->local()) {
                 continue;
@@ -2949,7 +3222,11 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             // default initialization value
             if (mi.second->exp) {
                 writer.writeU8(1);
-                writeMemberDefaultValue(writer, mi.second->exp);
+                if (!writeMemberDefaultValue(writer, mi.second->exp, "class",
+                        priv->path.c_str(), mi.first, error, nullptr,
+                        &member_default_locals)) {
+                    return false;
+                }
             } else {
                 writer.writeU8(0);
             }
@@ -2972,7 +3249,10 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             // is generated separately if the expression `needs_eval()`).
             if (vi.second->exp) {
                 writer.writeU8(1);
-                writeMemberDefaultValue(writer, vi.second->exp);
+                if (!writeMemberDefaultValue(writer, vi.second->exp, "class",
+                        priv->path.c_str(), vi.first, error)) {
+                    return false;
+                }
             } else {
                 writer.writeU8(0);
             }
@@ -3018,10 +3298,12 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
     }
 
     writer.endSection(sec_idx);
+    return true;
 }
 
 //! Write HASHDECLS section
-static void writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state) {
+static bool writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state,
+        std::string& error) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::HASHDECLS);
 
     uint32_t count = static_cast<uint32_t>(state.hashdecls.size());
@@ -3076,19 +3358,10 @@ static void writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                 writer.writeStringRef(mi.first);
                 writer.writeStringRef(getTypePath(mi.second->getTypeInfo()));
                 if (mi.second->exp) {
-                    const QoreValue v = mi.second->exp;
-                    qore_type_t t = v.getType();
                     writer.writeU8(1);
-                    bool wrote_expr_tree = writeMemberDefaultValue(writer, mi.second->exp);
-                    if (!wrote_expr_tree && !aotValueTagPreservesMemberDefault(v)) {
-                        fprintf(stderr,
-                            "warning: AOT serialisation of hashdecl '%s' member '%s' "
-                            "default expression may lose information (type %d = %s); "
-                            "loaded value will default to the type's zero-value "
-                            "(0 for int, empty for string, etc.).  Consider using a "
-                            "simple literal default and moving the computation into "
-                            "an init() method.\n",
-                            hd->getName(), mi.first, t, get_type_name(v.getInternalNode()));
+                    if (!writeMemberDefaultValue(writer, mi.second->exp, "hashdecl",
+                            nspath.c_str(), mi.first, error)) {
+                        return false;
                     }
                 } else {
                     writer.writeU8(0);
@@ -3098,6 +3371,7 @@ static void writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
     }
 
     writer.endSection(sec_idx);
+    return true;
 }
 
 //! Write ENUMS section
@@ -3356,8 +3630,90 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
     return crm;
 }
 
+static std::vector<AOTLocalSlotId> buildAOTLocalSlotsForUserSignature(const UserSignature* sig) {
+    std::vector<AOTLocalSlotId> rv;
+    if (!sig) {
+        return rv;
+    }
+
+    rv.reserve(sig->numParams() + (sig->selfid ? 1 : 0) + (sig->argvid ? 1 : 0));
+    for (unsigned i = 0; i < sig->numParams(); ++i) {
+        AOTLocalSlotId slot;
+        slot.local_var_ptr = reinterpret_cast<const void*>(sig->lv[i]);
+        slot.flags = 0x01;
+        slot.param_index = static_cast<uint16_t>(i);
+        if (sig->lv[i]) {
+            slot.name = sig->lv[i]->getName();
+        }
+        rv.push_back(std::move(slot));
+    }
+    if (sig->selfid) {
+        AOTLocalSlotId slot;
+        slot.local_var_ptr = reinterpret_cast<const void*>(sig->selfid);
+        slot.flags = 0x04;
+        slot.name = "self";
+        rv.push_back(std::move(slot));
+    }
+    if (sig->argvid) {
+        AOTLocalSlotId slot;
+        slot.local_var_ptr = reinterpret_cast<const void*>(sig->argvid);
+        slot.flags = 0x08;
+        slot.name = "$argv";
+        rv.push_back(std::move(slot));
+    }
+    return rv;
+}
+
+static bool writeNativeBCAArgBlob(QoreAOTBinaryWriter& writer, const QoreValue& arg_val,
+        const std::vector<AOTLocalSlotId>& bca_locals, const AOTConstantReverseMap* const_reverse_map,
+        const std::string& class_path, const char* method_name, const std::string& base_path,
+        uint16_t bca_index, uint16_t arg_index, const QoreProgramLocation* loc, std::string& error) {
+    uint32_t size_pos = writer.position();
+    writer.writeU32(0);
+    uint32_t payload_pos = writer.position();
+    static const std::vector<AOTGlobalSlotId> no_globals;
+
+    qoreAOTClearExprSerializationError();
+    bool ok = classifyAndWriteExpr(writer, arg_val, bca_locals, no_globals, const_reverse_map);
+    std::string expr_error;
+    bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
+    if (!ok || expr_error_set || writer.position() == payload_pos) {
+        writer.truncate(size_pos);
+        error = "AOT cannot serialize base-class constructor argument without fallback";
+        error += "; class='";
+        error += class_path.empty() ? "<unknown>" : class_path;
+        error += "' method='";
+        error += method_name ? method_name : "<unknown>";
+        error += "' base='";
+        error += base_path.empty() ? "<unknown>" : base_path;
+        error += "' bca-index=";
+        error += std::to_string(bca_index);
+        error += " arg-index=";
+        error += std::to_string(arg_index);
+        error += " location=";
+        error += qoreAOTDescribeLocation(loc);
+        if (expr_error_set) {
+            error += ": ";
+            error += expr_error;
+        } else if (!ok) {
+            error += ": classifyAndWriteExpr returned false without a nested expression diagnostic";
+        } else {
+            error += ": native expression serializer produced an empty payload";
+        }
+        error += "; arg=";
+        error += qoreAOTDescribeExpr(arg_val);
+        error += "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
+            "base-constructor argument to native IR";
+        return false;
+    }
+
+    writer.patchU32(size_pos, writer.position() - payload_pos);
+    return true;
+}
+
 //! Write METHODS section
-static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state) {
+static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state,
+        std::string& error) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::METHODS);
 
     // Build program-wide constant reverse map for BCA arg serialization
@@ -3396,7 +3752,6 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         // write user variant signatures
         {
             bool is_constructor = strcmp(method->getName(), "constructor") == 0;
-            bool debug = getenv("QORE_AOT_DEBUG") != nullptr;
             QoreFunctionIterator qfi(*static_cast<const QoreFunction*>(mfb));
             while (qfi.next()) {
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
@@ -3432,23 +3787,9 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                             const UserSignature* sig = ucv
                                 ? const_cast<UserConstructorVariant*>(ucv)->getUserSignature()
                                 : nullptr;
-                            AOTSlotMap bca_slots;
-                            if (sig) {
-                                for (unsigned i = 0; i < sig->numParams(); ++i) {
-                                    bca_slots.local_slots[reinterpret_cast<const void*>(sig->lv[i])] = i;
-                                }
-                                // Also map selfid if present
-                                if (sig->selfid) {
-                                    bca_slots.local_slots[reinterpret_cast<const void*>(sig->selfid)] =
-                                        static_cast<int32_t>(sig->numParams());
-                                }
-                                // Also map argvid if present
-                                if (sig->argvid) {
-                                    bca_slots.local_slots[reinterpret_cast<const void*>(sig->argvid)] =
-                                        static_cast<int32_t>(sig->numParams() + (sig->selfid ? 1 : 0));
-                                }
-                            }
+                            std::vector<AOTLocalSlotId> bca_locals = buildAOTLocalSlotsForUserSignature(sig);
 
+                            uint16_t bca_index = 0;
                             for (const BCANode* bca : *bcal) {
                                 // Write base class path for runtime resolution
                                 const QoreClass* base_cls = nullptr;
@@ -3463,30 +3804,34 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 }
                                 // getNamespacePath() walks the live namespace tree; see QoreAOT.cpp
                                 // NewObjectCallNode note.
-                                writer.writeStringRef(base_cls
-                                    ? base_cls->getNamespacePath().c_str() : "");
+                                std::string base_path = base_cls
+                                    ? base_cls->getNamespacePath() : std::string();
+                                writer.writeStringRef(base_path.c_str());
+                                writer.writeU16(static_cast<uint16_t>(
+                                    bca->loc ? bca->loc->start_line : 0));
+                                writer.writeU16(static_cast<uint16_t>(
+                                    bca->loc ? bca->loc->end_line : 0));
 
-                                // Serialize args as individual EXPR_TREE blobs
+                                // Serialize args as individual native expression blobs.
+                                // Legacy readers still understand EXPR_TREE blobs when the
+                                // QORE_AOT_FEAT_BCA_NATIVE_ARGS bit is absent; new writers do
+                                // not emit EXPR_TREE fallback.
                                 const QoreListNode* args = bca->getArgs();
                                 uint16_t num_args = args ? static_cast<uint16_t>(args->size()) : 0;
                                 writer.writeU16(num_args);
 
+                                const QoreClass* method_class = mi.method->getClass();
+                                std::string method_class_path = method_class
+                                    ? method_class->getNamespacePath() : std::string();
                                 for (uint16_t ai = 0; ai < num_args; ++ai) {
                                     QoreValue arg_val = args->retrieveEntry(ai);
-                                    std::vector<uint8_t> blob;
-                                    if (serializeExprTreeToBlob(arg_val, bca_slots, blob, debug, &program_crm)) {
-                                        writer.writeU32(static_cast<uint32_t>(blob.size()));
-                                        if (!blob.empty()) {
-                                            writer.writeBytes(blob.data(),
-                                                static_cast<uint32_t>(blob.size()));
-                                        }
-                                    } else {
-                                        printd(0, "AOT: failed to serialize BCA arg %d for %s::%s\n",
-                                            ai, mi.method->getClass()->getName(), method->getName());
-                                        // Write empty blob to keep format consistent
-                                        writer.writeU32(0);
+                                    if (!writeNativeBCAArgBlob(writer, arg_val, bca_locals, &program_crm,
+                                            method_class_path, method->getName(), base_path, bca_index, ai,
+                                            bca->loc, error)) {
+                                        return false;
                                     }
                                 }
+                                ++bca_index;
                             }
                         } else {
                             writer.writeU8(0);  // has_bca = false
@@ -3498,6 +3843,7 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
     }
 
     writer.endSection(sec_idx);
+    return true;
 }
 
 } // anonymous namespace
@@ -3643,9 +3989,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         trace_generic_eval("unsupported inline non-node expression", nullptr);
         qoreAOTSetExprSerializationError("unsupported inline native AOT expression for "
             + qoreAOTDescribeExpr(expr)
-            + "; add a native AOTExprKind serializer/reader or lower this operation to native IR");
-        writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
-        return true;
+            + "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
+                "operation to native IR");
+        return false;
     }
 
     const AbstractQoreNode* node = expr.getInternalNode();
@@ -3653,10 +3999,57 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         trace_generic_eval("missing inline expression node", nullptr);
         qoreAOTSetExprSerializationError("unsupported inline native AOT expression for "
             + qoreAOTDescribeExpr(expr)
-            + "; add a native AOTExprKind serializer/reader or lower this operation to native IR");
-        writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
-        return true;
+            + "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
+                "operation to native IR");
+        return false;
     }
+
+    if (node->getType() == NT_DATE) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
+        return writer.writeValue(expr);
+    }
+
+    auto write_inline_expr = [&](const QoreValue& v) -> bool {
+        return classifyAndWriteExpr(writer, v, parent_locals, parent_globals,
+            const_reverse_map);
+    };
+    auto write_qore_arg_list = [&](const QoreListNode* args) -> bool {
+        size_t nargs = args ? args->size() : 0;
+        if (nargs > 255) {
+            qoreAOTSetExprSerializationError("inline AOT expression payload has more than 255 arguments in "
+                + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
+            return false;
+        }
+        writer.writeU8(static_cast<uint8_t>(nargs));
+        for (size_t j = 0; j < nargs; ++j) {
+            if (!write_inline_expr(args->retrieveEntry(j))) {
+                return false;
+            }
+        }
+        return true;
+    };
+    auto write_parse_arg_list = [&](const QoreParseListNode* args) -> bool {
+        size_t nargs = args ? args->size() : 0;
+        if (nargs > 255) {
+            qoreAOTSetExprSerializationError("inline AOT expression payload has more than 255 arguments in "
+                + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
+            return false;
+        }
+        writer.writeU8(static_cast<uint8_t>(nargs));
+        for (size_t j = 0; j < nargs; ++j) {
+            if (!write_inline_expr(args->get(j))) {
+                return false;
+            }
+        }
+        return true;
+    };
+    auto write_args_prefer_qore = [&](const QoreListNode* args,
+            const QoreParseListNode* parse_args) -> bool {
+        if (args && args->size() > 0) {
+            return write_qore_arg_list(args);
+        }
+        return write_parse_arg_list(parse_args);
+    };
 
     // Preserve named constant identity when the expression node pointer is
     // already registered in the constant reverse map.
@@ -3705,7 +4098,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreParseListNode* pargs = call->getParseArgs();
         size_t nargs = args ? args->size() : (pargs ? pargs->size() : 0);
         if (nargs > 255) {
-            qoreAOTSetExprSerializationError("FUNC_CALL inline payload has more than 255 arguments");
+            qoreAOTSetExprSerializationError("FUNC_CALL inline payload has more than 255 arguments in "
+                + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
             return false;
         }
         writer.writeU8(static_cast<uint8_t>(nargs));
@@ -3722,17 +4116,25 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SELF_METHOD_CALL));
         const QoreMethod* method = call->getMethod();
-        if (method) {
-            const QoreClass* qc = method->getClass();
-            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
-            writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
-        } else {
-            writer.writeStringRef("");
+        const QoreClass* qc = call->getClass() ? call->getClass() : (method ? method->getClass() : nullptr);
+        // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
+        writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
+        writer.writeStringRef(call->getName());
+        const QoreListNode* args = call->getArgs();
+        const QoreParseListNode* pargs = call->getParseArgs();
+        size_t nargs = args ? args->size() : (pargs ? pargs->size() : 0);
+        if (nargs > 255) {
+            qoreAOTSetExprSerializationError("SELF_METHOD_CALL inline payload has more than 255 arguments in "
+                + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
+            return false;
         }
-        // Strip class prefix from method name if present (e.g., "LoggerWrapper::debug" → "debug")
-        const char* mname = call->getName();
-        const char* last_sep = strrchr(mname, ':');
-        writer.writeStringRef((last_sep && last_sep > mname && *(last_sep - 1) == ':') ? last_sep + 1 : mname);
+        writer.writeU8(static_cast<uint8_t>(nargs));
+        for (size_t j = 0; j < nargs; ++j) {
+            const QoreValue arg = args ? args->retrieveEntry(j) : pargs->get(j);
+            if (!classifyAndWriteExpr(writer, arg, parent_locals, parent_globals, const_reverse_map)) {
+                return false;
+            }
+        }
         return true;
     }
 
@@ -3750,14 +4152,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeStringRef(call->getName());
         // Serialize method args (must match read_expr_static_method_call format)
         const QoreListNode* args = call->getArgs();
-        if (args && args->size() > 0) {
-            writer.writeU8(static_cast<uint8_t>(args->size()));
-            for (size_t j = 0; j < args->size(); ++j) {
-                classifyAndWriteExpr(writer, args->retrieveEntry(j),
-                    parent_locals, parent_globals, const_reverse_map);
-            }
-        } else {
-            writer.writeU8(0);
+        if (!write_qore_arg_list(args)) {
+            return false;
         }
         return true;
     }
@@ -3772,14 +4168,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
             writer.writeStringRef(qc->getNamespacePath().c_str());
             const QoreListNode* args = vrn->getArgs();
-            if (args && args->size() > 0) {
-                writer.writeU8(static_cast<uint8_t>(args->size()));
-                for (size_t j = 0; j < args->size(); ++j) {
-                    classifyAndWriteExpr(writer, args->retrieveEntry(j),
-                        parent_locals, parent_globals, const_reverse_map);
-                }
-            } else {
-                writer.writeU8(0);
+            if (!write_qore_arg_list(args)) {
+                return false;
             }
             return true;
         }
@@ -3831,6 +4221,18 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                         return true;
                     }
                 }
+                // Member defaults and other non-function payloads do not have
+                // a SLOT_MAP global table.  Preserve the global variable
+                // identity by name so the loader can resolve it in the target
+                // program namespace instead of falling back to EXPR_TREE.
+                const char* name = global_var->getName();
+                if (name && *name) {
+                    std::string ref = "name:";
+                    ref += name;
+                    writer.writeU8(static_cast<uint8_t>(AOTExprKind::GLOBAL_VARREF));
+                    writer.writeStringRef(ref.c_str());
+                    return true;
+                }
             }
         }
     }
@@ -3872,23 +4274,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
             writer.writeStringRef(socn->oc->getNamespacePath().c_str());
             // Try evaluated args first, fall back to parse args
-            const QoreListNode* args = socn->getArgs();
-            if (args && args->size() > 0 && args->size() <= 255) {
-                writer.writeU8(static_cast<uint8_t>(args->size()));
-                for (size_t j = 0; j < args->size(); ++j) {
-                    classifyAndWriteExpr(writer, args->retrieveEntry(j), parent_locals, parent_globals, const_reverse_map);
-                }
-            } else if (const QoreParseListNode* pargs = socn->getParseArgs()) {
-                // Args not yet evaluated; serialize from parse-time expressions
-                uint8_t num_args = pargs->size() <= 255 ? static_cast<uint8_t>(pargs->size()) : 0;
-                writer.writeU8(num_args);
-                for (uint8_t j = 0; j < num_args; ++j) {
-                    classifyAndWriteExpr(writer, pargs->get(j), parent_locals, parent_globals, const_reverse_map);
-                }
-            } else {
-                writer.writeU8(0);
-            }
-            return true;
+            return write_args_prefer_qore(socn->getArgs(), socn->getParseArgs());
         }
     }
 
@@ -3899,22 +4285,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
         writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         // Serialize constructor args if available
-        const QoreListNode* args = no->getArgs();
-        if (args && args->size() > 0 && args->size() <= 255) {
-            writer.writeU8(static_cast<uint8_t>(args->size()));
-            for (size_t j = 0; j < args->size(); ++j) {
-                classifyAndWriteExpr(writer, args->retrieveEntry(j), parent_locals, parent_globals, const_reverse_map);
-            }
-        } else if (const QoreParseListNode* pargs = no->getParseArgs()) {
-            uint8_t num_args = pargs->size() <= 255 ? static_cast<uint8_t>(pargs->size()) : 0;
-            writer.writeU8(num_args);
-            for (uint8_t j = 0; j < num_args; ++j) {
-                classifyAndWriteExpr(writer, pargs->get(j), parent_locals, parent_globals, const_reverse_map);
-            }
-        } else {
-            writer.writeU8(0);
-        }
-        return true;
+        return write_args_prefer_qore(no->getArgs(), no->getParseArgs());
     }
 
     // QoreNumberNode: number literal constant
@@ -3961,7 +4332,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 ConstHashIterator it(qhn);
                 while (it.next()) {
                     writer.writeStringRef(it.getKey());
-                    classifyAndWriteExpr(writer, it.get(), parent_locals, parent_globals, const_reverse_map);
+                    if (!write_inline_expr(it.get())) {
+                        return false;
+                    }
                 }
             }
             return true;
@@ -3972,7 +4345,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             ConstHashIterator it(qhn);
             while (it.next()) {
                 writer.writeStringRef(it.getKey());
-                classifyAndWriteExpr(writer, it.get(), parent_locals, parent_globals, const_reverse_map);
+                if (!write_inline_expr(it.get())) {
+                    return false;
+                }
             }
             return true;
         }
@@ -3984,7 +4359,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::LIST_LITERAL));
             writer.writeU8(static_cast<uint8_t>(qln->size()));
             for (size_t i = 0; i < qln->size(); ++i) {
-                classifyAndWriteExpr(writer, qln->retrieveEntry(i), parent_locals, parent_globals, const_reverse_map);
+                if (!write_inline_expr(qln->retrieveEntry(i))) {
+                    return false;
+                }
             }
             return true;
         }
@@ -3997,7 +4374,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::LIST_LITERAL));
             writer.writeU8(static_cast<uint8_t>(pln->size()));
             for (size_t i = 0; i < pln->size(); ++i) {
-                classifyAndWriteExpr(writer, pln->get(i), parent_locals, parent_globals, const_reverse_map);
+                if (!write_inline_expr(pln->get(i))) {
+                    return false;
+                }
             }
             return true;
         }
@@ -4020,8 +4399,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 writer.writeU8(static_cast<uint8_t>(AOTExprKind::PARSE_HASH));
                 writer.writeU8(static_cast<uint8_t>(keys.size()));
                 for (size_t i = 0; i < keys.size(); ++i) {
-                    classifyAndWriteExpr(writer, keys[i], parent_locals, parent_globals, const_reverse_map);
-                    classifyAndWriteExpr(writer, vals[i], parent_locals, parent_globals, const_reverse_map);
+                    if (!write_inline_expr(keys[i]) || !write_inline_expr(vals[i])) {
+                        return false;
+                    }
                 }
                 return true;
             } else {
@@ -4031,21 +4411,34 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                     // Keys are typically string constants
                     QoreStringValueHelper key(keys[i]);
                     writer.writeStringRef(key->c_str());
-                    classifyAndWriteExpr(writer, vals[i], parent_locals, parent_globals, const_reverse_map);
+                    if (!write_inline_expr(vals[i])) {
+                        return false;
+                    }
                 }
                 return true;
             }
         }
-        // Hash too large for u8 count — fall through to GENERIC_EVAL
+        // Hash too large for u8 count — fail below with full unsupported-expression context.
     }
 
     // QoreHashObjectDereferenceOperatorNode: hash.key or hash{key} dereference chains
     // (e.g., oh.paths."/create".post — left=base, right=key, both recursively classified)
     if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_DEREF));
-        classifyAndWriteExpr(writer, hd->getLeft(), parent_locals, parent_globals, const_reverse_map);
-        classifyAndWriteExpr(writer, hd->getRight(), parent_locals, parent_globals, const_reverse_map);
-        return true;
+        return write_inline_expr(hd->getLeft()) && write_inline_expr(hd->getRight());
+    }
+
+    if (dynamic_cast<const QoreWeakAssignmentOperatorNode*>(node)) {
+        qoreAOTSetExprSerializationError("unsupported inline native AOT weak assignment for "
+            + qoreAOTDescribeExpr(expr)
+            + "; no fallback marker was emitted; add a native AOTExprKind serializer/reader for weak assignment "
+                "or lower this operation to native IR");
+        return false;
+    }
+
+    if (auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::ASSIGN));
+        return write_inline_expr(assign->getLeft()) && write_inline_expr(assign->getRight());
     }
 
     // Plus operator: used inside hash/list/constructor argument literals.
@@ -4053,22 +4446,22 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // expressions such as `hdr + ("Content-Type": content_type)`.
     if (auto* plus = dynamic_cast<const QorePlusOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::PLUS));
-        classifyAndWriteExpr(writer, plus->getLeft(), parent_locals, parent_globals,
-            const_reverse_map);
-        classifyAndWriteExpr(writer, plus->getRight(), parent_locals, parent_globals,
-            const_reverse_map);
-        return true;
+        return write_inline_expr(plus->getLeft()) && write_inline_expr(plus->getRight());
+    }
+
+    if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::RANGE));
+        return classifyAndWriteExpr(writer, range->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, range->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
     }
 
     // Square-bracket operator: required for nested lvalues such as
     // `\hash[key]` carried inside ParseReferenceNode metadata.
     if (auto* sq = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SQUARE_BRACKET));
-        classifyAndWriteExpr(writer, sq->getLeft(), parent_locals, parent_globals,
-            const_reverse_map);
-        classifyAndWriteExpr(writer, sq->getRight(), parent_locals, parent_globals,
-            const_reverse_map);
-        return true;
+        return write_inline_expr(sq->getLeft()) && write_inline_expr(sq->getRight());
     }
     if (auto* exists = dynamic_cast<const QoreExistsOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::EXISTS));
@@ -4082,35 +4475,19 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     }
     if (auto* minus = dynamic_cast<const QoreMinusOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::MINUS));
-        classifyAndWriteExpr(writer, minus->getLeft(), parent_locals, parent_globals,
-            const_reverse_map);
-        classifyAndWriteExpr(writer, minus->getRight(), parent_locals, parent_globals,
-            const_reverse_map);
-        return true;
+        return write_inline_expr(minus->getLeft()) && write_inline_expr(minus->getRight());
     }
     if (auto* multiply = dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::MULTIPLY));
-        classifyAndWriteExpr(writer, multiply->getLeft(), parent_locals, parent_globals,
-            const_reverse_map);
-        classifyAndWriteExpr(writer, multiply->getRight(), parent_locals, parent_globals,
-            const_reverse_map);
-        return true;
+        return write_inline_expr(multiply->getLeft()) && write_inline_expr(multiply->getRight());
     }
     if (auto* divide = dynamic_cast<const QoreDivisionOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::DIVIDE));
-        classifyAndWriteExpr(writer, divide->getLeft(), parent_locals, parent_globals,
-            const_reverse_map);
-        classifyAndWriteExpr(writer, divide->getRight(), parent_locals, parent_globals,
-            const_reverse_map);
-        return true;
+        return write_inline_expr(divide->getLeft()) && write_inline_expr(divide->getRight());
     }
     if (auto* modulo = dynamic_cast<const QoreModuloOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::MODULO));
-        classifyAndWriteExpr(writer, modulo->getLeft(), parent_locals, parent_globals,
-            const_reverse_map);
-        classifyAndWriteExpr(writer, modulo->getRight(), parent_locals, parent_globals,
-            const_reverse_map);
-        return true;
+        return write_inline_expr(modulo->getLeft()) && write_inline_expr(modulo->getRight());
     }
     if (auto* keys = dynamic_cast<const QoreKeysOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::KEYS));
@@ -4178,6 +4555,20 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         return classifyAndWriteExpr(writer, op->getExp(), parent_locals,
             parent_globals, const_reverse_map);
     }
+    if (auto* op = dynamic_cast<const QoreLogicalOrOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_OR));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalAndOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_AND));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
     if (auto* op = dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_NE));
         return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
@@ -4187,6 +4578,34 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     }
     if (auto* op = dynamic_cast<const QoreLogicalEqualsOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_EQ));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalLessThanOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_LT));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalGreaterThanOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_GT));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalLessThanOrEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_LE));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalGreaterThanOrEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_GE));
         return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
                 parent_globals, const_reverse_map)
             && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
@@ -4351,8 +4770,8 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // ParseReferenceNode: \var lvalue reference — serialize inner lvalue expression
     if (auto* prn = dynamic_cast<const ParseReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::PARSE_REF));
-        bool ok = classifyAndWriteExpr(writer, prn->getLVExp(), parent_locals, parent_globals, const_reverse_map);
-        return ok;
+        writer.writeStringRef(prn->getTypeInfo() ? QoreTypeInfo::getPath(prn->getTypeInfo()) : "");
+        return write_inline_expr(prn->getLVExp());
     }
 
     // NewHashDeclNode: hashdecl construction (e.g., <StatInfo>{"size": 1})
@@ -4361,15 +4780,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
             writer.writeStringRef(nhd->hd->getNamespacePath().c_str());
             // Serialize constructor args (typically a single hash initializer)
-            if (nhd->args && nhd->args->size() > 0) {
-                writer.writeU8(static_cast<uint8_t>(nhd->args->size()));
-                for (size_t j = 0; j < nhd->args->size(); ++j) {
-                    classifyAndWriteExpr(writer, nhd->args->get(j), parent_locals, parent_globals, const_reverse_map);
-                }
-            } else {
-                writer.writeU8(0);
-            }
-            return true;
+            return write_parse_arg_list(nhd->args);
         }
     }
 
@@ -4379,15 +4790,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_HASH_NEW));
             writer.writeStringRef(QoreTypeInfo::getPath(nch->typeInfo));
             // Serialize constructor args
-            if (nch->args && nch->args->size() > 0) {
-                writer.writeU8(static_cast<uint8_t>(nch->args->size()));
-                for (size_t j = 0; j < nch->args->size(); ++j) {
-                    classifyAndWriteExpr(writer, nch->args->get(j), parent_locals, parent_globals, const_reverse_map);
-                }
-            } else {
-                writer.writeU8(0);
-            }
-            return true;
+            return write_parse_arg_list(nch->args);
         }
     }
 
@@ -4399,7 +4802,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             // Serialize constructor arg (single QoreValue)
             if (ncl->args.hasNode()) {
                 writer.writeU8(1);
-                classifyAndWriteExpr(writer, ncl->args, parent_locals, parent_globals, const_reverse_map);
+                if (!write_inline_expr(ncl->args)) {
+                    return false;
+                }
             } else {
                 writer.writeU8(0);
             }
@@ -4418,7 +4823,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             QoreValue inner = hdc->getExp();
             if (inner.hasNode()) {
                 writer.writeU8(1);  // has inner expression
-                classifyAndWriteExpr(writer, inner, parent_locals, parent_globals, const_reverse_map);
+                if (!write_inline_expr(inner)) {
+                    return false;
+                }
             } else {
                 writer.writeU8(0);  // no inner expression (cast from nothing)
             }
@@ -4446,13 +4853,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // QoreClassCastOperatorNode: cast<ClassName>(obj)
     if (auto* cc = dynamic_cast<const QoreClassCastOperatorNode*>(node)) {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(cc->getCastTypeInfo());
-        if (qc) {
-            writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_CLASS));
-            // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.
-            writer.writeStringRef(qc->getNamespacePath().c_str());
-            writer.writeU8(cc->isOrNothing() ? 1 : 0);
-            return true;
-        }
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_CLASS));
+        // getNamespacePath(): see QoreAOT.cpp NewObjectCallNode.  A null
+        // class pointer represents the generic cast<object>(...) case.
+        writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "object");
+        writer.writeU8(cc->isOrNothing() ? 1 : 0);
+        return true;
     }
 
     // QoreEnumCastOperatorNode: cast<EnumType>(val)
@@ -4584,6 +4990,31 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
     }
 
+    if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
+        const QoreListNode* args = crc->getArgs();
+        const QoreParseListNode* pargs = crc->getParseArgs();
+        size_t nargs = args ? args->size() : (pargs ? pargs->size() : 0);
+        if (nargs > 255) {
+            qoreAOTSetExprSerializationError("CALLREF_CALL inline payload has more than 255 arguments in "
+                + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
+            return false;
+        }
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CALLREF_CALL));
+        if (!classifyAndWriteExpr(writer, crc->getExp(), parent_locals,
+                parent_globals, const_reverse_map)) {
+            return false;
+        }
+        writer.writeU8(static_cast<uint8_t>(nargs));
+        for (size_t j = 0; j < nargs; ++j) {
+            QoreValue arg = args ? args->retrieveEntry(j) : pargs->get(j);
+            if (!classifyAndWriteExpr(writer, arg, parent_locals,
+                    parent_globals, const_reverse_map)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // Call/method references inside container literals must serialize as
     // reference metadata, not as unevaluated AST constants.  The reader rebuilds
     // equivalent reference nodes that CreateCallRef/CreateMethodRef can evaluate
@@ -4679,8 +5110,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeStringRef(mc->getName() ? mc->getName() : "");
             writer.writeU8(mc->isPseudo() ? 1 : 0);
             // Target expression (left-hand side of the dot)
-            classifyAndWriteExpr(writer, de->getExpression(),
-                parent_locals, parent_globals, const_reverse_map);
+            if (!classifyAndWriteExpr(writer, de->getExpression(),
+                    parent_locals, parent_globals, const_reverse_map)) {
+                return false;
+            }
             // Method args: prefer the evaluated args list, fall back to parse_args
             const QoreListNode* call_args = mc->getArgs();
             const QoreParseListNode* parse_args = mc->getParseArgs();
@@ -4691,15 +5124,19 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 num_args = parse_args->size();
             }
             if (num_args > 255) {
-                num_args = 0;  // too many to encode — fall through to arg-less form
+                qoreAOTSetExprSerializationError("DOT_EVAL_TARGET inline payload has more than 255 arguments in "
+                    + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
+                return false;
             }
             writer.writeU8(static_cast<uint8_t>(num_args));
             for (size_t j = 0; j < num_args; ++j) {
                 QoreValue arg = call_args
                     ? call_args->retrieveEntry(j)
                     : parse_args->get(j);
-                classifyAndWriteExpr(writer, arg,
-                    parent_locals, parent_globals, const_reverse_map);
+                if (!classifyAndWriteExpr(writer, arg,
+                        parent_locals, parent_globals, const_reverse_map)) {
+                    return false;
+                }
             }
             return true;
         }
@@ -4721,8 +5158,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         std::string diag = qoreAOTBuildExprTreeFallbackDiagnostic(expr, parent_locals, const_reverse_map);
         if (diag.find("EXPR_TREE root=") != std::string::npos) {
             qoreAOTSetExprSerializationError(std::move(diag));
-            writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
-            return true;
+            return false;
         }
     }
 
@@ -4740,15 +5176,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
     }
 
-    // Unsupported — write GENERIC_EVAL placeholder
+    // Unsupported — fail before writing a fallback marker.
     trace_generic_eval("unsupported inline expression node", node);
     qoreAOTSetExprSerializationError("unsupported inline native AOT expression for "
         + qoreAOTDescribeExpr(expr)
-        + "; add a native AOTExprKind serializer/reader or lower this operation to native IR");
+        + "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this operation "
+            "to native IR");
     printd(3, "AOT: handler IR unsupported expr type '%s' for serialization\n",
         node->getTypeName());
-    writer.writeU8(static_cast<uint8_t>(AOTExprKind::GENERIC_EVAL));
-    return true;
+    return false;
 }
 
 bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompiledFuncWithSlots>& funcs,
@@ -4847,7 +5283,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             const auto* kinfo = getAOTExprSlotKindInfo(static_cast<uint8_t>(expr.kind));
             if (!kinfo || !kinfo->is_supported || !kinfo->write_fn) {
                 error = "unsupported expression slot kind " + std::to_string(static_cast<uint8_t>(expr.kind))
-                    + " in function '" + func.name + "' slot " + std::to_string(expr_idx);
+                    + " in function '" + func.name + "'";
+                qoreAOTAppendExprSlotContext(error, expr, expr_idx);
                 return false;
             }
             AOTExprSlotWriteCtx wctx{writer, expr, func.slot_ids.locals, func.slot_ids.globals,
@@ -4866,11 +5303,10 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     if (expr_error_set) {
                         error += ": ";
                         error += expr_error;
-                    } else if (!expr.ref1.empty()) {
-                        error += " ref1='";
-                        error += expr.ref1;
-                        error += "'";
+                    } else {
+                        error += ": writer returned false without a nested expression diagnostic";
                     }
+                    qoreAOTAppendExprSlotContext(error, expr, expr_idx);
                 }
                 return false;
             }
@@ -4881,6 +5317,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeStringRef(bl.name.c_str());
             writer.writeStringRef(bl.type_path.c_str());
             writer.writeU8(bl.is_closure ? 1 : 0);
+            writer.writeU32(bl.slot_id);
         }
 
         // Regex case entries (in slot-index order)
@@ -4916,7 +5353,12 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     if (expr_error_set) {
                         error += ": ";
                         error += expr_error;
+                    } else {
+                        error += ": writer returned false without a nested expression diagnostic";
                     }
+                    error += "; delete-lvalue-expr=";
+                    error += qoreAOTDescribeExpr(lvid.delete_lvalue_expr);
+                    error += "; no fallback marker was emitted";
                     return false;
                 }
             }
@@ -4939,7 +5381,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 // format of writeLValuePath in QoreAOTInstRegistry.cpp).
                 // Feature-gated via QORE_AOT_FEAT_LVPATH_SLICE.
                 if (step.kind == static_cast<uint8_t>(LVPathStepKind::HashKeySlice)
-                        || step.kind == static_cast<uint8_t>(LVPathStepKind::ListIndexSlice)) {
+                        || step.kind == static_cast<uint8_t>(LVPathStepKind::ListIndexSlice)
+                        || step.kind == static_cast<uint8_t>(LVPathStepKind::ListRangeSlice)) {
                     writer.writeU32(static_cast<uint32_t>(step.slice_operand_ids.size()));
                     for (uint32_t sid : step.slice_operand_ids) {
                         writer.writeU32(sid);
@@ -4996,6 +5439,52 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU16(static_cast<uint16_t>(loc.start_line));
             writer.writeU16(static_cast<uint16_t>(loc.end_line));
             writer.writeStringRef(loc.file.c_str());
+        }
+
+        // Metadata-only statement location entries for source-stripped
+        // ProgramControl::findStatementId() support.
+        writer.writeU16(static_cast<uint16_t>(func.aot_stmt_locs.size()));
+        for (auto& loc : func.aot_stmt_locs) {
+            writer.writeU16(static_cast<uint16_t>(loc.start_line));
+            writer.writeU16(static_cast<uint16_t>(loc.end_line));
+            writer.writeI64(loc.offset);
+            writer.writeStringRef(loc.file.c_str());
+            writer.writeStringRef(loc.source.c_str());
+        }
+
+        // Full function IR for source-stripped debug execution.  This is not
+        // source fallback: it is the same lowered IR used for AOT codegen,
+        // interpreted only when DebugProgram attaches to an AOT-only variant.
+        if (func.debug_ir) {
+            writer.writeU8(1);
+            uint32_t size_pos = writer.position();
+            writer.writeU32(0);
+            const auto& parent_locals = func.slot_ids.locals;
+            const auto& parent_globals = func.slot_ids.globals;
+            auto writeExpr = [&parent_locals, &parent_globals, func_const_reverse_map](
+                    QoreAOTBinaryWriter& w, const QoreValue& expr) -> bool {
+                return classifyAndWriteExpr(w, expr, parent_locals, parent_globals,
+                    func_const_reverse_map);
+            };
+            qoreAOTClearExprSerializationError();
+            bool debug_ir_ok = serializeIRFunction(writer, *func.debug_ir, writeExpr);
+            std::string expr_error;
+            bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
+            if (!debug_ir_ok || expr_error_set) {
+                error = "failed to serialize debug IR for function '" + func.name + "'";
+                if (expr_error_set) {
+                    error += ": ";
+                    error += expr_error;
+                } else {
+                    error += ": serializeIRFunction returned false without a nested expression diagnostic";
+                }
+                error += "; no fallback marker was emitted";
+                return false;
+            }
+            uint32_t end_pos = writer.position();
+            writer.patchU32(size_pos, end_pos - size_pos - 4);
+        } else {
+            writer.writeU8(0);
         }
 
         // Patch the entry size field
@@ -5478,6 +5967,8 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     for (auto* lv : func.all_body_locals) {
         writer.writeStringRef(lv->getName());
         writer.writeStringRef(getLocalTypePath(lv));
+        auto slot_it = func.local_var_slots.find(lv);
+        writer.writeU32(slot_it != func.local_var_slots.end() ? slot_it->second : UINT32_MAX);
     }
 
     // 4. Build block index map for block reference serialization
@@ -5899,9 +6390,9 @@ bool QoreAOTBinaryDeserializer::finalizePreIndex(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::finalizePostIndex(std::string& error) {
-    // Resolve deferred BCA (base class constructor argument) EXPR_TREE blobs.
+    // Resolve deferred BCA (base class constructor argument) blobs.
     // Must run after commitDeserializedClasses + rebuildAllIndexes so all
-    // methods and classes are findable by the EXPR_TREE handlers.
+    // methods and classes are findable by the native/legacy expression handlers.
     if (!resolveBCAExpressions(error)) {
         return false;
     }
@@ -6549,6 +7040,10 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             resolveDeferredExprTreeDefault(pim.pending_expr_tree_blob,
                 pim.default_val, getProgram(), "class", qc->getName(),
                 pim.name.c_str());
+            LocalVar* self_local = qore_class_private::getSelfId(*qc);
+            resolveDeferredNativeExprDefault(reader, pim.pending_expr_native_blob,
+                pim.default_val, getProgram(), "class", qc->getName(),
+                pim.name.c_str(), false, &self_local, 1);
 
             // Transfer ownership of the default value to the class member
             QoreValue default_val = pim.default_val;
@@ -6751,6 +7246,9 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             }
 
             resolveDeferredExprTreeDefault(psm.pending_expr_tree_blob,
+                psm.default_val, getProgram(), "class", qc->getName(),
+                psm.name.c_str());
+            resolveDeferredNativeExprDefault(reader, psm.pending_expr_native_blob,
                 psm.default_val, getProgram(), "class", qc->getName(),
                 psm.name.c_str());
 
@@ -6998,6 +7496,9 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             resolveDeferredExprTreeDefault(phm.pending_expr_tree_blob,
                 phm.default_val, getProgram(), "hashdecl", hd->getName(),
                 phm.name.c_str());
+            resolveDeferredNativeExprDefault(reader, phm.pending_expr_native_blob,
+                phm.default_val, getProgram(), "hashdecl", hd->getName(),
+                phm.name.c_str(), true);
 
             const QoreTypeInfo* mti = type_resolver->resolve(phm.type_path.c_str(), error);
             if (!error.empty()) {
@@ -7171,6 +7672,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             std::string pending_complex_default_path;
             std::vector<QoreValue> pending_complex_default_args;
             std::vector<uint8_t> pending_expr_tree_blob;
+            std::vector<uint8_t> pending_expr_native_blob;
         };
         std::vector<MemberInfo> members;
 
@@ -7264,6 +7766,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             phm.pending_complex_default_path = std::move(mi.pending_complex_default_path);
             phm.pending_complex_default_args = std::move(mi.pending_complex_default_args);
             phm.pending_expr_tree_blob = std::move(mi.pending_expr_tree_blob);
+            phm.pending_expr_native_blob = std::move(mi.pending_expr_native_blob);
             pending_members.push_back(std::move(phm));
         }
         pending_hashdecl_members.push_back({hd, std::move(pending_members)});
@@ -7589,6 +8092,8 @@ static bool readAndSetupVariantSignature(
         UserVariantBase* uvb,
         bool& sig_has_ellipsis,
         bool& needs_extra_args_flag,
+        int16_t& entry_first_line,
+        int16_t& entry_last_line,
         std::string& error,
         const QoreClass* classTypeInfo = nullptr,
         const std::vector<const QoreTypeInfo*>* type_table = nullptr) {
@@ -7645,6 +8150,12 @@ static bool readAndSetupVariantSignature(
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
         sig_first_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
         sig_last_line  = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+    }
+    entry_first_line = 0;
+    entry_last_line = 0;
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
+        entry_first_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+        entry_last_line  = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
     }
 
     // Read params — reserve+emplace rather than resize+assign so we
@@ -7896,6 +8407,37 @@ static bool readAndSetupVariantSignature(
     return true;
 }
 
+static void attachAOTEntryStatementBlock(QoreProgram* pgm, UserVariantBase* uvb,
+        int16_t entry_first_line, int16_t entry_last_line) {
+    assert(pgm);
+    assert(uvb);
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    StatementBlock* entry = nullptr;
+    {
+        AutoLocker al(&pp->plock);
+
+        const QoreProgramLocation* loc = nullptr;
+        if (UserSignature* sig = uvb->getUserSignature()) {
+            loc = sig->getParseLocation();
+            if (loc && (entry_first_line || entry_last_line)) {
+                loc = pp->getLocation(*loc, entry_first_line, entry_last_line);
+            }
+        }
+        if (!loc) {
+            loc = pp->getLocation(entry_first_line, entry_last_line);
+        }
+
+        entry = new StatementBlock(pp, loc);
+        // Function-entry metadata is resolved through findFunctionStatementId().
+        // Do not add it to the file/line index, or findStatementId() can
+        // resolve the first executable statement line to the function entry.
+        qore_program_private::registerStatement(pgm, entry, false);
+    }
+
+    uvb->setAOTEntryStatementBlock(entry);
+}
+
 bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::FUNCTIONS);
     if (!sec) {
@@ -7939,6 +8481,11 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                 QoreAOTBinaryReader::readU16(ptr);
                 // 3a. sig start/end lines (2x U16) — only when feat advertised
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
+                    QoreAOTBinaryReader::readU16(ptr);
+                    QoreAOTBinaryReader::readU16(ptr);
+                }
+                // 3b. function-entry statement start/end lines (2x U16)
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
                     QoreAOTBinaryReader::readU16(ptr);
                     QoreAOTBinaryReader::readU16(ptr);
                 }
@@ -8002,16 +8549,20 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
 
             bool sig_has_ellipsis = false;
             bool needs_extra_args_flag = false;
+            int16_t entry_first_line = 0;
+            int16_t entry_last_line = 0;
             const std::vector<const QoreTypeInfo*>* tt =
                 uses_type_table ? &type_table_resolved : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
-                    ufv, sig_has_ellipsis, needs_extra_args_flag, error, nullptr, tt)) {
+                    ufv, sig_has_ellipsis, needs_extra_args_flag, entry_first_line,
+                    entry_last_line, error, nullptr, tt)) {
                 // variant ownership transfers to addPendingVariant or cleanup
                 ufv->deref();
                 // function can't be deleted directly; add it to namespace empty
                 ns_list[ns_idx]->func_list.add(func, ns_list[ns_idx]);
                 return false;
             }
+            attachAOTEntryStatementBlock(pgm, ufv, entry_first_line, entry_last_line);
 
             // Set QCF_USES_EXTRA_ARGS on the variant.  This flag is
             // independent of signature.varargs (which was already set
@@ -8135,6 +8686,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
             bool sig_has_ellipsis = false;
             bool needs_extra_args_flag = false;
+            int16_t entry_first_line = 0;
+            int16_t entry_last_line = 0;
             uint64_t t_sig0 = time_on ? now_us() : 0;
             if (time_on) {
                 local_alloc_us += t_sig0 - t_alloc0;
@@ -8142,7 +8695,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             const std::vector<const QoreTypeInfo*>* tt =
                 uses_type_table ? &type_table_resolved : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
-                    umv, sig_has_ellipsis, needs_extra_args_flag, error, qc, tt)) {
+                    umv, sig_has_ellipsis, needs_extra_args_flag, entry_first_line,
+                    entry_last_line, error, qc, tt)) {
                 delete mvb;
                 return false;
             }
@@ -8202,6 +8756,10 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                             PendingBCAEntry entry;
                             const char* base_path = reader.readStringRef(ptr);
                             entry.base_path = base_path ? base_path : "";
+                            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BCA_LINES) != 0) {
+                                entry.start_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+                                entry.end_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+                            }
 
                             // Resolve base class by path
                             entry.classid = 0;
@@ -8248,6 +8806,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
             // Note: QCF_USES_EXTRA_ARGS flag is handled by the overridden hasVarargs()
             // method which checks signature.hasVarargs() directly
+            attachAOTEntryStatementBlock(pgm, umv, entry_first_line, entry_last_line);
 
             // Add method to class
             uint64_t t_add0 = time_on ? now_us() : 0;
@@ -8271,6 +8830,28 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
     return true;
 }
 
+static void addAOTInheritedInternalMemberContexts(qore_class_private* priv) {
+    // AOT metadata serializes class members and methods, but not the
+    // transient private:internal context map built during source parsing.
+    // Recreate the derived-class -> declaring-class storage mapping for
+    // inherited private:internal members so synthesized/merged methods on
+    // this class can access the same internal member storage as AST mode.
+    for (auto& mi : priv->members.member_list) {
+        QoreMemberInfo* info = mi.second;
+        if (!info || info->local()) {
+            continue;
+        }
+        const qore_class_private* declaring_class = info->getClass();
+        if (!declaring_class || info->getClassContext(priv)) {
+            continue;
+        }
+        QoreMemberInfo* declaring_info = const_cast<qore_class_private*>(declaring_class)->members.find(mi.first);
+        if (declaring_info && declaring_info->isLocalInternal()) {
+            info->addContextAccessForClass(priv, declaring_class);
+        }
+    }
+}
+
 bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
     // Import inherited members from base classes into newly deserialized classes.
     // During normal parsing, BCNode::initializeMembers() calls parseImportMembers()
@@ -8288,6 +8869,7 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
         // initializeMembers() checks parse_resolve_class_members flag to avoid re-initialization,
         // iterates base class list, and calls parseImportMembers() for each base class
         priv->initializeMembers();
+        addAOTInheritedInternalMemberContexts(priv);
         printd(5, "AOT deser: imported inherited members for class '%s'\n", qc->getName());
     }
     return true;
@@ -8525,6 +9107,7 @@ bool QoreAOTBinaryDeserializer::commitClassesResolveAbstract(std::string& error)
             continue;
         }
         priv->ahm.parseInit(*priv, priv->scl);
+        addAOTInheritedInternalMemberContexts(priv);
         // parseResolveAbstract() is a no-op once this flag is true; set it
         // so any later source-parse pass in the same Program doesn't
         // redundantly walk the same classes.
@@ -8574,14 +9157,18 @@ bool QoreAOTBinaryDeserializer::commitClassesValidate(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveBCAExpressions(std::string& error) {
+    bool bca_native_args = (reader.getHeader().feature_flags & QORE_AOT_FEAT_BCA_NATIVE_ARGS) != 0;
     for (auto& pbca : pending_bcas) {
         if (!pbca.ucv) {
             continue;
         }
 
         BCAList* bcal = new BCAList();
-        for (auto& entry : pbca.entries) {
-            // Deserialize arg EXPR_TREE blobs now that all methods are committed
+        for (size_t bca_index = 0; bca_index < pbca.entries.size(); ++bca_index) {
+            auto& entry = pbca.entries[bca_index];
+            // Deserialize arg blobs now that all methods are committed.  New
+            // objects use native inline AOT expression blobs; legacy objects
+            // without QORE_AOT_FEAT_BCA_NATIVE_ARGS still use EXPR_TREE.
             uint16_t num_args = static_cast<uint16_t>(entry.arg_blobs.size());
             QoreListNode* arg_list = nullptr;
             if (num_args > 0) {
@@ -8590,7 +9177,63 @@ bool QoreAOTBinaryDeserializer::resolveBCAExpressions(std::string& error) {
                     qore_get_complex_list_type(autoTypeInfo);
                 for (uint16_t ai = 0; ai < num_args; ++ai) {
                     auto& ab = entry.arg_blobs[ai];
-                    if (ab.data && ab.size > 0) {
+                    if (bca_native_args) {
+                        if (!ab.data || !ab.size) {
+                            error = "invalid empty native BCA argument blob";
+                            error += "; class='";
+                            error += pbca.qc ? pbca.qc->getNamespacePath() : "<unknown>";
+                            error += "' method='constructor' base='";
+                            error += entry.base_path.empty() ? "<unknown>" : entry.base_path;
+                            error += "' bca-index=";
+                            error += std::to_string(bca_index);
+                            error += " arg-index=";
+                            error += std::to_string(ai);
+                            error += " bca-lines=";
+                            error += std::to_string(entry.start_line);
+                            error += "-";
+                            error += std::to_string(entry.end_line);
+                            arg_list->deref(nullptr);
+                            delete bcal;
+                            return false;
+                        }
+
+                        const uint8_t* p = ab.data;
+                        const uint8_t* end = ab.data + ab.size;
+                        std::string expr_error;
+                        QoreValue arg_val = readOneExpr(reader, p, end, expr_error, pgm,
+                            pbca.local_vars.empty() ? nullptr : pbca.local_vars.data(),
+                            static_cast<int>(pbca.local_vars.size()), nullptr, 0);
+                        if (!expr_error.empty() || p != end) {
+                            arg_val.discard(nullptr);
+                            error = "failed to deserialize native BCA argument";
+                            error += "; class='";
+                            error += pbca.qc ? pbca.qc->getNamespacePath() : "<unknown>";
+                            error += "' method='constructor' base='";
+                            error += entry.base_path.empty() ? "<unknown>" : entry.base_path;
+                            error += "' bca-index=";
+                            error += std::to_string(bca_index);
+                            error += " arg-index=";
+                            error += std::to_string(ai);
+                            error += " blob-size=";
+                            error += std::to_string(ab.size);
+                            error += " bca-lines=";
+                            error += std::to_string(entry.start_line);
+                            error += "-";
+                            error += std::to_string(entry.end_line);
+                            if (!expr_error.empty()) {
+                                error += ": ";
+                                error += expr_error;
+                            }
+                            if (p != end) {
+                                error += "; trailing-bytes=";
+                                error += std::to_string(end - p);
+                            }
+                            arg_list->deref(nullptr);
+                            delete bcal;
+                            return false;
+                        }
+                        arg_list->push(arg_val, nullptr);
+                    } else if (ab.data && ab.size > 0) {
                         QoreValue arg_val = deserializeExprTreeFromBlob(
                             ab.data, ab.size, pgm,
                             pbca.local_vars.empty() ? nullptr : pbca.local_vars.data(),
@@ -8602,7 +9245,19 @@ bool QoreAOTBinaryDeserializer::resolveBCAExpressions(std::string& error) {
                 }
             }
 
-            BCANode* bca_node = new BCANode(entry.classid, arg_list);
+            const QoreProgramLocation* bca_loc = &loc_builtin;
+            if (entry.start_line > 0 || entry.end_line > 0) {
+                const QoreProgramLocation* ctor_loc = nullptr;
+                if (UserSignature* sig = pbca.ucv->getUserSignature()) {
+                    ctor_loc = sig->getParseLocation();
+                }
+                qore_program_private* pp = qore_program_private::get(*pgm);
+                bca_loc = ctor_loc
+                    ? pp->getLocation(*ctor_loc, entry.start_line, entry.end_line)
+                    : pp->getLocation(entry.start_line, entry.end_line);
+            }
+
+            BCANode* bca_node = new BCANode(entry.classid, arg_list, bca_loc);
             bcal->push_back(bca_node);
         }
 
@@ -8678,7 +9333,7 @@ bool QoreAOTBinaryDeserializer::deserializeFallbackSources(std::string& error) {
 
 bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
         const char* module_name, const std::unordered_set<std::string>* keep_modules,
-        const char* compile_file) {
+        const char* compile_file, std::string* error) {
     // Phase 1: Collect all user-defined items into indexed vectors
     // When module_name is provided, filter out items from reexported dependencies
     // When keep_modules is provided, items from those modules are always included
@@ -8706,14 +9361,32 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
 
     // Phase 2: Write each section
     writeNamespacesSection(writer, state);
-    writeClassesSection(writer, state);
-    writeHashDeclsSection(writer, state);
+    std::string section_error;
+    if (!writeClassesSection(writer, state, section_error)) {
+        if (error) {
+            *error = "CLASSES section: " + section_error;
+        }
+        return false;
+    }
+    section_error.clear();
+    if (!writeHashDeclsSection(writer, state, section_error)) {
+        if (error) {
+            *error = "HASHDECLS section: " + section_error;
+        }
+        return false;
+    }
     writeEnumsSection(writer, state);
     writeTypedefsSection(writer, state);
     writeConstantsSection(writer, state);
     writeGlobalsSection(writer, state);
     writeFunctionsSection(writer, state);
-    writeMethodsSection(writer, state);
+    section_error.clear();
+    if (!writeMethodsSection(writer, state, section_error)) {
+        if (error) {
+            *error = "METHODS section: " + section_error;
+        }
+        return false;
+    }
 
     // After every variant signature has been emitted, flush the per-blob
     // type-path table (TYPE_TABLE section).  Must come after

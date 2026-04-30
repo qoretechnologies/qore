@@ -442,6 +442,12 @@ uint64_t qore_rt_create_static_method_call_ref_aot(const char* class_path, const
 uint64_t qore_rt_create_static_method_call_ref_aot_throwing(const char* class_path, const char* method_name,
     ExceptionSink* xsink);
 
+//! Create a resolved local method call reference from serialized AOT metadata.
+uint64_t qore_rt_create_local_method_call_ref_aot(const char* class_path, const char* method_name,
+    ExceptionSink* xsink);
+uint64_t qore_rt_create_local_method_call_ref_aot_throwing(const char* class_path, const char* method_name,
+    ExceptionSink* xsink);
+
 //! Create a function call reference from serialized AOT metadata.
 uint64_t qore_rt_create_function_call_ref_aot(const char* function_name, ExceptionSink* xsink);
 uint64_t qore_rt_create_function_call_ref_aot_throwing(const char* function_name, ExceptionSink* xsink);
@@ -464,6 +470,13 @@ uint64_t qore_rt_create_parse_ref(const ParseReferenceNode* node, ExceptionSink*
 
 //! Create a parse reference via AOT context slot
 uint64_t qore_rt_create_parse_ref_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Create a local-variable parse reference via an AOT local slot.
+uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, int32_t local_slot, ExceptionSink* xsink);
+
+//! Create a self-member hash parse reference via AOT metadata.
+uint64_t qore_rt_create_member_hash_ref_aot(const char* member_name, uint64_t key_bits,
+    const char* ref_type_path, ExceptionSink* xsink);
 
 // --- Typed container construction helpers ---
 

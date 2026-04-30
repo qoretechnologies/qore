@@ -17,6 +17,8 @@ print_usage () {
   echo "  CI_NODE_TOTAL            Total number of shards for parallel test execution."
   echo "  QORE_EXCLUDE_PERF_TESTS  Set to '1' to exclude performance tests (same as -E)."
   echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P)."
+  echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
+  echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
 }
 
 err_multiple_format_opts() {
@@ -99,6 +101,26 @@ QR=""
 LIBQORE=""
 QORE_LIB_PATH="./lib/.libs:./qlib:$LD_LIBRARY_PATH"
 
+set_qore_build_dir () {
+    d="$1"
+    if [ ! -f "$d/CMakeCache.txt" ] || [ ! -f "$d/qore" ]; then
+        return 1
+    fi
+    if [ -f "$d/libqore.so" ]; then
+        LIBQORE="$d/libqore.so"
+    elif [ -f "$d/libqore.dylib" ]; then
+        LIBQORE="$d/libqore.dylib"
+    else
+        return 1
+    fi
+    QORE="$d/qore"
+    QR=""
+    if [ -f "$d/qr" ]; then
+        QR="$d/qr"
+    fi
+    return 0
+}
+
 # Allow callers to override binaries (ex: debug build output).
 if [ -n "$QORE_BINARY" ]; then
     QORE="$QORE_BINARY"
@@ -120,16 +142,17 @@ fi
 
 # Test that qore is built (CMake only, autotools no longer supported).
 if [ -z "$QORE" ]; then
+    if [ -d "build" ]; then
+        set_qore_build_dir "build"
+    fi
+fi
+if [ -z "$QORE" ]; then
     for D in `ls -d */`; do
         d=`echo ${D%%/}`
-        if [ -f "$d/CMakeCache.txt" ] && [ -f "$d/qore" ] && [ -f "$d/libqore.so" -o "$d/libqore.dylib" ]; then
-            if [ -f "$d/libqore.so" ]; then
-                LIBQORE="$d/libqore.so"
-            elif [ -f "$d/libqore.dylib" ]; then
-                LIBQORE="$d/libqore.dylib"
-            fi
-            QORE="$d/qore"
-            QR="$d/qr"
+        if [ "$d" = "build" ]; then
+            continue
+        fi
+        if set_qore_build_dir "$d"; then
             break
         fi
     done
@@ -140,8 +163,12 @@ if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
     exit 1
 fi
 
+export QORE_BINARY="$QORE"
+export LIBQORE_BINARY="$LIBQORE"
+
 QORE_DIR=`dirname "$QORE"`
 BUILD_MODULE_DIRS=""
+BUILD_QMOD_DIR=""
 if [ -d "$QORE_DIR/modules" ]; then
     for moddir in "$QORE_DIR/modules"/*; do
         if [ -d "$moddir" ]; then
@@ -153,10 +180,30 @@ if [ -d "$QORE_DIR/modules" ]; then
         fi
     done
 fi
+if [ -n "$QORE_TEST_QMOD_DIR" ]; then
+    if [ ! -d "$QORE_TEST_QMOD_DIR" ]; then
+        echo "QORE_TEST_QMOD_DIR does not exist or is not a directory: $QORE_TEST_QMOD_DIR"
+        exit 1
+    fi
+    BUILD_QMOD_DIR="$QORE_TEST_QMOD_DIR"
+elif [ "$QORE_TEST_SOURCE_MODULES" != "1" ] && [ -d "$QORE_DIR/qlib-qmod" ]; then
+    BUILD_QMOD_DIR="$QORE_DIR/qlib-qmod"
+fi
 
 export LD_LIBRARY_PATH=$QORE_LIB_PATH
+TEST_MODULE_DIRS=""
+if [ -n "$BUILD_QMOD_DIR" ]; then
+    TEST_MODULE_DIRS="$BUILD_QMOD_DIR"
+fi
 if [ -n "$BUILD_MODULE_DIRS" ]; then
-    export QORE_MODULE_DIR=$BUILD_MODULE_DIRS:./qlib:$QORE_MODULE_DIR
+    if [ -n "$TEST_MODULE_DIRS" ]; then
+        TEST_MODULE_DIRS="$TEST_MODULE_DIRS:$BUILD_MODULE_DIRS"
+    else
+        TEST_MODULE_DIRS="$BUILD_MODULE_DIRS"
+    fi
+fi
+if [ -n "$TEST_MODULE_DIRS" ]; then
+    export QORE_MODULE_DIR=$TEST_MODULE_DIRS:./qlib:$QORE_MODULE_DIR
 else
     export QORE_MODULE_DIR=./qlib:$QORE_MODULE_DIR
 fi

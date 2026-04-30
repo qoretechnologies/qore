@@ -582,7 +582,8 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         }
 
         # Test stream-chat
-        AbstractDataProvider stream = prov.getChildProvider("stream-chat");
+        PerplexityChatStreamDataProvider stream = cast<PerplexityChatStreamDataProvider>(
+            prov.getChildProvider("stream-chat"));
         StreamObserver stream_observer();
         stream.registerObserver(stream_observer);
         stream.observersReady();

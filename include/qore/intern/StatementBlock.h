@@ -125,6 +125,9 @@ class StatementBlock : public AbstractStatement {
 public:
     typedef safe_dslist<AbstractStatement*> statement_list_t;
 
+    //! Metadata-only block with an explicit program-owned location.
+    DLLLOCAL StatementBlock(qore_program_private_base* p, const QoreProgramLocation* loc);
+
     DLLLOCAL StatementBlock(int sline, int eline);
 
     // line numbers on statement blocks are set later

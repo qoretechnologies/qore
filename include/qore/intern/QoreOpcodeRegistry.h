@@ -41,7 +41,7 @@ struct OpcodeInfo {
 #define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
-constexpr OpcodeInfo OPCODE_REGISTRY[369] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[370] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 2
@@ -393,7 +393,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[369] = {
     { "AddTimeout"                    , false, false, false,  2, "AddTimeout", false, true , "ParseNode", true , false, true , false, false }, // 348
     { "SubTimeout"                    , false, false, false,  2, "SubTimeout", false, true , "ParseNode", true , false, true , false, false }, // 349
     { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , false, true , false, true  }, // 350
-    { "ListIndexDynamic"              , false, false, false,  2, "ListIndexDynamic", false, true , "ParseNode", true , false, true , false, true  }, // 351
+    { "ListIndexDynamic"              , false, false, false, OPCODE_MIN_OPERANDS(2), "ListIndexDynamic", false, true , "ParseNode", true , false, true , false, true  }, // 351
     { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 352
     { "LValuePathAssign"              , false, false, false, OPCODE_MIN_OPERANDS(1), "LValuePathAssign", true , true , "AssignmentNode", true , false, false, false, false }, // 353
     { "LValuePathCompound"            , false, false, false, OPCODE_MIN_OPERANDS(1), "LValuePathCompound", true , true , "ParseNode", true , false, false, false, false }, // 354
@@ -411,12 +411,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[369] = {
     { "ContextRef"                    , true , false, false,  0, "Evaluate context field reference", false, true , "ContextrefNode", true , false, true , false, false }, // 366
     { "ContextRow"                    , true , false, false,  0, "Evaluate current context row", false, true , "ContextRowNode", true , false, true , false, false }, // 367
     { "RefSelf"                       , false, false, false,  1, "Create owned reference to value", false, false, "ParseNode", true , false, false, false, false }, // 368
+    { "DebugBlock"                    , false, false, false,  0, "Debug-only StatementBlock entry marker", false, false, "ParseNode", false, false, false, false, false }, // 369
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 369,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 369"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 370,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 370"
 );
 
 //! ============================================================================

@@ -155,6 +155,13 @@ VariableBlockHelper::~VariableBlockHelper() {
 StatementBlock::StatementBlock(qore_program_private_base* p) : AbstractStatement(p) {
 }
 
+StatementBlock::StatementBlock(qore_program_private_base* p, const QoreProgramLocation* n_loc)
+        : AbstractStatement(p) {
+    if (n_loc) {
+        loc = n_loc;
+    }
+}
+
 StatementBlock::StatementBlock(int sline, int eline) : AbstractStatement(sline, eline) {
 }
 

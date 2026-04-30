@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 368,
+static_assert(QORE_IR_MAX_OPCODE == 369,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -770,20 +770,6 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                     || inst_ptr->opcode == QoreIROpcode::InstantiateLocal)) {
                 const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
                 if (linst->local) {
-                    // In AOT mode, closure-use locals need function-scope lifecycle
-                    // management (emitLocalInstantiation/emitLocalUninstantiation)
-                    // rather than block-scoped management.  Their InstantiateLocal
-                    // in the IR pushes a CVV onto the cvstack, but the matching
-                    // UninstantiateLocal may be skipped on return paths (CF_SKIP_LVARS).
-                    // By keeping them in entry_locals, emitLocalUninstantiation pops
-                    // them at every return site, and execJITWithDeopt serves as an
-                    // exception safety net.  The InstantiateLocal handler's runtime
-                    // call is idempotent (qore_rt_instantiate_local skips if already
-                    // on cvstack), so the double-call from emitLocalInstantiation +
-                    // InstantiateLocal handler is harmless.
-                    if (aot_mode && linst->local->closureUse()) {
-                        continue;
-                    }
                     block_scoped_locals.insert(reinterpret_cast<const void*>(linst->local));
                 }
             }
@@ -919,15 +905,13 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
                 instantiated_closure_use.insert(key);
             }
         }
-        // Also instantiate closure-use body locals that are NOT entry_locals
-        // (e.g., declared inside a for-loop body).  Without this, the first
-        // access to such a var lazily instantiates it via LocalVar::getLValue,
-        // which uses a name-based walk-all lookup; for recursive calls, that
-        // lookup would find an OUTER frame's CVV (same LocalVar name pointer)
-        // and skip creating a fresh CVV, causing cross-frame aliasing of the
-        // var's value.  By pre-instantiating per function-entry, each
-        // invocation has its own CVV on top of the cvstack, so walk-all
-        // lookups resolve to the current function's own variable.
+        // Also instantiate non-block-scoped closure-use body locals that are
+        // NOT entry_locals.  Without a current-frame CVV, the first access to
+        // such a var can lazily instantiate it via LocalVar::getLValue, which
+        // uses a name-based walk-all lookup; for recursive calls, that lookup
+        // can find an outer frame's CVV and cause cross-frame aliasing.  Locals
+        // with explicit block scope are instantiated at closure load/store and
+        // popped by the explicit UninstantiateLocal lowering.
         if (current_ir_func) {
             for (LocalVar* var : current_ir_func->all_body_locals) {
                 if (!var || !var->closureUse()) {
@@ -935,6 +919,9 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
                 }
                 const void* key = reinterpret_cast<const void*>(var);
                 if (instantiated_closure_use.count(key)) {
+                    continue;
+                }
+                if (block_scoped_locals.count(key)) {
                     continue;
                 }
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
@@ -1158,6 +1145,9 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
                 const void* key = reinterpret_cast<const void*>(var);
                 if (entry_local_set.count(key)) {
                     continue;  // Already handled by the entry_locals loop below
+                }
+                if (block_scoped_locals.count(key)) {
+                    continue;  // Popped by the explicit UninstantiateLocal lowering
                 }
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                 builder->CreateCall(pop_helper, {aot_ctx_arg,
@@ -3509,8 +3499,48 @@ static std::string formatQoreIRFallbackInstruction(const QoreIRInstruction* inst
     }
 
     if (expr) {
-        desc += ", expression ";
-        desc += expr->hasNode() ? expr->getInternalNode()->getTypeName() : expr->getTypeName();
+        desc += ", expression qtype=";
+        desc += std::to_string(expr->getType());
+        desc += " (";
+        desc += expr->getTypeName();
+        desc += ")";
+        if (expr->hasNode()) {
+            const AbstractQoreNode* node = expr->getInternalNode();
+            if (node) {
+                desc += ", node=";
+                desc += node->getTypeName();
+                desc += " (";
+                desc += std::to_string(node->getType());
+                desc += ")";
+                desc += ", needs-eval=";
+                desc += node->needs_eval() ? "true" : "false";
+                if (const auto* pn = dynamic_cast<const ParseNode*>(node)) {
+                    if (pn->loc) {
+                        desc += ", expr-location=";
+                        const char* file = pn->loc->getFileValue();
+                        desc += (file && *file) ? file : "<unknown>";
+                        if (pn->loc->start_line >= 0) {
+                            desc += ":";
+                            desc += std::to_string(pn->loc->start_line);
+                            if (pn->loc->end_line >= 0 && pn->loc->end_line != pn->loc->start_line) {
+                                desc += "-";
+                                desc += std::to_string(pn->loc->end_line);
+                            }
+                        }
+                        if (pn->loc->getSource() && *pn->loc->getSource()) {
+                            desc += ", source=";
+                            desc += pn->loc->getSource();
+                        }
+                        if (pn->loc->offset) {
+                            desc += ", offset=";
+                            desc += std::to_string(pn->loc->offset);
+                        }
+                    }
+                }
+            } else {
+                desc += ", node=<null>";
+            }
+        }
     }
 
     if (inst->loc && inst->loc->getFile()) {
@@ -8059,43 +8089,61 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // CreateCallRef invoke
                 if (aot_mode) {
                     auto* node = inv->expr.getInternalNode();
-                    auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
-                    const QoreMethod* method = scr ? scr->getMethod() : nullptr;
+                    auto* mcr = dynamic_cast<const LocalMethodCallReferenceNode*>(node);
+                    const QoreMethod* method = mcr ? mcr->getMethod() : nullptr;
                     const QoreClass* qc = method ? method->getClass() : nullptr;
-                    if (method && method->isStatic() && qc) {
+                    if (method && !method->isStatic() && qc) {
                         llvm::Value* class_path = builder->CreateGlobalStringPtr(
-                                qc->getNamespacePath(), "static_call_ref_class_path");
+                                qc->getNamespacePath(), "local_method_call_ref_class_path");
                         llvm::Value* method_name = builder->CreateGlobalStringPtr(
-                                method->getName(), "static_call_ref_method_name");
+                                method->getName(), "local_method_call_ref_method_name");
                         auto cr_ft = llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, ptr_type}, false);
                         auto helper = module.getOrInsertFunction(
-                                "qore_rt_create_static_method_call_ref_aot", cr_ft);
+                                "qore_rt_create_local_method_call_ref_aot", cr_ft);
                         auto helper_throwing = module.getOrInsertFunction(
-                                "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
+                                "qore_rt_create_local_method_call_ref_aot_throwing", cr_ft);
                         result = emitMaybeInvoke(helper, helper_throwing,
                                 {class_path, method_name, xsink_arg}, module, llvm_func, inst);
-                    } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
-                        QoreFunction* func = fcr->getFunction();
-                        if (!func) {
-                            error = "unsupported AOT call reference lowering: function call reference has no "
-                                "function metadata";
+                    } else {
+                        auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
+                        method = scr ? scr->getMethod() : nullptr;
+                        qc = method ? method->getClass() : nullptr;
+                        if (method && method->isStatic() && qc) {
+                            llvm::Value* class_path = builder->CreateGlobalStringPtr(
+                                    qc->getNamespacePath(), "static_call_ref_class_path");
+                            llvm::Value* method_name = builder->CreateGlobalStringPtr(
+                                    method->getName(), "static_call_ref_method_name");
+                            auto cr_ft = llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type, ptr_type}, false);
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_create_static_method_call_ref_aot", cr_ft);
+                            auto helper_throwing = module.getOrInsertFunction(
+                                    "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
+                            result = emitMaybeInvoke(helper, helper_throwing,
+                                    {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                        } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
+                            QoreFunction* func = fcr->getFunction();
+                            if (!func) {
+                                error = "unsupported AOT call reference lowering: function call reference has no "
+                                    "function metadata";
+                                return false;
+                            }
+                            llvm::Value* function_name = builder->CreateGlobalStringPtr(
+                                    func->getName(), "function_call_ref_name");
+                            auto cr_ft = llvm::FunctionType::get(i64_type,
+                                    {ptr_type, ptr_type}, false);
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_create_function_call_ref_aot", cr_ft);
+                            auto helper_throwing = module.getOrInsertFunction(
+                                    "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
+                            result = emitMaybeInvoke(helper, helper_throwing,
+                                    {function_name, xsink_arg}, module, llvm_func, inst);
+                        } else {
+                            error = "unsupported AOT call reference lowering: only resolved method, static method, "
+                                "and function call references are native";
                             return false;
                         }
-                        llvm::Value* function_name = builder->CreateGlobalStringPtr(
-                                func->getName(), "function_call_ref_name");
-                        auto cr_ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type}, false);
-                        auto helper = module.getOrInsertFunction(
-                                "qore_rt_create_function_call_ref_aot", cr_ft);
-                        auto helper_throwing = module.getOrInsertFunction(
-                                "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
-                        result = emitMaybeInvoke(helper, helper_throwing,
-                                {function_name, xsink_arg}, module, llvm_func, inst);
-                    } else {
-                        error = "unsupported AOT call reference lowering: only resolved static method call "
-                            "and function call references are native";
-                        return false;
                     }
                 } else {
                     QoreValue expr_val = inv->expr;
@@ -8194,12 +8242,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     if (key_val) {
                                         llvm::Value* key_boxed = boxValue(key_val, inv->operands[0].id);
                                         llvm::Value* name_ptr = builder->CreateGlobalStringPtr(member_name);
+                                        llvm::Value* type_ptr = builder->CreateGlobalStringPtr(
+                                            prn->getTypeInfo() ? QoreTypeInfo::getPath(prn->getTypeInfo()) : "");
                                         auto helper = module.getOrInsertFunction(
                                             "qore_rt_create_member_hash_ref_aot",
                                             llvm::FunctionType::get(i64_type,
-                                                {ptr_type, i64_type, ptr_type}, false));
+                                                {ptr_type, i64_type, ptr_type, ptr_type}, false));
                                         result = builder->CreateCall(helper,
-                                            {name_ptr, key_boxed, xsink_arg});
+                                            {name_ptr, key_boxed, type_ptr, xsink_arg});
                                         native_lowered = true;
                                     }
                                 }
@@ -10556,8 +10606,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
             llvm::Value* result;
             if (aot_mode) {
-                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                        reinterpret_cast<const void*>(linst->local));
+                const void* key = reinterpret_cast<const void*>(linst->local);
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                if (linst->local && linst->local->closureUse()
+                        && aot_body_locals.count(key)) {
+                    auto inst_helper = module.getOrInsertFunction(
+                            "qore_rt_instantiate_local_aot",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+                    builder->CreateCall(inst_helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot)});
+                }
                 auto lc_ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i32_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_load_closure_aot", lc_ft);
@@ -10657,8 +10715,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             if (aot_mode) {
-                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                        reinterpret_cast<const void*>(linst->local));
+                const void* key = reinterpret_cast<const void*>(linst->local);
+                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                if (linst->local && linst->local->closureUse()
+                        && aot_body_locals.count(key)) {
+                    auto inst_helper = module.getOrInsertFunction(
+                            "qore_rt_instantiate_local_aot",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+                    builder->CreateCall(inst_helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot)});
+                }
                 auto sc_ft = llvm::FunctionType::get(void_type,
                         {ptr_type, i32_type, i64_type, ptr_type}, false);
                 auto helper = module.getOrInsertFunction("qore_rt_store_closure_aot", sc_ft);
@@ -11172,43 +11238,61 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result;
             if (aot_mode) {
                 auto* node = crinst->expr.getInternalNode();
-                auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
-                const QoreMethod* method = scr ? scr->getMethod() : nullptr;
+                auto* mcr = dynamic_cast<const LocalMethodCallReferenceNode*>(node);
+                const QoreMethod* method = mcr ? mcr->getMethod() : nullptr;
                 const QoreClass* qc = method ? method->getClass() : nullptr;
-                if (method && method->isStatic() && qc) {
+                if (method && !method->isStatic() && qc) {
                     llvm::Value* class_path = builder->CreateGlobalStringPtr(
-                            qc->getNamespacePath(), "static_call_ref_class_path");
+                            qc->getNamespacePath(), "local_method_call_ref_class_path");
                     llvm::Value* method_name = builder->CreateGlobalStringPtr(
-                            method->getName(), "static_call_ref_method_name");
+                            method->getName(), "local_method_call_ref_method_name");
                     auto cr_ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, ptr_type, ptr_type}, false);
                     auto helper = module.getOrInsertFunction(
-                            "qore_rt_create_static_method_call_ref_aot", cr_ft);
+                            "qore_rt_create_local_method_call_ref_aot", cr_ft);
                     auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
+                            "qore_rt_create_local_method_call_ref_aot_throwing", cr_ft);
                     result = emitMaybeInvoke(helper, helper_throwing,
                             {class_path, method_name, xsink_arg}, module, llvm_func, inst);
-                } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
-                    QoreFunction* func = fcr->getFunction();
-                    if (!func) {
-                        error = "unsupported AOT call reference lowering: function call reference has no "
-                            "function metadata";
+                } else {
+                    auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node);
+                    method = scr ? scr->getMethod() : nullptr;
+                    qc = method ? method->getClass() : nullptr;
+                    if (method && method->isStatic() && qc) {
+                        llvm::Value* class_path = builder->CreateGlobalStringPtr(
+                                qc->getNamespacePath(), "static_call_ref_class_path");
+                        llvm::Value* method_name = builder->CreateGlobalStringPtr(
+                                method->getName(), "static_call_ref_method_name");
+                        auto cr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_create_static_method_call_ref_aot", cr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_static_method_call_ref_aot_throwing", cr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {class_path, method_name, xsink_arg}, module, llvm_func, inst);
+                    } else if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
+                        QoreFunction* func = fcr->getFunction();
+                        if (!func) {
+                            error = "unsupported AOT call reference lowering: function call reference has no "
+                                "function metadata";
+                            return false;
+                        }
+                        llvm::Value* function_name = builder->CreateGlobalStringPtr(
+                                func->getName(), "function_call_ref_name");
+                        auto cr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_create_function_call_ref_aot", cr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {function_name, xsink_arg}, module, llvm_func, inst);
+                    } else {
+                        error = "unsupported AOT call reference lowering: only resolved method, static method, "
+                            "and function call references are native";
                         return false;
                     }
-                    llvm::Value* function_name = builder->CreateGlobalStringPtr(
-                            func->getName(), "function_call_ref_name");
-                    auto cr_ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type}, false);
-                    auto helper = module.getOrInsertFunction(
-                            "qore_rt_create_function_call_ref_aot", cr_ft);
-                    auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_create_function_call_ref_aot_throwing", cr_ft);
-                    result = emitMaybeInvoke(helper, helper_throwing,
-                            {function_name, xsink_arg}, module, llvm_func, inst);
-                } else {
-                    error = "unsupported AOT call reference lowering: only resolved static method call "
-                        "and function call references are native";
-                    return false;
                 }
             } else {
                 QoreValue expr_val = crinst->expr;
@@ -11322,12 +11406,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 if (key_val) {
                                     llvm::Value* key_boxed = boxValue(key_val, prinst->operands[0].id);
                                     llvm::Value* name_ptr = builder->CreateGlobalStringPtr(member_name);
+                                    llvm::Value* type_ptr = builder->CreateGlobalStringPtr(
+                                        prinst->node->getTypeInfo()
+                                            ? QoreTypeInfo::getPath(prinst->node->getTypeInfo()) : "");
                                     auto helper = module.getOrInsertFunction(
                                         "qore_rt_create_member_hash_ref_aot",
                                         llvm::FunctionType::get(i64_type,
-                                            {ptr_type, i64_type, ptr_type}, false));
+                                            {ptr_type, i64_type, ptr_type, ptr_type}, false));
                                     result = builder->CreateCall(helper,
-                                        {name_ptr, key_boxed, xsink_arg});
+                                        {name_ptr, key_boxed, type_ptr, xsink_arg});
                                     native_lowered = true;
                                 }
                             }
@@ -13955,6 +14042,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             });
             return true;
         }
+        case QoreIROpcode::DebugBlock: {
+            return true;
+        }
         case QoreIROpcode::DiscardTemps: {
             emitDiscardTemps(module);
             return true;
@@ -14412,9 +14502,46 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         case QoreIROpcode::ListIndexDynamic: {
             if (inst->operands.size() >= 2) {
                 auto* lhs = getVal(inst->operands[0].id, error);
-                auto* rhs = getVal(inst->operands[1].id, error);
-                if (!lhs || !rhs) { return false; }
+                if (!lhs) { return false; }
                 llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+                if (inst->opcode == QoreIROpcode::ListIndexDynamic) {
+                    const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+                    if (!expr_inst->list_selector_kinds.empty()) {
+                        int num_selectors = static_cast<int>(inst->operands.size()) - 1;
+                        llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                                llvm_func->getEntryBlock().begin());
+                        llvm::Value* selector_array = ab.CreateAlloca(i64_type,
+                                llvm::ConstantInt::get(i32_type, num_selectors));
+                        for (int i = 0; i < num_selectors; ++i) {
+                            auto* selector = getVal(inst->operands[i + 1].id, error);
+                            if (!selector) { return false; }
+                            llvm::Value* boxed = boxValue(selector, inst->operands[i + 1].id);
+                            llvm::Value* gep = builder->CreateGEP(i64_type, selector_array,
+                                    llvm::ConstantInt::get(i32_type, i));
+                            builder->CreateStore(boxed, gep);
+                        }
+                        std::string kind_bytes(reinterpret_cast<const char*>(
+                            expr_inst->list_selector_kinds.data()), expr_inst->list_selector_kinds.size());
+                        llvm::Value* kinds_ptr = builder->CreateGlobalStringPtr(
+                            llvm::StringRef(kind_bytes.data(), kind_bytes.size()), "list_selector_kinds");
+                        auto helper = module.getOrInsertFunction("qore_rt_list_index_selectors",
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, i32_type, ptr_type, ptr_type}, false));
+                        llvm::Value* result = builder->CreateCall(helper,
+                            {lhs_boxed, kinds_ptr,
+                             llvm::ConstantInt::get(i32_type,
+                                static_cast<int32_t>(expr_inst->list_selector_kinds.size())),
+                             selector_array, xsink_arg});
+                        values[inst->result.id] = result;
+                        nanboxed_values.insert(inst->result.id);
+                        trackResultForCleanup(result, inst->result.id, llvm_func);
+                        emitExceptionCheck(module, llvm_func, inst);
+                        reloadAllLocalsFromRuntime(module, llvm_func);
+                        return true;
+                    }
+                }
+                auto* rhs = getVal(inst->operands[1].id, error);
+                if (!rhs) { return false; }
                 llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
                 llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
                     static_cast<int>(inst->opcode));
@@ -14452,7 +14579,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     ++num_dyn;
                 }
                 if (step.kind == LVPathStepKind::HashKeySlice
-                        || step.kind == LVPathStepKind::ListIndexSlice) {
+                        || step.kind == LVPathStepKind::ListIndexSlice
+                        || step.kind == LVPathStepKind::ListRangeSlice) {
                     num_dyn += static_cast<int>(step.slice_operand_ids.size());
                 }
             }
@@ -14475,7 +14603,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         builder->CreateStore(boxed, gep);
                     }
                     if (step.kind == LVPathStepKind::HashKeySlice
-                            || step.kind == LVPathStepKind::ListIndexSlice) {
+                            || step.kind == LVPathStepKind::ListIndexSlice
+                            || step.kind == LVPathStepKind::ListRangeSlice) {
                         for (uint32_t sid : step.slice_operand_ids) {
                             auto* dyn_val = getVal(sid, error);
                             if (!dyn_val) { return false; }

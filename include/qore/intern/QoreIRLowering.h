@@ -362,6 +362,7 @@ private:
     std::unordered_set<uint32_t> never_nothing_values;
     uint32_t block_counter = 0;
     uint32_t scope_counter = 0;  //!< Counter for generating unique scope IDs within a function
+    int statement_block_depth = 0;  //!< Nesting depth for debug block markers
     int loop_depth = 0;  //!< Nesting depth of loop bodies (for is_block_exit detection)
     QoreIRBasicBlock* guard_exception_target_override = nullptr;
 

@@ -650,8 +650,9 @@ enum class QoreIROpcode : uint16_t {
     //! consumer, such as return expressions evaluated before inlined on_exit
     //! handlers.
     RefSelf             = 368,
+    DebugBlock          = 369,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (369, 370, ...)
+    // NOTE: When adding new opcodes, assign the next sequential ID (370, 371, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -659,8 +660,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::RefSelf);
-static_assert(QORE_IR_MAX_OPCODE == 368, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::DebugBlock);
+static_assert(QORE_IR_MAX_OPCODE == 369, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -1088,6 +1089,7 @@ enum class LVPathStepKind : uint8_t {
     ListIndex      = 8,  //!< Navigate list by index (IR operand)
     HashKeySlice   = 9,  //!< Multi-key hash slice h{"a","b",...} — terminal step only
     ListIndexSlice = 10, //!< Multi-index list/string/binary slice l[1,3,5,...] — terminal step only
+    ListRangeSlice = 11, //!< Range list/string/binary slice l[1..3] — terminal step only
 };
 
 //! A single step in an lvalue navigation path
@@ -1105,7 +1107,7 @@ struct LVPathStep {
     // References an operand in the instruction's operands vector
     uint32_t operand_idx = UINT32_MAX;
 
-    // For HashKeySlice / ListIndexSlice: SSA ids (compile time) of the N
+    // For HashKeySlice / ListIndexSlice / ListRangeSlice: SSA ids (compile time) of the N
     // sub-expressions that form the slice selector list.  Consumed by the
     // LLVM emitter / JIT runtime in declared order to read from the boxed
     // dynamic-operand array.  For non-slice steps this vector is empty.
@@ -1116,6 +1118,7 @@ struct LVPathStep {
     // HashKeySlice: each QoreValue converts to a string key.
     // ListIndexSlice: each QoreValue is either an integer index or a list
     // (produced by a range operator) that expands to a sequence of indexes.
+    // ListRangeSlice: exactly two QoreValues: start and stop (either can be NOTHING).
     std::vector<QoreValue> slice_values;
 
     // Type info for type checking at this step
@@ -1222,12 +1225,15 @@ public:
 //! (qore_rt_lv_path_unary in JITRuntime.cpp).  Precondition: `lvh` is
 //! already navigated to the parent container at path[..size-1].
 //! Returns the aggregated removed-content value (hash for HashKeySlice,
-//! list/string/binary for ListIndexSlice) on Remove, or NOTHING on Delete.
+//! list/string/binary for ListIndexSlice/ListRangeSlice) on Remove, or NOTHING on Delete.
 class LValueHelper;  // forward
 DLLLOCAL QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink);
 DLLLOCAL QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
+        const LVPathStep& last_step, LVUnaryOp unary_op,
+        ExceptionSink* xsink);
+DLLLOCAL QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         const LVPathStep& last_step, LVUnaryOp unary_op,
         ExceptionSink* xsink);
 
@@ -1611,6 +1617,9 @@ public:
 
     QoreValue expr;
     bool has_ref_args = false;  //!< True if any operand is a reference type (may be modified by callee)
+    //! ListIndexDynamic only: selector kinds for native list/string/binary slices
+    //! with range entries. 0 = single index (one operand), 1 = range (start+stop operands).
+    std::vector<uint8_t> list_selector_kinds;
 };
 
 enum class QoreIRBackgroundKind : uint8_t {

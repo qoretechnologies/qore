@@ -33,6 +33,7 @@
 #include "qore/intern/QoreJITException.h"
 
 #include <time.h>
+#include <cstdlib>
 
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
@@ -296,6 +297,18 @@ static LocalVar* popMatchingAOTLocal(std::unordered_map<std::string, std::deque<
 
 // toBitsNB is defined in QoreJITIncludes.h (shared with other JIT files)
 
+static const QoreMethod* resolveAOTSelfMethod(const QoreClass* qc, const char* method_name,
+        qore_class_private*& qcp) {
+    qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+    const QoreMethod* m = qcp->parseFindSelfMethod(method_name);
+    if (!m) {
+        m = qc->findMethod(method_name);
+        if (!m) {
+            m = qc->findStaticMethod(method_name);
+        }
+    }
+    return m;
+}
 
 //! Resolve an expression slot identity to NaN-boxed QoreValue bits
 /** Looks up the referenced function/method/class in the program's namespace tree
@@ -391,33 +404,24 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     ref1 ? ref1 : "(null)", ref2);
                 return 0;
             }
-            const QoreMethod* m = qc->findMethod(method_name);
-            if (!m) {
-                m = qc->findStaticMethod(method_name);
+            if (!strcmp(ref2, "copy")) {
+                return toBitsNB(QoreValue(new SelfFunctionCallNode(
+                    &loc_builtin, strdup(ref2), nullptr, qc, true)));
             }
-            // Fall back to parse-time lookup for not-yet-initialized classes
-            if (!m) {
-                qore_class_private* qcp = qore_class_private::get(
-                    *const_cast<QoreClass*>(qc));
-                m = qcp->parseFindLocalMethod(method_name);
-                if (!m) {
-                    m = qcp->parseFindLocalStaticMethod(method_name);
-                }
-            }
+            qore_class_private* qcp = nullptr;
+            const QoreMethod* m = resolveAOTSelfMethod(qc, method_name, qcp);
             if (!m) {
                 printd(1, "AOT SLOT: cannot find method '%s::%s'\n", ref1, method_name);
                 return 0;
             }
             printd(5, "AOT SLOT: resolved self method '%s::%s' -> %p\n", ref1, method_name, m);
-            if (!strcmp(method_name, "copy")) {
-                return toBitsNB(QoreValue(new SelfFunctionCallNode(
-                    &loc_builtin, strdup(ref2), nullptr, qc, true)));
+            if (m->isStatic()) {
+                return toBitsNB(QoreValue(new StaticMethodCallNode(&loc_builtin, m, nullptr)));
             }
             // Use the full ref2 for NamedScope: qualified names ("ClassName::method") produce
             // ns.size() > 1, making evalImpl use the method pointer directly (base class call);
             // unqualified names produce ns.size() == 1 for normal virtual dispatch
-            SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(ref2), nullptr, m,
-                m->getClass(), qore_class_private::get(*m->getClass()));
+            SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(ref2), nullptr, m, qc, qcp);
             return toBitsNB(QoreValue(sfcn));
         }
 
@@ -705,6 +709,10 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
             return toBitsNB(QoreValue(node));
         }
         case AOTExprKind::CAST_CLASS: {
+            if (!strcmp(ref1, "object")) {
+                auto* node = new QoreClassCastOperatorNode(&loc_builtin, nullptr, QoreValue(), or_nothing);
+                return toBitsNB(QoreValue(node));
+            }
             const qore_ns_private* found_ns = nullptr;
             const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
                 *pp->RootNS, ref1, found_ns);
@@ -783,6 +791,126 @@ static const QoreClass* findPseudoClassByPath(const char* path) {
     return nullptr;
 }
 
+struct AOTEncodedMethodRef {
+    const char* method_name = nullptr;
+    const char* variant_class_path = nullptr;
+    const char* sig_text = nullptr;
+    std::string method_name_storage;
+    std::string variant_class_storage;
+
+    AOTEncodedMethodRef(const char* encoded) : method_name(encoded) {
+        if (!encoded) {
+            return;
+        }
+        const char* first_sep = strchr(encoded, '\n');
+        if (!first_sep) {
+            return;
+        }
+        method_name_storage.assign(encoded, first_sep - encoded);
+        method_name = method_name_storage.c_str();
+
+        const char* payload = first_sep + 1;
+        const char* second_sep = strchr(payload, '\n');
+        if (!second_sep) {
+            // Backward-compatible form: method_name + "\n" + signature.
+            sig_text = payload;
+            return;
+        }
+
+        variant_class_storage.assign(payload, second_sep - payload);
+        if (!variant_class_storage.empty()) {
+            variant_class_path = variant_class_storage.c_str();
+        }
+        sig_text = second_sep + 1;
+    }
+};
+
+static const QoreClass* findAOTClassByPath(QoreProgram* pgm, const char* class_path, bool pseudo) {
+    if (!pgm || !class_path || !*class_path) {
+        return nullptr;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+    if (!qc && pseudo) {
+        qc = findPseudoClassByPath(class_path);
+    }
+    return qc;
+}
+
+static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
+    if (!qc || !method_name || !*method_name) {
+        return nullptr;
+    }
+    const QoreMethod* method = qc->findMethod(method_name);
+    return method ? method : qc->findStaticMethod(method_name);
+}
+
+static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
+        QoreProgram* pgm, const QoreMethod*& method, const AOTEncodedMethodRef& method_ref,
+        bool pseudo) {
+    if (!method || !method_ref.sig_text || !*method_ref.sig_text) {
+        return nullptr;
+    }
+
+    const QoreMethod* variant_method = method;
+    if (method_ref.variant_class_path && *method_ref.variant_class_path) {
+        const QoreClass* variant_qc = findAOTClassByPath(pgm, method_ref.variant_class_path, pseudo);
+        if (variant_qc) {
+            if (const QoreMethod* m = findAOTMethodByName(variant_qc, method_ref.method_name)) {
+                variant_method = m;
+            }
+        }
+    }
+
+    MethodFunctionBase* mfb = qore_method_private::get(
+        *const_cast<QoreMethod*>(variant_method))->getFunction();
+    const AbstractQoreFunctionVariant* variant = mfb
+        ? mfb->findVariantBySignatureText(method_ref.sig_text) : nullptr;
+    if (variant) {
+        method = variant_method;
+    }
+    return variant;
+}
+
+static bool isNumericGlobalSlotRef(const char* ref) {
+    if (!ref || !*ref) {
+        return false;
+    }
+    for (const char* p = ref; *p; ++p) {
+        if (*p < '0' || *p > '9') {
+            return false;
+        }
+    }
+    return true;
+}
+
+static Var* resolveGlobalVarRefPayload(const char* ref, QoreProgram* pgm,
+        Var** globals, int num_globals) {
+    if (!ref || !*ref) {
+        return nullptr;
+    }
+
+    if (isNumericGlobalSlotRef(ref)) {
+        int global_slot = std::atoi(ref);
+        if (global_slot >= 0 && global_slot < num_globals && globals) {
+            return globals[global_slot];
+        }
+        return nullptr;
+    }
+
+    constexpr const char* prefix = "name:";
+    constexpr size_t prefix_len = 5;
+    const char* name = !strncmp(ref, prefix, prefix_len) ? ref + prefix_len : ref;
+    if (!pgm || !*name) {
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* vns = nullptr;
+    return qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, name, vns);
+}
+
 //! Advance pointer past one AOTExprKind-encoded expression without allocating objects
 static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e) {
     if (p >= e) { return; }
@@ -800,7 +928,8 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
             || ek == AOTExprKind::UNSHIFT || ek == AOTExprKind::NULL_COAL
             || ek == AOTExprKind::VALUE_COAL || ek == AOTExprKind::FOLDL
             || ek == AOTExprKind::FOLDR || ek == AOTExprKind::MAP
-            || ek == AOTExprKind::SELECT) {
+            || ek == AOTExprKind::SELECT || ek == AOTExprKind::LOG_AND
+            || ek == AOTExprKind::LOG_OR) {
         skipOneExpr(rdr, p, e);  // left operand
         skipOneExpr(rdr, p, e);  // right operand
         return;
@@ -819,6 +948,9 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         return;
     }
     if (ek == AOTExprKind::PARSE_REF) {
+        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_PARSE_REF_TYPE) != 0) {
+            rdr.readStringRef(p);  // reference type path
+        }
         skipOneExpr(rdr, p, e);  // inner lvalue expression
         return;
     }
@@ -854,7 +986,9 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         skipOneExpr(rdr, p, e);  // lvalue operand
         return;
     }
-    if (ek == AOTExprKind::LOG_EQ || ek == AOTExprKind::LOG_NE) {
+    if (ek == AOTExprKind::LOG_EQ || ek == AOTExprKind::LOG_NE
+            || ek == AOTExprKind::LOG_LT || ek == AOTExprKind::LOG_GT
+            || ek == AOTExprKind::LOG_LE || ek == AOTExprKind::LOG_GE) {
         skipOneExpr(rdr, p, e);  // left operand
         skipOneExpr(rdr, p, e);  // right operand
         return;
@@ -925,6 +1059,14 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
+    if (ek == AOTExprKind::CALLREF_CALL) {
+        skipOneExpr(rdr, p, e);  // callee expression
+        uint8_t na = QoreAOTBinaryReader::readU8(p);
+        for (uint8_t i = 0; i < na; ++i) {
+            skipOneExpr(rdr, p, e);  // each arg
+        }
+        return;
+    }
     // STATIC_METHOD_CALL: ref1(stringref) + ref2(stringref) + num_args(u8) + N×skipOneExpr
     if (ek == AOTExprKind::STATIC_METHOD_CALL) {
         rdr.readStringRef(p);  // class path
@@ -935,9 +1077,19 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
+    if (ek == AOTExprKind::SELF_METHOD_CALL) {
+        rdr.readStringRef(p);
+        rdr.readStringRef(p);
+        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_SELF_CALL_ARGS) != 0) {
+            uint8_t na = QoreAOTBinaryReader::readU8(p);
+            for (uint8_t i = 0; i < na; ++i) {
+                skipOneExpr(rdr, p, e);
+            }
+        }
+        return;
+    }
     // Two-stringref kinds
-    if (ek == AOTExprKind::SELF_METHOD_CALL
-            || ek == AOTExprKind::STATIC_VARREF || ek == AOTExprKind::CONST_ENUM) {
+    if (ek == AOTExprKind::STATIC_VARREF || ek == AOTExprKind::CONST_ENUM) {
         rdr.readStringRef(p);
         rdr.readStringRef(p);
         return;
@@ -1033,6 +1185,12 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
     }
     if (ek == AOTExprKind::CONST_BOOL) {
         QoreAOTBinaryReader::readU8(p);
+        return;
+    }
+    if (ek == AOTExprKind::CONST_VALUE) {
+        std::string value_error;
+        QoreValue v = rdr.readValue(p, e, value_error);
+        v.discard(nullptr);
         return;
     }
     // CONST_NOTHING, GENERIC_EVAL or unknown: no bytes to skip
@@ -1238,6 +1396,7 @@ QoreValue deserializeExprTreeFromBlob(const uint8_t* data, uint32_t size, QorePr
 // Forward declaration for hybrid closure resolution
 static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* name,
         QoreProgram* pgm, const QoreAOTFunc& aot_func);
+static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm);
 
 //! Build QoreAOTContext from deserialized slot map identities (no IR re-lowering needed)
 /** Resolves local/global/expression slot identities by looking up objects
@@ -1508,7 +1667,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         const char* ref2 = nullptr;
 
         // Validate expression kind is known (Phase 1 validation)
-        bool kind_is_valid = (kind_byte >= 1 && kind_byte <= 86) || kind_byte == 0xFE || kind_byte == 0xFF;
+        bool kind_is_valid = (kind_byte >= 1 && kind_byte <= 93) || kind_byte == 0xFE || kind_byte == 0xFF;
         if (!kind_is_valid) {
             printd(2, "AOT buildCtx '%s': unsupported kind_byte=%d at expr slot %d\n",
                 name, kind_byte, i);
@@ -1761,48 +1920,35 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Dot-eval method target: resolve class/method from strings
                 // and populate call_targets directly — no AST node needed
                 ref1 = reader.readStringRef(ptr);    // class_path
-                ref2 = reader.readStringRef(ptr);    // method_name
+                // method_name[\nvariant_class\nvariant_signature]
+                AOTEncodedMethodRef method_ref(reader.readStringRef(ptr));
                 uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ptr);
 
-                const QoreMethod* method = nullptr;
-                const QoreClass* qc = nullptr;
-                if (ref1 && *ref1) {
-                    const qore_ns_private* found_ns = nullptr;
-                    qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, ref1, found_ns);
-                    if (!qc) {
-                        // Pseudo-classes (e.g. ::Qore::<value>) are not in the
-                        // namespace hierarchy — try pseudo-class table lookup
-                        qc = findPseudoClassByPath(ref1);
-                    }
-                    if (qc && ref2 && *ref2) {
-                        method = qc->findMethod(ref2);
-                        if (!method) {
-                            method = qc->findStaticMethod(ref2);
-                        }
-                    }
-                }
+                const QoreClass* qc = findAOTClassByPath(pgm, ref1, is_pseudo != 0);
+                const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
+                const AbstractQoreFunctionVariant* variant = findAOTMethodVariantByRef(
+                    pgm, method, method_ref, is_pseudo != 0);
                 ctx->call_targets[i].method = method;
                 ctx->call_targets[i].qc = qc;
                 ctx->call_targets[i].is_pseudo = is_pseudo != 0;
                 // Make an owned copy of the method name since the source buffer
                 // (decompressed metadata) may be freed after deserialization
-                if (ref2 && *ref2) {
-                    ctx->owned_call_target_strings.emplace_back(ref2);
+                if (method_ref.method_name && *method_ref.method_name) {
+                    ctx->owned_call_target_strings.emplace_back(method_ref.method_name);
                     ctx->call_targets[i].method_name = ctx->owned_call_target_strings.back().c_str();
                 }
-                // Resolve variant from method only when the method has exactly
-                // ONE variant — safe fast-dispatch shortcut. For overloaded
-                // methods, leave variant null so the runtime does proper
-                // arg-type-based overload resolution via findVariant. Falling
-                // back to first() is unsafe: try_dispatch_method_fast binds
-                // caller args directly to the picked variant's signature, so
-                // a 2-arg call against a 1-arg first() variant silently
-                // misbinds parameters (see the dot-eval inline site for the
-                // full explanation).
-                if (method) {
+                if (variant) {
+                    ctx->call_targets[i].variant = variant;
+                } else if (method && !method_ref.sig_text) {
                     MethodFunctionBase* mfb = qore_method_private::get(
                         *method)->getFunction();
                     if (mfb && mfb->numVariants() == 1) {
+                        // Resolve variant from method only when the method has exactly
+                        // ONE variant — safe fast-dispatch shortcut. For overloaded
+                        // methods, leave variant null so the runtime does proper
+                        // arg-type-based overload resolution via findVariant. Falling
+                        // back to first() is unsafe: try_dispatch_method_fast binds
+                        // caller args directly to the picked variant's signature.
                         ctx->call_targets[i].variant = mfb->first();
                     }
                 }
@@ -1828,6 +1974,46 @@ static QoreAOTContext* buildContextFromSlotMap(
                 printd(0, "AOT v2: cannot resolve function ref '%s'\n",
                     ref1 ? ref1 : "(null)");
                 has_unsupported = true;
+                continue;
+            }
+            case AOTExprKind::CALLREF_CALL: {
+                std::string callee_err;
+                QoreValue callee = readOneExpr(reader, ptr, end, callee_err, pgm,
+                    ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                if (!callee_err.empty()) {
+                    printd(0, "AOT v2: error reading callref callee for slot %d: %s\n",
+                        i, callee_err.c_str());
+                    callee.discard(nullptr);
+                    has_unsupported = true;
+                    continue;
+                }
+                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                QoreParseListNode* args = nullptr;
+                if (num_args > 0) {
+                    args = new QoreParseListNode(&loc_builtin);
+                    for (uint8_t j = 0; j < num_args; ++j) {
+                        std::string arg_err;
+                        QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        if (!arg_err.empty()) {
+                            printd(0, "AOT v2: error reading callref arg %d for slot %d: %s\n",
+                                j, i, arg_err.c_str());
+                            delete args;
+                            callee.discard(nullptr);
+                            arg.discard(nullptr);
+                            has_unsupported = true;
+                            args = nullptr;
+                            break;
+                        }
+                        args->add(arg, &loc_builtin);
+                    }
+                }
+                if (has_unsupported) {
+                    continue;
+                }
+                auto* call = new CallReferenceCallNode(&loc_builtin, callee, args);
+                call->resolveParseArgs();
+                ctx->exprs[i] = toBitsNB(QoreValue(call));
                 continue;
             }
             case AOTExprKind::BOUND_METHOD_REF: {
@@ -1931,12 +2117,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                     QoreCastOperatorNode* cast_node = nullptr;
                     switch (kind) {
                         case AOTExprKind::CAST_CLASS: {
-                            const qore_ns_private* found_ns = nullptr;
-                            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                                *pp->RootNS, ref1, found_ns);
-                            if (qc) {
+                            if (!strcmp(ref1, "object")) {
                                 cast_node = new QoreClassCastOperatorNode(
-                                    &loc_builtin, qc, QoreValue(), or_nothing != 0);
+                                    &loc_builtin, nullptr, QoreValue(), or_nothing != 0);
+                            } else {
+                                const qore_ns_private* found_ns = nullptr;
+                                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                                    *pp->RootNS, ref1, found_ns);
+                                if (qc) {
+                                    cast_node = new QoreClassCastOperatorNode(
+                                        &loc_builtin, qc, QoreValue(), or_nothing != 0);
+                                }
                             }
                             break;
                         }
@@ -2200,13 +2391,25 @@ static QoreAOTContext* buildContextFromSlotMap(
                 continue;
             }
             case AOTExprKind::PARSE_REF: {
-                // \var lvalue reference: inner lvalue expression (AOTExprKind-encoded)
+                // \var lvalue reference: optional type path + inner lvalue expression.
+                const char* ref_type_path = nullptr;
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_PARSE_REF_TYPE) != 0) {
+                    ref_type_path = reader.readStringRef(ptr);
+                }
+                if (trace_slot_reg) {
+                    fprintf(stderr, "[aot-slot-reg] '%s': PARSE_REF expr[%d] type='%s'\n",
+                        name, i, ref_type_path ? ref_type_path : "");
+                }
                 std::string inner_err;
                 QoreValue inner = readOneExpr(reader, ptr, end, inner_err, pgm,
                     ctx->locals, num_locals, ctx->globals, num_globals);
                 if (!inner_err.empty()) {
                     printd(2, "AOT v2: PARSE_REF inner error for expr slot %d of '%s': %s\n",
                         i, name, inner_err.c_str());
+                    if (trace_slot_reg) {
+                        fprintf(stderr, "[aot-slot-reg] '%s': PARSE_REF expr[%d] inner error: %s\n",
+                            name, i, inner_err.c_str());
+                    }
                     inner.discard(nullptr);
                     has_unsupported = true;
                 } else {
@@ -2248,7 +2451,35 @@ static QoreAOTContext* buildContextFromSlotMap(
                             break;
                         }
                     }
-                    ctx->exprs[i] = toBitsNB(QoreValue(new ParseReferenceNode(&loc_builtin, inner)));
+                    const QoreTypeInfo* ref_ti = referenceTypeInfo;
+                    if (ref_type_path && *ref_type_path) {
+                        std::string type_error;
+                        QoreAOTTypeResolver type_resolver(pgm);
+                        ref_ti = type_resolver.resolve(ref_type_path, type_error);
+                        if (!ref_ti) {
+                            printd(0, "AOT v2: cannot resolve PARSE_REF type '%s' for expr slot %d of '%s': %s\n",
+                                ref_type_path, i, name, type_error.c_str());
+                            if (trace_slot_reg) {
+                                fprintf(stderr, "[aot-slot-reg] '%s': PARSE_REF expr[%d] type resolve error: %s\n",
+                                    name, i, type_error.c_str());
+                            }
+                            inner.discard(nullptr);
+                            has_unsupported = true;
+                            continue;
+                        }
+                        if (!QoreTypeInfo::isReference(ref_ti)) {
+                            printd(0, "AOT v2: resolved PARSE_REF type '%s' for expr slot %d of '%s' "
+                                "is not a reference type\n", ref_type_path, i, name);
+                            if (trace_slot_reg) {
+                                fprintf(stderr, "[aot-slot-reg] '%s': PARSE_REF expr[%d] type is not a reference: %s\n",
+                                    name, i, ref_type_path);
+                            }
+                            inner.discard(nullptr);
+                            has_unsupported = true;
+                            continue;
+                        }
+                    }
+                    ctx->exprs[i] = toBitsNB(QoreValue(new ParseReferenceNode(&loc_builtin, inner, ref_ti)));
                 }
                 continue;
             }
@@ -2284,6 +2515,23 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QorePlusOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::RANGE: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreRangeOperatorNode(&loc_builtin, left, right)));
                 }
                 continue;
             }
@@ -2501,6 +2749,12 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::LOG_EQ:
             case AOTExprKind::LOG_NE:
+            case AOTExprKind::LOG_LT:
+            case AOTExprKind::LOG_GT:
+            case AOTExprKind::LOG_LE:
+            case AOTExprKind::LOG_GE:
+            case AOTExprKind::LOG_AND:
+            case AOTExprKind::LOG_OR:
             case AOTExprKind::NULL_COAL:
             case AOTExprKind::VALUE_COAL:
             case AOTExprKind::FOLDL:
@@ -2538,6 +2792,24 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else if (kind == AOTExprKind::LOG_NE) {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreLogicalNotEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::LOG_LT) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalLessThanOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::LOG_GT) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalGreaterThanOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::LOG_LE) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalLessThanOrEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::LOG_GE) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalGreaterThanOrEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::LOG_AND) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalAndOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::LOG_OR) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalOrOperatorNode(&loc_builtin, left, right)));
                 } else {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreLogicalEqualsOperatorNode(&loc_builtin, left, right)));
@@ -3040,6 +3312,18 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ctx->exprs[i] = toBitsNB(QoreValue((bool)(sv && sv[0] == '1')));
                 continue;
             }
+            case AOTExprKind::CONST_VALUE: {
+                std::string value_error;
+                QoreValue value = reader.readValue(ptr, end, value_error);
+                if (!value_error.empty()) {
+                    printd(0, "AOT v2: error reading const value for '%s' expr slot %d: %s\n",
+                        name, i, value_error.c_str());
+                    has_unsupported = true;
+                    continue;
+                }
+                ctx->exprs[i] = toBitsNB(value);
+                continue;
+            }
             case AOTExprKind::CONST_NOTHING:
                 ctx->exprs[i] = toBitsNB(QoreValue());
                 continue;
@@ -3071,16 +3355,14 @@ static QoreAOTContext* buildContextFromSlotMap(
 
         // Handle GLOBAL_VARREF directly since it needs ctx->globals
         if (kind == AOTExprKind::GLOBAL_VARREF && ref1) {
-            int global_slot = std::atoi(ref1);
-            if (global_slot >= 0 && global_slot < ctx->num_globals && ctx->globals[global_slot]) {
-                // Create a GlobalVarRefNode pointing to the global variable
-                Var* gvar = ctx->globals[global_slot];
+            Var* gvar = resolveGlobalVarRefPayload(ref1, pgm, ctx->globals, ctx->num_globals);
+            if (gvar) {
                 GlobalVarRefNode* vrn = new GlobalVarRefNode(&loc_builtin, strdup(gvar->getName()), gvar);
                 ctx->exprs[i] = toBitsNB(QoreValue(vrn));
                 continue;
             } else {
-                printd(0, "AOT v2: invalid global slot %d for GLOBAL_VARREF expr slot %d (num_globals=%d)\n",
-                    global_slot, i, ctx->num_globals);
+                printd(0, "AOT v2: invalid global ref '%s' for GLOBAL_VARREF expr slot %d (num_globals=%d)\n",
+                    ref1, i, ctx->num_globals);
                 has_unsupported = true;
             }
         }
@@ -3182,6 +3464,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         const auto* self_call = dynamic_cast<const SelfFunctionCallNode*>(node);
         if (self_call && self_call->getMethod()) {
             ctx->call_targets[i].method = self_call->getMethod();
+            ctx->call_targets[i].qc = self_call->getClass();
             continue;
         }
         // Dot-eval method call (obj.method())
@@ -3263,8 +3546,16 @@ static QoreAOTContext* buildContextFromSlotMap(
         const char* blname = reader.readStringRef(ptr);
         const char* bltype = reader.readStringRef(ptr);
         uint8_t bl_closure = QoreAOTBinaryReader::readU8(ptr);
+        uint32_t bl_slot_id = UINT32_MAX;
+        if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BODY_LOCAL_SLOT) != 0) {
+            bl_slot_id = QoreAOTBinaryReader::readU32(ptr);
+        }
 
-        LocalVar* slot_lv = popMatchingAOTLocal(local_name_map, blname, bltype, ctx_type_resolver);
+        LocalVar* slot_lv = (bl_slot_id != UINT32_MAX && bl_slot_id < num_locals)
+            ? ctx->locals[bl_slot_id] : nullptr;
+        if (!slot_lv) {
+            slot_lv = popMatchingAOTLocal(local_name_map, blname, bltype, ctx_type_resolver);
+        }
         LocalVar* stmt_lv = popMatchingAOTLocal(stmt_body_local_map, blname, bltype, ctx_type_resolver);
         LocalVar* lv = slot_lv ? slot_lv : stmt_lv;
         if (!lv) {
@@ -3405,9 +3696,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 step.name = sname ? sname : "";
                 step.operand_idx = QoreAOTBinaryReader::readU32(ptr);
                 // Slice steps carry an SSA id vector (HashKeySlice /
-                // ListIndexSlice) — matches writer's wire format.
+                // ListIndexSlice / ListRangeSlice) — matches writer's wire format.
                 if (step.kind == LVPathStepKind::HashKeySlice
-                        || step.kind == LVPathStepKind::ListIndexSlice) {
+                        || step.kind == LVPathStepKind::ListIndexSlice
+                        || step.kind == LVPathStepKind::ListRangeSlice) {
                     uint32_t num_slice_ops = QoreAOTBinaryReader::readU32(ptr);
                     step.slice_operand_ids.reserve(num_slice_ops);
                     for (uint32_t k = 0; k < num_slice_ops; ++k) {
@@ -3641,6 +3933,127 @@ static QoreAOTContext* buildContextFromSlotMap(
                     ctx->locs[i] = new QoreProgramLocation(
                         interned_file, start_line, end_line);
                 }
+            }
+        }
+    }
+
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_STMT_LOC_TABLE) != 0
+            && ptr + 2 <= loc_boundary) {
+        uint16_t num_stmt_locs = QoreAOTBinaryReader::readU16(ptr);
+        if (num_stmt_locs > 0 && pgm) {
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            AutoLocker al(&pp->plock);
+            for (int i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
+                uint16_t start_line = QoreAOTBinaryReader::readU16(ptr);
+                uint16_t end_line = QoreAOTBinaryReader::readU16(ptr);
+                int64_t offset = QoreAOTBinaryReader::readI64(ptr);
+                const char* loc_file = reader.readStringRef(ptr);
+                const char* loc_source = reader.readStringRef(ptr);
+                if (!start_line || !loc_file) {
+                    continue;
+                }
+
+                const char* interned_file = pp->addString(loc_file);
+                const char* interned_source = loc_source && *loc_source
+                    ? pp->addString(loc_source) : nullptr;
+                QoreProgramLocation tmp(interned_file, start_line, end_line,
+                    interned_source, static_cast<int>(offset));
+                const QoreProgramLocation* loc = pp->getLocation(tmp, start_line, end_line);
+                StatementBlock* stmt = new StatementBlock(pp, loc);
+                qore_program_private::registerStatement(pgm, stmt, true);
+                ctx->owned_debug_statements.push_back(stmt);
+            }
+        } else {
+            for (int i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
+                (void)QoreAOTBinaryReader::readU16(ptr);
+                (void)QoreAOTBinaryReader::readU16(ptr);
+                (void)QoreAOTBinaryReader::readI64(ptr);
+                (void)reader.readStringRef(ptr);
+                (void)reader.readStringRef(ptr);
+            }
+        }
+    }
+
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_DEBUG_IR) != 0
+            && ptr + 1 <= loc_boundary) {
+        uint8_t has_debug_ir = QoreAOTBinaryReader::readU8(ptr);
+        if (has_debug_ir && ptr + 4 <= loc_boundary) {
+            uint32_t debug_ir_size = QoreAOTBinaryReader::readU32(ptr);
+            const uint8_t* debug_ir_end = ptr + debug_ir_size;
+            if (debug_ir_end <= loc_boundary) {
+                std::unordered_map<std::string, LocalVar*> debug_local_map;
+                for (auto* lv : ctx->all_body_locals) {
+                    if (lv && lv->getName() && *lv->getName()) {
+                        debug_local_map[lv->getName()] = lv;
+                        std::string tpath = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
+                        if (!tpath.empty()) {
+                            std::string ck(lv->getName());
+                            ck += '\x1f';
+                            ck += tpath;
+                            debug_local_map[ck] = lv;
+                        }
+                    }
+                }
+                for (int i = 0; i < num_locals; ++i) {
+                    LocalVar* lv = ctx->locals[i];
+                    if (lv && lv->getName() && *lv->getName()) {
+                        debug_local_map[lv->getName()] = lv;
+                        std::string tpath = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
+                        if (!tpath.empty()) {
+                            std::string ck(lv->getName());
+                            ck += '\x1f';
+                            ck += tpath;
+                            debug_local_map.emplace(std::move(ck), lv);
+                        }
+                    }
+                }
+
+                auto readExprCb = [pgm, ctx](const QoreAOTBinaryReader& rdr, const uint8_t*& p,
+                        const uint8_t* e, std::string& err) -> QoreValue {
+                    uint8_t kind_byte = QoreAOTBinaryReader::readU8(p);
+                    auto kind = static_cast<AOTExprKind>(kind_byte);
+                    if (kind == AOTExprKind::GENERIC_EVAL) {
+                        return QoreValue();
+                    }
+                    if (kind == AOTExprKind::EXPR_TREE) {
+                        uint32_t blob_size = QoreAOTBinaryReader::readU32(p);
+                        const uint8_t* blob_data = p;
+                        p += blob_size;
+                        ExprTreeDeserializer deser(blob_data, blob_size, pgm, ctx);
+                        uint64_t bits = deser.deserialize();
+                        if (bits) {
+                            QoreValue v;
+                            memcpy(&v, &bits, sizeof(v));
+                            return v;
+                        }
+                        return QoreValue();
+                    }
+                    --p;
+                    return readOneExpr(rdr, p, e, err, pgm,
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                };
+
+                std::string ir_error;
+                auto debug_ir = deserializeIRFunction(reader, ptr, debug_ir_end, pgm, readExprCb,
+                    &debug_local_map, ir_error, ctx->locals, num_locals, nullptr,
+                    true, &ctx->all_body_locals);
+                if (debug_ir) {
+                    finalizeDeserializedDebugIR(*debug_ir, pgm);
+                    ctx->debug_ir = std::move(debug_ir);
+                } else {
+                    printd(2, "AOT buildCtx: '%s' debug IR deser failed: %s\n",
+                        name, ir_error.c_str());
+                    if (trace_slot_reg) {
+                        fprintf(stderr, "[aot-slot-reg] '%s': debug IR deser failed: %s\n",
+                            name, ir_error.c_str());
+                    }
+                }
+                ptr = debug_ir_end;
+            } else {
+                printd(2, "AOT buildCtx: '%s' malformed debug IR size %u\n",
+                    name, debug_ir_size);
+                ptr = loc_boundary;
+                has_unsupported = true;
             }
         }
     }
@@ -4027,32 +4440,18 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 return nullptr;
             }
             const char* class_path = reader.readStringRef(ptr);
-            const char* method_name = reader.readStringRef(ptr);
+            AOTEncodedMethodRef method_ref(reader.readStringRef(ptr));
             bool pseudo = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
 
-            const QoreMethod* method = nullptr;
-            const QoreClass* qc = nullptr;
-            if (class_path && *class_path) {
-                qore_program_private* pp = qore_program_private::get(*pgm);
-                const qore_ns_private* found_ns = nullptr;
-                qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
-                if (!qc) {
-                    // Pseudo-classes (e.g. ::Qore::<value>) are not in the namespace
-                    // hierarchy — try pseudo-class table lookup
-                    qc = findPseudoClassByPath(class_path);
-                }
-                if (qc && method_name && *method_name) {
-                    method = qc->findMethod(method_name);
-                    if (!method) {
-                        method = qc->findStaticMethod(method_name);
-                    }
-                }
-            }
-            auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, nullptr, expr, pseudo);
+            const QoreClass* qc = findAOTClassByPath(pgm, class_path, pseudo);
+            const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
+            const AbstractQoreFunctionVariant* variant = findAOTMethodVariantByRef(
+                pgm, method, method_ref, pseudo);
+            auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, variant, expr, pseudo);
             ci->has_ref_args = has_ref_args;
-            if (method_name && *method_name) {
-                ci->fallback_method_name = strdup(method_name);
+            if (method_ref.method_name && *method_ref.method_name) {
+                ci->fallback_method_name = strdup(method_ref.method_name);
             }
             expr.discard(nullptr);
             inst.reset(ci);
@@ -4065,33 +4464,21 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 return nullptr;
             }
             const char* class_path = reader.readStringRef(ptr);
-            const char* method_name = reader.readStringRef(ptr);
+            AOTEncodedMethodRef method_ref(reader.readStringRef(ptr));
             bool pseudo = QoreAOTBinaryReader::readU8(ptr) != 0;
             bool has_ref_args = QoreAOTBinaryReader::readU8(ptr) != 0;
             uint16_t normal_idx = QoreAOTBinaryReader::readU16(ptr);
             uint16_t exception_idx = QoreAOTBinaryReader::readU16(ptr);
 
-            const QoreMethod* method = nullptr;
-            const QoreClass* qc = nullptr;
-            if (class_path && *class_path) {
-                qore_program_private* pp = qore_program_private::get(*pgm);
-                const qore_ns_private* found_ns = nullptr;
-                qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
-                if (!qc) {
-                    qc = findPseudoClassByPath(class_path);
-                }
-                if (qc && method_name && *method_name) {
-                    method = qc->findMethod(method_name);
-                    if (!method) {
-                        method = qc->findStaticMethod(method_name);
-                    }
-                }
-            }
-            auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, nullptr, expr,
+            const QoreClass* qc = findAOTClassByPath(pgm, class_path, pseudo);
+            const QoreMethod* method = findAOTMethodByName(qc, method_ref.method_name);
+            const AbstractQoreFunctionVariant* variant = findAOTMethodVariantByRef(
+                pgm, method, method_ref, pseudo);
+            auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, variant, expr,
                 pseudo, resolveBlock(normal_idx), resolveBlock(exception_idx));
             ci->has_ref_args = has_ref_args;
-            if (method_name && *method_name) {
-                ci->fallback_method_name = strdup(method_name);
+            if (method_ref.method_name && *method_ref.method_name) {
+                ci->fallback_method_name = strdup(method_ref.method_name);
             }
             expr.discard(nullptr);
             inst.reset(ci);
@@ -4411,9 +4798,10 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 step.name = name ? name : "";
                 step.operand_idx = QoreAOTBinaryReader::readU32(ptr);
                 // Slice steps carry an SSA id vector (HashKeySlice /
-                // ListIndexSlice) — matches writer's wire format.
+                // ListIndexSlice / ListRangeSlice) — matches writer's wire format.
                 if (step.kind == LVPathStepKind::HashKeySlice
-                        || step.kind == LVPathStepKind::ListIndexSlice) {
+                        || step.kind == LVPathStepKind::ListIndexSlice
+                        || step.kind == LVPathStepKind::ListRangeSlice) {
                     uint32_t num_slice_ops = QoreAOTBinaryReader::readU32(ptr);
                     step.slice_operand_ids.reserve(num_slice_ops);
                     for (uint32_t k = 0; k < num_slice_ops; ++k) {
@@ -4672,7 +5060,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         std::string& error,
         LocalVar** parent_locals_arr,
         int num_parent_locals,
-        std::vector<LocalVar*>* extended_closure_locals) {
+        std::vector<LocalVar*>* extended_closure_locals,
+        bool use_parent_locals_for_all_slots,
+        const std::vector<LocalVar*>* direct_body_locals) {
     // 1. Function header
     const char* func_name = reader.readStringRef(ptr);
     uint32_t max_value_id = QoreAOTBinaryReader::readU32(ptr);
@@ -4768,13 +5158,20 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
         // For handler parent slots (slot_id < parent_slot_count), use direct
         // slot-indexed access to the parent locals array to avoid name-collision
-        // ambiguity when the parent function has same-named variables
-        if (parent_locals_arr && slot_id < (uint32_t)parent_slot_count
+        // ambiguity when the parent function has same-named variables.  Full
+        // source-stripped debug IR is serialized against the enclosing AOT
+        // context's complete local slot table, so allow the same direct mapping
+        // for every slot on that path.
+        if (parent_locals_arr
+                && (use_parent_locals_for_all_slots || slot_id < (uint32_t)parent_slot_count)
                 && (int)slot_id < num_parent_locals
                 && parent_locals_arr[slot_id]) {
             LocalVar* parent_lv = parent_locals_arr[slot_id];
             func->local_var_slots[parent_lv] = slot_id;
             local_map[lname] = parent_lv;
+            if (ltype && *ltype) {
+                local_map[makeLocalKey(lname, ltype)] = parent_lv;
+            }
             enclosing_local_set.insert(parent_lv);
             continue;
         }
@@ -4804,27 +5201,47 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
     }
 
+    std::unordered_map<uint32_t, LocalVar*> body_slot_to_local;
+    for (auto& [lv, sid] : func->local_var_slots) {
+        body_slot_to_local[sid] = const_cast<LocalVar*>(lv);
+    }
+
     // 3. Read body locals
     for (int i = 0; i < num_body_locals; ++i) {
         const char* blname = reader.readStringRef(ptr);
         const char* bltype = reader.readStringRef(ptr);
+        uint32_t bl_slot_id = UINT32_MAX;
+        if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BODY_LOCAL_SLOT) != 0) {
+            bl_slot_id = QoreAOTBinaryReader::readU32(ptr);
+        }
 
         if (blname && *blname) {
             LocalVar* lv = nullptr;
-            auto key = makeLocalKey(blname, bltype);
-            auto cit = created_slot_locals.find(key);
-            if (cit == created_slot_locals.end() || cit->second.empty()) {
-                cit = created_slot_locals.find(blname);
+            if (direct_body_locals && i < static_cast<int>(direct_body_locals->size())) {
+                lv = (*direct_body_locals)[i];
             }
-            if (cit != created_slot_locals.end() && !cit->second.empty()) {
-                lv = cit->second.front();
-                cit->second.erase(cit->second.begin());
-            } else if (LocalVar* enclosing_lv = findEnclosingLocal(blname, bltype)) {
-                lv = enclosing_lv;
-            } else {
-                auto it = local_map.find(blname);
-                if (it != local_map.end()) {
-                    lv = it->second;
+            if (!lv && bl_slot_id != UINT32_MAX) {
+                auto slot_it = body_slot_to_local.find(bl_slot_id);
+                if (slot_it != body_slot_to_local.end()) {
+                    lv = slot_it->second;
+                }
+            }
+            if (!lv) {
+                auto key = makeLocalKey(blname, bltype);
+                auto cit = created_slot_locals.find(key);
+                if (cit == created_slot_locals.end() || cit->second.empty()) {
+                    cit = created_slot_locals.find(blname);
+                }
+                if (cit != created_slot_locals.end() && !cit->second.empty()) {
+                    lv = cit->second.front();
+                    cit->second.erase(cit->second.begin());
+                } else if (LocalVar* enclosing_lv = findEnclosingLocal(blname, bltype)) {
+                    lv = enclosing_lv;
+                } else {
+                    auto it = local_map.find(blname);
+                    if (it != local_map.end()) {
+                        lv = it->second;
+                    }
                 }
             }
             if (lv) {
@@ -4886,6 +5303,39 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     }
 
     return func;
+}
+
+static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm) {
+    ir.computeSlotIdsAndEmbed();
+    ir.computeIROnlyLocals();
+
+    for (LocalVar* lv : ir.all_body_locals) {
+        ir.pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+        ir.pre_instantiated_cache.insert(lv);
+    }
+
+    if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+        ir.ir_only_locals.clear();
+        ir.ast_visible_body_locals = ir.all_body_locals;
+    }
+
+    delete ir.cached_pre_instantiated;
+    auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
+    std::unordered_set<const void*> body_local_set;
+    for (LocalVar* lv : ir.all_body_locals) {
+        body_local_set.insert(reinterpret_cast<const void*>(lv));
+    }
+    for (const void* lv : ir.pre_instantiated_locals) {
+        if (!body_local_set.count(lv)) {
+            cached_pre_inst->insert(reinterpret_cast<const LocalVar*>(lv));
+        }
+    }
+    for (LocalVar* lv : ir.ast_visible_body_locals) {
+        if (!lv->closureUse()) {
+            cached_pre_inst->insert(lv);
+        }
+    }
+    ir.cached_pre_instantiated = cached_pre_inst;
 }
 
 //! Re-lower a user function variant to IR and build an AOT context.
@@ -5506,6 +5956,9 @@ static void registerAOTFunctionsFromSlotMaps(
                 func_name, (void*)ctx, (void*)uvb);
         }
         if (ctx && uvb) {
+            if (ctx->debug_ir) {
+                uvb->setCachedIR(ctx->debug_ir.release());
+            }
             uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
             ++registered;
             // Remove from func_map so fallback path won't re-register with wrong LocalVar*
@@ -5522,6 +5975,7 @@ static void registerAOTFunctionsFromSlotMaps(
                 info.fn_ptr = aot_func->fn_ptr;
                 info.name = func_name;
                 init_func_contexts->push_back(std::move(info));
+                ++registered;
                 func_map.erase(func_name);
                 printd(2, "AOT slot-reg: collected init function '%s' for execution\n", func_name);
             } else if (is_init_func) {

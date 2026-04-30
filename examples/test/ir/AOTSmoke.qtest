@@ -58,6 +58,13 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT lvalue operations", \testLvalueOps());
         addTestCase("AOT multiple user functions", \testMultipleUserFunctions());
         addTestCase("AOT method calls", \testMethodCalls());
+        addTestCase("AOT inherited overload dot-eval dispatch",
+            \testInheritedOverloadDotEvalDispatch());
+        addTestCase("AOT implicit self copy method call", \testImplicitSelfCopyMethodCall());
+        addTestCase("AOT abstract sibling private:internal member context",
+            \testAbstractSiblingPrivateInternalMemberContext());
+        addTestCase("AOT object member store private access checks",
+            \testObjectMemberStorePrivateAccessChecks());
         addTestCase("AOT hash operations", \testHashOps());
         addTestCase("AOT list operations", \testListOps());
         addTestCase("AOT nested function calls", \testNestedFunctionCalls());
@@ -94,6 +101,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testAOTModuleComputedMemberDefaults());
         addTestCase("AOT module closure-captured loop condition",
             \testAOTModuleClosureCapturedLoopCondition());
+        addTestCase("AOT module recursive closure local frame isolation",
+            \testAOTModuleRecursiveClosureLocalFrameIsolation());
         addTestCase("AOT module default object args", \testAOTModuleDefaultObjectArgs());
         addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
         addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
@@ -158,6 +167,12 @@ class AOTSmokeTest inherits QUnit::Test {
             \testClosureStripSourceCapturedLocalReturn());
         addTestCase("AOT closure strip source regex substitution",
             \testClosureStripSourceRegexSubst());
+        addTestCase("AOT closure strip source date literal",
+            \testClosureStripSourceDateLiteral());
+        addTestCase("AOT closure strip source logical and/or",
+            \testClosureStripSourceLogicalAndOr());
+        addTestCase("AOT closure strip source call reference call",
+            \testClosureStripSourceCallRefCall());
         addTestCase("AOT method closure param", \testAOTMethodClosureParam());
         addTestCase("AOT regex switch in on_exit", \testRegexSwitchInOnExit());
         addTestCase("AOT nested on_exit", \testNestedOnExit());
@@ -173,6 +188,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT operator keys", \testOperatorKeys());
         addTestCase("AOT operator instanceof", \testOperatorInstanceof());
         addTestCase("AOT operator map optimized", \testOperatorMapOptimized());
+        addTestCase("AOT operator map range type info", \testOperatorMapRangeTypeInfo());
         addTestCase("AOT context row expression", \testContextRowExpression());
         # Closure exception safety tests
         addTestCase("AOT closure exception safety", \testClosureExceptionSafety());
@@ -1043,6 +1059,142 @@ printf(\"int cast: %d\\n\", int(f));
         assertTrue(result.all_precompiled, "method calls: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "method calls output matches interpreter");
+    }
+
+    testInheritedOverloadDotEvalDispatch() {
+        # Regression: DOT_EVAL_TARGET slots must not lose the parse-selected
+        # variant for inherited overloads.  Otherwise AOT can bind to the
+        # child class' same-name no-arg overload and pass caller args as argv.
+        string code = "%modern
+class Base2 {
+    int doOther(string str) { return 1; }
+    int doOther() { return 2; }
+    int m2(int i) {
+        delete argv;
+        return i + 1;
+    }
+}
+class Child2 inherits Base2 {
+    int doOther() { return 3; }
+    int m2(int i) { return i; }
+}
+Child2 c2();
+printf(\"%d:%d:%d\\n\", c2.doOther(\"str\"), c2.m2(1), c2.m2(1, 2));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "inherited overload dot-eval: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "inherited overload dot-eval output matches interpreter");
+    }
+
+    testImplicitSelfCopyMethodCall() {
+        # Regression for Issue3637: implicit self copy() has no QoreMethod
+        # identity, so AOT must reconstruct it as an implicit copy call and
+        # not as an unresolved normal self method.
+        string code = "%modern
+class Issue3637 {
+    Issue3637 getCopy() {
+        return copy();
+    }
+}
+Issue3637 o();
+printf(\"%d\\n\", o.getCopy() instanceof Issue3637 ? 1 : 0);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "implicit self copy: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "implicit self copy output matches interpreter");
+    }
+
+    testAbstractSiblingPrivateInternalMemberContext() {
+        # Regression for issue2741 under source-stripped AOT: C3 gets a
+        # synthesized t1() while resolving B's abstract method from sibling
+        # parent C1.  The synthesized method executes with C3 as class
+        # context, so AOT must preserve C3 -> C1 storage mapping for C1's
+        # private:internal member.
+        string code = "%modern
+class B {
+    int t(int i) {
+        return t1(i);
+    }
+    abstract int t1(int i);
+}
+class N inherits B {
+}
+class C1 inherits B {
+    private:internal {
+        int cv = 1;
+    }
+    int t1(int i) {
+        return i + cv;
+    }
+}
+class C2 inherits C1 {
+    int ta() {
+        return t1(2);
+    }
+}
+class C3 inherits N, C1, C2 {
+}
+C3 c();
+printf(\"%d:%d:%d\\n\", c.t1(1), c.ta(), c.t(1));
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "abstract sibling internal member context: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "abstract sibling internal member context output matches interpreter");
+    }
+
+    testObjectMemberStorePrivateAccessChecks() {
+        # Regression: the HashKeyStore fast path used QoreObject::setValue()
+        # for object containers, bypassing LValueHelper's private-member
+        # access check.  The store must also keep try/catch routing intact.
+        string code = "%modern
+class Test1 {
+    private {
+        int a;
+    }
+    constructor() {
+        a = 1;
+    }
+}
+class Runner {
+    go() {
+        any t1 = new Test1();
+        try {
+            t1.a = 3;
+            printf(\"direct no throw\\n\");
+        } catch (hash<ExceptionInfo> e) {
+            printf(\"direct throw %s\\n\", e.err);
+        }
+        code c = sub () {
+            t1.a = 4;
+        };
+        try {
+            c();
+            printf(\"closure no throw\\n\");
+        } catch (hash<ExceptionInfo> e) {
+            printf(\"closure throw %s\\n\", e.err);
+        }
+    }
+}
+Runner r();
+r.go();
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object member store access checks: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "object member store access checks output matches interpreter");
     }
 
     testHashOps() {
@@ -2393,6 +2545,105 @@ printf(\"%y\\n\", AOTClosureLoop::run());
         assertEq(interp_out, aot_out,
             "compiled module preserves closure-captured loop condition: " + aot_out);
         assertEq("[0]\n", aot_out, "closure-captured loop condition executes loop body");
+    }
+
+    testAOTModuleRecursiveClosureLocalFrameIsolation() {
+        string tmp_dir = sprintf("/tmp/aot_recursive_closure_frame_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTRecursiveClosureFrame {
+    version = \"1.0\";
+    desc = \"AOT recursive closure local frame regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTRecursiveClosureFrame {
+    public auto sub parseLike(bool nested = True) {
+        any v;
+        bool in_hash;
+        list<hash> l = (
+            {\"type\": 1, \"val\": \"a\"},
+            {\"type\": 4},
+            {\"type\": nested ? 3 : 0, \"val\": nested ? \"nested\" : \"1\"},
+            {\"type\": 5},
+            {\"type\": 1, \"val\": \"b\"},
+            {\"type\": 4},
+            {\"type\": 0, \"val\": \"2\"},
+        );
+
+        code do_eq = sub (reference<int> i, string key) {
+            auto val;
+            switch (l[i + 2].type) {
+                case 3: val = parseLike(False); break;
+                case 0: val = int(l[i + 2].val); break;
+            }
+            if (!exists v) {
+                v{key} = val;
+                in_hash = True;
+            } else if (v.typeCode() == NT_HASH) {
+                v{key} = val;
+            }
+            i += 2;
+        };
+
+        for (int i = 0; i < l.size(); ++i) {
+            hash<auto> h = l[i];
+            switch (h.type) {
+                case 1:
+                    if (l[i + 1].type == 4) {
+                        do_eq(\\i, h.val);
+                        continue;
+                    }
+                    break;
+                case 5:
+                    if (v.typeCode() != NT_LIST && !in_hash) {
+                        list<auto> tmp;
+                        tmp += v;
+                        v = tmp;
+                    }
+                    break;
+            }
+        }
+        return v;
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTRecursiveClosureFrame.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTRecursiveClosureFrame.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "recursive closure frame module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTRecursiveClosureFrame
+printf(\"%y\\n\", AOTRecursiveClosureFrame::parseLike());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "recursive AOT closure call must not clobber caller loop locals: " + aot_out);
+        assertEq("{a: {a: 1, b: 2}, b: 2}\n", aot_out,
+            "recursive closure parser retains keys after nested value");
     }
 
     testAOTModuleCompileCustomOutput() {
@@ -4362,6 +4613,80 @@ exit(0);
             "closure regex-subst strip-source preserves regex metadata");
     }
 
+    testClosureStripSourceDateLiteral() {
+        string code = "%modern
+list<auto> sub date_capture() {
+    list<auto> out = ();
+    code c = sub () {
+        hash<auto> info = {\"to\": 5s};
+        out += info;
+    };
+    c();
+    return out;
+}
+
+printf(\"%y\\n\", date_capture());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure date literal strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure date literal strip-source output matches interpreter");
+    }
+
+    testClosureStripSourceLogicalAndOr() {
+        string code = "%modern
+list<string> sub logical_capture(int v) {
+    list<string> out = ();
+    code c = sub () {
+        if ((v > 1 && v < 5) || v == 9) {
+            out += \"hit\";
+        } else {
+            out += \"miss\";
+        }
+    };
+    c();
+    return out;
+}
+
+printf(\"%y\\n\", logical_capture(3));
+printf(\"%y\\n\", logical_capture(9));
+printf(\"%y\\n\", logical_capture(7));
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure logical and/or strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure logical and/or strip-source output matches interpreter");
+    }
+
+    testClosureStripSourceCallRefCall() {
+        string code = "%modern
+list<int> sub callref_capture() {
+    list<int> out = ();
+    code c = sub () {
+        code<int(int)> f = int sub (int v) { return v + 1; };
+        out += f(40);
+    };
+    c();
+    return out;
+}
+
+printf(\"%y\\n\", callref_capture());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "closure callref call strip-source: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "closure callref call strip-source output matches interpreter");
+    }
+
     testAOTMethodClosureParam() {
         # Test that method closures capture parameters correctly in AOT
         string code = "%modern
@@ -4625,6 +4950,20 @@ exit(0);
         hash<auto> result = compileCheckAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "map operator output matches interpreter");
+    }
+
+    testOperatorMapRangeTypeInfo() {
+        # Regression: QoreRangeOperatorNode cached an uninitialized result
+        # type; tiered IR lowering of map over a range could then crash while
+        # querying 0..N's type.
+        string code = "%modern
+list<int> nums = map \$1 + 10, 0..2;
+printf(\"%d:%d:%d\\n\", nums[0], nums[1], nums[2]);
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out, "map over range output matches interpreter");
     }
 
     testContextRowExpression() {

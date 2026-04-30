@@ -114,6 +114,19 @@ static const QoreClass* en_resolveClass(QoreProgram* pgm, const std::string& nam
     return qore_root_ns_private::runtimeFindClass(*pp->RootNS, path, found_ns);
 }
 
+static const QoreMethod* en_resolveSelfMethod(const QoreClass* qc, const char* method_name,
+        qore_class_private*& qcp) {
+    qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+    const QoreMethod* m = qcp->parseFindSelfMethod(method_name);
+    if (!m) {
+        m = qc->findMethod(method_name);
+        if (!m) {
+            m = qc->findStaticMethod(method_name);
+        }
+    }
+    return m;
+}
+
 // ============================================================================
 // Category 1: Leaf Constants (10 handlers)
 // ============================================================================
@@ -378,18 +391,18 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
         ctx.failed = true;
         return QoreValue();
     }
-    const QoreMethod* m = qc->findMethod(method_name.c_str());
-    if (!m) {
-        m = qc->findStaticMethod(method_name.c_str());
-    }
-    if (!m) {
-        qore_class_private* qcp = qore_class_private::get(
-            *const_cast<QoreClass*>(qc));
-        m = qcp->parseFindLocalMethod(method_name.c_str());
-        if (!m) {
-            m = qcp->parseFindLocalStaticMethod(method_name.c_str());
+    qore_class_private* qcp = nullptr;
+    if (method_name == "copy") {
+        if (ql && !ql->empty()) {
+            printd(0, "AOT EXPR_TREE: implicit self copy() call cannot have arguments\n");
+            ql->deref(nullptr);
+            ctx.failed = true;
+            return QoreValue();
         }
+        return QoreValue(new SelfFunctionCallNode(&loc_builtin,
+            strdup(method_name.c_str()), nullptr, qc, true));
     }
+    const QoreMethod* m = en_resolveSelfMethod(qc, method_name.c_str(), qcp);
     if (!m) {
         printd(1, "AOT EXPR_TREE: cannot find method '%s::%s'\n",
             class_name.c_str(), method_name.c_str());
@@ -401,9 +414,13 @@ static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
     }
     printd(5, "AOT EXPR_TREE: resolved self call '%s::%s' args=%d -> %p\n",
         class_name.c_str(), method_name.c_str(), (int)num_children, m);
+    if (m->isStatic()) {
+        StaticMethodCallNode base(&loc_builtin, m, nullptr);
+        return QoreValue(new StaticMethodCallNode(base, ql));
+    }
     SelfFunctionCallNode* base = new SelfFunctionCallNode(&loc_builtin,
         strdup(method_name.c_str()), nullptr, m,
-        m->getClass(), qore_class_private::get(*m->getClass()));
+        qc, qcp);
     SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(*base, ql);
     base->deref(nullptr);
     return QoreValue(sfcn);

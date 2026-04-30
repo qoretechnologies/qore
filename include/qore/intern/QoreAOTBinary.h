@@ -100,7 +100,7 @@ constexpr uint64_t QORE_AOT_FEAT_TYPE_TABLE      = 1ULL << 9;  //!< per-blob pre
 constexpr uint64_t QORE_AOT_FEAT_CONST_PENDING   = 1ULL << 10; //!< per-constant pending-init-func flag in CONSTANTS / CLASSES
 constexpr uint64_t QORE_AOT_FEAT_SIG_LINES       = 1ULL << 11; //!< per-variant signature start/end line pair follows the flags u16 in writeVariantSignature
 constexpr uint64_t QORE_AOT_FEAT_CONTEXT_IR      = 1ULL << 12; //!< native IR lowering of `context` statement (Context carries name+exp+where+sort; ContextMaxPos/SetPos/Destroy opcodes present)
-constexpr uint64_t QORE_AOT_FEAT_LVPATH_SLICE    = 1ULL << 13; //!< LVPathStepKind::HashKeySlice / ListIndexSlice with slice_operand_ids vector (multi-key hash / multi-index list remove/delete)
+constexpr uint64_t QORE_AOT_FEAT_LVPATH_SLICE    = 1ULL << 13; //!< LVPathStepKind::HashKeySlice / ListIndexSlice / ListRangeSlice with slice_operand_ids vector (multi-key hash / multi-index/range list remove/delete)
 constexpr uint64_t QORE_AOT_FEAT_MODULE_PATH_LISTS = 1ULL << 14; //!< per-Program %prepend-module-path / %append-module-path lists (MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections)
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_DELETE_EXPR = 1ULL << 15; //!< LValuePath records include optional original delete/remove lvalue expression for detach-then-destroy semantics
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_PATTERN = 1ULL << 16; //!< serialized IR LValuePath records include optional regex/transliteration pattern metadata
@@ -109,8 +109,17 @@ constexpr uint64_t QORE_AOT_FEAT_BACKQUOTE = 1ULL << 18; //!< native IR Backquot
 constexpr uint64_t QORE_AOT_FEAT_FIND = 1ULL << 19; //!< native IR Find opcode
 constexpr uint64_t QORE_AOT_FEAT_BACKGROUND_IR = 1ULL << 20; //!< native IR background call metadata
 constexpr uint64_t QORE_AOT_FEAT_INLINE_CALL_ARGS = 1ULL << 21; //!< inline FUNC_CALL expression payloads include serialized argument expressions
+constexpr uint64_t QORE_AOT_FEAT_LIST_SELECTOR_RANGE = 1ULL << 22; //!< ListIndexDynamic expression records include range-selector metadata
+constexpr uint64_t QORE_AOT_FEAT_ENTRY_STMT_LINES = 1ULL << 23; //!< per-variant function-entry StatementBlock start/end line pair follows signature lines
+constexpr uint64_t QORE_AOT_FEAT_PARSE_REF_TYPE = 1ULL << 24; //!< PARSE_REF records include the parse-time reference type path before the lvalue expression
+constexpr uint64_t QORE_AOT_FEAT_STMT_LOC_TABLE = 1ULL << 25; //!< SLOT_MAPS entries may carry source-stripped metadata-only statement locations
+constexpr uint64_t QORE_AOT_FEAT_DEBUG_IR = 1ULL << 26; //!< SLOT_MAPS entries may carry full function IR for source-stripped debugging
+constexpr uint64_t QORE_AOT_FEAT_SELF_CALL_ARGS = 1ULL << 27; //!< inline SELF_METHOD_CALL expression payloads include serialized argument expressions
+constexpr uint64_t QORE_AOT_FEAT_BODY_LOCAL_SLOT = 1ULL << 28; //!< body-local records include their local slot id for duplicate-name disambiguation
+constexpr uint64_t QORE_AOT_FEAT_BCA_LINES = 1ULL << 29; //!< BCA records include source line ranges for parent-constructor argument callstacks
+constexpr uint64_t QORE_AOT_FEAT_BCA_NATIVE_ARGS = 1ULL << 30; //!< BCA arg blobs contain native inline AOT expressions, not legacy EXPR_TREE blobs
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -176,6 +185,9 @@ enum class QoreAOTValueTag : uint8_t {
     //! Serialized expression tree for computed member defaults.
     //! Used when a member initializer is an AST expression such as a function call.
     VT_EXPR_TREE = 18,
+    //! Native AOT expression payload for computed member defaults.
+    //! Encoded as size(u32) + one inline AOTExprKind expression.
+    VT_EXPR_NATIVE = 19,
 };
 
 //! Section header in the binary format
@@ -405,6 +417,14 @@ public:
         buffer[pos + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
         buffer[pos + 2] = static_cast<uint8_t>((v >> 16) & 0xFF);
         buffer[pos + 3] = static_cast<uint8_t>((v >> 24) & 0xFF);
+    }
+
+    //! Truncate the output buffer to a previous position.
+    /** Used by speculative serializers that must roll back a partially
+        emitted payload when native lowering/classification reports a gap. */
+    void truncate(uint32_t pos) {
+        assert(pos <= buffer.size());
+        buffer.resize(pos);
     }
 
     //! Begin a new section
@@ -657,12 +677,15 @@ private:
            provided, only items whose AST declaration location matches
            the given file path are serialized — used for per-file
            `.qo` metadata fragments
+    @param error optional output diagnostic; set on failure with enough
+           owner/source/expression context to fix the unsupported lowering
     @return true on success, false if serialization failed
 */
 bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_ns,
     const char* module_name = nullptr,
     const std::unordered_set<std::string>* keep_modules = nullptr,
-    const char* compile_file = nullptr);
+    const char* compile_file = nullptr,
+    std::string* error = nullptr);
 
 //! Serialize module dependencies into the DEPENDENCIES binary section
 /** Writes all module dependencies (including reexport) so they can be loaded
@@ -803,7 +826,7 @@ enum class AOTExprKind : uint8_t {
     RUNTIME_CONST_REF  = 5,   //!< Runtime constant reference: ref1=const_name
     SELF_VARREF        = 6,   //!< Self variable reference (self keyword)
     LOCAL_VARREF       = 7,   //!< Local variable reference: ref1=local_slot_index (as string)
-    GLOBAL_VARREF      = 8,   //!< Global variable reference: ref1=global_slot_index (as string)
+    GLOBAL_VARREF      = 8,   //!< Global variable reference: ref1=global_slot_index or "name:<global-name>"
     CONST_NUMBER       = 9,   //!< Number constant: ref1=string representation
     CONST_BINARY       = 10,  //!< Binary constant: ref1=hex-encoded bytes
     CLOSURE_CREATE     = 11,  //!< Closure/lambda: ref1=enclosing class name (empty if none)
@@ -818,7 +841,7 @@ enum class AOTExprKind : uint8_t {
     CONST_STRING       = 20,  //!< String constant: ref1=string content
     HASH_LITERAL       = 21,  //!< Hash literal: num_pairs(u8) + [key_str(stringref) + value(AOTExprKind)] * N
     HASH_DEREF         = 22,  //!< Hash/object dereference: left(AOTExprKind) + right(AOTExprKind)
-    PARSE_REF          = 23,  //!< Parse reference (\var): inner_lvalue(AOTExprKind)
+    PARSE_REF          = 23,  //!< Parse reference (\var): [type_path if QORE_AOT_FEAT_PARSE_REF_TYPE] + inner_lvalue(AOTExprKind)
     CAST_HASHDECL      = 24,  //!< Hashdecl cast: ref1=hashdecl_path, u8 or_nothing
     CAST_COMPLEX_HASH  = 25,  //!< Complex hash cast: ref1=type_path, u8 or_nothing
     CAST_COMPLEX_LIST  = 26,  //!< Complex list cast: ref1=type_path, u8 or_nothing
@@ -830,7 +853,7 @@ enum class AOTExprKind : uint8_t {
     CONST_NOTHING      = 32,  //!< Nothing constant: no data
     LIST_LITERAL       = 33,  //!< List literal: count(u8) + [value(AOTExprKind)] * N
     CONST_NULL         = 34,  //!< NULL constant: no data
-    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name, flags=is_pseudo
+    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name[\nvariant_class\nvariant_sig], flags=is_pseudo
     FUNC_CALL_REF      = 36,  //!< Function call reference (\func): ref1=function_name
     BOUND_METHOD_REF   = 37,  //!< Bound method reference (\method): ref1=class_path, ref2=method_name
     STATIC_METHOD_REF  = 38,  //!< Static method reference (\Class::method): ref1=class_path, ref2=method_name
@@ -882,6 +905,15 @@ enum class AOTExprKind : uint8_t {
     HASH_MAP_OP        = 84,  //!< Hash map operator: key expression + value expression + source expression
     HASH_MAP_SELECT_OP = 85,  //!< Hash map-select operator: key expression + value expression + source + where
     SELECT             = 86,  //!< Select operator: source expression + select expression
+    LOG_LT             = 87,  //!< Logical less-than operator: left(AOTExprKind) + right(AOTExprKind)
+    LOG_GT             = 88,  //!< Logical greater-than operator: left(AOTExprKind) + right(AOTExprKind)
+    LOG_LE             = 89,  //!< Logical less-than-or-equals operator: left(AOTExprKind) + right(AOTExprKind)
+    LOG_GE             = 90,  //!< Logical greater-than-or-equals operator: left(AOTExprKind) + right(AOTExprKind)
+    LOG_AND            = 91,  //!< Logical AND operator: left(AOTExprKind) + right(AOTExprKind)
+    LOG_OR             = 92,  //!< Logical OR operator: left(AOTExprKind) + right(AOTExprKind)
+    CALLREF_CALL       = 93,  //!< Call reference call: callee expression + arguments
+    RANGE              = 94,  //!< Range operator: left(AOTExprKind) + right(AOTExprKind)
+    ASSIGN             = 95,  //!< Assignment operator: lvalue(AOTExprKind) + value(AOTExprKind)
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression marker; rejected for new AOT objects
 };
@@ -1076,6 +1108,7 @@ struct AOTBodyLocalId {
     std::string name;        //!< variable name
     std::string type_path;   //!< type path
     bool is_closure = false; //!< true if closure variable
+    uint32_t slot_id = UINT32_MAX; //!< local slot id when available
 };
 
 //! Identity for a regex case slot
@@ -1150,6 +1183,8 @@ struct AOTCompiledFuncWithSlots {
     //! Handler IR functions for each statement slot (indexed by stmt slot index).
     //! Non-null entries have serializable handler IR; null entries need AST fallback.
     std::vector<const QoreIRFunction*> handler_irs;
+    //! Optional full function IR used when source-stripped AOT code is debugged.
+    const QoreIRFunction* debug_ir = nullptr;
     //! AOT location table entry (owns the file string copy)
     struct AOTLocEntry {
         int16_t start_line = 0;
@@ -1158,6 +1193,15 @@ struct AOTCompiledFuncWithSlots {
     };
     //! AOT location table indexed by slot. Populated from QoreIRToLLVM::getAOTLocTable().
     std::vector<AOTLocEntry> aot_locs;
+    //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
+    struct AOTStmtLocEntry {
+        int16_t start_line = 0;
+        int16_t end_line = 0;
+        int64_t offset = 0;
+        std::string file;
+        std::string source;
+    };
+    std::vector<AOTStmtLocEntry> aot_stmt_locs;
 };
 
 //! Descriptor for a compiled constant/static-var init function
@@ -1328,6 +1372,9 @@ class QoreAOTBinaryDeserializer {
         //! class/namespace constants that are not registered while class shells
         //! are being read, so they are materialized after constants are added.
         std::vector<uint8_t> pending_expr_tree_blob;
+        //! Deferred VT_EXPR_NATIVE default.  The payload uses string-pool refs,
+        //! so it is materialized later with the owning binary reader.
+        std::vector<uint8_t> pending_expr_native_blob;
     };
     std::vector<std::vector<PendingInstanceMember>> pending_instance_members;
 
@@ -1349,6 +1396,8 @@ class QoreAOTBinaryDeserializer {
         std::vector<QoreValue> pending_complex_default_args;
         //! Same deferred-expression-tree channel as PendingInstanceMember.
         std::vector<uint8_t> pending_expr_tree_blob;
+        //! Same deferred-native-expression channel as PendingInstanceMember.
+        std::vector<uint8_t> pending_expr_native_blob;
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 
@@ -1397,6 +1446,8 @@ class QoreAOTBinaryDeserializer {
 
         // Deferred VT_EXPR_TREE member default.
         std::vector<uint8_t> pending_expr_tree_blob;
+        // Deferred VT_EXPR_NATIVE member default.
+        std::vector<uint8_t> pending_expr_native_blob;
     };
     // Map from hashdecl pointer to pending members
     std::vector<std::pair<TypedHashDecl*, std::vector<PendingHashdeclMember>>> pending_hashdecl_members;
@@ -1418,9 +1469,10 @@ class QoreAOTBinaryDeserializer {
     std::vector<PendingEnumBaseType> pending_enum_base_types;
 
     //! Pending BCA arg blob for deferred deserialization.
-    //! BCA arg EXPR_TREE blobs can reference static methods of the same class
-    //! that haven't been added yet during method deserialization. Deferring
-    //! blob deserialization to after all methods are committed fixes this.
+    //! New blobs carry native inline AOT expressions; old blobs carry legacy
+    //! EXPR_TREE. Both can reference static methods of the same class that
+    //! have not been added yet during method deserialization, so resolution is
+    //! deferred until after all methods are committed.
     struct PendingBCAArgBlob {
         const uint8_t* data;
         uint32_t size;
@@ -1428,6 +1480,8 @@ class QoreAOTBinaryDeserializer {
     struct PendingBCAEntry {
         qore_classid_t classid;
         std::string base_path;
+        int16_t start_line = 0;
+        int16_t end_line = 0;
         std::vector<PendingBCAArgBlob> arg_blobs;
     };
     struct PendingBCA {
@@ -2174,7 +2228,13 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     //! the matching writer-side extension in lib/QoreAOTBinary.cpp
     //! classifyAndWriteExpr's closure branch and in
     //! lib/QoreAOTExprSlotHandlers.cpp write_slot_CLOSURE_CREATE).
-    std::vector<LocalVar*>* extended_closure_locals = nullptr);
+    std::vector<LocalVar*>* extended_closure_locals = nullptr,
+    //! If true, parent_locals_arr is the function's own slot-id-indexed local
+    //! table, not just a parent prefix. Used for full source-stripped debug IR.
+    bool use_parent_locals_for_all_slots = false,
+    //! Optional body-local table already resolved by the surrounding AOT context.
+    //! Indexed in serialized body-local order.
+    const std::vector<LocalVar*>* direct_body_locals = nullptr);
 
 //! Compress metadata blob using zlib
 /** Compresses the serialized metadata blob to reduce size and LLVM compilation overhead.

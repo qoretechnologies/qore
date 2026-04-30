@@ -1048,6 +1048,15 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_FIND, "find"},
         {QORE_AOT_FEAT_BACKGROUND_IR, "background-ir"},
         {QORE_AOT_FEAT_INLINE_CALL_ARGS, "inline-call-args"},
+        {QORE_AOT_FEAT_LIST_SELECTOR_RANGE, "list-selector-range"},
+        {QORE_AOT_FEAT_ENTRY_STMT_LINES, "entry-stmt-lines"},
+        {QORE_AOT_FEAT_PARSE_REF_TYPE, "parse-ref-type"},
+        {QORE_AOT_FEAT_STMT_LOC_TABLE, "stmt-loc-table"},
+        {QORE_AOT_FEAT_DEBUG_IR, "debug-ir"},
+        {QORE_AOT_FEAT_SELF_CALL_ARGS, "self-call-args"},
+        {QORE_AOT_FEAT_BODY_LOCAL_SLOT, "body-local-slot"},
+        {QORE_AOT_FEAT_BCA_LINES, "bca-lines"},
+        {QORE_AOT_FEAT_BCA_NATIVE_ARGS, "bca-native-args"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -1183,6 +1192,13 @@ static const char* dump_aot_expr_kind_name(uint8_t kind) {
         case AOTExprKind::POST_DEC: return "POST_DEC";
         case AOTExprKind::LOG_EQ: return "LOG_EQ";
         case AOTExprKind::LOG_NE: return "LOG_NE";
+        case AOTExprKind::LOG_LT: return "LOG_LT";
+        case AOTExprKind::LOG_GT: return "LOG_GT";
+        case AOTExprKind::LOG_LE: return "LOG_LE";
+        case AOTExprKind::LOG_GE: return "LOG_GE";
+        case AOTExprKind::LOG_AND: return "LOG_AND";
+        case AOTExprKind::LOG_OR: return "LOG_OR";
+        case AOTExprKind::CALLREF_CALL: return "CALLREF_CALL";
         case AOTExprKind::LOG_NOT: return "LOG_NOT";
         case AOTExprKind::TRIM: return "TRIM";
         case AOTExprKind::CHOMP: return "CHOMP";
@@ -1293,6 +1309,15 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
             return true;
 
         case AOTExprKind::SELF_METHOD_CALL:
+            if (!dump_skip_string_ref(reader, p, end) || !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
+            if (!slot_form && (reader.getHeader().feature_flags & QORE_AOT_FEAT_SELF_CALL_ARGS) != 0) {
+                uint8_t nargs = 0;
+                return dump_read_u8(p, end, nargs) && skip_n_args(nargs);
+            }
+            return true;
+
         case AOTExprKind::STATIC_VARREF:
         case AOTExprKind::CONST_ENUM:
         case AOTExprKind::BOUND_METHOD_REF:
@@ -1320,6 +1345,13 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                     && skip_n_args(nargs);
             }
 
+        case AOTExprKind::CALLREF_CALL: {
+            uint8_t nargs = 0;
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_read_u8(p, end, nargs)
+                && skip_n_args(nargs);
+        }
+
         case AOTExprKind::RUNTIME_CONST_REF:
         case AOTExprKind::SELF_VARREF:
         case AOTExprKind::LOCAL_VARREF:
@@ -1343,6 +1375,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::FOLDR:
         case AOTExprKind::MAP:
         case AOTExprKind::SELECT:
+        case AOTExprKind::LOG_AND:
+        case AOTExprKind::LOG_OR:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
@@ -1398,6 +1432,10 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
 
         case AOTExprKind::LOG_EQ:
         case AOTExprKind::LOG_NE:
+        case AOTExprKind::LOG_LT:
+        case AOTExprKind::LOG_GT:
+        case AOTExprKind::LOG_LE:
+        case AOTExprKind::LOG_GE:
         case AOTExprKind::PUSH:
         case AOTExprKind::UNSHIFT:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
@@ -1434,6 +1472,13 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::CONST_BOOL:
             return slot_form ? dump_skip_string_ref(reader, p, end)
                 : dump_skip_bytes(p, end, 1);
+
+        case AOTExprKind::CONST_VALUE: {
+            std::string value_error;
+            QoreValue v = reader.readValue(p, end, value_error);
+            v.discard(nullptr);
+            return value_error.empty();
+        }
 
         case AOTExprKind::HASHDECL_NEW:
         case AOTExprKind::COMPLEX_HASH_NEW:
@@ -1484,6 +1529,10 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::PARSE_REF:
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_PARSE_REF_TYPE) != 0
+                    && !dump_skip_string_ref(reader, p, end)) {
+                return false;
+            }
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::CAST_HASHDECL: {
@@ -1819,6 +1868,7 @@ static const char* dump_aot_value_tag_name(uint8_t tag) {
         case QoreAOTValueTag::VT_CONST_REF: return "CONST_REF";
         case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: return "NEW_COMPLEX_DEFAULT";
         case QoreAOTValueTag::VT_EXPR_TREE: return "EXPR_TREE";
+        case QoreAOTValueTag::VT_EXPR_NATIVE: return "EXPR_NATIVE";
     }
     return "UNKNOWN";
 }
@@ -1981,6 +2031,26 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
                 });
             }
             p += blob_size;
+            return true;
+        }
+
+        case QoreAOTValueTag::VT_EXPR_NATIVE: {
+            uint32_t blob_size = 0;
+            if (!dump_read_u32(p, end, blob_size)) {
+                return fail("truncated native expression size");
+            }
+            if (!dump_need(p, end, blob_size)) {
+                return fail("native expression blob exceeds section bounds");
+            }
+            const uint8_t* blob_end = p + blob_size;
+            AOTSlotMapDumpSummary expr_summary;
+            AOTDumpExprContext expr_ctx;
+            bool ok = dump_skip_inline_expr(reader, p, blob_end, expr_summary,
+                "default", expr_ctx);
+            if (!ok || p != blob_end) {
+                p = blob_end;
+                return fail("malformed native default expression");
+            }
             return true;
         }
     }
@@ -2219,10 +2289,11 @@ static void print_aot_default_summary(const QoreAOTBinaryReader& reader) {
         return i == summary.top_value_tags.end() ? 0 : i->second;
     };
 
-    printf("    serialized defaults: total=%llu expr-tree=%llu new-object=%llu "
-           "complex-default=%llu enum=%llu const-ref=%llu\n",
+    printf("    serialized defaults: total=%llu expr-tree=%llu native-expr=%llu "
+           "new-object=%llu complex-default=%llu enum=%llu const-ref=%llu\n",
         static_cast<unsigned long long>(summary.defaults),
         static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_EXPR_TREE)),
+        static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_EXPR_NATIVE)),
         static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_NEW_OBJECT)),
         static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT)),
         static_cast<unsigned long long>(count_tag(QoreAOTValueTag::VT_ENUM)),

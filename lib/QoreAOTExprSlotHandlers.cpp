@@ -38,6 +38,53 @@ namespace {
 // Handler Functions for Expression Slot Metadata Serialization
 // ============================================================================
 
+static bool write_slot_inline_expr(AOTExprSlotWriteCtx& ctx, const QoreValue& expr) {
+    return ::classifyAndWriteExpr(ctx.writer, expr, ctx.parent_locals,
+        ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool write_slot_parse_args(AOTExprSlotWriteCtx& ctx, const QoreParseListNode* args) {
+    size_t nargs = args ? args->size() : 0;
+    if (nargs > 255) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(nargs));
+    for (size_t j = 0; j < nargs; ++j) {
+        if (!write_slot_inline_expr(ctx, args->get(j))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool write_slot_call_args(AOTExprSlotWriteCtx& ctx, const QoreListNode* args) {
+    size_t nargs = args ? args->size() : 0;
+    if (nargs > 255) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(nargs));
+    for (size_t j = 0; j < nargs; ++j) {
+        if (!write_slot_inline_expr(ctx, args->retrieveEntry(j))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool write_slot_args_prefer_parse(AOTExprSlotWriteCtx& ctx) {
+    if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
+        return write_slot_parse_args(ctx, ctx.expr.parse_args);
+    }
+    return write_slot_call_args(ctx, ctx.expr.call_args);
+}
+
+static bool write_slot_args_prefer_call(AOTExprSlotWriteCtx& ctx) {
+    if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
+        return write_slot_call_args(ctx, ctx.expr.call_args);
+    }
+    return write_slot_parse_args(ctx, ctx.expr.parse_args);
+}
+
 //! NEW_OBJECT and SCOPED_NEW_OBJECT
 //! ref1 = class path, ref2 = variant signature (e.g. "(string,int)" or "()" ).
 //! No inline args — constructor args are computed by separate IR instructions
@@ -114,70 +161,27 @@ static bool write_slot_CONST_STRING(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
+//! CONST_VALUE: serialized QoreValue payload
+static bool write_slot_CONST_VALUE(AOTExprSlotWriteCtx& ctx) {
+    return ctx.writer.writeValue(ctx.expr.child_expr);
+}
+
 //! HASHDECL_NEW: ref1 = hashdecl path + u8 num_args + N×classifyAndWriteExpr-encoded args
 static bool write_slot_HASHDECL_NEW(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
-    // Serialize constructor args from parse_args (NewHashDeclNode) or call_args (VrnConstruct)
-    if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
-        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.parse_args->size()));
-        for (size_t j = 0; j < ctx.expr.parse_args->size(); ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
-        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
-        for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else {
-        ctx.writer.writeU8(0);
-    }
-    return true;
+    return write_slot_args_prefer_parse(ctx);
 }
 
 //! COMPLEX_HASH_NEW: ref1 = type path + u8 num_args + N×classifyAndWriteExpr-encoded args
 static bool write_slot_COMPLEX_HASH_NEW(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
-    // Serialize constructor args from parse_args or call_args
-    if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
-        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.parse_args->size()));
-        for (size_t j = 0; j < ctx.expr.parse_args->size(); ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
-        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
-        for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else {
-        ctx.writer.writeU8(0);
-    }
-    return true;
+    return write_slot_args_prefer_parse(ctx);
 }
 
 //! COMPLEX_LIST_NEW: ref1 = type path + u8 num_args + N×classifyAndWriteExpr-encoded args
 static bool write_slot_COMPLEX_LIST_NEW(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
-    // Serialize constructor args from parse_args or call_args
-    if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
-        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.parse_args->size()));
-        for (size_t j = 0; j < ctx.expr.parse_args->size(); ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
-        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
-        for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else {
-        ctx.writer.writeU8(0);
-    }
-    return true;
+    return write_slot_args_prefer_parse(ctx);
 }
 
 //! CONST_NOTHING: no additional data
@@ -192,7 +196,7 @@ static bool write_slot_CONST_NULL(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
-//! DOT_EVAL_TARGET: ref1 = class path, ref2 = method name, flags = is_pseudo
+//! DOT_EVAL_TARGET: ref1 = class path, ref2 = method name[\nvariant class\nvariant signature], flags = is_pseudo
 static bool write_slot_DOT_EVAL_TARGET(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
@@ -230,9 +234,7 @@ static bool write_slot_SELF_METHOD_REF(AOTExprSlotWriteCtx& ctx) {
 static bool write_slot_OBJ_METHOD_REF_EXPR(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     // The child expression (target object) is serialized inline using classifyAndWriteExpr
-    classifyAndWriteExpr(ctx.writer, ctx.expr.child_expr,
-        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-    return true;
+    return write_slot_inline_expr(ctx, ctx.expr.child_expr);
 }
 
 //! HASH_LITERAL: num_pairs(u8) + [key_str + value(AOTExprKind)] * N
@@ -250,8 +252,9 @@ static bool write_slot_HASH_LITERAL(AOTExprSlotWriteCtx& ctx) {
                 return false;
             }
             ctx.writer.writeStringRef(it.getKey());
-            classifyAndWriteExpr(ctx.writer, it.get(),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+            if (!write_slot_inline_expr(ctx, it.get())) {
+                return false;
+            }
         }
         return true;
     }
@@ -277,8 +280,9 @@ static bool write_slot_HASH_LITERAL(AOTExprSlotWriteCtx& ctx) {
             }
             QoreStringValueHelper key(keys[i]);
             ctx.writer.writeStringRef(key->c_str());
-            classifyAndWriteExpr(ctx.writer, vals[i],
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+            if (!write_slot_inline_expr(ctx, vals[i])) {
+                return false;
+            }
         }
         return true;
     }
@@ -566,6 +570,56 @@ static bool write_slot_LOG_NE(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreLogicalNotEqualsOperatorNode>(ctx);
 }
 
+static bool write_slot_LOG_LT(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreLogicalLessThanOperatorNode>(ctx);
+}
+
+static bool write_slot_LOG_GT(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreLogicalGreaterThanOperatorNode>(ctx);
+}
+
+static bool write_slot_LOG_LE(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreLogicalLessThanOrEqualsOperatorNode>(ctx);
+}
+
+static bool write_slot_LOG_GE(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreLogicalGreaterThanOrEqualsOperatorNode>(ctx);
+}
+
+static bool write_slot_LOG_AND(AOTExprSlotWriteCtx& ctx) {
+    if (dynamic_cast<const QoreLogicalOrOperatorNode*>(
+            ctx.expr.child_expr.getInternalNode())) {
+        return false;
+    }
+    return write_binary_slot_payload<QoreLogicalAndOperatorNode>(ctx);
+}
+
+static bool write_slot_LOG_OR(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreLogicalOrOperatorNode>(ctx);
+}
+
+static bool write_slot_CALLREF_CALL(AOTExprSlotWriteCtx& ctx) {
+    const QoreListNode* args = ctx.expr.call_args;
+    const QoreParseListNode* pargs = ctx.expr.parse_args;
+    size_t nargs = args ? args->size() : (pargs ? pargs->size() : 0);
+    if (nargs > 255) {
+        return false;
+    }
+    if (!::classifyAndWriteExpr(ctx.writer, ctx.expr.child_expr,
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(nargs));
+    for (size_t j = 0; j < nargs; ++j) {
+        QoreValue arg = args ? args->retrieveEntry(j) : pargs->get(j);
+        if (!::classifyAndWriteExpr(ctx.writer, arg, ctx.parent_locals,
+                ctx.parent_globals, ctx.const_reverse_map)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool write_slot_LOG_NOT(AOTExprSlotWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
     auto* op = dynamic_cast<const QoreLogicalNotOperatorNode*>(node);
@@ -761,8 +815,9 @@ static bool write_slot_LIST_LITERAL(AOTExprSlotWriteCtx& ctx) {
             if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT list literal serialization")) {
                 return false;
             }
-            classifyAndWriteExpr(ctx.writer, qln->retrieveEntry(i),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+            if (!write_slot_inline_expr(ctx, qln->retrieveEntry(i))) {
+                return false;
+            }
         }
         return true;
     }
@@ -775,8 +830,9 @@ static bool write_slot_LIST_LITERAL(AOTExprSlotWriteCtx& ctx) {
             if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT parse-list literal serialization")) {
                 return false;
             }
-            classifyAndWriteExpr(ctx.writer, pln->get(i),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+            if (!write_slot_inline_expr(ctx, pln->get(i))) {
+                return false;
+            }
         }
         return true;
     }
@@ -803,25 +859,7 @@ static bool write_slot_STATIC_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
     // Serialize method args (may contain sub-expressions like string constants)
-    if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
-        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
-        for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
-        // Fallback to parse_args when call_args is not yet populated
-        uint8_t num_args = ctx.expr.parse_args->size() <= 255
-            ? static_cast<uint8_t>(ctx.expr.parse_args->size()) : 0;
-        ctx.writer.writeU8(num_args);
-        for (uint8_t j = 0; j < num_args; ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else {
-        ctx.writer.writeU8(0);
-    }
-    return true;
+    return write_slot_args_prefer_call(ctx);
 }
 
 //! STATIC_VARREF: ref1 = class path, ref2 = var name
@@ -968,8 +1006,9 @@ static bool write_slot_OBJ_METHOD_REF(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
-//! PARSE_REF: inline lvalue expression
+//! PARSE_REF: reference type path + inline lvalue expression
 static bool write_slot_PARSE_REF(AOTExprSlotWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     return ::classifyAndWriteExpr(ctx.writer, ctx.expr.child_expr,
         ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
 }

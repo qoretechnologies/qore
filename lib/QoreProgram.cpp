@@ -1684,19 +1684,18 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
         statementIndex->insert(name_section_sline_statement_map_t::value_type(key, sssm));
     } else {
         sssm = it->second;
-        if (statement) {
-            sline_statement_map_t::iterator li = sssm->statementMap.find(statement->loc->start_line+offs);
-            while (li != sssm->statementMap.end() && li->first == statement->loc->start_line+offs) {
-                if (li->second->loc->end_line == statement->loc->end_line) {
-                    // order of multimap values is not defined, so unless we want create extra index by statement position at line then we need insert only the first statement
-                    printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) skipping line (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line, statement->loc->end_line, this);
-                    return;
-                }
-                ++li;
+        if (statement && statement->loc) {
+            int line = statement->loc->start_line + offs;
+            sline_statement_map_t::iterator li = sssm->statementMap.find(line);
+            if (li != sssm->statementMap.end() && li->first == line) {
+                // The index stores raw statement pointers owned elsewhere; do not
+                // dereference existing entries here. First statement for a line wins.
+                printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) skipping line (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line, statement->loc->end_line, this);
+                return;
             }
         }
     }
-    if (statement) {
+    if (statement && statement->loc) {
         printd(5, "qore_program_private::addStatementToIndexIntern(%p,'%s',%d) insert line %d (%d-%d), this: %p\n", statementIndex, key, offs, statement->loc->start_line+offs, statement->loc->start_line, statement->loc->end_line, this);
         sssm->statementMap.insert(std::pair<int, AbstractStatement*>(statement->loc->start_line+offs, statement));
     }
@@ -1716,7 +1715,7 @@ void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement
             pgm->priv->statementIds.push_back(statement);
             pgm->priv->reverseStatementIds.insert(std::pair<AbstractStatement*, unsigned long>(statement, pgm->priv->statementIds.size()));
         }
-        if (addToIndex) {
+        if (addToIndex && statement->loc) {
             if (statement->loc->getSource()) {
                 printd(5, "qore_program_private::registerStatement(file+source), this: %p, statement: %p\n", pgm->priv, statement);
                 pgm->priv->addStatementToIndexIntern(&pgm->priv->statementByFileIndex, statement->loc->getSource(), statement, statement->loc->offset, statement->loc->getFile(), statement->loc->offset);
@@ -1911,6 +1910,30 @@ int ThreadLocalProgramData::dbgStep(const StatementBlock* blockStatement, const 
         getProgram()->priv->onStep(blockStatement, statement, bkptId, rc, rs, rts, xsink);
         setRunState(rs, rts);
         printd(5, "ThreadLocalProgramData::dbgStep() this: %p, rs: %d, rts: %p, rc: %d, xsink:%d\n", this, runState, runToStatement, rc, xsink && xsink->isEvent());
+    }
+    return rc;
+}
+
+int ThreadLocalProgramData::dbgSyntheticBlockStep(const StatementBlock* blockStatement, ExceptionSink* xsink) {
+    checkAttach(xsink);
+    checkBreakFlag();
+    if (runState == DBG_RS_STOPPED || runState == DBG_RS_DETACH) {
+        return 0;
+    }
+
+    int rc = 0;
+    if (runState == DBG_RS_STEP || (runState == DBG_RS_STEP_OVER && functionCallLevel == 0)) {
+        printd(5, "ThreadLocalProgramData::dbgSyntheticBlockStep() this: %p, rs: %d, tid: %d\n",
+            this, runState, q_gettid());
+        functionCallLevel = 0;
+        DebugRunStateEnum rs = runState;
+        const AbstractStatement* rts = runToStatement;
+        runState = DBG_RS_STOPPED;
+        runToStatement = nullptr;
+        getProgram()->priv->onStep(blockStatement, nullptr, 0, rc, rs, rts, xsink);
+        setRunState(rs, rts);
+        printd(5, "ThreadLocalProgramData::dbgSyntheticBlockStep() this: %p, rs: %d, rts: %p, rc: %d, xsink:%d\n",
+            this, runState, runToStatement, rc, xsink && xsink->isEvent());
     }
     return rc;
 }
@@ -2763,7 +2786,7 @@ AbstractStatement* QoreProgram::findFunctionStatement(const char* functionName, 
     //printd(5, "QoreProgram::findFunctionStatement() '%s' -> %p\n", functionName, uvb);
     if (!uvb)
         return nullptr;
-    return uvb->getStatementBlock();
+    return uvb->getEntryStatementBlock();
 }
 
 unsigned long QoreProgram::getStatementId(const AbstractStatement* statement) const {

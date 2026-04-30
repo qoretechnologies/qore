@@ -2304,7 +2304,14 @@ UserVariantBase::~UserVariantBase() {
     delete cached_aot_ctx;
     delete cached_ir;
     delete gate;
+    delete aot_entry_statement;
     delete statements;
+}
+
+void UserVariantBase::setAOTEntryStatementBlock(StatementBlock* b) {
+    assert(!statements);
+    delete aot_entry_statement;
+    aot_entry_statement = b;
 }
 
 QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) const {
@@ -3146,15 +3153,19 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     ExecutionTier tier = current_tier.load(std::memory_order_acquire);
 
-    // When a debugger is attached at dispatch time, force AST execution so
-    // that all debug events (dbgFunctionEnter/Exit, dbgStep with onBlock/onStep,
-    // dbgException) are generated with full fidelity. JIT has no debug hooks;
-    // IR interpreter has hooks but only generates onStep events (no onBlock),
-    // so it can't match AST fidelity for dispatch-time debugging.
-    // The IR interpreter's debug hooks handle the mid-execution attachment case
-    // (debugger attaches while a function is already executing in IR).
-    if (tier != TIER_AST && qore_program_private::get(*pgm)->hasDebuggerAttached()) {
-        tier = TIER_AST;
+    // Native JIT/AOT code has no Qore DebugProgram hooks.  If a program allows
+    // debugging, a debugger can attach after this function has already started,
+    // so dispatch-time "currently attached" checks are insufficient.  Prefer AST
+    // when available; source-stripped AOT variants have no AST body, so use the
+    // serialized IR debug representation.
+    bool debugger_may_run = (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)
+        || qore_program_private::get(*pgm)->hasDebuggerAttached();
+    if (tier != TIER_AST && debugger_may_run) {
+        if (statements) {
+            tier = TIER_AST;
+        } else if (cached_ir) {
+            tier = TIER_IR;
+        }
     }
 
     // JIT/AOT tier: execute native function
@@ -3385,8 +3396,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
                 QoreValue ir_return_value;
                 bool fell_back_to_ast = false;
+                StatementBlock* debug_statements = statements ? statements : aot_entry_statement;
                 bool ok = QoreIRInterpreter::execute(*cached_ir, ir_return_value, xsink, nullptr,
-                    nullptr, nullptr, cached_ir->cached_pre_instantiated, excluded_selfid, statements, pgm);
+                    nullptr, nullptr, cached_ir->cached_pre_instantiated, excluded_selfid, debug_statements, pgm);
 
                 if (ok && !*xsink) {
                     val = ir_return_value;

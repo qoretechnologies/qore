@@ -402,6 +402,9 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_create_object_method_ref_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_create_object_method_ref_aot_throwing));
     addSymbol("qore_rt_create_parse_ref_aot", reinterpret_cast<void*>(&qore_rt_create_parse_ref_aot));
+    addSymbol("qore_rt_create_local_ref_aot", reinterpret_cast<void*>(&qore_rt_create_local_ref_aot));
+    addSymbol("qore_rt_create_member_hash_ref_aot",
+        reinterpret_cast<void*>(&qore_rt_create_member_hash_ref_aot));
     addSymbol("qore_rt_new_hash_decl_aot", reinterpret_cast<void*>(&qore_rt_new_hash_decl_aot));
     addSymbol("qore_rt_new_complex_hash_aot", reinterpret_cast<void*>(&qore_rt_new_complex_hash_aot));
     addSymbol("qore_rt_new_complex_list_aot", reinterpret_cast<void*>(&qore_rt_new_complex_list_aot));

@@ -6201,6 +6201,24 @@ void QoreMemberInfo::addContextAccess(const QoreMemberInfo& mi, const qore_class
 #endif
 }
 
+void QoreMemberInfo::addContextAccessForClass(const qore_class_private* class_ctx,
+        const qore_class_private* member_class_ctx) {
+    if (!class_ctx || !member_class_ctx) {
+        return;
+    }
+
+    if (!cls_context_map) {
+        cls_context_map = new cls_context_map_t;
+        assert(!member_info_list);
+        member_info_list = new member_info_list_t;
+    }
+
+    cls_context_map_t::iterator i = cls_context_map->lower_bound(class_ctx);
+    if (i == cls_context_map->end() || i->first != class_ctx) {
+        cls_context_map->insert(i, cls_context_map_t::value_type(class_ctx, member_class_ctx));
+    }
+}
+
 int QoreMemberInfo::parseInit(const char* name, LocalVar& selfid) {
     if (init) {
         return 0;

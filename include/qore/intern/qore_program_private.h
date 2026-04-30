@@ -253,6 +253,13 @@ public:
     */
     DLLLOCAL int dbgStep(const StatementBlock* blockStatement, const AbstractStatement* statement, ExceptionSink* xsink);
     /**
+        Executed for source-stripped IR synthetic block markers.  These markers
+        provide AST-compatible onBlock events while stepping, but must not be
+        used for run-to-statement or breakpoint matching because their metadata
+        identity is line-derived and can collide with the real statement marker.
+    */
+    DLLLOCAL int dbgSyntheticBlockStep(const StatementBlock* blockStatement, ExceptionSink* xsink);
+    /**
         Executed when a function is entered. If step-over is requested then flag is cleared not to break
     */
     DLLLOCAL void dbgFunctionEnter(const StatementBlock* statement, ExceptionSink* xsink);
@@ -300,6 +307,10 @@ public:
 
     DLLLOCAL bool runtimeCheck() const {
         return runState != DBG_RS_DETACH || attachFlag || breakFlag;
+    }
+
+    DLLLOCAL bool hasBreakFlag() const {
+        return breakFlag;
     }
 
 private:
@@ -2733,6 +2744,16 @@ public:
         if (statementId == 0 || statementId > statementIds.size())
             return nullptr;
         return statementIds[statementId-1];
+    }
+
+    DLLLOCAL void getRegisteredStatementLocations(std::vector<const QoreProgramLocation*>& locs) const {
+        AutoLocker al(&plock);
+        locs.reserve(locs.size() + statementIds.size());
+        for (const AbstractStatement* stmt : statementIds) {
+            if (stmt && stmt->loc) {
+                locs.push_back(stmt->loc);
+            }
+        }
     }
 
     DLLLOCAL unsigned getProgramId() const {

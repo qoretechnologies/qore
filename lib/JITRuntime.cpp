@@ -48,6 +48,7 @@
 } while(0)
 
 #include <cstring>
+#include <algorithm>
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -68,12 +69,15 @@
 #include <qore/intern/AbstractStatement.h>
 #include <qore/intern/qore_thread_intern.h>
 #include <qore/intern/QoreTypeInfo.h>
+#include <qore/intern/QoreTypeSpec.h>
 #include <qore/intern/OnBlockExitStatement.h>
 #include <qore/intern/QoreException.h>
 #include <qore/intern/StatementBlock.h>
 #include <qore/intern/FunctionCallNode.h>
 #include <qore/intern/SelfVarrefNode.h>
 #include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
+#include <qore/intern/QoreSquareBracketsOperatorNode.h>
+#include <qore/intern/QoreSquareBracketsRangeOperatorNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/FunctionalOperatorInterface.h>
 #include <qore/intern/QoreClassIntern.h>
@@ -85,6 +89,7 @@
 #include <qore/intern/NewComplexTypeNode.h>
 #include <qore/intern/typed_hash_decl_private.h>
 #include <qore/intern/qore_list_private.h>
+#include <qore/intern/qore_string_private.h>
 #include <qore/intern/QoreHashNodeIntern.h>
 #include <qore/intern/ParseReferenceNode.h>
 #include <qore/intern/VarRefNode.h>
@@ -1070,6 +1075,189 @@ extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint6
     return toBits(result);
 }
 
+static QoreValue qore_rt_build_selector_range(QoreValue start, QoreValue stop, ExceptionSink* xsink) {
+    if (start.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the start expression of the range operator (..) evaluated to NOTHING");
+        return QoreValue();
+    }
+    if (stop.isNothing()) {
+        xsink->raiseException("RANGE-ERROR", "the end expression of the range operator (..) evaluated to NOTHING");
+        return QoreValue();
+    }
+
+    int64_t s = start.getAsBigInt();
+    int64_t e = stop.getAsBigInt();
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), xsink);
+    size_t cancel_i = 0;
+    if (s <= e) {
+        for (int64_t i = s; ; ++i) {
+            rv->push(QoreValue(i), xsink);
+            if (*xsink || i == e) {
+                break;
+            }
+            if ((++cancel_i & 0x3fff) == 0 && qore_check_cancel(xsink, "range selector slice")) {
+                return QoreValue();
+            }
+        }
+    } else {
+        for (int64_t i = s; ; --i) {
+            rv->push(QoreValue(i), xsink);
+            if (*xsink || i == e) {
+                break;
+            }
+            if ((++cancel_i & 0x3fff) == 0 && qore_check_cancel(xsink, "range selector slice")) {
+                return QoreValue();
+            }
+        }
+    }
+    return *xsink ? QoreValue() : rv.release();
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
+        int32_t count, const uint64_t* selector_bits, ExceptionSink* xsink) {
+    QoreValue left = fromBits(left_bits);
+    qore_type_t left_type = left.getType();
+    int selector_idx = 0;
+
+    if (left_type == NT_LIST) {
+        const QoreTypeInfo* vtype = nullptr;
+        bool vcommon = false;
+        bool have_value = false;
+        ReferenceHolder<QoreListNode> ret(new QoreListNode(autoTypeInfo), xsink);
+        for (int32_t i = 0; i < count; ++i) {
+            bool is_range = kinds[i] != 0;
+            ValueHolder selector(xsink);
+            if (is_range) {
+                QoreValue start = fromBits(selector_bits[selector_idx++]);
+                QoreValue stop = fromBits(selector_bits[selector_idx++]);
+                selector = qore_rt_build_selector_range(start, stop, xsink);
+            } else {
+                selector = fromBits(selector_bits[selector_idx++]).refSelf();
+            }
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+
+            ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(left, *selector, is_range, xsink),
+                xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+            if (is_range) {
+                assert(entry->getType() == NT_LIST);
+                ConstListIterator li(entry->get<const QoreListNode>());
+                while (li.next()) {
+                    QoreValue n = li.getValue();
+                    if (!have_value) {
+                        vtype = n.getTypeInfo();
+                        vcommon = true;
+                        have_value = true;
+                    } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, n.getTypeInfo())) {
+                        vcommon = false;
+                    }
+                    ret->push(n.refSelf(), xsink);
+                    if (*xsink) {
+                        return toBits(QoreValue());
+                    }
+                }
+            } else {
+                if (!have_value) {
+                    vtype = entry->getTypeInfo();
+                    vcommon = true;
+                    have_value = true;
+                } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, entry->getTypeInfo())) {
+                    vcommon = false;
+                }
+                ret->push(entry.release(), xsink);
+                if (*xsink) {
+                    return toBits(QoreValue());
+                }
+            }
+        }
+
+        if (!vtype || vtype == anyTypeInfo) {
+            vtype = autoTypeInfo;
+        }
+        const QoreTypeInfo* ti = qore_get_complex_list_type(vtype);
+        qore_list_private::get(**ret)->complexTypeInfo = ti;
+        QoreValue rv(ret.release());
+        if (QoreTypeInfo::hasType(vtype)) {
+            QoreTypeInfo::acceptAssignment(ti, "<type folding>", rv, xsink);
+            if (*xsink) {
+                rv.discard(xsink);
+                return toBits(QoreValue());
+            }
+        }
+        return toBits(rv);
+    }
+
+    if (left_type == NT_STRING) {
+        SimpleRefHolder<QoreStringNode> ret(new QoreStringNode);
+        for (int32_t i = 0; i < count; ++i) {
+            bool is_range = kinds[i] != 0;
+            ValueHolder selector(xsink);
+            if (is_range) {
+                QoreValue start = fromBits(selector_bits[selector_idx++]);
+                QoreValue stop = fromBits(selector_bits[selector_idx++]);
+                selector = qore_rt_build_selector_range(start, stop, xsink);
+            } else {
+                selector = fromBits(selector_bits[selector_idx++]).refSelf();
+            }
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+            ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(left, *selector, is_range, xsink),
+                xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+            if (!entry->isNothing()) {
+                qore_string_private::get(*ret)->concat(entry->get<QoreStringNode>());
+            }
+        }
+        return toBits(QoreValue(ret.release()));
+    }
+
+    if (left_type == NT_BINARY) {
+        SimpleRefHolder<BinaryNode> ret(new BinaryNode);
+        for (int32_t i = 0; i < count; ++i) {
+            bool is_range = kinds[i] != 0;
+            ValueHolder selector(xsink);
+            if (is_range) {
+                QoreValue start = fromBits(selector_bits[selector_idx++]);
+                QoreValue stop = fromBits(selector_bits[selector_idx++]);
+                selector = qore_rt_build_selector_range(start, stop, xsink);
+            } else {
+                selector = fromBits(selector_bits[selector_idx++]).refSelf();
+            }
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+            ValueHolder entry(QoreSquareBracketsOperatorNode::doSquareBrackets(left, *selector, is_range, xsink),
+                xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
+            switch (entry->getType()) {
+                case NT_INT: {
+                    unsigned char c = static_cast<unsigned char>(entry->getAsBigInt());
+                    ret->append(&c, 1);
+                    break;
+                }
+                case NT_BINARY:
+                    ret->append(entry->get<BinaryNode>());
+                    break;
+                default:
+                    assert(entry->getType() == NT_NOTHING);
+                    break;
+            }
+        }
+        return toBits(QoreValue(ret.release()));
+    }
+
+    return toBits(QoreValue());
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_unary_op(int opcode, uint64_t operand, ExceptionSink* xsink) {
     QoreValue val = fromBits(operand);
     QoreValue result = QoreIRInterpreter::evalUnary(static_cast<QoreIROpcode>(opcode), val, xsink);
@@ -1649,6 +1837,57 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_static_method_call_ref_aot(const ch
     return toBits(QoreValue(new StaticMethodCallReferenceNode(&loc_builtin, method, call_pgm, cls)));
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_create_local_method_call_ref_aot(const char* class_path,
+        const char* method_name, ExceptionSink* xsink) {
+    if (!class_path || !*class_path || !method_name || !*method_name) {
+        xsink->raiseException("CALL-REFERENCE-ERROR", "cannot resolve method call reference '%s::%s()'",
+            class_path ? class_path : "<null>", method_name ? method_name : "<null>");
+        return toBits(QoreValue());
+    }
+
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve method call reference '%s::%s()': no program context",
+            class_path, method_name);
+        return toBits(QoreValue());
+    }
+
+    const char* resolved_class_path = (class_path[0] == ':' && class_path[1] == ':')
+        ? class_path + 2 : class_path;
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+        *pp->RootNS, resolved_class_path, found_ns);
+    if (!qc) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve class '%s' for method call reference '%s()'",
+            class_path, method_name);
+        return toBits(QoreValue());
+    }
+
+    const QoreMethod* method = qc->findMethod(method_name);
+    if (!method) {
+        xsink->raiseException("CALL-REFERENCE-ERROR",
+            "cannot resolve method call reference '%s::%s()'",
+            class_path, method_name);
+        return toBits(QoreValue());
+    }
+
+    RuntimeConfig& rc = rc_get_current_ref();
+    QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
+    if (!obj) {
+        xsink->raiseException("OBJECT-ERROR",
+            "cannot evaluate method call reference '\\%s()' when not in an object context; if using "
+            "'background', evaluate the method reference before the 'background' statement",
+            method_name);
+        return toBits(QoreValue());
+    }
+
+    const qore_class_private* cls = rc.getClass() ? rc.getClass() : runtime_get_class();
+    return toBits(QoreValue(new RunTimeResolvedMethodReferenceNode(&loc_builtin, obj, method, cls)));
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_create_function_call_ref_aot(const char* function_name,
         ExceptionSink* xsink) {
     if (!function_name || !*function_name) {
@@ -1761,6 +2000,41 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_parse_ref_aot(QoreAOTContext* ctx, 
     return qore_rt_create_parse_ref(node, xsink);
 }
 
+static const QoreTypeInfo* get_local_parse_ref_type(LocalVar* lv) {
+    const QoreTypeInfo* ti = lv ? lv->parseGetTypeInfoForInitialAssignment() : nullptr;
+    if (!ti) {
+        return referenceTypeInfo;
+    }
+    const QoreTypeInfo* ref_target = QoreTypeInfo::getReferenceTarget(ti);
+    return qore_get_complex_hard_reference_type(ref_target ? ref_target : ti);
+}
+
+static const QoreTypeInfo* resolve_parse_ref_target_type(const char* ref_type_path, ExceptionSink* xsink) {
+    if (!ref_type_path || !*ref_type_path) {
+        return nullptr;
+    }
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        xsink->raiseException("AOT-REF-ERROR",
+            "cannot resolve reference type '%s' without a current Program", ref_type_path);
+        return nullptr;
+    }
+    std::string error;
+    QoreAOTTypeResolver resolver(pgm);
+    const QoreTypeInfo* ref_ti = resolver.resolve(ref_type_path, error);
+    if (!ref_ti) {
+        xsink->raiseException("AOT-REF-ERROR",
+            "cannot resolve reference type '%s': %s", ref_type_path, error.c_str());
+        return nullptr;
+    }
+    if (!QoreTypeInfo::isReference(ref_ti)) {
+        xsink->raiseException("AOT-REF-ERROR",
+            "resolved parse-reference type '%s' is not a reference type", ref_type_path);
+        return nullptr;
+    }
+    return QoreTypeInfo::getUniqueReturnComplexReference(ref_ti);
+}
+
 //! AOT: create a reference to a local variable from slot index
 /** Eliminates EXPR_TREE for \var expressions by resolving the LocalVar*
     from the AOT context's local slot, constructing a temporary VarRefNode
@@ -1774,6 +2048,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, 
         return 0;
     }
     LocalVar* lv = ctx->locals[local_slot];
+    const QoreTypeInfo* ref_ti = get_local_parse_ref_type(lv);
     // Build a temporary VarRefNode + ParseReferenceNode and evaluate.
     // Mirror the source parser's setThreadSafe() call (ReferenceNode.cpp:281):
     // switch the VarRefNode to VT_LOCAL_TS and mark the LocalVar closure_use so
@@ -1786,7 +2061,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, 
     // CIRCULAR-REFERENCE-ERROR.
     VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(lv->getName()), lv, false);
     vrn->setThreadSafe();
-    SimpleRefHolder<ParseReferenceNode> prn(new ParseReferenceNode(&loc_builtin, QoreValue(vrn)));
+    SimpleRefHolder<ParseReferenceNode> prn(new ParseReferenceNode(&loc_builtin, QoreValue(vrn), ref_ti));
     ReferenceNode* ref = prn->evalToRef(xsink);
     return ref ? toBits(QoreValue(ref)) : 0;
 }
@@ -1797,7 +2072,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, 
     member name string embedded as a constant.
 */
 extern "C" DLLEXPORT uint64_t qore_rt_create_member_hash_ref_aot(
-        const char* member_name, uint64_t key_bits, ExceptionSink* xsink) {
+        const char* member_name, uint64_t key_bits, const char* ref_type_path, ExceptionSink* xsink) {
     assert(member_name);
 
     // Get current self/class context
@@ -1810,6 +2085,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_member_hash_ref_aot(
         return 0;
     }
 
+    const QoreTypeInfo* ref_target_ti = resolve_parse_ref_target_type(ref_type_path, xsink);
+    if (*xsink) {
+        return 0;
+    }
+
     // Build the partial lvalue expression: SelfVarrefNode{key}
     // SelfVarrefNode references the member variable on the current object
     SelfVarrefNode* svn = new SelfVarrefNode(&loc_builtin, strdup(member_name));
@@ -1818,7 +2098,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_member_hash_ref_aot(
     QoreValue lv(new QoreHashObjectDereferenceOperatorNode(&loc_builtin, QoreValue(svn), key_copy));
 
     // Create ReferenceNode with the partial lvalue
-    ReferenceNode* ref = new ReferenceNode(lv, nullptr, self, self, qc);
+    ReferenceNode* ref = new ReferenceNode(lv, ref_target_ti, self, self, qc);
     return toBits(QoreValue(ref));
 }
 
@@ -2585,6 +2865,22 @@ static QoreHashNode* qore_rt_make_implicit_hash_for_lvalue(LocalVar* var, Except
     return new QoreHashNode(QoreTypeInfo::getElementType(QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo)));
 }
 
+static void qore_rt_assign_object_member_lvalue(QoreObject* obj, const char* key, const QoreValue& val,
+        ExceptionSink* xsink) {
+    const qore_class_private* class_ctx = runtime_get_class();
+    if (class_ctx && !qore_class_private::runtimeCheckPrivateClassAccess(*obj->getClass(), class_ctx)) {
+        class_ctx = nullptr;
+    }
+
+    LValueHelper helper(xsink);
+    if (qore_object_private::getLValue(*obj, key, helper, class_ctx, false, xsink)) {
+        return;
+    }
+
+    QoreValue stored = val.hasNode() ? val.refSelf() : val;
+    helper.assign(stored);
+}
+
 // JIT path: write hash{key} = value with copy-on-write support.
 // var: container LocalVar* (used to update the local when COW triggers).
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
@@ -2592,11 +2888,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue hv = fromBits(hash_bits);
     QoreValue val = fromBits(value_bits);
+    ValueHolder val_holder(val.refSelf(), xsink);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        // HashKeyStore loads the container without taking an extra reference.
-        // Any ref beyond the lvalue's own runtime slot is real sharing and must
-        // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
+        // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
+        // This makes `h.b = h` copy the outer hash before storing the original.
         if (h->reference_count() > 1) {
             QoreHashNode* new_h = h->copy();
             qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
@@ -2626,7 +2922,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         }
         new_h->deref(nullptr);
     } else if (hv.getType() == NT_OBJECT) {
-        const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
+        qore_rt_assign_object_member_lvalue(const_cast<QoreObject*>(hv.get<const QoreObject>()), key, val, xsink);
     }
     return value_bits;
 }
@@ -2638,11 +2934,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
         uint64_t value_bits, ExceptionSink* xsink) {
     QoreValue hv = fromBits(hash_bits);
     QoreValue val = fromBits(value_bits);
+    ValueHolder val_holder(val.refSelf(), xsink);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
-        // HashKeyStore loads the container without taking an extra reference.
-        // Any ref beyond the lvalue's own runtime slot is real sharing and must
-        // trigger COW; LLVM-side reload/cache refs are cleared before this helper.
+        // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
+        // This makes `h.b = h` copy the outer hash before storing the original.
         if (h->reference_count() > 1) {
             QoreHashNode* new_h = h->copy();
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
@@ -2674,7 +2970,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
         }
         new_h->deref(nullptr);
     } else if (hv.getType() == NT_OBJECT) {
-        const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
+        qore_rt_assign_object_member_lvalue(const_cast<QoreObject*>(hv.get<const QoreObject>()), key, val, xsink);
     }
     return value_bits;
 }
@@ -2705,6 +3001,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue lv = fromBits(list_bits);
     QoreValue val = fromBits(val_bits);
+    ValueHolder val_holder(val.refSelf(), xsink);
 
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
@@ -2777,6 +3074,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         uint64_t val_bits, ExceptionSink* xsink) {
     QoreValue lv = fromBits(list_bits);
     QoreValue val = fromBits(val_bits);
+    ValueHolder val_holder(val.refSelf(), xsink);
     if (lv.getType() == NT_LIST) {
         QoreListNode* l = lv.get<QoreListNode>();
         // ListIndexStore loads the container without taking an extra reference.
@@ -6555,7 +6853,8 @@ static void patchLVPath(std::vector<LVPathStep>& path_copy,
             QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
             step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
         } else if (step.kind == LVPathStepKind::HashKeySlice
-                || step.kind == LVPathStepKind::ListIndexSlice) {
+                || step.kind == LVPathStepKind::ListIndexSlice
+                || step.kind == LVPathStepKind::ListRangeSlice) {
             step.slice_values.clear();
             step.slice_values.reserve(step.slice_operand_ids.size());
             for (size_t i = 0; i < step.slice_operand_ids.size(); ++i) {
@@ -6957,6 +7256,123 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
     return QoreValue();
 }
 
+// Shared helper for ListRangeSlice terminal step: removes/deletes a contiguous
+// effective range from a list/string/binary lvalue, matching
+// QoreSquareBracketsRangeOperatorNode + LValueRemoveHelper semantics.
+QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
+        const LVPathStep& last_step, LVUnaryOp unary_op,
+        ExceptionSink* xsink) {
+    const bool is_delete = (unary_op == LVUnaryOp::Delete);
+    if (last_step.slice_values.size() != 2) {
+        xsink->raiseException("IR-EXEC-ERROR", "ListRangeSlice remove requires start and stop operands");
+        return QoreValue();
+    }
+
+    bool broken_list_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
+    int64 start = 0;
+    int64 stop = 0;
+    int64 seq_size = 0;
+    QoreValue seq = lvh.getValue();
+    if (!QoreSquareBracketsRangeOperatorNode::getEffectiveRange(seq, start, stop, seq_size,
+            last_step.slice_values[0], last_step.slice_values[1], broken_list_range, xsink)) {
+        if (*xsink || is_delete) {
+            return QoreValue();
+        }
+        if (ct == NT_LIST) {
+            ReferenceHolder<QoreListNode> v(new QoreListNode(autoTypeInfo), xsink);
+            if (broken_list_range) {
+                int64 d = stop - start;
+                if (d < 0) {
+                    d = -d;
+                }
+                ++d;
+                while (d--) {
+                    v->push(QoreValue(), xsink);
+                    if (*xsink) {
+                        return QoreValue();
+                    }
+                }
+            }
+            return v.release();
+        }
+        if (ct == NT_STRING) {
+            return QoreValue(new QoreStringNode);
+        }
+        if (ct == NT_BINARY) {
+            return QoreValue(new BinaryNode);
+        }
+        return QoreValue();
+    }
+
+    bool reverse = false;
+    if (stop < start) {
+        reverse = true;
+        std::swap(start, stop);
+    }
+
+    if (ct == NT_LIST) {
+        lvh.ensureUnique();
+        QoreListNode* l = lvh.getValue().get<QoreListNode>();
+        if (!l) {
+            return QoreValue();
+        }
+        size_t orig_size = l->size();
+        ReferenceHolder<QoreListNode> nl(l->extract(start, stop - start + 1), xsink);
+        if (stop >= static_cast<int64>(orig_size)) {
+            qore_list_private::get(**nl)->resize(nl->size() + stop - orig_size + 1);
+        }
+        if (reverse) {
+            nl = nl->reverse();
+        }
+        if (is_delete) {
+            return QoreValue();
+        }
+        return nl.release();
+    }
+
+    if (ct == NT_STRING) {
+        lvh.ensureUnique();
+        QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+        if (!str) {
+            return QoreValue();
+        }
+        SimpleRefHolder<QoreStringNode> ns(str->extract(start, stop - start + 1, xsink));
+        if (*xsink) {
+            return QoreValue();
+        }
+        if (reverse) {
+            ns = ns->reverse();
+        }
+        if (is_delete) {
+            return QoreValue();
+        }
+        return ns.release();
+    }
+
+    if (ct == NT_BINARY) {
+        lvh.ensureUnique();
+        BinaryNode* bin = lvh.getValue().get<BinaryNode>();
+        if (!bin) {
+            return QoreValue();
+        }
+        SimpleRefHolder<BinaryNode> nb(new BinaryNode);
+        bin->splice(start, stop - start + 1, nullptr, 0, *nb);
+        if (reverse) {
+            BinaryNode* rb = new BinaryNode;
+            for (size_t i = 0; i < nb->size(); ++i) {
+                rb->append(static_cast<const char*>(nb->getPtr()) + nb->size() - i - 1, 1);
+            }
+            nb = rb;
+        }
+        if (is_delete) {
+            return QoreValue();
+        }
+        return nb.release();
+    }
+
+    return QoreValue();
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         ExceptionSink* xsink) {
@@ -7010,7 +7426,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         bool last_is_list = (last_step.kind == LVPathStepKind::ListIndex);
         bool last_is_hash_slice = (last_step.kind == LVPathStepKind::HashKeySlice);
         bool last_is_list_slice = (last_step.kind == LVPathStepKind::ListIndexSlice);
-        if (last_is_hash || last_is_list || last_is_hash_slice || last_is_list_slice) {
+        bool last_is_list_range = (last_step.kind == LVPathStepKind::ListRangeSlice);
+        if (last_is_hash || last_is_list || last_is_hash_slice || last_is_list_slice
+                || last_is_list_range) {
             LValueHelper lvh(xsink);
             // for_remove=true on the parent walk: don't vivify intermediate
             // containers just to remove a nested key that doesn't exist.
@@ -7048,6 +7466,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             } else if (last_is_list_slice
                     && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
                 res = executeLVListIndexSliceRemove(lvh, ct, last_step,
+                        inst->unary_op, xsink);
+                handled_multistep_remove = true;
+            } else if (last_is_list_range
+                    && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                res = executeLVListRangeSliceRemove(lvh, ct, last_step,
                         inst->unary_op, xsink);
                 handled_multistep_remove = true;
             } else if (ct == NT_NOTHING) {
@@ -10137,6 +10560,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_method_re
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_static_method_call_ref_aot_throwing(
         const char* class_path, const char* method_name, ExceptionSink* xsink) {
     uint64_t result = qore_rt_create_static_method_call_ref_aot(class_path, method_name, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_local_method_call_ref_aot_throwing(
+        const char* class_path, const char* method_name, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_local_method_call_ref_aot(class_path, method_name, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

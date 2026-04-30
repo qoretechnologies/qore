@@ -79,7 +79,8 @@ int QoreRangeOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     // do not evaluate at parse time, even if the arguments are both constant values, so we can support lazy
     // evaluation with functional operators
 
-    parse_context.typeInfo = qore_get_complex_list_type(bigIntTypeInfo);
+    typeInfo = qore_get_complex_list_type(bigIntTypeInfo);
+    parse_context.typeInfo = typeInfo;
     parse_context.analysis.clear();
     parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
     parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);

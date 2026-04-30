@@ -697,6 +697,9 @@ public:
 protected:
     UserSignature signature;
     StatementBlock* statements;
+    //! Source-stripped AOT has no executable AST body, but ProgramControl and
+    //! debugger APIs still need a stable function-entry statement identity.
+    StatementBlock* aot_entry_statement = nullptr;
     // for "synchronized" functions
     VRMutex* gate;
 
@@ -789,6 +792,10 @@ public:
     DLLLOCAL StatementBlock* getStatementBlock() const {
         return statements;
     }
+    DLLLOCAL StatementBlock* getEntryStatementBlock() const {
+        return statements ? statements : aot_entry_statement;
+    }
+    DLLLOCAL void setAOTEntryStatementBlock(StatementBlock* b);
 
     DLLLOCAL QoreParseOptions getParseOptions(const QoreParseOptions& po) const;
 

@@ -124,6 +124,9 @@ struct QoreAOTContext {
     //! Used in strip-source mode where AST-based stmts[] are not available.
     std::vector<std::unique_ptr<QoreIRFunction>> handler_irs;
 
+    //! Deserialized full function IR used as a non-source debug fallback for source-stripped AOT.
+    std::unique_ptr<QoreIRFunction> debug_ir;
+
     //! Owned IR function kept alive for LValuePath instruction pointers.
     //! LValuePath instructions reference path data in the IR function; the function must
     //! outlive the context so that lv_path_insts[] pointers remain valid.
@@ -150,6 +153,9 @@ struct QoreAOTContext {
     //! Owned string copies for call target method names from slot map deserialization.
     //! Uses std::list so that element pointers remain stable across insertions.
     std::list<std::string> owned_call_target_strings;
+
+    //! Metadata-only statements registered for source-stripped ProgramControl lookups.
+    std::vector<AbstractStatement*> owned_debug_statements;
 
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.

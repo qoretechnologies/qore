@@ -1072,6 +1072,9 @@ public:
     // accessing the object's data
     DLLLOCAL void addContextAccess(const QoreMemberInfo& mi, const qore_class_private* qc);
 
+    DLLLOCAL void addContextAccessForClass(const qore_class_private* class_ctx,
+            const qore_class_private* member_class_ctx);
+
     // issue #2970: returns the number of parent class members to initialize
     DLLLOCAL size_t numParentMembers() const {
         return member_info_list ? member_info_list->size() : 0;
@@ -1420,8 +1423,9 @@ public:
     /** Used during AOT binary deserialization to reconstruct BCANode with pre-resolved data.
         Takes ownership of n_args.
     */
-    DLLLOCAL BCANode(qore_classid_t n_classid, QoreListNode* n_args)
-            : FunctionCallBase(nullptr, n_args), loc(&loc_builtin), classid(n_classid),
+    DLLLOCAL BCANode(qore_classid_t n_classid, QoreListNode* n_args,
+            const QoreProgramLocation* n_loc = &loc_builtin)
+            : FunctionCallBase(nullptr, n_args), loc(n_loc), classid(n_classid),
               ns(nullptr), name(nullptr) {
     }
 

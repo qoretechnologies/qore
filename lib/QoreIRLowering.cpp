@@ -2055,6 +2055,14 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         return false;
     }
 
+    const bool root_statement_block = statement_block_depth++ == 0;
+    struct StatementBlockDepthGuard {
+        int& depth;
+        ~StatementBlockDepthGuard() {
+            --depth;
+        }
+    } statement_block_depth_guard{statement_block_depth};
+
     // Push handler stack to track which handlers are registered in this block
     size_t block_handler_start = block_handlers.size();
     handler_stack.push(block_handler_start);
@@ -2106,6 +2114,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         }
         // Phase 2a: Emit ScopeEnter so scope_stack has watermark for exception-path handler execution
         builder.createScopeEnter(scope_id);
+    }
+
+    if (!root_statement_block) {
+        builder.createDebugBlock(block->loc);
     }
 
     bool terminated = false;
@@ -3187,7 +3199,7 @@ static bool isDynamicKeyHashSubscript(const QoreValue& expr,
 //
 // `allow_slice`: when true, multi-key hash slice (h{"a","b"}) and
 // multi-index list slice (l[1,3,5]) lvalues are accepted and encoded as
-// HashKeySlice / ListIndexSlice terminal steps.  Callers that don't
+// HashKeySlice / ListIndexSlice / ListRangeSlice terminal steps.  Callers that don't
 // implement slice semantics at runtime (e.g. LValuePathAssign /
 // LValuePathCompound / LValuePathBinaryMut helpers) must pass false so
 // these shapes fall through to the existing AST-eval path.
@@ -3264,6 +3276,25 @@ static bool extractLValuePath(const QoreValue& expr,
         // Store "ClassPath::varName" so AOT deserialization can resolve the static var
         step.name = std::string(scv->qc.getPath()) + "::" + scv->str;
         path.push_back(step);
+        return true;
+    }
+
+    // Navigation: QoreSquareBracketsRangeOperatorNode (container[start..stop])
+    if (auto* sbr = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        if (!allow_slice) {
+            return false;
+        }
+        if (!extractLValuePath(sbr->get(0), path, dynamic_operands, allow_slice)) {
+            return false;
+        }
+        LVPathStep step;
+        step.kind = LVPathStepKind::ListRangeSlice;
+        step.slice_operand_ids.reserve(2);
+        dynamic_operands.push_back(sbr->get(1));
+        step.slice_operand_ids.push_back(UINT32_MAX);
+        dynamic_operands.push_back(sbr->get(2));
+        step.slice_operand_ids.push_back(UINT32_MAX);
+        path.push_back(std::move(step));
         return true;
     }
 
@@ -7364,6 +7395,33 @@ QoreIRValue QoreIRLowering::lowerSquareBracketsRange(const QoreValue& expr, std:
     return result;
 }
 
+static bool collectListIndexRangeSelectors(const QoreValue& rhs, std::vector<QoreValue>& selectors) {
+    bool has_range = false;
+    if (auto* pln = dynamic_cast<const QoreParseListNode*>(rhs.getInternalNode())) {
+        selectors.reserve(pln->size());
+        for (size_t i = 0; i < pln->size(); ++i) {
+            QoreValue v = pln->get(i);
+            if (dynamic_cast<const QoreRangeOperatorNode*>(v.getInternalNode())) {
+                has_range = true;
+            }
+            selectors.push_back(v);
+        }
+        return has_range;
+    }
+    if (auto* qln = dynamic_cast<const QoreListNode*>(rhs.getInternalNode())) {
+        selectors.reserve(qln->size());
+        for (size_t i = 0; i < qln->size(); ++i) {
+            QoreValue v = qln->retrieveEntry(i);
+            if (dynamic_cast<const QoreRangeOperatorNode*>(v.getInternalNode())) {
+                has_range = true;
+            }
+            selectors.push_back(v);
+        }
+        return has_range;
+    }
+    return false;
+}
+
 QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node);
@@ -7375,11 +7433,44 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
     // LValueHelper only supports list-type lvalue access and would reject
     // binary[index] or string[index] with a RUNTIME-TYPE-ERROR.
 
-    // For rhs_list_range (e.g., list[1..3]), the RHS contains unevaluated AST
-    // nodes with range operators that cannot be pre-evaluated — fall back to AST
-    if (op->hasRhsListRange()) {
-        std::vector<QoreIRValue> operands;
-        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
+    // Multi-selector slices can contain range entries (for example
+    // str[0, 3..4, 5]). Evaluating the whole RHS as a list loses which entry
+    // was a range, so lower each selector separately and carry compact
+    // selector metadata on the native ListIndexDynamic instruction.
+    std::vector<QoreValue> range_selectors;
+    if (collectListIndexRangeSelectors(op->getRight(), range_selectors)) {
+        QoreIRValue lhs = lowerExpression(op->getLeft(), error);
+        if (!lhs.isValid()) {
+            return QoreIRValue();
+        }
+        std::vector<QoreIRValue> operands{lhs};
+        std::vector<uint8_t> selector_kinds;
+        selector_kinds.reserve(range_selectors.size());
+        for (QoreValue selector : range_selectors) {
+            if (auto* range = dynamic_cast<const QoreRangeOperatorNode*>(selector.getInternalNode())) {
+                QoreIRValue start = lowerExpression(range->getLeft(), error);
+                if (!start.isValid()) {
+                    return QoreIRValue();
+                }
+                QoreIRValue stop = lowerExpression(range->getRight(), error);
+                if (!stop.isValid()) {
+                    return QoreIRValue();
+                }
+                selector_kinds.push_back(1);
+                operands.push_back(start);
+                operands.push_back(stop);
+            } else {
+                QoreIRValue index = lowerExpression(selector, error);
+                if (!index.isValid()) {
+                    return QoreIRValue();
+                }
+                selector_kinds.push_back(0);
+                operands.push_back(index);
+            }
+        }
+        auto* inst = builder.createExprOp(QoreIROpcode::ListIndexDynamic, expr, operands, op->loc);
+        inst->list_selector_kinds = std::move(selector_kinds);
+        return inst->result;
     }
 
     // Lower both operands (container and index) for native execution
@@ -7834,7 +7925,8 @@ QoreIRValue QoreIRLowering::lowerExtract(const QoreValue& expr, std::string& err
                         ++dyn_idx;
                     }
                 } else if (step.kind == LVPathStepKind::HashKeySlice
-                        || step.kind == LVPathStepKind::ListIndexSlice) {
+                        || step.kind == LVPathStepKind::ListIndexSlice
+                        || step.kind == LVPathStepKind::ListRangeSlice) {
                     for (uint32_t& sid : step.slice_operand_ids) {
                         if (dyn_idx < dyn_vals.size()) {
                             sid = dyn_vals[dyn_idx].id;
@@ -8801,6 +8893,9 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
     auto store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreInstruction>(
         container_var, key_name.c_str());
     store_inst->loc = loc;
+    if (!exception_stack.empty()) {
+        store_inst->exception_target = exception_stack.back();
+    }
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(new_val);
 
@@ -8849,6 +8944,9 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicCompoundOp(
     auto* store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreDynamicInstruction>(
         container_var);
     store_inst->loc = loc;
+    if (!exception_stack.empty()) {
+        store_inst->exception_target = exception_stack.back();
+    }
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(new_val);
     store_inst->operands.push_back(key_val);
@@ -8921,6 +9019,9 @@ QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
     auto* store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreInstruction>(
         container_var, key_name.c_str());
     store_inst->loc = loc;
+    if (!exception_stack.empty()) {
+        store_inst->exception_target = exception_stack.back();
+    }
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(value);
 
@@ -8955,6 +9056,9 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
     auto* store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreDynamicInstruction>(
         container_var);
     store_inst->loc = loc;
+    if (!exception_stack.empty()) {
+        store_inst->exception_target = exception_stack.back();
+    }
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(value);
     store_inst->operands.push_back(key_val);
@@ -8973,7 +9077,7 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
         LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr) {
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
-    // Slice lvalues (HashKeySlice / ListIndexSlice) are currently only
+    // Slice lvalues (HashKeySlice / ListIndexSlice / ListRangeSlice) are currently only
     // supported at the runtime by LValuePathUnary's Remove/Delete paths.
     // Any other opcode/unary-op combination must not accept slice lvalues —
     // extractLValuePath will fall back to AST-eval for those shapes.
@@ -9007,7 +9111,8 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
                 ++dyn_idx;
             }
         } else if (step.kind == LVPathStepKind::HashKeySlice
-                || step.kind == LVPathStepKind::ListIndexSlice) {
+                || step.kind == LVPathStepKind::ListIndexSlice
+                || step.kind == LVPathStepKind::ListRangeSlice) {
             for (uint32_t& sid : step.slice_operand_ids) {
                 if (dyn_idx < dyn_vals.size()) {
                     sid = dyn_vals[dyn_idx].id;

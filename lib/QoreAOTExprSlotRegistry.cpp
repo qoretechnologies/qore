@@ -53,8 +53,14 @@
 #include "qore/intern/QorePostDecrementOperatorNode.h"
 #include "qore/intern/QoreIntPostIncrementOperatorNode.h"
 #include "qore/intern/QoreIntPostDecrementOperatorNode.h"
+#include "qore/intern/QoreLogicalAndOperatorNode.h"
+#include "qore/intern/QoreLogicalOrOperatorNode.h"
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOperatorNode.h"
+#include "qore/intern/QoreLogicalGreaterThanOperatorNode.h"
+#include "qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalGreaterThanOrEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalNotOperatorNode.h"
 #include "qore/intern/QoreNullCoalescingOperatorNode.h"
 #include "qore/intern/QoreValueCoalescingOperatorNode.h"
@@ -78,6 +84,7 @@
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
+#include "qore/intern/CallReferenceCallNode.h"
 
 class UserClosureVariant;
 QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant);
@@ -229,8 +236,8 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 40: OBJ_METHOD_REF_EXPR
     {"OBJ_METHOD_REF_EXPR", 40, true, write_slot_OBJ_METHOD_REF_EXPR, "Object method reference with expression"},
 
-    // 41: CONST_VALUE is inline-only for now.
-    {nullptr, 41, false, nullptr, nullptr},
+    // 41: CONST_VALUE
+    {"CONST_VALUE", 41, true, write_slot_CONST_VALUE, "Serialized constant value"},
 
     // 42: PLUS
     {"PLUS", 42, true, write_slot_PLUS, "Plus operator"},
@@ -367,14 +374,28 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 86: SELECT
     {"SELECT", 86, true, write_slot_SELECT, "Select operator"},
 
-    // 87-253: Unused
-    {nullptr, 87, false, nullptr, nullptr},
-    {nullptr, 88, false, nullptr, nullptr},
-    {nullptr, 89, false, nullptr, nullptr},
-    {nullptr, 90, false, nullptr, nullptr},
-    {nullptr, 91, false, nullptr, nullptr},
-    {nullptr, 92, false, nullptr, nullptr},
-    {nullptr, 93, false, nullptr, nullptr},
+    // 87: LOG_LT
+    {"LOG_LT", 87, true, write_slot_LOG_LT, "Logical less-than operator"},
+
+    // 88: LOG_GT
+    {"LOG_GT", 88, true, write_slot_LOG_GT, "Logical greater-than operator"},
+
+    // 89: LOG_LE
+    {"LOG_LE", 89, true, write_slot_LOG_LE, "Logical less-than-or-equals operator"},
+
+    // 90: LOG_GE
+    {"LOG_GE", 90, true, write_slot_LOG_GE, "Logical greater-than-or-equals operator"},
+
+    // 91: LOG_AND
+    {"LOG_AND", 91, true, write_slot_LOG_AND, "Logical AND operator"},
+
+    // 92: LOG_OR
+    {"LOG_OR", 92, true, write_slot_LOG_OR, "Logical OR operator"},
+
+    // 93: CALLREF_CALL
+    {"CALLREF_CALL", 93, true, write_slot_CALLREF_CALL, "Call reference call"},
+
+    // 94-253: Unused
     {nullptr, 94, false, nullptr, nullptr},
     {nullptr, 95, false, nullptr, nullptr},
     {nullptr, 96, false, nullptr, nullptr},

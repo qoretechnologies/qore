@@ -41,7 +41,7 @@ class RuntimeConfig;
 class QoreRangeOperatorNode : public QoreIntBinaryOperatorNode, public FunctionalOperator {
 OP_COMMON
 protected:
-    const QoreTypeInfo* typeInfo;
+    const QoreTypeInfo* typeInfo = nullptr;
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
     DLLLOCAL virtual QoreValue evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const;
