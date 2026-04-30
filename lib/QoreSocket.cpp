@@ -327,7 +327,10 @@ public:
         if (priv->buflen > priv->bufoffset) {
             return true;
         }
-        return priv->ssl && priv->ssl->pending() > 0;
+        if (priv->ssl && priv->ssl->pending() > 0) {
+            return true;
+        }
+        return priv->h2_session && (priv->h2_session->hasStreamData() || priv->h2_session->wantWrite());
     }
 
 private:
