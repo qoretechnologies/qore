@@ -1569,7 +1569,11 @@ public:
     }
 
     DLLLOCAL virtual void abort(ExceptionSink*) override {
+        bool close_socket = static_cast<bool>(poll_state);
         poll_state.reset();
+        if (close_socket) {
+            qore_socket_close_from_controller(sock);
+        }
         done = true;
     }
 
@@ -1691,7 +1695,11 @@ public:
     }
 
     DLLLOCAL virtual void abort(ExceptionSink*) override {
+        bool close_socket = static_cast<bool>(poll_state);
         poll_state.reset();
+        if (close_socket) {
+            qore_socket_close_from_controller(sock);
+        }
         done = true;
     }
 
