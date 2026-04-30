@@ -10,6 +10,7 @@
 class Test inherits QUnit::Test {
     constructor() : QUnit::Test("Socket resolveAddrInfo", "1.0") {
         addTestCase("numeric host", \testNumericHost());
+        addTestCase("global getaddrinfo", \testGlobalGetaddrinfo());
         addTestCase("passive wildcard", \testPassiveWildcard());
         addTestCase("numeric host error", \testNumericHostError());
         set_return_value(main());
@@ -18,6 +19,15 @@ class Test inherits QUnit::Test {
     testNumericHost() {
         list<hash<auto>> l = Socket::resolveAddrInfo("127.0.0.1", "0", AF_INET,
             AI_NUMERICHOST | AI_NUMERICSERV);
+        assertGt(0, l.size());
+        assertAddressInfo(l[0], True);
+        assertEq("127.0.0.1", l[0].address);
+        assertEq(AF_INET, l[0].family);
+        assertEq(0, l[0].port);
+    }
+
+    testGlobalGetaddrinfo() {
+        list<hash<auto>> l = getaddrinfo("127.0.0.1", "0", AF_INET, AI_NUMERICHOST | AI_NUMERICSERV);
         assertGt(0, l.size());
         assertAddressInfo(l[0], True);
         assertEq("127.0.0.1", l[0].address);

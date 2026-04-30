@@ -5711,6 +5711,14 @@ private:
         status = new_status;
         result = res;
         if (status == ARES_SUCCESS && result) {
+            bool first = true;
+            const char* canonname = nullptr;
+            if (flags & AI_CANONNAME) {
+                canonname = result->name && *result->name
+                    ? result->name
+                    : (result->cnames && result->cnames->name && *result->cnames->name ? result->cnames->name
+                        : nullptr);
+            }
             for (struct ares_addrinfo_node* n = result->nodes; n; n = n->ai_next) {
                 if (!n->ai_addr || n->ai_addrlen <= 0
                         || n->ai_addrlen > static_cast<ares_socklen_t>(sizeof(struct sockaddr_storage))) {
@@ -5722,7 +5730,11 @@ private:
                 ai.protocol = n->ai_protocol;
                 ai.addrlen = static_cast<socklen_t>(n->ai_addrlen);
                 memcpy(&ai.addr, n->ai_addr, n->ai_addrlen);
+                if (first && canonname) {
+                    ai.canonname = canonname;
+                }
                 addrs.push_back(ai);
+                first = false;
             }
             if (addrs.empty()) {
                 status = ARES_ENODATA;
@@ -5764,6 +5776,10 @@ static QoreListNode* qore_socket_resolved_addrinfo_to_list(const std::vector<Soc
         const struct sockaddr* addr = reinterpret_cast<const struct sockaddr*>(&ai.addr);
         QoreHashNode* h = new QoreHashNode(autoTypeInfo);
         qore_hash_private* hh = qore_hash_private::get(*h);
+
+        if (!ai.canonname.empty()) {
+            hh->setKeyValueIntern("canonname", new QoreStringNode(ai.canonname));
+        }
 
         QoreStringNode* addr_str = q_addr_to_string2(addr);
         if (addr_str) {

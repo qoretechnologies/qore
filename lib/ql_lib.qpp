@@ -37,6 +37,7 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/ModuleInfo.h"
+#include "qore/intern/qore_socket_private.h"
 
 #include <cerrno>
 #include <csignal>
@@ -1251,6 +1252,9 @@ nothing gethostbyaddr_long() [flags=RUNTIME_NOOP] {
 //! Returns a list of @ref address_information_hash for the given node name or string address; if no lookup can be performed then an exception is thrown
 /** Either node or service may be @ref nothing but not both or a \c QOREADDRINFO-GETINFO-ERROR exception will be thrown
 
+    This function delegates resolution to the global async I/O controller and blocks the caller until the
+    controller-backed lookup completes.
+
     @param node The host name or node name to look up
     @param service The service name to look up to a port number
     @param family The @ref network_address_family_constants "address family" for the lookup, must be one of Qore::AF_INET, Qore::AF_INET6, or Qore::AF_UNSPEC, meaning to return all possible addresses
@@ -1266,7 +1270,8 @@ list<hash<auto>> l = getaddrinfo("localhost");
     @throw QOREADDRINFO-GETINFO-ERROR nodename nor servname provided, or not known
  */
 list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
-   return q_getaddrinfo_to_list(xsink, node ? node->c_str() : 0, service ? service->c_str() : 0, (int)family, (int)flags);
+   return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : 0, service ? service->c_str() : 0,
+      (int)family, (int)flags);
 }
 
 //! closes all possible file descriptors; useful in "daemon" processes that may have inherited open file descriptors

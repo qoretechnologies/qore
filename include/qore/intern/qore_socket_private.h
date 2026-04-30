@@ -338,6 +338,7 @@ struct SocketResolvedAddrInfo {
     int protocol = 0;
     socklen_t addrlen = 0;
     struct sockaddr_storage addr = {};
+    std::string canonname;
 };
 
 class QoreCaresAddrInfoResolver;
