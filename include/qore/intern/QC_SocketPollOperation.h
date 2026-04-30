@@ -1565,6 +1565,7 @@ public:
                                            const char* host, uint16_t port, int family,
                                            int64_t handshake_timeout_ns = 0,
                                            int64_t not_before_ns_abs = 0);
+    DLLLOCAL ~SocketQuicClientPollOperation() override;
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -1667,6 +1668,13 @@ public:
     DLLLOCAL int migrateConnection(ExceptionSink* xsink);
 
 private:
+    DLLLOCAL QoreHashNode* continueResolve(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const;
+    DLLLOCAL int initializeResolved(ExceptionSink* xsink);
+
+    std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
+    std::string host;
+    std::string service;
     std::shared_ptr<QuicSession> quic_session;
     QCS qcs_state = QCS::NONE;
     struct sockaddr_storage local_addr_{};
@@ -1686,6 +1694,9 @@ private:
     //! so a stalled handshake over UDP fails fast at the configured
     //! connect_timeout instead of silently waiting for the outer request_timeout.
     int64_t handshake_deadline_ns_ = 0;
+    int64_t handshake_timeout_ns_ = 0;
+    uint16_t port_ = 0;
+    int family_ = AF_UNSPEC;
 
     //! Absolute ngtcp2 timestamp (ns) before which no UDP datagrams may be
     //! emitted; 0 means disabled.  Enforced in sendPendingPackets(): while

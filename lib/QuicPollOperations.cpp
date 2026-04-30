@@ -382,7 +382,8 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     const char* host, uint16_t port, int family,
     int64_t handshake_timeout_ns,
     int64_t not_before_ns_abs)
-    : SocketPollSocketOperationBase(sock),
+    : SocketPollSocketOperationBase(sock), host(host), service(std::to_string(port)),
+      handshake_timeout_ns_(handshake_timeout_ns), port_(port), family_(q_get_af(family)),
       not_before_ns_(not_before_ns_abs) {
     AutoLocker al(sock->priv->m);
 
@@ -395,33 +396,72 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
             sock->priv->socket->priv->stype);
         return;
     }
+}
 
-    // Resolve the remote address
-    QoreAddrInfo ai;
-    QoreString service_str;
-    service_str.sprintf("%d", (int)port);
-    if (ai.getInfo(xsink, host, service_str.c_str(), family, 0, SOCK_DGRAM, 0)) {
-        return;
+SocketQuicClientPollOperation::~SocketQuicClientPollOperation() = default;
+
+QoreHashNode* SocketQuicClientPollOperation::getResolverPollInfo(ExceptionSink* xsink) const {
+    std::vector<std::pair<int, int>> extra_fds;
+    resolver->getExtraFds(extra_fds);
+    QoreHashNode* rv = getSocketPollInfoHash(xsink, 0, extra_fds);
+    if (*xsink) {
+        return nullptr;
+    }
+    int poll_timeout_ms = resolver->getPollTimeoutMs();
+    rv->setKeyValue("poll_timeout_ms", poll_timeout_ms >= 0 ? poll_timeout_ms : 1, xsink);
+    return rv;
+}
+
+QoreHashNode* SocketQuicClientPollOperation::continueResolve(ExceptionSink* xsink) {
+    if (!resolver) {
+        resolver = std::make_unique<QoreCaresAddrInfoResolver>(host, service, family_, SOCK_DGRAM, 0);
     }
 
-    struct addrinfo* aip = ai.getAddrInfo();
-    if (!aip) {
-        xsink->raiseException("QUIC-ERROR", "could not resolve remote address '%s:%d'", host, (int)port);
-        return;
+    int rc = resolver->continuePoll(xsink);
+    if (*xsink || rc < 0) {
+        return nullptr;
+    }
+    if (rc) {
+        return getResolverPollInfo(xsink);
     }
 
-    // Store remote address
-    memcpy(&remote_addr_, aip->ai_addr, aip->ai_addrlen);
-    remote_addrlen_ = aip->ai_addrlen;
+    if (initializeResolved(xsink)) {
+        return nullptr;
+    }
+    return nullptr;
+}
+
+int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
+    const std::vector<SocketResolvedAddrInfo>& addrs = resolver->getAddresses();
+    if (addrs.empty()) {
+        xsink->raiseException("QUIC-ERROR", "could not resolve remote address '%s:%s'",
+            host.c_str(), service.c_str());
+        return -1;
+    }
+
+    const SocketResolvedAddrInfo& ai = addrs.front();
+    memcpy(&remote_addr_, &ai.addr, ai.addrlen);
+    remote_addrlen_ = ai.addrlen;
+    resolver.reset();
+
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkOpen(xsink)) {
+        return -1;
+    }
+    if (sock->priv->socket->priv->stype != SOCK_DGRAM) {
+        xsink->raiseException("QUIC-ERROR", "QUIC requires a UDP (SOCK_DGRAM) socket; this socket has type %d",
+            sock->priv->socket->priv->stype);
+        return -1;
+    }
 
     // Connect UDP socket to remote so getsockname() returns the specific
     // local interface address (not wildcard). Required for correct ngtcp2
     // path validation. Connected sockets also filter incoming packets to
     // only those from the peer, which is desirable for QUIC clients.
     int fd = sock->priv->socket->getSocket();
-    if (::connect(fd, aip->ai_addr, aip->ai_addrlen) < 0) {
+    if (::connect(fd, reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "UDP connect() failed");
-        return;
+        return -1;
     }
 
     // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
@@ -445,7 +485,7 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     local_addrlen_ = sizeof(local_addr_);
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "getsockname() failed on QUIC client socket");
-        return;
+        return -1;
     }
     if (enableQuicPktinfo(fd, local_addr_.ss_family) < 0) {
         printd(0, "SocketQuicClientPollOperation: enableQuicPktinfo() failed: errno=%d (%s)\n",
@@ -454,7 +494,7 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
 
     // Set non-blocking guard flag on QoreSocketObject
     if (sock->priv->setNonBlock(xsink)) {
-        return;
+        return -1;
     }
     set_non_block = true;
 
@@ -464,14 +504,14 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     if (sock->priv->socket->priv->set_non_blocking(true, xsink)) {
         sock->priv->clearNonBlock();
         set_non_block = false;
-        return;
+        return -1;
     }
 
     // Create QUIC session with actual socket addresses; pass through the
     // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification;
     // enable 0-RTT for reconnections with cached session tickets.
     // Pass client cert/pk for mTLS if configured on the socket.
-    quic_session = QuicSession::createClient(sock->priv->socket->priv, xsink, host, port,
+    quic_session = QuicSession::createClient(sock->priv->socket->priv, xsink, host.c_str(), port_,
         reinterpret_cast<const struct sockaddr*>(&local_addr_), local_addrlen_,
         reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
         sock->priv->socket->priv->ssl_verify_mode,
@@ -480,7 +520,7 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     if (*xsink || !quic_session) {
         sock->priv->clearNonBlock();
         set_non_block = false;
-        return;
+        return -1;
     }
 
     // Store the session on qore_socket_private for access via Socket QPP methods
@@ -490,16 +530,17 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     // Without this, a stalled QUIC handshake over UDP has no transport-level
     // deadline (unlike TCP where the OS eventually returns ETIMEDOUT) — only
     // the outer request_timeout would bound it.
-    if (handshake_timeout_ns > 0) {
-        handshake_deadline_ns_ = QuicSession::timestamp() + handshake_timeout_ns;
+    if (handshake_timeout_ns_ > 0) {
+        handshake_deadline_ns_ = QuicSession::timestamp() + handshake_timeout_ns_;
     }
 
     qcs_state = QCS::HANDSHAKE_SEND;
+    return 0;
 }
 
 const char* SocketQuicClientPollOperation::getStateImpl() const {
     switch (qcs_state) {
-        case QCS::NONE: return "initializing";
+        case QCS::NONE: return resolver ? "resolving" : "initializing";
         case QCS::HANDSHAKE_SEND: return "handshake-send";
         case QCS::HANDSHAKE_RECV: return "handshake-recv";
         case QCS::SETUP_HTTP3: return "setup-http3";
@@ -770,6 +811,13 @@ QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSin
 }
 
 QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) {
+    if (qcs_state == QCS::NONE) {
+        QoreHashNode* poll_info = continueResolve(xsink);
+        if (*xsink || poll_info || qcs_state != QCS::HANDSHAKE_SEND) {
+            return poll_info;
+        }
+    }
+
     AutoLocker al(sock->priv->m);
 
     if (!sock->priv->socket->priv->isOpen()) {
