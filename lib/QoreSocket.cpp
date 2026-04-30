@@ -4596,7 +4596,7 @@ int check_windows_rc(int rc) {
 
 void qore_socket_error_intern(int rc, ExceptionSink* xsink, const char* err, const char* cdesc, const char* mname,
         const char* host, const char* svc, const struct sockaddr *addr) {
-    windows_set_errno();
+    qore_windows_set_errno(rc);
     assert(xsink);
 
     QoreStringNode* desc = new QoreStringNode;
