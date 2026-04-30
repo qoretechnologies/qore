@@ -104,6 +104,107 @@ AbstractQoreNode* missing_function_error(const char* func, const char* opt, Exce
    return xsink->raiseException("MISSING-FEATURE-ERROR", "this system does not implement %s(); for maximum portability use the constant Option::HAVE_%s to check if this function is implemented before calling", func, opt);
 }
 
+static const QoreHashNode* q_get_addrinfo_hash(const QoreValue& v) {
+    return v.getType() == NT_HASH ? v.get<const QoreHashNode>() : nullptr;
+}
+
+static const QoreStringNode* q_get_hash_string_value(const QoreHashNode& h, const char* key) {
+    QoreValue v = h.getKeyValue(key);
+    return v.getType() == NT_STRING ? v.get<const QoreStringNode>() : nullptr;
+}
+
+static int q_get_hash_int_value(const QoreHashNode& h, const char* key, int def = 0) {
+    QoreValue v = h.getKeyValue(key);
+    return v.isNullOrNothing() ? def : static_cast<int>(v.getAsBigInt());
+}
+
+static QoreStringNode* q_gethostbyname_to_string_asyncio(const char* host) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreListNode> addrs(qore_socket_resolve_addrinfo_asyncio(&xsink, host, nullptr, Q_AF_UNSPEC, 0),
+        &xsink);
+    if (xsink || !addrs || addrs->empty()) {
+        xsink.clear();
+        return nullptr;
+    }
+
+    ConstListIterator li(*addrs);
+    while (li.next()) {
+        const QoreHashNode* h = q_get_addrinfo_hash(li.getValue());
+        if (!h) {
+            continue;
+        }
+        const QoreStringNode* address = q_get_hash_string_value(*h, "address");
+        if (address) {
+            return address->stringRefSelf();
+        }
+    }
+
+    return nullptr;
+}
+
+static QoreHashNode* q_gethostbyname_to_hash_asyncio(const char* host) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreListNode> addrs(
+        qore_socket_resolve_addrinfo_asyncio(&xsink, host, nullptr, Q_AF_UNSPEC, AI_CANONNAME), &xsink);
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreListNode> addresses(new QoreListNode(stringTypeInfo), &xsink);
+    if (xsink || !addrs || addrs->empty() || !result || !addresses) {
+        xsink.clear();
+        return nullptr;
+    }
+
+    const QoreHashNode* first = nullptr;
+    int first_family = AF_UNSPEC;
+    ConstListIterator li(*addrs);
+    while (li.next()) {
+        const QoreHashNode* h = q_get_addrinfo_hash(li.getValue());
+        if (!h) {
+            continue;
+        }
+        if (!first) {
+            first = h;
+            first_family = q_get_hash_int_value(*h, "family", AF_UNSPEC);
+        }
+        if (q_get_hash_int_value(*h, "family", AF_UNSPEC) == first_family) {
+            const QoreStringNode* address = q_get_hash_string_value(*h, "address");
+            if (address) {
+                addresses->push(address->stringRefSelf(), &xsink);
+                if (xsink) {
+                    xsink.clear();
+                    return nullptr;
+                }
+            }
+        }
+    }
+
+    if (!first || addresses->empty()) {
+        return nullptr;
+    }
+
+    qore_hash_private* rh = qore_hash_private::get(**result);
+    const QoreStringNode* canonname = q_get_hash_string_value(*first, "canonname");
+    rh->setKeyValueIntern("name", canonname ? canonname->stringRefSelf() : new QoreStringNode(host));
+    rh->setKeyValueIntern("aliases", new QoreListNode(stringTypeInfo));
+    switch (first_family) {
+        case AF_INET:
+            rh->setKeyValueIntern("typename", new QoreStringNode("ipv4"));
+            rh->setKeyValueIntern("type", AF_INET);
+            rh->setKeyValueIntern("len", 4);
+            break;
+        case AF_INET6:
+            rh->setKeyValueIntern("typename", new QoreStringNode("ipv6"));
+            rh->setKeyValueIntern("type", AF_INET6);
+            rh->setKeyValueIntern("len", 16);
+            break;
+        default:
+            rh->setKeyValueIntern("typename", new QoreStringNode("unknown"));
+            break;
+    }
+    rh->setKeyValueIntern("addresses", addresses.release());
+
+    return result.release();
+}
+
 /** @defgroup library_option_constants Qore Library Option Constants
 
     @since %Qore 0.9.3.1
@@ -1147,6 +1248,8 @@ int setsid() [dom=PROCESS] {
 
     @return the first address corresponding to the hostname passed as an argument or @ref nothing if the lookup fails
 
+    @note delegates to the global async I/O controller and blocks until the async DNS lookup completes
+
     @par Example:
     @code{.py}
 *string addr = gethostbyname(host);
@@ -1157,7 +1260,7 @@ if (!exists host)
     @see gethostbyname_long() for a version of this function that returns all host information, including all hostname aliases and all addresses
  */
 *string gethostbyname(string name) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyname_to_string(name->c_str());
+   return q_gethostbyname_to_string_asyncio(name->c_str());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1201,6 +1304,8 @@ nothing gethostbyaddr() [flags=RUNTIME_NOOP] {
 
     @return @ref host_information_hash "a hash" representing all host and address information corresponding to the hostname passed as an argument
 
+    @note delegates to the global async I/O controller and blocks until the async DNS lookup completes
+
     @par Example:
     @code{.py}
 *hash<auto> ah = gethostbyname_long(host);
@@ -1211,7 +1316,7 @@ if (!ah)
     @see gethostbyname() for a version of this function that returns just the first network address corresponding to the hostname
  */
 *hash<auto> gethostbyname_long(string name) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyname_to_hash(name->c_str());
+   return q_gethostbyname_to_hash_asyncio(name->c_str());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
