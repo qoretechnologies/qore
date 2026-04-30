@@ -5637,13 +5637,28 @@ load_local_done:
             }
             case QoreIROpcode::VrnConstruct: {
                 auto* vrn_inst = static_cast<QoreIRVrnConstructInstruction*>(inst);
-                uint64_t result_bits = qore_rt_vrn_construct(vrn_inst->vrn, xsink);
+                QoreValue out;
+                if (vrn_inst->vrn) {
+                    uint64_t result_bits = qore_rt_vrn_construct(vrn_inst->vrn, xsink);
+                    out = fromBits(result_bits);
+                } else if (vrn_inst->expr.hasNode()) {
+                    auto* vrn = dynamic_cast<VarRefNewObjectNode*>(
+                        const_cast<AbstractQoreNode*>(vrn_inst->expr.getInternalNode()));
+                    if (vrn) {
+                        uint64_t result_bits = qore_rt_vrn_construct(vrn, xsink);
+                        out = fromBits(result_bits);
+                    } else {
+                        out = evalAndRef(vrn_inst->expr, xsink);
+                    }
+                } else if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR",
+                        "vrn.construct has neither AST node nor serialized expression");
+                }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
-                QoreValue out = fromBits(result_bits);
                 setValueSlot(values, vrn_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(vrn_inst->result.id);

@@ -63,6 +63,65 @@ QoreHashNode* ENV;
 // Debug flag for type narrowing - controlled by --debug-show-narrowing command-line flag
 bool qore_debug_narrowing = false;
 
+static bool split_static_lvalue_path(const std::string& full_name, std::string& class_path,
+        std::string& var_name) {
+    size_t sep = full_name.rfind("::");
+    if (sep == std::string::npos) {
+        return false;
+    }
+
+    class_path = full_name.substr(0, sep);
+    var_name = full_name.substr(sep + 2);
+    if (class_path.size() >= 2 && class_path[0] == ':' && class_path[1] == ':') {
+        class_path.erase(0, 2);
+    }
+
+    return !class_path.empty() && !var_name.empty();
+}
+
+static QoreVarInfo* resolve_runtime_static_lvalue_path(const std::string& full_name, std::string& error) {
+    std::string class_path;
+    std::string var_name;
+    if (!split_static_lvalue_path(full_name, class_path, var_name)) {
+        error = "invalid static variable lvalue path root '" + full_name + "'";
+        return nullptr;
+    }
+
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        error = "cannot resolve static variable lvalue path root '" + full_name + "': no program context";
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str(), found_ns);
+    if (!qc) {
+        error = "cannot resolve class '" + class_path + "' for static variable lvalue path root '"
+            + full_name + "'";
+        return nullptr;
+    }
+
+    QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
+    if (!vi) {
+        QoreClassHierarchyIterator hi(*qc);
+        while (hi.next()) {
+            vi = qore_class_private::get(hi.get())->vars.find(var_name.c_str());
+            if (vi) {
+                break;
+            }
+        }
+    }
+
+    if (!vi) {
+        error = "cannot resolve static variable '" + var_name + "' in class '" + class_path
+            + "' for static variable lvalue path root '" + full_name + "'";
+        return nullptr;
+    }
+
+    return vi;
+}
+
 void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out) {
     if (in && in->getType() == NT_OBJECT) {
         qore_object_private::get(*static_cast<QoreObject*>(in))->setRealReference();
@@ -1176,6 +1235,18 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                     clearPtr();
                     return -1;
                 }
+                break;
+            }
+
+            std::string error;
+            QoreVarInfo* vi = resolve_runtime_static_lvalue_path(root.name, error);
+            if (!vi) {
+                vl.xsink->raiseException("LVALUE-ERROR", "%s", error.c_str());
+                return -1;
+            }
+            if (vi->getLValue(*this)) {
+                clearPtr();
+                return -1;
             }
             break;
         }

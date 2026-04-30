@@ -3202,33 +3202,10 @@ bool QoreIRToLLVM::tryEmitDecomposedBackground(const QoreValue& expr_val,
     // background callref(args) — call-ref in operands[0], args after
     if (auto* crcn = dynamic_cast<const CallReferenceCallNode*>(inner)) {
         if (aot_mode) {
-            auto* callee_val = getVal(operands[0].id, error_dummy);
-            if (!callee_val) {
-                return false;
-            }
-            llvm::Value* callee_boxed = boxValue(callee_val, operands[0].id);
-            int nargs = (int)operands.size() - 1;
-            llvm::Value* args_array = build_args_array(1, operands.size());
-            if (build_args_failed) {
-                return false;
-            }
-            auto ft = llvm::FunctionType::get(i64_type,
-                {i64_type, ptr_type, i32_type, ptr_type}, false);
-            auto helper = module.getOrInsertFunction(
-                "qore_rt_background_call_ref_value_aot", ft);
-            if (throwing_ok) {
-                auto helper_throwing = module.getOrInsertFunction(
-                    "qore_rt_background_call_ref_value_aot_throwing", ft);
-                *result_out = emitMaybeInvoke(helper, helper_throwing,
-                    {callee_boxed, args_array,
-                     llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
-                    module, llvm_func, inst);
-            } else {
-                *result_out = builder->CreateCall(helper,
-                    {callee_boxed, args_array,
-                     llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-            }
-            return true;
+            return emit_aot_slot_call_with_recv("qore_rt_background_call_ref_call_aot",
+                "qore_rt_background_call_ref_call_aot_throwing",
+                /*recv_idx*/0, /*args_first*/1, /*args_end*/operands.size(),
+                result_out);
         }
         return call_with_node_and_recv("qore_rt_background_call_ref_call",
             "qore_rt_background_call_ref_call_throwing",

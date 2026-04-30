@@ -4173,7 +4173,51 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             }
             return true;
         }
-        // Non-class VarRefNewObjectNode (hashdecl, complex hash/list) — fall through
+
+        const QoreTypeInfo* vti = vrn->getTypeInfo();
+        if (vrn->isHashDeclConstruct()) {
+            const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(vti);
+            if (!hd) {
+                qoreAOTSetExprSerializationError("HASHDECL VarRefNewObjectNode has no hashdecl type in "
+                    + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
+                return false;
+            }
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
+            writer.writeStringRef(hd->getNamespacePath().c_str());
+            return write_parse_arg_list(vrn->getParseArgs());
+        }
+        if (vrn->isComplexHashConstruct()) {
+            if (!vti) {
+                qoreAOTSetExprSerializationError("complex-hash VarRefNewObjectNode has no type info in "
+                    + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
+                return false;
+            }
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_HASH_NEW));
+            writer.writeStringRef(QoreTypeInfo::getPath(vti));
+            return write_parse_arg_list(vrn->getParseArgs());
+        }
+        if (vrn->isComplexListConstruct()) {
+            if (!vti) {
+                qoreAOTSetExprSerializationError("complex-list VarRefNewObjectNode has no type info in "
+                    + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
+                return false;
+            }
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_LIST_NEW));
+            writer.writeStringRef(QoreTypeInfo::getPath(vti));
+            const QoreValue& new_args = vrn->getNewArgs();
+            if (new_args.hasNode()) {
+                writer.writeU8(1);
+                if (!classifyAndWriteExpr(writer, new_args, parent_locals, parent_globals, const_reverse_map)) {
+                    return false;
+                }
+            } else {
+                writer.writeU8(0);
+            }
+            return true;
+        }
+        qoreAOTSetExprSerializationError("unsupported VarRefNewObjectNode constructor in "
+            + qoreAOTDescribeExpr(expr) + "; no fallback marker was emitted");
+        return false;
     }
 
     // VarRefNode: local and global variable references

@@ -855,6 +855,67 @@ static const QoreClass* findAOTClassByPath(QoreProgram* pgm, const char* class_p
     return qc;
 }
 
+static bool splitAOTStaticVarPath(const std::string& full_name, std::string& class_path,
+        std::string& var_name) {
+    size_t sep = full_name.rfind("::");
+    if (sep == std::string::npos) {
+        return false;
+    }
+
+    class_path = full_name.substr(0, sep);
+    var_name = full_name.substr(sep + 2);
+    if (class_path.size() >= 2 && class_path[0] == ':' && class_path[1] == ':') {
+        class_path.erase(0, 2);
+    }
+
+    return !class_path.empty() && !var_name.empty();
+}
+
+static StaticClassVarRefNode* resolveAOTStaticLValueRoot(QoreProgram* pgm, const std::string& full_name,
+        std::string& error) {
+    if (!pgm) {
+        error = "cannot resolve static lvalue path root '" + full_name + "': no program";
+        return nullptr;
+    }
+
+    std::string class_path;
+    std::string var_name;
+    if (!splitAOTStaticVarPath(full_name, class_path, var_name)) {
+        error = "invalid static lvalue path root '" + full_name + "'";
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str(), found_ns);
+    if (!qc) {
+        error = "cannot resolve class '" + class_path + "' for static lvalue path root '" + full_name + "'";
+        return nullptr;
+    }
+
+    const QoreClass* owner_qc = qc;
+    QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
+    if (!vi) {
+        QoreClassHierarchyIterator hi(*qc);
+        while (hi.next()) {
+            const QoreClass& parent_qc = hi.get();
+            vi = qore_class_private::get(parent_qc)->vars.find(var_name.c_str());
+            if (vi) {
+                owner_qc = &parent_qc;
+                break;
+            }
+        }
+    }
+
+    if (!vi) {
+        error = "cannot resolve static variable '" + var_name + "' in class '" + class_path
+            + "' for static lvalue path root '" + full_name + "'";
+        return nullptr;
+    }
+
+    return new StaticClassVarRefNode(&loc_builtin, var_name.c_str(), *owner_qc, *vi);
+}
+
 static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* method_name) {
     if (!qc || !method_name || !*method_name) {
         return nullptr;
@@ -3671,25 +3732,18 @@ static QoreAOTContext* buildContextFromSlotMap(
                         *pp->RootNS, step.name.c_str(), vns);
                 } else if (step.kind == LVPathStepKind::StaticVar
                         && !step.name.empty()) {
-                    // Name format: "ClassPath::varName" — split and resolve
-                    std::string full_name = step.name;
-                    size_t sep = full_name.rfind("::");
-                    if (sep != std::string::npos && sep >= 2) {
-                        std::string class_path = full_name.substr(0, sep);
-                        std::string var_name = full_name.substr(sep + 2);
-                        const qore_ns_private* found_ns = nullptr;
-                        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                            *pp->RootNS, class_path.c_str(), found_ns);
-                        if (qc) {
-                            QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
-                            if (vi) {
-                                auto* scv = new StaticClassVarRefNode(
-                                    &loc_builtin, var_name.c_str(), *qc, *vi);
-                                step.ref_ptr = scv;
-                                ctx->owned_static_var_refs.push_back(scv);
-                            }
-                        }
+                    std::string error;
+                    StaticClassVarRefNode* scv = resolveAOTStaticLValueRoot(pgm, step.name, error);
+                    if (!scv) {
+                        printd(0, "AOT v2: %s while building context for '%s'\n", error.c_str(), name);
+                        delete ctx;
+                        return nullptr;
                     }
+                    // Static variable lvalue roots must resolve in the active
+                    // runtime program, matching AOT LoadStaticVar-by-path.
+                    // A module context can be built against the module shadow
+                    // program, while execution happens in the importing program.
+                    scv->deref(nullptr);
                 }
                 pi->path.push_back(std::move(step));
             }
@@ -4785,23 +4839,14 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                     step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
                         *pp->RootNS, step.name.c_str());
                 } else if (step.kind == LVPathStepKind::StaticVar && !step.name.empty()) {
-                    std::string full_name = step.name;
-                    size_t sep = full_name.rfind("::");
-                    if (sep != std::string::npos) {
-                        std::string class_path = full_name.substr(0, sep);
-                        std::string var_name = full_name.substr(sep + 2);
-                        const qore_ns_private* found_ns = nullptr;
-                        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                            *pp->RootNS, class_path.c_str(), found_ns);
-                        if (qc) {
-                            QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
-                            if (vi) {
-                                auto* scv = new StaticClassVarRefNode(&loc_builtin, var_name.c_str(), *qc, *vi);
-                                step.ref_ptr = scv;
-                                pi->owned_static_var_refs.push_back(scv);
-                            }
-                        }
+                    std::string static_error;
+                    StaticClassVarRefNode* scv = resolveAOTStaticLValueRoot(pgm, step.name, static_error);
+                    if (!scv) {
+                        error = "failed to deserialize static lvalue path root: " + static_error;
+                        return nullptr;
                     }
+                    step.ref_ptr = scv;
+                    pi->owned_static_var_refs.push_back(scv);
                 }
                 pi->path.push_back(std::move(step));
             }
@@ -5052,6 +5097,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         QoreAOTTypeResolver type_resolver(pgm);
         func->return_type_info = type_resolver.resolve(return_type_path, type_error);
     }
+    QoreAOTTypeResolver local_type_resolver(pgm);
 
     // 2. Read local variable slot table and build name→LocalVar* map.
     //
@@ -5088,13 +5134,20 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         created_slot_locals[makeLocalKey(lname, ltype)].push_back(lv);
         created_slot_locals[lname].push_back(lv);
     };
-    auto findEnclosingLocal = [&local_map, &enclosing_local_set, &makeLocalKey](
+    auto findEnclosingLocal = [&local_map, &enclosing_local_set, &makeLocalKey, &local_type_resolver](
             const char* lname, const char* ltype) -> LocalVar* {
+        if (!lname || !*lname) {
+            return nullptr;
+        }
         if (ltype && *ltype) {
             auto cit = local_map.find(makeLocalKey(lname, ltype));
             if (cit != local_map.end() && enclosing_local_set.count(cit->second)) {
                 return cit->second;
             }
+            auto it = local_map.find(lname);
+            return it != local_map.end() && enclosing_local_set.count(it->second)
+                && aotLocalTypeMatches(it->second, ltype, &local_type_resolver)
+                ? it->second : nullptr;
         }
         auto it = local_map.find(lname);
         return it != local_map.end() && enclosing_local_set.count(it->second)
@@ -7323,6 +7376,7 @@ static void executeInitFunctions(QoreProgram* pgm,
     const char* mod_name,
     QoreProgram* shadow_pgm,
     const char* mod_path);
+static void preInitStaticVarsInProgram(QoreProgram* pgm);
 
 static std::string makeAOTRegistrationFailureMessage(const char* label,
         int registered, int num_functions,
@@ -7554,6 +7608,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     }
                 }
             }
+            preInitStaticVarsInProgram(*qpgm);
 
             // Source fallback is intentionally not available. Legacy
             // FUNC_SOURCES records with fallback function names are rejected during
@@ -8233,6 +8288,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     }
                 }
             }
+            preInitStaticVarsInProgram(*qpgm);
 
             // Source fallback is intentionally not available in v3 objects. Legacy
             // FUNC_SOURCES records with fallback function names are rejected during
@@ -8726,6 +8782,7 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
             }
         }
     }
+    preInitStaticVarsInProgram(tpgm);
 }
 
 extern "C" DLLEXPORT void qore_aot_module_delete() {
@@ -9071,6 +9128,16 @@ static void preInitStaticVarsInNamespace(qore_ns_private* ns, ExceptionSink* xsi
             preInitStaticVarsInNamespace(qore_ns_private::get(*child), xsink);
         }
     }
+}
+
+static void preInitStaticVarsInProgram(QoreProgram* pgm) {
+    if (!pgm) {
+        return;
+    }
+    ExceptionSink local_xs;
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    preInitStaticVarsInNamespace(qore_ns_private::get(*pp->RootNS), &local_xs);
+    local_xs.clear();
 }
 
 //! Execute collected init functions and store results in target constants/static vars
@@ -10081,6 +10148,7 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
                     label ? label : "<script>", init_err.c_str());
             }
         }
+        preInitStaticVarsInProgram(tpgm);
     }
 
     return 0;
@@ -10245,6 +10313,7 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
                 }
             }
         }
+        preInitStaticVarsInProgram(tpgm);
     }
 
     if (time_on) {

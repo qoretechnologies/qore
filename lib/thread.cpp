@@ -853,7 +853,7 @@ public:
             ThreadData* td = thread_data.get();
             call_obj = td->current_obj;
             class_ctx = td->current_class;
-            loc = td->runtime_loc;
+            loc = td->runtime_loc ? td->runtime_loc : &loc_builtin;
         }
 
         //printd(5, "BGThreadParams::BGThreadParams(f: %p (%s %d), t: %d) this: %p call_obj: %p '%s' cc: %p '%s' "

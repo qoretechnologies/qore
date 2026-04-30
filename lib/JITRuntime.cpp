@@ -10264,6 +10264,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
     return toBits(QoreValue(new QoreStringNode(v.getTypeName())));
 }
 
+namespace {
+QoreValue doBackgroundWithLocation(const QoreProgramLocation* node_loc, QoreValue expr, ExceptionSink* xsink);
+}
+
 //! Background self-method call (JIT mode): takes SelfFunctionCallNode* for method identity
 //! and pre-evaluated args — avoids EXPR_TREE serialization in AOT
 extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
@@ -10291,7 +10295,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
     // shadows AbstractQoreNode::deref and only handles self — so we must call both:
     // the shadowing deref for self, then discard for the node itself.
     SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(*sfcn, arg_list);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(sfcn->loc, QoreValue(call_node), xsink);
     call_node->deref(xsink);           // derefs self (the shadowing override)
     QoreValue(call_node).discard(xsink); // decrements refcount and frees the node
     return toBits(result);
@@ -10347,7 +10351,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
     // do_op_background copies the expression; the original must be freed after.
     // SetSelfFunctionCallNode::deref(xsink) shadows AbstractQoreNode::deref and only handles self.
     SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(temp_sfcn, arg_list);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(&loc_builtin, QoreValue(call_node), xsink);
     call_node->deref(xsink);           // derefs self (the shadowing override)
     QoreValue(call_node).discard(xsink); // decrements refcount and frees the node
     return toBits(result);
@@ -10372,6 +10376,12 @@ QoreListNode* bgBuildArgList(uint64_t* args, int nargs) {
     }
     return arg_list;
 }
+
+QoreValue doBackgroundWithLocation(const QoreProgramLocation* node_loc, QoreValue expr, ExceptionSink* xsink) {
+    const QoreProgramLocation* loc = get_runtime_location();
+    QoreProgramLocationHelper loc_helper(loc ? loc : (node_loc ? node_loc : &loc_builtin));
+    return do_op_background(expr, xsink);
+}
 } // anonymous
 
 //! Background free function call (JIT mode): takes FunctionCallNode* for identity
@@ -10385,7 +10395,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_function_call(
     // do_op_background will make its own copy via crlr_fcall_copy; we release the
     // original here so the local FunctionCallNode's destructor cleans up.
     FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(fcn->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
@@ -10396,7 +10406,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_static_method_call(
     assert(smcn);
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     StaticMethodCallNode* call_node = new StaticMethodCallNode(*smcn, arg_list);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(smcn->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
@@ -10419,7 +10429,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_call(
     MethodCallNode* new_m = new MethodCallNode(*source_m, arg_list);
     QoreDotEvalOperatorNode* call_node =
         new QoreDotEvalOperatorNode(devn->loc, recv, new_m);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(devn->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
@@ -10438,7 +10448,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call(
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     CallReferenceCallNode* call_node =
         new CallReferenceCallNode(crcn->loc, callee, arg_list);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(crcn->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
@@ -10464,7 +10474,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_function_call_aot(
     assert(fcn);
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     FunctionCallNode* call_node = new FunctionCallNode(*fcn, arg_list);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
@@ -10479,7 +10489,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_static_method_call_aot(
     assert(smcn);
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     StaticMethodCallNode* call_node = new StaticMethodCallNode(*smcn, arg_list);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
@@ -10503,7 +10513,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_call_aot(
     MethodCallNode* new_m = new MethodCallNode(*source_m, arg_list);
     QoreDotEvalOperatorNode* call_node =
         new QoreDotEvalOperatorNode(devn->loc, recv, new_m);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
@@ -10520,7 +10530,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_dot_eval_name_call_aot(
     MethodCallNode* new_m = new MethodCallNode(&loc_builtin, strdup(method_name), arg_list);
     QoreDotEvalOperatorNode* call_node =
         new QoreDotEvalOperatorNode(&loc_builtin, recv, new_m);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(&loc_builtin, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
@@ -10534,7 +10544,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_value_aot(
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     CallReferenceCallNode* call_node =
         new CallReferenceCallNode(&loc_builtin, callee, arg_list);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(&loc_builtin, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }
@@ -10555,7 +10565,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_call_ref_call_aot(
     QoreListNode* arg_list = bgBuildArgList(args, nargs);
     CallReferenceCallNode* call_node =
         new CallReferenceCallNode(crcn->loc, callee, arg_list);
-    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    QoreValue result = doBackgroundWithLocation(bg_op->loc, QoreValue(call_node), xsink);
     QoreValue(call_node).discard(xsink);
     return toBits(result);
 }

@@ -469,6 +469,11 @@ public:
         return runtime_check;
     }
 
+    //! Returns pre-parsed constructor args for complex-list construction
+    DLLLOCAL const QoreValue& getNewArgs() const {
+        return new_args;
+    }
+
 protected:
     enum vrn_type_e : unsigned char {
         VRN_NONE = 0,

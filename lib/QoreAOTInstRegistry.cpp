@@ -318,6 +318,12 @@ static StaticClassVarRefNode* instRegistryResolveStaticVarRef(QoreProgram* pgm, 
     if (class_path.empty() || var_name.empty()) {
         return nullptr;
     }
+    if (class_path.size() >= 2 && class_path[0] == ':' && class_path[1] == ':') {
+        class_path.erase(0, 2);
+    }
+    if (class_path.empty()) {
+        return nullptr;
+    }
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* found_ns = nullptr;
@@ -326,8 +332,20 @@ static StaticClassVarRefNode* instRegistryResolveStaticVarRef(QoreProgram* pgm, 
         return nullptr;
     }
 
+    const QoreClass* owner_qc = qc;
     QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
-    return vi ? new StaticClassVarRefNode(&loc_builtin, var_name.c_str(), *qc, *vi) : nullptr;
+    if (!vi) {
+        QoreClassHierarchyIterator hi(*qc);
+        while (hi.next()) {
+            const QoreClass& parent_qc = hi.get();
+            vi = qore_class_private::get(parent_qc)->vars.find(var_name.c_str());
+            if (vi) {
+                owner_qc = &parent_qc;
+                break;
+            }
+        }
+    }
+    return vi ? new StaticClassVarRefNode(&loc_builtin, var_name.c_str(), *owner_qc, *vi) : nullptr;
 }
 
 // Error propagation convention for instruction read_fn handlers:
@@ -2975,8 +2993,10 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                 delete pi;
                 return nullptr;
             }
-            step.ref_ptr = scv;
-            pi->owned_static_var_refs.push_back(scv);
+            // AOT static lvalue roots resolve at runtime in the active program.
+            // This keeps module writes aligned with LoadStaticVar-by-path reads
+            // after the module namespace is merged into an importing program.
+            scv->deref(nullptr);
         }
         pi->path.push_back(std::move(step));
     }
