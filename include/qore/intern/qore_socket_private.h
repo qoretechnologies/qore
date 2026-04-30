@@ -1761,19 +1761,11 @@ struct qore_socket_private : public QoreReferenceCounter {
             //printd(1, "qore_socket_private::accept_internal() rc: %d, %d bytes returned\n", rc, size);
 
             if (rc >= 0 && source) {
-                char host[NI_MAXHOST + 1];
-                char service[NI_MAXSERV + 1];
-
-                if (!getnameinfo((struct sockaddr *)&addr_in, qore_get_in_len((struct sockaddr *)&addr_in), host,
-                    sizeof(host), service, sizeof(service), NI_NUMERICSERV)) {
-                    source->priv->setHostName(host);
-                }
-
                 // get ipv4 or ipv6 address
                 char ifname[INET6_ADDRSTRLEN];
                 if (inet_ntop(addr_in.ss_family, qore_get_in_addr((struct sockaddr *)&addr_in), ifname,
                     sizeof(ifname))) {
-                    //printd(5, "inet_ntop() '%s' host: '%s'\n", ifname, host);
+                    source->priv->setHostName(ifname);
                     source->priv->setAddress(ifname);
                 }
             }
@@ -2308,10 +2300,9 @@ struct qore_socket_private : public QoreReferenceCounter {
     DLLLOCAL static QoreHashNode* getAddrInfo(const struct sockaddr_storage& addr, socklen_t len, bool host_lookup,
             const std::string& socketname) {
         const char* hostname = nullptr;
-        char host[NI_MAXHOST + 1];
+        char host[INET6_ADDRSTRLEN];
         if ((addr.ss_family == AF_INET || addr.ss_family == AF_INET6) && host_lookup
-                && !getnameinfo((struct sockaddr*)&addr, qore_get_in_len((struct sockaddr*)&addr), host,
-                    sizeof(host), 0, 0, 0)) {
+                && inet_ntop(addr.ss_family, qore_get_in_addr((struct sockaddr*)&addr), host, sizeof(host))) {
             hostname = host;
         }
         return makeAddrInfo(addr, len, socketname, hostname);
