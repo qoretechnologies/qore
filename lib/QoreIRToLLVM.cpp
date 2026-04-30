@@ -578,7 +578,12 @@ llvm::Value* QoreIRToLLVM::boxInt(llvm::Value* int_val) {
 // bits = bitcast_to_i64(double) + DOUBLE_ENCODE_OFFSET
 llvm::Value* QoreIRToLLVM::boxFloat(llvm::Value* float_val) {
     llvm::Value* raw_bits = builder->CreateBitCast(float_val, i64_type);
-    return builder->CreateAdd(raw_bits, llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
+    llvm::Value* is_colliding_nan = builder->CreateICmpUGE(raw_bits,
+        llvm::ConstantInt::get(i64_type, 0xFFF8000000000000ULL));
+    llvm::Value* positive_nan_bits = builder->CreateAnd(raw_bits,
+        llvm::ConstantInt::get(i64_type, 0x7FFFFFFFFFFFFFFFULL));
+    llvm::Value* safe_bits = builder->CreateSelect(is_colliding_nan, positive_nan_bits, raw_bits);
+    return builder->CreateAdd(safe_bits, llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
 }
 
 // NaN-boxing: encode a native bool (i1) into QoreValue
@@ -5220,7 +5225,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (!lhs || !rhs) { return false; }
             llvm::Value* l_float = ensureFloatType(lhs, inst->operands[0].id, module);
             llvm::Value* r_float = ensureFloatType(rhs, inst->operands[1].id, module);
-            values[inst->result.id] = builder->CreateFCmpONE(l_float, r_float);
+            values[inst->result.id] = builder->CreateFCmpUNE(l_float, r_float);
             return true;
         }
         case QoreIROpcode::LtFloat: {
