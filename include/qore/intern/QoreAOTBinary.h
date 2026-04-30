@@ -122,8 +122,9 @@ constexpr uint64_t QORE_AOT_FEAT_BODY_LOCAL_SLOT = 1ULL << 28; //!< body-local r
 constexpr uint64_t QORE_AOT_FEAT_BCA_LINES = 1ULL << 29; //!< BCA records include source line ranges for parent-constructor argument callstacks
 constexpr uint64_t QORE_AOT_FEAT_BCA_NATIVE_ARGS = 1ULL << 30; //!< BCA arg blobs contain native inline AOT expressions, not legacy EXPR_TREE blobs
 constexpr uint64_t QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS = 1ULL << 31; //!< closure records split effective varargs from signature ellipsis
+constexpr uint64_t QORE_AOT_FEAT_CONTAINER_TYPEINFO = 1ULL << 32; //!< MakeList/MakeHash records carry parse-time container typeInfo
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

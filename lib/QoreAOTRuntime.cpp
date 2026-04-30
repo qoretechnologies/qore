@@ -1987,7 +1987,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 continue;
             }
             case AOTExprKind::COMPLEX_LIST_NEW: {
-                // ref1 = type path, followed by serialized constructor arg
+                // ref1 = type path, followed by one serialized constructor value
                 ref1 = reader.readStringRef(ptr);
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                 QoreValue arg_val;

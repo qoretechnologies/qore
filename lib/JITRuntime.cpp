@@ -2391,6 +2391,31 @@ static const QoreTypeInfo* qore_rt_resolve_element_type_path(const char* type_pa
     return ti;
 }
 
+static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path, const char* op,
+        ExceptionSink* xsink) {
+    if (!type_path || !*type_path) {
+        return nullptr;
+    }
+
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        if (xsink) {
+            xsink->raiseException("AOT-TYPE-ERROR",
+                "%s cannot resolve container type '%s' without a current Program", op, type_path);
+        }
+        return nullptr;
+    }
+
+    std::string error;
+    QoreAOTTypeResolver resolver(pgm);
+    const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+    if (!ti && xsink) {
+        xsink->raiseException("AOT-TYPE-ERROR",
+            "%s cannot resolve container type '%s': %s", op, type_path, error.c_str());
+    }
+    return ti;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list_typed(const QoreTypeInfo* element_type,
         ExceptionSink* xsink) {
     QoreListNode* list = new QoreListNode(element_type ? element_type : autoTypeInfo);
@@ -2585,6 +2610,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, const
     return toBits(QoreValue(list.release()));
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_make_list_by_type_path(uint64_t* vals, int count,
+        const char* type_path, ExceptionSink* xsink) {
+    const QoreTypeInfo* typeInfo = qore_rt_resolve_full_type_path(type_path, "MakeList", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_make_list(vals, count, typeInfo, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
     // count is the number of key-value pairs; kv_pairs has 2*count elements
@@ -2619,6 +2653,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, c
         qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
     return toBits(QoreValue(hash.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_by_type_path(uint64_t* kv_pairs, int count,
+        const char* type_path, ExceptionSink* xsink) {
+    const QoreTypeInfo* typeInfo = qore_rt_resolve_full_type_path(type_path, "MakeHash", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_make_hash(kv_pairs, count, typeInfo, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
@@ -2699,6 +2742,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys(const char** keys, ui
         hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
     }
     return toBits(QoreValue(hash.release()));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys_by_type_path(const char** keys, uint64_t* vals,
+        int count, const char* type_path, ExceptionSink* xsink) {
+    const QoreTypeInfo* typeInfo = qore_rt_resolve_full_type_path(type_path, "MakeHashConstKeys", xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    return qore_rt_make_hash_const_keys(keys, vals, count, typeInfo, xsink);
 }
 
 // --- Statement execution helpers ---
@@ -2847,9 +2899,27 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_list_throwi
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_list_by_type_path_throwing(
+        uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_list_by_type_path(vals, count, type_path, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_throwing(
         uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     uint64_t result = qore_rt_make_hash(kv_pairs, count, typeInfo, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_by_type_path_throwing(
+        uint64_t* kv_pairs, int count, const char* type_path, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_hash_by_type_path(kv_pairs, count, type_path, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -2860,6 +2930,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_const_
         const char** keys, uint64_t* vals, int count,
         const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     uint64_t result = qore_rt_make_hash_const_keys(keys, vals, count, typeInfo, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_make_hash_const_keys_by_type_path_throwing(
+        const char** keys, uint64_t* vals, int count, const char* type_path, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_make_hash_const_keys_by_type_path(keys, vals, count, type_path, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

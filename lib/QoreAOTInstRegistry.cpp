@@ -2685,6 +2685,7 @@ static bool writeMakeHashConstKeys(AOTInstWriteCtx& ctx) {
     for (const auto& key : mhck->keys) {
         ctx.writer.writeStringRef(key.c_str());
     }
+    ctx.writer.writeStringRef(mhck->typeInfo ? QoreTypeInfo::getPath(mhck->typeInfo) : "");
     return true;
 }
 
@@ -2700,6 +2701,19 @@ static std::unique_ptr<QoreIRInstruction> readMakeHashConstKeys(
         keys.push_back(key ? key : "");
     }
     auto inst = std::make_unique<QoreIRMakeHashConstKeysInstruction>(std::move(keys));
+    const char* type_path = nullptr;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CONTAINER_TYPEINFO) != 0) {
+        type_path = ctx.reader.readStringRef(ctx.ptr);
+    }
+    if (type_path && *type_path) {
+        std::string type_error;
+        QoreAOTTypeResolver type_resolver(ctx.pgm);
+        inst->typeInfo = type_resolver.resolve(type_path, type_error);
+        if (!inst->typeInfo) {
+            ctx.error = "cannot resolve MakeHashConstKeys type '" + std::string(type_path) + "': " + type_error;
+            return nullptr;
+        }
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;
@@ -3044,16 +3058,12 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
 // Group 57: MakeList - List construction with optional parse-time type info
 // ============================================================================
 //
-// The typeInfo field is not serialized: the interpreter falls back to deriving
-// the element type from the operands (autoTypeInfo for empty lists) when
-// typeInfo is null.  This matches the MakeHashConstKeys pattern.  The
-// essential point is that the *correct subclass* (QoreIRMakeListInstruction)
-// is created on deserialization so the interpreter's static_cast and
-// ml->typeInfo read land on a valid field (initialized to nullptr), not past
-// the end of a base QoreIRInstruction.
+// The typeInfo field is serialized because empty typed containers cannot
+// recover their parse-time type from operands after deserialization.
 
 static bool writeMakeList(AOTInstWriteCtx& ctx) {
-    // No subclass-specific fields serialized (typeInfo derived at runtime).
+    auto* ml = static_cast<const QoreIRMakeListInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(ml->typeInfo ? QoreTypeInfo::getPath(ml->typeInfo) : "");
     return true;
 }
 
@@ -3062,6 +3072,19 @@ static std::unique_ptr<QoreIRInstruction> readMakeList(
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
     auto inst = std::make_unique<QoreIRMakeListInstruction>();
+    const char* type_path = nullptr;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CONTAINER_TYPEINFO) != 0) {
+        type_path = ctx.reader.readStringRef(ctx.ptr);
+    }
+    if (type_path && *type_path) {
+        std::string type_error;
+        QoreAOTTypeResolver type_resolver(ctx.pgm);
+        inst->typeInfo = type_resolver.resolve(type_path, type_error);
+        if (!inst->typeInfo) {
+            ctx.error = "cannot resolve MakeList type '" + std::string(type_path) + "': " + type_error;
+            return nullptr;
+        }
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;
@@ -3072,10 +3095,12 @@ static std::unique_ptr<QoreIRInstruction> readMakeList(
 // Group 58: MakeHash - Hash construction with optional parse-time type info
 // ============================================================================
 //
-// See MakeList comment: typeInfo not serialized; the correct subclass must be
-// created on deser so the interpreter's static_cast lands on a valid field.
+// See MakeList comment: typeInfo must survive AOT serialization for empty
+// typed hashes such as hash-map results.
 
 static bool writeMakeHash(AOTInstWriteCtx& ctx) {
+    auto* mh = static_cast<const QoreIRMakeHashInstruction*>(ctx.inst);
+    ctx.writer.writeStringRef(mh->typeInfo ? QoreTypeInfo::getPath(mh->typeInfo) : "");
     return true;
 }
 
@@ -3084,6 +3109,19 @@ static std::unique_ptr<QoreIRInstruction> readMakeHash(
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
     auto inst = std::make_unique<QoreIRMakeHashInstruction>();
+    const char* type_path = nullptr;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_CONTAINER_TYPEINFO) != 0) {
+        type_path = ctx.reader.readStringRef(ctx.ptr);
+    }
+    if (type_path && *type_path) {
+        std::string type_error;
+        QoreAOTTypeResolver type_resolver(ctx.pgm);
+        inst->typeInfo = type_resolver.resolve(type_path, type_error);
+        if (!inst->typeInfo) {
+            ctx.error = "cannot resolve MakeHash type '" + std::string(type_path) + "': " + type_error;
+            return nullptr;
+        }
+    }
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;

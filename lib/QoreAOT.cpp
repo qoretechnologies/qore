@@ -639,6 +639,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // ellipsis and the variant-level QCF_USES_EXTRA_ARGS flag set when the
     // closure body references argv/$N.
     flags |= QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS;
+    // Container construction IR carries parse-time typeInfo for empty typed
+    // list/hash values that cannot recover their type from operands.
+    flags |= QORE_AOT_FEAT_CONTAINER_TYPEINFO;
     return flags;
 }
 
@@ -11639,6 +11642,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
             id.call_args = vrn->getArgs();
             id.parse_args = vrn->getParseArgs();
+            id.child_expr = vrn->getNewArgs();
             return id;
         }
         // Other non-class VarRefNewObjectNode falls through to GENERIC_EVAL
@@ -11666,6 +11670,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
         id.kind = AOTExprKind::COMPLEX_LIST_NEW;
         id.ref1 = QoreTypeInfo::getPath(ncl->typeInfo);
+        id.child_expr = ncl->args;
         return id;
     }
 

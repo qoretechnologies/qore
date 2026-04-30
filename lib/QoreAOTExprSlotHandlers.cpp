@@ -181,7 +181,16 @@ static bool write_slot_COMPLEX_HASH_NEW(AOTExprSlotWriteCtx& ctx) {
 //! COMPLEX_LIST_NEW: ref1 = type path + u8 num_args + N×classifyAndWriteExpr-encoded args
 static bool write_slot_COMPLEX_LIST_NEW(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
-    return write_slot_args_prefer_parse(ctx);
+    if (ctx.expr.child_expr.hasNode()) {
+        ctx.writer.writeU8(1);
+        return write_slot_inline_expr(ctx, ctx.expr.child_expr);
+    }
+    if ((ctx.expr.parse_args && ctx.expr.parse_args->size())
+            || (ctx.expr.call_args && ctx.expr.call_args->size())) {
+        return false;
+    }
+    ctx.writer.writeU8(0);
+    return true;
 }
 
 //! CONST_NOTHING: no additional data

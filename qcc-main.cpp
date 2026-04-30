@@ -1058,6 +1058,7 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_BCA_LINES, "bca-lines"},
         {QORE_AOT_FEAT_BCA_NATIVE_ARGS, "bca-native-args"},
         {QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS, "closure-varargs-flags"},
+        {QORE_AOT_FEAT_CONTAINER_TYPEINFO, "container-typeinfo"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));

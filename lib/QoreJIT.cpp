@@ -318,8 +318,12 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
 
     // Container construction helpers
     addSymbol("qore_rt_make_list", reinterpret_cast<void*>(&qore_rt_make_list));
+    addSymbol("qore_rt_make_list_by_type_path", reinterpret_cast<void*>(&qore_rt_make_list_by_type_path));
     addSymbol("qore_rt_make_hash", reinterpret_cast<void*>(&qore_rt_make_hash));
+    addSymbol("qore_rt_make_hash_by_type_path", reinterpret_cast<void*>(&qore_rt_make_hash_by_type_path));
     addSymbol("qore_rt_make_hash_const_keys", reinterpret_cast<void*>(&qore_rt_make_hash_const_keys));
+    addSymbol("qore_rt_make_hash_const_keys_by_type_path",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_by_type_path));
 
     // Statement execution helpers
     addSymbol("qore_rt_exec_statement", reinterpret_cast<void*>(&qore_rt_exec_statement));
