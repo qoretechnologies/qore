@@ -131,7 +131,7 @@ ENDMACRO (QORE_WRAP_QPP_VALUE)
 #
 MACRO (QORE_INSTALL_QPP_METADATA _module_name)
     set(_meta_files ${ARGN})
-    if (_meta_files)
+    if (_meta_files AND DEFINED QORE_METADATA_DIR)
         install(FILES ${_meta_files}
                 DESTINATION ${QORE_METADATA_DIR}/${_module_name})
     endif()

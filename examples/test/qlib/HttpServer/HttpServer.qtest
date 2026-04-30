@@ -2879,6 +2879,14 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         int test_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready");
 
+        # Drain pending worker-pool callbacks on the GLOBAL controller, then re-wait
+        # for the I/O thread.  Without this, an in-flight handleAcceptResult from
+        # mClient (preconnected in setUp) can submit a ReadHeader op AFTER baseline,
+        # causing the final assertion to see baseline+1 even though the test's own
+        # connections all cleaned up correctly.
+        server.getGlobalAsyncCtrl().flushCallbacks();
+        assertTrue(server.waitForAsyncIo(5s), "async I/O should be ready after flush");
+
         # Get baseline cache size (should just be accept operations)
         int baseline_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
         if (m_options.verbose > 1) {

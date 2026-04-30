@@ -1045,7 +1045,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
 AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink)
     : num_io_threads(1), autostop_flag(autostop), shutting_down(false),
       io_waiting(false), io_exiting(false), ready_flag(false),
-      submit_seq(0), processed_seq(0),
+      submit_seq(0),
       logger(nullptr), timer_callback(nullptr) {
     // Check env var for I/O thread count override
     const char* env_threads = getenv("QORE_IO_THREADS");
@@ -1453,6 +1453,12 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         }
 
         ++submit_seq;
+        // Direct cache insertion is synchronously complete: bump per-thread
+        // submit_seq AND processed_seq together so waitForProcessing()
+        // observes a consistent state without needing an extra iteration.
+        ++t.submit_seq;
+        t.processed_seq.store(t.submit_seq.load(std::memory_order_relaxed),
+            std::memory_order_release);
     } else {
         // Worker thread: package data into SubmitOp command
         // Route to the correct I/O thread based on operation key
@@ -1490,6 +1496,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             // mutation and the I/O thread's empty checks are synchronized by m,
             // so a command visible to the I/O thread has a visible sequence bump.
             ++submit_seq;
+            ++target->submit_seq;
         }
         // Publish sock_hash → target thread BEFORE notifying, so a concurrent
         // wakeSocketByObject firing as soon as the submitter returns always
@@ -1604,6 +1611,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         cmd.cancel_count = nullptr;
         target.cmdq.push(std::move(cmd));
         ++submit_seq;
+        ++target.submit_seq;
         target.notifier->notify();
         ASYNC_IO_TRACE("cancelByKey DEFER_MID_BATCH key='%s'\n", uh.c_str());
         // rv stays false (fire-and-forget); caller must not rely on the
@@ -1644,6 +1652,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
             // Cancel can be left with no pending notifier byte, leaving the
             // I/O thread blocked in kevent(-1) and waitCancel() hung.
             ++submit_seq;
+            ++target.submit_seq;
             do_signal = true;
         }
     }
@@ -1760,6 +1769,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         cmd.completion = completion;
                         tp->cmdq.push(std::move(cmd));
                         ++submit_seq;
+                        ++tp->submit_seq;
                     }
                     wait_remote = true;
                 }
@@ -1871,6 +1881,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         // catch-up covers this CancelOwner —
                         // see Cancel for details.
                         ++submit_seq;
+                        ++tp->submit_seq;
                     }
                     do_signal = true;
                 }
@@ -2001,6 +2012,7 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                         cmd.completion = completion;
                         tp->cmdq.push(std::move(cmd));
                         ++submit_seq;
+                        ++tp->submit_seq;
                     }
                     wait_remote = true;
                 }
@@ -2118,6 +2130,7 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                         // catch-up covers this CancelByProgram —
                         // see Cancel for details.
                         ++submit_seq;
+                        ++tp->submit_seq;
                     }
                     do_signal = true;
                 }
@@ -2355,13 +2368,32 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
     if (!ctx().tid) {
         return false;
     }
-    int target = submit_seq;
-    if (processed_seq >= target) {
+    // Snapshot per-thread submit counters under m so each target reflects all
+    // submits visible at call time on its respective queue.  We then wait
+    // until each thread's processed_seq reaches its own target — this is the
+    // multi-thread-correct semantic, replacing the older single-counter form
+    // which could let one I/O thread advance the global processed_seq using
+    // a snapshot of global submit_seq that included pending submits on a
+    // sibling thread's cmdq.
+    std::vector<int> targets(io_threads.size());
+    for (size_t i = 0; i < io_threads.size(); ++i) {
+        targets[i] = io_threads[i]->submit_seq.load(std::memory_order_acquire);
+    }
+    auto allDone = [&]() -> bool {
+        for (size_t i = 0; i < io_threads.size(); ++i) {
+            if (io_threads[i]->processed_seq.load(std::memory_order_acquire)
+                    < targets[i]) {
+                return false;
+            }
+        }
+        return true;
+    };
+    if (allDone()) {
         return true;
     }
     if (timeout_ms > 0) {
         int64 deadline_us = get_epoch_us() + (int64)timeout_ms * 1000;
-        while (processed_seq < target && ctx().tid) {
+        while (!allDone() && ctx().tid) {
             int64 remaining_us = deadline_us - get_epoch_us();
             if (remaining_us <= 0) {
                 return false;
@@ -2369,16 +2401,16 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
             int remaining_ms = (int)((remaining_us + 999) / 1000);
             int rc = processed_cond.wait2(m, remaining_ms);
             if (rc) {
-                return processed_seq >= target;
+                return allDone();
             }
         }
-        return processed_seq >= target;
+        return allDone();
     }
     // No timeout - wait indefinitely
-    while (processed_seq < target && ctx().tid) {
+    while (!allDone() && ctx().tid) {
         processed_cond.wait(m);
     }
-    return processed_seq >= target;
+    return allDone();
 }
 
 bool AsyncIoControllerPriv::running() const {
@@ -2805,12 +2837,21 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             break;  // Quit command received
         }
 
-        // Snapshot submit_seq AFTER processCommands drained the cmdq: this is
-        // the number of submits we've actually processed this iteration.  Any
-        // submit that arrives during Phase 1/2/3 below will be drained on the
-        // NEXT iteration — we must NOT advance processed_seq past it, or
-        // waitForProcessing() will wake up before the late submit is in cache.
-        int processed_target_this_iter = submit_seq.load(std::memory_order_acquire);
+        // Snapshot THIS THREAD'S submit_seq AFTER processCommands drained the
+        // cmdq: this is the number of submits actually delivered to this thread
+        // and processed this iteration.  Any submit that arrives during
+        // Phase 1/2/3 below will be drained on the NEXT iteration — we must
+        // NOT advance t.processed_seq past it, or waitForProcessing() will wake
+        // up before the late submit is in cache.
+        //
+        // Per-thread (not global) is required: under multi-thread mode, the
+        // global submit_seq counts submits to ALL threads' cmdqs, so a
+        // post-drain snapshot of global submit_seq could include submits
+        // pending on a sibling thread's cmdq, and advancing this thread's
+        // processed view to that snapshot would let waitForProcessing return
+        // before the sibling has installed the cache entry — the cache cleanup
+        // test flake (test#2 in pipeline 49637) is the canonical symptom.
+        int processed_target_this_iter = t.submit_seq.load(std::memory_order_acquire);
 
         // Re-check cmdq after processCommands returns.  Producers mutate cmdq
         // while holding m, so taking the same lock here gives a reliable view
@@ -2994,14 +3035,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // Stale entry (deadline was updated) — discard
             }
 
-            // Update processed sequence counter (lock for condition broadcast).
-            // Use the value captured AFTER processCommands — NOT the live
-            // submit_seq — so waitForProcessing() doesn't wake up before a
-            // SubmitOp that arrived during Phase 1/2/3 has been processed.
+            // Update this thread's processed counter (lock for condition
+            // broadcast).  Use the value captured AFTER processCommands —
+            // NOT the live t.submit_seq — so waitForProcessing() doesn't wake
+            // up before a SubmitOp that arrived during Phase 1/2/3 has been
+            // processed.
             {
                 AutoLocker al(m);
-                if (processed_seq < processed_target_this_iter) {
-                    processed_seq = processed_target_this_iter;
+                if (t.processed_seq.load(std::memory_order_relaxed)
+                        < processed_target_this_iter) {
+                    t.processed_seq.store(processed_target_this_iter,
+                        std::memory_order_release);
                     processed_cond.broadcast();
                 }
             }
@@ -3692,24 +3736,26 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             }
         }
 
-        // Catch up processed_seq before blocking in poll.  Worker-thread
-        // cancel/cancelByOwner/cancelByProgram push commands and bump submit_seq
-        // under lock m, but the I/O thread's Phase 1 snapshot may have already
-        // read submit_seq before the bump.  This re-check under lock provides
-        // happens-before ordering with the worker's push+bump sequence.
-        // Without this re-check, poll(-1) would block indefinitely and
-        // waitForProcessing() would time out.
+        // Catch up t.processed_seq before blocking in poll.  Worker-thread
+        // cancel/cancelByOwner/cancelByProgram push commands and bump
+        // t.submit_seq under lock m, but the I/O thread's Phase 1 snapshot may
+        // have already read t.submit_seq before the bump.  This re-check
+        // under lock provides happens-before ordering with the worker's
+        // push+bump sequence.  Without this re-check, poll(-1) would block
+        // indefinitely and waitForProcessing() would time out.
         {
             AutoLocker al(m);
-            int current_submit = submit_seq.load(std::memory_order_acquire);
-            if (processed_seq < current_submit && t.cmdq.empty()) {
-                ASYNC_IO_TRACE("advance processed_seq: %d -> %d (pre-poll recheck)\n",
-                    (int)processed_seq, current_submit);
-                processed_seq = current_submit;
+            int current_submit = t.submit_seq.load(std::memory_order_acquire);
+            int current_processed = t.processed_seq.load(std::memory_order_relaxed);
+            if (current_processed < current_submit && t.cmdq.empty()) {
+                ASYNC_IO_TRACE("advance t.processed_seq[%d]: %d -> %d (pre-poll recheck)\n",
+                    t.thread_idx, current_processed, current_submit);
+                t.processed_seq.store(current_submit, std::memory_order_release);
                 processed_cond.broadcast();
-            } else if (processed_seq < current_submit) {
-                ASYNC_IO_TRACE("BLOCKED processed_seq=%d submit_seq=%d cmdq-nonempty\n",
-                    (int)processed_seq, current_submit);
+            } else if (current_processed < current_submit) {
+                ASYNC_IO_TRACE("BLOCKED t.processed_seq[%d]=%d t.submit_seq=%d "
+                    "cmdq-nonempty\n", t.thread_idx, current_processed,
+                    current_submit);
             }
         }
 
@@ -4072,8 +4118,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         }
 
         if (!restart_preserved_commands) {
-            processed_seq = 0;
             submit_seq = 0;
+            for (auto& tp : io_threads) {
+                tp->submit_seq.store(0, std::memory_order_relaxed);
+                tp->processed_seq.store(0, std::memory_order_relaxed);
+            }
         }
         processed_cond.broadcast();
         if (io_waiting) {

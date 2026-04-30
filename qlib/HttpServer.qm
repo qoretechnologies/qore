@@ -5431,8 +5431,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         "OK");
                     # Clear persistence so the idle timeout can fire and the
                     # connection can be returned to async I/O if no more
-                    # requests arrive
+                    # requests arrive.  Also remove user thread context so
+                    # subsequent requests on the same thread do not see stale
+                    # persistent session data (e.g. persistent_data from a
+                    # prior aborted streaming request).
                     phi.clear();
+                    removeUserThreadContext();
                     continue;
                 }
 

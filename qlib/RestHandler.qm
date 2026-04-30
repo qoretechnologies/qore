@@ -609,6 +609,17 @@ public namespace RestHandler {
         */
         nothing recv(hash<auto> v) {
             if (ex) {
+                # Allow end-of-data (trailer) signals through even after an
+                # error so that handlers can finalize (e.g. rollback a DB
+                # transaction).  Without this, an aborted HTTP/1.1 chunked
+                # body read leaves server-side resources un-cleaned.
+                if (v.hasKey("hdr")) {
+                    try {
+                        recvImpl(v);
+                    } catch (hash<ExceptionInfo> eod_ex) {
+                        # Ignore — error already captured
+                    }
+                }
                 return;
             }
             try {

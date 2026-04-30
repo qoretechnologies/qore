@@ -259,6 +259,20 @@ public:
     */
     DLLEXPORT int issueRuntimeCmd(const char* mname, QoreProgram* pgm, const QoreString& cmd, ExceptionSink* xsink);
 
+    //! Returns the owning QoreProgram for the named user module, or nullptr.
+    /** User (.qm) modules are parsed and run inside a dedicated QoreProgram; that
+        Program is the canonical home for the module's classes / constants / functions
+        and is the same instance for every consumer Program that loads the module.
+        Binary modules don't have an owning Program and return nullptr.
+
+        @param name the module name (e.g. "QUnit", "SqlUtil")
+        @return the module's owning QoreProgram, or nullptr if the module is not
+                loaded, is not a user module, or cannot be resolved
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT static QoreProgram* findUserModuleProgram(const char* name);
+
     // not exported in the public API
     DLLLOCAL ModuleManager();
 };

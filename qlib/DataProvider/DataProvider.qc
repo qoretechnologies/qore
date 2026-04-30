@@ -226,6 +226,7 @@ public class DataProvider {
             "openapi3": "OpenApi3DataProvider",
             "perplexity": "PerplexityDataProvider",
             "pdfco": "PdfCoDataProvider",
+            "segment": "SegmentDataProvider",
             "pop3": "Pop3ClientDataProvider",
 
             # provided by the jni module
@@ -239,6 +240,7 @@ public class DataProvider {
             "sax": "SaxDataProvider",
             "servicenowrest": "ServiceNowRestDataProvider",
             "lemlist": "LemlistDataProvider",
+            "sendcloud": "SendCloudDataProvider",
             "shippo": "ShippoDataProvider",
             "shipstation": "ShipStationDataProvider",
             "systemeio": "SystemeIoDataProvider",

@@ -2573,6 +2573,20 @@ void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
                 chunk->setSize(count);
                 sendStreamData(stream_id, chunk->getPtr(), count, false, xsink);
                 info.bytes_sent += (int64_t)count;
+                // Keep info.file_offset in sync with the FileInputStream's
+                // internal position.  io_uring reads use pread (positional)
+                // off info.file_offset, while readNonBlock advances the
+                // stream's own seekable position.  These two counters are
+                // independent: if io_uring is set up lazily AFTER the first
+                // sync-path read (Phase 3 setIoUring race — see
+                // AsyncIoControllerPriv.cpp:3460), the next io_uring submit
+                // would pread() from the stale info.file_offset (still 0)
+                // and re-read the same range already buffered by the sync
+                // path.  Result: server sends more body bytes than the
+                // declared Content-Length, client emits RST_STREAM with
+                // NGHTTP2_PROTOCOL_ERROR per RFC 7540 §8.1.2.6, and the
+                // RestClient surfaces HTTP2-STREAM-RESET.
+                info.file_offset += (size_t)count;
             }
         } else {
             // Non-pollable (memory streams) — readHelper never blocks
