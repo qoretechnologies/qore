@@ -5746,7 +5746,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         && !is_complex_typed_outer
                         && !needs_type_strip_outer
                         && !QoreTypeInfo::getTypedHash(outer_ti);
-                bool needs_value_coerce_outer = is_complex_typed_outer || needs_scalar_coerce_outer;
+                bool needs_plain_any_outer = outer_ti == anyTypeInfo || outer_ti == autoNoNarrowTypeInfo;
+                bool needs_value_coerce_outer = is_complex_typed_outer || needs_scalar_coerce_outer
+                    || needs_plain_any_outer;
                 llvm::Value* consumed_cleanup_outer = nullptr;
                 if (needs_value_coerce_outer) {
                     // Apply assignment coercion before publishing the value to
@@ -6040,7 +6042,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 && !is_complex_typed
                 && !needs_type_strip
                 && !QoreTypeInfo::getTypedHash(local_ti);
-            bool needs_value_coerce = is_complex_typed || needs_scalar_coerce;
+            bool needs_plain_any = local_ti == anyTypeInfo || local_ti == autoNoNarrowTypeInfo;
+            bool needs_value_coerce = is_complex_typed || needs_scalar_coerce || needs_plain_any;
             llvm::Value* consumed_cleanup = nullptr;
 
             // IR-only locals still need their cached alloca value to match

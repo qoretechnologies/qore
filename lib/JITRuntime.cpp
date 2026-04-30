@@ -788,7 +788,13 @@ static void qore_rt_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreV
     // Keep StoreLocal coercion aligned with LValueHelper::assign(): hash<auto!>
     // and list<auto!> accept narrowed containers but must store them as auto
     // containers so later heterogeneous key/element writes remain valid.
-    if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
+    if (ti == anyTypeInfo || ti == autoNoNarrowTypeInfo) {
+        if (val.getType() == NT_HASH) {
+            map_get_plain_hash(val, xsink);
+        } else if (val.getType() == NT_LIST) {
+            map_get_plain_list(val, xsink);
+        }
+    } else if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
         if (val.getType() != NT_HASH) {
             return;
         }
