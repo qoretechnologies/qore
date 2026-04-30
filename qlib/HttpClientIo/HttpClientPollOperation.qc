@@ -157,8 +157,12 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
 
     #! Continues reading without creating a new poll operation
     continueReading() {
-        if (state != STATE_WAIT_READ) {
-            throw "HTTPCLIENT-STATE-ERROR", sprintf("cannot continue reading in state: %y", state);
+        # consult the authoritative C++ state via getState(); the local
+        # `state` field is initialized but never advanced for protocols
+        # whose state machines live entirely in the C++ peer.
+        string actual = getState();
+        if (actual != STATE_WAIT_READ) {
+            throw "HTTPCLIENT-STATE-ERROR", sprintf("cannot continue reading in state: %y", actual);
         }
         empty_read_count = 0;
         state = STATE_READING;

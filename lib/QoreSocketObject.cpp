@@ -4224,7 +4224,12 @@ bool QoreSocketObject::hasPendingData() const {
     // where SSL_read() reads a full TLS record containing both HTTP headers
     // and the first WebSocket frame; the header reader consumes only headers,
     // leaving frame data in rbuf that the next poll op must process.
-    if (priv->socket->priv->buflen > priv->socket->priv->bufoffset) {
+    //
+    // buflen is the LENGTH of unread data starting at bufoffset (see brecv()
+    // and readByteFromBuffer() in qore_socket_private.h) — comparing it to
+    // bufoffset as if it were an end-index silently drops leftover bytes
+    // whenever a previous reader has advanced bufoffset.
+    if (priv->socket->priv->buflen) {
         return true;
     }
     // Check SSL buffer without syscalls or locking — safe from any thread
@@ -4255,11 +4260,19 @@ bool QoreSocketObject::hasPendingData() const {
 
 BinaryNode* QoreSocketObject::drainPendingBuffer() {
     qore_socket_private* sp = priv->socket->priv;
-    if (sp->buflen <= sp->bufoffset) {
+    // buflen is the LENGTH of unread data starting at bufoffset (see brecv()
+    // and readByteFromBuffer() in qore_socket_private.h).  Earlier code here
+    // computed avail = buflen - bufoffset which silently dropped leftover
+    // bytes whenever the previous reader had advanced bufoffset, e.g. an
+    // HTTP/1.1 client that consumed a 101 response and left WS frame bytes
+    // in the buffer for the WebSocket poll op to pick up.
+    if (!sp->buflen) {
         return nullptr;
     }
-    size_t avail = sp->buflen - sp->bufoffset;
-    BinaryNode* result = new BinaryNode(sp->rbuf + sp->bufoffset, avail);
+    // BinaryNode takes ownership of its pointer, so we must allocate a copy
+    // — sp->rbuf is owned by the socket and cannot be free()d by the node.
+    BinaryNode* result = new BinaryNode();
+    result->append(sp->rbuf + sp->bufoffset, sp->buflen);
     sp->bufoffset = 0;
     sp->buflen = 0;
     return result;

@@ -188,7 +188,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             stream_id = h1conn.submitRequestStreaming(method, path, headers, body,
                 data_channel, True, body_streaming, notifier, sse_install_eligible);
             @assert(stream_id >= 0);
-            reservation_held = False;
+            releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
@@ -251,7 +251,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         try {
             stream_id = h1conn.submitRequestSse(method, path, headers, body, queue, notifier);
             @assert(stream_id >= 0);
-            reservation_held = False;
+            releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);

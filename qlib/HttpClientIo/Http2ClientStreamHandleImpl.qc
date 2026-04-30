@@ -162,6 +162,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             stream_id = h2conn.submitRequestStreaming(method, path, headers, body,
                 data_channel, body_streaming, notifier, sse_install_eligible);
             @assert(stream_id >= 0);
+            releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);
@@ -210,6 +211,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         try {
             stream_id = h2conn.submitRequestSse(method, path, headers, body, queue, notifier);
             @assert(stream_id >= 0);
+            releaseReservationIfHeld();
         } catch (hash<ExceptionInfo> ex) {
             {
                 AutoLock al(lock);

@@ -38,6 +38,18 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     public {
         #! State constants
         const STATE_STREAMING = "streaming";
+        #! Producer signalled end-of-stream; drain queued events, then close
+        /** Set by @ref close().  In this state @ref continuePoll() keeps
+            flushing the @ref event_channel and any partially-written
+            @ref pending_data; once both are empty, the operation closes the
+            socket and transitions to @ref STATE_DISCONNECTED.  This avoids
+            a race in the H1 response-header dispatch path where calling
+            @ref abort() before the I/O controller has issued
+            @c startPollSendHttpResponse would race ahead and leave the
+            controller calling into a closed socket — see
+            @ref close() for the full rationale.
+        */
+        const STATE_DRAINING = "draining";
         const STATE_DISCONNECTED = "disconnected";
         const STATE_ERROR = "error";
 
@@ -126,15 +138,22 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     }
 
     #! Returns True when the operation is complete (disconnected or error)
+    /** @ref STATE_DRAINING is intentionally NOT terminal: the operation is
+        still pulling from the event_channel and writing to the socket.
+        Returning True here would cause the controller to stop polling us
+        before we drain the queued events.
+    */
     bool goalReached() {
-        return state != STATE_STREAMING;
+        return state == STATE_DISCONNECTED || state == STATE_ERROR;
     }
 
     #! Continues the poll operation
     /** @return poll info for the next poll() call, or NOTHING if complete
     */
     *hash<SocketPollInfo> continuePoll() {
-        if (state != STATE_STREAMING) {
+        # @ref STATE_DRAINING is also live: the producer has signalled
+        # end-of-stream but we still need to flush queued events.
+        if (state != STATE_STREAMING && state != STATE_DRAINING) {
             return NOTHING;
         }
 
@@ -175,6 +194,21 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             pending_data = result.value.typeCode() == NT_STRING
                 ? result.value
                 : formatSseEvent(result.value);
+        }
+
+        # Graceful end-of-stream: producer signalled close() and we have
+        # now flushed the queue and any partial pending_data.  Close the
+        # socket here (the framework's handleSseDisconnect path does not
+        # close it) and transition to DISCONNECTED so the controller
+        # tears the connection down on the next poll.
+        if (state == STATE_DRAINING) {
+            try {
+                sock.close();
+            } catch () {
+                # Ignore close errors
+            }
+            state = STATE_DISCONNECTED;
+            return NOTHING;
         }
 
         # No data to send — send a heartbeat inline if the interval has
@@ -322,6 +356,42 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     #! Returns the number of queued events
     int getQueueSize() {
         return event_channel.size();
+    }
+
+    #! Initiates a graceful end-of-stream: drain queued events, then close
+    /** Use this when the SSE producer has finished emitting events and
+        wants the stream to end cleanly.  Sets @ref state to
+        @ref STATE_DRAINING and notifies @ref continuePoll(); the next
+        poll cycle flushes any queued or partially-written data and
+        only then closes the socket.
+
+        Why a separate method from @ref abort(): the H1 SSE handoff
+        spawns a producer thread (see
+        @c WebAppHandler::startSseDrainer in qorus) that begins pulling
+        chunks immediately after @c setupAsyncSseConnection() returns —
+        before the I/O controller has issued
+        @c startPollSendHttpResponse() to write the response headers.
+        For fast producers (qonsole's slash-form @c /list, for example),
+        the producer can drain its queue and signal end-of-stream
+        before the controller has even started the response.  Using
+        @ref abort() in that path immediately closes the socket and
+        the controller sees @c SOCKET-NOT-OPEN when it tries to write
+        the headers.  @ref close() defers the socket close until
+        @ref continuePoll() runs (which it cannot until the response
+        headers are out and the SSE state machine is installed),
+        eliminating that race.
+
+        Idempotent against itself; @ref abort() called after
+        @ref close() still wins (transitions to @ref STATE_DISCONNECTED
+        and closes the socket immediately for error paths).
+
+        @since %Qore 2.4
+    */
+    close() {
+        if (state == STATE_STREAMING) {
+            state = STATE_DRAINING;
+            notifier.notify();
+        }
     }
 
     #! Aborts the operation and closes the connection
