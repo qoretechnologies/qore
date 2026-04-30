@@ -92,7 +92,8 @@ static bool http2_poll_exception_is(const QoreHashNode& ex, const char* err) {
 
 class Http2SocketControllerPollable : public AbstractPollableIoObjectBase {
 public:
-    DLLLOCAL Http2SocketControllerPollable(qore_socket_private* sock) : sock(sock) {
+    DLLLOCAL Http2SocketControllerPollable(qore_socket_private* sock)
+            : sock(sock), close_lock(sock->outer_lock) {
         sock->ref();
         QoreString tmp;
         qore_get_ptr_hash(tmp, sock);
@@ -113,6 +114,16 @@ public:
 
     DLLLOCAL virtual void closeIo(ExceptionSink*) override {
         sock->prepareForClose();
+        if (close_lock) {
+            AutoLocker al(*close_lock);
+            closeIoLocked();
+        } else {
+            closeIoLocked();
+        }
+    }
+
+private:
+    DLLLOCAL void closeIoLocked() {
         if (sock->isOpen()) {
             sock->shutdown_direct();
             sock->close();
@@ -132,8 +143,8 @@ public:
         return sock->ssl && sock->ssl->pending() > 0;
     }
 
-private:
     qore_socket_private* sock;
+    QoreThreadLock* close_lock;
     std::string identity_hash;
 };
 
