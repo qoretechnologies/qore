@@ -66,6 +66,10 @@ static std::atomic<uint64_t> qore_socket_sync_exec_seq{0};
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
+#ifdef _Q_WINDOWS
+static int qore_windows_set_errno(int rc);
+#endif
+
 static int qore_input_stream_pollable_descriptor(InputStream* is, const char* err, ExceptionSink* xsink) {
     if (!is->supportsNonBlockingIo()) {
         return -1;
@@ -199,6 +203,16 @@ static int qore_socket_poll_fd_now(int fd, short events, const char* err, const 
     return qore_socket_poll_fd_revents_now(fd, events, revents, err, desc, xsink);
 }
 
+static int qore_socket_set_raw_error(int rc) {
+#ifdef _Q_WINDOWS
+    WSASetLastError(rc);
+    return qore_windows_set_errno(rc);
+#else
+    errno = rc;
+    return errno;
+#endif
+}
+
 // returns 0 = connected, 1 = still in progress, -1 = error
 static int qore_socket_check_connect_ready(int fd) {
     int val = 0;
@@ -209,7 +223,10 @@ static int qore_socket_check_connect_ready(int fd) {
     }
 
     if (val) {
-        errno = val;
+        int e = qore_socket_set_raw_error(val);
+        if (e == EINPROGRESS || e == EAGAIN || e == ENOTCONN) {
+            return 1;
+        }
         return -1;
     }
 
@@ -4488,9 +4505,7 @@ int sock_get_raw_error() {
     return WSAGetLastError();
 }
 
-int windows_set_errno() {
-    int rc = WSAGetLastError();
-
+static int qore_windows_set_errno(int rc) {
     switch (rc) {
         case 0:
             errno = 0;
@@ -4543,19 +4558,14 @@ int windows_set_errno() {
             break;
 
         case WSAEWOULDBLOCK:
+        case WSAEALREADY:
+        case WSAEINPROGRESS:
             errno = EAGAIN;
             break;
 
-#ifdef DEBUG
-        case WSAEALREADY:
         case WSAEINTR:
-        case WSAEINPROGRESS:
-            // should never get these here
-            printd(0, "sock_get_error() got unexpected error code %d; about to assert()\n", rc);
-            assert(false);
-            errno = EFAULT;
+            errno = EINTR;
             break;
-#endif
 
         default:
             printd(0, "sock_get_error() unknown code %d; about to assert()\n", rc);
@@ -4565,6 +4575,10 @@ int windows_set_errno() {
     }
 
     return errno;
+}
+
+int windows_set_errno() {
+    return qore_windows_set_errno(WSAGetLastError());
 }
 
 int sock_get_error() {
