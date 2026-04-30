@@ -2417,7 +2417,6 @@ public:
         poll_state.reset();
         discardAcceptedPollable(xsink);
         accepted_socket.reset();
-        descriptor = -1;
         state = SPS_NONE;
     }
 
@@ -2450,12 +2449,11 @@ public:
             if (!rc) {
                 if (state == SPS_ACCEPTING) {
                     assert(dynamic_cast<SocketAcceptPollState*>(poll_state.get()));
-                    descriptor = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
+                    int descriptor = reinterpret_cast<SocketAcceptPollState*>(poll_state.get())->getDescriptor();
                     poll_state.reset();
                     accept_completed = true;
+                    accepted_socket.reset(sock->createAcceptedSocket(descriptor));
                     if (ssl) {
-                        accepted_socket.reset(sock->createAcceptedSocket(descriptor));
-                        descriptor = -1;
                         state = SPS_ACCEPTING_SSL;
                         bumpFdGeneration();
                         continue;
@@ -2474,7 +2472,17 @@ public:
     }
 
     DLLLOCAL virtual QoreValue getOutput() const override {
-        return descriptor >= 0 ? QoreValue((int64)descriptor) : QoreValue();
+        if (!accepted_socket) {
+            return QoreValue();
+        }
+        qore_socket_private* priv = qore_socket_private::get(*accepted_socket);
+        int rv = priv->sock;
+        if (rv < 0) {
+            return QoreValue();
+        }
+        priv->sock = QORE_INVALID_SOCKET;
+        accepted_socket.reset();
+        return static_cast<int64>(rv);
     }
 
     DLLLOCAL QoreSocket* releaseAcceptedSocket() {
@@ -2525,9 +2533,8 @@ private:
     QoreSocket* sock = nullptr;
     SocketSource* source = nullptr;
     std::unique_ptr<AbstractPollState> poll_state;
-    std::unique_ptr<QoreSocket> accepted_socket;
+    mutable std::unique_ptr<QoreSocket> accepted_socket;
     QoreObject* accepted_pollable_obj = nullptr;
-    int descriptor = -1;
     int state = SPS_ACCEPTING;
     bool ssl = false;
     SimpleRefHolder<QoreSSLCertificate> cert;
