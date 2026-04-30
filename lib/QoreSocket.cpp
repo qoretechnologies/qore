@@ -8995,6 +8995,9 @@ static int qore_socket_bind_sockaddr_direct(QoreSocket* s, const struct sockaddr
         // set errno from windows error
         sock_get_error();
 #endif
+        int bind_errno = errno;
+        qore_socket_close_private_from_controller(priv);
+        errno = bind_errno;
         return -1;
     }
 
@@ -9029,6 +9032,9 @@ static int qore_socket_bind_family_sockaddr_direct(QoreSocket* s, int family, co
         // set errno from windows error
         sock_get_error();
 #endif
+        int bind_errno = errno;
+        qore_socket_close_private_from_controller(priv);
+        errno = bind_errno;
         return -1;
     }
 
