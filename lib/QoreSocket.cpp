@@ -6784,7 +6784,12 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     PollObjectCleanup cleanup{{}};
 
     ConstListIterator li(poll_list);
+    unsigned cancel_check = 0;
     while (li.next()) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "Socket::poll setup")) {
+            return nullptr;
+        }
+
         const QoreValue v = li.getValue();
         assert(QoreTypeInfo::getUniqueReturnHashDecl(v.getFullTypeInfo())->equal(hashdeclSocketPollInfo));
         const QoreHashNode* h = v.get<const QoreHashNode>();
@@ -6873,7 +6878,13 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     };
 
     size_t submitted = 0;
+    cancel_check = 0;
     for (const PollEntry& entry : entries) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "Socket::poll submit")) {
+            cancel_owner();
+            return nullptr;
+        }
+
         for (int event : {SOCK_POLLIN, SOCK_POLLOUT}) {
             if (!(entry.events & event)) {
                 continue;
@@ -7013,18 +7024,29 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         return consume_result(result->get<const QoreHashNode>());
     };
 
-    auto mark_closed_entries = [&]() {
+    auto mark_closed_entries = [&]() -> int {
+        unsigned close_check = 0;
         for (const PollEntry& entry : entries) {
+            if (!(close_check++ % 100) && qore_check_cancel(xsink, "Socket::poll result build")) {
+                return -1;
+            }
             if (entry_closed(entry.index)) {
                 result_events[entry.index] = SOCK_POLLERR;
             }
         }
+        return 0;
     };
 
     auto build_results = [&]() -> QoreListNode* {
-        mark_closed_entries();
+        if (mark_closed_entries()) {
+            return nullptr;
+        }
 
+        unsigned result_check = 0;
         for (const auto& [idx, events] : result_events) {
+            if (!(result_check++ % 100) && qore_check_cancel(xsink, "Socket::poll result build")) {
+                return nullptr;
+            }
             if (!events) {
                 continue;
             }
