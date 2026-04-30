@@ -216,7 +216,8 @@ static int qore_socket_check_connect_ready(int fd) {
     // where poll() may report writable readiness before connect completion.
     int rc = ::send(fd, nullptr, 0, 0);
     if (rc) {
-        if (errno == EINPROGRESS || errno == EAGAIN || errno == ENOTCONN) {
+        int e = sock_get_error();
+        if (e == EINPROGRESS || e == EAGAIN || e == ENOTCONN) {
             return 1;
         }
         return -1;
@@ -4525,6 +4526,10 @@ int windows_set_errno() {
 
         case WSAECONNREFUSED:
             errno = ECONNREFUSED;
+            break;
+
+        case WSAENOTCONN:
+            errno = ENOTCONN;
             break;
 
         case WSAEBADF:
