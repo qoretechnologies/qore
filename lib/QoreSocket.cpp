@@ -8712,12 +8712,12 @@ static int qore_socket_bind_name_direct(QoreSocket* s, const char* name, bool re
         if (host.strlen() > 2 && host[0] == '[' && host[host.strlen() - 1] == ']') {
             host.terminate(host.strlen() - 1);
             rc = priv->bindINET(&xsink, host.c_str() + 1, service.c_str(), reuseaddr, AF_INET6, SOCK_STREAM);
+        } else {
+            // assume an ipv6 address if there is a ':' character in the hostname, otherwise bind ipv4
+            rc = priv->bindINET(&xsink, host.c_str(), service.c_str(), reuseaddr, strchr(host.c_str(), ':')
+                ? AF_INET6
+                : AF_INET, SOCK_STREAM);
         }
-
-        // assume an ipv6 address if there is a ':' character in the hostname, otherwise bind ipv4
-        rc = priv->bindINET(&xsink, host.c_str(), service.c_str(), reuseaddr, strchr(host.c_str(), ':')
-            ? AF_INET6
-            : AF_INET, SOCK_STREAM);
     } else
         rc = priv->bindUNIX(&xsink, name, SOCK_STREAM);
 
