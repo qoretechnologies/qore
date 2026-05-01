@@ -4517,42 +4517,330 @@ static bool qore_socket_exec_http_blank_line(const QoreStringNode& line) {
     return !qore_socket_exec_http_line_payload_size(line);
 }
 
-static QoreStringNode* qore_socket_exec_recv_http_line(QoreSocket* s, int timeout_ms,
-        const char* owner_name, ExceptionSink* xsink) {
-    return qore_socket_exec_recv_until_string(s, "\r\n", 2, timeout_ms, owner_name, xsink);
-}
+class QoreSocketControllerReadHttpChunkedBodyPollOperation : public SocketPollOperationBase {
+public:
+    enum class State {
+        RecvChunkSize,
+        RecvChunkData,
+        RecvTrailer,
+        Done,
+    };
 
-static int qore_socket_exec_read_http_chunked_trailers(QoreSocket* s, QoreHashNode& output,
-        int timeout_ms, int source, const char* owner_name, ExceptionSink* xsink, QoreHashNode* info = nullptr,
-        bool* has_trailers = nullptr) {
-    QoreString trailers(s->getEncoding());
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked trailer read")) {
-            return -1;
+    DLLLOCAL QoreSocketControllerReadHttpChunkedBodyPollOperation(QoreSocket* sock, bool binary_body,
+            bool read_once, int source)
+            : sock(sock), out(nullptr), body_bin(binary_body ? new BinaryNode : nullptr),
+            body_str(binary_body ? nullptr : new QoreStringNode(sock->getEncoding())),
+            trailers(sock->getEncoding()), binary_body(binary_body), read_once(read_once), source(source) {
+        assert(!read_once || binary_body);
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        bool close_socket = abortNeedsClose();
+        poll_state.reset();
+        if (close_socket) {
+            qore_socket_close_from_controller(sock);
+        }
+        out = nullptr;
+        data.discard();
+        state = State::Done;
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
         }
 
-        SimpleRefHolder<QoreStringNode> line(qore_socket_exec_recv_http_line(s, timeout_ms, owner_name, xsink));
+        qore_socket_private* priv = qore_socket_private::get(*sock);
+        if (!http_expect_cleared) {
+            if (priv->http_exp_chunked_body) {
+                priv->http_exp_chunked_body = false;
+            }
+            http_expect_cleared = true;
+        }
+
+        while (!done) {
+            if (!poll_state) {
+                startPoll(xsink);
+                if (*xsink || !poll_state) {
+                    state = State::Done;
+                    done = true;
+                    return nullptr;
+                }
+            }
+
+            int rc = poll_state->continuePoll(xsink);
+            if (*xsink) {
+                poll_state.reset();
+                state = State::Done;
+                return nullptr;
+            }
+            if (rc) {
+                return getSocketPollInfoHash(xsink, rc);
+            }
+
+            if (takePollOutput(xsink)) {
+                state = State::Done;
+                return nullptr;
+            }
+
+            int handle_rc = 0;
+            switch (state) {
+                case State::RecvChunkSize:
+                    handle_rc = handleChunkSize(xsink, *priv);
+                    break;
+                case State::RecvChunkData:
+                    handle_rc = handleChunkData(xsink, *priv);
+                    break;
+                case State::RecvTrailer:
+                    handle_rc = handleTrailer(xsink, *priv);
+                    break;
+                case State::Done:
+                    done = true;
+                    return nullptr;
+            }
+            if (handle_rc || *xsink) {
+                state = State::Done;
+                return nullptr;
+            }
+        }
+
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return out.release();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        switch (state) {
+            case State::RecvChunkSize:
+                return "recv-chunk-size";
+            case State::RecvChunkData:
+                return "recv-chunk-data";
+            case State::RecvTrailer:
+                return "recv-chunk-trailer";
+            case State::Done:
+                return "received";
+            default:
+                return "unknown";
+        }
+    }
+
+private:
+    DLLLOCAL void startPoll(ExceptionSink* xsink) {
+        switch (state) {
+            case State::RecvChunkSize:
+            case State::RecvTrailer:
+                current_read_to_string = true;
+                poll_state.reset(sock->startRecvUntilBytes(xsink, "\r\n", 2));
+                break;
+            case State::RecvChunkData:
+                current_read_to_string = false;
+                poll_state.reset(sock->startRecv(xsink, static_cast<size_t>(current_chunk_size + 2)));
+                break;
+            case State::Done:
+                break;
+        }
+    }
+
+    DLLLOCAL int takePollOutput(ExceptionSink* xsink) {
+        SimpleRefHolder<BinaryNode> bin(poll_state->takeOutput().get<BinaryNode>());
+        poll_state.reset();
+        if (current_read_to_string) {
+            size_t len = bin->size();
+            char* buf = reinterpret_cast<char*>(bin->giveBuffer());
+            char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+            if (!nbuf) {
+                xsink->outOfMemory();
+                return -1;
+            }
+            nbuf[len] = '\0';
+            data = new QoreStringNode(nbuf, len, len + 1, sock->getEncoding());
+        } else {
+            data = bin.release();
+        }
+        return 0;
+    }
+
+    DLLLOCAL int setOutputBody(ExceptionSink* xsink) {
+        out = new QoreHashNode(autoTypeInfo);
+        if (binary_body) {
+            out->setKeyValue("body", body_bin.release(), xsink);
+        } else {
+            out->setKeyValue("body", body_str.release(), xsink);
+        }
+        return *xsink ? -1 : 0;
+    }
+
+    DLLLOCAL int handleChunkSize(ExceptionSink* xsink, qore_socket_private& priv) {
+        ValueHolder line_val(data ? data->refSelf() : QoreValue(), xsink);
+        data.discard();
         if (*xsink) {
             return -1;
         }
-        if (qore_socket_exec_http_blank_line(**line)) {
-            break;
+        if (line_val->getType() != NT_STRING) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR",
+                "expected string output from async chunk-size read operation, got '%s'",
+                line_val->getFullTypeName());
+            return -1;
         }
-        trailers.concat(line->c_str(), line->size());
+
+        const QoreStringNode* line = line_val->get<const QoreStringNode>();
+        size_t line_len = qore_socket_exec_http_line_payload_size(*line);
+        const char* line_str = line->c_str();
+        const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
+        size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
+        std::string hex(line_str, hex_len);
+        long chunk_size = strtol(hex.c_str(), nullptr, 16);
+        if (chunk_size < 0) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+            return -1;
+        }
+
+        priv.do_chunked_read(QORE_EVENT_HTTP_CHUNK_SIZE, static_cast<size_t>(chunk_size), line_len, source);
+        bytes_consumed = true;
+
+        if (!chunk_size) {
+            if (setOutputBody(xsink)) {
+                return -1;
+            }
+            state = State::RecvTrailer;
+            return 0;
+        }
+
+        long max_read_size = static_cast<long>(std::numeric_limits<ssize_t>::max() - 2);
+        if (chunk_size > max_read_size) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
+                chunk_size);
+            return -1;
+        }
+
+        current_chunk_size = chunk_size;
+        state = State::RecvChunkData;
+        return 0;
     }
 
-    if (has_trailers) {
-        *has_trailers = !trailers.empty();
+    DLLLOCAL int handleChunkData(ExceptionSink* xsink, qore_socket_private& priv) {
+        ValueHolder data_val(data ? data->refSelf() : QoreValue(), xsink);
+        data.discard();
+        if (*xsink) {
+            return -1;
+        }
+        if (data_val->getType() != NT_BINARY) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR",
+                "expected binary output from async chunk data read operation, got '%s'",
+                data_val->getFullTypeName());
+            return -1;
+        }
+
+        const BinaryNode* bin = data_val->get<const BinaryNode>();
+        size_t chunk_size = static_cast<size_t>(current_chunk_size);
+        if (bin->size() < chunk_size + 2) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "read " QSD " bytes for HTTP chunk size " QSD,
+                bin->size(), chunk_size);
+            return -1;
+        }
+
+        priv.do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, bin->getPtr(), chunk_size);
+        if (binary_body) {
+            body_bin->append(bin->getPtr(), chunk_size);
+        } else {
+            body_str->concat(static_cast<const char*>(bin->getPtr()), chunk_size);
+        }
+        bytes_consumed = true;
+
+        int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+        if (priv.max_chunked_body_size > 0 && body_size > priv.max_chunked_body_size) {
+            xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+                body_size, priv.max_chunked_body_size);
+            return -1;
+        }
+
+        priv.do_chunked_read(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, chunk_size, chunk_size + 2, source);
+        if (read_once) {
+            if (setOutputBody(xsink)) {
+                return -1;
+            }
+            state = State::Done;
+            done = true;
+            return 0;
+        }
+
+        current_chunk_size = 0;
+        state = State::RecvChunkSize;
+        return 0;
     }
-    if (!trailers.empty()) {
-        qore_socket_private* priv = qore_socket_private::get(*s);
-        priv->convertHeaderToHash(&output, const_cast<char*>(trailers.c_str()), 0, info, nullptr,
-            "response-headers-raw");
-        priv->do_read_http_header(QORE_EVENT_HTTP_FOOTERS_RECEIVED, &output, source);
+
+    DLLLOCAL int handleTrailer(ExceptionSink* xsink, qore_socket_private& priv) {
+        ValueHolder line_val(data ? data->refSelf() : QoreValue(), xsink);
+        data.discard();
+        if (*xsink) {
+            return -1;
+        }
+        if (line_val->getType() != NT_STRING) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR",
+                "expected string output from async chunk trailer read operation, got '%s'",
+                line_val->getFullTypeName());
+            return -1;
+        }
+
+        const QoreStringNode* line = line_val->get<const QoreStringNode>();
+        bytes_consumed = true;
+        if (qore_socket_exec_http_blank_line(*line)) {
+            if (!trailers.empty()) {
+                priv.convertHeaderToHash(*out, const_cast<char*>(trailers.c_str()), 0, nullptr, nullptr,
+                    "response-headers-raw");
+                if (*xsink) {
+                    return -1;
+                }
+                priv.do_read_http_header(QORE_EVENT_HTTP_FOOTERS_RECEIVED, *out, source);
+            }
+            state = State::Done;
+            done = true;
+            return 0;
+        }
+
+        trailers.concat(line->c_str(), line->size());
+        return 0;
     }
-    return 0;
-}
+
+    DLLLOCAL bool abortNeedsClose() const {
+        if (bytes_consumed) {
+            return true;
+        }
+        if (!poll_state) {
+            return false;
+        }
+        if (current_read_to_string) {
+            assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
+            return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() > 0;
+        }
+        assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() > 0;
+    }
+
+    QoreSocket* sock;
+    std::unique_ptr<AbstractPollState> poll_state;
+    mutable ReferenceHolder<QoreHashNode> out;
+    SimpleRefHolder<BinaryNode> body_bin;
+    SimpleRefHolder<QoreStringNode> body_str;
+    SimpleRefHolder<SimpleValueQoreNode> data;
+    QoreString trailers;
+    State state = State::RecvChunkSize;
+    int64_t current_chunk_size = 0;
+    bool binary_body = true;
+    bool read_once = false;
+    bool current_read_to_string = true;
+    bool http_expect_cleared = false;
+    int source = QORE_SOURCE_SOCKET;
+    bool bytes_consumed = false;
+    bool done = false;
+};
 
 static QoreHashNode* qore_socket_exec_read_http_chunked_body(QoreSocket* s, int timeout_ms,
         bool binary_body, bool read_once, const char* owner_name, int source, ExceptionSink* xsink) {
@@ -4567,90 +4855,18 @@ static QoreHashNode* qore_socket_exec_read_http_chunked_body(QoreSocket* s, int 
         return nullptr;
     }
 
-    if (priv->http_exp_chunked_body) {
-        priv->http_exp_chunked_body = false;
+    ValueHolder rv(qore_socket_exec_poll(s,
+        new QoreSocketControllerReadHttpChunkedBodyPollOperation(s, binary_body, read_once, source),
+        timeout_ms, owner_name, "received", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
     }
-
-    SimpleRefHolder<BinaryNode> body_bin(binary_body ? new BinaryNode : nullptr);
-    SimpleRefHolder<QoreStringNode> body_str(binary_body ? nullptr : new QoreStringNode(s->getEncoding()));
-
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked body read")) {
-            return nullptr;
-        }
-
-        SimpleRefHolder<QoreStringNode> line(qore_socket_exec_recv_http_line(s, timeout_ms, owner_name, xsink));
-        if (*xsink) {
-            return nullptr;
-        }
-
-        size_t line_len = qore_socket_exec_http_line_payload_size(**line);
-        const char* line_str = line->c_str();
-        const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
-        size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
-        std::string hex(line_str, hex_len);
-        long chunk_size = strtol(hex.c_str(), nullptr, 16);
-        if (chunk_size < 0) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
-            return nullptr;
-        }
-
-        priv->do_chunked_read(QORE_EVENT_HTTP_CHUNK_SIZE, static_cast<size_t>(chunk_size), line_len, source);
-
-        if (!chunk_size) {
-            ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), xsink);
-            if (binary_body) {
-                output->setKeyValue("body", body_bin.release(), xsink);
-            } else {
-                output->setKeyValue("body", body_str.release(), xsink);
-            }
-            if (*xsink || qore_socket_exec_read_http_chunked_trailers(s, **output, timeout_ms, source, owner_name,
-                    xsink)) {
-                return nullptr;
-            }
-            return output.release();
-        }
-
-        if (static_cast<unsigned long>(chunk_size) > static_cast<unsigned long>(std::numeric_limits<ssize_t>::max())) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
-                chunk_size);
-            return nullptr;
-        }
-
-        SimpleRefHolder<BinaryNode> chunk(qore_socket_exec_recv_binary(s, chunk_size, timeout_ms, xsink, -1));
-        if (*xsink) {
-            return nullptr;
-        }
-
-        priv->do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, chunk->getPtr(), chunk->size());
-        if (binary_body) {
-            body_bin->append(chunk->getPtr(), chunk->size());
-        } else {
-            body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
-        }
-
-        int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
-        if (priv->max_chunked_body_size > 0 && body_size > priv->max_chunked_body_size) {
-            xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
-                body_size, priv->max_chunked_body_size);
-            return nullptr;
-        }
-
-        SimpleRefHolder<BinaryNode> crlf(qore_socket_exec_recv_binary(s, 2, timeout_ms, xsink, -1));
-        if (*xsink) {
-            return nullptr;
-        }
-        priv->do_chunked_read(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, static_cast<size_t>(chunk_size),
-            static_cast<size_t>(chunk_size) + 2, source);
-
-        if (read_once) {
-            ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), xsink);
-            assert(binary_body);
-            output->setKeyValue("body", body_bin.release(), xsink);
-            return *xsink ? nullptr : output.release();
-        }
+    if (rv->getType() != NT_HASH) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR",
+            "expected hash output from async chunked body read operation, got '%s'", rv->getFullTypeName());
+        return nullptr;
     }
+    return rv.release().get<QoreHashNode>();
 }
 
 static bool qore_socket_exec_process_sse_char(qore_socket_private* priv, QoreString& str, int& eol_count, char c) {
