@@ -48,9 +48,63 @@ class A {
     }
 }
 
+class RefArgTarget {
+    public {
+        int x;
+    }
+
+    constructor(int x) {
+        self.x = x;
+    }
+
+    int get() {
+        return x;
+    }
+
+    ref(reference<int> i) {
+    }
+}
+
+class RefArgHolder {
+    public {
+        int i = 1;
+        int x = get0();
+        RefArgTarget t;
+
+        static int si = 2;
+    }
+
+    constructor() {
+        t = new RefArgTarget(0);
+    }
+
+    destructor() {
+        if (get2() != 0) {
+            throw "ERR";
+        }
+    }
+
+    int get0(int x = i) {
+        return x;
+    }
+
+    int get1(int x = si) {
+        return x;
+    }
+
+    testRefCall() {
+        t.ref(\i);
+    }
+
+    private:internal int get2(int x = t.get()) {
+        return x;
+    }
+}
+
 class ReferenceTest inherits QUnit::Test {
     constructor() : Test("Reference Test", "1.0") {
         addTestCase("member ref", \memberReferenceTest());
+        addTestCase("dot-eval self-member reference arg", \dotEvalSelfMemberReferenceArgTest());
         addTestCase("issue 3417", \issue3417());
         addTestCase("issue 2891", \issue2891());
         addTestCase("Complex reference test", \testComplexReferences());
@@ -65,6 +119,12 @@ class ReferenceTest inherits QUnit::Test {
         T t();
         assertEq({}, t.test());
         assertEq({}, t.testStatic());
+    }
+
+    dotEvalSelfMemberReferenceArgTest() {
+        RefArgHolder h();
+        assertEq(1, h.x);
+        h.testRefCall();
     }
 
     issue3417() {

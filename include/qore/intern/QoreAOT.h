@@ -85,6 +85,8 @@ struct QoreAOTCallTarget {
     native code uses index-based lookups instead of embedded pointers.
 */
 struct QoreAOTContext {
+    QoreProgram* pgm = nullptr;     //!< Program owning the deserialized AOT symbols for type/name resolution
+
     LocalVar** locals = nullptr;    //!< LoadLocal/StoreLocal/LoadClosure/StoreClosure/instantiate
     int num_locals = 0;
     Var** globals = nullptr;        //!< LoadGlobal/StoreGlobal/LoadThreadLocal/StoreThreadLocal

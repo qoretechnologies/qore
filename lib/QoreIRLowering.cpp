@@ -611,7 +611,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         --loop_depth;
         if (!blockHasTerminator(builder.getBlock())) {
-            builder.createBranch(cond_block);
+            auto* br = builder.createBranch(cond_block);
+            setLoopCheckpointExceptionTarget(br, cond_block);
         }
         flow_stack.pop_back();
 
@@ -655,7 +656,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Mark condition block as loop header for OSR detection
         cond_block->is_loop_header = true;
         if (!blockHasTerminator(builder.getBlock())) {
-            builder.createBranch(cond_block);
+            auto* br = builder.createBranch(cond_block);
+            setLoopCheckpointExceptionTarget(br, cond_block);
         }
 
         builder.setBlock(cond_block);
@@ -699,7 +701,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         }
         --loop_depth;
         if (!blockHasTerminator(builder.getBlock())) {
-            builder.createBranch(cond_block);
+            auto* br = builder.createBranch(cond_block);
+            setLoopCheckpointExceptionTarget(br, cond_block);
         }
         flow_stack.pop_back();
 
@@ -736,7 +739,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
         }
         if (!blockHasTerminator(builder.getBlock())) {
-            builder.createBranch(cond_block);
+            auto* br = builder.createBranch(cond_block);
+            setLoopCheckpointExceptionTarget(br, cond_block);
         }
 
         builder.setBlock(cond_block);
@@ -789,7 +793,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             }
         }
         if (!blockHasTerminator(builder.getBlock())) {
-            builder.createBranch(cond_block);
+            auto* br = builder.createBranch(cond_block);
+            setLoopCheckpointExceptionTarget(br, cond_block);
         }
 
         // Move exit_block to end so LLVM lowering processes it after any
@@ -901,7 +906,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createBranch(preheader_block, stmt->loc);
             builder.setBlock(preheader_block);
             QoreIRValue init_index = builder.createConstInt(0, stmt->loc)->result;
-            builder.createBranch(header_block, stmt->loc);
+            {
+                auto* br = builder.createBranch(header_block, stmt->loc);
+                setLoopCheckpointExceptionTarget(br, header_block, catch_block);
+            }
 
             // Header: PHI for index, compare with size
             builder.setBlock(header_block);
@@ -999,7 +1007,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             QoreIRValue one = builder.createConstInt(1, stmt->loc)->result;
             QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt,
                 index_val, one, stmt->loc)->result;
-            builder.createBranch(header_block, stmt->loc);
+            {
+                auto* br = builder.createBranch(header_block, stmt->loc);
+                setLoopCheckpointExceptionTarget(br, header_block, catch_block);
+            }
 
             // Complete PHI node
             index_phi->incoming.push_back({init_index, preheader_block});
@@ -1105,7 +1116,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Preheader: initialize index counter and branch to header
         builder.setBlock(preheader_block);
         QoreIRValue init_index = builder.createConstInt(0, stmt->loc)->result;
-        builder.createBranch(header_block, stmt->loc);
+        {
+            auto* br = builder.createBranch(header_block, stmt->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Header block: PHI for index, check for next value and branch
         builder.setBlock(header_block);
@@ -1169,7 +1183,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRValue one = builder.createConstInt(1, stmt->loc)->result;
         QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt, index_val, one,
             stmt->loc)->result;
-        builder.createBranch(header_block, stmt->loc);
+        {
+            auto* br = builder.createBranch(header_block, stmt->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Complete the PHI node with incoming values
         index_phi->incoming.push_back({init_index, preheader_block});
@@ -1394,7 +1411,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Preheader: init index counter.
         builder.setBlock(preheader_block);
         QoreIRValue init_index = builder.createConstInt(0, stmt->loc)->result;
-        builder.createBranch(header_block, stmt->loc);
+        {
+            auto* br = builder.createBranch(header_block, stmt->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Header: PHI for index, compare with max_pos.
         builder.setBlock(header_block);
@@ -1442,7 +1462,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         QoreIRValue one = builder.createConstInt(1, stmt->loc)->result;
         QoreIRValue next_index = builder.createBinaryOp(QoreIROpcode::AddInt,
             index_val, one, stmt->loc)->result;
-        builder.createBranch(header_block, stmt->loc);
+        {
+            auto* br = builder.createBranch(header_block, stmt->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Complete the PHI.
         index_phi->incoming.push_back({init_index, preheader_block});
@@ -1525,7 +1548,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         if (old_elem.isValid()) {
             builder.createPopImplicitElement(old_elem, stmt->loc);
         }
-        builder.createBranch(target);
+        {
+            auto* br = builder.createBranch(target);
+            setLoopCheckpointExceptionTarget(br, target);
+        }
         return true;
     }
     if (auto* cont_stmt = dynamic_cast<const ContinueStatement*>(stmt)) {
@@ -1556,7 +1582,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Note: no need to pop $# here for foreach loops — the continue target
         // (latch_block) already calls PopImplicitElement before incrementing the
         // index and branching back to the header.
-        builder.createBranch(target);
+        {
+            auto* br = builder.createBranch(target);
+            setLoopCheckpointExceptionTarget(br, target);
+        }
         return true;
     }
     if (auto* switch_stmt = dynamic_cast<const SwitchStatement*>(stmt)) {
@@ -4992,6 +5021,13 @@ QoreIRBasicBlock* QoreIRLowering::getCurrentExceptionTarget() const {
 
 QoreIRBasicBlock* QoreIRLowering::getGuardExceptionTarget() const {
     return guard_exception_target_override ? guard_exception_target_override : getCurrentExceptionTarget();
+}
+
+void QoreIRLowering::setLoopCheckpointExceptionTarget(QoreIRInstruction* inst, QoreIRBasicBlock* target,
+        QoreIRBasicBlock* handler) {
+    if (inst && target && target->is_loop_header) {
+        inst->exception_target = handler ? handler : getCurrentExceptionTarget();
+    }
 }
 
 QoreIRLowering::GuardExceptionTargetOverrideScope::GuardExceptionTargetOverrideScope(QoreIRLowering& lowering,
@@ -10675,7 +10711,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
         QoreIRValue result_list = builder.createSizedList(list_size, map->loc, expTypeInfo)->result;
-        builder.createBranch(header_block, map->loc);
+        {
+            auto* br = builder.createBranch(header_block, map->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Header block: check if index < size
         builder.setBlock(header_block);
@@ -10763,7 +10802,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         QoreIRBasicBlock* body_exit_block = builder.getBlock();
 
         // Branch back to header
-        builder.createBranch(header_block, map->loc);
+        {
+            auto* br = builder.createBranch(header_block, map->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Complete PHI nodes
         index_phi->incoming.push_back({zero, preheader_block});
@@ -10806,7 +10848,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     builder.setBlock(preheader_block);
     QoreIRValue result_list = builder.createEmptyList(map->loc, expTypeInfo)->result;
     QoreIRValue init_index = builder.createConstInt(0, map->loc)->result;
-    builder.createBranch(header_block, map->loc);
+    {
+        auto* br = builder.createBranch(header_block, map->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Header block: create phi for index and check for next value
     builder.setBlock(header_block);
@@ -10879,7 +10924,10 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     QoreIRBasicBlock* body_exit_block = builder.getBlock();
 
     // Branch back to header
-    builder.createBranch(header_block, map->loc);
+    {
+        auto* br = builder.createBranch(header_block, map->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Complete the phi node with incoming values
     index_phi->incoming.push_back({init_index, preheader_block});
@@ -10956,7 +11004,10 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, select->loc)->result;
         QoreIRValue result_list = builder.createEmptyList(select->loc, elem_type)->result;
-        builder.createBranch(header_block, select->loc);
+        {
+            auto* br = builder.createBranch(header_block, select->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Header block: check if index < size
         builder.setBlock(header_block);
@@ -11046,7 +11097,10 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
         QoreIRBasicBlock* cont_exit_block = builder.getBlock();
 
-        builder.createBranch(header_block, select->loc);
+        {
+            auto* br = builder.createBranch(header_block, select->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Complete PHI nodes
         index_phi->incoming.push_back({zero, preheader_block});
@@ -11120,7 +11174,10 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
     builder.setBlock(preheader_block);
     QoreIRValue result_list = builder.createEmptyList(select->loc)->result;
     QoreIRValue init_index = builder.createConstInt(0, select->loc)->result;
-    builder.createBranch(header_block, select->loc);
+    {
+        auto* br = builder.createBranch(header_block, select->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Header block: create phi for index and check for next value
     builder.setBlock(header_block);
@@ -11177,7 +11234,10 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
     QoreIRBasicBlock* cont_exit_block = builder.getBlock();
 
-    builder.createBranch(header_block, select->loc);
+    {
+        auto* br = builder.createBranch(header_block, select->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Complete the phi node
     index_phi->incoming.push_back({init_index, preheader_block});
@@ -11306,7 +11366,10 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
             first_val = builder.createListGetFloat(input_list, zero, foldl->loc)->result;
         }
         QoreIRValue one = builder.createConstInt(1, foldl->loc)->result;
-        builder.createBranch(header_block, foldl->loc);
+        {
+            auto* br = builder.createBranch(header_block, foldl->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Header block: check if index < size
         builder.setBlock(header_block);
@@ -11366,7 +11429,10 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
         QoreIRBasicBlock* body_exit_block = builder.getBlock();
 
         // Branch back to header
-        builder.createBranch(header_block, foldl->loc);
+        {
+            auto* br = builder.createBranch(header_block, foldl->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Complete PHI nodes
         index_phi->incoming.push_back({one, init_block});
@@ -11463,7 +11529,10 @@ QoreIRValue QoreIRLowering::lowerFoldlNative(const QoreFoldlOperatorNode* foldl,
     QoreIRBasicBlock* body_exit_block = builder.getBlock();
 
     // Branch back to header with new accumulator
-    builder.createBranch(header_block, foldl->loc);
+    {
+        auto* br = builder.createBranch(header_block, foldl->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Complete the accumulator phi node
     accum_phi->incoming.push_back({first_val, init_block});
@@ -11573,7 +11642,10 @@ QoreIRValue QoreIRLowering::lowerFoldrNative(const QoreFoldrOperatorNode* foldr,
     QoreIRBasicBlock* body_exit_block = builder.getBlock();
 
     // Branch back to header with new accumulator
-    builder.createBranch(header_block, foldr->loc);
+    {
+        auto* br = builder.createBranch(header_block, foldr->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Complete the accumulator phi node
     accum_phi->incoming.push_back({first_val, init_block});
@@ -11650,7 +11722,10 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, ms->loc)->result;
         QoreIRValue result_list = builder.createEmptyList(ms->loc)->result;
-        builder.createBranch(header_block, ms->loc);
+        {
+            auto* br = builder.createBranch(header_block, ms->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Header block: check if index < size
         builder.setBlock(header_block);
@@ -11746,7 +11821,10 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
         QoreIRBasicBlock* cont_exit_block = builder.getBlock();
 
-        builder.createBranch(header_block, ms->loc);
+        {
+            auto* br = builder.createBranch(header_block, ms->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Complete PHI nodes
         index_phi->incoming.push_back({zero, preheader_block});
@@ -11790,7 +11868,10 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     builder.setBlock(preheader_block);
     QoreIRValue result_list = builder.createEmptyList(ms->loc)->result;
     QoreIRValue init_index = builder.createConstInt(0, ms->loc)->result;
-    builder.createBranch(header_block, ms->loc);
+    {
+        auto* br = builder.createBranch(header_block, ms->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Header block: create phi for index and check for next value
     builder.setBlock(header_block);
@@ -11851,7 +11932,10 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     QoreIRBasicBlock* cont_exit_block = builder.getBlock();
 
-    builder.createBranch(header_block, ms->loc);
+    {
+        auto* br = builder.createBranch(header_block, ms->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Complete the phi node
     index_phi->incoming.push_back({init_index, preheader_block});
@@ -11927,7 +12011,10 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
         QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_result_type)->result;
-        builder.createBranch(header_block, hm->loc);
+        {
+            auto* br = builder.createBranch(header_block, hm->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Header block: check if index < size
         builder.setBlock(header_block);
@@ -12009,7 +12096,10 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
         QoreIRBasicBlock* body_exit_block = builder.getBlock();
 
         // Branch back to header
-        builder.createBranch(header_block, hm->loc);
+        {
+            auto* br = builder.createBranch(header_block, hm->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Complete PHI nodes
         index_phi->incoming.push_back({zero, preheader_block});
@@ -12050,7 +12140,10 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     builder.setBlock(preheader_block);
     QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_result_type)->result;
     QoreIRValue init_index = builder.createConstInt(0, hm->loc)->result;
-    builder.createBranch(header_block, hm->loc);
+    {
+        auto* br = builder.createBranch(header_block, hm->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Header block
     builder.setBlock(header_block);
@@ -12128,7 +12221,10 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
     QoreIRBasicBlock* body_exit_block = builder.getBlock();
 
     // Branch back to header
-    builder.createBranch(header_block, hm->loc);
+    {
+        auto* br = builder.createBranch(header_block, hm->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Complete the phi node
     index_phi->incoming.push_back({init_index, preheader_block});
@@ -12207,7 +12303,10 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, hms->loc)->result;
         QoreIRValue result_hash = builder.createMakeHash({}, hms->loc, hash_result_type)->result;
-        builder.createBranch(header_block, hms->loc);
+        {
+            auto* br = builder.createBranch(header_block, hms->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Header block: check if index < size
         builder.setBlock(header_block);
@@ -12309,7 +12408,10 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
         QoreIRBasicBlock* cont_exit_block = builder.getBlock();
 
         // Branch back to header
-        builder.createBranch(header_block, hms->loc);
+        {
+            auto* br = builder.createBranch(header_block, hms->loc);
+            setLoopCheckpointExceptionTarget(br, header_block);
+        }
 
         // Complete PHI nodes
         index_phi->incoming.push_back({zero, preheader_block});
@@ -12353,7 +12455,10 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     builder.setBlock(preheader_block);
     QoreIRValue result_hash = builder.createMakeHash({}, hms->loc, hash_result_type)->result;
     QoreIRValue init_index = builder.createConstInt(0, hms->loc)->result;
-    builder.createBranch(header_block, hms->loc);
+    {
+        auto* br = builder.createBranch(header_block, hms->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Header block
     builder.setBlock(header_block);
@@ -12448,7 +12553,10 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
     QoreIRBasicBlock* cont_exit_block = builder.getBlock();
 
     // Branch back to header
-    builder.createBranch(header_block, hms->loc);
+    {
+        auto* br = builder.createBranch(header_block, hms->loc);
+        setLoopCheckpointExceptionTarget(br, header_block);
+    }
 
     // Complete the phi node
     index_phi->incoming.push_back({init_index, preheader_block});

@@ -2325,6 +2325,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
 
         QoreValue getWritebackValue(uint32_t i) {
+            if (parent_slot_cache && i < locals_slot_cache.size()) {
+                // Parent-slot-cache mode is used when a handler runs under an
+                // LLVM/AOT parent.  Nested handler writebacks update this cache;
+                // TLS can be stale during exception cleanup.
+                QoreValue value = locals_slot_cache[i];
+                if (!value.isNothing() || i >= slot_to_lvar.size() || !slot_to_lvar[i]) {
+                    return value.hasNode() ? value.refSelf() : value;
+                }
+                // Some parent locals (notably reference/closure-use locals) are
+                // not seeded into the native parent slot cache.  If the cache
+                // entry is empty, fall back to the authoritative TLS value.
+            }
+
             if (i < slot_to_lvar.size() && slot_to_lvar[i]) {
                 bool needs_deref = true;
                 QoreValue value = slot_to_lvar[i]->eval(needs_deref, xsink);
@@ -2513,6 +2526,11 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Scope stack: tracks handler list indices at each ScopeEnter
     // Used to know which handlers to execute on ScopeExit
     std::vector<size_t> scope_stack;
+    auto preserveParentSlotForWriteback = [&](size_t slot_id) {
+        // Dirty inherited parent slots must survive cache invalidation until
+        // ParentSlotWriteback publishes them to the enclosing frame.
+        return slot_id < parent_slot_dirty.size() && parent_slot_dirty[slot_id];
+    };
 
     // Helper to fire on_block_exit handlers for all scopes from current depth down to target_depth.
     // Used by Throw/Rethrow handlers (no-exception-target case) to fire scope exits after
@@ -2569,6 +2587,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                 cleanupStoredValues(threadlocals, xsink);
                 cleanupStoredValues(closures, xsink);
                 for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                    if (preserveParentSlotForWriteback(i)) {
+                        continue;
+                    }
                     locals_slot_cache[i].discard(xsink);
                     locals_slot_cache[i] = QoreValue();
                 }
@@ -2599,6 +2620,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // Clear local slot cache, preserving IR-only locals (loop counters etc.)
         // that only exist in the cache and have no variable-stack backing.
         for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+            if (preserveParentSlotForWriteback(i)) {
+                continue;
+            }
             if (i < locals_ir_only.size() && locals_ir_only[i]) {
                 continue;  // Preserve IR-only locals
             }
@@ -2629,6 +2653,9 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         // Invalidate non-IR-only local slots: callees can modify these through TLS
         if (has_non_ir_only_locals) {
             for (size_t i = 0; i < locals_ir_only.size(); ++i) {
+                if (preserveParentSlotForWriteback(i)) {
+                    continue;
+                }
                 if (!locals_ir_only[i]) {
                     locals_slot_cache[i].discard(xsink);
                     locals_slot_cache[i] = QoreValue();
@@ -2807,10 +2834,6 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto markParentLValuePathDirty = [&](const QoreIRLValuePathInstruction* path_inst) {
         if (parent_slot_dirty.empty() || !path_inst || !path_inst->hasLocalTarget()
                 || path_inst->path.empty()) {
-            return;
-        }
-        const LVPathStep& root = path_inst->path[0];
-        if (root.type_info && QoreTypeInfo::isReference(root.type_info)) {
             return;
         }
         markParentSlotDirty(path_inst->lvalue_slot_id);
@@ -3364,6 +3387,10 @@ next_instruction:
             }
             case QoreIROpcode::MakeList: {
                 const auto* ml = static_cast<const QoreIRMakeListInstruction*>(inst);
+                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getComplexListValueType(ml->typeInfo);
+                if (declared_vtype == anyTypeInfo) {
+                    declared_vtype = nullptr;
+                }
                 ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
@@ -3383,8 +3410,8 @@ next_instruction:
                         return false;
                     }
                 }
-                if (ml->typeInfo) {
-                    qore_list_private::get(*list)->complexTypeInfo = ml->typeInfo;
+                if (declared_vtype && declared_vtype != autoTypeInfo) {
+                    qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(declared_vtype);
                 } else {
                     if (!vtype || vtype == anyTypeInfo || !vcommon) {
                         vtype = autoTypeInfo;
@@ -3398,6 +3425,10 @@ next_instruction:
             }
             case QoreIROpcode::MakeHash: {
                 const auto* mh = static_cast<const QoreIRMakeHashInstruction*>(inst);
+                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getComplexHashValueType(mh->typeInfo);
+                if (declared_vtype == anyTypeInfo) {
+                    declared_vtype = nullptr;
+                }
                 ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
@@ -3428,10 +3459,10 @@ next_instruction:
                         return false;
                     }
                 }
-                if (mh->typeInfo) {
-                    qore_hash_private::get(*hash)->complexTypeInfo = mh->typeInfo;
+                if (declared_vtype && declared_vtype != autoTypeInfo) {
+                    qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(declared_vtype);
                 } else {
-                    if (!vtype || vtype == anyTypeInfo) {
+                    if (!vtype || vtype == anyTypeInfo || !vcommon) {
                         vtype = autoTypeInfo;
                     }
                     qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(vtype);
@@ -3445,6 +3476,10 @@ next_instruction:
                 const auto& ckeys = mhck->keys;
                 size_t n = ckeys.size();
                 assert(n == inst->operands.size());
+                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getComplexHashValueType(mhck->typeInfo);
+                if (declared_vtype == anyTypeInfo) {
+                    declared_vtype = nullptr;
+                }
                 ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
                 qore_hash_private* hp = qore_hash_private::get(*hash);
                 hp->hm.reserve(n);
@@ -3467,10 +3502,10 @@ next_instruction:
                         return false;
                     }
                 }
-                if (mhck->typeInfo) {
-                    hp->complexTypeInfo = mhck->typeInfo;
+                if (declared_vtype && declared_vtype != autoTypeInfo) {
+                    hp->complexTypeInfo = qore_get_complex_hash_type(declared_vtype);
                 } else {
-                    if (!vtype || vtype == anyTypeInfo) {
+                    if (!vtype || vtype == anyTypeInfo || !vcommon) {
                         vtype = autoTypeInfo;
                     }
                     hp->complexTypeInfo = qore_get_complex_hash_type(vtype);
@@ -4102,6 +4137,11 @@ next_instruction:
                     // Check for thread cancellation or program interrupt at loop headers
                     if (qore_check_cancel(xsink, "IR loop")) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        if (br->exception_target) {
+                            block = br->exception_target;
+                            ip = 0;
+                            break;
+                        }
                         cleanupLocalCaches();
                         return false;
                     }
@@ -4131,6 +4171,11 @@ next_instruction:
                     // Check for thread cancellation or program interrupt at loop headers
                     if (qore_check_cancel(xsink, "IR loop")) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        if (br->exception_target) {
+                            block = br->exception_target;
+                            ip = 0;
+                            break;
+                        }
                         cleanupLocalCaches();
                         return false;
                     }
@@ -4486,6 +4531,20 @@ load_local_done:
                         return false;
                     }
                     out.refSelf();
+                    if (!h->getHashDecl() && !out.isNothing()) {
+                        const QoreTypeInfo* vti = h->getValueTypeInfo();
+                        if (QoreTypeInfo::hasType(vti) && vti != autoTypeInfo && vti != anyTypeInfo
+                                && !QoreTypeInfo::superSetOf(vti, out.getTypeInfo())) {
+                            ValueHolder holder(out, xsink);
+                            QoreTypeInfo::acceptInputKey(vti, hka_inst->key_name.c_str(), *holder, xsink);
+                            if (xsink && *xsink) {
+                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                cleanupLocalCaches();
+                                return false;
+                            }
+                            out = holder.release();
+                        }
+                    }
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
                     out = o->evalMember(hka_inst->key_name.c_str(), xsink);
@@ -5137,6 +5196,11 @@ load_local_done:
                     // Check for thread cancellation or program interrupt at loop headers
                     if (qore_check_cancel(xsink, "IR loop")) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        if (fused_inst->exception_target) {
+                            block = fused_inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
                         cleanupLocalCaches();
                         return false;
                     }
@@ -5264,7 +5328,7 @@ load_local_done:
                 if (list_val.getType() == NT_LIST) {
                     const QoreListNode* l = list_val.get<const QoreListNode>();
                     size_t sz = l->size();
-                    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoHashTypeInfo), nullptr);
+                    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), nullptr);
                     for (size_t i = 0; i < sz; ++i) {
                         QoreValue elem = l->retrieveEntry(i);
                         if (elem.getType() == NT_HASH) {
@@ -7718,10 +7782,14 @@ load_local_done:
                 // Cache invalidation: broad for reference roots (write-through can modify
                 // any variable), targeted for non-reference roots.
                 if (path_inst->hasLocalTarget()) {
+                    markParentLValuePathDirty(path_inst);
                     bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
                         && QoreTypeInfo::isReference(path_inst->path[0].type_info);
                     if (is_ref) {
                         for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
+                            if (preserveParentSlotForWriteback(j)) {
+                                continue;
+                            }
                             if (j < locals_ir_only.size() && locals_ir_only[j]) {
                                 continue;
                             }
@@ -7738,7 +7806,6 @@ load_local_done:
                         clearLoadSlots(path_inst->lvalue_slot_id);
                     }
                 }
-                markParentLValuePathDirty(path_inst);
 
                 if (path_inst->result.isValid()) {
                     // Use refSelf() to create an independent reference — assign_val may also exist
@@ -7827,10 +7894,14 @@ load_local_done:
                 }
                 // Cache invalidation: broad for reference roots, targeted for others
                 if (path_inst->hasLocalTarget()) {
+                    markParentLValuePathDirty(path_inst);
                     bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
                         && QoreTypeInfo::isReference(path_inst->path[0].type_info);
                     if (is_ref) {
                         for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
+                            if (preserveParentSlotForWriteback(j)) {
+                                continue;
+                            }
                             if (j < locals_ir_only.size() && locals_ir_only[j]) {
                                 continue;
                             }
@@ -7848,7 +7919,6 @@ load_local_done:
                         clearLoadSlots(path_inst->lvalue_slot_id);
                     }
                 }
-                markParentLValuePathDirty(path_inst);
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
                     if (res.hasNode()) {
@@ -8622,10 +8692,14 @@ lvalue_path_unary_done:
                 }
                 invalidateLValuePathClosureCache(path_inst);
                 if (path_inst->hasLocalTarget()) {
+                    markParentLValuePathDirty(path_inst);
                     bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
                         && QoreTypeInfo::isReference(path_inst->path[0].type_info);
                     if (is_ref) {
                         for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
+                            if (preserveParentSlotForWriteback(j)) {
+                                continue;
+                            }
                             if (j < locals_ir_only.size() && locals_ir_only[j]) {
                                 continue;
                             }
@@ -8640,7 +8714,6 @@ lvalue_path_unary_done:
                         clearLoadSlots(path_inst->lvalue_slot_id);
                     }
                 }
-                markParentLValuePathDirty(path_inst);
                 cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);

@@ -54,6 +54,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ConstEnum: return "const.enum";
         case QoreIROpcode::MakeList: return "make.list";
         case QoreIROpcode::MakeHash: return "make.hash";
+        case QoreIROpcode::CastComplexHash: return "cast.complex-hash";
         case QoreIROpcode::CreateEmptyList: return "create.empty.list";
         case QoreIROpcode::CreateSizedList: return "create.sized.list";
         case QoreIROpcode::ListAppend: return "list.append";

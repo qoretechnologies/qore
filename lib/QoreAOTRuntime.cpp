@@ -1261,7 +1261,7 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         return;
     }
     // CLOSURE_CREATE: flags(stringref) + class_type_path(stringref) + return_type(stringref)
-    //   + num_params(u16) + params + varargs(u8) + num_captured(u16) + captured
+    //   + num_params(u16) + params + varargs flags + num_captured(u16) + captured
     //   + has_ir(u8) + [ir_size(u32) + ir_data]
     if (ek == AOTExprKind::CLOSURE_CREATE) {
         rdr.readStringRef(p);  // flags
@@ -1278,7 +1278,11 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
                 dv.discard(nullptr);
             }
         }
-        QoreAOTBinaryReader::readU8(p);  // varargs
+        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
+            QoreAOTBinaryReader::readU16(p);  // closure flags
+        } else {
+            QoreAOTBinaryReader::readU8(p);  // legacy varargs
+        }
         uint16_t nc = QoreAOTBinaryReader::readU16(p);
         for (uint16_t i = 0; i < nc; ++i) {
             rdr.readStringRef(p);  // captured name
@@ -1528,6 +1532,7 @@ QoreValue deserializeExprTreeFromBlob(const uint8_t* data, uint32_t size, QorePr
     // Build a minimal QoreAOTContext for the deserializer with just local var slots.
     // We borrow the locals pointer; must null it before ctx destructor runs (which frees it).
     QoreAOTContext ctx;
+    ctx.pgm = pgm;
     ctx.locals = locals;
     ctx.num_locals = num_locals;
     ExprTreeDeserializer deser(data, size, pgm, &ctx);
@@ -1613,6 +1618,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         num_regex_cases, num_body_locals, has_unsupported, (void*)uvb);
 
     auto* ctx = new QoreAOTContext();
+    ctx->pgm = pgm;
     ctx->num_locals = num_locals;
     ctx->num_globals = num_globals;
     ctx->num_exprs = num_exprs;
@@ -1835,8 +1841,9 @@ static QoreAOTContext* buildContextFromSlotMap(
         const char* ref1 = nullptr;
         const char* ref2 = nullptr;
 
-        // Validate expression kind is known (Phase 1 validation)
-        bool kind_is_valid = (kind_byte >= 1 && kind_byte <= 93) || kind_byte == 0xFE || kind_byte == 0xFF;
+        // Validate expression kind through the registry instead of keeping a
+        // second hard-coded max native opcode here.
+        bool kind_is_valid = expr_kind_info && expr_kind_info->is_supported;
         if (!kind_is_valid) {
             printd(2, "AOT buildCtx '%s': unsupported kind_byte=%d at expr slot %d\n",
                 name, kind_byte, i);
@@ -5523,6 +5530,9 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
 
     // Build the context from the fresh IR (same walk order → same slot indices)
     QoreAOTContext* ctx = buildAOTContext(*ir_func, aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts, aot_func.num_regex_cases);
+    if (ctx) {
+        ctx->pgm = pgm;
+    }
     if (ctx && ctx->num_lv_path_insts > 0) {
         // Keep IR function alive — LValuePath instructions reference path data in it
         ctx->lv_path_ir_func.reset(ir_func);
@@ -9395,7 +9405,9 @@ static void executeInitFunctions(
                 }
             }
             if (is_module_init) {
-                ModuleInitNamePathContextHelper module_ctx(mod_name, mod_path);
+                const char* init_mod_name = desc.ns_path.empty() ? mod_name : desc.ns_path.c_str();
+                const char* init_mod_path = desc.item_name.empty() ? mod_path : desc.item_name.c_str();
+                ModuleInitNamePathContextHelper module_ctx(init_mod_name, init_mod_path);
                 // The compiled closure body expects its body locals to be
                 // pre-instantiated on the thread's lvstack (mimicking evalTiered's
                 // contract with regular functions). Manually instantiate each

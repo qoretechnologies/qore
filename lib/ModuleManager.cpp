@@ -495,6 +495,8 @@ QoreUserModule::~QoreUserModule() {
     // del is normally already run by QoreModuleManager::delUser() Phase 0, but
     // guard here in case the module is destroyed outside the normal del path
     runDelCallback(xsink);
+    init_c.discard(&xsink);
+    init_c.clear();
     // issue #4816: Type objects in foreign modules can hold strong refs to
     // this program's data, so plain deref() can leave refcount > 0 at shutdown
     // — the destructor never runs, stranding the parse tree (namespaces,
@@ -1734,6 +1736,7 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
             return nullptr;
         }
         assert(!xsink);
+        mi->setInitClosure(qmd.init_c.refSelf());
     }
 
     mi->set(desc, version, author, url, license_str, qmd.takeDel());

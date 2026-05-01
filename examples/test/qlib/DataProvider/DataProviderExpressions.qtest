@@ -52,6 +52,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("duration function tests", \durationTests());
         addTestCase("date extraction tests", \dateExtractionTests());
         addTestCase("null handling tests", \nullHandlingTests());
+        addTestCase("expression metadata typing tests", \expressionMetadataTypingTests());
         addTestCase("math function tests", \mathTests());
         addTestCase("string function tests (new)", \newStringTests());
         addTestCase("map/hash_map tests", \mapTests());
@@ -557,6 +558,13 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         assertEq(5, eval_expr("nullif", (5, 10)));
         assertEq("a", eval_expr("nullif", ("a", "b")));
         assertEq(NOTHING, eval_expr("nullif", ("same", "same")));
+    }
+
+    expressionMetadataTypingTests() {
+        hash<DataProvider::DataProviderExpressionInfo> exp =
+            DataProvider::AbstractDataProvider::GenericExpressions{DataProvider::DP_OP_AND};
+        hash<DataProvider::DataProviderSignatureTypeInfo> arg = exp.args[0];
+        assertEq(DataProvider::ST_Any, arg.type_code);
     }
 
     mathTests() {

@@ -82,6 +82,12 @@ static void ambiguousDuplicateSignatureException(const char* cname, const char* 
         sig1->getSignatureText());
 }
 
+static const QoreTypeInfo* getParamLocalTypeInfo(const QoreTypeInfo* ti) {
+    // Keep AOT-deserialized signatures aligned with parseInitPushLocalVars():
+    // omitted *reference arguments start as unrestricted local cells.
+    return ti == referenceOrNothingTypeInfo ? anyTypeInfo : ti;
+}
+
 QoreFunction* IList::getFunction(const qore_class_private* class_ctx, const qore_class_private*& last_class,
     const_iterator aqfi, bool& internal_access, bool& stop) const {
     stop = internal_access && (*aqfi).access == Internal;
@@ -808,7 +814,7 @@ void UserSignature::setupFromAOTMetadata(
     lv.resize(nparams);
     for (size_t i = 0; i < nparams; ++i) {
         const char* pname = i < paramNames.size() ? paramNames[i].c_str() : "";
-        lv[i] = pp->createLocalVar(pname, paramTypes[i]);
+        lv[i] = pp->createLocalVar(pname, getParamLocalTypeInfo(paramTypes[i]));
     }
 
     typeList = std::move(paramTypes);
@@ -888,7 +894,7 @@ void UserSignature::replaceResolvedTypes(const QoreTypeInfo* retType,
     typeList = std::move(paramTypes);
     for (size_t i = 0; i < typeList.size() && i < lv.size(); ++i) {
         if (lv[i]) {
-            lv[i]->setTypeInfo(typeList[i]);
+            lv[i]->setTypeInfo(getParamLocalTypeInfo(typeList[i]));
         }
     }
 
@@ -928,8 +934,7 @@ void UserSignature::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
         // check for dups but do not check if the variables are referenced in the block
         // push args declared as type "*reference" as "any"; if no value passed, then they have no type restrictions
         // NOTE that when complex types are supported, the type restriction should be that of the reference's subtype
-        lv.push_back(push_local_var(names[i].c_str(), loc,
-            typeList[i] == referenceOrNothingTypeInfo ? anyTypeInfo : typeList[i], err, true, 1));
+        lv.push_back(push_local_var(names[i].c_str(), loc, getParamLocalTypeInfo(typeList[i]), err, true, 1));
         printd(5, "UserSignature::parseInitPushLocalVars() registered local var %s (id: %p)\n", names[i].c_str(),
             lv[i]);
     }

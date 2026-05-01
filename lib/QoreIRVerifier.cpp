@@ -1162,6 +1162,79 @@ static bool isCallOrInvoke(QoreIROpcode op) {
     }
 }
 
+static void collectLocalsFromIRFunction(const QoreIRFunction& func,
+        std::unordered_set<const void*>& ast_locals,
+        bool& unknown_node_found) {
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            if (inst->opcode == QoreIROpcode::LoadLocal ||
+                    inst->opcode == QoreIROpcode::StoreLocal ||
+                    inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                auto* linst = static_cast<const QoreIRLocalInstruction*>(inst.get());
+                if (linst->local) {
+                    ast_locals.insert(reinterpret_cast<const void*>(linst->local));
+                }
+            } else if (inst->opcode == QoreIROpcode::AddAssignLocalInt) {
+                auto* fused = static_cast<const QoreIRAddAssignLocalIntInstruction*>(inst.get());
+                if (fused->target) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->target));
+                }
+                if (fused->source) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->source));
+                }
+            } else if (inst->opcode == QoreIROpcode::IncrementLocalInt) {
+                auto* fused = static_cast<const QoreIRIncrementLocalIntInstruction*>(inst.get());
+                if (fused->local) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->local));
+                }
+            } else if (inst->opcode == QoreIROpcode::BranchIfLtLocalInt) {
+                auto* fused = static_cast<const QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
+                if (fused->lhs) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->lhs));
+                }
+                if (fused->rhs) {
+                    ast_locals.insert(reinterpret_cast<const void*>(fused->rhs));
+                }
+            }
+
+            if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                auto* pi = static_cast<const QoreIRLValuePathInstruction*>(inst.get());
+                for (const auto& step : pi->path) {
+                    if ((step.kind == LVPathStepKind::LocalVar
+                            || step.kind == LVPathStepKind::ClosureVar)
+                            && step.ref_ptr) {
+                        ast_locals.insert(step.ref_ptr);
+                    }
+                }
+            }
+
+            if (isLValueOp(inst->opcode)) {
+                auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
+                collectLocalsFromExpr(lvinst->lvalue, ast_locals, unknown_node_found);
+            }
+            if (const QoreValue* expr = getInstructionExpr(inst.get())) {
+                collectLocalsFromExpr(*expr, ast_locals, unknown_node_found);
+            }
+
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                auto* obe_inst = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
+                if (obe_inst->stmt) {
+                    collectLocalsFromStatementBlock(obe_inst->stmt->getCode(),
+                            ast_locals, unknown_node_found);
+                }
+                if (obe_inst->handler_ir) {
+                    collectLocalsFromIRFunction(*obe_inst->handler_ir,
+                            ast_locals, unknown_node_found);
+                }
+            }
+        }
+    }
+}
+
 void QoreIRFunction::computeIROnlyLocals() {
     ir_only_locals.clear();
 
@@ -1288,6 +1361,10 @@ void QoreIRFunction::computeIROnlyLocals() {
                 auto* obe_inst = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
                 if (obe_inst->stmt) {
                     collectLocalsFromStatementBlock(obe_inst->stmt->getCode(),
+                            ast_referenced_locals, unknown_node_found);
+                }
+                if (obe_inst->handler_ir) {
+                    collectLocalsFromIRFunction(*obe_inst->handler_ir,
                             ast_referenced_locals, unknown_node_found);
                 }
             }

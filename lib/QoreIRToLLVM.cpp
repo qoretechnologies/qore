@@ -36,12 +36,26 @@
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreClassIntern.h"
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
 static_assert(QORE_IR_MAX_OPCODE == 369,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
+
+static bool isFastFunctionCallEligible(const AbstractQoreFunctionVariant* variant) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    return uvb && uvb->isStaticallyFastCallEligible();
+}
+
+static bool isFastMethodCallEligible(const AbstractQoreFunctionVariant* variant) {
+    const auto* mvb = dynamic_cast<const MethodVariantBase*>(variant);
+    return mvb
+        ? mvb->isStaticallyFastMethodCallEligible()
+        : isFastFunctionCallEligible(variant);
+}
+
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/CaseNodeRegex.h"
@@ -2090,7 +2104,7 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
 
 // Walk a lvalue AST expression to find the root LocalVar* key (for alloca lookup).
 // Returns nullptr if the root is not a local variable.
-static const void* findLvalueRootLocalKey(const QoreValue& lvalue) {
+static LocalVar* findLvalueRootLocalVar(const QoreValue& lvalue) {
     if (!lvalue.hasNode()) {
         return nullptr;
     }
@@ -2098,8 +2112,8 @@ static const void* findLvalueRootLocalKey(const QoreValue& lvalue) {
     while (node) {
         if (auto* var_ref = dynamic_cast<const VarRefNode*>(node)) {
             qore_var_t type = var_ref->getType();
-            if (type == VT_LOCAL || type == VT_LOCAL_TS) {
-                return reinterpret_cast<const void*>(var_ref->ref.id);
+            if (type == VT_LOCAL || type == VT_LOCAL_TS || type == VT_CLOSURE) {
+                return var_ref->ref.id;
             }
             return nullptr;
         }
@@ -2112,6 +2126,10 @@ static const void* findLvalueRootLocalKey(const QoreValue& lvalue) {
         }
     }
     return nullptr;
+}
+
+static const void* findLvalueRootLocalKey(const QoreValue& lvalue) {
+    return reinterpret_cast<const void*>(findLvalueRootLocalVar(lvalue));
 }
 
 const void* QoreIRToLLVM::findLVPathRootLocalKey(
@@ -6855,6 +6873,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 error = "branch target block not found";
                 return false;
             }
+            if (br->target && br->target->is_loop_header) {
+                auto check_cancel = module.getOrInsertFunction("qore_rt_check_cancel",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                llvm::Value* operation = builder->CreateGlobalString("IR loop", "loop_cancel_operation");
+                builder->CreateCall(check_cancel, {xsink_arg, operation});
+                emitExceptionCheck(module, llvm_func, inst);
+            }
             builder->CreateBr(it->second);
             return true;
         }
@@ -7713,17 +7738,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     // uniquely identifies the resolved target; compare FE
                     // pointer to the current function's FE.
                     bool is_self_rec = false;
+                    const FunctionCallNode* self_call = nullptr;
                     if (!aot_self_recursive_fast_entry.empty()) {
-                        const auto* call = dynamic_cast<const FunctionCallNode*>(
+                        self_call = dynamic_cast<const FunctionCallNode*>(
                                 inv->expr.getInternalNode());
-                        if (call && call->getFunctionEntry()
+                        if (self_call && self_call->getFunctionEntry()
                                 && current_ir_func
                                 && aot_self_recursive_fe
-                                && call->getFunctionEntry() == aot_self_recursive_fe) {
+                                && self_call->getFunctionEntry() == aot_self_recursive_fe) {
                             is_self_rec = true;
                         }
                     }
-                    if (is_self_rec) {
+                    if (is_self_rec && isFastFunctionCallEligible(self_call->getVariant())) {
                         // AOT Approach B self-recursive: direct LLVM call to fast entry
                         llvm::Function* fast_fn = module.getFunction(
                                 aot_self_recursive_fast_entry);
@@ -8487,11 +8513,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                         llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                                 cast_node->isOrNothing() ? 1 : 0);
-                        auto helper = module.getOrInsertFunction("qore_rt_cast_by_type_path",
+                        auto helper = module.getOrInsertFunction("qore_rt_cast_by_type_path_aot",
                                 llvm::FunctionType::get(i64_type,
-                                    {i64_type, ptr_type, i64_type, ptr_type}, false));
+                                    {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false));
                         result = builder->CreateCall(helper,
-                                {inner_boxed, type_path_ptr, or_nothing_val, xsink_arg});
+                                {aot_ctx_arg, inner_boxed, type_path_ptr, or_nothing_val, xsink_arg});
                     } else {
                         // Fallback to expr slot
                         QoreValue expr_val = inv->expr;
@@ -8531,6 +8557,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 uint64_t lv_bits;
                 std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
                 llvm::Value* val_boxed = boxValue(val, inv->operands[0].id);
+                if (LocalVar* root_local = findLvalueRootLocalVar(lv);
+                        root_local && root_local->closureUse()) {
+                    const void* local_key = reinterpret_cast<const void*>(root_local);
+                    if (aot_mode) {
+                        auto inst_helper = module.getOrInsertFunction(
+                                "qore_rt_instantiate_local_aot",
+                                llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+                        int32_t local_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local_key);
+                        builder->CreateCall(inst_helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, local_slot)});
+                    } else {
+                        auto inst_helper = module.getOrInsertFunction(
+                                "qore_rt_instantiate_local",
+                                llvm::FunctionType::get(void_type, {ptr_type}, false));
+                        llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                                reinterpret_cast<uint64_t>(root_local));
+                        builder->CreateCall(inst_helper, {builder->CreateIntToPtr(var_ptr, ptr_type)});
+                    }
+                }
                 // Clear reload tracker for lvalue target local
                 {
                     const void* local_key = findLvalueRootLocalKey(lv);
@@ -8953,6 +8998,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             llvm::Value* call_result;
             if (aot_mode && direct_inst->is_self_recursive
+                    && isFastFunctionCallEligible(direct_inst->variant)
                     && !aot_self_recursive_fast_entry.empty()) {
                 // AOT Approach B self-recursive: direct LLVM call to fast entry
                 // Completely bypasses the runtime helper — no TLS param instantiation,
@@ -8990,7 +9036,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
 
-                if (direct_inst->is_self_recursive) {
+                if (direct_inst->is_self_recursive
+                        && isFastFunctionCallEligible(direct_inst->variant)) {
                     // Self-recursive AOT (no fast entry available): lightweight helper
                     if (has_arg_cleanups) {
                         auto helper = module.getOrInsertFunction(
@@ -9093,7 +9140,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     call_result = builder->CreateCall(helper, {callee_fn, variant_ptr,
                             args_array, llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
                 }
-            } else if (direct_inst->is_self_recursive && direct_inst->variant != nullptr) {
+            } else if (direct_inst->is_self_recursive && direct_inst->variant != nullptr
+                    && isFastFunctionCallEligible(direct_inst->variant)) {
                 // Lightweight path for self-recursive calls: skip ProgramThreadCountContextHelper,
                 // ArgvContextHelper, and return type coercion overhead
                 llvm::Value* variant_ptr = builder->CreateIntToPtr(
@@ -9175,7 +9223,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const char* helper_name_throwing = "qore_rt_call_method_direct_aot_throwing";
                 if (direct_inst->variant) {
                     const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
-                    if (uvb && uvb->isStaticallyFastCallEligible()) {
+                    if (uvb && isFastMethodCallEligible(direct_inst->variant)) {
                         helper_name = "qore_rt_call_method_fast_aot";
                         helper_name_throwing = "qore_rt_call_method_fast_aot_throwing";
                     }
@@ -9199,7 +9247,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Use fast call path if variant is eligible (no default args, not synchronized)
                 if (direct_inst->variant) {
                     const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
-                    if (uvb && uvb->isStaticallyFastCallEligible()) {
+                    if (uvb && isFastMethodCallEligible(direct_inst->variant)) {
                         llvm::Value* variant_ptr = builder->CreateIntToPtr(
                                 llvm::ConstantInt::get(i64_type,
                                     reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
@@ -9263,7 +9311,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const char* helper_name_throwing = "qore_rt_call_method_direct_aot_throwing";
                 if (invoke_inst->variant) {
                     const UserVariantBase* uvb = invoke_inst->variant->getUserVariantBase();
-                    if (uvb && uvb->isStaticallyFastCallEligible()) {
+                    if (uvb && isFastMethodCallEligible(invoke_inst->variant)) {
                         helper_name = "qore_rt_call_method_fast_aot";
                         helper_name_throwing = "qore_rt_call_method_fast_aot_throwing";
                     }
@@ -9287,7 +9335,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // Use fast call path if variant is eligible (no default args, not synchronized)
                 if (invoke_inst->variant) {
                     const UserVariantBase* uvb = invoke_inst->variant->getUserVariantBase();
-                    if (uvb && uvb->isStaticallyFastCallEligible()) {
+                    if (uvb && isFastMethodCallEligible(invoke_inst->variant)) {
                         llvm::Value* variant_ptr = builder->CreateIntToPtr(
                                 llvm::ConstantInt::get(i64_type,
                                     reinterpret_cast<uint64_t>(invoke_inst->variant)), ptr_type);
@@ -9375,7 +9423,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             "qore_rt_call_static_method_direct_aot_consume_args_throwing";
                 } else if (direct_inst->variant) {
                     const UserVariantBase* uvb = direct_inst->variant->getUserVariantBase();
-                    if (uvb && uvb->isStaticallyFastCallEligible()) {
+                    if (uvb && isFastMethodCallEligible(direct_inst->variant)) {
                         helper_name = "qore_rt_call_static_method_fast_aot";
                         helper_name_throwing = "qore_rt_call_static_method_fast_aot_throwing";
                     }
@@ -11866,6 +11914,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             uint64_t lv_bits;
             std::memcpy(&lv_bits, &lv, sizeof(lv_bits));
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            if (LocalVar* root_local = findLvalueRootLocalVar(lvinst->lvalue);
+                    root_local && root_local->closureUse()) {
+                const void* local_key = reinterpret_cast<const void*>(root_local);
+                if (aot_mode) {
+                    auto inst_helper = module.getOrInsertFunction(
+                            "qore_rt_instantiate_local_aot",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+                    int32_t local_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(local_key);
+                    builder->CreateCall(inst_helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, local_slot)});
+                } else {
+                    auto inst_helper = module.getOrInsertFunction(
+                            "qore_rt_instantiate_local",
+                            llvm::FunctionType::get(void_type, {ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(root_local));
+                    builder->CreateCall(inst_helper, {builder->CreateIntToPtr(var_ptr, ptr_type)});
+                }
+            }
             // Clear the reload tracker for the lvalue target local (same pattern
             // as compound assign — prevents refcount inflation in loops).
             {
@@ -13722,13 +13789,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
                             cast_node->isOrNothing() ? 1 : 0);
                     auto cbtp_ft = llvm::FunctionType::get(i64_type,
-                            {i64_type, ptr_type, i64_type, ptr_type}, false);
+                            {ptr_type, i64_type, ptr_type, i64_type, ptr_type}, false);
                     auto helper = module.getOrInsertFunction(
-                            "qore_rt_cast_by_type_path", cbtp_ft);
+                            "qore_rt_cast_by_type_path_aot", cbtp_ft);
                     auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_cast_by_type_path_throwing", cbtp_ft);
+                            "qore_rt_cast_by_type_path_aot_throwing", cbtp_ft);
                     result = emitMaybeInvoke(helper, helper_throwing,
-                            {inner_boxed, type_path_ptr, or_nothing_val, xsink_arg},
+                            {aot_ctx_arg, inner_boxed, type_path_ptr, or_nothing_val, xsink_arg},
                             module, llvm_func, inst);
                 } else {
                     // Fallback to expr slot if cast node is unavailable
@@ -14193,6 +14260,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // (Only needed if handlers actually executed, but safe to do always)
                 if (!sinst->inline_lowered) {
                     reloadAllLocalsFromRuntime(module, llvm_func);
+                    emitExceptionCheck(module, llvm_func, inst);
                 }
             }
             // ScopeExit produces NOTHING as its result

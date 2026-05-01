@@ -246,6 +246,15 @@ public:
         return final;
     }
 
+    DLLLOCAL virtual bool isMethodSynchronized() const {
+        return false;
+    }
+
+    DLLLOCAL bool isStaticallyFastMethodCallEligible() const {
+        const UserVariantBase* uvb = getUserVariantBase();
+        return uvb && uvb->isStaticallyFastCallEligible() && !isMethodSynchronized();
+    }
+
     DLLLOCAL void clearAbstract() {
         assert(abstract);
         abstract = false;
@@ -368,6 +377,10 @@ public:
     }
 
     DLLLOCAL ~UserMethodVariant() {
+    }
+
+    DLLLOCAL bool isMethodSynchronized() const override {
+        return synchronized;
     }
 
     // the following defines the pure virtual functions that are common to all user variants
@@ -1910,6 +1923,11 @@ public:
     DLLLOCAL char* getHash() const {
         assert(is_set);
         return (char*)buf;
+    }
+
+    DLLLOCAL void setRawHash(const void* data) {
+        memcpy(buf, data, SH_SIZE);
+        is_set = true;
     }
 
     DLLLOCAL void clear() {

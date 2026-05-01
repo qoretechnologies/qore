@@ -38,6 +38,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/qore_list_private.h"
 
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 
@@ -845,6 +846,15 @@ const QoreTypeInfo* QoreValue::getFullTypeInfo() const {
             }
             // Check for complex type info (e.g., hash<StatInfo> from cast expressions)
             const QoreTypeInfo* complex_type = qore_hash_private::get(*h)->complexTypeInfo;
+            if (complex_type) {
+                return complex_type;
+            }
+        }
+    }
+    if (t == NT_LIST && isPointer()) {
+        const QoreListNode* l = reinterpret_cast<const QoreListNode*>(getPointerUnsafe());
+        if (l) {
+            const QoreTypeInfo* complex_type = qore_list_private::get(*l)->complexTypeInfo;
             if (complex_type) {
                 return complex_type;
             }

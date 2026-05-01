@@ -210,6 +210,10 @@ static bool aotEmitDebugInfo() {
 //! Criteria: has self-recursive calls, all params IR-only, no closures/references/varargs.
 static bool isAOTSelfRecursiveEligible(const QoreIRFunction* ir_func,
         const UserVariantBase* uvb) {
+    if (!uvb || !uvb->isStaticallyFastCallEligible()) {
+        return false;
+    }
+
     // Check for self-recursive CallDirect instructions
     bool has_self_recursive = false;
     for (const auto& block : ir_func->blocks) {
@@ -285,6 +289,9 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
     const char* source_label = nullptr);
 static void filterLoadableLocalModules(std::unordered_set<std::string>& local_module_names,
     const std::unordered_map<std::string, std::string>& local_module_paths,
+    const qore_program_private* pp);
+static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_module_names,
+    std::unordered_map<std::string, std::string>& local_module_paths,
     const qore_program_private* pp);
 
 // Phase 4 slice 10: llvm::object::ObjectFile for reading fragment
@@ -642,6 +649,17 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Container construction IR carries parse-time typeInfo for empty typed
     // list/hash values that cannot recover their type from operands.
     flags |= QORE_AOT_FEAT_CONTAINER_TYPEINFO;
+    // Preserve the parser-produced class signature hashes. Recomputing them
+    // from deserialized method maps can change declaration order and break
+    // cross-Program class compatibility.
+    flags |= QORE_AOT_FEAT_CLASS_HASH;
+    // Function and method records preserve synchronized gates so source-stripped
+    // AOT dispatch takes the same lock/deadlock paths as source execution.
+    flags |= QORE_AOT_FEAT_METHOD_SYNC;
+    // Serialized constant/default list and hash values preserve their runtime
+    // complex/hashdecl type metadata so downstream AOT compilation sees the
+    // same typed constants as source parsing.
+    flags |= QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS;
     return flags;
 }
 
@@ -1545,7 +1563,8 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
         QoreProgram* pgm, llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledInitFunc>& compiled_init_funcs,
-        const AOTConstantReverseMap* const_reverse_map) {
+        const AOTConstantReverseMap* const_reverse_map,
+        const char* module_path = nullptr) {
     if (init_c.getType() != NT_CLOSURE) {
         if (getenv("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT: module init of '%s' is not a closure (type=%s)\n",
@@ -1638,7 +1657,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     cif.feature_flags = scanIRFeatureFlags(*ir_func);
     cif.target_type = AOTCompiledInitFunc::MODULE_INIT;
     cif.ns_path = mod_name;
-    cif.item_name.clear();
+    cif.item_name = module_path ? module_path : "";
 
     compiled_init_funcs.push_back(std::move(cif));
     if (getenv("QORE_AOT_DEBUG")) {
@@ -1745,7 +1764,9 @@ static AOTConstantReverseMap buildConstantReverseMap(qore_ns_private* root_ns) {
 
 static void collectLocalModuleRoots(std::vector<std::pair<std::string, qore_ns_private*>>& roots,
         const std::unordered_set<std::string>& local_module_names, qore_ns_private* root_ns) {
-    for (const std::string& mod : local_module_names) {
+    std::vector<std::string> module_names(local_module_names.begin(), local_module_names.end());
+    std::sort(module_names.begin(), module_names.end());
+    for (const std::string& mod : module_names) {
         QoreProgram* module_pgm = MM.findUserModuleProgram(mod.c_str());
         if (!module_pgm) {
             continue;
@@ -3694,6 +3715,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
     extractAllDependencies(source_text, source_len, nullptr, &local_module_names,
         &local_module_paths, label);
     filterLoadableLocalModules(local_module_names, local_module_paths, pp);
+    collectEmbeddedUserModules(local_module_names, local_module_paths, pp);
     std::vector<std::pair<std::string, qore_ns_private*>> local_module_roots;
     collectLocalModuleRoots(local_module_roots, local_module_names, root_ns);
 
@@ -3727,6 +3749,21 @@ bool QoreAOT::compile(QoreProgram* pgm,
     if (!fatal_lowering_error.empty()) {
         error = fatal_lowering_error;
         return false;
+    }
+    for (auto& root : local_module_roots) {
+        QoreAbstractModule* mod = QMM.findModule(root.first.c_str());
+        QoreUserModule* user_mod = mod && mod->isUser() ? dynamic_cast<QoreUserModule*>(mod) : nullptr;
+        if (!user_mod) {
+            continue;
+        }
+        QoreValue init_c = user_mod->refInitClosure();
+        if (!init_c) {
+            continue;
+        }
+        compileModuleInitClosureAsInitFunc(init_c, root.first.c_str(), user_mod->getProgram(),
+            ctx, *module, di_builder, di_cu, compiled_init_funcs, &const_reverse_map,
+            user_mod->getFileName());
+        init_c.discard(nullptr);
     }
 
     // Step 2: Try to compile top-level code with AOT mode
@@ -3861,24 +3898,45 @@ bool QoreAOT::compile(QoreProgram* pgm,
         hdr.parse_options_hi = parse_options.getHi();
         hdr.source_hash = computeSourceHash(label);
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+        writer.feature_flags = hdr.feature_flags;
         appendModulePathListSections(writer, pgm, hdr.feature_flags);
         appendBuildInfoSection(writer, "script", target_triple, opt_level, include_source);
 
         // Serialize dependencies from the parsed program's feature lists.
         // This captures ALL module dependencies including those from %include'd files,
         // which extractAllDependencies() would miss since it only scans raw source text.
+        // Script binaries can also embed relative-path user modules; private functions
+        // from those modules may reference successful %try-module loads from the module's
+        // own program, so include those feature lists as runtime dependencies too.
         std::vector<std::string> all_deps;
+        std::unordered_set<std::string> dep_seen;
+        auto add_dep = [&](const std::string& feat) {
+            if (feat != "qore" && dep_seen.insert(feat).second) {
+                all_deps.push_back(feat);
+            }
+        };
         {
             qore_program_private* pp = qore_program_private::get(*pgm);
             // featureList contains builtin module names, userFeatureList contains user module names
             for (const auto& feat : pp->featureList) {
-                if (feat != "qore") {
-                    all_deps.push_back(feat);
-                }
+                add_dep(feat);
             }
             for (const auto& feat : pp->userFeatureList) {
-                if (feat != "qore") {
-                    all_deps.push_back(feat);
+                add_dep(feat);
+            }
+            for (const std::string& module_name : local_module_names) {
+                QoreAbstractModule* mod = QMM.findModule(module_name.c_str());
+                QoreUserModule* user_mod = mod && mod->isUser()
+                    ? dynamic_cast<QoreUserModule*>(mod) : nullptr;
+                if (!user_mod) {
+                    continue;
+                }
+                qore_program_private* mpp = qore_program_private::get(*user_mod->getProgram());
+                for (const auto& feat : mpp->featureList) {
+                    add_dep(feat);
+                }
+                for (const auto& feat : mpp->userFeatureList) {
+                    add_dep(feat);
                 }
             }
         }
@@ -4203,6 +4261,41 @@ static void filterLoadableLocalModules(std::unordered_set<std::string>& local_mo
         } else {
             ++it;
         }
+    }
+}
+
+static bool aotUserModuleNeedsEmbedding(const QoreAbstractModule* mod,
+        const qore_program_private* pp) {
+    if (!mod || !mod->isUser()) {
+        return false;
+    }
+
+    std::string module_path = aotCanonicalPath(mod->getFileName());
+    std::vector<std::string> module_dirs;
+    aotCollectEffectiveModuleDirs(module_dirs, pp);
+    for (const std::string& dir : module_dirs) {
+        if (aotPathIsUnderDir(module_path, dir)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void collectEmbeddedUserModules(std::unordered_set<std::string>& local_module_names,
+        std::unordered_map<std::string, std::string>& local_module_paths,
+        const qore_program_private* pp) {
+    if (!pp) {
+        return;
+    }
+
+    for (const std::string& feature : pp->userFeatureList) {
+        QoreAbstractModule* mod = QMM.findModule(feature.c_str());
+        if (!aotUserModuleNeedsEmbedding(mod, pp)) {
+            continue;
+        }
+        local_module_names.insert(feature);
+        local_module_paths.insert_or_assign(feature, aotCanonicalPath(mod->getFileName()));
     }
 }
 
@@ -5701,6 +5794,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         hdr.parse_options_hi = final_po.getHi();
         hdr.source_hash = computeSourceHash(label);
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+        writer.feature_flags = hdr.feature_flags;
         appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
         appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source);
 
@@ -6157,6 +6251,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             hdr.parse_options_hi = final_po.getHi();
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+            writer.feature_flags = hdr.feature_flags;
             appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
             appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source);
 
@@ -6534,6 +6629,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         hdr.qore_version_patch = QORE_VERSION_PATCH;
         hdr.source_hash = computeSourceHash(target_canon.c_str());
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+        writer.feature_flags = hdr.feature_flags;
         appendModulePathListSections(writer, qpgm, hdr.feature_flags);
         appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
 
@@ -7178,6 +7274,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         hdr.qore_version_patch = QORE_VERSION_PATCH;
         hdr.source_hash = computeSourceHash(target_canon.c_str());
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+        writer.feature_flags = hdr.feature_flags;
         appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
         appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
 
@@ -7658,6 +7755,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             hdr.parse_options_hi = final_po.getHi();
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+            writer.feature_flags = hdr.feature_flags;
             appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
             appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source);
 
@@ -8086,6 +8184,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             hdr.parse_options_hi = final_po.getHi();
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+            writer.feature_flags = hdr.feature_flags;
             appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
             appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source);
 
@@ -8553,6 +8652,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             hdr.parse_options_hi = final_po.getHi();
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
+            writer.feature_flags = hdr.feature_flags;
             appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
             appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source);
 

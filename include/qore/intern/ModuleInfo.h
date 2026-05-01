@@ -772,6 +772,15 @@ public:
         del = dl;
     }
 
+    DLLLOCAL void setInitClosure(QoreValue v) {
+        init_c.discard(nullptr);
+        init_c = v;
+    }
+
+    DLLLOCAL QoreValue refInitClosure() const {
+        return init_c.refSelf();
+    }
+
     DLLLOCAL virtual bool isBuiltin() const override {
         return false;
     }
@@ -803,6 +812,7 @@ protected:
     //! Module logic / namespace container
     QoreProgram* pgm;
 
+    QoreValue init_c{}; // retained for AOT compilation of embedded local modules
     AbstractQoreNode* del = nullptr; // deletion closure / call reference
 
     DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;

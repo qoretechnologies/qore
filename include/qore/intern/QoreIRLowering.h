@@ -299,6 +299,8 @@ private:
 
     QoreIRBasicBlock* getCurrentExceptionTarget() const;
     QoreIRBasicBlock* getGuardExceptionTarget() const;
+    void setLoopCheckpointExceptionTarget(QoreIRInstruction* inst, QoreIRBasicBlock* target,
+        QoreIRBasicBlock* handler = nullptr);
     bool needsNotNothingGuard(const QoreValue& expr) const;
     bool needsNotNothingGuard(const QoreValue* expr, const QoreTypeInfo* target_type,
         bool allow_maybe_nothing = false) const;

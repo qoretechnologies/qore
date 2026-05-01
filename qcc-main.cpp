@@ -1059,6 +1059,9 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_BCA_NATIVE_ARGS, "bca-native-args"},
         {QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS, "closure-varargs-flags"},
         {QORE_AOT_FEAT_CONTAINER_TYPEINFO, "container-typeinfo"},
+        {QORE_AOT_FEAT_CLASS_HASH, "class-hash"},
+        {QORE_AOT_FEAT_METHOD_SYNC, "method-sync"},
+        {QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS, "typed-value-containers"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -1379,6 +1382,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::SELECT:
         case AOTExprKind::LOG_AND:
         case AOTExprKind::LOG_OR:
+        case AOTExprKind::RANGE:
+        case AOTExprKind::ASSIGN:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
@@ -1607,8 +1612,14 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                     }
                 }
             }
-            if (!dump_skip_bytes(p, end, 1)) {
-                return false;
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
+                if (!dump_skip_bytes(p, end, 2)) {
+                    return false;
+                }
+            } else {
+                if (!dump_skip_bytes(p, end, 1)) {
+                    return false;
+                }
             }
             uint16_t ncaptured = 0;
             if (!dump_read_u16(p, end, ncaptured)) {
@@ -1914,6 +1925,19 @@ static bool dump_skip_serialized_value_args(const QoreAOTBinaryReader& reader,
     return true;
 }
 
+static bool dump_skip_container_value_type(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end) {
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS) == 0) {
+        return true;
+    }
+    uint8_t kind = 0;
+    if (!dump_read_u8(p, end, kind)) {
+        return false;
+    }
+    return kind == static_cast<uint8_t>(QoreAOTContainerValueType::Plain)
+        || dump_skip_len_string_ref(reader, p, end);
+}
+
 static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end, AOTDefaultDumpSummary& summary,
         std::string& error, bool top_level, const char* category,
@@ -1972,13 +1996,15 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
 
         case QoreAOTValueTag::VT_LIST: {
             uint32_t count = 0;
-            return dump_read_u32(p, end, count)
+            return dump_skip_container_value_type(reader, p, end)
+                && dump_read_u32(p, end, count)
                 && dump_skip_serialized_value_args(reader, p, end, count, summary, error);
         }
 
         case QoreAOTValueTag::VT_HASH: {
             uint32_t count = 0;
-            if (!dump_read_u32(p, end, count)) {
+            if (!dump_skip_container_value_type(reader, p, end)
+                    || !dump_read_u32(p, end, count)) {
                 return fail("truncated hash value");
             }
             for (uint32_t i = 0; i < count; ++i) {
@@ -2091,6 +2117,8 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
     }
     const bool has_const_pending_flag =
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
+    const bool has_class_hash =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_HASH) != 0;
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = nullptr;
@@ -2102,6 +2130,10 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
             return false;
         }
         std::string owner = dump_owner_name(path, name);
+        if (has_class_hash && !dump_skip_bytes(p, end, 1 + SH_SIZE)) {
+            error = "truncated class signature hash";
+            return false;
+        }
 
         uint32_t num_bases = 0;
         if (!dump_read_u32(p, end, num_bases)) {

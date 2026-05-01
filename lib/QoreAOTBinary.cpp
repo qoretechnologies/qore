@@ -559,6 +559,28 @@ static bool readDeferredMemberDefault(
         default_val = QoreValue();
         return true;
     }
+    if (tag_byte == static_cast<uint8_t>(QoreAOTValueTag::VT_CONST_REF)
+            && !reader.wrap_const_ref_in_rcr) {
+        // Class/static member records are read before class constants from
+        // the same CLASSES record are registered. Resolve constant refs after
+        // resolveClassConstants() instead of silently converting an unresolved
+        // same-class constant to NOTHING.
+        ++ptr;  // consume tag
+        if (ptr + 8 > end) {
+            error = "unexpected end of data reading const_ref name";
+            return false;
+        }
+        (void)QoreAOTBinaryReader::readU32(ptr);  // name_len (unused)
+        uint32_t name_offset = QoreAOTBinaryReader::readU32(ptr);
+        const char* fqn = reader.getString(name_offset);
+        if (!fqn) {
+            error = "invalid string offset for const_ref name";
+            return false;
+        }
+        pim.pending_const_ref_path = fqn;
+        default_val = QoreValue();
+        return true;
+    }
     if (tag_byte != static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT)) {
         // Normal case: use the standard reader
         default_val = reader.readValue(ptr, end, error);
@@ -624,6 +646,35 @@ static bool readDeferredMemberDefault(
         default_val = QoreValue();
     }
     (void)save;  // save no longer needed — ptr correctly advanced
+    return true;
+}
+
+static bool resolveDeferredConstRefDefault(std::string& path, QoreValue& default_val,
+        QoreProgram* pgm, const char* kind, const char* owner_name,
+        const char* member_name, std::string& error) {
+    if (path.empty()) {
+        return true;
+    }
+    if (default_val.hasNode()) {
+        default_val.discard(nullptr);
+        default_val = QoreValue();
+    }
+    QoreValue v = qore_aot_resolve_constant_path_value(pgm, path.c_str(),
+        true, true);
+    if (!v) {
+        error = "AOT cannot resolve deferred constant-ref default '";
+        error += path;
+        error += "' for ";
+        error += kind ? kind : "member";
+        error += " '";
+        error += owner_name ? owner_name : "<unknown>";
+        error += "::";
+        error += member_name ? member_name : "<unknown>";
+        error += "'";
+        return false;
+    }
+    default_val = v;
+    path.clear();
     return true;
 }
 
@@ -947,6 +998,23 @@ static bool aot_constant_path_belongs_to_fqns(const std::string& path,
     return excluded_fqns.find(path.substr(pos, base_len)) != excluded_fqns.end();
 }
 
+static bool aot_constant_path_belongs_to_fqn(const std::string& path,
+        const std::string& fqn) {
+    if (fqn.empty()) {
+        return false;
+    }
+    if (!aot_is_encoded_constant_path(path.c_str())) {
+        return path == fqn;
+    }
+
+    size_t pos = strlen(AOT_CONST_PATH_PREFIX);
+    size_t base_len = 0;
+    if (!aot_parse_size_component(path, pos, base_len) || pos + base_len > path.size()) {
+        return false;
+    }
+    return path.compare(pos, base_len, fqn) == 0;
+}
+
 static AOTConstantReverseMap aot_filter_constant_reverse_map(
         const AOTConstantReverseMap& crm, const std::vector<std::string>& excluded_fqns,
         const std::string& excluded_direct_fqn) {
@@ -1073,6 +1141,154 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
     return rv;
 }
 
+static std::string qoreAOTExceptionText(ExceptionSink& xsink) {
+    QoreValue e = xsink.getExceptionErr();
+    QoreValue d = xsink.getExceptionDesc();
+    const char* es = e.getType() == NT_STRING && e.get<const QoreStringNode>()
+        ? e.get<const QoreStringNode>()->c_str() : "(?err)";
+    const char* ds = d.getType() == NT_STRING && d.get<const QoreStringNode>()
+        ? d.get<const QoreStringNode>()->c_str() : "(?desc)";
+    std::string rv(es);
+    rv += ": ";
+    rv += ds;
+    xsink.clear();
+    return rv;
+}
+
+static void qoreAOTWriteContainerValueType(QoreAOTBinaryWriter& writer,
+        QoreAOTContainerValueType kind, const char* type_path) {
+    writer.writeU8(static_cast<uint8_t>(kind));
+    if (kind == QoreAOTContainerValueType::Plain) {
+        return;
+    }
+    size_t len = type_path ? strlen(type_path) : 0;
+    writer.writeU32(static_cast<uint32_t>(len));
+    writer.writeStringRef(type_path ? type_path : "", len);
+}
+
+static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
+        const QoreListNode* list) {
+    if ((writer.feature_flags & QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS) == 0) {
+        return;
+    }
+    const QoreTypeInfo* ti = list ? list->getTypeInfo() : nullptr;
+    const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    if (vt && vt != autoTypeInfo && vt != anyTypeInfo) {
+        qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
+            QoreTypeInfo::getPath(ti));
+        return;
+    }
+    qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Plain, nullptr);
+}
+
+static void qoreAOTWriteHashValueType(QoreAOTBinaryWriter& writer,
+        const QoreHashNode* hash) {
+    if ((writer.feature_flags & QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS) == 0) {
+        return;
+    }
+    if (hash) {
+        if (const TypedHashDecl* hd = hash->getHashDecl()) {
+            std::string path = hd->getNamespacePath();
+            qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::HashDecl,
+                path.c_str());
+            return;
+        }
+        const QoreTypeInfo* ti = hash->getTypeInfo();
+        const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+        if (vt && vt != autoTypeInfo && vt != anyTypeInfo) {
+            qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
+                QoreTypeInfo::getPath(ti));
+            return;
+        }
+    }
+    qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Plain, nullptr);
+}
+
+static bool qoreAOTReadContainerValueType(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, const uint8_t* end, QoreAOTContainerValueType& kind,
+        const char*& type_path, std::string& error) {
+    kind = QoreAOTContainerValueType::Plain;
+    type_path = nullptr;
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS) == 0) {
+        return true;
+    }
+    if (ptr + 1 > end) {
+        error = "unexpected end of data reading typed container value kind";
+        return false;
+    }
+    kind = static_cast<QoreAOTContainerValueType>(QoreAOTBinaryReader::readU8(ptr));
+    if (kind == QoreAOTContainerValueType::Plain) {
+        return true;
+    }
+    if (kind != QoreAOTContainerValueType::Complex && kind != QoreAOTContainerValueType::HashDecl) {
+        error = "invalid typed container value kind";
+        return false;
+    }
+    if (ptr + 8 > end) {
+        error = "unexpected end of data reading typed container value type path";
+        return false;
+    }
+    uint32_t len = QoreAOTBinaryReader::readU32(ptr);
+    uint32_t offset = QoreAOTBinaryReader::readU32(ptr);
+    type_path = reader.getString(offset);
+    if (!type_path || !*type_path) {
+        error = "invalid or empty typed container value type path";
+        return false;
+    }
+    if (strlen(type_path) < len) {
+        error = "truncated typed container value type path";
+        return false;
+    }
+    return true;
+}
+
+static bool qoreAOTApplyContainerValueType(QoreValue& v,
+        QoreAOTContainerValueType kind, const char* type_path, QoreProgram* pgm,
+        std::string& error) {
+    if (kind == QoreAOTContainerValueType::Plain) {
+        return true;
+    }
+
+    const QoreTypeInfo* ti = nullptr;
+    if (kind == QoreAOTContainerValueType::HashDecl) {
+        const QoreNamespace* pns = nullptr;
+        const TypedHashDecl* hd = pgm ? pgm->findHashDecl(type_path, pns) : nullptr;
+        if (!hd) {
+            error = "cannot resolve hashdecl '" + std::string(type_path)
+                + "' while reading typed AOT container value";
+            return false;
+        }
+        ti = hd->getTypeInfo();
+    } else if (kind == QoreAOTContainerValueType::Complex) {
+        QoreAOTTypeResolver resolver(pgm);
+        std::string type_error;
+        ti = resolver.resolve(type_path, type_error);
+        if (!ti) {
+            error = "cannot resolve complex type '" + std::string(type_path)
+                + "' while reading typed AOT container value";
+            if (!type_error.empty()) {
+                error += ": " + type_error;
+            }
+            return false;
+        }
+    } else {
+        error = "invalid typed AOT container value kind";
+        return false;
+    }
+
+    ExceptionSink xsink;
+    bool ok = QoreTypeInfo::retypeValue(v, ti, &xsink);
+    if (!ok || xsink.isException()) {
+        error = "cannot restore typed AOT container value as '"
+            + std::string(type_path) + "'";
+        if (xsink.isException()) {
+            error += ": " + qoreAOTExceptionText(xsink);
+        }
+        return false;
+    }
+    return true;
+}
+
 // ---- QoreAOTBinaryWriter ----
 
 bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
@@ -1084,24 +1300,21 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
         writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NULL));
         return true;
     }
-    // For otherwise-unserializable pointer-backed values (e.g. a QoreObject
-    // produced by parse-time constant folding of `{"int": IntType}`), check
-    // whether the node pointer is registered in the program reverse map.
-    // If so, write as VT_CONST_REF so the reference can be resolved at load
-    // time. This is skipped for container types (list/hash) and scope refs
-    // which have their own dedicated encodings below; checking only the
-    // types that would otherwise fall into the default-NOTHING case avoids
-    // accidentally rewriting a constant's own top-level value as a
-    // self-reference (only leaf objects make it here).
+    // Preserve source constant-reference semantics inside folded container
+    // values when the node pointer matches a known program constant. Avoid
+    // only paths belonging to the top-level constant currently being written,
+    // which would create a self-reference at load time.
     if (const_reverse_map && v.hasNode()) {
         qore_type_t nt = v.getType();
-        if (nt == NT_OBJECT) {
+        if (nt == NT_OBJECT || nt == NT_HASH || nt == NT_LIST) {
             const AbstractQoreNode* node = v.getInternalNode();
             if (const std::string* path = aotFindConstantReverseMapPath(const_reverse_map, node)) {
-                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_CONST_REF));
-                writeU32(static_cast<uint32_t>(path->size()));
-                writeStringRef(path->c_str(), path->size());
-                return true;
+                if (!aot_constant_path_belongs_to_fqn(*path, current_const_path)) {
+                    writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_CONST_REF));
+                    writeU32(static_cast<uint32_t>(path->size()));
+                    writeStringRef(path->c_str(), path->size());
+                    return true;
+                }
             }
         }
     }
@@ -1220,6 +1433,7 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
         case NT_LIST: {
             writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_LIST));
             const QoreListNode* list = v.get<const QoreListNode>();
+            qoreAOTWriteListValueType(*this, list);
             if (list) {
                 uint32_t count = static_cast<uint32_t>(list->size());
                 writeU32(count);
@@ -1236,6 +1450,7 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
         case NT_HASH: {
             writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_HASH));
             const QoreHashNode* hash = v.get<const QoreHashNode>();
+            qoreAOTWriteHashValueType(*this, hash);
             if (hash) {
                 uint32_t count = static_cast<uint32_t>(hash->size());
                 writeU32(count);
@@ -1767,6 +1982,11 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
         }
 
         case QoreAOTValueTag::VT_LIST: {
+            QoreAOTContainerValueType kind = QoreAOTContainerValueType::Plain;
+            const char* type_path = nullptr;
+            if (!qoreAOTReadContainerValueType(*this, ptr, end, kind, type_path, error)) {
+                return QoreValue();
+            }
             if (ptr + 4 > end) {
                 error = "unexpected end of data reading list count";
                 return QoreValue();
@@ -1780,10 +2000,20 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 }
                 list->push(elem, nullptr);
             }
-            return QoreValue(list.release());
+            QoreValue rv(list.release());
+            if (!qoreAOTApplyContainerValueType(rv, kind, type_path, getProgram(), error)) {
+                rv.discard(nullptr);
+                return QoreValue();
+            }
+            return rv;
         }
 
         case QoreAOTValueTag::VT_HASH: {
+            QoreAOTContainerValueType kind = QoreAOTContainerValueType::Plain;
+            const char* type_path = nullptr;
+            if (!qoreAOTReadContainerValueType(*this, ptr, end, kind, type_path, error)) {
+                return QoreValue();
+            }
             if (ptr + 4 > end) {
                 error = "unexpected end of data reading hash count";
                 return QoreValue();
@@ -1807,7 +2037,12 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 }
                 hash->setKeyValue(key, val, nullptr);
             }
-            return QoreValue(hash.release());
+            QoreValue rv(hash.release());
+            if (!qoreAOTApplyContainerValueType(rv, kind, type_path, getProgram(), error)) {
+                rv.discard(nullptr);
+                return QoreValue();
+            }
+            return rv;
         }
 
         case QoreAOTValueTag::VT_OPAQUE_DEFAULT:
@@ -2442,6 +2677,22 @@ static const char* getTypePath(const QoreTypeInfo* ti, bool no_narrow = false) {
         return "*list<auto!>";
     }
     return ti ? QoreTypeInfo::getPath(ti) : "";
+}
+
+static std::string getNamespaceConstantPath(const qore_ns_private* ns, const char* name) {
+    std::string ns_path = ns ? ns->path : "";
+    if (ns_path.size() >= 2) {
+        ns_path = ns_path.substr(2);
+    }
+    return ns_path.empty() ? std::string(name ? name : "") : ns_path + "::" + (name ? name : "");
+}
+
+static std::string getClassConstantPath(const qore_class_private* priv, const char* name) {
+    std::string class_path = priv ? priv->path : "";
+    if (class_path.size() >= 2) {
+        class_path = class_path.substr(2);
+    }
+    return class_path.empty() ? std::string(name ? name : "") : class_path + "::" + (name ? name : "");
 }
 
 //! Internal state for collecting namespace items during serialization
@@ -3369,6 +3620,17 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         // domain
         writer.writeI64(priv->domain);
 
+        // Parser-produced class signature hash. Runtime class compatibility
+        // uses this hash to compare same-named classes across Program objects;
+        // preserve it exactly instead of recomputing from deserialized maps.
+        writer.writeU8(priv->hash ? 1 : 0);
+        if (priv->hash) {
+            writer.writeBytes(priv->hash.getHash(), SH_SIZE);
+        } else {
+            static const uint8_t empty_hash[SH_SIZE] = {};
+            writer.writeBytes(empty_hash, SH_SIZE);
+        }
+
         // base classes
         if (priv->scl) {
             uint32_t num_bases = static_cast<uint32_t>(priv->scl->size());
@@ -3485,7 +3747,10 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     } else {
                         // Use getReferencedValue() for the actual evaluated value
                         QoreValue actual_val = ce->getReferencedValue();
+                        std::string old_const_path = std::move(writer.current_const_path);
+                        writer.current_const_path = getClassConstantPath(priv, ce->getName());
                         writer.writeValue(actual_val);
+                        writer.current_const_path = std::move(old_const_path);
                         actual_val.discard(nullptr);
                     }
                 }
@@ -3656,7 +3921,12 @@ static void writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
             // ce->val may hold a RuntimeConstantRefNode (NT_RTCONSTREF) which is
             // just a reference to the constant's evaluated saved_val.
             QoreValue actual_val = ce->getReferencedValue();
+            std::string old_const_path = std::move(writer.current_const_path);
+            qore_ns_private* ns = ci.ns_idx < state.namespaces.size()
+                ? state.namespaces[ci.ns_idx].ns : nullptr;
+            writer.current_const_path = getNamespaceConstantPath(ns, ce->getName());
             writer.writeValue(actual_val);
+            writer.current_const_path = std::move(old_const_path);
             actual_val.discard(nullptr);
         }
     }
@@ -3719,6 +3989,12 @@ static void writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
             while (qfi.next()) {
                 const AbstractQoreFunctionVariant* v = qfi.getVariant();
                 if (v->isUser()) {
+                    uint8_t vflags = 0;
+                    const UserVariantBase* uvb = v->getUserVariantBase();
+                    if (uvb && uvb->isSynchronized()) {
+                        vflags |= 0x01;
+                    }
+                    writer.writeU8(vflags);
                     writeVariantSignature(writer, v);
                 }
             }
@@ -3961,6 +4237,11 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     }
                     if (mvb->isAbstract()) {
                         mflags |= 0x02;
+                    }
+                    const UserVariantBase* uvb = v->getUserVariantBase();
+                    if (mvb->isMethodSynchronized()
+                            || (uvb && uvb->isSynchronized())) {
+                        mflags |= 0x04;
                     }
                     writer.writeU8(mflags);
                     writeVariantSignature(writer, v);
@@ -6822,6 +7103,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
     class_list.resize(count);
+    class_signature_hashes.resize(count);
+    const bool has_class_hash = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_HASH) != 0;
 
     // Populate the root namespace's clmap incrementally as each class is
     // created, so standard lookup paths (runtimeFindClass, findClass,
@@ -6850,6 +7133,17 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         int64_t domain = QoreAOTBinaryReader::readI64(ptr);
+        if (has_class_hash) {
+            uint8_t hash_valid = QoreAOTBinaryReader::readU8(ptr);
+            if (ptr + SH_SIZE > end) {
+                error = "invalid class signature hash for class '" + std::string(name) + "'";
+                return false;
+            }
+            if (hash_valid) {
+                class_signature_hashes[i].assign(reinterpret_cast<const char*>(ptr), SH_SIZE);
+            }
+            ptr += SH_SIZE;
+        }
 
         // Validate namespace index before creating the class
         if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
@@ -7130,6 +7424,11 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                 // Add base class to this class with proper access level
                 qc->addBaseClass(const_cast<QoreClass*>(base),
                     static_cast<ClassAccess>(pbc.access), pbc.is_virtual);
+                // Source parsing treats inherited classes as class-signature
+                // input. AOT attaches bases manually, so mark the signature
+                // dirty here; otherwise memberless derived classes commit with
+                // an empty hash and fail cross-Program class compatibility.
+                qore_class_private::get(*qc)->has_sig_changes = true;
                 printd(5, "AOT deser: resolved base class '%s' (id: %d) for class '%s' (id: %d)\n",
                     pbc.base_path.c_str(), base->getID(),
                     qc->getName(), qc->getID());
@@ -7311,6 +7610,11 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                 pim.pending_complex_default_path.clear();
             }
 
+            if (!resolveDeferredConstRefDefault(pim.pending_const_ref_path,
+                    pim.default_val, getProgram(), "class", qc->getName(),
+                    pim.name.c_str(), error)) {
+                return false;
+            }
             resolveDeferredExprTreeDefault(pim.pending_expr_tree_blob,
                 pim.default_val, getProgram(), "class", qc->getName(),
                 pim.name.c_str());
@@ -7508,6 +7812,11 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                 psm.pending_complex_default_path.clear();
             }
 
+            if (!resolveDeferredConstRefDefault(psm.pending_const_ref_path,
+                    psm.default_val, getProgram(), "class", qc->getName(),
+                    psm.name.c_str(), error)) {
+                return false;
+            }
             resolveDeferredExprTreeDefault(psm.pending_expr_tree_blob,
                 psm.default_val, getProgram(), "class", qc->getName(),
                 psm.name.c_str());
@@ -7933,6 +8242,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             std::string pending_complex_default_path;
             std::vector<QoreValue> pending_complex_default_args;
             std::vector<uint8_t> pending_expr_tree_blob;
+            std::string pending_const_ref_path;
             std::vector<uint8_t> pending_expr_native_blob;
         };
         std::vector<MemberInfo> members;
@@ -8027,6 +8337,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
             phm.pending_complex_default_path = std::move(mi.pending_complex_default_path);
             phm.pending_complex_default_args = std::move(mi.pending_complex_default_args);
             phm.pending_expr_tree_blob = std::move(mi.pending_expr_tree_blob);
+            phm.pending_const_ref_path = std::move(mi.pending_const_ref_path);
             phm.pending_expr_native_blob = std::move(mi.pending_expr_native_blob);
             pending_members.push_back(std::move(phm));
         }
@@ -8731,6 +9042,9 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
             printd(2, "AOT: skipping function '%s' - already exists (from dependency)\n", name);
             // Skip reading variants (must match exact format of readAndSetupVariantSignature)
             for (uint32_t v = 0; v < num_variants; ++v) {
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_METHOD_SYNC) != 0) {
+                    QoreAOTBinaryReader::readU8(ptr);  // variant flags
+                }
                 // Read variant data matching the format in readAndSetupVariantSignature:
                 // 1. ret_type (u32 index when type-table is in use, else StringRef)
                 if (uses_type_table) {
@@ -8806,9 +9120,13 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
         QoreFunction* func = new QoreFunction(name);
 
         for (uint32_t v = 0; v < num_variants; ++v) {
+            uint8_t vflags = 0;
+            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_METHOD_SYNC) != 0) {
+                vflags = QoreAOTBinaryReader::readU8(ptr);
+            }
             // Create an empty UserFunctionVariant (no body, no params)
             UserFunctionVariant* ufv = new UserFunctionVariant(
-                nullptr, 0, 0, QoreValue(), nullptr, false);
+                nullptr, 0, 0, QoreValue(), nullptr, (vflags & 0x01) != 0);
 
             bool sig_has_ellipsis = false;
             bool needs_extra_args_flag = false;
@@ -8904,6 +9222,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             uint8_t mflags = QoreAOTBinaryReader::readU8(ptr);
             bool is_final = (mflags & 0x01) != 0;
             bool is_abstract = (mflags & 0x02) != 0;
+            bool is_synchronized = (mflags & 0x04) != 0;
 
             // Create the correct variant type for special methods:
             // constructor → UserConstructorVariant, destructor → UserDestructorVariant,
@@ -8937,12 +9256,12 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             } else if (is_copy) {
                 auto* v = new UserCopyVariant(
                     static_cast<ClassAccess>(access),
-                    nullptr, 0, 0, QoreValue(), nullptr, false);
+                    nullptr, 0, 0, QoreValue(), nullptr, is_synchronized);
                 mvb = v; umv = v;
             } else {
                 auto* v = new UserMethodVariant(
                     static_cast<ClassAccess>(access), is_final,
-                    nullptr, 0, 0, QoreValue(), nullptr, false,
+                    nullptr, 0, 0, QoreValue(), nullptr, is_synchronized,
                     QCF_NO_FLAGS, is_abstract);
                 mvb = v; umv = v;
             }
@@ -9255,6 +9574,9 @@ bool QoreAOTBinaryDeserializer::commitClassesDoCommit(std::string& error) {
         qore_class_private* priv = qore_class_private::get(*qc);
         // Commits all pending method variants (hm, shm maps); handles base-class recursion
         priv->parseCommit();
+        if (i < class_signature_hashes.size() && class_signature_hashes[i].size() == SH_SIZE) {
+            priv->hash.setRawHash(class_signature_hashes[i].data());
+        }
         printd(5, "AOT deser: committed class '%s' constructor=%p hm.size=%d\n",
             qc->getName(), (void*)priv->constructor, (int)priv->hm.size());
     }

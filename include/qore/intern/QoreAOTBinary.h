@@ -123,8 +123,11 @@ constexpr uint64_t QORE_AOT_FEAT_BCA_LINES = 1ULL << 29; //!< BCA records includ
 constexpr uint64_t QORE_AOT_FEAT_BCA_NATIVE_ARGS = 1ULL << 30; //!< BCA arg blobs contain native inline AOT expressions, not legacy EXPR_TREE blobs
 constexpr uint64_t QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS = 1ULL << 31; //!< closure records split effective varargs from signature ellipsis
 constexpr uint64_t QORE_AOT_FEAT_CONTAINER_TYPEINFO = 1ULL << 32; //!< MakeList/MakeHash records carry parse-time container typeInfo
+constexpr uint64_t QORE_AOT_FEAT_CLASS_HASH = 1ULL << 33; //!< CLASSES records carry parser-produced class signature hashes
+constexpr uint64_t QORE_AOT_FEAT_METHOD_SYNC = 1ULL << 34; //!< FUNCTIONS/METHODS variant flags preserve synchronized gates
+constexpr uint64_t QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS = 1ULL << 35; //!< Serialized list/hash values preserve complex/hashdecl runtime typeInfo
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -193,6 +196,14 @@ enum class QoreAOTValueTag : uint8_t {
     //! Native AOT expression payload for computed member defaults.
     //! Encoded as size(u32) + one inline AOTExprKind expression.
     VT_EXPR_NATIVE = 19,
+};
+
+//! Optional value-container type metadata kind, present in VT_LIST/VT_HASH
+//! payloads when QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS is set.
+enum class QoreAOTContainerValueType : uint8_t {
+    Plain = 0,
+    Complex = 1,
+    HashDecl = 2,
 };
 
 //! Section header in the binary format
@@ -302,6 +313,15 @@ public:
     //! as VT_CONST_REF entries. Set before calling section writers that serialize
     //! user constant values.
     const AOTConstantReverseMap* const_reverse_map = nullptr;
+
+    //! Header feature flags used by payload-level compatibility choices while
+    //! section writers serialize values.
+    uint64_t feature_flags = 0;
+
+    //! Fully-qualified constant currently being serialized. Used to avoid
+    //! encoding self-referential VT_CONST_REF values when a top-level constant's
+    //! own container node appears in the program reverse map.
+    std::string current_const_path;
 
     //! Per-blob type-path interner — when non-empty, `writeVariantSignature`
     //! emits a `u32` index into this table instead of the legacy inline
@@ -1324,6 +1344,7 @@ class QoreAOTBinaryDeserializer {
     // Index maps: serialized index → created object
     std::vector<qore_ns_private*> ns_list;
     std::vector<QoreClass*> class_list;
+    std::vector<std::string> class_signature_hashes;
 
     // Embedded source data (from FUNC_SOURCES section)
     const char* fallback_source = nullptr;       //!< embedded source text
@@ -1377,6 +1398,10 @@ class QoreAOTBinaryDeserializer {
         //! class/namespace constants that are not registered while class shells
         //! are being read, so they are materialized after constants are added.
         std::vector<uint8_t> pending_expr_tree_blob;
+        //! Deferred VT_CONST_REF default. Class/static member records are read
+        //! before same-class constants are registered, so constant refs must
+        //! be resolved during the member-resolution phase.
+        std::string pending_const_ref_path;
         //! Deferred VT_EXPR_NATIVE default.  The payload uses string-pool refs,
         //! so it is materialized later with the owning binary reader.
         std::vector<uint8_t> pending_expr_native_blob;
@@ -1401,6 +1426,8 @@ class QoreAOTBinaryDeserializer {
         std::vector<QoreValue> pending_complex_default_args;
         //! Same deferred-expression-tree channel as PendingInstanceMember.
         std::vector<uint8_t> pending_expr_tree_blob;
+        //! Same deferred-constant-ref channel as PendingInstanceMember.
+        std::string pending_const_ref_path;
         //! Same deferred-native-expression channel as PendingInstanceMember.
         std::vector<uint8_t> pending_expr_native_blob;
     };
@@ -1451,6 +1478,8 @@ class QoreAOTBinaryDeserializer {
 
         // Deferred VT_EXPR_TREE member default.
         std::vector<uint8_t> pending_expr_tree_blob;
+        // Deferred VT_CONST_REF member default.
+        std::string pending_const_ref_path;
         // Deferred VT_EXPR_NATIVE member default.
         std::vector<uint8_t> pending_expr_native_blob;
     };

@@ -141,7 +141,8 @@ QoreValue QoreObjectClosureNode::execValue(const QoreListNode* args, ExceptionSi
     // See QoreClosureNode::execValue above — ensure tlpd is set on threads without
     // program context (the typical crash signature is AsyncIoController::ioThread →
     // QoreObjectClosureNode::execValue → null tlpd at lib/thread.cpp:1218).
-    ClosureTlpdEnsureHelper tlpd_helper(xsink, obj->getProgram());
+    QoreProgram* pgm = obj->getProgram();
+    ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
     CVecInstantiator cvi(cvec, xsink);
-    return closure->exec(*this, 0, args, obj, class_ctx, xsink);
+    return closure->exec(*this, pgm, args, obj, class_ctx, xsink);
 }
