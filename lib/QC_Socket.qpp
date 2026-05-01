@@ -1940,9 +1940,9 @@ hashdecl Qore::SocketPollInfo {
     *int poll_timeout_ms;
 
     //! Optional extra file descriptors to monitor alongside the main socket
-    /** When set, the I/O controller registers these fds with its event loop.
-        When any extra fd becomes ready, the operation's continuePoll() is called.
-        Used for InputStream fds during streaming responses.
+    /** When set, @ref Qore::Socket::poll() "Socket::poll()" and the I/O controller monitor these fds alongside the
+        main pollable object.  When any extra fd becomes ready, the operation's continuePoll() is called.  Used for
+        InputStream and OutputStream fds during streaming operations.
 
         @since %Qore 2.3
     */

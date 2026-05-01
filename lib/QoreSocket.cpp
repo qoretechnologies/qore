@@ -8746,6 +8746,11 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         QoreObject* original_obj;
         QoreObject* poll_obj;
         bool original_is_pollable;
+        struct PollTarget {
+            QoreObject* poll_obj;
+            int events;
+        };
+        std::vector<PollTarget> extra_targets;
     };
 
     struct PollObjectCleanup {
@@ -8816,13 +8821,61 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
             return nullptr;
         }
 
-        if (!(events & (SOCK_POLLIN | SOCK_POLLOUT))) {
+        std::vector<PollEntry::PollTarget> extra_targets;
+        QoreValue extra_value = h->getKeyValue("extra_fds");
+        if (extra_value.getType() == NT_LIST) {
+            const QoreListNode* extra_list = extra_value.get<const QoreListNode>();
+            ConstListIterator extra_li(extra_list);
+            while (extra_li.next()) {
+                if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "Socket::poll setup")) {
+                    return nullptr;
+                }
+
+                QoreValue extra_entry = extra_li.getValue();
+                const QoreHashNode* extra_hash = extra_entry.get<const QoreHashNode>();
+                assert(extra_hash);
+
+                bool fd_found;
+                int64 fd64 = extra_hash->getKeyAsBigInt("fd", fd_found);
+                if (!fd_found || fd64 < 0 || fd64 > std::numeric_limits<int>::max()) {
+                    xsink->raiseException("SOCKET-POLL-ERROR",
+                        "element %zu/%zu (starting from 1) has an invalid extra_fds[%zu].fd value",
+                        li.index() + 1, poll_list->size(), extra_li.index());
+                    return nullptr;
+                }
+
+                bool extra_events_found;
+                int64 extra_events64 = extra_hash->getKeyAsBigInt("events", extra_events_found);
+                int extra_events = extra_events_found ? static_cast<int>(extra_events64) : 0;
+                if (!extra_events) {
+                    extra_events = SOCK_POLLIN;
+                }
+                if (!(extra_events & (SOCK_POLLIN | SOCK_POLLOUT))) {
+                    xsink->raiseException("SOCKET-POLL-ERROR",
+                        "element %zu/%zu (starting from 1) has an invalid extra_fds[%zu].events value; "
+                        "neither SOCK_POLLIN nor SOCK_POLLOUT is set",
+                        li.index() + 1, poll_list->size(), extra_li.index());
+                    return nullptr;
+                }
+
+                std::unique_ptr<QoreSocketPollListPollable> extra_pollable(
+                    new QoreSocketPollListPollable(static_cast<int>(fd64)));
+                ReferenceHolder<QoreObject> extra_obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(),
+                    extra_pollable.get()), xsink);
+                extra_pollable.release();
+                QoreObject* extra_poll_obj = extra_obj.release();
+                cleanup.objects.push_back(extra_poll_obj);
+                extra_targets.push_back({extra_poll_obj, extra_events});
+            }
+        }
+
+        if (!(events & (SOCK_POLLIN | SOCK_POLLOUT)) && extra_targets.empty()) {
             xsink->raiseException("SOCKET-POLL-ERROR", "element %zu/%zu (starting from 1) has an invalid " \
                 "'events' value; neither SOCK_POLLIN nor SOCK_POLLOUT is set", li.index() + 1, poll_list->size());
             return nullptr;
         }
 
-        entries.push_back({li.index(), events, obj, poll_obj, (bool)io});
+        entries.push_back({li.index(), events, obj, poll_obj, static_cast<bool>(io), std::move(extra_targets)});
     }
 
     std::map<size_t, int> result_events;
@@ -8859,60 +8912,81 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 
     size_t submitted = 0;
     cancel_check = 0;
-    for (const PollEntry& entry : entries) {
+    uint64_t target_seq = 0;
+
+    auto submit_readiness_poll = [&](const PollEntry& entry, QoreObject* poll_obj, int event) -> int {
         if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "Socket::poll submit")) {
             cancel_owner();
-            return nullptr;
+            return -1;
         }
 
+        ReferenceHolder<SocketPollOperationBase> poller(
+            new QoreSocketPollListReadinessPollOperation(poll_obj, event, armed), xsink);
+        ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+        poller->setSelf(*op_obj);
+        poller.release();
+        if (!*xsink) {
+            op_obj->setValue("sock", poll_obj->objectRefSelf(), xsink);
+            op_obj->setValue("goal", new QoreStringNode("poll"), xsink);
+        }
+        if (*xsink) {
+            cancel_owner();
+            return -1;
+        }
+
+        ReferenceHolder<QoreHashNode> other(new QoreHashNode(autoTypeInfo), xsink);
+        other->setKeyValue("index", static_cast<int64>(entry.index), xsink);
+        other->setKeyValue("events", event, xsink);
+        if (*xsink) {
+            cancel_owner();
+            return -1;
+        }
+
+        uint64_t target = target_seq++;
+        QoreStringMaker key("Socket::poll:%" PRIu64 ":%zu:%" PRIu64 ":%d", seq, entry.index, target, event);
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
+        info->setKeyValue("sock", poll_obj->objectRefSelf(), xsink);
+        info->setKeyValue("spop", (*op_obj)->objectRefSelf(), xsink);
+        info->setKeyValue("owner", new QoreStringNode(owner.c_str()), xsink);
+        info->setKeyValue("key", new QoreStringNode(key.c_str()), xsink);
+        info->setKeyValue("thread_key", new QoreStringNode(owner.c_str()), xsink);
+        info->setKeyValue("to", -1, xsink);
+        info->setKeyValue("resultQueue", (*queue_obj)->objectRefSelf(), xsink);
+        info->setKeyValue("other", other.release(), xsink);
+        if (*xsink) {
+            cancel_owner();
+            return -1;
+        }
+
+        ReferenceHolder<QoreObject> submit_rv(ctrl->submit(*ctl_obj, info.release(), false, xsink), xsink);
+        if (*xsink) {
+            cancel_owner();
+            return -1;
+        }
+        ++submitted;
+        return 0;
+    };
+
+    for (const PollEntry& entry : entries) {
         for (int event : {SOCK_POLLIN, SOCK_POLLOUT}) {
             if (!(entry.events & event)) {
                 continue;
             }
 
-            ReferenceHolder<SocketPollOperationBase> poller(
-                new QoreSocketPollListReadinessPollOperation(entry.poll_obj, event, armed), xsink);
-            ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
-            poller->setSelf(*op_obj);
-            poller.release();
-            if (!*xsink) {
-                op_obj->setValue("sock", entry.poll_obj->objectRefSelf(), xsink);
-                op_obj->setValue("goal", new QoreStringNode("poll"), xsink);
-            }
-            if (*xsink) {
-                cancel_owner();
+            if (submit_readiness_poll(entry, entry.poll_obj, event)) {
                 return nullptr;
             }
+        }
 
-            ReferenceHolder<QoreHashNode> other(new QoreHashNode(autoTypeInfo), xsink);
-            other->setKeyValue("index", (int64)entry.index, xsink);
-            other->setKeyValue("events", event, xsink);
-            if (*xsink) {
-                cancel_owner();
-                return nullptr;
+        for (const PollEntry::PollTarget& target : entry.extra_targets) {
+            for (int event : {SOCK_POLLIN, SOCK_POLLOUT}) {
+                if (!(target.events & event)) {
+                    continue;
+                }
+                if (submit_readiness_poll(entry, target.poll_obj, event)) {
+                    return nullptr;
+                }
             }
-
-            QoreStringMaker key("Socket::poll:%" PRIu64 ":%zu:%d", seq, entry.index, event);
-            ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
-            info->setKeyValue("sock", entry.poll_obj->objectRefSelf(), xsink);
-            info->setKeyValue("spop", (*op_obj)->objectRefSelf(), xsink);
-            info->setKeyValue("owner", new QoreStringNode(owner.c_str()), xsink);
-            info->setKeyValue("key", new QoreStringNode(key.c_str()), xsink);
-            info->setKeyValue("thread_key", new QoreStringNode(owner.c_str()), xsink);
-            info->setKeyValue("to", -1, xsink);
-            info->setKeyValue("resultQueue", (*queue_obj)->objectRefSelf(), xsink);
-            info->setKeyValue("other", other.release(), xsink);
-            if (*xsink) {
-                cancel_owner();
-                return nullptr;
-            }
-
-            ReferenceHolder<QoreObject> submit_rv(ctrl->submit(*ctl_obj, info.release(), false, xsink), xsink);
-            if (*xsink) {
-                cancel_owner();
-                return nullptr;
-            }
-            ++submitted;
         }
     }
 

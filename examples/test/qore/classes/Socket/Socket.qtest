@@ -172,6 +172,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("send close test", \sendCloseTest());
         addTestCase("isDataAvailable close test", \isDataAvailableCloseTest());
         addTestCase("poll test", \pollTest());
+        addTestCase("poll extra fd test", \pollExtraFdTest());
         addTestCase("tls13 test", \tls13Test());
         addTestCase("connection ID", \connectionIdTest());
         addTestCase("Client/Server Socket tests", \clientServerSocketTest());
@@ -1879,6 +1880,38 @@ class SocketTest inherits QUnit::Test {
 
         Socket peer = server.accept(10s);
         assertEq(msg, peer.recv(msg.size()));
+    }
+
+    pollExtraFdTest() {
+%ifdef Windows
+        testSkip("skipping because File::getPipe() is not available on Windows");
+%endif
+
+        Socket s();
+        s.bindINET("127.0.0.1", 0);
+        s.listen();
+
+        hash<PipeInfo> pipe = File::getPipe();
+        ReadOnlyFile read = pipe.read;
+        File write = pipe.write;
+        write.write("x");
+
+        list<hash<SocketPollInfo>> ready = Socket::poll((
+            <SocketPollInfo>{
+                "events": 0,
+                "socket": s,
+                "extra_fds": (
+                    <ExtraPollFdInfo>{
+                        "fd": read.getPollableDescriptor(),
+                        "events": 0,
+                    },
+                ),
+            },
+        ), 5s);
+        assertEq(1, ready.size());
+        assertEq(SOCK_POLLIN, ready[0].events);
+        assertEq(s, ready[0].socket);
+        assertEq(binary("x"), read.readShortBinary(1, 1000));
     }
 
     streamSocketTransferTest() {
