@@ -108,6 +108,7 @@ public:
     /** The returned hash contains:
         - \c sock: the accepted QoreSocketObject (ref'd)
         - \c ssl: true if SSL
+        - \c secure: true if SSL is already active on the accepted socket
         - \c is_http2: true if HTTP/2 was negotiated
         - \c negotiated_protocol: ALPN protocol string or nullptr
         - \c http_version: the configured HTTP version mode
@@ -164,6 +165,7 @@ private:
     // Configuration
     bool ssl;                               //!< SSL required
     bool do_ssl_handshake;                  //!< Perform SSL handshake in this op
+    bool secure;                            //!< SSL is active on the accepted socket
     bool is_http2;                          //!< HTTP/2 was negotiated
     int ssl_verify_flags;                   //!< SSL verification flags
     bool ssl_accept_all_certs;              //!< Accept all client certificates

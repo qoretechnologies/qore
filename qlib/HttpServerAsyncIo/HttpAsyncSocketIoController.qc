@@ -792,6 +792,7 @@ public class HttpAsyncSocketIoController {
                 "state": HttpConnectionState::KeepAlive,
                 "keep_alive_op": ka_op,
                 "ttl": ttl,
+                "ssl": cx.ssl ?? False,
             };
         }
 
@@ -828,6 +829,7 @@ public class HttpAsyncSocketIoController {
                 "target": target,
                 "state": HttpConnectionState::WebSocket,
                 "stream_op": poll_op,
+                "ssl": cx.ssl ?? False,
             };
         }
         submitConnectionOp(uh, cinfo);
@@ -1105,11 +1107,11 @@ public class HttpAsyncSocketIoController {
             if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
                 log(LoggerLevel::INFO,
                     "Accept complete: sock=%s ssl=%y secure=%y http2=%y",
-                    uh, output.ssl, sock.isSecure(), output.is_http2);
+                    uh, output.ssl, output.secure ?? False, output.is_http2);
             }
         }
 
-        if (output.ssl && !sock.isSecure()) {
+        if (output.ssl && !(output.secure ?? False)) {
             hash<auto> cx = getUnknownConnectionContext();
 
             if (linfo.cert) {
@@ -1151,6 +1153,7 @@ public class HttpAsyncSocketIoController {
                 "ssl_op": ssl_op,
                 "http_version": output.http_version,
                 "is_http2": False,
+                "ssl": False,
             };
             hash<HttpActiveConnectionInfo> cinfo;
             {
@@ -1177,6 +1180,7 @@ public class HttpAsyncSocketIoController {
                 "state": HttpConnectionState::Http2,
                 "stream_op": h2op,
                 "is_http2": True,
+                "ssl": output.secure ?? False,
             };
             hash<HttpActiveConnectionInfo> cinfo;
             {
@@ -1200,6 +1204,7 @@ public class HttpAsyncSocketIoController {
             "state": HttpConnectionState::ReadHeader,
             "http_version": output.http_version,
             "is_http2": False,
+            "ssl": output.secure ?? False,
         };
         hash<HttpActiveConnectionInfo> cinfo;
         {
@@ -1386,6 +1391,7 @@ public class HttpAsyncSocketIoController {
             "state": HttpConnectionState::Http3,
             "stream_op": h3op,
             "is_http2": False,
+            "ssl": True,
         };
         *Future peer_info_future = startPeerInfoFuture(new_cinfo.cx.peer);
         if (peer_info_future !== NOTHING) {
@@ -1836,6 +1842,7 @@ public class HttpAsyncSocketIoController {
                     conn_info.state = HttpConnectionState::Http2;
                     conn_info.stream_op = h2op;
                     conn_info.is_http2 = True;
+                    conn_info.ssl = True;
                     # Update cx with real peer info now that socket is stable
                     conn_info.cx.peer = peer_info;
                     conn_info.cx.socket = socket_info;
@@ -1858,6 +1865,7 @@ public class HttpAsyncSocketIoController {
                     hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                     conn_info.state = HttpConnectionState::ReadHeader;
                     conn_info.is_http2 = False;
+                    conn_info.ssl = True;
                     # Update cx with real peer info now that socket is stable
                     conn_info.cx.peer = peer_info;
                     conn_info.cx.socket = socket_info;
@@ -2471,7 +2479,7 @@ public class HttpAsyncSocketIoController {
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
-            "ssl": cinfo.sock.isSecure(),
+            "ssl": cinfo.ssl,
         };
 
         log(LoggerLevel::DEBUG, "Header complete for keep-alive: %y", uh);
@@ -2588,7 +2596,7 @@ public class HttpAsyncSocketIoController {
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
-            "ssl": cinfo.sock.isSecure(),
+            "ssl": cinfo.ssl,
         };
 
         # Store the pre-read body for the handler (same convention as H2/H3)
@@ -2703,6 +2711,7 @@ public class HttpAsyncSocketIoController {
                     "state": HttpConnectionState::SendStreamAndReadHeader,
                     "stream_op": fused_op,
                     "ttl": ttl,
+                    "ssl": linfo.ssl,
                 };
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
@@ -2741,6 +2750,7 @@ public class HttpAsyncSocketIoController {
                     "target": target,
                     "state": HttpConnectionState::SendStreamResponse,
                     "stream_op": send_op,
+                    "ssl": linfo.ssl,
                 };
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
@@ -2777,6 +2787,7 @@ public class HttpAsyncSocketIoController {
                     "state": HttpConnectionState::SendAndReadHeader,
                     "stream_op": fused_op,
                     "ttl": ttl,
+                    "ssl": linfo.ssl,
                 };
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
@@ -2812,6 +2823,7 @@ public class HttpAsyncSocketIoController {
                     "state": HttpConnectionState::SendStreamAndReadHeader,
                     "stream_op": fused_op,
                     "ttl": ttl,
+                    "ssl": linfo.ssl,
                 };
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
@@ -2865,6 +2877,7 @@ public class HttpAsyncSocketIoController {
                             "state": HttpConnectionState::SendAndReadHeader,
                             "stream_op": fused_op,
                             "ttl": ttl,
+                            "ssl": linfo.ssl,
                         };
                         hash<HttpActiveConnectionInfo> cinfo;
                         {
@@ -2887,6 +2900,7 @@ public class HttpAsyncSocketIoController {
                         "target": target,
                         "state": HttpConnectionState::SendStreamResponse,
                         "stream_op": send_op,
+                        "ssl": linfo.ssl,
                     };
                     hash<HttpActiveConnectionInfo> cinfo;
                     {
@@ -2934,6 +2948,7 @@ public class HttpAsyncSocketIoController {
                             # Store pending streaming info for transition after header send
                             "pending_stream_type": stream_state,
                             "pending_stream_op": result.stream_operation,
+                            "ssl": linfo.ssl,
                         };
                     }
                     submitConnectionOp(uh, cinfo);
@@ -2954,6 +2969,7 @@ public class HttpAsyncSocketIoController {
                         "state": stream_state,
                         "stream_op": result.stream_operation,
                         "ttl": result.ttl ?? DefaultIdleTimeout,
+                        "ssl": linfo.ssl,
                     };
                 }
                 submitConnectionOp(uh, cinfo);
@@ -3243,7 +3259,7 @@ public class HttpAsyncSocketIoController {
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
-            "ssl": cinfo.sock.isSecure(),
+            "ssl": cinfo.ssl,
         };
 
         # Check for persistent queue — if a dedicated thread is waiting for this
@@ -3466,7 +3482,7 @@ public class HttpAsyncSocketIoController {
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
-            "ssl": cinfo.sock.isSecure(),
+            "ssl": cinfo.ssl,
         };
 
         # Dispatch to handler thread pool
@@ -3859,6 +3875,9 @@ hashdecl HttpActiveConnectionInfo {
 
     #! True if this is an HTTP/2 connection
     bool is_http2 = False;
+
+    #! True if SSL/TLS is active for this connection
+    bool ssl = False;
 
     #! Pending streaming state type (set during header send before SSE/WS transition)
     *string pending_stream_type;
