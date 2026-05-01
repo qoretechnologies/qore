@@ -2799,10 +2799,11 @@ public class HttpAsyncSocketIoController {
                 string status_msg = result.status_message ?? "Unknown";
                 if (result.send_callback) {
                     # Drain the send_callback on the handler thread (the
-                    # callback is user code that must run here), then send
-                    # the materialized body via async I/O.
-                    # sendHTTPResponseWithCallback is a blocking call that
-                    # hangs on non-blocking sockets after the EAGAIN fix.
+                    # callback is user code that must run here), then submit
+                    # the materialized body via controller-backed async I/O.
+                    # This keeps Qore callback execution off the I/O thread
+                    # and preserves the H1 connection state-machine paths
+                    # below for close and keep-alive handling.
                     binary buf;
                     while (True) {
                         auto chunk = result.send_callback();

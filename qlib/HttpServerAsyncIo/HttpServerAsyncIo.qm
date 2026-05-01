@@ -170,9 +170,11 @@ public namespace HttpServerAsyncIo {
         */
         bool dedicated = False;
 
-        #! callback for sending chunked response data where each callback return is one HTTP chunk
-        /** When set, the controller calls @ref Qore::Socket::sendHTTPResponseWithCallback()
-            "sendHTTPResponseWithCallback()" with this callback instead of sending the body directly.
+        #! callback for producing streaming response data
+        /** When set, the controller invokes the callback on a handler worker.
+            HTTP/1.x materializes the returned chunks and submits the socket write
+            through async poll operations; HTTP/2 and HTTP/3 wrap the callback as
+            an InputStream and send DATA frames through the async controller.
 
 
             @see send_timeout
