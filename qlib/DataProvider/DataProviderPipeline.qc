@@ -440,11 +440,15 @@ class PipelineQueue {
         }
 
         bool waited = False;
-        while (!queue_stop && queue.lsize() == size) {
+        while (!queue_stop && !queue_abort && queue.lsize() == size) {
             waited = True;
             ++queue_waiting;
             cond.wait(lck);
             --queue_waiting;
+        }
+
+        if (queue_abort) {
+            throw "PIPELINE-SUBMISSION-ABORTED", sprintf("pipeline %y has aborted", parent.getName());
         }
 
         if (queue_stop) {
@@ -2129,6 +2133,12 @@ public class DataProviderPipeline {
         lck.lock();
         on_exit lck.unlock();
 
+        foreach PipelineQueue q in (pmap.iterator()) {
+            if (q.queue_waiting || q.data_waiting) {
+                q.cond.broadcast();
+            }
+        }
+
         logInfo("pipeline %y: abort(<%s exceptions>) called with %sactive pipeline", name,
             ignore_exceptions ? "throw" : "ignore", locked ? "" : "in");
 
@@ -2245,6 +2255,9 @@ public class DataProviderPipeline {
         abort_flag = True;
         foreach PipelineQueue q in (pmap.iterator()) {
             q.queue_abort = True;
+            if (q.queue_waiting || q.data_waiting) {
+                q.cond.broadcast();
+            }
         }
     }
 
@@ -2472,5 +2485,3 @@ public class DataProviderPipeline {
     splice stack, 0, 2;
     return map $1.type != "new-thread" ? sprintf("%s %s()", get_ex_pos($1), $1.function) : "new-thread", stack;
 }
-
-

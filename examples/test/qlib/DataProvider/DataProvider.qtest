@@ -97,6 +97,53 @@ class TestRecordProcessor inherits AbstractDataProcessor {
     }
 }
 
+class SignalingTestRecordProcessor inherits AbstractDataProcessor {
+    public {
+        string pfx;
+        list<hash<auto>> recs;
+        list<hash<auto>> raw_recs;
+        Queue processed_queue();
+    }
+
+    constructor(string pfx) {
+        self.pfx = pfx;
+    }
+
+    clear() {
+        remove recs;
+        remove raw_recs;
+        while (processed_queue.size()) {
+            processed_queue.get();
+        }
+    }
+
+    int waitForRecords(int count, string desc) {
+        try {
+            while (True) {
+                int size = processed_queue.get(5s);
+                if (size >= count) {
+                    return size;
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            throw "TEST-TIMEOUT", sprintf("timeout waiting for %s; expected at least %d processed records; have %d",
+                desc, count, recs.size()), ex;
+        }
+    }
+
+    private submitImpl(code enqueue, auto rec) {
+        hash<auto> new_rec = (map {pfx + "-" + $1.key: $1.value}, rec.pairIterator());
+        raw_recs += new_rec;
+        recs += map $1, new_rec.contextIterator();
+        processed_queue.push(recs.size());
+        enqueue(new_rec);
+    }
+
+    private bool supportsBulkApiImpl() {
+        return True;
+    }
+}
+
 class TestFlushRecordProcessor inherits TestRecordProcessor {
     private {
         *hash<auto> new_rec;
@@ -1584,7 +1631,7 @@ public class DataProviderTest inherits QUnit::Test {
             });
             DataProviderPipeline pipe(opts);
 
-            TestRecordProcessor record_processor0("A");
+            SignalingTestRecordProcessor record_processor0("A");
             pipe.append(record_processor0);
             hash<PipelineInfo> info = pipe.getInfo();
             assertNothing(info.start_time);
@@ -1599,14 +1646,7 @@ public class DataProviderTest inherits QUnit::Test {
             pipe.submit({"a": 1});
             assertEq(PS_RUNNING, pipe.getInfo().status);
 
-            # wait for record count = 1
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size == 1) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(1, "initial pipeline submission");
 
             Counter thread_cnt(1);
             Queue abort_queue();
@@ -1626,17 +1666,10 @@ public class DataProviderTest inherits QUnit::Test {
                 }
             };
             background submit();
-            thread_cnt.waitForZero();
+            assertEq(0, thread_cnt.waitForZero(5s));
 
             # issue #4317: do not abort before we know the infinite record provider is in progress
-            # wait for record count >= 2
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size >= 2) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(2, "abort test pipeline submission");
 
             if (m_options.verbose > 2) {
                 printf("TID %d: record processor0 size: %d; about to abort\n", gettid(), record_processor0.recs.size());
@@ -1657,7 +1690,7 @@ public class DataProviderTest inherits QUnit::Test {
                 printf("TID %d: pipeline info: %N\n", gettid(), pipe.getInfo());
             }
 
-            *hash<ExceptionInfo> ex_info = abort_queue.get();
+            *hash<ExceptionInfo> ex_info = abort_queue.get(5s);
             assertEq("PIPELINE-SUBMISSION-ABORTED", ex_info.err);
 
             if (m_options.verbose > 2) {
@@ -1689,14 +1722,7 @@ public class DataProviderTest inherits QUnit::Test {
             pipe1.submit({"a": 1});
             assertEq(PS_RUNNING, pipe1.getInfo().status);
 
-            # wait for record count = 1
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size == 1) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(1, "initial copied pipeline submission");
 
             assertEq(0, thread_cnt.getCount());
             assertEq(0, abort_queue.size());
@@ -1711,24 +1737,17 @@ public class DataProviderTest inherits QUnit::Test {
                 }
             };
             background submit();
-            thread_cnt.waitForZero();
+            assertEq(0, thread_cnt.waitForZero(5s));
 
             # issue #4317: do not abort before we know the infinite record provider is in progress
-            # wait for record count >= 2
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size >= 2) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(2, "abort test copied pipeline submission");
 
             pipe1.abort();
             assertEq(PS_ABORTED, pipe1.getInfo().status);
             #printf("%N\n", pipe.getInfo());
             assertThrows("PIPELINE-ERROR", \pipe1.submit(), {});
 
-            ex_info = abort_queue.get();
+            ex_info = abort_queue.get(5s);
             assertEq("PIPELINE-SUBMISSION-ABORTED", ex_info.err);
 
             pipe1.reset();
@@ -1763,14 +1782,7 @@ public class DataProviderTest inherits QUnit::Test {
             pipe2.submit({"a": 1});
             assertEq(PS_RUNNING, pipe2.getInfo().status);
 
-            # wait for record count = 1
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size == 1) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(1, "initial factory pipeline submission");
 
             assertEq(0, thread_cnt.getCount());
             assertEq(0, abort_queue.size());
@@ -1785,24 +1797,17 @@ public class DataProviderTest inherits QUnit::Test {
                 }
             };
             background submit();
-            thread_cnt.waitForZero();
+            assertEq(0, thread_cnt.waitForZero(5s));
 
             # issue #4317: do not abort before we know the infinite record provider is in progress
-            # wait for record count >= 2
-            while (True) {
-                int size = record_processor0.recs.size();
-                if (size >= 2) {
-                    break;
-                }
-                sleep(50ms);
-            }
+            record_processor0.waitForRecords(2, "abort test factory pipeline submission");
 
             pipe2.abort();
             assertEq(PS_ABORTED, pipe2.getInfo().status);
             #printf("%N\n", pipe.getInfo());
             assertThrows("PIPELINE-ERROR", \pipe2.submit(), {});
 
-            ex_info = abort_queue.get();
+            ex_info = abort_queue.get(5s);
             assertEq("PIPELINE-SUBMISSION-ABORTED", ex_info.err);
 
             pipe2.reset();
