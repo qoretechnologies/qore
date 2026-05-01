@@ -497,13 +497,19 @@ static int socket_exec_send_http_response(QoreObject* self, QoreSocketObject* s,
 
 static int socket_exec_send_http_chunked_body_trailer(QoreObject* self, QoreSocketObject* s,
         const QoreHashNode* trailer, int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
     hdr.concat("0\r\n");
     qore_socket_private::do_headers(hdr, trailer, 0, false);
 
     int rc = socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink);
     if (!rc && trailer) {
-        my_socket_priv::getPriv(*s)->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET, *trailer);
+        priv->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET, *trailer);
     }
     return rc;
 }

@@ -4321,13 +4321,19 @@ static void qore_socket_exec_set_http_chunk_prefix(QoreString& prefix, size_t si
 
 static int qore_socket_exec_send_http_chunked_body_trailer(QoreSocket* s, const QoreHashNode* trailer,
         int source, int timeout_ms, ExceptionSink* xsink) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_SEND);
+    if (!io_guard) {
+        return -1;
+    }
+
     QoreString hdr(s->getEncoding());
     hdr.concat("0\r\n");
     qore_socket_private::do_headers(hdr, trailer, 0, false);
 
     int rc = qore_socket_exec_send_bytes(s, hdr.c_str(), hdr.size(), timeout_ms, xsink, -1);
     if (!rc && trailer) {
-        qore_socket_private::get(*s)->do_header_event(QORE_EVENT_HTTP_FOOTERS_SENT, source, *trailer);
+        priv->do_header_event(QORE_EVENT_HTTP_FOOTERS_SENT, source, *trailer);
     }
     return rc;
 }
