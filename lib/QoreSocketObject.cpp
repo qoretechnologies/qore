@@ -4371,10 +4371,20 @@ static bool qore_socket_object_exec_is_data_available(QoreSocketObject* s, int t
 static int qore_socket_object_exec_check_idle_data(QoreSocketObject* s, ExceptionSink* xsink) {
     s->ref();
     QoreSocketObjectIdleDataPollOperation* idle_poller = new QoreSocketObjectIdleDataPollOperation(xsink, s);
+    ReferenceHolder<SocketPollOperationBase> poller(idle_poller, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return -1;
+    }
 
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
-        qore_socket_object_make_poll_op(*sock_obj, idle_poller, "check-idle-data", xsink), xsink);
+        qore_socket_object_make_poll_op(*sock_obj, poller.release(), "check-idle-data", xsink), xsink);
     if (*xsink) {
         return -1;
     }
