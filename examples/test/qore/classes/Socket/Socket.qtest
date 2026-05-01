@@ -182,6 +182,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Unsafe stream socket transfer rejection", \unsafeStreamSocketTransferRejectionTest());
         addTestCase("SSL read test", \sslReadTest());
         addTestCase("SSL upgrade test", \sslUpgradeTest());
+        addTestCase("SSL upgrade poll output test", \sslUpgradePollOutputTest());
         addTestCase("SSL poll send partial test", \sslPollSendPartialTest());
         addTestCase("SSL write disconnect test", \sslWriteDisconnectTest());
         addTestCase("ALPN test", \alpnTest());
@@ -1629,6 +1630,68 @@ class SocketTest inherits QUnit::Test {
             fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
         }
         assertTrue(server_result);
+    }
+
+    sslUpgradePollOutputTest() {
+        Socket server();
+        server.bind(0);
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.setAlpnProtocols(("h2", "http/1.1"));
+        client.connect("127.0.0.1:" + port);
+
+        Socket peer = server.accept(15s);
+        peer.setCertificate(TestCert);
+        peer.setPrivateKey(TestCert);
+        peer.setAlpnProtocols(("h2", "http/1.1"));
+
+        SocketPollOperation server_op = peer.startPollUpgradeServerToSSL();
+        SocketPollOperation client_op = client.startPollUpgradeClientToSSL();
+
+        date deadline = now_us() + 15s;
+        while ((!server_op.goalReached() || !client_op.goalReached()) && now_us() < deadline) {
+            list<hash<SocketPollInfo>> poll_list = ();
+
+            if (!server_op.goalReached()) {
+                *hash<SocketPollInfo> server_info = server_op.continuePoll();
+                if (server_info) {
+                    poll_list += server_info;
+                }
+            }
+
+            if (!client_op.goalReached()) {
+                *hash<SocketPollInfo> client_info = client_op.continuePoll();
+                if (client_info) {
+                    poll_list += client_info;
+                }
+            }
+
+            if (poll_list) {
+                Socket::poll(poll_list, 1s);
+            } else {
+                usleep(1ms);
+            }
+        }
+
+        assertTrue(server_op.goalReached(), "server SSL poll upgrade should complete");
+        assertTrue(client_op.goalReached(), "client SSL poll upgrade should complete");
+
+        hash<auto> server_out = server_op.getOutput();
+        hash<auto> client_out = client_op.getOutput();
+
+        assertTrue(server_out.secure);
+        assertTrue(client_out.secure);
+        assertEq(server_out.negotiated_protocol, client_out.negotiated_protocol);
+        assertEq(server_out.negotiated_protocol == "h2", server_out.is_http2);
+        assertEq(client_out.negotiated_protocol == "h2", client_out.is_http2);
+
+        client.shutdownSSL();
+        peer.shutdownSSL();
+        client.close();
+        peer.close();
+        server.close();
     }
 
     # Reproduces an SSL async send edge case: partial writes that require polling.

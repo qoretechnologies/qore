@@ -505,6 +505,9 @@ public:
 
     DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
+    //! Returns SSL handshake output with negotiated ALPN metadata
+    DLLEXPORT virtual QoreValue getOutput() const override;
+
 private:
     DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
     DLLEXPORT void initLocked(ExceptionSink* xsink);

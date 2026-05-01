@@ -75,6 +75,8 @@ public:
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
 
+    DLLLOCAL virtual QoreValue getOutput() const override;
+
     DLLLOCAL virtual const char* getStateImpl() const {
         return "accepting-ssl";
     }

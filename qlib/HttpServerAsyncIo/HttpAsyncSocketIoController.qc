@@ -1805,8 +1805,9 @@ public class HttpAsyncSocketIoController {
         hash<auto> peer_info = cx.peer;
         hash<auto> socket_info = cx.socket;
 
-        *string negotiated = sock.getAlpnProtocol();
-        bool is_http2 = (negotiated == "h2");
+        hash<auto> ssl_output = result.spop.getOutput();
+        *string negotiated = ssl_output.negotiated_protocol;
+        bool is_http2 = ssl_output.is_http2;
 
         if ((http_version == HttpVersionMode::Http20 || http_version == "2") && !is_http2) {
             log(LoggerLevel::WARN, "HTTP/2 required but client negotiated: %y", negotiated ?? "none");

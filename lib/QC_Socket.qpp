@@ -3494,6 +3494,12 @@ AbstractPollOperation Socket::startPollReadServerSentEvent() {
     The poll operation returned will upgrade a client connection to an SSL/TLS connection using any certificate and
     private key set for the socket.
 
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns a hash
+    with the following keys:
+    - \c secure: True if SSL/TLS is active on the socket
+    - \c is_http2: True if HTTP/2 was negotiated via ALPN
+    - \c negotiated_protocol: the negotiated ALPN protocol string, or @ref nothing if none was negotiated
+
     @since %Qore 1.12
 */
 AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
@@ -3516,6 +3522,12 @@ AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
 
     The poll operation returned will upgrade a server connection to an SSL/TLS connection using the certificate and
     private key set on the socket.
+
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns a hash
+    with the following keys:
+    - \c secure: True if SSL/TLS is active on the socket
+    - \c is_http2: True if HTTP/2 was negotiated via ALPN
+    - \c negotiated_protocol: the negotiated ALPN protocol string, or @ref nothing if none was negotiated
 
     @since %Qore 1.12
 */

@@ -11107,6 +11107,43 @@ const char* SocketUpgradeClientSslPollOperation::getStateImpl() const {
     return "connecting-ssl";
 }
 
+static QoreValue qore_socket_get_ssl_upgrade_output(my_socket_priv* priv) {
+    bool secure = false;
+    bool is_http2 = false;
+    std::string negotiated_protocol;
+
+    {
+        AutoLocker al(priv->m);
+        if (priv->valid && priv->socket) {
+            qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+            if (sp->ssl) {
+                secure = true;
+                negotiated_protocol = sp->ssl->getAlpnProtocol();
+                is_http2 = (negotiated_protocol == "h2");
+            }
+        }
+    }
+
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+    h->setKeyValue("secure", secure, &xsink);
+    h->setKeyValue("is_http2", is_http2, &xsink);
+    if (!negotiated_protocol.empty()) {
+        h->setKeyValue("negotiated_protocol", new QoreStringNode(negotiated_protocol), &xsink);
+    } else {
+        h->setKeyValue("negotiated_protocol", QoreValue(), &xsink);
+    }
+    if (xsink) {
+        xsink.clear();
+        return QoreValue();
+    }
+    return h.release();
+}
+
+QoreValue SocketUpgradeClientSslPollOperation::getOutput() const {
+    return qore_socket_get_ssl_upgrade_output(sock->priv);
+}
+
 void SocketReadHttpHeaderPollOperation::abort(ExceptionSink* xsink) {
     out = nullptr;
     SocketRecvPollOperationBase::abort(xsink);
@@ -11874,6 +11911,10 @@ QoreHashNode* SocketUpgradeServerSslPollOperation::continuePoll(ExceptionSink* x
     }
 
     return getSocketPollInfoHash(xsink, rc);
+}
+
+QoreValue SocketUpgradeServerSslPollOperation::getOutput() const {
+    return qore_socket_get_ssl_upgrade_output(sock->priv);
 }
 
 SocketShutdownSslPollOperation::SocketShutdownSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock)
