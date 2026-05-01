@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreCondition.h>
 #include <qore/QoreSandboxManager.h>
+#include "qore/intern/QoreThreadList.h"
 
 #include <cerrno>
 #include <cstring>
@@ -143,67 +144,39 @@ int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, ExceptionSink* xsink) {
 }
 
 int QoreCondition::waitWithInterrupt(pthread_mutex_t* m, int64 timeout_ms, ExceptionSink* xsink) {
-    // Check for cancellation or program interrupt before waiting
-    if (xsink && qore_check_cancel(xsink, "condition wait")) {
+    // pre-wait check: cancel set before we even tried to wait
+    if (qore_check_cancel(xsink, "condition wait")) {
         return QORE_COND_RESULT_INTERRUPTED;
     }
 
-    const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
-    int64 remaining_timeout = timeout_ms;
+    // Register so cancelThread()/SandboxManager::requestInterrupt() can wake us via broadcast().
+    // The seq_cst on this store pairs with seq_cst on the cancel side (set flag, read waiting_on)
+    // to defeat the lost-wakeup race: at least one of "waiter sees flag" or "canceller sees pointer"
+    // is guaranteed.  See design/cooperative-cancellation.md.
+    thread_list.setCurrentWaitingOn(this);
 
-    while (true) {
-        // Calculate effective timeout for this poll cycle
-        int effective_timeout;
-        if (timeout_ms < 0) {
-            // Infinite timeout - poll at intervals
-            effective_timeout = poll_interval;
-        } else {
-            // Finite timeout - use smaller of remaining or poll interval
-            effective_timeout = remaining_timeout > poll_interval ? poll_interval : remaining_timeout;
-        }
-
-        // Snapshot the signal generation before waiting so we can detect a
-        // broadcast that raced with ETIMEDOUT (pthread_cond_timedwait may
-        // return ETIMEDOUT even when a concurrent signal/broadcast fired).
-        uint64_t pre_gen = getSignalGen();
-        int rc = wait2(m, effective_timeout);
-
-        if (rc == 0) {
-            // Condition was signaled
-            return QORE_COND_RESULT_SUCCESS;
-        }
-
-        // Check if it was actually a timeout (ETIMEDOUT) vs other errors
-        if (rc != ETIMEDOUT) {
-            // Non-timeout error (e.g., EINVAL) - this shouldn't happen normally
-            // but if it does, treat it as an error and return timeout to avoid infinite loop
-            return QORE_COND_RESULT_TIMEOUT;
-        }
-
-        // ETIMEDOUT returned, but check if a signal/broadcast fired during our
-        // wait.  POSIX permits pthread_cond_timedwait to return ETIMEDOUT even
-        // when signalled concurrently with the deadline, which manifests as a
-        // lost wakeup to the caller.  The signal generation counter is
-        // incremented under the same mutex by signal()/broadcast(), so a
-        // change here means the caller's predicate may have transitioned —
-        // return SUCCESS so the caller re-checks state immediately instead of
-        // waiting for the full timeout.
-        if (getSignalGen() != pre_gen) {
-            return QORE_COND_RESULT_SUCCESS;
-        }
-
-        // Timeout occurred - check for cancellation or program interrupt
-        if (xsink && qore_check_cancel(xsink, "condition wait")) {
-            return QORE_COND_RESULT_INTERRUPTED;
-        }
-
-        // Check if we've exceeded the total timeout
-        if (timeout_ms >= 0) {
-            remaining_timeout -= effective_timeout;
-            if (remaining_timeout <= 0) {
-                return QORE_COND_RESULT_TIMEOUT;
-            }
-        }
-        // For infinite timeout, continue polling
+    // Re-check after registration: if cancel arrived just before our store became visible to the
+    // canceller, the canceller may have read waiting_on==nullptr and skipped the broadcast — so
+    // we must catch it ourselves.
+    if (qore_check_cancel(xsink, "condition wait")) {
+        thread_list.clearCurrentWaitingOn();
+        return QORE_COND_RESULT_INTERRUPTED;
     }
+
+    // Single wait — broadcast-on-cancel will wake us if cancellation is requested while we sleep,
+    // so no polling loop is needed.
+    int rc = wait2(m, timeout_ms);
+
+    thread_list.clearCurrentWaitingOn();
+
+    // If we were woken by a cancel-induced broadcast (rc==0) or cancel arrived between wakeup
+    // and unregister, report INTERRUPTED rather than SUCCESS.
+    if (qore_check_cancel(xsink, "condition wait")) {
+        return QORE_COND_RESULT_INTERRUPTED;
+    }
+
+    if (rc == 0) {
+        return QORE_COND_RESULT_SUCCESS;
+    }
+    return QORE_COND_RESULT_TIMEOUT;
 }

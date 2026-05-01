@@ -402,14 +402,14 @@ class PipelineQueue {
         self.lck = lck;
         self.cnt = cnt;
 
-        cnt.add();
-        on_error {
-            cnt.done();
-        }
         self.id = id;
         self.id_str = id.toString();
         WaitGroup run_cnt();
         run_cnt.add();
+        # cnt is added/decremented inside run() so its scope coincides exactly with the
+        # background thread's lifetime; the constructor only returns after run() has
+        # done cnt.add() and called registerThread() under the safety of this strong
+        # `parent` ref (see run() below).
         tid = background run(run_cnt);
         # do not return until the background thread is running
         run_cnt.wait();
@@ -477,9 +477,24 @@ class PipelineQueue {
 
     #! Processing thread
     run(WaitGroup run_cnt) {
-        run_cnt.done();
+        # Add to cnt before any weak `parent` dereference so cnt's non-zero window
+        # covers the entire lifetime of this thread.  Paired with on_exit cnt.done()
+        # so it always fires (even if registerThread or runIntern throws), preventing
+        # the pipeline destructor from blocking forever in cnt.wait().
+        cnt.add();
+        on_exit cnt.done();
 
-        parent.registerThread(self);
+        # Call registerThread() while the constructor still blocks on run_cnt.wait(),
+        # which guarantees the user thread holds a strong ref to the parent pipeline
+        # via the constructor's `parent` parameter.  If registerThread (which evaluates
+        # the weak `parent` member) ran after run_cnt.done(), the temp strong ref taken
+        # by the weak deref could be the last one — its drop would fire the pipeline
+        # destructor on this thread, which calls cnt.wait() and self-deadlocks because
+        # this thread holds the outstanding cnt entry.
+        {
+            on_exit run_cnt.done();
+            parent.registerThread(self);
+        }
 
         lck.lock();
         on_exit lck.unlock();
@@ -568,15 +583,8 @@ class PipelineQueue {
     /** @note Called in the pipeline lock
     */
     private runIntern() {
-        # Decrement the thread counter on exit.  This MUST happen inside
-        # runIntern() (while the caller still holds lck) rather than in
-        # run()'s on_exit, because after runIntern() returns the run()
-        # stack cleanup can drop the last strong reference to the pipeline
-        # (via the weak "parent" member), which would fire the pipeline
-        # destructor in this thread.  The destructor calls
-        # cnt.waitForZero(), so cnt must already be decremented to avoid
-        # self-deadlock.
-        on_exit cnt.done();
+        # cnt.add()/cnt.done() is managed in run() (the caller); see run() for
+        # the rationale on why cnt's scope must coincide with the entire thread.
 
         # Metrics batch state — flushed at threshold or when the queue goes idle
         int batch_count = 0;

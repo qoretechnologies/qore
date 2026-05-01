@@ -117,6 +117,20 @@ void HashDeclList::mergeUserPublic(const HashDeclList& old, qore_ns_private* ns)
         }
         TypedHashDecl* hd = new TypedHashDecl(*i.second);
         typed_hash_decl_private::get(*hd)->setNamespace(ns);
+        // %requires-merged copies must not be marked public in the receiving
+        // program — otherwise a diamond merge fires when the requiring module
+        // is itself %require'd elsewhere: the merged copy would be re-merged
+        // via the second path while \c orig stays the same as the original
+        // source's, but the duplicate-check at scan time still raises
+        // \c "duplicate hashdecl" because two paths converge through different
+        // intermediate namespaces.  Forcing private here mirrors the historical
+        // behavior the codebase relied on (the copy ctor used to hard-code
+        // \c pub=false; now it preserves \c old.pub for explicit
+        // \ref Program::importHashDecl() — the merge path enforces the
+        // \"default-private\" semantic explicitly).
+        if (typed_hash_decl_private::get(*hd)->isPublic()) {
+            typed_hash_decl_private::get(*hd)->setPrivate();
+        }
         addInternal(hd);
     }
     // Update local parent pointers to point to hashdecls in this list (not the source list)

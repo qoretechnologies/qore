@@ -62,6 +62,7 @@ static constexpr int QTF_EXTERNAL_LIFECYCLE = (1 << 1);
 
 class ThreadData;
 class QoreStringNode;
+class QoreCondition;
 
 #define QTS_AVAIL    0
 #define QTS_NA       1
@@ -102,6 +103,20 @@ public:
 
     //! optional cancellation reason string
     QoreStringNode* cancel_reason = nullptr;
+
+    //! the condition the thread is currently blocked on, or nullptr if not blocked
+    /** Set by QoreCondition::waitWithInterrupt() before sleeping and cleared after waking,
+        so that cancelThread() / SandboxManager::requestInterrupt() can wake the thread directly
+        via QoreCondition::broadcast() instead of relying on periodic polling.
+
+        Lifetime: the pointer is only read by code that has either set the per-thread cancel flag
+        (paired with the waiter's flag-recheck after the seq_cst register) or holds thread_list.lck
+        with the entry active.  The Qore object owning the QoreCondition cannot be freed while a
+        thread is in waitWithInterrupt() (the caller holds a reference for the duration of the call),
+        so a non-null pointer observed under those conditions is always live for at least a brief
+        broadcast() call.
+    */
+    std::atomic<QoreCondition*> waiting_on{nullptr};
 
     DLLLOCAL void cleanup();
 
@@ -256,9 +271,43 @@ public:
     DLLLOCAL QoreHashNode* getParentCallerLocation(const QoreStackLocation* stack_location, size_t offset) const;
 
     //! Check if the given thread has cancellation requested (lock-free, atomic read)
+    /** seq_cst pairs with seq_cst on the cancel side and is required for the Dekker-style
+        lost-wakeup race in QoreCondition::waitWithInterrupt (where the waiter's store of
+        waiting_on and load of cancel_requested must be in the same total order as the
+        canceller's store of cancel_requested and load of waiting_on).  On x86 this is free;
+        on weak-memory architectures it adds a fence per check, which is negligible at the
+        rate cancellation points are traversed.
+    */
     DLLLOCAL bool isCancelRequested(int tid) const {
-        return tid >= 0 && tid < MAX_QORE_THREADS && entry[tid].cancel_requested.load(std::memory_order_acquire);
+        return tid >= 0 && tid < MAX_QORE_THREADS && entry[tid].cancel_requested.load(std::memory_order_seq_cst);
     }
+
+    //! Register the QoreCondition the current thread is about to block on (for waitWithInterrupt)
+    /** seq_cst pairs with seq_cst on the cancel side; see clearCurrentWaitingOn() for the lock-free
+        rationale.  This store is lock-free — registration races against cancellation are resolved
+        by the post-store re-check in QoreCondition::waitWithInterrupt.  See
+        design/cooperative-cancellation.md.
+    */
+    DLLLOCAL void setCurrentWaitingOn(QoreCondition* cond) {
+        int tid = q_gettid();
+        if (tid >= 0 && tid < MAX_QORE_THREADS) {
+            entry[tid].waiting_on.store(cond, std::memory_order_seq_cst);
+        }
+    }
+
+    //! Clear the current thread's waiting_on slot under lck (for QoreCondition::waitWithInterrupt)
+    /** Serializes against cancelThread() / wakeAllWaiters() so that any cond pointer those
+        observed is still in use by us at the time of broadcast (and therefore the cond's
+        owning object is still alive).  See design/cooperative-cancellation.md.
+    */
+    DLLLOCAL void clearCurrentWaitingOn();
+
+    //! Broadcast to every QoreCondition that any active thread is currently waiting on
+    /** Used by SandboxManager::requestInterrupt() to wake waiters out of waitWithInterrupt().
+        Spurious wakeups for threads in other programs are harmless (they re-check their own
+        program's interrupt state and resume waiting).
+    */
+    DLLLOCAL void wakeAllWaiters();
 
     //! Get the cancel reason for the given thread (caller must hold lck or be the owning thread)
     DLLLOCAL QoreStringNode* getCancelReason(int tid) const {

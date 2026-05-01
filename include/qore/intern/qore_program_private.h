@@ -1986,9 +1986,12 @@ public:
         }
     }
 
-    DLLLOCAL void importClass(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path, const char* new_name = nullptr, bool inject = false, q_setpub_t set_pub = CSP_UNCHANGED);
+    DLLLOCAL void importClass(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path,
+            const char* new_name = nullptr, bool inject = false, q_setpub_t set_pub = CSP_UNCHANGED,
+            bool reexport = false);
 
-    DLLLOCAL void importHashDecl(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path, const char* new_name = nullptr, q_setpub_t set_pub = CSP_UNCHANGED);
+    DLLLOCAL void importHashDecl(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path,
+            const char* new_name = nullptr, q_setpub_t set_pub = CSP_UNCHANGED, bool reexport = false);
 
     DLLLOCAL const char* addString(const char* str) {
         str_set_t::iterator i = str_set.lower_bound(str);
@@ -2334,6 +2337,38 @@ public:
             child.priv->setDefine(i.first.c_str(), val, child.priv->parseSink);
         }
     }
+
+    //! Copies parent's reexport-marked imported classes & hashdecls into `child`.
+    /** Symmetric to \ref inheritParseDefines for symbol resolution.
+
+        Called by ModuleManager's child-Program creation paths
+        (\ref loadSeparatedModule / \ref loadUserModuleFromPath /
+        \ref loadUserModuleFromSource) to propagate host-application symbols
+        the parent explicitly opted to expose for transitively-required
+        modules.
+
+        Without this, \c %requires-loaded child Programs start with an empty
+        \c thdmap / \c clmap for the parent's host imports.  The closest-to-root
+        resolution algorithm in \ref qore_root_ns_private::parseFindHashDeclIntern
+        et al. only consults the current Program's index, so the child's parse
+        fails on unqualified references to names the host imported (e.g.
+        \c TokenInfo from \c OMQ::TokenInfo) — even though the parent had
+        them indexed from \c Program::importHashDecl().
+
+        Filter: parent entries with \c isReexport()=true are copied.  This is
+        an opt-in mechanism (default false) so module-merged public symbols
+        — classes brought in via the parent's own \c %requires that the host
+        never asked to re-export — do not propagate and cannot cause diamond
+        conflicts with classes the child also resolves through its own
+        \c %requires chain.
+
+        Inherited copies inherit the \c reexport flag from the source via the
+        cross-program copy ctor, so a multi-level chain (host → A → B → C)
+        continues to propagate.
+
+        @since %Qore 2.4
+     */
+    DLLLOCAL static void inheritParseImports(QoreProgram& child, QoreProgram& parent, ExceptionSink* xsink);
 
     DLLLOCAL static void runTimeDefine(QoreProgram* pgm, const char* str, QoreValue val, ExceptionSink* xsink) {
         pgm->priv->runTimeDefine(str, val, xsink);

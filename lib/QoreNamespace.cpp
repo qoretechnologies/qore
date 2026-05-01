@@ -994,7 +994,8 @@ QoreNamespace* QoreNamespace::findCreateNamespacePathAll(const char* nspath) {
 }
 
 QoreClass* qore_ns_private::runtimeImportClass(ExceptionSink* xsink, const QoreClass* c, QoreProgram* spgm,
-        q_setpub_t set_pub, const char* new_name, bool inject, const qore_class_private* injectedClass) {
+        q_setpub_t set_pub, const char* new_name, bool inject, const qore_class_private* injectedClass,
+        bool reexport) {
     if (checkImportClass(new_name ? new_name : c->getName(), xsink)) {
         return nullptr;
     }
@@ -1002,11 +1003,19 @@ QoreClass* qore_ns_private::runtimeImportClass(ExceptionSink* xsink, const QoreC
     QoreClass* nc = qore_class_private::makeImportClass(*c, spgm, new_name, inject, injectedClass, this, set_pub);
     classList.add(nc);
 
+    // If the host opted in to re-export this import (or the source was already
+    // marked re-export, e.g. for a transitive inheritance copy), tag the new
+    // class so qore_program_private::inheritParseImports propagates it into
+    // child Programs created for transitively-required modules.
+    if (reexport) {
+        qore_class_private::setReexport(*nc, true);
+    }
+
     return nc;
 }
 
 TypedHashDecl* qore_ns_private::runtimeImportHashDecl(ExceptionSink* xsink, const TypedHashDecl* hd,
-    QoreProgram* spgm, q_setpub_t set_pub, const char* new_name) {
+    QoreProgram* spgm, q_setpub_t set_pub, const char* new_name, bool reexport) {
     if (checkImportHashDecl(new_name ? new_name : hd->getName(), xsink)) {
         return nullptr;
     }
@@ -1025,6 +1034,15 @@ TypedHashDecl* qore_ns_private::runtimeImportHashDecl(ExceptionSink* xsink, cons
         if (typed_hash_decl_private::get(*nhd)->isPublic()) {
             typed_hash_decl_private::get(*nhd)->setPrivate();
         }
+    }
+    // If the host opted in to re-export this import (or the source was already
+    // marked re-export, e.g. for a transitive inheritance copy), tag the new
+    // hashdecl so qore_program_private::inheritParseImports propagates it into
+    // child Programs created for transitively-required modules.  The copy ctor
+    // preserves old.reexport for chained imports; the explicit set here covers
+    // the first import call from the host.
+    if (reexport) {
+        typed_hash_decl_private::get(*nhd)->setReexport(true);
     }
     hashDeclList.add(nhd);
 
@@ -1069,7 +1087,7 @@ QoreNamespace* qore_ns_private::findCreateNamespace(const char* nsn, bool user, 
     return ns;
 }
 
-QoreNamespace* qore_ns_private::findCreateNamespacePath(const nslist_t& nsl, bool user, bool& is_new) {
+QoreNamespace* qore_ns_private::findCreateNamespacePath(const nslist_t& nsl, bool user, bool& is_new, bool pub) {
     assert(!nsl.empty());
     assert(!is_new);
 
@@ -1078,10 +1096,18 @@ QoreNamespace* qore_ns_private::findCreateNamespacePath(const nslist_t& nsl, boo
 
     //printd(5, "qore_ns_private::findCreateNamespacePath() this: %p nsv: %ld\n", this, nsv.size());
 
-    // iterate through each level of the namespace path and find/create namespaces as needed
+    // iterate through each level of the namespace path and find/create namespaces as needed.
+    // When pub=true, mark each namespace along the path public — this lets %requires-merging
+    // (qore_ns_private::scanMergeCommittedNamespace) descend into those namespaces and surface
+    // public symbols inside them.  Without this, an import that creates a private parent
+    // namespace effectively makes every public symbol inside it un-mergeable, regardless of
+    // the symbol's own pub flag.
     QoreNamespace* nns = ns;
-    for (nslist_t::const_iterator i = nsl.begin(), e = nsl.end(); i != e; ++i)
+    for (nslist_t::const_iterator i = nsl.begin(), e = nsl.end(); i != e; ++i) {
         nns = nns->priv->findCreateNamespace((*i)->name.c_str(), user, is_new, rns);
+        if (pub)
+            nns->priv->pub = true;
+    }
 
     return nns;
 }
