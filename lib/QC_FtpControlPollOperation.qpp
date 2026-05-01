@@ -149,6 +149,9 @@ void FtpControlPollOperationPriv::abort(ExceptionSink* xsink) {
         current_op->deref(xsink);
         current_op = nullptr;
     }
+    if (ctrl_sock) {
+        ctrl_sock->closeIo(xsink);
+    }
     ctrl_state = FtpCtrlState::CLOSED;
 }
 
