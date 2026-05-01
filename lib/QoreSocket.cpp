@@ -411,6 +411,7 @@ static int qore_socket_get_user_timeout_direct(QoreSocket* s);
 static int qore_socket_set_socket_timeout_direct(QoreSocket* s, int optname, int ms);
 static int qore_socket_get_socket_timeout_direct(QoreSocket* s, int optname);
 static int qore_socket_get_port_direct(QoreSocket* s);
+static bool qore_socket_exec_process_sse_char(qore_socket_private* priv, QoreString& str, int& eol_count, char c);
 
 static int qore_socket_close_private_from_controller(qore_socket_private* priv) {
     priv->prepareForClose();
@@ -1637,6 +1638,89 @@ private:
     Action action;
     size_t size = 0;
     std::string pattern;
+};
+
+class QoreSocketControllerReadServerSentEventPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketControllerReadServerSentEventPollOperation(QoreSocket* sock)
+            : sock(sock), event_data(QCS_UTF8), out(nullptr) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        bool close_socket = bytes_consumed;
+        if (!close_socket && poll_state) {
+            assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
+            close_socket = reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() > 0;
+        }
+        poll_state.reset();
+        if (close_socket) {
+            qore_socket_close_from_controller(sock);
+        }
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        qore_socket_private* priv = qore_socket_private::get(*sock);
+        while (true) {
+            if (!poll_state) {
+                poll_state.reset(sock->startRecv(xsink, 1));
+                if (*xsink || !poll_state) {
+                    return nullptr;
+                }
+            }
+
+            int rc = poll_state->continuePoll(xsink);
+            if (*xsink) {
+                poll_state.reset();
+                return nullptr;
+            }
+            if (rc) {
+                return getSocketPollInfoHash(xsink, rc);
+            }
+
+            SimpleRefHolder<BinaryNode> data(poll_state->takeOutput().get<BinaryNode>());
+            poll_state.reset();
+            if (!data || !data->size()) {
+                se_closed("Socket", "readServerSentEvent", xsink);
+                return nullptr;
+            }
+
+            bytes_consumed = true;
+            char c = *static_cast<const char*>(data->getPtr());
+            if (qore_socket_exec_process_sse_char(priv, event_data, eol_count, c)) {
+                out = QoreSocket::parseServerSentEvent(xsink, event_data);
+                if (!*xsink) {
+                    done = true;
+                }
+                return nullptr;
+            }
+        }
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return out.release();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "received" : "reading-sse";
+    }
+
+private:
+    QoreSocket* sock;
+    std::unique_ptr<AbstractPollState> poll_state;
+    QoreString event_data;
+    mutable ReferenceHolder<QoreHashNode> out;
+    int eol_count = 0;
+    bool bytes_consumed = false;
+    bool done = false;
 };
 
 class QoreSocketControllerConnectPollOperation : public SocketPollOperationBase {
@@ -4522,40 +4606,23 @@ static bool qore_socket_exec_process_sse_char(qore_socket_private* priv, QoreStr
 }
 
 static QoreHashNode* qore_socket_exec_read_server_sent_event(QoreSocket* s, int timeout_ms, ExceptionSink* xsink) {
-    SocketSyncPoll::assertNotOnIoThread("Socket", "readServerSentEvent", xsink);
-    if (*xsink) {
-        return nullptr;
-    }
-
     qore_socket_private* priv = qore_socket_private::get(*s);
     QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
     if (!io_guard) {
         return nullptr;
     }
 
-    QoreString str(QCS_UTF8);
-    int eol_count = 0;
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket SSE read")) {
-            return nullptr;
-        }
-
-        SimpleRefHolder<BinaryNode> data(qore_socket_exec_recv_binary(s, 1, timeout_ms, xsink, -1));
-        if (*xsink) {
-            return nullptr;
-        }
-        if (!data->size()) {
-            se_closed("Socket", "readServerSentEvent", xsink);
-            return nullptr;
-        }
-        char c = *static_cast<const char*>(data->getPtr());
-        if (qore_socket_exec_process_sse_char(priv, str, eol_count, c)) {
-            break;
-        }
+    ValueHolder rv(qore_socket_exec_poll(s, new QoreSocketControllerReadServerSentEventPollOperation(s),
+        timeout_ms, "readServerSentEvent", "received", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
     }
-
-    return QoreSocket::parseServerSentEvent(xsink, str);
+    if (rv->getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-SSE-ERROR",
+            "expected hash output from async SSE read operation, got '%s'", rv->getFullTypeName());
+        return nullptr;
+    }
+    return rv.release().get<QoreHashNode>();
 }
 
 static QoreHashNode* qore_socket_exec_read_server_sent_event_encoded(QoreSocket* s,
