@@ -2137,10 +2137,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
     std::unique_ptr<AOTConstantReverseMap> local_init_base_crm;
     if (!init_base_const_reverse_map) {
         if (const_reverse_map && pending_init_constant_fqns && !pending_init_constant_fqns->empty()) {
-            qore_program_private* pp = qore_program_private::get(*pgm);
-            qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+            // Build the pending-safe view from the namespace tree currently being
+            // compiled.  Script AOT can compile relative source modules from
+            // separate module programs; using the script program root here would
+            // omit those module-local pending constants.
             local_init_base_crm.reset(new AOTConstantReverseMap(
-                buildPendingSafeConstantReverseMap(root_ns, *pending_init_constant_fqns)));
+                buildPendingSafeConstantReverseMap(ns, *pending_init_constant_fqns)));
             init_base_const_reverse_map = local_init_base_crm.get();
         } else {
             init_base_const_reverse_map = const_reverse_map;
