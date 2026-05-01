@@ -6278,9 +6278,23 @@ public:
     DLLLOCAL QoreHashNode* continueWaitingConnect(ExceptionSink* xsink) {
         // The first controller pass arms the notifier fd; later passes are
         // driven by the async controller when the notifier becomes readable.
+        // Public poll-operation users may also call continuePoll() manually
+        // before the notifier is readable; in that case keep returning the
+        // same poll info instead of treating the early call as an internal
+        // connection-state error.
         bool decided = pending_conn->isClosed() || pending_conn->isReady();
-        if (!decided && !waiting_connect_armed) {
-            waiting_connect_armed = true;
+        if (!decided) {
+            if (waiting_connect_armed) {
+                notifier->acknowledge(xsink);
+                if (*xsink) {
+                    done = true;
+                    phase = Phase::DONE;
+                    clearPendingUnlocked(xsink);
+                    return nullptr;
+                }
+            } else {
+                waiting_connect_armed = true;
+            }
             return getSocketPollInfoHash(xsink, SOCK_POLLIN);
         }
         notifier->acknowledge(xsink);
@@ -6310,19 +6324,6 @@ public:
                 }
             }
             xsink->raiseException(err_str, "%s", desc_str);
-            done = true;
-            phase = Phase::DONE;
-            clearPendingUnlocked(xsink);
-            return nullptr;
-        }
-
-        if (!pending_conn->isReady()) {
-            // Spurious wake (state still CONNECTING) — extremely unlikely
-            // because onConnectionReady signals only on transition.  Treat
-            // as an internal error rather than spinning.
-            xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
-                "connection-ready notifier signaled but connection is not "
-                "in a decided state");
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
