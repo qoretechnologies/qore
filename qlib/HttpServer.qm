@@ -219,6 +219,8 @@ log("started listener on %s", lh.desc);
     - added @ref HttpServer::HttpServer::addListenerAsync() "addListenerAsync()" and
       @ref HttpServer::HttpServer::addListenersAsync() "addListenersAsync()" methods for Future-based listener setup
       and routed synchronous listener methods through the same async setup path
+    - HTTP/1.x persistent handlers now keep handler-thread affinity while subsequent request reads are driven by
+      the async I/O controller and routed through a persistent queue
     - removed high-frequency INFO log messages from async I/O hot paths to reduce log spam
     - fixed async I/O cache leak when clients disconnect during SSL handshake
     - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were
@@ -1439,7 +1441,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
     #! stops all listeners; does not wait for all connections on the listeners to close
     stopNoWait() {
-        # Wake dedicated persistent-handler threads (see HttpListener::handleMultiplexedPersistentSync)
+        # Wake dedicated persistent-handler threads (see HttpListener::handleQueuedPersistentConnection)
         # so they return immediately instead of waiting up to their idle TTL in
         # Queue::get().  Without this, HttpListener::stop()'s cThreads.wait()
         # below blocks for the full TTL even though all I/O is already async.
@@ -2270,7 +2272,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     */
     returnConnectionToAsyncIo(Socket sock, hash<auto> cx, HttpListener listener) {
         if (asyncIo && asyncTarget) {
-            asyncIo.addIdleConnection(sock, listener, cx, asyncTarget, ttl);
+            hash<auto> async_cx = exists cx.peer ? cx : cast<hash<auto>>({
+                "peer": cx."peer-info",
+                "socket": cx."socket-info",
+            });
+            if (exists cx{"peer-info-future"}) {
+                async_cx{"peer-info-future"} = cx{"peer-info-future"};
+            }
+            asyncIo.addIdleConnection(sock, listener, async_cx, asyncTarget, ttl);
         }
     }
 
@@ -5227,7 +5236,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # thread only for the duration of some context (an open SQL
             # statement, an in-flight bidi message exchange, a transient lock,
             # etc.) will report persistent at dispatch time but release as
-            # soon as that context ends.  Skip the persistent sync loop
+            # soon as that context ends.  Skip the persistent queue loop
             # entirely in that case so the handler thread is freed
             # immediately instead of idling for the full TTL.
             if (!phi.handler.isPersistent()) {
@@ -5236,26 +5245,46 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 return <HttpServerAsyncIo::HttpRequestResultInfo>{};
             }
             # Enter dedicated persistent loop
-            handleMultiplexedPersistentSync(request_helper, pq, s, \cx, phi, info,
+            handleQueuedPersistentConnection(request_helper, pq, s, \cx, phi, info,
                 deregister_fn, sock_key);
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         } else if (!is_multiplexed && phi.handler && phi.handler.isPersistent()
                 && !request_helper.isDedicated()) {
-            # For HTTP/1.x, switch to synchronous mode for thread affinity
-            log("cid %d: handler opted into persistence for %s %s, switching to sync mode",
+            # For HTTP/1.x, keep this handler thread dedicated for thread
+            # affinity, but hand subsequent socket reads back to async I/O.  The
+            # controller routes matching requests to the Queue below.
+            log("cid %d: handler opted into persistence for %s %s, entering queued persistent mode",
                 cx.id, hdr.method, cx.masked_path);
-            # Handler requires thread affinity - send current response synchronously first
             if (async_response.code) {
                 sendResponseSync(s, async_response);
             }
             # See multiplexed branch above: drop response refs so the underlying
             # framework objects (e.g. RestStreamRequest) can run their destructors
-            # before the persistent sync loop is entered, releasing handler
+            # before the persistent queue loop is entered, releasing handler
             # persistence whose only condition was the in-flight stream.
             delete async_response.send_callback;
             delete async_response.input_stream;
-            # Continue handling requests on this thread until persistence ends
-            handlePersistentConnectionSync(request_helper, s, \cx, phi, info);
+            if (!phi.handler.isPersistent()) {
+                log("cid %d: persistence released during initial response, "
+                    "skipping queued persistent mode", cx.id);
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+            }
+            if (cx.close || !s.isOpen()) {
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+            }
+
+            Queue pq();
+            code register_fn = header_info.register_persistent_queue;
+            code deregister_fn = header_info.deregister_persistent_queue;
+            sock_key = s.uniqueHash();
+            register_fn(sock_key, pq);
+            on_exit deregister_fn(sock_key);
+            if (!cx.close && s.isOpen()) {
+                serv.returnConnectionToAsyncIo(s, cx, self);
+            }
+            # Continue handling queued requests on this thread until persistence ends
+            handleQueuedPersistentConnection(request_helper, pq, s, \cx, phi, info,
+                deregister_fn, sock_key);
             # Persistent handler managed the socket lifecycle; return empty result
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         }
@@ -5458,226 +5487,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         logResponse(response.cx, response);
     }
 
-    #! Handles a persistent connection synchronously after the async I/O controller detected persistence
-    /** This method is called when a handler opts into persistence via setPersistent(True).
-        It handles all subsequent requests on the current thread until:
-        - The handler releases persistence (isPersistent() returns False)
-        - The connection is closed
-        - An error occurs
-
-        @param request_helper the request helper for parsing HTTP requests
-        @param s the socket for the connection
-        @param cx the connection context
-        @param phi the persistent handler info
-        @param info peer info for logging
-    */
-    private handlePersistentConnectionSync(RequestHelper request_helper, Socket s, reference<hash<auto>> cx,
-            HttpPersistentHandlerInfo phi, hash<auto> info) {
-        @assert(phi.handler, "phi.handler must be set when entering persistent sync mode");
-        @assert(phi.handler.isPersistent(), "handler must be persistent when entering persistent sync mode");
-        log("cid %d: switching to synchronous mode for persistent handler", cx.id);
-
-        # Static listener context template
-        hash<auto> cx_listener = getContextTemplate(info);
-
-        # Clean up persistent handler state and thread-local data when this function
-        # exits for any reason.  This is critical because this runs on a handler pool
-        # thread that will be reused - stale thread-local data from a persistent
-        # session (e.g., from an abnormal disconnect) would corrupt subsequent requests.
-        on_exit {
-            phi.clear();
-            removeUserThreadContext();
-            remove_thread_data("svc_listener");
-        }
-
-        try {
-            while (!exit && s.isOpen()) {
-                # NOTE: persistence may have ended between requests (e.g., between
-                # DataStream SELECT and ROLLBACK), but we continue processing on this
-                # thread to preserve thread affinity for thread-bound resources (e.g.,
-                # database transactions).  The idle timeout in the wait loop below
-                # handles the case where no more requests arrive after persistence ends.
-
-                # Wait for next request with idle timeout
-                date poll_interval = HttpServer::PollTimeout;
-                date ttl = serv.getTtl();
-                if (poll_interval > ttl) {
-                    poll_interval = ttl;
-                }
-
-                date start = now_us();
-                while (!exit && s.isOpen() && !s.isDataAvailable(poll_interval)) {
-                    # Check for idle timeout only if persistence has been released
-                    # (persistent connections have no idle timeout while active)
-                    if (!phi.handler || !phi.handler.isPersistent()) {
-                        if ((now_us() - start) > ttl) {
-                            log("cid %d: persistent sync idle timeout, returning to async I/O",
-                                cx.id);
-                            if (!cx.close && s.isOpen()) {
-                                serv.returnConnectionToAsyncIo(s, cx, self);
-                            }
-                            return;
-                        }
-                    }
-                }
-                # Check if we exited due to shutdown
-                if (exit) {
-                    return;
-                }
-
-                # Reset context for new request
-                cx = cx_listener;
-
-                # Read HTTP header
-                hash<auto> header_info;
-                hash<auto> hdr;
-                try {
-                    hdr = s.readHTTPHeader(HttpServer::ReadTimeout, \header_info);
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "SOCKET-CLOSED") {
-                        # Connection closed by peer
-                        return;
-                    } else if (ex.err == "SOCKET-TIMEOUT") {
-                        string err = sprintf("timed out reading HTTP header after %d ms", HttpServer::ReadTimeout);
-                        logError("cid %d: %s", cx.id, err);
-                        cx.close = True;
-                        serv.sendHttpError(self, cx, s, 400, err, NOTHING, NOTHING, NOTHING, False);
-                        return;
-                    }
-                    string etxt = sprintf("ERROR reading HTTP header: %s: %s", ex.err, ex.desc);
-                    logError("cid %d: %s", cx.id, etxt);
-                    cx.close = True;
-                    serv.sendHttpError(self, cx, s, 400, etxt, NOTHING, NOTHING, NOTHING, False);
-                    return;
-                }
-
-                # Process path
-                cx.raw_path = hdr.path;
-                hdr.path = decode_url(hdr.path);
-                cx += {
-                    "orig_path": hdr.path,
-                    "masked_path": serv.maskData(hdr.path),
-                };
-
-                if (hdr.path =~ /^\//) {
-                    splice hdr.path, 0, 1;
-                }
-
-                if (hdr.authorization) {
-                    cx.auth = hdr.authorization;
-                }
-
-                # Process content-type
-                if (hdr."content-type") {
-                    hdr."_qore_orig_content_type" = hdr."content-type";
-                }
-                # only overwrite content-type if body-content-type is set (HTTP/2 may not set it)
-                if (header_info."body-content-type".val()) {
-                    hdr."content-type" = header_info."body-content-type";
-                    if (hdr."content-type".typeCode() == NT_LIST) {
-                        hdr."content-type" = hdr."content-type"[0];
-                    }
-                }
-
-                cx.hdr = hdr;
-                cx.char_encoding = s.getEncoding();
-                cx."response-encoding" = header_info."accept-charset";
-                cx.close = header_info.close;
-
-                # Check for end-persistent signal — client is explicitly ending
-                # the persistent session.  Send a 200 OK response and clear
-                # persistence so the connection can be reused.  The loop
-                # continues to handle any subsequent requests on the same
-                # keep-alive connection (e.g., a new streaming session);
-                # if no more requests arrive, the idle timeout will return
-                # the connection to async I/O.
-                if (hdr."qorus-connection" =~ /^end-persistent$/i) {
-                    log("cid %d: received end-persistent signal, terminating "
-                        "persistent session", cx.id);
-                    s.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"},
-                        "OK");
-                    # Clear persistence so the idle timeout can fire and the
-                    # connection can be returned to async I/O if no more
-                    # requests arrive.  Also remove user thread context so
-                    # subsequent requests on the same thread do not see stale
-                    # persistent session data (e.g. persistent_data from a
-                    # prior aborted streaming request).
-                    phi.clear();
-                    removeUserThreadContext();
-                    continue;
-                }
-
-                # Log the request
-                {
-                    string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
-                    string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
-                        cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
-                    if (hdr."transfer-encoding" == "chunked") {
-                        lstr += " body: chunked";
-                    }
-                    if (hdr."_qore_orig_content_type") {
-                        lstr += sprintf(" Content-Type: %y", hdr."_qore_orig_content_type");
-                    }
-                    if (ssl) {
-                        lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
-                    }
-                    lstr += " [persistent-sync]";
-                    lstr += ")";
-                    log("%s", lstr);
-                }
-
-                cx.uctx = get_thread_data("uctx");
-                cx."header-info" = header_info;
-
-                if (get_remote_certs) {
-                    cx."client-cert" = s.getRemoteCertificate();
-                }
-
-                # Process request
-                hash<HttpAsyncResponseInfo> async_response = <HttpAsyncResponseInfo>{};
-                handleRequest(request_helper, self, s, \cx, hdr, hdr.method == "HEAD", phi, info,
-                    \async_response);
-
-                # If handler took over the socket (dedicated), we're done
-                # Note: isDedicatedExternal() implies isDedicated(), so checking isDedicated() covers both
-                if (request_helper.isDedicated()) {
-                    return;
-                }
-
-                # Send response synchronously
-                if (async_response && async_response.code) {
-                    sendResponseSync(s, async_response);
-                }
-
-                # Check if connection should be closed
-                if (cx.close) {
-                    break;
-                }
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            string etxt = serv.getDebug()
-                ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
-                : get_exception_string(ex);
-            logError("cid %d: persistent handler error: %s", cx.id, etxt);
-            cx.close = True;
-            try {
-                serv.sendHttpError(self, cx, s, 500, etxt, NOTHING, NOTHING, cx."response-encoding", False);
-            } catch () {
-                # Ignore errors sending error response
-            }
-        }
-
-        # Close connection
-        if (s.isOpen()) {
-            try {
-                s.shutdown();
-                s.close();
-            } catch () {
-                # Ignore close errors
-            }
-        }
-    }
-
     #! Sends a multiplexed response from a handler pool thread using the protocol-appropriate submit API
     /** Uses the thread-safe submit APIs that queue data for the I/O thread, avoiding conflicts
         with the I/O thread's poll operation.  Supports both HTTP/2 and HTTP/3 (QUIC).
@@ -5757,7 +5566,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     #! Sends a streaming response inline on the current thread
-    /** Used by \c handleMultiplexedPersistentSync() to drive \c send_callback
+    /** Used by \c handleQueuedPersistentConnection() to drive \c send_callback
         or \c input_stream responses on the dedicated handler thread, preserving
         thread affinity for thread-local resources (e.g. DatasourcePool
         reservations).
@@ -5890,10 +5699,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
-    #! Handles persistent multiplexed connections via a dedicated handler pool thread
-    /** This method is called when a handler opts into persistence for an HTTP/2 or HTTP/3
-        multiplexed connection.  It enters a loop reading subsequent requests from a Queue
-        (populated by the I/O controller) and processes them on the current thread, ensuring
+    #! Handles persistent connections via a dedicated handler pool thread
+    /** This method is called when a handler opts into persistence.  It enters a loop reading
+        subsequent requests from a Queue (populated by the I/O controller) and processes them
+        on the current thread, ensuring
         thread affinity for thread-local resources like database transactions.
 
         @param request_helper the request lifecycle helper
@@ -5905,13 +5714,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @param deregister_fn callback to deregister the persistent queue
         @param sock_key the socket unique hash identifying the connection
     */
-    private handleMultiplexedPersistentSync(RequestHelper request_helper, Queue pq, Socket s,
+    private handleQueuedPersistentConnection(RequestHelper request_helper, Queue pq, Socket s,
             reference<hash<auto>> cx, HttpPersistentHandlerInfo phi, hash<auto> info,
             code<nothing(string)> deregister_fn, string sock_key) {
-        @assert(phi.handler, "phi.handler must be set when entering multiplexed persistent mode");
+        @assert(phi.handler, "phi.handler must be set when entering queued persistent mode");
         @assert(phi.handler.isPersistent(), "handler must be persistent when entering "
-            "multiplexed persistent mode");
-        log("cid %d: entering multiplexed persistent sync loop", cx.id);
+            "queued persistent mode");
+        log("cid %d: entering queued persistent loop", cx.id);
 
         # Static listener context template
         hash<auto> cx_listener = getContextTemplate(info);
@@ -5958,7 +5767,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                             # End-Persistent header, or TCP connection close
                             # triggers cleanup via
                             # signalPersistentQueuesForConnection().
-                            log("cid %d: multiplexed persistent idle timeout, "
+                            log("cid %d: queued persistent idle timeout, "
                                 "exiting dedicated mode", cx.id);
                             deregister_fn(sock_key);
                             drainOrphanedPersistentRequests(request_helper, pq,
@@ -5972,13 +5781,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
                 # Check for close signal or empty entry
                 if (!entry || entry.type == "close") {
-                    log("cid %d: multiplexed persistent connection closed", cx.id);
+                    log("cid %d: queued persistent connection closed", cx.id);
                     return;
                 }
 
                 # Extract request data from queue entry
                 hash<auto> conn_info = entry.conn_info;
                 hash<auto> req_hdr = conn_info.hdr;
+                bool is_multiplexed = (conn_info.header_info.http2 ?? False)
+                    || (conn_info.header_info.http3 ?? False);
 
                 # Check for end-persistent signal — the client is explicitly
                 # ending the persistent session (e.g., before clearing its
@@ -5988,13 +5799,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (req_hdr."qorus-connection" =~ /^end-persistent$/i) {
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
-                    sendMultiplexedResponse(s, conn_info.header_info,
-                        <HttpAsyncResponseInfo>{
-                            "code": 200,
-                            "hdr": {"content-type": "text/plain"},
-                            "body": "OK",
-                            "cx": cx,
-                        });
+                    hash<auto> end_cx = cx_listener;
+                    end_cx."header-info" = conn_info.header_info;
+                    end_cx.close = conn_info.header_info.close;
+                    hash<HttpAsyncResponseInfo> end_response = <HttpAsyncResponseInfo>{
+                        "code": 200,
+                        "hdr": {"content-type": "text/plain"},
+                        "body": "OK",
+                        "cx": end_cx,
+                    };
+                    if (is_multiplexed) {
+                        sendMultiplexedResponse(s, conn_info.header_info, end_response);
+                    } else {
+                        sendResponseSync(s, end_response);
+                    }
                     if (entry.resume_reading) {
                         try {
                             entry.resume_reading();
@@ -6005,6 +5823,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
                         \cx, cx_listener, phi, info);
+                    if (!is_multiplexed && !end_cx.close && s.isOpen()) {
+                        serv.returnConnectionToAsyncIo(s, end_cx, self);
+                    }
                     return;
                 }
 
@@ -6051,7 +5872,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     if (ssl) {
                         lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
                     }
-                    lstr += " [persistent-mux-sync]";
+                    lstr += is_multiplexed ? " [persistent-mux]" : " [persistent-h1]";
                     lstr += ")";
                     log("%s", lstr);
                 }
@@ -6092,17 +5913,21 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     return;
                 }
 
-                # Send response via HTTP/2 submit.  For send_callback
+                # Send response.  For send_callback
                 # responses, drive the callback inline on the current
                 # (dedicated) thread to preserve thread affinity for
                 # thread-local resources (e.g. DSP reservations).
                 if (async_response && async_response.code) {
-                    if (async_response.send_callback || async_response.input_stream) {
-                        sendMultiplexedStreamingResponseInline(s,
-                            conn_info.header_info, async_response);
+                    if (is_multiplexed) {
+                        if (async_response.send_callback || async_response.input_stream) {
+                            sendMultiplexedStreamingResponseInline(s,
+                                conn_info.header_info, async_response);
+                        } else {
+                            sendMultiplexedResponse(s, conn_info.header_info,
+                                async_response);
+                        }
                     } else {
-                        sendMultiplexedResponse(s, conn_info.header_info,
-                            async_response);
+                        sendResponseSync(s, async_response);
                     }
                 }
                 # Drop response refs so any framework objects captured by the
@@ -6119,18 +5944,24 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # dispatched stream now that the handler is done.  The response
                 # has already been queued via sendMultiplexedResponse() which
                 # uses nghttp2's internal state, not our streams map.
-                if (conn_info.header_info.body_streaming) {
+                if (is_multiplexed && conn_info.header_info.body_streaming) {
                     s.cleanupHttp2Stream(conn_info.header_info.stream_id);
                     conn_info.header_info.io_wake();
                 }
 
+                if (!is_multiplexed && (cx.close || !s.isOpen())) {
+                    return;
+                }
+
                 # Check if persistence was cleared by this request (e.g. commit/rollback).
-                # We check both the handler's internal flag and the user thread context,
-                # since persistenceThreadTerminate() clears the uctx but not the handler's
-                # internal persistence flag.
+                # Multiplexed requests also check user thread context, since
+                # persistenceThreadTerminate() clears the uctx but not the handler's
+                # internal persistence flag.  Plain H1 persistent handlers may not
+                # use uctx at all, so their handler flag remains authoritative.
                 *hash<auto> uctx = get_thread_data("uctx");
+                bool persistence_data_cleared = is_multiplexed && !uctx.persistent_data;
                 if (!phi.handler || !phi.handler.isPersistent()
-                        || !uctx.persistent_data) {
+                        || persistence_data_cleared) {
                     log("cid %d: persistence cleared after request, exiting "
                         "dedicated mode", cx.id);
                     # Deregister the persistent queue BEFORE returning to prevent
@@ -6143,14 +5974,21 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     # brief window between the last pq.get() and the deregistration
                     drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
                         cx_listener, phi, info);
+                    if (!is_multiplexed && !cx.close && s.isOpen()) {
+                        serv.returnConnectionToAsyncIo(s, cx, self);
+                    }
                     return;
+                }
+
+                if (!is_multiplexed && s.isOpen()) {
+                    serv.returnConnectionToAsyncIo(s, cx, self);
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
             string etxt = serv.getDebug()
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
-            logError("cid %d: multiplexed persistent handler error: %s", cx.id, etxt);
+            logError("cid %d: queued persistent handler error: %s", cx.id, etxt);
             # Drain any requests routed onto the persistent queue between
             # the last pq.get() and this error.  Without this drain, a
             # request queued while we were processing the failing request
@@ -6967,7 +6805,7 @@ class RequestHelper {
         cThreads.wait() and dThreads.wait().
 
         @note We check isOpen() to avoid double-close if the socket was already closed
-        (e.g., by handlePersistentConnectionSync())
+        (e.g., by the async I/O controller)
     */
     destructor() {
         if (s && !dedicated_external && s.isOpen()) {

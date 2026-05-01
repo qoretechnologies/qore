@@ -167,8 +167,8 @@ public class HttpAsyncSocketIoController {
         hash<string, int> accept_counts;
         int accept_seq = 0;
 
-        #! Queues for persistent HTTP/2/HTTP/3 connections keyed by socket unique hash
-        /** When a handler opts into persistence for a multiplexed connection, the handler
+        #! Queues for persistent HTTP connections keyed by socket/session unique hash
+        /** When a handler opts into persistence for a connection, the handler
             pool thread enters a dedicated loop and registers a Queue here. Subsequent
             requests on the same connection are routed to the Queue instead of dispatching
             to a new pool thread, ensuring thread affinity for thread-local resources
@@ -376,7 +376,7 @@ public class HttpAsyncSocketIoController {
         controller.waitStop();
     }
 
-    #! Registers a persistent queue for a multiplexed connection
+    #! Registers a persistent queue for a connection
     /** Called by a handler pool thread when entering dedicated persistent mode.
         Subsequent requests on the same connection will be routed to the Queue
         instead of dispatching to a new pool thread.
@@ -391,7 +391,7 @@ public class HttpAsyncSocketIoController {
         persistent_queues{key} = {"queue": q, "filter": filter};
     }
 
-    #! Deregisters a persistent queue for a multiplexed connection
+    #! Deregisters a persistent queue for a connection
     /** Called when the dedicated handler pool thread exits its persistent loop.
 
         @param key the socket unique hash identifying the connection
@@ -403,7 +403,7 @@ public class HttpAsyncSocketIoController {
         remove persistent_queues{key};
     }
 
-    #! Returns the persistent queue for a multiplexed connection, or NOTHING if none
+    #! Returns the persistent queue for a connection, or NOTHING if none
     /** @param key the socket unique hash identifying the connection
         @param hdr the request headers to test against the filter (if any)
         @return the Queue if a dedicated thread is waiting and the filter passes, or NOTHING
@@ -429,8 +429,38 @@ public class HttpAsyncSocketIoController {
         return queue;
     }
 
+    private hash<auto> addPersistentQueueClosures(hash<auto> header_info) {
+        header_info.register_persistent_queue = sub (string key, Queue q,
+                *code<bool(hash<auto>)> filter) {
+            self.registerPersistentQueue(key, q, filter);
+        };
+        header_info.deregister_persistent_queue = sub (string key) {
+            self.deregisterPersistentQueue(key);
+        };
+        return header_info;
+    }
+
+    private bool routeRequestToPersistentQueue(string uh, hash<HttpConnectionInfo> conn_info) {
+        *Queue pq = getPersistentQueue(uh, conn_info.hdr);
+        if (!pq) {
+            return False;
+        }
+
+        log(LoggerLevel::DEBUG, "HTTP/1.x request routed to persistent queue: %y %s %s",
+            uh, conn_info.hdr.method, conn_info.hdr.path);
+        {
+            AutoWriteLock al(m);
+            remove connections{uh};
+        }
+        pq.push({
+            "type": "request",
+            "conn_info": conn_info,
+        });
+        return True;
+    }
+
     #! Signals persistent queues for a closed connection to exit
-    /** Called when a multiplexed connection closes so that dedicated handler pool
+    /** Called when a connection closes so that dedicated handler pool
         threads blocked on Queue::get() are unblocked and can exit cleanly.
 
         @param uh the connection unique hash
@@ -2483,6 +2513,7 @@ public class HttpAsyncSocketIoController {
 
     #! Handles header read completion
     private handleHeaderComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, hash<auto> output) {
+        output.info = addPersistentQueueClosures(output.info);
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": cinfo.sock,
             "hdr": output.hdr,
@@ -2533,6 +2564,10 @@ public class HttpAsyncSocketIoController {
                     # Fall through to normal dispatch — handler will read body
                 }
             }
+        }
+
+        if (routeRequestToPersistentQueue(uh, conn_info)) {
+            return;
         }
 
         # Remove from our tracking
@@ -2617,6 +2652,10 @@ public class HttpAsyncSocketIoController {
 
         log(LoggerLevel::DEBUG, "Body read complete for %y: %d bytes", uh,
             body_data ? body_data.size() : 0);
+
+        if (routeRequestToPersistentQueue(uh, conn_info)) {
+            return;
+        }
 
         # Remove from our tracking — handler thread owns the socket now
         {
