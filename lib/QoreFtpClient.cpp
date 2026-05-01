@@ -145,7 +145,7 @@ static int qore_ftp_wait_controller_queue(QoreObject* queue_obj, const char* wha
     return qore_ftp_check_controller_result(result->get<const QoreHashNode>(), label, xsink);
 }
 
-static void qore_ftp_cancel_controller_socket(QoreSocketObject* sock) {
+static void qore_ftp_cancel_and_close_controller_socket(QoreSocketObject* sock) {
     if (!sock) {
         return;
     }
@@ -158,7 +158,7 @@ static void qore_ftp_cancel_controller_socket(QoreSocketObject* sock) {
                 (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink)),
             &xsink);
         if (!xsink && *ctl_priv) {
-            ctl_priv->cancel(sock, &xsink);
+            ctl_priv->cancelAndClose(sock, &xsink);
         }
     }
     if (xsink) {
@@ -1179,7 +1179,7 @@ struct qore_ftp_private {
         int code;
         QoreStringNodeHolder mr(sendMsgAsyncBlocking(code, "PORT", pconn.c_str(), xsink));
         if (*xsink || (code / 100) != 2) {
-            qore_ftp_cancel_controller_socket(accept_priv->getListenerSocket());
+            qore_ftp_cancel_and_close_controller_socket(accept_priv->getListenerSocket());
             if (!*xsink) {
                 xsink->raiseException("FTP-CONNECT-ERROR",
                     "PORT command failed: %s", mr ? mr->c_str() : "no response");
@@ -1190,7 +1190,7 @@ struct qore_ftp_private {
         // 5. Send transfer command — triggers server connect-back to our PORT
         mr = sendMsgAsyncBlocking(code, transfer_cmd, transfer_arg, xsink);
         if (*xsink || (code / 100) != 1) {
-            qore_ftp_cancel_controller_socket(accept_priv->getListenerSocket());
+            qore_ftp_cancel_and_close_controller_socket(accept_priv->getListenerSocket());
             if (!*xsink) {
                 xsink->raiseException("FTP-DATA-ERROR",
                     "%s failed: %s", transfer_cmd, mr ? mr->c_str() : "no response");
@@ -1200,7 +1200,7 @@ struct qore_ftp_private {
 
         // 6. Block until accept (+ optional SSL) completes
         if (qore_ftp_wait_controller_queue(*accept_queue, "FTP PORT accept", xsink)) {
-            qore_ftp_cancel_controller_socket(accept_priv->getListenerSocket());
+            qore_ftp_cancel_and_close_controller_socket(accept_priv->getListenerSocket());
             return -1;
         }
 
@@ -1276,7 +1276,7 @@ struct qore_ftp_private {
             return -1;
         }
         if (qore_ftp_wait_controller_queue(*data_queue, "FTP PORT data transfer", xsink)) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             return -1;
         }
 
@@ -1345,7 +1345,7 @@ struct qore_ftp_private {
         // 4. RETR command on control channel
         resp = sendMsgAsyncBlocking(code, "RETR", remotepath, xsink);
         if (*xsink || (code / 100) != 1) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             if (!*xsink) {
                 xsink->raiseException("FTP-GET-ERROR",
                     "RETR failed: %s", resp ? resp->c_str() : "no response");
@@ -1355,7 +1355,7 @@ struct qore_ftp_private {
 
         // 5. Wait for data transfer to complete
         if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             return nullptr;
         }
 
@@ -1433,7 +1433,7 @@ struct qore_ftp_private {
         // 4. RETR command on control channel
         resp = sendMsgAsyncBlocking(code, "RETR", remotepath, xsink);
         if (*xsink || (code / 100) != 1) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             if (!*xsink) {
                 xsink->raiseException("FTP-GET-ERROR",
                     "RETR failed: %s", resp ? resp->c_str() : "no response");
@@ -1443,7 +1443,7 @@ struct qore_ftp_private {
 
         // 5. Wait for data transfer to complete
         if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             return -1;
         }
 
@@ -1508,7 +1508,7 @@ struct qore_ftp_private {
         // 5. STOR command
         resp = sendMsgAsyncBlocking(code, "STOR", remotename, xsink);
         if (*xsink || (code / 100) != 1) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             if (!*xsink) {
                 xsink->raiseException("FTP-PUT-ERROR",
                     "STOR failed: %s", resp ? resp->c_str() : "no response");
@@ -1518,7 +1518,7 @@ struct qore_ftp_private {
 
         // 6. Wait for data transfer
         if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             return -1;
         }
 
@@ -1589,7 +1589,7 @@ struct qore_ftp_private {
         // 4. STOR command
         resp = sendMsgAsyncBlocking(code, "STOR", remotename, xsink);
         if (*xsink || (code / 100) != 1) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             if (!*xsink) {
                 xsink->raiseException("FTP-PUT-ERROR",
                     "STOR failed: %s", resp ? resp->c_str() : "no response");
@@ -1599,7 +1599,7 @@ struct qore_ftp_private {
 
         // 5. Wait for data transfer
         if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             return -1;
         }
 
@@ -1668,16 +1668,16 @@ struct qore_ftp_private {
         resp = sendMsgAsyncBlocking(code, long_list ? "LIST" : "NLST",
             (path && *path) ? path : nullptr, xsink);
         if (*xsink) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             return nullptr;
         }
         // 5xx = file not found
         if ((code / 100) == 5) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             return nullptr;
         }
         if ((code / 100) != 1) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             xsink->raiseException("FTP-LIST-ERROR",
                 "LIST/NLST failed: %s", resp ? resp->c_str() : "no response");
             return nullptr;
@@ -1685,7 +1685,7 @@ struct qore_ftp_private {
 
         // 5. Wait for data transfer
         if (qore_ftp_wait_controller_queue(*data_queue_holder, "FTP data transfer", xsink)) {
-            qore_ftp_cancel_controller_socket(data_op->getDataSocket());
+            qore_ftp_cancel_and_close_controller_socket(data_op->getDataSocket());
             return nullptr;
         }
 
