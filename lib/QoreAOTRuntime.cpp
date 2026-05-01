@@ -280,6 +280,33 @@ static bool aotLocalTypeMatches(const LocalVar* lv, const char* type_path,
             || QoreTypeInfo::isOutputIdentical(lv->getTypeInfoForLValue(), resolved_ti));
 }
 
+static bool isGenericAOTTypePath(const std::string& path) {
+    std::string npath = normalizeAOTTypePathForMatch(path.c_str());
+    return npath.empty() || npath == "auto" || npath == "*auto" || npath == "any" || npath == "*any";
+}
+
+static bool aotLocalTypeKnownMismatch(const LocalVar* lv, const char* type_path,
+        QoreAOTTypeResolver* type_resolver) {
+    if (!lv || !type_path || !*type_path || aotLocalTypeMatches(lv, type_path, type_resolver)
+            || !type_resolver) {
+        return false;
+    }
+
+    std::string declared_path = QoreTypeInfo::getPath(lv->getTypeInfo());
+    std::string lvalue_path = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
+    std::string serialized_path = normalizeAOTTypePathForMatch(type_path);
+    if (isGenericAOTTypePath(declared_path) || isGenericAOTTypePath(lvalue_path)
+            || isGenericAOTTypePath(serialized_path)) {
+        return false;
+    }
+
+    std::string type_error;
+    const QoreTypeInfo* resolved_ti = type_resolver->resolve(type_path, type_error);
+    return resolved_ti && type_error.empty()
+        && !QoreTypeInfo::isOutputIdentical(lv->getTypeInfo(), resolved_ti)
+        && !QoreTypeInfo::isOutputIdentical(lv->getTypeInfoForLValue(), resolved_ti);
+}
+
 static LocalVar* popMatchingAOTLocal(std::unordered_map<std::string, std::deque<LocalVar*>>& local_map,
         const char* name, const char* type_path, QoreAOTTypeResolver* type_resolver) {
     if (!name || !*name) {
@@ -5248,10 +5275,14 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
                 if (aotLocalTypeMatches(it->second, ltype, &local_type_resolver)) {
                     return it->second;
                 }
+                if (aotLocalTypeKnownMismatch(it->second, ltype, &local_type_resolver)) {
+                    return nullptr;
+                }
                 // Reference parameters are serialized as their lvalue slot type
                 // (for example auto) while the signature local keeps the declared
-                // reference type. Reusing the enclosing LocalVar preserves the
-                // pointer/name identity required by the runtime local stack.
+                // reference type. Other source-stripped type paths can also fail
+                // equality checks despite referring to the same source local.
+                // Reuse only after excluding a provable concrete type mismatch.
                 return it->second;
             }
             return nullptr;

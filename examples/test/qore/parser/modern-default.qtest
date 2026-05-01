@@ -32,7 +32,7 @@ class ModernDefaultTest inherits QUnit::Test {
     # Helper: writes @src into a tempfile with @suffix, runs qore against it in
     # the current process's default exec mode (AST-safe), returns combined stdout+stderr.
     private hash<auto> runFile(string src, *string suffix, *hash<string, string> env_over) {
-        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0];
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
         assertTrue(exists qore_bin, "no qore binary path available");
 
         TmpFile tmp(NOTHING, suffix);
