@@ -6449,6 +6449,221 @@ QoreHashNode* qore_socket_resolve_hostbyaddr_asyncio(ExceptionSink* xsink, const
     return rv.release().get<QoreHashNode>();
 }
 
+class QoreSocketControllerResolveNameInfoPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketControllerResolveNameInfoPollOperation(const struct sockaddr_storage& addr, socklen_t len,
+            AbstractAsyncAction* action)
+            : addr(addr), len(len), action(action) {
+    }
+
+    DLLLOCAL virtual ~QoreSocketControllerResolveNameInfoPollOperation() {
+        ExceptionSink xsink;
+        cleanupAction(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+        resolver.reset();
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+        if (!resolver) {
+            resolver = std::make_unique<QoreCaresNameInfoResolver>(addr, len);
+        }
+
+        int rc = resolver->continuePoll(xsink);
+        if (*xsink || rc < 0) {
+            done = true;
+            resolver.reset();
+            return nullptr;
+        }
+        if (rc) {
+            return getResolverPollInfo(xsink);
+        }
+
+        hostname = resolver->getHostname();
+        resolver.reset();
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return done
+            ? qore_socket_private::makeAddrInfo(addr, len, std::string(), hostname.empty() ? nullptr : hostname.c_str())
+            : QoreValue();
+    }
+
+    DLLLOCAL virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash,
+            ExceptionSink* xsink) override {
+        if (!action) {
+            return false;
+        }
+
+        if (canceled) {
+            action->executeError("QOREADDRINFO-CANCELLED", "async reverse address resolution was canceled", xsink);
+            cleanupAction(xsink);
+            return true;
+        }
+
+        if (ex_hash) {
+            const char* err = "QOREADDRINFO-GETNAMEINFO-ERROR";
+            const char* desc = "async reverse address resolution failed";
+            QoreValue err_v = ex_hash->getKeyValue("err");
+            if (err_v.getType() == NT_STRING) {
+                err = err_v.get<const QoreStringNode>()->c_str();
+            }
+            QoreValue desc_v = ex_hash->getKeyValue("desc");
+            if (desc_v.getType() == NT_STRING) {
+                desc = desc_v.get<const QoreStringNode>()->c_str();
+            }
+            action->executeError(err, desc, xsink);
+            cleanupAction(xsink);
+            return true;
+        }
+
+        ValueHolder rv(getOutput(), xsink);
+        if (*xsink) {
+            action->executeError("QOREADDRINFO-GETNAMEINFO-ERROR",
+                "async reverse address resolution completed with an exception while retrieving output", xsink);
+            cleanupAction(xsink);
+            return true;
+        }
+        if (rv->isNothing()) {
+            action->executeError("QOREADDRINFO-GETNAMEINFO-ERROR",
+                "async reverse address resolution completed without returning address info", xsink);
+            cleanupAction(xsink);
+            return true;
+        }
+        if (rv->getType() != NT_HASH) {
+            QoreString desc;
+            desc.sprintf("expected a hash from async reverse address resolution, got '%s'", rv->getFullTypeName());
+            action->executeError("QOREADDRINFO-GETNAMEINFO-ERROR", desc.c_str(), xsink);
+            cleanupAction(xsink);
+            return true;
+        }
+        action->execute(rv.release(), xsink);
+        cleanupAction(xsink);
+        return true;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        if (done) {
+            return "done";
+        }
+        return resolver ? "resolving-nameinfo" : "starting-nameinfo";
+    }
+
+private:
+    DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const {
+        std::vector<std::pair<int, int>> extra_fds;
+        resolver->getExtraFds(extra_fds);
+        QoreHashNode* rv = getSocketPollInfoHash(xsink, 0, extra_fds);
+        if (*xsink) {
+            return nullptr;
+        }
+        int poll_timeout_ms = resolver->getPollTimeoutMs();
+        rv->setKeyValue("poll_timeout_ms", poll_timeout_ms >= 0 ? poll_timeout_ms : 1, xsink);
+        return rv;
+    }
+
+    DLLLOCAL void cleanupAction(ExceptionSink* xsink) {
+        if (action) {
+            action->deref(xsink);
+            action = nullptr;
+        }
+    }
+
+    struct sockaddr_storage addr = {};
+    socklen_t len = 0;
+    std::unique_ptr<QoreCaresNameInfoResolver> resolver;
+    std::string hostname;
+    AbstractAsyncAction* action = nullptr;
+    bool done = false;
+};
+
+QoreFuture* qore_socket_resolve_nameinfo_asyncio_future(ExceptionSink* xsink, const struct sockaddr_storage& addr,
+        socklen_t len, int timeout_ms) {
+    ReferenceHolder<QorePromise> promise(new QorePromise(), xsink);
+    ReferenceHolder<QoreFuture> future(promise->getFuture(xsink), xsink);
+    if (*xsink || !future) {
+        return nullptr;
+    }
+
+    ReferenceHolder<AbstractAsyncAction> action(new PromiseAction(*promise, nullptr), xsink);
+    ReferenceHolder<SocketPollOperationBase> poller_holder(
+        new QoreSocketControllerResolveNameInfoPollOperation(addr, len, action.release()), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreEventNotifier> notifier_holder(new QoreEventNotifier(xsink), xsink);
+    if (*xsink || !notifier_holder->isValid()) {
+        return nullptr;
+    }
+    QoreEventNotifier* notifier_raw = *notifier_holder;
+    notifier_raw->ref();
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder), xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("resolve-nameinfo"), xsink);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (!ctl_obj) {
+        return nullptr;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return nullptr;
+    }
+
+    const std::string& socket_hash = notifier_holder->getIoIdentityHash();
+
+    std::string owner("QoreDNS::getnameinfo_async:");
+    owner += socket_hash;
+
+    std::string key(owner);
+    key += ':';
+    key += std::to_string(++qore_socket_sync_exec_seq);
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
+    info->setKeyValue("sock", (*sock_obj)->objectRefSelf(), xsink);
+    info->setKeyValue("spop", (*op_obj)->objectRefSelf(), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("key", new QoreStringNode(key), xsink);
+    info->setKeyValue("thread_key", new QoreStringNode(socket_hash), xsink);
+    info->setKeyValue("to", timeout_ms, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreObject> queue_obj(ctrl->submit(*ctl_obj, info.release(), false, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    return future.release();
+}
+
 QoreCaresNameInfoResolver::QoreCaresNameInfoResolver(const struct sockaddr_storage& addr, socklen_t len, int flags)
         : addr(addr), len(len), flags(flags) {
 }

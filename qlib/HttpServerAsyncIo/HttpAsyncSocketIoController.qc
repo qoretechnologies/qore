@@ -1022,6 +1022,62 @@ public class HttpAsyncSocketIoController {
         handleAcceptComplete(linfo, output);
     }
 
+    private hash<auto> getUnknownConnectionContext() {
+        # Keep the outer hash wide enough to add non-hash values such as peer-info-future.
+        return cast<hash<auto>>({
+            "peer": {"address": "unknown", "address_desc": "unknown", "port": 0},
+            "socket": {"address": "unknown", "address_desc": "unknown", "port": 0},
+        });
+    }
+
+    private *Future startPeerInfoFuture(hash<auto> peer_info) {
+        *string address = peer_info.address;
+        if (!address || address == "unknown" || address == "quic") {
+            return NOTHING;
+        }
+
+        int family = peer_info.family ?? (address =~ /:/ ? AF_INET6 : AF_INET);
+        if (family != AF_INET && family != AF_INET6) {
+            return NOTHING;
+        }
+
+        try {
+            # Keep the typed local; direct soft return can otherwise lose the Future value.
+            *Future f = getnameinfo_async(address, family, peer_info.port ?? 0);
+            return f;
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Could not start async reverse DNS for %s: %s: %s",
+                peer_info.address_desc ?? address, ex.err, ex.desc);
+        }
+
+        return NOTHING;
+    }
+
+    private hash<auto> getImmediateConnectionContext(Socket sock, string uh, string phase) {
+        hash<auto> cx = getUnknownConnectionContext();
+        if (!sock.isOpen()) {
+            return cx;
+        }
+
+        try {
+            hash<auto> peer_info = sock.getPeerInfo(False);
+            cx = cast<hash<auto>>({
+                "peer": peer_info,
+                "socket": sock.getSocketInfo(False),
+            });
+
+            *Future peer_info_future = startPeerInfoFuture(peer_info);
+            if (peer_info_future !== NOTHING) {
+                cx{"peer-info-future"} = peer_info_future;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Could not get numeric peer info for %s connection %s: %s: %s",
+                phase, uh, ex.err, ex.desc);
+        }
+
+        return cx;
+    }
+
     #! Handles accept completion
     private handleAcceptComplete(hash<HttpListenerInfo> linfo, hash<auto> output) {
         Socket sock = output.sock;
@@ -1054,12 +1110,7 @@ public class HttpAsyncSocketIoController {
         }
 
         if (output.ssl && !sock.isSecure()) {
-            # Don't call getPeerInfo() here - can block I/O thread if client closes socket
-            # Will populate peer info after SSL handshake completes and socket is stable
-            hash<auto> cx = {
-                "peer": {"address": "unknown", "address_desc": "unknown", "port": 0},
-                "socket": {"address": "unknown", "address_desc": "unknown", "port": 0},
-            };
+            hash<auto> cx = getUnknownConnectionContext();
 
             if (linfo.cert) {
                 sock.setCertificate(linfo.cert);
@@ -1114,19 +1165,7 @@ public class HttpAsyncSocketIoController {
 
         # Check if this is an HTTP/2 connection
         if (output.is_http2) {
-            # Get peer info through controller-backed c-ares DNS.
-            hash<auto> cx = {"peer": {"address": "unknown", "address_desc": "unknown", "port": 0}, "socket": {"address": "unknown", "address_desc": "unknown", "port": 0}};
-            if (sock.isOpen()) {
-                try {
-                    cx = {
-                        "peer": sock.getPeerInfo(),
-                        "socket": sock.getSocketInfo(),
-                    };
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::DEBUG, "Could not get peer info for h2c connection %s: %s: %s",
-                        uh, ex.err, ex.desc);
-                }
-            }
+            hash<auto> cx = getImmediateConnectionContext(sock, uh, "h2c");
 
             Http2PollOperation h2op(sock, True);
 
@@ -1151,19 +1190,7 @@ public class HttpAsyncSocketIoController {
         }
 
         # HTTP/1.x path (no SSL)
-        # Get peer info through controller-backed c-ares DNS.
-        hash<auto> cx = {"peer": {"address": "unknown", "address_desc": "unknown", "port": 0}, "socket": {"address": "unknown", "address_desc": "unknown", "port": 0}};
-        if (sock.isOpen()) {
-            try {
-                cx = {
-                    "peer": sock.getPeerInfo(),
-                    "socket": sock.getSocketInfo(),
-                };
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "Could not get peer info for HTTP/1.x connection %s: %s: %s",
-                    uh, ex.err, ex.desc);
-            }
-        }
+        hash<auto> cx = getImmediateConnectionContext(sock, uh, "HTTP/1.x");
 
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
             "sock": sock,
@@ -1340,22 +1367,30 @@ public class HttpAsyncSocketIoController {
         # HttpListener::getContextTemplate(info.cx.peer) before calling
         # processNativeRequest().  Error paths in this controller use
         # submitQuicResponse() directly, bypassing cx entirely.
+        # Keep the outer hash wide enough to add peer-info-future below.
+        hash<auto> cx = cast<hash<auto>>({
+            "peer": {
+                "address": request.peer_address ?? "quic",
+                "address_desc": request.peer_address ?? "quic",
+                "port": request.peer_port ?? 0,
+                "family": (request.peer_address ?? "") =~ /:/ ? AF_INET6 : AF_INET,
+                "familystr": (request.peer_address ?? "") =~ /:/ ? "ipv6" : "ipv4",
+            },
+            "socket": listener.getSocketInfo(),
+        });
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
             "sock": listener,
             "listener": linfo.http_listener,
-            "cx": {
-                "peer": {
-                    "address": request.peer_address ?? "quic",
-                    "address_desc": request.peer_address ?? "quic",
-                    "port": request.peer_port ?? 0,
-                },
-                "socket": listener.getSocketInfo(),
-            },
+            "cx": cx,
             "target": target,
             "state": HttpConnectionState::Http3,
             "stream_op": h3op,
             "is_http2": False,
         };
+        *Future peer_info_future = startPeerInfoFuture(new_cinfo.cx.peer);
+        if (peer_info_future !== NOTHING) {
+            new_cinfo.cx{"peer-info-future"} = peer_info_future;
+        }
 
         {
             AutoWriteLock al(m);
@@ -1760,20 +1795,9 @@ public class HttpAsyncSocketIoController {
 
         # SSL handshake complete - socket is now stable and validated
         Socket sock = result.sock;
-
-        # Now safe to get peer info; DNS is controller-backed through c-ares.
-        hash<auto> peer_info = {"address": "unknown", "address_desc": "unknown", "port": 0};
-        hash<auto> socket_info = {"address": "unknown", "address_desc": "unknown", "port": 0};
-        if (sock.isOpen()) {
-            try {
-                peer_info = sock.getPeerInfo();
-                socket_info = sock.getSocketInfo();
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "Could not get peer info after SSL handshake for %s: %s: %s",
-                    uh, ex.err, ex.desc);
-                # Continue with fallback values - not critical
-            }
-        }
+        hash<auto> cx = getImmediateConnectionContext(sock, uh, "SSL");
+        hash<auto> peer_info = cx.peer;
+        hash<auto> socket_info = cx.socket;
 
         *string negotiated = sock.getAlpnProtocol();
         bool is_http2 = (negotiated == "h2");
@@ -1815,6 +1839,11 @@ public class HttpAsyncSocketIoController {
                     # Update cx with real peer info now that socket is stable
                     conn_info.cx.peer = peer_info;
                     conn_info.cx.socket = socket_info;
+                    if (exists cx{"peer-info-future"}) {
+                        conn_info.cx{"peer-info-future"} = cx{"peer-info-future"};
+                    } else {
+                        remove conn_info.cx{"peer-info-future"};
+                    }
                     cinfo = connections{uh} = conn_info;
                 }
             } else {
@@ -1832,6 +1861,11 @@ public class HttpAsyncSocketIoController {
                     # Update cx with real peer info now that socket is stable
                     conn_info.cx.peer = peer_info;
                     conn_info.cx.socket = socket_info;
+                    if (exists cx{"peer-info-future"}) {
+                        conn_info.cx{"peer-info-future"} = cx{"peer-info-future"};
+                    } else {
+                        remove conn_info.cx{"peer-info-future"};
+                    }
                     cinfo = connections{uh} = conn_info;
                 }
             }

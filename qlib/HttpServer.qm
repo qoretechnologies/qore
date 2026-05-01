@@ -213,9 +213,9 @@ log("started listener on %s", lh.desc);
       - requires Qore built with Brotli and/or Zstd support
     - return HTTP 204 when a handler returns code 200 with no response body
     - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
-      - DNS hostname lookups in \c getPeerInfo() are now delegated to controller-backed c-ares resolution
-      - moved \c getPeerInfo() calls to after SSL handshake completion when socket is stable
-      - peer info can include hostnames without blocking the I/O thread
+      - async server request contexts now get numeric \c "peer-info" immediately without reverse DNS
+      - reverse DNS is dispatched in parallel and exposed as optional \c "peer-info-future" for handlers that need it
+      - moved peer info refresh to after SSL handshake completion when socket is stable
     - removed high-frequency INFO log messages from async I/O hot paths to reduce log spam
     - fixed async I/O cache leak when clients disconnect during SSL handshake
     - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were
@@ -6574,6 +6574,9 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         # getContextTemplate() builds the full context with "peer-info", "id",
         # "ssl", "listener-id", "listener-name", "async_ctrl"
         hash<auto> cx = listener.getContextTemplate(info.cx.peer);
+        if (exists info.cx{"peer-info-future"}) {
+            cx{"peer-info-future"} = info.cx{"peer-info-future"};
+        }
         return listener.processNativeRequest(info.sock, cx, info.hdr, info.header_info);
     }
 

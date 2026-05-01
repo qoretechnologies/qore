@@ -702,6 +702,8 @@ cargo install tree-sitter-cli@0.26.5
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
       - @ref Qore::getaddrinfo_async() "getaddrinfo_async()": Future-returning async DNS address lookup backed by
         the global async I/O controller and c-ares
+      - @ref Qore::getnameinfo_async() "getnameinfo_async()": Future-returning async reverse DNS lookup for
+        peer-style address information backed by the global async I/O controller and c-ares
       - @ref Qore::get_value_byte_size() "get_value_byte_size()": returns the approximate memory size in bytes of any Qore value;
         recursively calculates sizes for hashes and lists, returns exact sizes for strings and binary data
       - @ref Qore::inflate_raw_to_binary() "inflate_raw_to_binary()": raw DEFLATE decompression to binary
@@ -955,9 +957,9 @@ cargo install tree-sitter-cli@0.26.5
         - new @ref HttpServer::HttpServer::isAsyncMode() "HttpServer::isAsyncMode()" method to check if async mode is enabled
         - new \c HttpServer::queueAsyncResponse() method for async response sending
         - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
-      - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
-        by delegating DNS hostname lookups to controller-backed c-ares resolution and moving calls to after SSL
-        handshake completion
+      - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive;
+        async request contexts now get numeric \c "peer-info" immediately and expose optional
+        \c "peer-info-future" for handlers that need reverse DNS
       - QUIC/HTTP/3 listener support via \c addQuicListener() for serving HTTP/3 over UDP
       - InputStream streaming response support: handlers can return an \c InputStream as the response body
         for memory-efficient streaming across HTTP/1.x, HTTP/2, and HTTP/3

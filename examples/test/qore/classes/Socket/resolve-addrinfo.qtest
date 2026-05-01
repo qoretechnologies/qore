@@ -12,6 +12,7 @@ class Test inherits QUnit::Test {
         addTestCase("numeric host", \testNumericHost());
         addTestCase("global getaddrinfo", \testGlobalGetaddrinfo());
         addTestCase("global getaddrinfo async", \testGlobalGetaddrinfoAsync());
+        addTestCase("global getnameinfo async", \testGlobalGetnameinfoAsync());
         addTestCase("passive wildcard", \testPassiveWildcard());
         addTestCase("numeric host error", \testNumericHostError());
         set_return_value(main());
@@ -44,6 +45,19 @@ class Test inherits QUnit::Test {
         assertEq("127.0.0.1", l[0].address);
         assertEq(AF_INET, l[0].family);
         assertEq(0, l[0].port);
+    }
+
+    testGlobalGetnameinfoAsync() {
+        Future f = getnameinfo_async("127.0.0.1", AF_INET, 12345);
+        hash<auto> h = f.get(10s);
+        assertTrue(exists h.address);
+        assertTrue(exists h.address_desc);
+        assertTrue(exists h.family);
+        assertTrue(exists h.familystr);
+        assertTrue(exists h.port);
+        assertEq("127.0.0.1", h.address);
+        assertEq(AF_INET, h.family);
+        assertEq(12345, h.port);
     }
 
     testPassiveWildcard() {

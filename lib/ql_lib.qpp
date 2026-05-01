@@ -225,7 +225,15 @@ static int q_gethost_lookup_family(int type) {
 }
 
 static int q_gethostbyaddr_sockaddr(ExceptionSink* xsink, const char* addr, int type,
+        struct sockaddr_storage& sa, socklen_t& len, const char* err);
+
+static int q_gethostbyaddr_sockaddr(ExceptionSink* xsink, const char* addr, int type,
         struct sockaddr_storage& sa, socklen_t& len) {
+    return q_gethostbyaddr_sockaddr(xsink, addr, type, sa, len, "GETHOSTBYADDR-ERROR");
+}
+
+static int q_gethostbyaddr_sockaddr(ExceptionSink* xsink, const char* addr, int type,
+        struct sockaddr_storage& sa, socklen_t& len, const char* err) {
     type = q_gethost_lookup_family(type);
     memset(&sa, 0, sizeof(sa));
 
@@ -241,19 +249,41 @@ static int q_gethostbyaddr_sockaddr(ExceptionSink* xsink, const char* addr, int 
         dst = &in6->sin6_addr;
         len = sizeof(struct sockaddr_in6);
     } else {
-        xsink->raiseException("GETHOSTBYADDR-ERROR",
+        xsink->raiseException(err,
             "%d is an invalid address type (valid types are AF_INET=%d, AF_INET6=%d)", type, AF_INET, AF_INET6);
         return -1;
     }
 
     int rc = inet_pton(type, addr, dst);
     if (rc == 0) {
-        xsink->raiseException("GETHOSTBYADDR-ERROR", "'%s' is not a valid address for %s addresses", addr,
+        xsink->raiseException(err, "'%s' is not a valid address for %s addresses", addr,
             type == AF_INET ? "AF_INET (IPv4)" : "AF_INET6 (IPv6)");
         return -1;
     }
     if (rc < 0) {
         return -1;
+    }
+
+    return type;
+}
+
+static int q_getnameinfo_sockaddr(ExceptionSink* xsink, const char* addr, int type, int port,
+        struct sockaddr_storage& sa, socklen_t& len) {
+    type = q_gethostbyaddr_sockaddr(xsink, addr, type, sa, len, "QOREADDRINFO-GETNAMEINFO-ERROR");
+    if (type < 0) {
+        return -1;
+    }
+
+    if (port < 0 || port > 65535) {
+        xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR",
+            "%d is an invalid port number for reverse address resolution", port);
+        return -1;
+    }
+
+    if (type == AF_INET) {
+        reinterpret_cast<struct sockaddr_in*>(&sa)->sin_port = htons(static_cast<uint16_t>(port));
+    } else if (type == AF_INET6) {
+        reinterpret_cast<struct sockaddr_in6*>(&sa)->sin6_port = htons(static_cast<uint16_t>(port));
     }
 
     return type;
@@ -1497,6 +1527,41 @@ list<hash<auto>> l = f.get();
 Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout_ms = -1) [dom=EXTERNAL_INFO] {
    QoreFuture* future = qore_socket_resolve_addrinfo_asyncio_future(xsink, node ? node->c_str() : 0,
       service ? service->c_str() : 0, (int)family, (int)flags, (int)socktype, (int)protocol, timeout_ms);
+   return future ? new QoreObject(QC_FUTUREIMPL, getProgram(), future) : nullptr;
+}
+
+//! Starts an asynchronous reverse address lookup and returns a Future for peer-style address information
+/** This function submits reverse address resolution to the global async I/O controller and returns immediately.
+    The returned Future resolves to a hash in the same address-info shape used by
+    @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()", with numeric address fields always present and
+    hostname fields present when reverse DNS succeeds.
+
+    @param addr the numeric IPv4 or IPv6 address to resolve
+    @param family the address family, must be one of Qore::AF_INET or Qore::AF_INET6
+    @param port the peer port to include in the returned hash
+    @param timeout_ms the timeout for the controller-backed reverse resolution operation; -1 = never timeout
+
+    @return a Future that resolves to a hash with peer-style address information
+
+    @par Example:
+    @code{.py}
+Future f = getnameinfo_async("127.0.0.1", AF_INET, 12345);
+hash<auto> peer_info = f.get(100ms);
+    @endcode
+
+    @throw QOREADDRINFO-GETNAMEINFO-ERROR invalid address information
+    @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
+
+    @since %Qore 2.3
+ */
+Future getnameinfo_async(string addr, softint family = AF_INET, softint port = 0, timeout timeout_ms = -1) [dom=EXTERNAL_INFO] {
+   struct sockaddr_storage sa;
+   socklen_t len = 0;
+   if (q_getnameinfo_sockaddr(xsink, addr->c_str(), family, port, sa, len) < 0) {
+      return QoreValue();
+   }
+
+   QoreFuture* future = qore_socket_resolve_nameinfo_asyncio_future(xsink, sa, len, timeout_ms);
    return future ? new QoreObject(QC_FUTUREIMPL, getProgram(), future) : nullptr;
 }
 

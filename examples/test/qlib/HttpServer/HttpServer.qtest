@@ -43,6 +43,30 @@ class SimpleStringHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class PeerInfoFutureHandler inherits AbstractHttpRequestHandler {
+    private {
+        Queue q;
+    }
+
+    constructor(Queue q) {
+        self.q = q;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> report = {
+            "peer-info": cx{"peer-info"},
+            "has-peer-info-future": exists cx{"peer-info-future"},
+        };
+        if (report{"has-peer-info-future"}) {
+            report{"peer-info-future-is-future"} = cx{"peer-info-future"} instanceof Future;
+            Future f = cx{"peer-info-future"};
+            report{"resolved-peer-info"} = f.get(10s);
+        }
+        q.push(report);
+        return makeResponse(200, "ok");
+    }
+}
+
 class ReqHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         string rpath = hdr.path;
@@ -340,6 +364,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("2nd wildcard listener", \secondWildcardListener());
         addTestCase("bug 2936 multipart form-data binary file upload", \multipartFormDataBinaryFileTest());
         addTestCase("async mode basic", \asyncModeBasicTest());
+        addTestCase("async mode peer info future", \asyncModePeerInfoFutureTest());
         addTestCase("async mode keep-alive", \asyncModeKeepAliveTest());
         addTestCase("async mode concurrent", \asyncModeConcurrentTest());
         addTestCase("async mode HTTPS", \asyncModeHttpsTest());
@@ -1018,6 +1043,32 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash resp = client.send("dx123", "POST", "/abc");
         assertEq(200, resp.status_code);
         assertEq("POST, dx123, abc, /abc", resp.body);
+    }
+
+    asyncModePeerInfoFutureTest() {
+        Queue q();
+        mAsyncServer.setHandler("peer-info-future", "/peer-info-future", MimeTypeText,
+            new PeerInfoFutureHandler(q));
+
+        HTTPClient client({"url": asyncUrl, "timeout": 5s});
+        client.connect();
+        on_exit client.disconnect();
+
+        assertEq("ok", client.get("/peer-info-future"));
+
+        hash<auto> report = q.get(5s);
+        hash<auto> peer_info = report{"peer-info"};
+        assertTrue(exists peer_info.address);
+        assertTrue(exists peer_info.port);
+        assertTrue(exists peer_info.family);
+        assertFalse(exists peer_info.hostname);
+        assertTrue(report{"has-peer-info-future"});
+        assertTrue(report{"peer-info-future-is-future"});
+
+        hash<auto> resolved = report{"resolved-peer-info"};
+        assertEq(peer_info.address, resolved.address);
+        assertEq(peer_info.port, resolved.port);
+        assertEq(peer_info.family, resolved.family);
     }
 
     asyncModeKeepAliveTest() {

@@ -113,6 +113,7 @@ module HttpServerUtil {
     |\c masked_path|string|the URI path after URL decoding and masking for sensitive information
     |\c orig_path|string|the URI path in the request after URL decoding
     |\c peer-info|hash|information about the remote socket as returned by @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()"
+    |\c peer-info-future|@ref Qore::Thread::Future "Future"|optional Future resolving to peer information with reverse DNS hostname fields; handlers may wait on it if hostname resolution is required
     |\c raw_path|string|the raw URI request path in the request
     |\c response-encoding|*string|any value given by any \c "Accept-Charset" in the request
     |\c root_path|*string|the root URL path matched if the request was matched by a URL prefix
