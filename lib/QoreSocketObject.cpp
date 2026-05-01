@@ -2945,6 +2945,35 @@ private:
     ExceptionSink* xsink;
 };
 
+class QoreSocketObjectAsyncIoGuard {
+public:
+    QoreSocketObjectAsyncIoGuard(my_socket_priv& priv, ExceptionSink* xsink, unsigned direction)
+            : priv(priv), direction(direction) {
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sync", xsink);
+        if (qore_on_async_io_thread() || (xsink && *xsink)) {
+            return;
+        }
+        AutoLocker al(priv.m);
+        active = !priv.startAsyncSequenceIo(xsink, direction);
+    }
+
+    ~QoreSocketObjectAsyncIoGuard() {
+        if (active) {
+            AutoLocker al(priv.m);
+            priv.clearAsyncSequenceIo(direction);
+        }
+    }
+
+    explicit operator bool() const {
+        return active;
+    }
+
+private:
+    my_socket_priv& priv;
+    unsigned direction;
+    bool active = false;
+};
+
 static int qore_socket_object_exec_send_input_stream_poll(QoreSocketObject* s, InputStream* is,
         QoreObject* is_obj, int64 size, int timeout_ms, ExceptionSink* xsink, bool reassign_after) {
     if (!size) {
@@ -2952,6 +2981,12 @@ static int qore_socket_object_exec_send_input_stream_poll(QoreSocketObject* s, I
     }
     if (!is->isIoThreadSafe()) {
         xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
         return -1;
     }
 
@@ -3037,6 +3072,12 @@ static int qore_socket_object_exec_recv_output_stream_poll(QoreSocketObject* s, 
     }
     if (!os->isIoThreadSafe()) {
         xsink->raiseException("SOCKET-RECV-ERROR", "OutputStream is not I/O thread safe");
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
         return -1;
     }
 
@@ -3256,35 +3297,6 @@ static BinaryNode* qore_socket_object_exec_recv_some_binary(QoreSocketObject* s,
     }
     return result.release().get<BinaryNode>();
 }
-
-class QoreSocketObjectAsyncIoGuard {
-public:
-    QoreSocketObjectAsyncIoGuard(my_socket_priv& priv, ExceptionSink* xsink, unsigned direction)
-            : priv(priv), direction(direction) {
-        SocketSyncPoll::assertNotOnIoThread("Socket", "sync", xsink);
-        if (qore_on_async_io_thread() || (xsink && *xsink)) {
-            return;
-        }
-        AutoLocker al(priv.m);
-        active = !priv.startAsyncSequenceIo(xsink, direction);
-    }
-
-    ~QoreSocketObjectAsyncIoGuard() {
-        if (active) {
-            AutoLocker al(priv.m);
-            priv.clearAsyncSequenceIo(direction);
-        }
-    }
-
-    explicit operator bool() const {
-        return active;
-    }
-
-private:
-    my_socket_priv& priv;
-    unsigned direction;
-    bool active = false;
-};
 
 static QoreHashNode* qore_socket_object_exec_read_http_header(QoreSocketObject* s, QoreHashNode* info,
         int timeout_ms, ExceptionSink* xsink) {

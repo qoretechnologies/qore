@@ -1064,6 +1064,12 @@ static void socket_exec_send_input_stream(QoreObject* self, QoreSocketObject* s,
         return;
     }
 
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return;
+    }
+
     SocketExecInputStreamRefGuard caller_ref(input_stream, xsink, true);
     s->ref();
     input_stream->ref();
@@ -1101,6 +1107,12 @@ static int socket_exec_recv_output_stream_poll(QoreObject* self, QoreSocketObjec
     }
     if (!os->isIoThreadSafe()) {
         xsink->raiseException("SOCKET-RECV-ERROR", "OutputStream is not I/O thread safe");
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
         return -1;
     }
 
