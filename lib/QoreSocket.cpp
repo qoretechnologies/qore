@@ -4086,7 +4086,7 @@ static int qore_socket_exec_send_http_response(QoreSocket* s, QoreHashNode* info
 
     stream_id = static_cast<int32_t>(h2_stream->getAsBigInt());
     if (stream_id > 0) {
-        QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_SEND);
+        QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
         if (!io_guard) {
             return -1;
         }
