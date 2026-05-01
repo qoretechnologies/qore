@@ -555,6 +555,7 @@ public class HttpAsyncSocketIoController {
             listener.setSslVerifyMode(ssl_verify_flags);
         }
         listener.acceptAllCertificates(ssl_accept_all_certs);
+        hash<auto> socket_info = listener.getSocketInfo(False);
 
         {
             AutoWriteLock al(m);
@@ -574,6 +575,7 @@ public class HttpAsyncSocketIoController {
                 "ssl_verify_flags": ssl_verify_flags,
                 "get_remote_certs": get_remote_certs,
                 "http_listener": http_listener,
+                "socket_info": socket_info,
             };
         }
         # Remove listener from map if submitQuicAcceptOp fails
@@ -1055,29 +1057,31 @@ public class HttpAsyncSocketIoController {
         return NOTHING;
     }
 
-    private hash<auto> getImmediateConnectionContext(Socket sock, string uh, string phase) {
-        hash<auto> cx = getUnknownConnectionContext();
-        if (!sock.isOpen()) {
-            return cx;
+    private hash<auto> getAcceptConnectionContext(hash<auto> output, string uh, string phase) {
+        *hash<auto> peer_info = output.peer_info;
+        *hash<auto> socket_info = output.socket_info;
+        if (!peer_info || !socket_info) {
+            log(LoggerLevel::DEBUG, "No numeric peer info in accept output for %s connection %s", phase, uh);
+            return getUnknownConnectionContext();
         }
 
-        try {
-            hash<auto> peer_info = sock.getPeerInfo(False);
-            cx = cast<hash<auto>>({
-                "peer": peer_info,
-                "socket": sock.getSocketInfo(False),
-            });
+        hash<auto> cx = cast<hash<auto>>({
+            "peer": peer_info,
+            "socket": socket_info,
+        });
 
-            *Future peer_info_future = startPeerInfoFuture(peer_info);
-            if (peer_info_future !== NOTHING) {
-                cx{"peer-info-future"} = peer_info_future;
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::DEBUG, "Could not get numeric peer info for %s connection %s: %s: %s",
-                phase, uh, ex.err, ex.desc);
+        *Future peer_info_future = startPeerInfoFuture(peer_info);
+        if (peer_info_future !== NOTHING) {
+            cx{"peer-info-future"} = peer_info_future;
         }
 
         return cx;
+    }
+
+    private hash<auto> getActiveConnectionContext(string uh) {
+        AutoReadLock al(m);
+        *hash<HttpActiveConnectionInfo> cinfo = connections{uh};
+        return cinfo ? cinfo.cx : getUnknownConnectionContext();
     }
 
     #! Handles accept completion
@@ -1112,7 +1116,7 @@ public class HttpAsyncSocketIoController {
         }
 
         if (output.ssl && !(output.secure ?? False)) {
-            hash<auto> cx = getUnknownConnectionContext();
+            hash<auto> cx = getAcceptConnectionContext(output, uh, "SSL");
 
             if (linfo.cert) {
                 sock.setCertificate(linfo.cert);
@@ -1168,7 +1172,7 @@ public class HttpAsyncSocketIoController {
 
         # Check if this is an HTTP/2 connection
         if (output.is_http2) {
-            hash<auto> cx = getImmediateConnectionContext(sock, uh, "h2c");
+            hash<auto> cx = getAcceptConnectionContext(output, uh, "h2c");
 
             Http2PollOperation h2op(sock, True);
 
@@ -1194,7 +1198,7 @@ public class HttpAsyncSocketIoController {
         }
 
         # HTTP/1.x path (no SSL)
-        hash<auto> cx = getImmediateConnectionContext(sock, uh, "HTTP/1.x");
+        hash<auto> cx = getAcceptConnectionContext(output, uh, "HTTP/1.x");
 
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
             "sock": sock,
@@ -1381,7 +1385,13 @@ public class HttpAsyncSocketIoController {
                 "family": (request.peer_address ?? "") =~ /:/ ? AF_INET6 : AF_INET,
                 "familystr": (request.peer_address ?? "") =~ /:/ ? "ipv6" : "ipv4",
             },
-            "socket": listener.getSocketInfo(False),
+            "socket": linfo.socket_info ?? {
+                "address": "quic",
+                "address_desc": "quic",
+                "port": 0,
+                "family": AF_INET,
+                "familystr": "ipv4",
+            },
         });
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
             "sock": listener,
@@ -1801,7 +1811,7 @@ public class HttpAsyncSocketIoController {
 
         # SSL handshake complete - socket is now stable and validated
         Socket sock = result.sock;
-        hash<auto> cx = getImmediateConnectionContext(sock, uh, "SSL");
+        hash<auto> cx = getActiveConnectionContext(uh);
         hash<auto> peer_info = cx.peer;
         hash<auto> socket_info = cx.socket;
 
@@ -3833,6 +3843,9 @@ hashdecl HttpListenerInfo {
 
     #! HTTP listener object for handler dispatch (used for QUIC/HTTP/3 listeners)
     *HttpServer::HttpListenerInterface http_listener;
+
+    #! Numeric local socket info captured when the listener is registered
+    *hash<auto> socket_info;
 
     #! The Http3ServerPollOperation accepting QUIC connections (QUIC listeners only)
     /** Used by reloadListenerCertificateByHttpListener() to stage a TLS-material

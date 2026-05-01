@@ -112,6 +112,8 @@ public:
         - \c is_http2: true if HTTP/2 was negotiated
         - \c negotiated_protocol: ALPN protocol string or nullptr
         - \c http_version: the configured HTTP version mode
+        - \c peer_info: numeric peer address info for the accepted socket, or nullptr
+        - \c socket_info: numeric local address info for the accepted socket, or nullptr
     */
     DLLLOCAL QoreValue getOutput() const override;
 

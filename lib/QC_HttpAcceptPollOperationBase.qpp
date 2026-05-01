@@ -87,6 +87,44 @@ bool HttpAcceptPollOperationPriv::goalReached() const {
     return accept_state == AcceptState::COMPLETE;
 }
 
+static QoreHashNode* qore_http_accept_get_numeric_addr_info(QoreSocketObject* sock, bool peer) {
+    ExceptionSink xsink;
+    struct sockaddr_storage addr = {};
+    socklen_t len = 0;
+    std::string socketname;
+
+    {
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        if (priv->checkValid(&xsink)) {
+            xsink.clear();
+            return nullptr;
+        }
+
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        int rc = peer
+            ? sp->getPeerSockAddr(&xsink, addr, len)
+            : sp->getSocketSockAddr(&xsink, addr, len);
+        if (xsink || rc) {
+            xsink.clear();
+            return nullptr;
+        }
+        socketname = sp->socketname;
+    }
+
+    return qore_socket_private::makeAddrInfo(addr, len, socketname);
+}
+
+static void qore_http_accept_set_numeric_addr_info(QoreHashNode* h, const char* key, QoreSocketObject* sock,
+        bool peer, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> info(qore_http_accept_get_numeric_addr_info(sock, peer), xsink);
+    if (info) {
+        h->setKeyValue(key, info.release(), xsink);
+    } else {
+        h->setKeyValue(key, QoreValue(), xsink);
+    }
+}
+
 QoreHashNode* HttpAcceptPollOperationPriv::continuePoll(ExceptionSink* xsink) {
     if (goalReached()) {
         return nullptr;
@@ -144,6 +182,13 @@ QoreValue HttpAcceptPollOperationPriv::getOutput() const {
     h->setKeyValue("ssl", ssl, &xsink);
     h->setKeyValue("secure", secure, &xsink);
     h->setKeyValue("is_http2", is_http2, &xsink);
+    if (client_sock) {
+        qore_http_accept_set_numeric_addr_info(*h, "peer_info", client_sock, true, &xsink);
+        qore_http_accept_set_numeric_addr_info(*h, "socket_info", client_sock, false, &xsink);
+    } else {
+        h->setKeyValue("peer_info", QoreValue(), &xsink);
+        h->setKeyValue("socket_info", QoreValue(), &xsink);
+    }
     if (!negotiated_protocol.empty()) {
         h->setKeyValue("negotiated_protocol", new QoreStringNode(negotiated_protocol), &xsink);
     } else {
