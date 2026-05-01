@@ -450,6 +450,23 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
     }
 
     if (current_op->goalReached()) {
+        ValueHolder output_val(current_op->getOutput(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string alpn_id;
+        if (output_val->getType() == NT_HASH) {
+            QoreHashNode* output = output_val->get<QoreHashNode>();
+            QoreValue proto_val = output->getKeyValue("negotiated_protocol");
+            if (proto_val.getType() == NT_STRING) {
+                alpn_id = proto_val.get<const QoreStringNode>()->c_str();
+            }
+        }
+        {
+            AutoLocker al(stream_lock);
+            negotiated_protocol = std::move(alpn_id);
+        }
+
         // No ALPN check for HTTP/1.1 - it is the default protocol
         printd(5, "Http1ClientPollOperationPriv::handleSslUpgrade() SSL done\n");
         startReady(xsink);

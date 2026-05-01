@@ -562,7 +562,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 //
                 // After the CONNECT tunnel + SSL upgrade completes (H1
                 // connection reaches READY), we read the negotiated ALPN
-                // from the socket:
+                // captured from the async SSL upgrade operation:
                 // - "h2" → extract socket, adopt into Http2ClientConnection
                 // - "http/1.1" or empty → keep the H1 connection
                 ReferenceHolder<Http1ClientConnection> h1(
@@ -594,17 +594,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     return nullptr;
                 }
 
-                // Read the ALPN result from the tunneled+SSL socket.
-                QoreSocketObject* h1_sock = h1->getSocketPriv();
-                SimpleRefHolder<QoreStringNode> alpn(
-                    h1_sock ? h1_sock->getAlpnProtocol(xsink) : nullptr);
-                if (*xsink) {
-                    return nullptr;
-                }
-                std::string alpn_id;
-                if (alpn && !alpn->empty()) {
-                    alpn_id = alpn->c_str();
-                }
+                std::string alpn_id = h1->getNegotiatedProtocol();
 
                 if (alpn_id == "h2") {
                     // Protocol escalation: extract socket, adopt into H2.

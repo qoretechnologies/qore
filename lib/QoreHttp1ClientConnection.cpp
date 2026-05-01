@@ -460,6 +460,14 @@ int Http1ClientConnection::getActiveStreamCount() const {
     return poll_op_priv->getActiveStreamCount();
 }
 
+std::string Http1ClientConnection::getNegotiatedProtocol() const {
+    MethodGuard g(const_cast<Http1ClientConnection*>(this));
+    if (!g.acquired() || !poll_op_priv) {
+        return std::string();
+    }
+    return poll_op_priv->getNegotiatedProtocol();
+}
+
 QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) {
