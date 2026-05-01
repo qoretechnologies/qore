@@ -285,7 +285,15 @@ public class HttpAsyncSocketIoController {
             listener_keys = keys listeners;
             if (connections) {
                 conn_keys = keys connections;
-                conn_sockets = map connections{$1}.sock, keys connections;
+                conn_sockets = ();
+                foreach string uh in (conn_keys) {
+                    hash<HttpActiveConnectionInfo> cinfo =
+                        cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                    if (cinfo.state != HttpConnectionState::Http3
+                            && cinfo.state != HttpConnectionState::Http3Sending) {
+                        push conn_sockets, cinfo.sock;
+                    }
+                }
             }
             listeners = {};
             connections = {};
@@ -308,11 +316,14 @@ public class HttpAsyncSocketIoController {
                 # ignore - operation may have already completed
             }
         }
-        # Also cancel by socket for non-QUIC connections (HTTP/1.x, HTTP/2) where
-        # the cache key is the socket unique hash
+        # Also cancel and close by socket for non-QUIC connections
+        # (HTTP/1.x, HTTP/2) where the cache key is the socket unique hash.
+        # HTTP/3 is intentionally skipped here because QUIC sessions share the
+        # listener UDP socket; closing one logical connection would break the
+        # other sessions on the listener.
         foreach Socket sock in (conn_sockets) {
             try {
-                controller.cancel(sock);
+                controller.cancelAndClose(sock);
             } catch () {
                 # ignore - operation may have already completed
             }
@@ -337,7 +348,15 @@ public class HttpAsyncSocketIoController {
             AutoWriteLock al(m);
             if (connections) {
                 conn_keys = keys connections;
-                conn_sockets = map connections{$1}.sock, keys connections;
+                conn_sockets = ();
+                foreach string uh in (conn_keys) {
+                    hash<HttpActiveConnectionInfo> cinfo =
+                        cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                    if (cinfo.state != HttpConnectionState::Http3
+                            && cinfo.state != HttpConnectionState::Http3Sending) {
+                        push conn_sockets, cinfo.sock;
+                    }
+                }
                 connections = {};
             } else {
                 conn_keys = NOTHING;
@@ -351,7 +370,7 @@ public class HttpAsyncSocketIoController {
         }
         foreach Socket sock in (conn_sockets) {
             try {
-                controller.cancel(sock);
+                controller.cancelAndClose(sock);
             } catch () {}
         }
         # Reset stopping flag so the controller can be restarted
