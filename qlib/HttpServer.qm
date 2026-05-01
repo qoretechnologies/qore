@@ -4315,7 +4315,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     #! Lightweight inline request processing — no context setup, logging, auth
-    /** This method processes a request inline in the I/O thread, bypassing
+    /** This method processes a request on the async callback dispatcher worker, bypassing
         the full processNativeRequest() path. It is only called when the handler's
         canHandleInline() returns True.
 
@@ -6499,7 +6499,7 @@ class HttpServerCallbackAppender inherits LoggerAppenderWithLayout {
 
 #! Native async target implementing HttpAsyncTarget for the callback-based HttpAsyncSocketIoController
 /** Request dispatch uses a two-path model:
-    -# @ref tryInlineRequest() runs on the I/O callback thread for lightweight requests
+    -# @ref tryInlineRequest() runs on an async callback dispatcher worker for lightweight requests
        (HTTP/1.x only, no body, handler opts in via @ref AbstractHttpRequestHandler::canHandleInline()
        "canHandleInline()"); returns the response immediately without a thread hop
     -# If @ref tryInlineRequest() returns @ref nothing, the request is dispatched to the
@@ -6523,7 +6523,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         self.logger = logger;
     }
 
-    #! Attempts to handle a request inline in the I/O thread
+    #! Attempts to handle a request on the async callback dispatcher worker
     /** Looks up the handler and, if it supports inline processing and the request
         has no body, processes it directly without thread pool dispatch.
 

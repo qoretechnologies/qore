@@ -136,7 +136,7 @@ public class HttpAsyncTarget {
     */
     abstract onWebSocketClose(Socket sock, int code, string reason, *HttpServer::HttpListenerInterface listener, hash<auto> cx);
 
-    #! Attempts to handle a request inline in the I/O thread
+    #! Attempts to handle a request on the async callback dispatcher worker
     /** Returns a result hash if the request was handled inline, or @ref nothing
         if it should be dispatched to the handler thread pool via onHttpRequest().
 
@@ -145,8 +145,8 @@ public class HttpAsyncTarget {
         @ref nothing (all requests go to the thread pool).
 
         @warning Only handle requests inline that are very fast and non-blocking.
-        Long-running handlers will block the I/O callback thread and stall all other
-        connections on that I/O callback thread.
+        Long-running handlers will block the async callback dispatcher worker and
+        delay other controller callbacks assigned to that worker.
 
         @param info connection and request information
         @return result hash if handled inline, or @ref nothing to dispatch to thread pool

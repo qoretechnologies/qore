@@ -3104,7 +3104,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     /** Test that I/O thread never blocks on getPeerInfo() calls.
-        Verifies the fix: getPeerInfo(host_lookup=False) and defensive checks.
+        Verifies the fix: controller-backed c-ares DNS and defensive checks.
     */
     asyncModeIoThreadNonBlockingTest() {
         Logger logger("async-io-nonblock-test", LoggerLevel::getLevelInfo());
@@ -3720,9 +3720,9 @@ class PersistentTestHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! Test handler that supports inline processing in the I/O thread
+#! Test handler that supports inline processing on the callback dispatcher worker
 class InlineTestHandler inherits AbstractHttpRequestHandler {
-    #! Returns True — this handler can run inline in the I/O thread
+    #! Returns True — this handler can run inline on the callback dispatcher worker
     bool canHandleInline(hash<auto> cx, hash<auto> hdr) {
         return True;
     }

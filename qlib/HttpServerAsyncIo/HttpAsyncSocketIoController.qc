@@ -274,7 +274,7 @@ public class HttpAsyncSocketIoController {
     stop() {
         # Set stopping flag first — prevents handler tasks from submitting new operations
         # Copy keys under lock, then cancel without holding the lock
-        # to avoid deadlock with I/O thread callbacks that also acquire m
+        # to avoid deadlock with controller callbacks that also acquire m
         *list<string> listener_keys;
         *list<Socket> conn_sockets;
         *list<string> conn_keys;
@@ -947,7 +947,7 @@ public class HttpAsyncSocketIoController {
         @param http_version the HTTP version for the listener (e.g. \c "1.1", \c "2")
         @param owner the listener owner key used for tracking accept counts
 
-        @note This method runs on the I/O callback thread and must not block.
+        @note This method runs on an async callback dispatcher worker and must not block.
     */
     handleAcceptResult(hash<SocketPollResultInfo> result, Socket listener,
             HttpAsyncTarget target, bool ssl, auto cert, auto key,
@@ -2097,7 +2097,7 @@ public class HttpAsyncSocketIoController {
         @param orig_state the @ref HttpConnectionState that was active when the operation
             was submitted; used to dispatch to the correct handler
 
-        @note This method runs on the I/O callback thread and must not block.
+        @note This method runs on an async callback dispatcher worker and must not block.
     */
     handleConnectionResult(hash<SocketPollResultInfo> result, string uh,
             string orig_state) {

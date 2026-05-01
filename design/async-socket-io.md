@@ -16,7 +16,7 @@ integration points for other code.
   - Owns the I/O thread and an EventNotifier for cross-thread signaling.
   - Maintains a cache of SocketPollOperation instances and an EventLoop for efficient polling.
   - Processes commands (Add, Cancel, CancelOwner, Quit, Wake) from a command queue.
-  - Delivers results via callback (invoked in the I/O thread) or Queue.
+  - Delivers Qore callbacks through the callback dispatcher worker pool; Queue results are pushed directly.
 
 - HttpServerAsyncIo (qlib/HttpServerAsyncIo)
   - Uses AsyncSocketIoController to perform accept and I/O operations.
@@ -36,8 +36,9 @@ integration points for other code.
 - **I/O thread** — one per controller instance
   - Blocks in EventLoop::poll() over all registered sockets plus the EventNotifier.
   - Wakes on socket readiness or EventNotifier activity.
-  - Processes commands, drives `continuePoll()` on operations, and delivers results directly.
-  - Results are delivered via callback (called in the I/O thread) or pushed to a Queue.
+  - Processes commands and drives pure C++ `continuePoll()` work on operations.
+  - Qore poll operations and `onComplete()` callbacks are dispatched to callback workers; Queue results are pushed
+    without executing Qore code on the I/O thread.
   - The three-phase loop (snapshot → continuePoll → update/deliver) releases the lock during
     `continuePoll()` so worker threads can `submit()` concurrently.
   - At the end of Phase 1 (cache snapshot), `processed_seq` is set to `submit_seq` and
@@ -46,8 +47,7 @@ integration points for other code.
 
 - **Worker threads**
   - Submit operations via `submit()` or `exec()`.
-  - The I/O thread delivers results back to workers via callback or Queue — there is no separate
-    coordinator thread.
+  - Callback dispatcher workers execute Qore callbacks; Queue waiters receive results through the result Queue.
   - `submit()` increments `submit_seq` under the lock before waking the I/O thread.
 
 ## EventNotifier and Command Queue
@@ -142,7 +142,7 @@ Submits an operation to the controller. The `SocketPollOperationInfo` hashdecl:
 | `callback`    | `*code`                    | Optional completion callback (mutually exclusive with `resultQueue`). |
 | `key`         | `*string`                  | Optional custom cache key (default: `sock.uniqueHash()`). |
 
-When `callback` is provided, results are delivered by calling the callback in the I/O thread.
+When `callback` is provided, results are delivered by the callback dispatcher worker pool.
 When `resultQueue` is provided, results are pushed to that Queue. Otherwise a new Queue is
 created and returned.
 
@@ -517,7 +517,7 @@ Known failure modes include:
   `SubmitOp` commands during exit cleanup instead of dropping them, (3) post-push verification in
   `submit()` — if the I/O thread exited during the push, `startIntern()` restarts it.
 - **PROGRAM-ERROR shutdown race**: During program shutdown, `cancelByProgram` cancels all ops and
-  flushes workers.  But the I/O thread could dispatch new callbacks between the flush and `ptid`
+  flushes workers.  But the I/O thread could enqueue new callbacks between the flush and `ptid`
   being set, causing workers to hit `PROGRAM-ERROR`.  Fixed by `markProgramShuttingDown()` /
   `clearProgramShuttingDown()` on `QoreCallDispatcher` — workers check the set before calling
   `evalMethod` and silently discard callbacks for dying programs.

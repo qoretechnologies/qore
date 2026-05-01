@@ -2691,14 +2691,14 @@ public class AbstractHttpRequestHandler {
         };
     }
 
-    #! Returns True if this handler can be executed inline in the I/O thread
+    #! Returns True if this handler can be executed on the callback dispatcher worker
     /** Override to return True for fast, non-blocking handlers (health checks,
-        static responses). WARNING: long-running handlers will stall all
-        connections on the I/O thread.
+        static responses). WARNING: long-running handlers will stall the
+        async callback dispatcher worker handling completed HTTP requests.
 
         @param cx connection context with peer info
         @param hdr parsed HTTP headers
-        @return True to handle inline, False (default) to use thread pool
+        @return True to handle on the callback dispatcher worker, False (default) to use thread pool
 
         @since HttpServerUtil 1.4
     */
@@ -2706,7 +2706,7 @@ public class AbstractHttpRequestHandler {
         return False;
     }
 
-    #! Handles a request inline (called only when canHandleInline returns True)
+    #! Handles a request inline on the callback dispatcher worker
     /** This is a lightweight alternative to the full handleRequest() path.
         No context setup, logging, auth, or RequestHelper is involved.
         The handler receives minimal context and returns a response hash.
