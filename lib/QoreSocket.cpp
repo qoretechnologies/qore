@@ -41,6 +41,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <qore/Qore.h>
 #include <qore/QoreSocket.h>
 #include <qore/QoreSocketObject.h>
@@ -13847,14 +13848,47 @@ bool SocketReadHttpHeaderPollOperation::abortNeedsClose() const {
 }
 
 SocketReadServerSentEventPollOperation::SocketReadServerSentEventPollOperation(ExceptionSink* xsink,
-        QoreSocketObject* sock) : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8), out(xsink) {
+        QoreSocketObject* sock) : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8),
+        compressed_data(QCS_DEFAULT), out(xsink) {
     init(xsink, false);
 }
 
 SocketReadServerSentEventPollOperation::SocketReadServerSentEventPollOperation(ExceptionSink* xsink,
         QoreSocketObject* sock, bool defer_init) : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8),
-        out(xsink) {
+        compressed_data(QCS_DEFAULT), out(xsink) {
     init(xsink, defer_init);
+}
+
+SocketReadServerSentEventPollOperation::SocketReadServerSentEventPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock, const QoreStringNode* content_encoding, bool defer_init)
+        : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8), compressed_data(QCS_DEFAULT),
+        out(xsink) {
+    initTransform(xsink, content_encoding);
+    if (*xsink) {
+        return;
+    }
+    init(xsink, defer_init);
+}
+
+void SocketReadServerSentEventPollOperation::initTransform(ExceptionSink* xsink,
+        const QoreStringNode* content_encoding) {
+    if (!content_encoding) {
+        return;
+    }
+
+    transform = CompressionTransforms::getDecompressor(content_encoding, xsink);
+    if (*xsink) {
+        return;
+    }
+
+    transform_buf_size = transform->outputBufferSize();
+    if (!transform_buf_size) {
+        return;
+    }
+    transform_buf.reset(new (std::nothrow) char[transform_buf_size]);
+    if (!transform_buf) {
+        xsink->outOfMemory();
+    }
 }
 
 void SocketReadServerSentEventPollOperation::init(ExceptionSink* xsink, bool defer_init) {
@@ -13882,6 +13916,25 @@ int SocketReadServerSentEventPollOperation::initPollState(ExceptionSink* xsink) 
     return 0;
 }
 
+bool SocketReadServerSentEventPollOperation::processSseChar(ExceptionSink* xsink, qore_socket_private* sp,
+        char c) {
+    if (!qore_socket_exec_process_sse_char(sp, event_data, eol_count, c)) {
+        return false;
+    }
+
+    if (set_non_block) {
+        my_socket_priv::getPriv(*sock)->clearNonBlock(NB_RECV);
+        set_non_block = false;
+    }
+    ReferenceHolder<QoreHashNode> parsed(QoreSocket::parseServerSentEvent(xsink, event_data), xsink);
+    if (*xsink) {
+        return true;
+    }
+    out = parsed.release();
+    received = true;
+    return true;
+}
+
 QoreHashNode* SocketReadServerSentEventPollOperation::continuePoll(ExceptionSink* xsink) {
     my_socket_priv* priv = my_socket_priv::getPriv(*sock);
     AutoLocker al(priv->m);
@@ -13900,8 +13953,18 @@ QoreHashNode* SocketReadServerSentEventPollOperation::continuePoll(ExceptionSink
 
     qore_socket_private* sp = qore_socket_private::get(*priv->socket);
     while (true) {
+        if (transform && transform_pos < transform_len) {
+            char c = transform_buf[transform_pos++];
+            if (processSseChar(xsink, sp, c)) {
+                return nullptr;
+            }
+            continue;
+        }
+
         if (!poll_state) {
-            poll_state.reset(priv->socket->startRecv(xsink, 1));
+            poll_state.reset(transform
+                ? priv->socket->startRecvSome(xsink, DEFAULT_SOCKET_BUFSIZE)
+                : priv->socket->startRecv(xsink, 1));
             if (*xsink || !poll_state) {
                 if (set_non_block) {
                     priv->clearNonBlock(NB_RECV);
@@ -13936,18 +13999,30 @@ QoreHashNode* SocketReadServerSentEventPollOperation::continuePoll(ExceptionSink
         }
 
         bytes_consumed = true;
-        char c = *static_cast<const char*>(data->getPtr());
-        if (qore_socket_exec_process_sse_char(sp, event_data, eol_count, c)) {
-            if (set_non_block) {
-                priv->clearNonBlock(NB_RECV);
-                set_non_block = false;
-            }
-            ReferenceHolder<QoreHashNode> parsed(QoreSocket::parseServerSentEvent(xsink, event_data), xsink);
+        if (transform) {
+            compressed_data.concat(static_cast<const char*>(data->getPtr()), data->size());
+            transform_pos = 0;
+            std::pair<int64, int64> result = transform->apply(compressed_data.c_str(), compressed_data.size(),
+                transform_buf.get(), transform_buf_size, xsink);
             if (*xsink) {
+                if (set_non_block) {
+                    priv->clearNonBlock(NB_RECV);
+                    set_non_block = false;
+                }
                 return nullptr;
             }
-            out = parsed.release();
-            received = true;
+            if (result.first) {
+                compressed_data.removeBytes(result.first);
+            }
+            transform_len = static_cast<size_t>(result.second);
+            if (!transform_len) {
+                continue;
+            }
+            continue;
+        }
+
+        char c = *static_cast<const char*>(data->getPtr());
+        if (processSseChar(xsink, sp, c)) {
             return nullptr;
         }
     }
@@ -13973,8 +14048,13 @@ bool SocketReadServerSentEventPollOperation::abortNeedsClose() const {
         return true;
     }
     if (poll_state) {
-        assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
-        return reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+        if (transform) {
+            assert(dynamic_cast<SocketRecvSomePollState*>(poll_state.get()));
+            return reinterpret_cast<SocketRecvSomePollState*>(poll_state.get())->getBytesReceived() ? true : false;
+        } else {
+            assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
+            return reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+        }
     }
     return true;
 }

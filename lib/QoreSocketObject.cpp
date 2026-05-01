@@ -3746,32 +3746,6 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
     }
 }
 
-static bool qore_socket_object_exec_process_sse_char(my_socket_priv* priv, QoreString& str, int& eol_count,
-        char c) {
-    if (priv->takeSseGotCr()) {
-        if (c == '\n') {
-            return false;
-        }
-    }
-
-    if (c == '\r') {
-        str.concat('\n');
-        priv->setSseGotCr(true);
-        return ++eol_count == 2;
-    }
-
-    if (c == '\n') {
-        str.concat('\n');
-        return ++eol_count == 2;
-    }
-
-    if (eol_count) {
-        eol_count = 0;
-    }
-    str.concat(c);
-    return false;
-}
-
 static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketObject* s, int timeout_ms,
         ExceptionSink* xsink) {
     s->ref();
@@ -3791,75 +3765,19 @@ static QoreHashNode* qore_socket_object_exec_read_server_sent_event(QoreSocketOb
 
 static QoreHashNode* qore_socket_object_exec_read_server_sent_event_encoded(QoreSocketObject* s,
         const QoreStringNode* content_encoding, int timeout_ms, ExceptionSink* xsink) {
-    SocketSyncPoll::assertNotOnIoThread("Socket", "readServerSentEvent", xsink);
+    s->ref();
+    ValueHolder rv(qore_socket_object_exec_recv_poll(s,
+        new SocketReadServerSentEventPollOperation(xsink, s, content_encoding, true), timeout_ms,
+        "readServerSentEvent", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
-
-    SimpleRefHolder<Transform> transform(CompressionTransforms::getDecompressor(content_encoding, xsink));
-    if (*xsink) {
+    if (rv->getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-SSE-ERROR",
+            "expected hash output from async SSE read operation, got '%s'", rv->getFullTypeName());
         return nullptr;
     }
-
-    my_socket_priv* priv = my_socket_priv::getPriv(*s);
-    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
-    if (!async_guard) {
-        return nullptr;
-    }
-
-    QoreString str(QCS_UTF8);
-    int eol_count = 0;
-
-    size_t tbufsize = transform->outputBufferSize();
-    char* tbuf = tbufsize ? static_cast<char*>(malloc(tbufsize * sizeof(char))) : nullptr;
-    if (tbufsize && !tbuf) {
-        xsink->outOfMemory();
-        return nullptr;
-    }
-    ON_BLOCK_EXIT(free, tbuf);
-    size_t tlen = 0;
-    size_t tpos = 0;
-    QoreString cibuf;
-
-    unsigned cancel_check = 0;
-    while (true) {
-        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket encoded SSE read")) {
-            return nullptr;
-        }
-
-        if (tpos >= tlen) {
-            SimpleRefHolder<BinaryNode> data(qore_socket_object_exec_recv_some_binary(s, DEFAULT_SOCKET_BUFSIZE,
-                timeout_ms, xsink, "readServerSentEvent"));
-            if (*xsink) {
-                return nullptr;
-            }
-            if (!data->size()) {
-                se_closed("Socket", "readServerSentEvent", xsink);
-                return nullptr;
-            }
-
-            cibuf.concat(static_cast<const char*>(data->getPtr()), data->size());
-            tpos = 0;
-            std::pair<int64, int64> result = transform->apply(cibuf.c_str(), cibuf.size(), tbuf, tbufsize, xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-            if (result.first) {
-                cibuf.removeBytes(result.first);
-            }
-            if (!result.second) {
-                continue;
-            }
-            tlen = static_cast<size_t>(result.second);
-        }
-
-        char c = tbuf[tpos++];
-        if (qore_socket_object_exec_process_sse_char(priv, str, eol_count, c)) {
-            break;
-        }
-    }
-
-    return QoreSocket::parseServerSentEvent(xsink, str);
+    return rv.release().get<QoreHashNode>();
 }
 
 static int qore_socket_object_exec_send_http_message(QoreSocketObject* s, QoreHashNode* info,

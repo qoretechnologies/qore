@@ -39,6 +39,7 @@
 #include <qore/ReferenceHolder.h>
 #include <qore/AbstractQoreNode.h>
 #include <qore/QoreString.h>
+#include <qore/Transform.h>
 
 #include <memory>
 #include <string>
@@ -87,6 +88,8 @@ constexpr int SPS_CONNECTING = 1;
 constexpr int SPS_CONNECTING_SSL = 2;
 constexpr int SPS_CONNECTED = 3;
 ///@}
+
+struct qore_socket_private;
 
 //! Intermediate base class that owns a socket reference and an AbstractPollState
 /** Provides the abort() logic that clears non-blocking state and optionally
@@ -557,7 +560,7 @@ private:
 };
 
 //! Non-blocking Server-Sent Event reader
-/** Reads a single unencoded Server-Sent Event message from a connected socket.
+/** Reads a single Server-Sent Event message from a connected socket.
 
     @since %Qore 2.3
 */
@@ -575,6 +578,14 @@ public:
     */
     DLLEXPORT SocketReadServerSentEventPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
             bool defer_init);
+    //! Creates the SSE read operation with optional content decompression
+    /** @param xsink exception sink
+        @param sock the socket (will be ref'd)
+        @param content_encoding content encoding to decompress
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketReadServerSentEventPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+            const QoreStringNode* content_encoding, bool defer_init);
 
     DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
@@ -589,11 +600,19 @@ protected:
 
 private:
     QoreString event_data;
+    QoreString compressed_data;
     mutable ReferenceHolder<QoreHashNode> out;
+    SimpleRefHolder<Transform> transform;
+    std::unique_ptr<char[]> transform_buf;
+    size_t transform_buf_size = 0;
+    size_t transform_len = 0;
+    size_t transform_pos = 0;
     int eol_count = 0;
     bool bytes_consumed = false;
 
     DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
+    DLLEXPORT void initTransform(ExceptionSink* xsink, const QoreStringNode* content_encoding);
+    DLLEXPORT bool processSseChar(ExceptionSink* xsink, qore_socket_private* sp, char c);
     DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
