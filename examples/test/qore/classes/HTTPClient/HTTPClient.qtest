@@ -386,6 +386,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("UNIX socket proxy conn_mgr test", \unixSocketProxyConnMgrTest());
         addTestCase("UNIX socket setURL reset test", \unixSocketSetURLResetTest());
         addTestCase("proxy URL conn_mgr reset test", \proxyUrlConnMgrResetTest());
+        addTestCase("conn_mgr Host override test", \connMgrHostOverrideTest());
         addTestCase("conn_mgr isConnected test", \connMgrIsConnectedTest());
         addTestCase("upgrade isDataAvailable test", \upgradeIsDataAvailableTest());
         addTestCase("chunked HEAD test", \chunkedHeadTest());
@@ -1028,6 +1029,51 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertEq("GET", origin_hdr.method);
         assertEq("/direct", origin_hdr.path);
         assertEq(sprintf("localhost:%d", origin_port), origin_hdr.host);
+    }
+
+    connMgrHostOverrideTest() {
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                string raw;
+                while (!(raw =~ /\r\n\r\n/)) {
+                    raw += peer.recv(1, 5s);
+                }
+
+                int host_count = 0;
+                foreach string line in (raw.split("\r\n")) {
+                    if (line =~ /^Host:/i) {
+                        ++host_count;
+                    }
+                }
+                q.push(("raw": raw, "host_count": host_count));
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\nok");
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int port = q.get();
+        HTTPClient hc({"url": "http://localhost:" + port, "timeout": 5s});
+        *string body = hc.get("/", {"Host": "override.example", "Connection": "close"});
+        assertEq("ok", body);
+
+        auto request = q.get();
+        if (request.typeCode() == NT_HASH && request.hasKey("err")) {
+            fail(sprintf("%s: %s", request.err, request.desc));
+        }
+        assertEq(1, request.host_count);
+        assertTrue(request.raw =~ /\r\nHost: override\.example\r\n/);
+        assertFalse(request.raw =~ /\r\nHost: localhost:/);
     }
 
     connMgrIsConnectedTest() {

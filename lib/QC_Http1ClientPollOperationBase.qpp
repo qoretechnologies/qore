@@ -2066,13 +2066,27 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
         host_str = target_host + ":" + std::to_string(target_port);
     }
 
+    bool has_host_header = false;
+    if (user_headers) {
+        ConstHashIterator hi(user_headers);
+        while (hi.next()) {
+            if (!strcasecmp(hi.getKey(), "host") && !hi.get().isNothing()) {
+                has_host_header = true;
+                break;
+            }
+        }
+    }
+
     // For plain HTTP through a proxy, use absolute URL in request line
     if (is_proxy_plain) {
-        req->sprintf("%s http://%s%s HTTP/1.1\r\nHost: %s\r\n",
-            method, host_str.c_str(), (path && *path) ? path : "/", host_str.c_str());
+        req->sprintf("%s http://%s%s HTTP/1.1\r\n",
+            method, host_str.c_str(), (path && *path) ? path : "/");
     } else {
-        req->sprintf("%s %s HTTP/1.1\r\nHost: %s\r\n",
-            method, (path && *path) ? path : "/", host_str.c_str());
+        req->sprintf("%s %s HTTP/1.1\r\n",
+            method, (path && *path) ? path : "/");
+    }
+    if (!has_host_header) {
+        req->sprintf("Host: %s\r\n", host_str.c_str());
     }
 
     // Add request headers (skip HTTP/2 pseudo-headers)
