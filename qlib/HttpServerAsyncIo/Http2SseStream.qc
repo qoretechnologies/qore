@@ -30,12 +30,11 @@ public namespace HttpServerAsyncIo {
     stream is kept open (no END_STREAM flag) until explicitly closed,
     allowing the server to push events incrementally.
 
-    Unlike @ref HttpSseStreamPollOperation (which queues events for an I/O
-    thread loop to drain), this class writes DATA frames directly on the
-    calling thread via @ref Qore::Socket::sendHttp2StreamData(), then wakes
-    the async I/O controller so the nghttp2 session's \c sendPendingData()
-    flushes them to the socket.  The write is thread-safe because
-    \c sendHttp2StreamData() acquires the HTTP/2 session lock internally.
+    Unlike @ref HttpSseStreamPollOperation (which keeps an explicit event
+    queue for an I/O-thread poll loop to drain), this class hands each frame
+    to @ref Qore::Socket::sendHttp2StreamData().  That public Socket API
+    delegates HTTP/2 DATA enqueue to the async I/O controller and wakes the
+    owning poll operation to flush nghttp2 pending data.
 
     Backpressure from @ref Qore::Socket::sendHttp2StreamData() is handled
     by waking the controller and blocking on
@@ -56,10 +55,10 @@ public class Http2SseStream inherits AbstractSseConnection {
 
         #! Optional callback to wake the async I/O controller after each write
         /** Called after @ref queueRawString() and @ref queueRawEvent() submit
-            data so that the I/O thread flushes queued DATA frames promptly.
-            Without this, events sit in the nghttp2 send buffer until the next
-            frame-read cycle — effectively forever for a server-push SSE
-            connection with no client traffic.
+            data.  The Socket API already wakes the owning async I/O
+            controller after a successful enqueue; this callback is retained
+            for callers that want an explicit wake hook around the higher-level
+            SSE operation.
 
             @see @ref AsyncSocketIo::AsyncSocketIoController::wakeSocket()
         */
@@ -212,7 +211,7 @@ public class Http2SseStream inherits AbstractSseConnection {
         return !stream_open || !sock.isOpen();
     }
 
-    #! Returns 0 — events are written synchronously, there is no internal queue
+    #! Returns 0 — events are handed to the controller immediately, with no adapter queue
     int getQueueSize() {
         return 0;
     }

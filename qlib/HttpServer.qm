@@ -193,7 +193,8 @@ log("started listener on %s", lh.desc);
       - response paths (regular, send_callback, InputStream, SSE setup)
         all use \c sendHttp2StreamData() /
         \c submitHttp2StreamingResponseHeaders() /
-        \c sendHttp2Trailers() followed by \c io_wake()
+        \c sendHttp2Trailers(), which delegate enqueue/wake handling to
+        the async I/O controller
       - the \c Socket::setHttp2ActiveStream() bridge that redirected
         \c Socket::send() / \c Socket::recv() to HTTP/2 DATA frames was
         removed from \c handleRequest(); every H2 response site already
