@@ -488,7 +488,7 @@ public:
 #endif
 
     DLLLOCAL virtual bool hasPendingData() const override {
-        if (priv->buflen > priv->bufoffset) {
+        if (priv->buflen) {
             return true;
         }
         if (priv->ssl && priv->ssl->pending() > 0) {
@@ -533,7 +533,7 @@ public:
             se_not_open("Socket", "isDataAvailable", xsink);
             return nullptr;
         }
-        if (priv->buflen > priv->bufoffset) {
+        if (priv->buflen) {
             ready = true;
             return nullptr;
         }
@@ -12939,7 +12939,7 @@ QoreHashNode* SocketDataAvailablePollOperation::continuePoll(ExceptionSink* xsin
     }
 
     qore_socket_private* sp = qore_socket_private::get(*priv->socket);
-    if (sp->buflen > sp->bufoffset) {
+    if (sp->buflen) {
         complete(true);
         return nullptr;
     }

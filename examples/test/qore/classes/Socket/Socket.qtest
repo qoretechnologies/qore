@@ -437,17 +437,22 @@ class SocketTest inherits QUnit::Test {
         int port = server.getSocketInfo().port;
 
         Counter cnt(1);
+        Queue release_client();
         background sub () {
             Socket client();
             client.connect("localhost:" + port);
-            client.send("HTTP/1.1 204 No Content\r\nX-Test: value\r\n\r\n");
+            client.send("HTTP/1.1 204 No Content\r\nX-Test: value\r\nContent-Length: 5\r\n\r\nhello");
+            release_client.get(5s);
             cnt.dec();
         }();
 
         Socket conn = server.accept(5s);
         string header = conn.readHTTPHeaderString(5s);
+        assertTrue(conn.isDataAvailable(5s));
+        assertEq("hello", conn.recv(5, 5s));
+        release_client.push(True);
         cnt.waitForZero(5s);
-        assertEq("HTTP/1.1 204 No Content\r\nX-Test: value\n", header);
+        assertEq("HTTP/1.1 204 No Content\r\nX-Test: value\r\nContent-Length: 5\n", header);
     }
 
     httpChunkedBodyTrailerTest() {
