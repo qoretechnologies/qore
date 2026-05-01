@@ -1295,10 +1295,10 @@ ws.connect();
         - \c http2: @ref True if using HTTP/2 WebSocket (RFC 8441)
         - \c http3: @ref True if using HTTP/3 WebSocket (RFC 9220)
         - \c num_connects: how many times has the client connected to the server
-        - \c peer: information about the connected server socket (see
-          @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-        - \c socket: information about the connected local socket (see
-          @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
+        - \c peer: numeric information about the connected server socket (see
+          @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo(False)")
+        - \c socket: numeric information about the connected local socket (see
+          @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo(False)")
 
         @since WebSocketClient 2.4
     */
@@ -1314,8 +1314,8 @@ ws.connect();
             *Socket sock = getActiveSocket();
             if (sock) {
                 rv += {
-                    "peer": sock.getPeerInfo(),
-                    "socket": sock.getSocketInfo(),
+                    "peer": sock.getPeerInfo(False),
+                    "socket": sock.getSocketInfo(False),
                 };
             }
         } catch (hash<ExceptionInfo> ex) {

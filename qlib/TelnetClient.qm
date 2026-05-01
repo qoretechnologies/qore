@@ -395,8 +395,9 @@ public class TelnetClient {
             disconnectIntern();
         logDbg("connecting to %s (timeout %y)", connect, milliseconds(timeout));
         conn.connect(connect, timeout);
-        hash h = conn.getSocketInfo();
-        log("connected to %s (%s)%s", h.hostname, h.address_desc, h.port ? sprintf(" port %d", h.port) : "");
+        hash h = conn.getSocketInfo(False);
+        log("connected to %s (%s)%s", h.hostname ?? h.address ?? h.address_desc, h.address_desc,
+            h.port ? sprintf(" port %d", h.port) : "");
     }
 
     #! returns @ref True "True" if the client is connected to the server
@@ -671,9 +672,10 @@ telnet.setEventQueue();
     # don't override this method, fix/enhance it with a patch to the module
     private final disconnectIntern() {
         if (conn.isOpen()) {
-            hash h = conn.getSocketInfo();
+            hash h = conn.getSocketInfo(False);
             conn.close();
-            log("disconnected from %s (%s)%s", h.hostname, h.address_desc, h.port ? sprintf(" port %d", h.port) : "");
+            log("disconnected from %s (%s)%s", h.hostname ?? h.address ?? h.address_desc, h.address_desc,
+                h.port ? sprintf(" port %d", h.port) : "");
         }
     }
 
