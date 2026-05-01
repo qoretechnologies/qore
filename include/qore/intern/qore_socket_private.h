@@ -106,6 +106,7 @@ static constexpr int SOCK_POLLERR   = (1 << 2);
 static constexpr int SOCK_POLLTIMER = (1 << 3);
 
 struct qore_socket_private;
+class QoreFuture;
 
 DLLLOCAL void concat_target(QoreString& str, const struct sockaddr *addr, const char* type = "target");
 DLLLOCAL int qore_socket_exec_close_private(qore_socket_private* priv);
@@ -113,6 +114,9 @@ DLLLOCAL int do_read_error(ssize_t rc, const char* method_name, int timeout_ms, 
 DLLLOCAL int sock_get_raw_error();
 DLLLOCAL int sock_get_error();
 DLLLOCAL QoreListNode* qore_socket_resolve_addrinfo_asyncio(ExceptionSink* xsink, const char* node,
+    const char* service, int family = Q_AF_UNSPEC, int flags = 0, int socktype = Q_SOCK_STREAM,
+    int protocol = 0, int timeout_ms = -1);
+DLLLOCAL QoreFuture* qore_socket_resolve_addrinfo_asyncio_future(ExceptionSink* xsink, const char* node,
     const char* service, int family = Q_AF_UNSPEC, int flags = 0, int socktype = Q_SOCK_STREAM,
     int protocol = 0, int timeout_ms = -1);
 DLLLOCAL QoreHashNode* qore_socket_resolve_hostbyaddr_asyncio(ExceptionSink* xsink,

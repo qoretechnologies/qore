@@ -38,6 +38,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QC_FutureImpl.h"
 
 #include <cerrno>
 #include <csignal>
@@ -1463,6 +1464,40 @@ list<hash<auto>> l = getaddrinfo("localhost");
 list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
    return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : 0, service ? service->c_str() : 0,
       (int)family, (int)flags);
+}
+
+//! Starts an asynchronous address information lookup and returns a Future for the result
+/** Either node or service may be @ref nothing but not both or the returned Future will be rejected with a
+    \c QOREADDRINFO-GETINFO-ERROR exception.
+
+    This function submits the lookup to the global async I/O controller and returns immediately.  The implementation
+    creates any internal pollable object needed by the controller; callers do not need to create a Socket or
+    EventNotifier for DNS lookups.
+
+    @param node The host name or node name to look up
+    @param service The service name to look up to a port number
+    @param family The @ref network_address_family_constants "address family" for the lookup, must be one of Qore::AF_INET, Qore::AF_INET6, or Qore::AF_UNSPEC, meaning to return all possible addresses
+    @param flags see @ref network_address_information_constants for possible values to be combined with @ref bitwise_or_operator "binary or"
+    @param socktype a hint for the type of socket; 0 = any socket type
+    @param protocol a hint for the protocol number; 0 = the default protocol
+    @param timeout_ms the timeout for the controller-backed resolution operation; -1 = never timeout
+
+    @return a Future that resolves to a list of @ref address_information_hash for the given node name or string address
+
+    @par Example:
+    @code{.py}
+Future f = getaddrinfo_async("localhost");
+list<hash<auto>> l = f.get();
+    @endcode
+
+    @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
+
+    @since %Qore 2.3
+ */
+Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout_ms = -1) [dom=EXTERNAL_INFO] {
+   QoreFuture* future = qore_socket_resolve_addrinfo_asyncio_future(xsink, node ? node->c_str() : 0,
+      service ? service->c_str() : 0, (int)family, (int)flags, (int)socktype, (int)protocol, timeout_ms);
+   return future ? new QoreObject(QC_FUTUREIMPL, getProgram(), future) : nullptr;
 }
 
 //! closes all possible file descriptors; useful in "daemon" processes that may have inherited open file descriptors

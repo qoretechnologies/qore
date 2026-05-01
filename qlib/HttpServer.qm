@@ -2602,6 +2602,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     }
 
     private Future resolveINETListenerAddressesAsync(hash<HttpListenerOptionInfo> info) {
+        if (info.node || info.family != AF_UNSPEC) {
+            return getaddrinfo_async(info.node, info.service, info.family, AIFlags);
+        }
+
+        Future inet6_f = getaddrinfo_async(NOTHING, info.service, AF_INET6, AIFlags);
+        Future inet_f = getaddrinfo_async(NOTHING, info.service, AF_INET, AIFlags);
         Promise p();
         Future f = p.getFuture();
 
@@ -2609,31 +2615,28 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             getGlobalAsyncCtrl().submitTask(sub () {
                 try {
                     list<auto> al;
-                    if (!info.node && info.family == AF_UNSPEC) {
-                        *hash<ExceptionInfo> first_ex;
-                        try {
-                            al += Qore::Socket::resolveAddrInfo(NOTHING, info.service, AF_INET6, AIFlags);
-                        } catch (hash<ExceptionInfo> ex) {
+                    *hash<ExceptionInfo> first_ex;
+                    try {
+                        al += inet6_f.get();
+                    } catch (hash<ExceptionInfo> ex) {
+                        first_ex = ex;
+                    }
+                    try {
+                        al += inet_f.get();
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (!first_ex) {
                             first_ex = ex;
                         }
-                        try {
-                            al += Qore::Socket::resolveAddrInfo(NOTHING, info.service, AF_INET, AIFlags);
-                        } catch (hash<ExceptionInfo> ex) {
-                            if (!first_ex) {
-                                first_ex = ex;
-                            }
-                        }
-                        if (!al.size()) {
-                            if (!first_ex) {
-                                throw "QOREADDRINFO-GETINFO-ERROR",
-                                    sprintf("async address resolution for wildcard service %y returned no addresses",
-                                        info.service);
-                            }
-                            throw first_ex.err, first_ex.desc, first_ex.arg;
-                        }
-                    } else {
-                        al = Qore::Socket::resolveAddrInfo(info.node, info.service, info.family, AIFlags);
                     }
+                    if (!al.size()) {
+                        if (!first_ex) {
+                            throw "QOREADDRINFO-GETINFO-ERROR",
+                                sprintf("async address resolution for wildcard service %y returned no addresses",
+                                    info.service);
+                        }
+                        throw first_ex.err, first_ex.desc, first_ex.arg;
+                    }
+
                     p.set(al);
                 } catch (hash<ExceptionInfo> ex) {
                     p.setError(ex.err, ex.desc, ex.arg);

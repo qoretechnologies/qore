@@ -4060,29 +4060,38 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     unregisterExtraFds(t, result.key, xsink);
                     unregisterFromEventLoop(t, result.key, xsink);
 
+                    bool handled = pinfo.spop_base
+                        ? pinfo.spop_base->handleCompletion(false, result.ex_hash, xsink)
+                        : false;
+                    bool deliver_result = pinfo.queue || pinfo.has_qore_on_complete || !handled;
+
                     // Build result hash (buildResultHash does refSelf on ex_hash)
-                    QoreHashNode* result_hash = buildResultHash(pinfo, false, result.ex_hash, xsink);
-                    // Deref our copy of ex_hash — buildResultHash already refSelf'd it
+                    QoreHashNode* result_hash = deliver_result
+                        ? buildResultHash(pinfo, false, result.ex_hash, xsink)
+                        : nullptr;
+                    // Deref our copy of ex_hash — buildResultHash already refSelf'd it when used
                     if (result.ex_hash) {
                         result.ex_hash->deref(xsink);
                         result.ex_hash = nullptr;
                     }
 
-                    // Prepare deferred delivery
-                    DeferredDelivery dd;
-                    dd.key = result.key;
-                    dd.queue = pinfo.queue;
-                    if (dd.queue) {
-                        dd.queue->ref();
+                    if (deliver_result) {
+                        // Prepare deferred delivery
+                        DeferredDelivery dd;
+                        dd.key = result.key;
+                        dd.queue = pinfo.queue;
+                        if (dd.queue) {
+                            dd.queue->ref();
+                        }
+                        dd.spop_obj = pinfo.spop_obj;
+                        if (dd.spop_obj) {
+                            dd.spop_obj->ref();
+                        }
+                        dd.has_on_complete = pinfo.has_qore_on_complete;
+                        dd.result = result_hash;
+                        dd.owner = pinfo.owner;
+                        deferred_deliveries.push_back(std::move(dd));
                     }
-                    dd.spop_obj = pinfo.spop_obj;
-                    if (dd.spop_obj) {
-                        dd.spop_obj->ref();
-                    }
-                    dd.has_on_complete = pinfo.has_qore_on_complete;
-                    dd.result = result_hash;
-                    dd.owner = pinfo.owner;
-                    deferred_deliveries.push_back(std::move(dd));
 
                     // Signal any cancel waiter for this key.
                     {
@@ -5389,7 +5398,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // Result from async continuePoll() dispatch from worker thread
                     // Cache is I/O-thread-only — no lock needed
                     bool finished = false;
-                    DeferredDelivery dd;
+                    bool deliver_finished = false;
+                    DeferredDelivery dd = {};
 
                     {
                         auto it = t.cache.find(cmd.key);
@@ -5426,20 +5436,29 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             unregisterExtraFds(t, cmd.key, xsink);
                             unregisterFromEventLoop(t, cmd.key, xsink);
 
-                            QoreHashNode* result_hash = buildResultHash(pinfo, false,
-                                cmd.continue_poll_ex, xsink);
+                            bool handled = pinfo.spop_base
+                                ? pinfo.spop_base->handleCompletion(false, cmd.continue_poll_ex, xsink)
+                                : false;
+                            bool deliver_result = pinfo.queue || pinfo.has_qore_on_complete || !handled;
+
+                            QoreHashNode* result_hash = deliver_result
+                                ? buildResultHash(pinfo, false, cmd.continue_poll_ex, xsink)
+                                : nullptr;
                             if (cmd.continue_poll_ex) {
                                 cmd.continue_poll_ex->deref(xsink);
                             }
 
-                            dd.key = cmd.key;
-                            dd.queue = pinfo.queue;
-                            if (dd.queue) { dd.queue->ref(); }
-                            dd.spop_obj = pinfo.spop_obj;
-                            if (dd.spop_obj) { dd.spop_obj->ref(); }
-                            dd.has_on_complete = pinfo.has_qore_on_complete;
-                            dd.result = result_hash;
-                            dd.owner = pinfo.owner;
+                            if (deliver_result) {
+                                deliver_finished = true;
+                                dd.key = cmd.key;
+                                dd.queue = pinfo.queue;
+                                if (dd.queue) { dd.queue->ref(); }
+                                dd.spop_obj = pinfo.spop_obj;
+                                if (dd.spop_obj) { dd.spop_obj->ref(); }
+                                dd.has_on_complete = pinfo.has_qore_on_complete;
+                                dd.result = result_hash;
+                                dd.owner = pinfo.owner;
+                            }
 
                             {
                                 AutoLocker al(m);
@@ -5553,7 +5572,7 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     }
 
                     // Deliver result outside lock
-                    if (finished) {
+                    if (finished && deliver_finished) {
                         deliverResult(dd.queue, dd.spop_obj, dd.has_on_complete,
                             dd.result, xsink, dd.owner);
                         dd.spop_obj = nullptr;
@@ -5632,15 +5651,20 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
         callAbort(pinfo.spop_obj, xsink);
     }
 
+    bool handled = pinfo.spop_base ? pinfo.spop_base->handleCompletion(true, nullptr, xsink) : false;
+    bool deliver_result = pinfo.queue || pinfo.has_qore_on_complete || !handled;
+
     // Build result hash
-    QoreHashNode* result = buildResultHash(pinfo, true, nullptr, xsink);
+    QoreHashNode* result = deliver_result ? buildResultHash(pinfo, true, nullptr, xsink) : nullptr;
 
     // Deliver result — dispatches onComplete to worker thread if overridden
-    if (pinfo.spop_obj) {
-        pinfo.spop_obj->ref();
+    if (deliver_result) {
+        if (pinfo.spop_obj) {
+            pinfo.spop_obj->ref();
+        }
+        deliverResult(pinfo.queue, pinfo.spop_obj, pinfo.has_qore_on_complete, result, xsink,
+            pinfo.owner);
     }
-    deliverResult(pinfo.queue, pinfo.spop_obj, pinfo.has_qore_on_complete, result, xsink,
-        pinfo.owner);
 }
 
 void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
