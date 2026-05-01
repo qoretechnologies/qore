@@ -33,6 +33,7 @@
 
 // FIXME: change int to size_t where applicable! (ex: int rc = recv())
 
+#include <cerrno>
 #include <cctype>
 #include <climits>
 #include <algorithm>
@@ -4517,6 +4518,36 @@ static bool qore_socket_exec_http_blank_line(const QoreStringNode& line) {
     return !qore_socket_exec_http_line_payload_size(line);
 }
 
+static int qore_socket_exec_parse_http_chunk_size(const char* line_str, size_t line_len, int64_t& chunk_size,
+        ExceptionSink* xsink) {
+    const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
+    size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
+    if (!hex_len) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "empty value given for chunk size");
+        return -1;
+    }
+
+    std::string hex(line_str, hex_len);
+    errno = 0;
+    char* end = nullptr;
+    unsigned long long parsed = strtoull(hex.c_str(), &end, 16);
+    if (errno == ERANGE || end == hex.c_str() || *end) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "invalid value given for chunk size ('%s')", hex.c_str());
+        return -1;
+    }
+
+    unsigned long long max_read_size = static_cast<unsigned long long>(
+        std::numeric_limits<ssize_t>::max() - 2);
+    if (parsed > max_read_size) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %llu exceeds the maximum supported size",
+            parsed);
+        return -1;
+    }
+
+    chunk_size = static_cast<int64_t>(parsed);
+    return 0;
+}
+
 class QoreSocketControllerReadHttpChunkedBodyPollOperation : public SocketPollOperationBase {
 public:
     enum class State {
@@ -4699,12 +4730,8 @@ private:
         const QoreStringNode* line = line_val->get<const QoreStringNode>();
         size_t line_len = qore_socket_exec_http_line_payload_size(*line);
         const char* line_str = line->c_str();
-        const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
-        size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
-        std::string hex(line_str, hex_len);
-        long chunk_size = strtol(hex.c_str(), nullptr, 16);
-        if (chunk_size < 0) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+        int64_t chunk_size = 0;
+        if (qore_socket_exec_parse_http_chunk_size(line_str, line_len, chunk_size, xsink)) {
             return -1;
         }
 
@@ -4717,13 +4744,6 @@ private:
             }
             state = State::RecvTrailer;
             return 0;
-        }
-
-        long max_read_size = static_cast<long>(std::numeric_limits<ssize_t>::max() - 2);
-        if (chunk_size > max_read_size) {
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
-                chunk_size);
-            return -1;
         }
 
         current_chunk_size = chunk_size;
@@ -14402,12 +14422,8 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkSize(ExceptionSink* xsink
         line_len -= 2;
     }
 
-    const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
-    size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
-    std::string hex(line_str, hex_len);
-    long chunk_size = strtol(hex.c_str(), nullptr, 16);
-    if (chunk_size < 0) {
-        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+    int64_t chunk_size = 0;
+    if (qore_socket_exec_parse_http_chunk_size(line_str, line_len, chunk_size, xsink)) {
         return -1;
     }
 
@@ -14421,13 +14437,6 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkSize(ExceptionSink* xsink
         }
         chunked_body_state = ChunkedBodyState::RECV_TRAILER;
         return 0;
-    }
-
-    long max_read_size = static_cast<long>(std::numeric_limits<ssize_t>::max() - 2);
-    if (chunk_size > max_read_size) {
-        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
-            chunk_size);
-        return -1;
     }
 
     current_chunk_size = chunk_size;
