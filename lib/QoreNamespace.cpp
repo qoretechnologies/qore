@@ -848,6 +848,22 @@ QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, const QorePar
         ns->priv->parent = &parent;
         assert(!ns->priv->root);
         // do not assert() ns->priv->depth > 0 here; we may be in an unattached namespace tree
+
+        // Drop empty stubs that originated from a module: when a parent
+        // namespace tree is copied into a child Program under parse
+        // options that strip user content (e.g. PO_NO_INHERIT_USER_CLASSES),
+        // namespaces tagged with `from_module` can end up fully empty
+        // after the copy.  Such empty stubs would otherwise shadow the
+        // real module namespace later (e.g. during get_module_root_ns
+        // probing) and cause Java/Kotlin compiles to resolve `qoremod.<X>`
+        // to the empty stub instead of the loaded module.  PO_NO_INHERIT_*
+        // controls *parent* inheritance — it must not impact namespaces
+        // re-introduced by an explicit `%requires` in the child.
+        if (i->second->priv->getModuleName() && ns->priv->isEmpty()) {
+            delete ns;
+            continue;
+        }
+
         last = nsmap.insert(last, nsmap_t::value_type(i->first, ns));
 
         //printd(5, "QoreNamespaceList::QoreNamespaceList(old: %p) this: %p po: %lld copied '%s'\n", &old, this, po,
