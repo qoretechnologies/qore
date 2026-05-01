@@ -797,6 +797,14 @@ public:
         helper so I/O-thread protocol callbacks can enqueue DATA directly on
         the already-owned QUIC session.
 
+        @param stream_id the stream ID returned by submitQuicRequestStreaming()
+        @param data body data (may be nullptr with len 0 to send empty DATA + END_STREAM)
+        @param len length of data
+        @param end_stream true to signal the end of the request body
+        @param xsink exception sink
+
+        @return 0 on success, 1 if buffer full (backpressure), -1 on error
+
         @since %Qore 2.3
     */
     DLLLOCAL int sendQuicClientStreamDataForAsyncPoll(int64_t stream_id, const void* data, size_t len,
