@@ -948,6 +948,12 @@ static QoreValue socket_exec_recv_poll(QoreObject* self, QoreSocketObject* s, So
         return QoreValue();
     }
 
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return QoreValue();
+    }
+
     ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
         xsink);
     poller_holder->setSelf(*op_obj);
@@ -1252,6 +1258,12 @@ static QoreHashNode* socket_exec_read_http_header(QoreObject* self, QoreSocketOb
     SocketReadHttpHeaderPollOperation* header_poller = new SocketReadHttpHeaderPollOperation(xsink, s, true);
     ReferenceHolder<SocketPollOperationBase> poller(header_poller, xsink);
     if (*xsink) {
+        return nullptr;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
         return nullptr;
     }
 

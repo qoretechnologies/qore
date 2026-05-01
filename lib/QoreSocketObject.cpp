@@ -3300,9 +3300,20 @@ static int qore_socket_object_exec_send_string(QoreSocketObject* s, const QoreSt
 static QoreValue qore_socket_object_exec_recv_poll(QoreSocketObject* s, SocketRecvPollOperationBase* poller,
         int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
     SocketRecvPollOperationBase* recv_poller = poller;
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return QoreValue();
+    }
+
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
-        qore_socket_object_make_poll_op(*sock_obj, poller, "received", xsink), xsink);
+        qore_socket_object_make_poll_op(*sock_obj, poller_holder.release(), "received", xsink), xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -3407,10 +3418,20 @@ static QoreHashNode* qore_socket_object_exec_read_http_header(QoreSocketObject* 
         int timeout_ms, ExceptionSink* xsink) {
     s->ref();
     SocketReadHttpHeaderPollOperation* header_poller = new SocketReadHttpHeaderPollOperation(xsink, s, true);
+    ReferenceHolder<SocketPollOperationBase> poller(header_poller, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return nullptr;
+    }
 
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
-        qore_socket_object_make_poll_op(*sock_obj, header_poller, "received", xsink), xsink);
+        qore_socket_object_make_poll_op(*sock_obj, poller.release(), "received", xsink), xsink);
     if (*xsink) {
         return nullptr;
     }
