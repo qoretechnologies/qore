@@ -1099,6 +1099,12 @@ FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_sock, 
         }
         return;
     }
+    if (accept_base->needsWorkerDispatch()) {
+        accept_base->deref(xsink);
+        xsink->raiseException("FTP-CONNECT-ERROR",
+            "accept operation requires worker dispatch and cannot be used by FtpPortAcceptPollOperation");
+        return;
+    }
 
     // Set sock member to listener (controller polls this fd)
     // listener_sock is a ReferenceHolder<QoreSocketObject> from QPP — get QoreObject wrapper

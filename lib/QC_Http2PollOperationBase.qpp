@@ -684,6 +684,11 @@ Http2PollOperationBase::constructor(Socket[QoreSocketObject] sock, object initia
     if (*xsink || !read_priv) {
         return;
     }
+    if (read_priv->needsWorkerDispatch()) {
+        xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
+            "initial_read_op requires worker dispatch and cannot be used by Http2PollOperationBase");
+        return;
+    }
 
     // Store socket as Qore member for DGC visibility
     QoreValue sock_arg = args->retrieveEntry(0);
@@ -843,6 +848,12 @@ nothing Http2PollOperationBase::injectSendOp(object send_op) {
     if (*xsink || !send_priv) {
         return QoreValue();
     }
+    if (send_priv->needsWorkerDispatch()) {
+        send_priv->deref(xsink);
+        xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
+            "send_op requires worker dispatch and cannot be used by Http2PollOperationBase");
+        return QoreValue();
+    }
 
     // Ref the send_op QoreObject for DGC before transferring ownership
     const_cast<QoreObject*>(send_op)->ref();
@@ -877,6 +888,12 @@ nothing Http2PollOperationBase::injectReadOp(object read_op) {
         const_cast<QoreObject*>(read_op)->getReferencedPrivateData(
             CID_SOCKETPOLLOPERATIONBASE, xsink));
     if (*xsink || !read_priv) {
+        return QoreValue();
+    }
+    if (read_priv->needsWorkerDispatch()) {
+        read_priv->deref(xsink);
+        xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
+            "read_op requires worker dispatch and cannot be used by Http2PollOperationBase");
         return QoreValue();
     }
 

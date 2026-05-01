@@ -485,6 +485,11 @@ HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, obje
     if (*xsink || !accept_priv) {
         return;
     }
+    if (accept_priv->needsWorkerDispatch()) {
+        xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-ERROR",
+            "accept_op requires worker dispatch and cannot be used by HttpAcceptPollOperationBase");
+        return;
+    }
 
     // NOTE: We intentionally do NOT set the "sock" member to the listener Socket here.
     // The inner accept operation (current_op) already holds a "sock" reference to the
