@@ -1086,7 +1086,7 @@ public:
                 break;
             case Action::SetMaxChunkedBodySize: {
                 qore_socket_private* priv = qore_socket_private::get(*sock);
-                priv->max_chunked_body_size = value;
+                priv->max_chunked_body_size.store(value, std::memory_order_relaxed);
                 rc = 0;
                 break;
             }
@@ -1120,7 +1120,7 @@ public:
             }
             case Action::SetHttp2MaxRequestBodySize: {
                 qore_socket_private* priv = qore_socket_private::get(*sock);
-                priv->max_http2_body_size = value;
+                priv->max_http2_body_size.store(value, std::memory_order_relaxed);
                 AutoLocker al(priv->h2_session_lock);
                 if (priv->h2_session) {
                     priv->h2_session->setMaxRequestBodySize(value);
@@ -5013,9 +5013,10 @@ private:
         bytes_consumed = true;
 
         int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
-        if (priv.max_chunked_body_size > 0 && body_size > priv.max_chunked_body_size) {
+        int64 max_chunked_body_size = priv.max_chunked_body_size.load(std::memory_order_relaxed);
+        if (max_chunked_body_size > 0 && body_size > max_chunked_body_size) {
             xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
-                body_size, priv.max_chunked_body_size);
+                body_size, max_chunked_body_size);
             return -1;
         }
 
@@ -5898,7 +5899,7 @@ void my_socket_priv::clearHttpExpectChunkedBody() const {
 }
 
 int64 my_socket_priv::getMaxChunkedBodySize() const {
-    return socket->priv->max_chunked_body_size;
+    return socket->priv->max_chunked_body_size.load(std::memory_order_relaxed);
 }
 
 bool my_socket_priv::takeSseGotCr() const {
@@ -11376,7 +11377,7 @@ void QoreSocket::setMaxChunkedBodySize(int64 size) {
 }
 
 int64 QoreSocket::getMaxChunkedBodySize() const {
-    return priv->max_chunked_body_size;
+    return priv->max_chunked_body_size.load(std::memory_order_relaxed);
 }
 
 void QoreSocket::setHttp2MaxRequestBodySize(int64 size) {
@@ -11387,7 +11388,7 @@ void QoreSocket::setHttp2MaxRequestBodySize(int64 size) {
 }
 
 int64 QoreSocket::getHttp2MaxRequestBodySize() const {
-    return priv->max_http2_body_size;
+    return priv->max_http2_body_size.load(std::memory_order_relaxed);
 }
 
 void QoreSocket::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
@@ -12796,7 +12797,7 @@ QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
             break;
         case Action::SetMaxChunkedBodySize: {
             qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
-            sp->max_chunked_body_size = value;
+            sp->max_chunked_body_size.store(value, std::memory_order_relaxed);
             rc = 0;
             break;
         }
@@ -12830,7 +12831,7 @@ QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
         }
         case Action::SetHttp2MaxRequestBodySize: {
             qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
-            sp->max_http2_body_size = value;
+            sp->max_http2_body_size.store(value, std::memory_order_relaxed);
             AutoLocker hal(sp->h2_session_lock);
             if (sp->h2_session) {
                 sp->h2_session->setMaxRequestBodySize(value);
@@ -15929,7 +15930,8 @@ SocketHttp2ServerPollOperation::SocketHttp2ServerPollOperation(ExceptionSink* xs
         // Reuse existing session (socket owns it)
         h2_session = sock->priv->socket->priv->h2_session;
         // Update max body size limit in case it changed since session was created
-        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
+        h2_session->setMaxRequestBodySize(
+            sock->priv->socket->priv->max_http2_body_size.load(std::memory_order_relaxed));
         reused_session = true;
     } else {
         // Initialize new HTTP/2 session and store it on the socket
@@ -15962,8 +15964,9 @@ int SocketHttp2ServerPollOperation::initSession(ExceptionSink* xsink) {
     // Apply socket-level HTTP/2 settings before the connection preface is sent
     h2_session->setEnableConnectProtocol(sock->priv->socket->priv->h2_enable_connect_protocol);
     // Propagate max request body size limit to the HTTP/2 session
-    if (sock->priv->socket->priv->max_http2_body_size > 0) {
-        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
+    int64 max_http2_body_size = sock->priv->socket->priv->max_http2_body_size.load(std::memory_order_relaxed);
+    if (max_http2_body_size > 0) {
+        h2_session->setMaxRequestBodySize(max_http2_body_size);
     }
     // Store session on socket for shared access
     sock->priv->socket->priv->h2_session = h2_session;
@@ -17087,7 +17090,8 @@ SocketHttp2ClientMultiplexPollOperation::SocketHttp2ClientMultiplexPollOperation
         // Reuse existing session (socket owns it)
         h2_session = sock->priv->socket->priv->h2_session;
         // Update max body size limit in case it changed since session was created
-        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
+        h2_session->setMaxRequestBodySize(
+            sock->priv->socket->priv->max_http2_body_size.load(std::memory_order_relaxed));
         reused_session = true;
     } else {
         // Initialize new HTTP/2 client session and store it on the socket
@@ -17174,8 +17178,9 @@ int SocketHttp2ClientMultiplexPollOperation::initSession(ExceptionSink* xsink) {
         return -1;
     }
     // Propagate max request body size limit to the HTTP/2 session
-    if (sock->priv->socket->priv->max_http2_body_size > 0) {
-        h2_session->setMaxRequestBodySize(sock->priv->socket->priv->max_http2_body_size);
+    int64 max_http2_body_size = sock->priv->socket->priv->max_http2_body_size.load(std::memory_order_relaxed);
+    if (max_http2_body_size > 0) {
+        h2_session->setMaxRequestBodySize(max_http2_body_size);
     }
     // Store session on socket for shared access
     sock->priv->socket->priv->h2_session = h2_session;

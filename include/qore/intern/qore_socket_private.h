@@ -990,13 +990,13 @@ struct qore_socket_private : public QoreReferenceCounter {
         raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds
         this limit.
     */
-    int64 max_chunked_body_size = 0;
+    std::atomic<int64> max_chunked_body_size{0};
 
     //! Maximum request body size for HTTP/2 streams (0 = unlimited)
     /** Propagated to Http2Session when created; DATA frame accumulation exceeding
         this limit causes the stream to be reset with REFUSED_STREAM.
     */
-    int64 max_http2_body_size = 0;
+    std::atomic<int64> max_http2_body_size{0};
 
     //! Whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** When false, the server does not advertise extended CONNECT protocol support
