@@ -845,6 +845,8 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::vector<std::string> alpn_protocols;
     Queue* event_queue = nullptr,   //!< event queue
         * warn_queue = nullptr;     //!< warning queue
+    //! protects event queue pointer, callback argument, and data flag lifetime
+    mutable QoreThreadLock event_queue_m;
     //! protects warning queue pointer and callback argument lifetime
     mutable QoreThreadLock warning_queue_m;
 
@@ -1800,35 +1802,95 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void cleanupQueues(ExceptionSink* xsink) {
-        if (event_queue) {
-            event_queue->pushAndTakeRef(getEvent(QORE_EVENT_DELETED));
+        Queue* old_event_queue = nullptr;
+        QoreValue old_event_arg;
+        {
+            AutoLocker al(event_queue_m);
+            if (event_queue) {
+                event_queue->pushAndTakeRef(getEvent(QORE_EVENT_DELETED));
 
-            // deref and remove event queue
-            event_queue->deref(xsink);
-            event_queue = nullptr;
+                old_event_queue = event_queue;
+                old_event_arg = event_arg;
+                event_queue = nullptr;
+                event_arg = QoreValue();
+                event_data = false;
+            }
+        }
+        if (old_event_arg) {
+            old_event_arg.discard(xsink);
+        }
+        if (old_event_queue) {
+            old_event_queue->deref(xsink);
         }
         clearWarningQueue(xsink);
     }
 
     DLLLOCAL void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
-        if (event_queue) {
-            if (event_arg) {
-                event_arg.discard(xsink);
-            }
-            event_queue->deref(xsink);
+        Queue* old_queue = nullptr;
+        QoreValue old_arg;
+        {
+            AutoLocker al(event_queue_m);
+            old_queue = event_queue;
+            old_arg = event_arg;
+            event_queue = q;
+            event_arg = arg;
+            event_data = with_data;
         }
-        event_queue = q;
-        event_arg = arg;
-        event_data = with_data;
+        if (old_arg) {
+            old_arg.discard(xsink);
+        }
+        if (old_queue) {
+            old_queue->deref(xsink);
+        }
+    }
+
+    DLLLOCAL bool hasEventQueue() const {
+        AutoLocker al(event_queue_m);
+        return event_queue;
+    }
+
+    DLLLOCAL bool isEventDataEnabled() const {
+        AutoLocker al(event_queue_m);
+        return event_queue && event_data;
+    }
+
+    DLLLOCAL Queue* getEventQueue() const {
+        AutoLocker al(event_queue_m);
+        return event_queue;
+    }
+
+    DLLLOCAL void swapEventQueueState(qore_socket_private& s) {
+        if (&s == this) {
+            return;
+        }
+
+        qore_socket_private* first;
+        qore_socket_private* second;
+        if (std::less<qore_socket_private*>()(this, &s)) {
+            first = this;
+            second = &s;
+        } else {
+            first = &s;
+            second = this;
+        }
+
+        AutoLocker al(first->event_queue_m);
+        AutoLocker bl(second->event_queue_m);
+
+        std::swap(event_queue, s.event_queue);
+        std::swap(event_arg, s.event_arg);
+        std::swap(event_data, s.event_data);
     }
 
     DLLLOCAL void do_start_ssl_event() {
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             event_queue->pushAndTakeRef(getEvent(QORE_EVENT_START_SSL));
         }
     }
 
     DLLLOCAL void do_ssl_established_event() {
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_SSL_ESTABLISHED);
             h->setKeyValue("cipher", new QoreStringNode(ssl->getCipherName()), nullptr);
@@ -1839,6 +1901,7 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL void do_connect_event(int af, const struct sockaddr* addr, const char* target,
             const char* service = nullptr, int prt = -1) {
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_CONNECTING);
             QoreStringNode* str = q_addr_to_string2(addr);
@@ -1858,25 +1921,27 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void do_connected_event() {
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             event_queue->pushAndTakeRef(getEvent(QORE_EVENT_CONNECTED));
         }
     }
 
     DLLLOCAL void do_data_event_intern(int event, int source, const QoreStringNode& str) const {
-        assert(event_queue && event_data && str.size());
-        ReferenceHolder<QoreHashNode> h(getEvent(event, source), nullptr);
-        h->setKeyValue("data", str.refSelf(), nullptr);
-        event_queue->pushAndTakeRef(h.release());
-    }
-
-    DLLLOCAL void do_data_event(int event, int source, const QoreStringNode& str) const {
+        AutoLocker al(event_queue_m);
         if (event_queue && event_data && str.size()) {
-            do_data_event_intern(event, source, str);
+            ReferenceHolder<QoreHashNode> h(getEvent(event, source), nullptr);
+            h->setKeyValue("data", str.refSelf(), nullptr);
+            event_queue->pushAndTakeRef(h.release());
         }
     }
 
+    DLLLOCAL void do_data_event(int event, int source, const QoreStringNode& str) const {
+        do_data_event_intern(event, source, str);
+    }
+
     DLLLOCAL void do_data_event(int event, int source, const BinaryNode& b) const {
+        AutoLocker al(event_queue_m);
         if (event_queue && event_data && b.size()) {
             ReferenceHolder<QoreHashNode> h(getEvent(event, source), nullptr);
             h->setKeyValue("data", b.refSelf(), nullptr);
@@ -1885,6 +1950,7 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void do_data_event(int event, int source, const void* data, size_t size) const {
+        AutoLocker al(event_queue_m);
         if (event_queue && event_data && size) {
             ReferenceHolder<QoreHashNode> h(getEvent(event, source), nullptr);
             SimpleRefHolder<BinaryNode> b(new BinaryNode);
@@ -1895,6 +1961,7 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void do_header_event(int event, int source, const QoreHashNode& hdr) const {
+        AutoLocker al(event_queue_m);
         if (event_queue && event_data && !hdr.empty()) {
             ReferenceHolder<QoreHashNode> h(getEvent(event, source), nullptr);
             h->setKeyValue("headers", hdr.refSelf(), nullptr);
@@ -1903,6 +1970,7 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void do_chunked_read(int event, size_t bytes, size_t total_read, int source) {
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(event, source);
             if (event == QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED)
@@ -1915,6 +1983,7 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void do_read_http_header(int event, const QoreHashNode* headers, int source) {
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(event, source);
             h->setKeyValue("headers", headers->hashRefSelf(), nullptr);
@@ -1923,6 +1992,7 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void do_send_http_message_event(const QoreString& str, const QoreHashNode* headers, int source) {
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_HTTP_SEND_MESSAGE, source);
             h->setKeyValue("message", new QoreStringNode(str), nullptr);
@@ -1933,6 +2003,7 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void do_close_event() {
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             event_queue->pushAndTakeRef(getEvent(QORE_EVENT_CHANNEL_CLOSED));
         }
@@ -1940,6 +2011,7 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL void do_read_event(size_t bytes_read, size_t total_read, size_t bufsize = 0, int source = QORE_SOURCE_SOCKET) {
         // post bytes read on event queue, if any
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_PACKET_READ, source);
             h->setKeyValue("read", bytes_read, nullptr);
@@ -1953,6 +2025,7 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL void do_send_event(int bytes_sent, int total_sent, int bufsize) {
         // post bytes sent on event queue, if any
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_PACKET_SENT);
             h->setKeyValue("sent", bytes_sent, nullptr);
@@ -1964,6 +2037,7 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL void do_resolve_event(const char* host, const char* service = 0) {
         // post bytes sent on event queue, if any
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_HOSTNAME_LOOKUP);
             if (host)
@@ -1976,6 +2050,7 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL void do_resolved_event(const struct sockaddr* addr) {
         // post bytes sent on event queue, if any
+        AutoLocker al(event_queue_m);
         if (event_queue) {
             QoreHashNode* h = getEvent(QORE_EVENT_HOSTNAME_RESOLVED);
             QoreStringNode* str = q_addr_to_string2(addr);
@@ -1987,6 +2062,29 @@ struct qore_socket_private : public QoreReferenceCounter {
             if (prt > 0)
                 h->setKeyValue("port", prt, nullptr);
             q_af_to_hash(addr->sa_family, *h, nullptr);
+            event_queue->pushAndTakeRef(h);
+        }
+    }
+
+    DLLLOCAL void do_content_length_event(size_t len, int source) {
+        AutoLocker al(event_queue_m);
+        if (event_queue) {
+            QoreHashNode* h = getEvent(QORE_EVENT_HTTP_CONTENT_LENGTH, source);
+            h->setKeyValue("len", len, nullptr);
+            event_queue->pushAndTakeRef(h);
+        }
+    }
+
+    DLLLOCAL void do_redirect_event(const QoreStringNode* loc, const QoreStringNode* msg, int source) {
+        AutoLocker al(event_queue_m);
+        if (event_queue) {
+            QoreHashNode* h = getEvent(QORE_EVENT_HTTP_REDIRECT, source);
+            if (loc) {
+                h->setKeyValue("location", loc->refSelf(), nullptr);
+            }
+            if (msg) {
+                h->setKeyValue("status_message", msg->refSelf(), nullptr);
+            }
             event_queue->pushAndTakeRef(h);
         }
     }
@@ -2497,18 +2595,17 @@ struct qore_socket_private : public QoreReferenceCounter {
         }
 
         // write status line or request line to the info hash and raise a data event if applicable
-        if (info || (event_queue && event_data)) {
-            QoreStringNodeHolder status_line(new QoreStringNode(buf));
-            if (info && event_queue && event_data) {
-                status_line->ref();
-            }
-            if (event_queue && event_data) {
-                do_data_event_intern(QORE_EVENT_SOCKET_DATA_READ, source, **status_line);
+        bool emit_data_event = isEventDataEnabled();
+        if (info || emit_data_event) {
+            QoreStringNode* status_line = new QoreStringNode(buf);
+            if (emit_data_event) {
+                do_data_event_intern(QORE_EVENT_SOCKET_DATA_READ, source, *status_line);
             }
             if (info) {
-                info->setKeyValue(info_key, *status_line, nullptr);
+                info->setKeyValue(info_key, status_line, nullptr);
+            } else {
+                status_line->deref(nullptr);
             }
-            status_line.release();
         }
 
         bool close = convertHeaderToHash(*h, p, flags, info, &http_exp_chunked_body, headers_raw_key);

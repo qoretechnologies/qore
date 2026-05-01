@@ -702,34 +702,6 @@ static void setConnMgrResponseUri(QoreHashNode* info, const QoreHashNode* src,
     info->setKeyValue("response-uri", rv, xsink);
 }
 
-void do_content_length_event(Queue* event_queue, qore_socket_private* priv, size_t len) {
-    if (event_queue) {
-        QoreHashNode* h = priv->getEvent(QORE_EVENT_HTTP_CONTENT_LENGTH, QORE_SOURCE_HTTPCLIENT);
-        qore_hash_private* hh = qore_hash_private::get(*h);
-        hh->setKeyValueIntern("len", len);
-        event_queue->pushAndTakeRef(h);
-    }
-}
-
-void do_redirect_event(Queue* event_queue, qore_socket_private* priv, const QoreStringNode* loc,
-        const QoreStringNode* msg) {
-    if (event_queue) {
-        QoreHashNode* h = priv->getEvent(QORE_EVENT_HTTP_REDIRECT, QORE_SOURCE_HTTPCLIENT);
-        qore_hash_private* hh = qore_hash_private::get(*h);
-        hh->setKeyValueIntern("location", loc->refSelf());
-        if (msg)
-            hh->setKeyValueIntern("status_message", msg->refSelf());
-        event_queue->pushAndTakeRef(h);
-    }
-}
-
-void do_event(Queue* event_queue, qore_socket_private* priv, int event) {
-    if (event_queue) {
-        QoreHashNode* h = priv->getEvent(event, QORE_SOURCE_HTTPCLIENT);
-        event_queue->pushAndTakeRef(h);
-    }
-}
-
 struct qore_httpclient_priv {
     my_socket_priv* msock;
 
@@ -1327,9 +1299,7 @@ struct qore_httpclient_priv {
 
             qore_socket_private* active = msock->socket->priv;
             qore_socket_private* old = adopted_msock->socket->priv;
-            std::swap(active->event_queue, old->event_queue);
-            std::swap(active->event_arg, old->event_arg);
-            std::swap(active->event_data, old->event_data);
+            active->swapEventQueueState(*old);
             active->swapWarningQueueState(*old);
             std::swap(active->assume_http_encoding, old->assume_http_encoding);
             std::swap(active->utf8_content_type_set, old->utf8_content_type_set);
@@ -5432,16 +5402,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // send_internal behavior).  The conn_mgr path uses its own sockets
         // for I/O, but events are fired on msock's queue for user visibility.
         {
-            Queue* event_queue = msock->socket->getQueue();
-            if (event_queue) {
-                const char* cl = get_string_header(xsink, **ans, "content-length");
-                if (!*xsink && cl) {
-                    ssize_t len = strtoll(cl, nullptr, 10);
-                    do_content_length_event(event_queue, msock->socket->priv, len);
-                }
-                if (*xsink) {
-                    return nullptr;
-                }
+            const char* cl = get_string_header(xsink, **ans, "content-length");
+            if (!*xsink && cl) {
+                ssize_t len = strtoll(cl, nullptr, 10);
+                msock->socket->priv->do_content_length_event(len, QORE_SOURCE_HTTPCLIENT);
+            }
+            if (*xsink) {
+                return nullptr;
             }
         }
 
@@ -5478,13 +5445,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
 
             // Fire redirect event on the HTTPClient's event queue
-            {
-                Queue* event_queue = msock->socket->getQueue();
-                if (event_queue) {
-                    do_redirect_event(event_queue, msock->socket->priv,
-                        loc, mess);
-                }
-            }
+            msock->socket->priv->do_redirect_event(loc, mess, QORE_SOURCE_HTTPCLIENT);
 
             if (redirectUrlUnlocked(location, this_connection, xsink)) {
                 const char* msg = mess ? mess->c_str() : "<no message>";

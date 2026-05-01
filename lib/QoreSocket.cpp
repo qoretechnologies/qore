@@ -7532,7 +7532,7 @@ int SocketConnectInetHappyEyeballsPollState::finishResolve(ExceptionSink* xsink)
     }
 
     // emit all "resolved" events
-    if (sock->event_queue) {
+    if (sock->hasEventQueue()) {
         for (auto& ai : addrs) {
             sock->do_resolved_event(reinterpret_cast<const struct sockaddr*>(&ai.addr));
         }
@@ -10887,7 +10887,7 @@ static int qore_socket_bind_inet_resolved_direct(QoreSocket* s, const char* name
         return -1;
     }
 
-    if (priv->event_queue) {
+    if (priv->hasEventQueue()) {
         for (auto& ai : addrs) {
             priv->do_resolved_event(reinterpret_cast<const struct sockaddr*>(&ai.addr));
         }
@@ -11399,7 +11399,7 @@ void QoreSocket::setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bo
 }
 
 Queue* QoreSocket::getQueue() {
-    return priv->event_queue;
+    return priv->getEventQueue();
 }
 
 void QoreSocket::cleanup(ExceptionSink* xsink) {
