@@ -229,9 +229,8 @@ class FormattingTest inherits QUnit::Test {
 
     testDocFmtMissingParams() {
         # Reuse the shared server: a malformed request returns an error response
-        # without mutating server state, so isolation is unnecessary.  Spinning
-        # up a fresh QLSServer would re-parse all ~3180 standard module files
-        # (~30s per fresh init) just to send one bad request.
+        # without mutating server state, so isolation is unnecessary, and this keeps
+        # the test focused on validation rather than server startup cost.
         hash<auto> req = makeRequest("textDocument/formatting");
         delete req.params;
         softlist<auto> responses = server.handleRequest(make_json(req));
