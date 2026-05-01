@@ -2224,7 +2224,7 @@ public:
                             return nullptr;
                         }
                         if (!poll_rv) {
-                            return getPollInfo(xsink, SOCK_POLLIN);
+                            return getPollInfo(xsink, SOCK_POLLIN, true);
                         }
 
                         SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
@@ -2330,7 +2330,7 @@ public:
 private:
     enum class Phase { ReadChunk, SendChunk, Done, Error };
 
-    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events) {
+    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool stream_wait = false) {
         int64 poll_timeout_ms = -1;
         if (timeout_ms >= 0) {
             int us;
@@ -2346,9 +2346,9 @@ private:
         }
 
         QoreHashNode* raw_info = nullptr;
-        if (is_pollable && stream_fd >= 0) {
+        if (stream_wait && is_pollable && stream_fd >= 0) {
             std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
-            raw_info = getSocketPollInfoHash(xsink, events, extra_fds);
+            raw_info = getSocketPollInfoHash(xsink, 0, extra_fds);
         } else {
             raw_info = getSocketPollInfoHash(xsink, events);
         }
@@ -2622,7 +2622,7 @@ private:
         QoreHashNode* raw_info = nullptr;
         if (output_wait && is_pollable && output_fd >= 0) {
             std::vector<std::pair<int, int>> extra_fds{{output_fd, SOCK_POLLOUT}};
-            raw_info = getSocketPollInfoHash(xsink, events, extra_fds);
+            raw_info = getSocketPollInfoHash(xsink, 0, extra_fds);
         } else {
             raw_info = getSocketPollInfoHash(xsink, events);
         }
@@ -13157,7 +13157,7 @@ int SocketSendInputStreamPollOperation::initLocked(ExceptionSink* xsink) {
     return -1;
 }
 
-QoreHashNode* SocketSendInputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events) {
+QoreHashNode* SocketSendInputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events, bool stream_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
         int us;
@@ -13173,9 +13173,9 @@ QoreHashNode* SocketSendInputStreamPollOperation::getPollInfo(ExceptionSink* xsi
     }
 
     QoreHashNode* raw_info = nullptr;
-    if (is_pollable && stream_fd >= 0) {
+    if (stream_wait && is_pollable && stream_fd >= 0) {
         std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
-        raw_info = getSocketPollInfoHash(xsink, events, extra_fds);
+        raw_info = getSocketPollInfoHash(xsink, 0, extra_fds);
     } else {
         raw_info = getSocketPollInfoHash(xsink, events);
     }
@@ -13280,7 +13280,7 @@ QoreHashNode* SocketSendInputStreamPollOperation::continuePoll(ExceptionSink* xs
                         return nullptr;
                     }
                     if (poll_rv == 0) {
-                        return getPollInfo(xsink, SOCK_POLLIN);
+                        return getPollInfo(xsink, SOCK_POLLIN, true);
                     }
 
                     SimpleRefHolder<BinaryNode> chunk(new BinaryNode);
@@ -13440,7 +13440,8 @@ int SocketSendHttpChunkedInputStreamPollOperation::initLocked(ExceptionSink* xsi
     return -1;
 }
 
-QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events) {
+QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::getPollInfo(ExceptionSink* xsink, int events,
+        bool stream_wait) {
     int64 poll_timeout_ms = -1;
     if (timeout_ms >= 0) {
         int us;
@@ -13456,9 +13457,9 @@ QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::getPollInfo(Excepti
     }
 
     QoreHashNode* raw_info = nullptr;
-    if (is_pollable && stream_fd >= 0) {
+    if (stream_wait && is_pollable && stream_fd >= 0) {
         std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
-        raw_info = getSocketPollInfoHash(xsink, events, extra_fds);
+        raw_info = getSocketPollInfoHash(xsink, 0, extra_fds);
     } else {
         raw_info = getSocketPollInfoHash(xsink, events);
     }
@@ -13547,7 +13548,7 @@ QoreHashNode* SocketSendHttpChunkedInputStreamPollOperation::continuePoll(Except
                         return nullptr;
                     }
                     if (poll_rv == 0) {
-                        return getPollInfo(xsink, SOCK_POLLIN);
+                        return getPollInfo(xsink, SOCK_POLLIN, true);
                     }
 
                     chunk = new BinaryNode;
@@ -13742,7 +13743,7 @@ QoreHashNode* SocketRecvOutputStreamPollOperation::getPollInfo(ExceptionSink* xs
     QoreHashNode* raw_info = nullptr;
     if (output_wait && is_pollable && output_fd >= 0) {
         std::vector<std::pair<int, int>> extra_fds{{output_fd, SOCK_POLLOUT}};
-        raw_info = getSocketPollInfoHash(xsink, events, extra_fds);
+        raw_info = getSocketPollInfoHash(xsink, 0, extra_fds);
     } else {
         raw_info = getSocketPollInfoHash(xsink, events);
     }
@@ -13968,7 +13969,7 @@ QoreHashNode* SocketWriteOutputStreamPollOperation::getPollInfo(ExceptionSink* x
     QoreHashNode* raw_info = nullptr;
     if (is_pollable && output_fd >= 0) {
         std::vector<std::pair<int, int>> extra_fds{{output_fd, SOCK_POLLOUT}};
-        raw_info = getSocketPollInfoHash(xsink, SOCK_POLLIN, extra_fds);
+        raw_info = getSocketPollInfoHash(xsink, 0, extra_fds);
     } else {
         raw_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
     }
@@ -15626,11 +15627,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
                         return nullptr;
                     }
                     if (rc) {
-                        // Need more I/O for sending the current chunk
-                        if (is_pollable && stream_fd >= 0) {
-                            std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
-                            return getSocketPollInfoHash(xsink, rc, extra_fds);
-                        }
+                        // Need more socket I/O for sending the current chunk.
                         return getSocketPollInfoHash(xsink, rc);
                     }
                     // Chunk sent successfully
@@ -15681,7 +15678,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
                     if (poll_rv == 0) {
                         // Stream not ready — register fd with event loop
                         std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
-                        return getSocketPollInfoHash(xsink, SOCK_POLLIN, extra_fds);
+                        return getSocketPollInfoHash(xsink, 0, extra_fds);
                     }
 
                     // Stream FD is readable — do non-blocking read
@@ -16755,7 +16752,7 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
                         // Stream not ready: register fd with event loop and
                         // retry reading on next continuePoll() call.
                         std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
-                        return getSocketPollInfoHash(xsink, SOCK_POLLIN, extra_fds);
+                        return getSocketPollInfoHash(xsink, 0, extra_fds);
                     }
 
                     // Stream FD is readable — do non-blocking read

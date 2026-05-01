@@ -959,7 +959,7 @@ private:
 
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
     DLLLOCAL int initLocked(ExceptionSink* xsink);
-    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events);
+    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool stream_wait = false);
     DLLLOCAL int64 getNextChunkSize() const;
     DLLLOCAL void complete(ExceptionSink* xsink);
     DLLLOCAL bool checkTimeout(ExceptionSink* xsink);
@@ -1053,7 +1053,7 @@ private:
 
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
     DLLLOCAL int initLocked(ExceptionSink* xsink);
-    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events);
+    DLLLOCAL QoreHashNode* getPollInfo(ExceptionSink* xsink, int events, bool stream_wait = false);
     DLLLOCAL void complete(ExceptionSink* xsink);
     DLLLOCAL bool checkTimeout(ExceptionSink* xsink);
     DLLLOCAL void clearTimeout();
