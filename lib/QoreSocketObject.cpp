@@ -2641,30 +2641,90 @@ static QoreValue qore_socket_object_exec_quic_query(QoreSocketObject* s,
     return query_poller->getOutput();
 }
 
+class QoreSocketObjectAsyncIoGuard {
+public:
+    QoreSocketObjectAsyncIoGuard(my_socket_priv& priv, ExceptionSink* xsink, unsigned direction)
+            : priv(priv), direction(direction) {
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sync", xsink);
+        if (qore_on_async_io_thread() || (xsink && *xsink)) {
+            return;
+        }
+        AutoLocker al(priv.m);
+        active = !priv.startAsyncSequenceIo(xsink, direction);
+    }
+
+    ~QoreSocketObjectAsyncIoGuard() {
+        if (active) {
+            AutoLocker al(priv.m);
+            priv.clearAsyncSequenceIo(direction);
+        }
+    }
+
+    explicit operator bool() const {
+        return active;
+    }
+
+private:
+    my_socket_priv& priv;
+    unsigned direction;
+    bool active = false;
+};
+
 static int qore_socket_object_exec_connect(QoreSocketObject* s, const char* target, int timeout_ms, bool ssl,
         ExceptionSink* xsink) {
     s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, ssl, target, s, true),
+        xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
     const char* goal = ssl ? "connect-ssl" : "connect";
-    return qore_socket_object_exec_poll_no_output(s, new SocketConnectPollOperation(xsink, ssl, target, s, true),
-        timeout_ms, goal, goal, xsink);
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink);
 }
 
 static int qore_socket_object_exec_connect_inet(QoreSocketObject* s, const char* host, const char* service,
         int family, int socktype, int protocol, int timeout_ms, bool ssl, ExceptionSink* xsink) {
     s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketConnectPollOperation(xsink, ssl, host, service, family, socktype, protocol, s, true), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
     const char* goal = ssl ? "connect-ssl" : "connect";
-    return qore_socket_object_exec_poll_no_output(s,
-        new SocketConnectPollOperation(xsink, ssl, host, service, family, socktype, protocol, s, true),
-        timeout_ms, goal, goal, xsink);
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink);
 }
 
 static int qore_socket_object_exec_connect_unix(QoreSocketObject* s, const char* path, int socktype, int protocol,
         int timeout_ms, bool ssl, ExceptionSink* xsink) {
     s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketConnectPollOperation(xsink, ssl, path, socktype, protocol, s, true), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
     const char* goal = ssl ? "connect-ssl" : "connect";
-    return qore_socket_object_exec_poll_no_output(s,
-        new SocketConnectPollOperation(xsink, ssl, path, socktype, protocol, s, true), timeout_ms, goal, goal,
-        xsink);
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink);
 }
 
 static int qore_socket_object_exec_upgrade_ssl(QoreSocketObject* s, int timeout_ms, bool server,
@@ -2828,35 +2888,6 @@ void my_socket_priv::setAccept(QoreSocketObject& sock, QoreObject* o) {
         xsink.clear();
     }
 }
-
-class QoreSocketObjectAsyncIoGuard {
-public:
-    QoreSocketObjectAsyncIoGuard(my_socket_priv& priv, ExceptionSink* xsink, unsigned direction)
-            : priv(priv), direction(direction) {
-        SocketSyncPoll::assertNotOnIoThread("Socket", "sync", xsink);
-        if (qore_on_async_io_thread() || (xsink && *xsink)) {
-            return;
-        }
-        AutoLocker al(priv.m);
-        active = !priv.startAsyncSequenceIo(xsink, direction);
-    }
-
-    ~QoreSocketObjectAsyncIoGuard() {
-        if (active) {
-            AutoLocker al(priv.m);
-            priv.clearAsyncSequenceIo(direction);
-        }
-    }
-
-    explicit operator bool() const {
-        return active;
-    }
-
-private:
-    my_socket_priv& priv;
-    unsigned direction;
-    bool active = false;
-};
 
 static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int timeout_ms, bool ssl,
         ExceptionSink* xsink, SocketSource* source = nullptr) {
