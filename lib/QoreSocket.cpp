@@ -8767,6 +8767,7 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
 
     std::vector<PollEntry> entries;
     PollObjectCleanup cleanup{{}};
+    int64 poll_timeout_hint_ms = -1;
 
     ConstListIterator li(poll_list);
     unsigned cancel_check = 0;
@@ -8781,6 +8782,13 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         assert(h);
         bool found;
         int64 events = h->getKeyAsBigInt("events", found);
+        QoreValue poll_timeout_value = h->getKeyValue("poll_timeout_ms");
+        if (!poll_timeout_value.isNullOrNothing()) {
+            int64 poll_timeout_ms = poll_timeout_value.getAsBigInt();
+            if (poll_timeout_hint_ms < 0 || poll_timeout_ms < poll_timeout_hint_ms) {
+                poll_timeout_hint_ms = poll_timeout_ms;
+            }
+        }
 
         // get the socket
         QoreObject* obj;
@@ -9118,7 +9126,15 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
     };
 
     if (submitted) {
-        int queue_timeout = timeout_ms < 0 ? 0 : (timeout_ms == 0 ? -1 : timeout_ms);
+        int64 effective_timeout_ms = timeout_ms;
+        if (poll_timeout_hint_ms >= 0
+                && (effective_timeout_ms < 0 || poll_timeout_hint_ms < effective_timeout_ms)) {
+            effective_timeout_ms = poll_timeout_hint_ms;
+        }
+        int queue_timeout = effective_timeout_ms < 0
+            ? 0
+            : (effective_timeout_ms == 0 ? -1 : static_cast<int>(std::min<int64>(effective_timeout_ms,
+                std::numeric_limits<int>::max())));
         int rc = shift_one(queue_timeout);
         if (rc < 0) {
             cancel_owner();

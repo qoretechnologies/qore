@@ -173,6 +173,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("isDataAvailable close test", \isDataAvailableCloseTest());
         addTestCase("poll test", \pollTest());
         addTestCase("poll extra fd test", \pollExtraFdTest());
+        addTestCase("poll timeout hint test", \pollTimeoutHintTest());
         addTestCase("tls13 test", \tls13Test());
         addTestCase("connection ID", \connectionIdTest());
         addTestCase("Client/Server Socket tests", \clientServerSocketTest());
@@ -1912,6 +1913,25 @@ class SocketTest inherits QUnit::Test {
         assertEq(SOCK_POLLIN, ready[0].events);
         assertEq(s, ready[0].socket);
         assertEq(binary("x"), read.readShortBinary(1, 1000));
+    }
+
+    pollTimeoutHintTest() {
+        Socket s();
+        s.bindINET("127.0.0.1", 0);
+        s.listen();
+
+        date start = now_us();
+        list<hash<SocketPollInfo>> ready = Socket::poll((
+            <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": s,
+                "poll_timeout_ms": 25,
+            },
+        ), 5s);
+        date elapsed = now_us() - start;
+
+        assertEq(0, ready.size());
+        assertTrue(elapsed < 1s, "poll_timeout_ms should wake before caller timeout");
     }
 
     streamSocketTransferTest() {
