@@ -416,6 +416,25 @@ public:
         return 0;
     }
 
+    //! Increments accept refcount for an async-controller operation authorized by @a tid
+    DLLLOCAL int setNonBlockAcceptFromAsyncController(ExceptionSink* xsink, int tid) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (checkAsyncSequenceAllowedForTid(xsink, NB_ALL, tid)) {
+            return -1;
+        }
+        if (non_block_flags) {
+            xsink->raiseException("SOCKET-NON-BLOCK-ERROR", "a non-blocking operation is currently in progress");
+            return -1;
+        }
+        if (checkValid(xsink)) {
+            return -1;
+        }
+        ++non_block_accept_count;
+        return 0;
+    }
+
     //! Decrements accept refcount
     DLLLOCAL void clearNonBlockAccept() {
         // must be called with the lock held

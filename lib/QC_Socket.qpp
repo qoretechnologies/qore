@@ -861,6 +861,12 @@ static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int t
         return QoreValue();
     }
 
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return QoreValue();
+    }
+
     ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
     poller->setSelf(*op_obj);
     poller.release();

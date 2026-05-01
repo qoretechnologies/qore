@@ -11131,6 +11131,8 @@ SocketAcceptPollOperation::SocketAcceptPollOperation(ExceptionSink* xsink, QoreS
 
 void SocketAcceptPollOperation::init(ExceptionSink* xsink, bool defer_init) {
     if (defer_init) {
+        controller_deferred_init = true;
+        controller_deferred_tid = q_gettid();
         return;
     }
 
@@ -11151,7 +11153,10 @@ void SocketAcceptPollOperation::initLocked(ExceptionSink* xsink) {
     if (preVerify(xsink)) {
         return;
     }
-    if (!sock->priv->setNonBlockAccept(xsink)) {
+    int rc = controller_deferred_init
+        ? sock->priv->setNonBlockAcceptFromAsyncController(xsink, controller_deferred_tid)
+        : sock->priv->setNonBlockAccept(xsink);
+    if (!rc) {
         set_non_block_accept = true;
         poll_state.reset(new SocketAcceptPollState(xsink, sock->priv->socket->priv, source));
         if (!*xsink) {

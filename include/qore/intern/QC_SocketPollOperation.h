@@ -448,6 +448,8 @@ private:
 
     int sgoal = 0;
     bool initialized = false;
+    bool controller_deferred_init = false;
+    int controller_deferred_tid = -1;
 
     DLLLOCAL virtual const char* getStateImpl() const override {
         switch (state) {
