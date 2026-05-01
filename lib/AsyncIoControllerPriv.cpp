@@ -5637,17 +5637,16 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
 
 void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink) {
     // Call abort on the poll operation.
-    // Trusted code (QDOM_PROCESS) runs directly; sandboxed code is dispatched
+    // Dispatch Qore abort() and C++ wrappers that can call Qore/blocking code
     // to the worker pool to avoid blocking the I/O thread.
-    if (pinfo.has_qore_abort && on_async_io_thread) {
-        // Always dispatch Qore abort() to worker pool — it may acquire
-        // application-level locks that would block the I/O thread
+    bool worker_abort = pinfo.has_qore_abort || (pinfo.spop_base && pinfo.spop_base->needsWorkerDispatch());
+    if (worker_abort && on_async_io_thread) {
         ensureCallDispatcher();
         pinfo.spop_obj->ref();
         call_dispatcher.load(std::memory_order_acquire)->dispatchAbortAsync(pinfo.spop_obj,
             pinfo.owner);
     } else {
-        // C++ built-in or not on I/O thread — safe to call directly
+        // C++ built-in or not on I/O thread - safe to call directly
         callAbort(pinfo.spop_obj, xsink);
     }
 

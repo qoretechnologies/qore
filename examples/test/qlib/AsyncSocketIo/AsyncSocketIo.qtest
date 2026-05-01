@@ -19,6 +19,57 @@
 
 %exec-class AsyncSocketIoTest
 
+class BlockingAbortPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        EventNotifier notifier;
+        Counter abort_started;
+        Counter release_abort;
+        bool started = False;
+        bool canceled = False;
+    }
+
+    constructor(EventNotifier notifier, Counter abort_started, Counter release_abort) {
+        self.notifier = notifier;
+        self.abort_started = abort_started;
+        self.release_abort = release_abort;
+    }
+
+    string getGoal() {
+        return "blocking-abort";
+    }
+
+    string getState() {
+        return canceled ? "canceled" : (started ? "waiting" : "pending");
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (canceled) {
+            return NOTHING;
+        }
+        if (!started) {
+            started = True;
+            return <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": notifier,
+            };
+        }
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+
+    abort() {
+        canceled = True;
+        abort_started.dec();
+        release_abort.waitForZero();
+    }
+}
+
 public class AsyncSocketIoTest inherits QUnit::Test {
     public {
         const VALUE_TEXT = {
@@ -54,6 +105,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("main", \mainTest());
         addTestCase("owner required", \ownerRequiredTest());
         addTestCase("cancel by owner", \cancelByOwnerTest());
+        addTestCase("delegated abort worker dispatch", \delegatedAbortWorkerDispatchTest());
         addTestCase("wait ready", \waitReadyTest());
         addTestCase("wait for processing", \waitForProcessingTest());
         addTestCase("cancelEx", \cancelExTest());
@@ -246,6 +298,56 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         # Test canceling non-existent owner returns 0
         canceled = io_controller.cancelByOwner("non-existent-owner");
         assertEq(0, canceled, "canceling non-existent owner should return 0");
+    }
+
+    delegatedAbortWorkerDispatchTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        EventNotifier notifier();
+        Counter abort_started(1);
+        Counter release_abort(1);
+        Counter cancel_done(1);
+        Queue cancel_result();
+        string owner = "delegated-abort-worker-owner";
+
+        on_exit {
+            if (release_abort.getCount()) {
+                release_abort.dec();
+            }
+            cancel_done.waitForZero(5s);
+        }
+
+        BlockingAbortPollOperation inner(notifier, abort_started, release_abort);
+        DelegatingPollOperation wrapped(inner);
+        io_controller.submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": wrapped,
+            "owner": owner,
+            "to": 30s,
+        });
+
+        assertTrue(io_controller.waitForProcessing(2s), "operation should be registered before cancel");
+
+        background sub () {
+            on_exit cancel_done.dec();
+            try {
+                cancel_result.push({"canceled": io_controller.cancelByOwner(owner)});
+            } catch (hash<ExceptionInfo> ex) {
+                cancel_result.push({"ex": ex});
+            }
+        }();
+
+        assertEq(0, abort_started.waitForZero(5s), "delegated abort should start on a worker thread");
+        assertEq(0, cancel_done.waitForZero(1s), "cancelByOwner should not wait for delegated Qore abort");
+
+        hash<auto> cancel_info = cancel_result.get(1s);
+        assertFalse(exists cancel_info.ex, "cancelByOwner should not throw: " + (cancel_info.ex.err ?? ""));
+        assertEq(1, cancel_info.canceled, "cancelByOwner should cancel the delegated operation");
+
+        if (release_abort.getCount()) {
+            release_abort.dec();
+        }
     }
 
     waitReadyTest() {
