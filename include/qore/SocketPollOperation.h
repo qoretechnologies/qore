@@ -38,6 +38,7 @@
 #include <qore/AbstractPollState.h>
 #include <qore/ReferenceHolder.h>
 #include <qore/AbstractQoreNode.h>
+#include <qore/QoreString.h>
 
 #include <memory>
 #include <string>
@@ -58,6 +59,7 @@
     - SocketRecvUntilBytesPollOperation — recv until a byte pattern
     - SocketUpgradeClientSslPollOperation — client-side TLS handshake
     - SocketReadHttpHeaderPollOperation — read HTTP response/request headers
+    - SocketReadServerSentEventPollOperation — read one Server-Sent Event message
     - SocketReadHttpBodyPollOperation — read HTTP response body (Content-Length / chunked / close)
 
     @par NOT exported (stay internal)
@@ -548,6 +550,48 @@ public:
 
 private:
     mutable ReferenceHolder<QoreHashNode> out;
+
+    DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
+    DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
+    DLLEXPORT virtual bool abortNeedsClose() const override;
+};
+
+//! Non-blocking Server-Sent Event reader
+/** Reads a single unencoded Server-Sent Event message from a connected socket.
+
+    @since %Qore 2.3
+*/
+class SocketReadServerSentEventPollOperation : public SocketRecvPollOperationBase {
+public:
+    //! Creates the SSE read operation
+    /** @param xsink exception sink
+        @param sock the socket (will be ref'd)
+    */
+    DLLEXPORT SocketReadServerSentEventPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
+    //! Creates the SSE read operation with optional deferred controller initialization
+    /** @param xsink exception sink
+        @param sock the socket (will be ref'd)
+        @param defer_init if true, socket non-blocking setup is deferred until the async controller runs the operation
+    */
+    DLLEXPORT SocketReadServerSentEventPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+            bool defer_init);
+
+    DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    //! Returns the parsed SseMessageInfo hash
+    DLLEXPORT virtual QoreValue getOutput() const override;
+
+    //! Aborts: clears output buffer then delegates to base abort
+    DLLEXPORT virtual void abort(ExceptionSink* xsink) override;
+
+protected:
+    DLLEXPORT virtual const char* getStateImpl() const override;
+
+private:
+    QoreString event_data;
+    mutable ReferenceHolder<QoreHashNode> out;
+    int eol_count = 0;
+    bool bytes_consumed = false;
 
     DLLEXPORT void init(ExceptionSink* xsink, bool defer_init);
     DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;

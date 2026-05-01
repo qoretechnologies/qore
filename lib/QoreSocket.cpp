@@ -13526,7 +13526,8 @@ void SocketRecvDataPollOperation::init(ExceptionSink* xsink, bool defer_init) {
         return;
     }
 
-    AutoLocker al(sock->priv->m);
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    AutoLocker al(priv->m);
     initPollState(xsink);
 }
 
@@ -13774,6 +13775,139 @@ bool SocketReadHttpHeaderPollOperation::abortNeedsClose() const {
     if (poll_state) {
         assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
         return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+    }
+    return true;
+}
+
+SocketReadServerSentEventPollOperation::SocketReadServerSentEventPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock) : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8), out(xsink) {
+    init(xsink, false);
+}
+
+SocketReadServerSentEventPollOperation::SocketReadServerSentEventPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock, bool defer_init) : SocketRecvPollOperationBase(sock, false), event_data(QCS_UTF8),
+        out(xsink) {
+    init(xsink, defer_init);
+}
+
+void SocketReadServerSentEventPollOperation::init(ExceptionSink* xsink, bool defer_init) {
+    controller_deferred_init = defer_init;
+    controller_deferred_tid = defer_init ? q_gettid() : -1;
+    if (defer_init) {
+        return;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    AutoLocker al(priv->m);
+    initPollState(xsink);
+}
+
+int SocketReadServerSentEventPollOperation::initPollState(ExceptionSink* xsink) {
+    assert(my_socket_priv::getPriv(*sock)->m.trylock());
+    if (initialized) {
+        return 0;
+    }
+    if (initIntern(xsink)) {
+        return -1;
+    }
+
+    initialized = true;
+    return 0;
+}
+
+QoreHashNode* SocketReadServerSentEventPollOperation::continuePoll(ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    AutoLocker al(priv->m);
+
+    if (received) {
+        return nullptr;
+    }
+
+    if (!initialized) {
+        if (initPollState(xsink)) {
+            return nullptr;
+        }
+    } else if (priv->checkOpen(xsink)) {
+        return nullptr;
+    }
+
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    while (true) {
+        if (!poll_state) {
+            poll_state.reset(priv->socket->startRecv(xsink, 1));
+            if (*xsink || !poll_state) {
+                if (set_non_block) {
+                    priv->clearNonBlock(NB_RECV);
+                    set_non_block = false;
+                }
+                return nullptr;
+            }
+        }
+
+        int rc = poll_state->continuePoll(xsink);
+        if (*xsink) {
+            poll_state.reset();
+            if (set_non_block) {
+                priv->clearNonBlock(NB_RECV);
+                set_non_block = false;
+            }
+            return nullptr;
+        }
+        if (rc) {
+            return getSocketPollInfoHash(xsink, rc);
+        }
+
+        SimpleRefHolder<BinaryNode> data(poll_state->takeOutput().get<BinaryNode>());
+        poll_state.reset();
+        if (!data || !data->size()) {
+            if (set_non_block) {
+                priv->clearNonBlock(NB_RECV);
+                set_non_block = false;
+            }
+            se_closed("Socket", "readServerSentEvent", xsink);
+            return nullptr;
+        }
+
+        bytes_consumed = true;
+        char c = *static_cast<const char*>(data->getPtr());
+        if (qore_socket_exec_process_sse_char(sp, event_data, eol_count, c)) {
+            if (set_non_block) {
+                priv->clearNonBlock(NB_RECV);
+                set_non_block = false;
+            }
+            ReferenceHolder<QoreHashNode> parsed(QoreSocket::parseServerSentEvent(xsink, event_data), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            out = parsed.release();
+            received = true;
+            return nullptr;
+        }
+    }
+}
+
+QoreValue SocketReadServerSentEventPollOperation::getOutput() const {
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    AutoLocker al(priv->m);
+    return out.release();
+}
+
+void SocketReadServerSentEventPollOperation::abort(ExceptionSink* xsink) {
+    out = nullptr;
+    SocketRecvPollOperationBase::abort(xsink);
+}
+
+const char* SocketReadServerSentEventPollOperation::getStateImpl() const {
+    return received ? "received" : "reading-sse";
+}
+
+bool SocketReadServerSentEventPollOperation::abortNeedsClose() const {
+    if (bytes_consumed) {
+        return true;
+    }
+    if (poll_state) {
+        assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() ? true : false;
     }
     return true;
 }
