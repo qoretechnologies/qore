@@ -150,7 +150,7 @@ public:
         }
         const char* mod_name = get_module_context_name();
         if (mod_name) {
-            from_module = mod_name;
+            from_modules.emplace_back(mod_name);
         }
         assert(name.rfind("::") == std::string::npos);
         assert(path.rfind("::::", 0) == std::string::npos);
@@ -162,7 +162,8 @@ public:
             path(old.path),
             ns(new QoreNamespace(this)),
             constant(this), pub(old.pub),
-            builtin(old.builtin), from_module(old.from_module) {
+            builtin(old.builtin),
+            from_modules(old.from_modules) {
         assert(name.rfind("::") == std::string::npos);
         assert(path.rfind("::", 0) == 0);
         assert(path.rfind("::::", 0) == std::string::npos);
@@ -188,8 +189,8 @@ public:
             builtin(old.builtin),
             imported(old.imported),
             class_handler(old.class_handler) {
-        if (!old.from_module.empty()) {
-            from_module = old.from_module;
+        if (!old.from_modules.empty()) {
+            from_modules = old.from_modules;
         }
         // copy public typedefs if not disabled by parse options
         if (!(po & PO_NO_TYPEDEF)) {
@@ -223,7 +224,21 @@ public:
     }
 
     DLLLOCAL const char* getModuleName() const {
-        return from_module.empty() ? nullptr : from_module.c_str();
+        if (from_modules.empty()) {
+            return nullptr;
+        }
+        // Prefer the contributor whose module name matches the namespace name —
+        // that contributor is the namespace's canonical declarer; other contributors
+        // are extenders that added classes/symbols into a namespace they did not
+        // originally declare.  This preserves the public API contract that
+        // getModuleName() reports the "owning" module of a namespace, not just
+        // whichever module happened to touch it first.
+        for (const auto& m : from_modules) {
+            if (m == name) {
+                return m.c_str();
+            }
+        }
+        return from_modules.front().c_str();
     }
 
     //! Sets a key value in the namespace's key-value store
@@ -687,8 +702,18 @@ private:
     DLLLOCAL qore_ns_private& operator=(const qore_ns_private&) = delete;
 
 protected:
-    // the module that defined this class, if any
-    std::string from_module;
+    // modules that contributed to this namespace, in insertion order (deduplicated)
+    /** A namespace can host content from multiple modules — for example, two modules each
+        declaring `public namespace HttpServer { ... }` and exporting different classes.
+        Tracking all contributors prevents lookups by module name from failing because the
+        single-string `from_module` slot was overwritten by a later contributor with a
+        different name from the original.
+
+        Lookups should use isFromModule(name); getModuleName() returns the first
+        contributor for backward compatibility (used in error messages, serialization,
+        and the public DLLEXPORT QoreNamespace::getModuleName() API).
+    */
+    std::vector<std::string> from_modules;
 
     // called from the root namespace constructor only
     DLLLOCAL qore_ns_private(QoreNamespace* n_ns) : ns(n_ns), constant(this), root(true), pub(true), builtin(true),
@@ -696,12 +721,52 @@ protected:
     }
 
     DLLLOCAL void setModuleName() {
-        assert(from_module.empty());
+        assert(from_modules.empty());
         const char* mod_name = get_module_context_name();
         if (mod_name) {
-            from_module = mod_name;
+            from_modules.emplace_back(mod_name);
         }
-        //printd(5, "qore_ns_private::setModuleName() this: %p mod: %s\n", this, mod_name ? mod_name : "n/a");
+    }
+
+public:
+    //! Adds a module to this namespace's contributor set if not already present
+    DLLLOCAL void addModuleName(const std::string& mod) {
+        for (const auto& m : from_modules) {
+            if (m == mod) {
+                return;
+            }
+        }
+        from_modules.push_back(mod);
+    }
+
+    DLLLOCAL void addModuleName(const char* mod) {
+        if (!mod || !*mod) {
+            return;
+        }
+        for (const auto& m : from_modules) {
+            if (m == mod) {
+                return;
+            }
+        }
+        from_modules.emplace_back(mod);
+    }
+
+    //! Returns true iff this namespace has the given module as one of its contributors
+    DLLLOCAL bool isFromModule(const char* mod) const {
+        if (!mod) {
+            return false;
+        }
+        for (const auto& m : from_modules) {
+            if (m == mod) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! Returns the full list of contributing modules (in insertion order)
+    DLLLOCAL const std::vector<std::string>& getModuleNames() const {
+        return from_modules;
     }
 };
 
