@@ -1032,11 +1032,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
         }
         foreach HttpClientConnection conn in (to_close) {
-            # Cancel from the I/O controller BEFORE closing to release the
-            # controller's strong references to the socket and poll operation.
-            # Without this, the PollInfo entry keeps the objects alive and the
-            # socket fd leaks until the controller is destroyed.
-            try { controller.cancel(conn.getSocket()); } catch () {}
             try {
                 conn.close();
             } catch () {
@@ -1330,9 +1325,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
                 if (!h2c_ok) {
                     log(LoggerLevel::DEBUG, "h2c probe failed for %s, falling back to HTTP/1.1", key);
-                    # Cancel the probe connection from the controller BEFORE closing
-                    # the socket to prevent the I/O thread from reading a closed fd
-                    try { controller.cancel(conn.getSocket()); } catch () {}
                     try { conn.close(); } catch () {}
                     {
                         AutoWriteLock al(pool_lock);
@@ -1541,7 +1533,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (!h3_pending || !h2_pending) {
             if (h3conn.isReady()) {
                 log(LoggerLevel::DEBUG, "happy eyeballs: H3 already ready for %s", key);
-                try { controller.cancel(h2conn.getSocket()); } catch () {}
                 try { h2conn.close(); } catch () {}
                 {
                     AutoWriteLock al(pool_lock);
@@ -1551,7 +1542,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
             if (h2conn.isReady()) {
                 log(LoggerLevel::DEBUG, "happy eyeballs: H2 already ready for %s", key);
-                try { controller.cancel(h3conn.getSocket()); } catch () {}
                 try { h3conn.close(); } catch () {}
                 {
                     AutoWriteLock al(pool_lock);
@@ -1572,7 +1562,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     log(LoggerLevel::DEBUG,
                         "happy eyeballs: H2 failed fast with SOCKET-CONNECT-ERROR for %s,"
                         " aborting H3", key);
-                    try { controller.cancel(h3conn.getSocket()); } catch () {}
                     try { h3conn.close(); } catch () {}
                     try { h2conn.close(); } catch () {}
                     string desc_fast = sprintf("could not connect to %s: %s", key,
@@ -1604,7 +1593,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Determine winner
         if (h3conn.isReady()) {
             log(LoggerLevel::DEBUG, "happy eyeballs: H3 won for %s", key);
-            try { controller.cancel(h2conn.getSocket()); } catch () {}
             try { h2conn.close(); } catch () {}
             {
                 AutoWriteLock al(pool_lock);
@@ -1614,7 +1602,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
         if (h2conn.isReady()) {
             log(LoggerLevel::DEBUG, "happy eyeballs: H2 won for %s", key);
-            try { controller.cancel(h3conn.getSocket()); } catch () {}
             try { h3conn.close(); } catch () {}
             {
                 AutoWriteLock al(pool_lock);
@@ -1626,9 +1613,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Neither connected — collect error details and clean up both
         *hash<auto> h3_err = h3conn.getPollOperation().getError();
         *hash<auto> h2_err = h2conn.getPollOperation().getError();
-        try { controller.cancel(h3conn.getSocket()); } catch () {}
         try { h3conn.close(); } catch () {}
-        try { controller.cancel(h2conn.getSocket()); } catch () {}
         try { h2conn.close(); } catch () {}
 
         # Build a user-friendly error message with the underlying failure reasons
@@ -2254,7 +2239,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         foreach HttpClientConnection conn in (to_close) {
             log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
-            try { controller.cancel(conn.getSocket()); } catch () {}
             try { conn.close(); } catch () {}
         }
     }

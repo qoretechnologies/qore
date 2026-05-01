@@ -122,9 +122,9 @@ public class Http2ClientConnection inherits HttpClientConnection {
         }
         if (ctl) {
             try {
-                ctl.cancel(self.getSocket());
+                ctl.cancelAndClose(self.getSocket());
             } catch () {
-                # Ignore cancel errors during close
+                # Ignore close errors during close
             }
         } else {
             try {

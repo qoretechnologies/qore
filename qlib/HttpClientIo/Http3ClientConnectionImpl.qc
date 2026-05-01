@@ -198,14 +198,11 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
         if (ctl) {
             try {
-                ctl.cancel(self.getSocket());
+                ctl.cancelAndClose(self.getSocket());
             } catch () {
-                # Ignore cancel errors during close
+                # Ignore close errors during close
             }
         }
-        # Close the socket fd immediately to prevent descriptor leaks.
-        # Cancellation runs poll_op.abort() on the I/O thread; close() here
-        # only releases the descriptor after the controller no longer polls it.
         try {
             self.getSocket().close();
         } catch () {
