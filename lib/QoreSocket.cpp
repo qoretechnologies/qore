@@ -928,6 +928,7 @@ private:
         GetSendTimeout,
         GetRecvTimeout,
         GetPort,
+        SetMaxChunkedBodySize,
         SetHttp2MaxRequestBodySize,
     };
 
@@ -942,6 +943,7 @@ public:
         GetSendTimeout,
         GetRecvTimeout,
         GetPort,
+        SetMaxChunkedBodySize,
         SetHttp2MaxRequestBodySize,
     };
 
@@ -1072,6 +1074,12 @@ public:
             case Action::GetPort:
                 rc = qore_socket_get_port_direct(sock);
                 break;
+            case Action::SetMaxChunkedBodySize: {
+                qore_socket_private* priv = qore_socket_private::get(*sock);
+                priv->max_chunked_body_size = value;
+                rc = 0;
+                break;
+            }
             case Action::SetHttp2MaxRequestBodySize: {
                 qore_socket_private* priv = qore_socket_private::get(*sock);
                 priv->max_http2_body_size = value;
@@ -1135,6 +1143,8 @@ private:
                 return Action::GetRecvTimeout;
             case ConfigAction::GetPort:
                 return Action::GetPort;
+            case ConfigAction::SetMaxChunkedBodySize:
+                return Action::SetMaxChunkedBodySize;
             case ConfigAction::SetHttp2MaxRequestBodySize:
                 return Action::SetHttp2MaxRequestBodySize;
         }
@@ -1152,6 +1162,7 @@ private:
             || action == Action::GetSendTimeout
             || action == Action::GetRecvTimeout
             || action == Action::GetPort
+            || action == Action::SetMaxChunkedBodySize
             || action == Action::SetHttp2MaxRequestBodySize;
     }
 
@@ -11305,7 +11316,10 @@ int QoreSocket::getRecvTimeout() const {
 }
 
 void QoreSocket::setMaxChunkedBodySize(int64 size) {
-    priv->max_chunked_body_size = size;
+    qore_socket_exec_setup_no_exception(this,
+        new QoreSocketControllerSetupPollOperation(this,
+            QoreSocketControllerSetupPollOperation::ConfigAction::SetMaxChunkedBodySize, size),
+        "setMaxChunkedBodySize");
 }
 
 int64 QoreSocket::getMaxChunkedBodySize() const {
@@ -12593,6 +12607,8 @@ SocketSetupPollOperation::Action SocketSetupPollOperation::getAction(ConfigActio
             return Action::GetRecvTimeout;
         case ConfigAction::GetPort:
             return Action::GetPort;
+        case ConfigAction::SetMaxChunkedBodySize:
+            return Action::SetMaxChunkedBodySize;
         case ConfigAction::SetHttp2MaxRequestBodySize:
             return Action::SetHttp2MaxRequestBodySize;
     }
@@ -12610,6 +12626,7 @@ bool SocketSetupPollOperation::isConfigAction() const {
         || action == Action::GetSendTimeout
         || action == Action::GetRecvTimeout
         || action == Action::GetPort
+        || action == Action::SetMaxChunkedBodySize
         || action == Action::SetHttp2MaxRequestBodySize;
 }
 
@@ -12699,6 +12716,12 @@ QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
         case Action::GetPort:
             rc = qore_socket_get_port_direct(sock->priv->socket);
             break;
+        case Action::SetMaxChunkedBodySize: {
+            qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+            sp->max_chunked_body_size = value;
+            rc = 0;
+            break;
+        }
         case Action::SetHttp2MaxRequestBodySize: {
             qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
             sp->max_http2_body_size = value;

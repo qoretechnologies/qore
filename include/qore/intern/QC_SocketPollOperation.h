@@ -183,6 +183,7 @@ private:
         GetSendTimeout,
         GetRecvTimeout,
         GetPort,
+        SetMaxChunkedBodySize,
         SetHttp2MaxRequestBodySize,
     };
 
@@ -197,6 +198,7 @@ public:
         GetSendTimeout,
         GetRecvTimeout,
         GetPort,
+        SetMaxChunkedBodySize,
         SetHttp2MaxRequestBodySize,
     };
 

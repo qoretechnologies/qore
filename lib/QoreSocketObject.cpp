@@ -5954,8 +5954,13 @@ int64 QoreSocketObject::getConnectionId() const {
 }
 
 void QoreSocketObject::setMaxChunkedBodySize(int64 size) {
-    AutoLocker al(priv->m);
-    priv->socket->setMaxChunkedBodySize(size);
+    ExceptionSink xsink;
+    qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
+        SocketSetupPollOperation::ConfigAction::SetMaxChunkedBodySize, size), "setMaxChunkedBodySize",
+        "done", &xsink);
+    if (xsink) {
+        xsink.clear();
+    }
 }
 
 int64 QoreSocketObject::getMaxChunkedBodySize() const {
