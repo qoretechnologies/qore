@@ -137,7 +137,7 @@ private:
 #endif
 
     DLLLOCAL virtual bool hasPendingData() const override {
-        if (sock->buflen > sock->bufoffset) {
+        if (sock->buflen) {
             return true;
         }
         return sock->ssl && sock->ssl->pending() > 0;
