@@ -1330,11 +1330,7 @@ struct qore_httpclient_priv {
             std::swap(active->event_queue, old->event_queue);
             std::swap(active->event_arg, old->event_arg);
             std::swap(active->event_data, old->event_data);
-            std::swap(active->warn_queue, old->warn_queue);
-            std::swap(active->warn_callback_arg, old->warn_callback_arg);
-            std::swap(active->tl_warning_us, old->tl_warning_us);
-            std::swap(active->tp_warning_bs, old->tp_warning_bs);
-            std::swap(active->tp_us_min, old->tp_us_min);
+            active->swapWarningQueueState(*old);
             std::swap(active->assume_http_encoding, old->assume_http_encoding);
             std::swap(active->utf8_content_type_set, old->utf8_content_type_set);
             active->enc = old->enc;

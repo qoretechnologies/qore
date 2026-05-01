@@ -9528,7 +9528,7 @@ void SSLSocketHelper::handleErrorIntern(ExceptionSink* xsink, int e, const char*
 }
 
 PrivateQoreSocketTimeoutHelper::PrivateQoreSocketTimeoutHelper(qore_socket_private* s, const char* o)
-        : PrivateQoreSocketTimeoutBase(s->tl_warning_us ? s : 0), op(o) {
+        : PrivateQoreSocketTimeoutBase(s && s->tl_warning_us.load(std::memory_order_relaxed) ? s : nullptr), op(o) {
 }
 
 PrivateQoreSocketTimeoutHelper::~PrivateQoreSocketTimeoutHelper() {
@@ -9536,8 +9536,9 @@ PrivateQoreSocketTimeoutHelper::~PrivateQoreSocketTimeoutHelper() {
         return;
 
     int64 dt = q_clock_getmicros() - start;
-    if (dt >= sock->tl_warning_us)
+    if (dt >= sock->tl_warning_us.load(std::memory_order_relaxed)) {
         sock->doTimeoutWarning(op, dt);
+    }
 }
 
 PrivateQoreSocketThroughputHelper::PrivateQoreSocketThroughputHelper(qore_socket_private* s, bool snd)
@@ -9565,12 +9566,13 @@ void PrivateQoreSocketThroughputHelper::finalize(int64 bytes) {
         sock->tp_us_recv.fetch_add(dt, std::memory_order_relaxed);
     }
 
-    if (!sock->tp_warning_bs) {
+    double warning_bs = sock->tp_warning_bs.load(std::memory_order_relaxed);
+    if (!warning_bs) {
         return;
     }
 
     // ignore if less than event time threshold
-    if (dt < sock->tp_us_min) {
+    if (dt < sock->tp_us_min.load(std::memory_order_relaxed)) {
         return;
     }
 
@@ -9579,7 +9581,7 @@ void PrivateQoreSocketThroughputHelper::finalize(int64 bytes) {
     //printd(5, "PrivateQoreSocketThroughputHelper::finalize() bytes: " QLLD " us: " QLLD " bs: %.6f threshold: "
     //    %.6f\n", bytes, dt, bs, sock->tp_warning_bs);
 
-    if (bs <= (double)sock->tp_warning_bs) {
+    if (bs <= warning_bs) {
         sock->doThroughputWarning(send, bytes, dt, bs);
     }
 }

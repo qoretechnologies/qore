@@ -845,6 +845,8 @@ struct qore_socket_private : public QoreReferenceCounter {
     std::vector<std::string> alpn_protocols;
     Queue* event_queue = nullptr,   //!< event queue
         * warn_queue = nullptr;     //!< warning queue
+    //! protects warning queue pointer and callback argument lifetime
+    mutable QoreThreadLock warning_queue_m;
 
     // issue #3633: HTTP encoding to assume
     std::string assume_http_encoding = "ISO-8859-1";
@@ -870,13 +872,13 @@ struct qore_socket_private : public QoreReferenceCounter {
     size_t buflen = 0,
         bufoffset = 0;
 
-    int64 tl_warning_us = 0;     // timeout threshold for network action warning in microseconds
-    double tp_warning_bs = 0;    // throughput warning threshold in B/s
+    std::atomic<int64> tl_warning_us{0};     // timeout threshold for network action warning in microseconds
+    std::atomic<double> tp_warning_bs{0.0};  // throughput warning threshold in B/s
     std::atomic<int64> tp_bytes_sent{0};  // throughput: bytes sent
     std::atomic<int64> tp_bytes_recv{0};  // throughput: bytes received
     std::atomic<int64> tp_us_sent{0};     // throughput: time sending
     std::atomic<int64> tp_us_recv{0};     // throughput: time receiving
-    int64 tp_us_min = 0;         // throughput: minimum time for transfer to be considered
+    std::atomic<int64> tp_us_min{0};         // throughput: minimum time for transfer to be considered
 
     //! callback argument for the warning queue
     QoreValue warn_callback_arg{};
@@ -1805,14 +1807,7 @@ struct qore_socket_private : public QoreReferenceCounter {
             event_queue->deref(xsink);
             event_queue = nullptr;
         }
-        if (warn_queue) {
-            warn_queue->deref(xsink);
-            warn_queue = nullptr;
-            if (warn_callback_arg) {
-                warn_callback_arg.discard(xsink);
-                warn_callback_arg.clear();
-            }
-        }
+        clearWarningQueue(xsink);
     }
 
     DLLLOCAL void setEventQueue(ExceptionSink* xsink, Queue* q, QoreValue arg, bool with_data) {
@@ -2890,16 +2885,23 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void clearWarningQueue(ExceptionSink* xsink) {
-        if (warn_queue) {
-            if (warn_callback_arg) {
-                warn_callback_arg.discard(xsink);
-                warn_callback_arg = QoreValue();
-            }
-            warn_queue->deref(xsink);
+        Queue* old_queue = nullptr;
+        QoreValue old_arg;
+        {
+            AutoLocker al(warning_queue_m);
+            old_queue = warn_queue;
+            old_arg = warn_callback_arg;
             warn_queue = nullptr;
-            tl_warning_us = 0;
-            tp_warning_bs = 0.0;
-            tp_us_min = 0;
+            warn_callback_arg = QoreValue();
+            tl_warning_us.store(0, std::memory_order_relaxed);
+            tp_warning_bs.store(0.0, std::memory_order_relaxed);
+            tp_us_min.store(0, std::memory_order_relaxed);
+        }
+        if (old_arg) {
+            old_arg.discard(xsink);
+        }
+        if (old_queue) {
+            old_queue->deref(xsink);
         }
     }
 
@@ -2919,24 +2921,67 @@ struct qore_socket_private : public QoreReferenceCounter {
         if (warning_bs < 0)
             warning_bs = 0;
 
-        if (warn_queue) {
-            warn_queue->deref(xsink);
-            warn_callback_arg.discard(xsink);
+        Queue* old_queue = nullptr;
+        QoreValue old_arg;
+        {
+            AutoLocker al(warning_queue_m);
+            old_queue = warn_queue;
+            old_arg = warn_callback_arg;
+            warn_queue = qholder.release();
+            warn_callback_arg = holder.release();
+            tl_warning_us.store((int64)warning_ms * 1000, std::memory_order_relaxed);
+            tp_warning_bs.store((double)warning_bs, std::memory_order_relaxed);
+            tp_us_min.store(min_ms * 1000, std::memory_order_relaxed);
+        }
+        if (old_queue) {
+            old_queue->deref(xsink);
+        }
+        old_arg.discard(xsink);
+    }
+
+    DLLLOCAL void swapWarningQueueState(qore_socket_private& s) {
+        if (&s == this) {
+            return;
         }
 
-        warn_queue = qholder.release();
-        warn_callback_arg = holder.release();
-        tl_warning_us = (int64)warning_ms * 1000;
-        tp_warning_bs = warning_bs;
-        tp_us_min = min_ms * 1000;
+        qore_socket_private* first;
+        qore_socket_private* second;
+        if (std::less<qore_socket_private*>()(this, &s)) {
+            first = this;
+            second = &s;
+        } else {
+            first = &s;
+            second = this;
+        }
+
+        AutoLocker al(first->warning_queue_m);
+        AutoLocker bl(second->warning_queue_m);
+
+        std::swap(warn_queue, s.warn_queue);
+        std::swap(warn_callback_arg, s.warn_callback_arg);
+
+        int64 tl = tl_warning_us.load(std::memory_order_relaxed);
+        tl_warning_us.store(s.tl_warning_us.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        s.tl_warning_us.store(tl, std::memory_order_relaxed);
+
+        double tp = tp_warning_bs.load(std::memory_order_relaxed);
+        tp_warning_bs.store(s.tp_warning_bs.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        s.tp_warning_bs.store(tp, std::memory_order_relaxed);
+
+        int64 min_us = tp_us_min.load(std::memory_order_relaxed);
+        tp_us_min.store(s.tp_us_min.load(std::memory_order_relaxed), std::memory_order_relaxed);
+        s.tp_us_min.store(min_us, std::memory_order_relaxed);
     }
 
     DLLLOCAL void getUsageInfo(QoreHashNode& h, qore_socket_private& s) const {
-        if (warn_queue) {
-            h.setKeyValue("arg", warn_callback_arg.refSelf(), 0);
-            h.setKeyValue("timeout", tl_warning_us, 0);
-            h.setKeyValue("min_throughput", (int64)tp_warning_bs, 0);
-            h.setKeyValue("min_throughput_us", (int64)tp_us_min, 0);
+        {
+            AutoLocker al(warning_queue_m);
+            if (warn_queue) {
+                h.setKeyValue("arg", warn_callback_arg.refSelf(), 0);
+                h.setKeyValue("timeout", tl_warning_us.load(std::memory_order_relaxed), 0);
+                h.setKeyValue("min_throughput", (int64)tp_warning_bs.load(std::memory_order_relaxed), 0);
+                h.setKeyValue("min_throughput_us", tp_us_min.load(std::memory_order_relaxed), 0);
+            }
         }
 
         h.setKeyValue("bytes_sent", tp_bytes_sent.load(std::memory_order_relaxed)
@@ -2950,11 +2995,14 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void getUsageInfo(QoreHashNode& h) const {
-        if (warn_queue) {
-            h.setKeyValue("arg", warn_callback_arg.refSelf(), 0);
-            h.setKeyValue("timeout", tl_warning_us, 0);
-            h.setKeyValue("min_throughput", (int64)tp_warning_bs, 0);
-            h.setKeyValue("min_throughput_us", (int64)tp_us_min, 0);
+        {
+            AutoLocker al(warning_queue_m);
+            if (warn_queue) {
+                h.setKeyValue("arg", warn_callback_arg.refSelf(), 0);
+                h.setKeyValue("timeout", tl_warning_us.load(std::memory_order_relaxed), 0);
+                h.setKeyValue("min_throughput", (int64)tp_warning_bs.load(std::memory_order_relaxed), 0);
+                h.setKeyValue("min_throughput_us", tp_us_min.load(std::memory_order_relaxed), 0);
+            }
         }
 
         h.setKeyValue("bytes_sent", tp_bytes_sent.load(std::memory_order_relaxed), 0);
@@ -2977,15 +3025,21 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void doTimeoutWarning(const char* op, int64 dt) {
-        assert(warn_queue);
-        assert(dt > tl_warning_us);
+        AutoLocker al(warning_queue_m);
+        if (!warn_queue) {
+            return;
+        }
+        int64 warning_us = tl_warning_us.load(std::memory_order_relaxed);
+        if (!warning_us || dt < warning_us) {
+            return;
+        }
 
         QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
         h->setKeyValue("type", new QoreStringNode("SOCKET-OPERATION-WARNING"), 0);
         h->setKeyValue("operation", new QoreStringNode(op), 0);
         h->setKeyValue("us", dt, 0);
-        h->setKeyValue("timeout", tl_warning_us, 0);
+        h->setKeyValue("timeout", warning_us, 0);
         if (warn_callback_arg)
             h->setKeyValue("arg", warn_callback_arg.refSelf(), 0);
 
@@ -2993,8 +3047,14 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void doThroughputWarning(bool send, int64 bytes, int64 dt, double bs) {
-        assert(warn_queue);
-        assert(bs < tp_warning_bs);
+        AutoLocker al(warning_queue_m);
+        if (!warn_queue) {
+            return;
+        }
+        double warning_bs = tp_warning_bs.load(std::memory_order_relaxed);
+        if (!warning_bs || bs > warning_bs) {
+            return;
+        }
 
         QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
@@ -3003,7 +3063,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         h->setKeyValue("bytes", bytes, 0);
         h->setKeyValue("us", dt, 0);
         h->setKeyValue("bytes_sec", bs, 0);
-        h->setKeyValue("threshold", (int64)tp_warning_bs, 0);
+        h->setKeyValue("threshold", (int64)warning_bs, 0);
         if (warn_callback_arg)
             h->setKeyValue("arg", warn_callback_arg.refSelf(), 0);
 
