@@ -4460,29 +4460,181 @@ static int qore_socket_exec_send_http_message_callback(QoreSocket* s, QoreHashNo
     return qore_socket_exec_send_http_chunked_body_callback(s, send_callback, source, timeout_ms, aborted, xsink);
 }
 
+class QoreSocketControllerReadHttpHeaderPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL QoreSocketControllerReadHttpHeaderPollOperation(QoreSocket* sock, int source)
+            : sock(sock), out(nullptr), source(source) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        bool close_socket = bytes_consumed;
+        if (!close_socket && poll_state) {
+            assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
+            close_socket = reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() > 0;
+        }
+        poll_state.reset();
+        if (close_socket) {
+            qore_socket_close_from_controller(sock);
+        }
+        out = nullptr;
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        if (!poll_state) {
+            poll_state.reset(sock->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
+            if (*xsink || !poll_state) {
+                done = true;
+                return nullptr;
+            }
+        }
+
+        int rc = poll_state->continuePoll(xsink);
+        if (*xsink) {
+            poll_state.reset();
+            done = true;
+            return nullptr;
+        }
+        if (rc) {
+            return getSocketPollInfoHash(xsink, rc);
+        }
+
+        SimpleRefHolder<BinaryNode> bin(poll_state->takeOutput().get<BinaryNode>());
+        poll_state.reset();
+
+        size_t raw_size = bin->size();
+        bytes_consumed = raw_size > 0;
+
+        out = new QoreHashNode(autoTypeInfo);
+        out->setKeyValue("size", static_cast<int64>(raw_size), xsink);
+        if (*xsink) {
+            done = true;
+            return nullptr;
+        }
+        if (!raw_size) {
+            out->setKeyValue("closed", true, xsink);
+            done = true;
+            return nullptr;
+        }
+
+        char* buf = reinterpret_cast<char*>(bin->giveBuffer());
+        char* nbuf = reinterpret_cast<char*>(q_realloc(buf, raw_size + 1));
+        if (!nbuf) {
+            xsink->outOfMemory();
+            done = true;
+            return nullptr;
+        }
+        nbuf[raw_size] = '\0';
+        QoreStringNodeHolder hdrstr(new QoreStringNode(nbuf, raw_size, raw_size + 1, sock->getEncoding()));
+
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+        ReferenceHolder<QoreHashNode> hdr(
+            qore_socket_private::get(*sock)->processHttpHeaderString(xsink, hdrstr, *info, source), xsink);
+        if (*xsink) {
+            done = true;
+            return nullptr;
+        }
+
+        out->setKeyValue("hdr", hdr.release(), xsink);
+        out->setKeyValue("info", info.release(), xsink);
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return out.release();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "received" : "receiving";
+    }
+
+private:
+    QoreSocket* sock;
+    std::unique_ptr<AbstractPollState> poll_state;
+    mutable ReferenceHolder<QoreHashNode> out;
+    int source;
+    bool bytes_consumed = false;
+    bool done = false;
+};
+
 static QoreHashNode* qore_socket_exec_read_http_header(QoreSocket* s, QoreHashNode* info, int timeout_ms,
         qore_offset_t* rc, int source, ExceptionSink* xsink) {
-    SimpleRefHolder<QoreStringNode> raw(qore_socket_exec_recv_until_string(s, "\r\n\r\n", 4, timeout_ms,
-        "readHTTPHeader", xsink));
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_RECV);
+    if (!io_guard) {
+        if (rc) {
+            *rc = -1;
+        }
+        return nullptr;
+    }
+
+    ValueHolder result(qore_socket_exec_poll(s,
+        new QoreSocketControllerReadHttpHeaderPollOperation(s, source),
+        timeout_ms, "readHTTPHeader", "received", xsink), xsink);
     if (*xsink) {
         if (rc) {
             *rc = -1;
         }
         return nullptr;
     }
-    if (raw->empty()) {
-        xsink->raiseException("SOCKET-HTTP-ERROR", "remote closed the connection while reading the HTTP header");
+    if (result->getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected hash output from async HTTP header operation, got '%s'", result->getFullTypeName());
         if (rc) {
-            *rc = 0;
+            *rc = -1;
+        }
+        return nullptr;
+    }
+
+    QoreHashNode* output = result->get<QoreHashNode>();
+    QoreValue size_val = output->getKeyValue("size");
+    if (size_val.getType() != NT_INT) {
+        xsink->raiseException("SOCKET-HTTP-ERROR", "missing raw HTTP header size from async header operation");
+        if (rc) {
+            *rc = -1;
         }
         return nullptr;
     }
     if (rc) {
-        *rc = static_cast<qore_offset_t>(raw->size());
+        *rc = static_cast<qore_offset_t>(size_val.getAsBigInt());
     }
 
-    QoreStringNodeHolder hdrstr(raw.release());
-    return qore_socket_private::get(*s)->processHttpHeaderString(xsink, hdrstr, info, source);
+    if (output->getKeyValue("closed").getAsBool()) {
+        xsink->raiseException("SOCKET-HTTP-ERROR", "remote closed the connection while reading the HTTP header");
+        return nullptr;
+    }
+
+    QoreValue hdr_val = output->getKeyValue("hdr");
+    if (hdr_val.getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected 'hdr' hash output from async HTTP header operation, got '%s'", hdr_val.getFullTypeName());
+        if (rc) {
+            *rc = -1;
+        }
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> hdr(hdr_val.get<const QoreHashNode>()->hashRefSelf(), xsink);
+    if (info) {
+        QoreValue info_val = output->getKeyValue("info");
+        if (info_val.getType() != NT_HASH) {
+            xsink->raiseException("SOCKET-HTTP-ERROR",
+                "expected 'info' hash output from async HTTP header operation, got '%s'",
+                info_val.getFullTypeName());
+            return nullptr;
+        }
+        info->merge(info_val.get<const QoreHashNode>(), xsink);
+    }
+    return *xsink ? nullptr : hdr.release();
 }
 
 static QoreStringNode* qore_socket_exec_read_http_header_string(QoreSocket* s, int timeout_ms, int source,
