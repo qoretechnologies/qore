@@ -106,6 +106,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("owner required", \ownerRequiredTest());
         addTestCase("cancel by owner", \cancelByOwnerTest());
         addTestCase("delegated abort worker dispatch", \delegatedAbortWorkerDispatchTest());
+        addTestCase("ping wrapper abort worker dispatch", \pingWrapperAbortWorkerDispatchTest());
         addTestCase("poll pipeline rejects worker delegate", \pollPipelineRejectsWorkerDelegateTest());
         addTestCase("poll pipeline recv frame no sync probe", \pollPipelineRecvFrameNoSyncProbeTest());
         addTestCase("wait ready", \waitReadyTest());
@@ -346,6 +347,57 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         hash<auto> cancel_info = cancel_result.get(1s);
         assertFalse(exists cancel_info.ex, "cancelByOwner should not throw: " + (cancel_info.ex.err ?? ""));
         assertEq(1, cancel_info.canceled, "cancelByOwner should cancel the delegated operation");
+
+        if (release_abort.getCount()) {
+            release_abort.dec();
+        }
+    }
+
+    pingWrapperAbortWorkerDispatchTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        EventNotifier notifier();
+        Counter abort_started(1);
+        Counter release_abort(1);
+        Counter cancel_done(1);
+        Queue cancel_result();
+        string owner = "ping-wrapper-abort-worker-owner";
+
+        on_exit {
+            if (release_abort.getCount()) {
+                release_abort.dec();
+            }
+            cancel_done.waitForZero(5s);
+        }
+
+        BlockingAbortPollOperation inner(notifier, abort_started, release_abort);
+        DelegatingPollOperation wrapped(inner);
+        HttpClientPingPollOperationBase ping(wrapped, 200, 299, "PING-WRAPPER-ERROR");
+        io_controller.submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": ping,
+            "owner": owner,
+            "to": 30s,
+        });
+
+        assertTrue(io_controller.waitForProcessing(2s), "wrapped ping operation should be registered before cancel");
+
+        background sub () {
+            on_exit cancel_done.dec();
+            try {
+                cancel_result.push({"canceled": io_controller.cancelByOwner(owner)});
+            } catch (hash<ExceptionInfo> ex) {
+                cancel_result.push({"ex": ex});
+            }
+        }();
+
+        assertEq(0, abort_started.waitForZero(5s), "wrapped ping abort should start on a worker thread");
+        assertEq(0, cancel_done.waitForZero(1s), "cancelByOwner should not wait for wrapped ping Qore abort");
+
+        hash<auto> cancel_info = cancel_result.get(1s);
+        assertFalse(exists cancel_info.ex, "cancelByOwner should not throw: " + (cancel_info.ex.err ?? ""));
+        assertEq(1, cancel_info.canceled, "cancelByOwner should cancel the wrapped ping operation");
 
         if (release_abort.getCount()) {
             release_abort.dec();

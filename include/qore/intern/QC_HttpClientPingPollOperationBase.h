@@ -84,6 +84,10 @@ public:
         return goal_reached;
     }
 
+    DLLLOCAL bool needsWorkerDispatch() const override {
+        return inner_op && inner_op->needsWorkerDispatch();
+    }
+
     DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override;
     DLLLOCAL void abort(ExceptionSink* xsink) override;
     DLLLOCAL QoreValue getOutput() const override;
