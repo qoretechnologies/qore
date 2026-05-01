@@ -564,6 +564,11 @@ qore_class_private::qore_class_private(QoreClass* n_cls, std::string&& nme, std:
         parse_resolve_class_members(false),
         parse_resolve_abstract(false),
         has_transient_member(false),
+        // Default false — host explicitly opts in via Program::importClass(...
+        // reexport=True), which calls qore_class_private::setReexport(true)
+        // after construction.  Without this initializer the bit-field has
+        // indeterminate value and parse-time inheritance picks up garbage.
+        reexport(false),
         domain(dom),
         num_methods(0),
         num_user_methods(0),
@@ -748,6 +753,10 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         parse_resolve_class_members(true),
         parse_resolve_abstract(true),
         has_transient_member(old.has_transient_member),
+        // Preserve the source's reexport marker so inheritParseImports's
+        // child-Program propagation continues through transitive %requires
+        // chains: A → B (via reexport) → C will reach C.
+        reexport(old.reexport),
         domain(old.domain),
         num_methods(old.num_methods),
         num_user_methods(old.num_user_methods),

@@ -705,6 +705,9 @@ void ThreadEntry::cleanup() {
         cancel_reason->deref();
         cancel_reason = nullptr;
     }
+    // a thread in waitWithInterrupt clears waiting_on before returning, so it must be null here,
+    // but be defensive against any future code path that exits without clearing
+    waiting_on.store(nullptr, std::memory_order_relaxed);
 
     status = QTS_AVAIL;
 }
@@ -3811,8 +3814,35 @@ int QoreThreadList::cancelThread(int tid, const char* reason) {
         }
         entry[tid].cancel_reason = new QoreStringNode(reason);
     }
-    entry[tid].cancel_requested.store(true, std::memory_order_release);
+    // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check flag) to
+    // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
+    entry[tid].cancel_requested.store(true, std::memory_order_seq_cst);
+    // wake the target if it's blocked in waitWithInterrupt — the waiter clears waiting_on under
+    // lck before returning, so a non-null pointer observed here (under lck, with the entry still
+    // active) is in use by a still-alive cond
+    QoreCondition* cond = entry[tid].waiting_on.load(std::memory_order_seq_cst);
+    if (cond) {
+        cond->broadcast();
+    }
     return 0;
+}
+
+void QoreThreadList::clearCurrentWaitingOn() {
+    AutoLocker al(lck);
+    int tid = q_gettid();
+    if (tid >= 0 && tid < MAX_QORE_THREADS) {
+        entry[tid].waiting_on.store(nullptr, std::memory_order_seq_cst);
+    }
+}
+
+void QoreThreadList::wakeAllWaiters() {
+    AutoLocker al(lck);
+    for (int t = 0; t < MAX_QORE_THREADS; ++t) {
+        QoreCondition* cond = entry[t].waiting_on.load(std::memory_order_seq_cst);
+        if (cond) {
+            cond->broadcast();
+        }
+    }
 }
 
 void QoreThreadList::clearCancel(int tid) {

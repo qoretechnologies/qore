@@ -2011,7 +2011,17 @@ public:
         parse_resolve_class_members : 1,  // class members resolved
         parse_resolve_abstract : 1,       // abstract methods resolved
         has_transient_member : 1,         // has at least one transient member
-        parseCommitRuntimeInitDone : 1 = 0    // has parseCommitRuntimeInit() been called?
+        parseCommitRuntimeInitDone : 1 = 0,   // has parseCommitRuntimeInit() been called?
+        // re-export marker for cross-program imports.  Set by Program::
+        // importClass(... reexport=True) on the host side; consulted by
+        // qore_program_private::inheritParseImports() in ModuleManager's
+        // child-Program creation paths to decide whether the symbol
+        // propagates into a transitively-required module's parse context.
+        // Default false preserves the historical "imports stay local"
+        // semantic and avoids diamond conflicts with namespace-merged
+        // public classes (e.g. those brought in via %requires) that the
+        // host never opted to expose to %requires children.
+        reexport : 1
         ;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
@@ -3617,6 +3627,14 @@ public:
 
     DLLLOCAL static bool isUserPublic(const QoreClass& qc) {
         return qc.priv->pub && !qc.priv->sys;
+    }
+
+    DLLLOCAL static bool isReexport(const QoreClass& qc) {
+        return qc.priv->reexport;
+    }
+
+    DLLLOCAL static void setReexport(QoreClass& qc, bool v = true) {
+        qc.priv->reexport = v;
     }
 
     DLLLOCAL static bool isFinal(const QoreClass& qc) {

@@ -148,6 +148,14 @@ public:
         return sys;
     }
 
+    DLLLOCAL bool isReexport() const {
+        return reexport;
+    }
+
+    DLLLOCAL void setReexport(bool v = true) {
+        reexport = v;
+    }
+
     DLLLOCAL const typed_hash_decl_private* getOrig() const {
         return orig;
     }
@@ -361,6 +369,16 @@ protected:
 
     bool pub = false;
     bool sys = false;
+
+    // re-export marker for cross-program imports.  Set by Program::importHashDecl(...
+    // reexport=True) on the host side; consulted by qore_program_private::
+    // inheritParseImports() in ModuleManager's child-Program creation paths to
+    // decide whether the symbol propagates into a transitively-required module's
+    // parse context.  Default false preserves the historical "imports stay
+    // local" semantic and avoids diamond conflicts with namespace-merged
+    // public symbols (e.g. classes brought in via %requires) that the host
+    // never opted to expose to %requires children.
+    bool reexport = false;
 
     bool parse_init_done = false;
 

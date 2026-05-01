@@ -1751,12 +1751,15 @@ pgm.importClass("MyNamespace::MyClass");
     @throw CLASS-IMPORT-ERROR Cannot import a class into the same Program object; class or namespace with this name already exists or the source class does not exist; injection indicated but @ref Qore::PO_ALLOW_INJECTION not set
     @throw ENCODING-CONVERSION-ERROR the class name could not be converted to the @ref default_encoding "default character encoding"
 
+    @param reexport if @ref True "True", the imported class is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported class so the child's parse can resolve unqualified references to it.  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic and avoids diamond conflicts with namespace-merged public classes that the host never opted to expose.
+
     @since
     - This method was first implemented in %Qore 0.8.7
     - %Qore 0.8.12 added the \a new_name and \a inject parameters
     - %Qore 0.9.3 added the \a module_visibility parameter
+    - %Qore 2.4 added the \a reexport parameter
  */
-nothing Program::importClass(string cls, *string new_name, *softbool inject, int module_visibility = CSP_UNCHANGED) {
+nothing Program::importClass(string cls, *string new_name, *softbool inject, int module_visibility = CSP_UNCHANGED, bool reexport = False) {
     TempEncodingHelper tmp(cls, QCS_DEFAULT, xsink);
     if (!tmp) {
         assert(*xsink);
@@ -1774,7 +1777,7 @@ nothing Program::importClass(string cls, *string new_name, *softbool inject, int
         if (nn->empty())
             return xsink->raiseException("CLASS-IMPORT-ERROR", "the new class name while importing class '%s' may not be empty", tmp->c_str());
     }
-    qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(), new_name ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility));
+    qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(), new_name ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility), reexport);
 }
 
 //! Imports a @ref hashdecl "typed hash declaration" into the program object's space
@@ -1791,9 +1794,13 @@ pgm.importHashDecl("MyNamespace::MyHash");
     @throw HASHDECL-IMPORT-ERROR Cannot import a hashdecl into the same Program object; conflict with an existing definition
     @throw ENCODING-CONVERSION-ERROR the hashdecl name could not be converted to the @ref default_encoding "default character encoding"
 
-    @since %Qore 0.8.13
+    @param reexport if @ref True "True", the imported hashdecl is marked for re-export to child Programs created when modules are required transitively from this Program — i.e. when this Program is the parent in a module-loader child-Program creation, qore_program_private::inheritParseImports() will propagate the imported hashdecl so the child's parse can resolve unqualified references to it (closest-to-root match algorithm).  Default is @ref False "False" (no re-export), which preserves the historical "imports stay local" semantic.
+
+    @since
+    - %Qore 0.8.13
+    - %Qore 2.4 added the \a reexport parameter
  */
-nothing Program::importHashDecl(string name, *string new_name) {
+nothing Program::importHashDecl(string name, *string new_name, bool reexport = False) {
     TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
     if (!tmp) {
         assert(*xsink);
@@ -1811,7 +1818,7 @@ nothing Program::importHashDecl(string name, *string new_name) {
         if (nn->empty())
             return xsink->raiseException("HASHDECL-IMPORT-ERROR", "the new hashdecl name while importing hashdecl '%s' may not be empty", tmp->c_str());
     }
-    qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(), new_name ? nn->c_str() : nullptr);
+    qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(), new_name ? nn->c_str() : nullptr, CSP_UNCHANGED, reexport);
 }
 
 //! Returns a list of strings of all user functions defined in the program object

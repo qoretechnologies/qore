@@ -1346,7 +1346,7 @@ void qore_program_private::runtimeImportSystemApi(ExceptionSink* xsink) {
 }
 
 void qore_program_private::importClass(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path,
-        const char* new_name, bool inject, q_setpub_t set_pub) {
+        const char* new_name, bool inject, q_setpub_t set_pub, bool reexport) {
     if (&from_pgm == this) {
         xsink->raiseException("CLASS-IMPORT-ERROR", "cannot import class \"%s\" with the same source and target " \
             "Program objects", path);
@@ -1399,25 +1399,29 @@ void qore_program_private::importClass(ExceptionSink* xsink, qore_program_privat
 
     // find/create target namespace based on source namespace
     QoreNamespace* tns;
+    // When the imported symbol will be re-exported, mark each created namespace
+    // along the path public — otherwise scanMergeCommittedNamespace skips
+    // private namespaces during %requires merging, hiding all symbols inside.
     if (new_name && strstr(new_name, "::")) {
         NamedScope nscope(new_name);
 
-        tns = qore_root_ns_private::runtimeFindCreateNamespacePath(*RootNS, nscope, qore_class_private::isPublic(*c),
-            !c->isSystem());
+        tns = qore_root_ns_private::runtimeFindCreateNamespacePath(*RootNS, nscope,
+            qore_class_private::isPublic(*c) || reexport, !c->isSystem());
         qore_root_ns_private::runtimeImportClass(*RootNS, xsink, *tns, c, src_pgm, set_pub, nscope.getIdentifier(),
-            inject, injectedClass);
+            inject, injectedClass, reexport);
     } else {
-        tns = vns->root ? RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*RootNS, *vns, !c->isSystem());
+        tns = vns->root ? RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*RootNS, *vns,
+            !c->isSystem(), reexport);
         printd(5, "qore_program_private::importClass() this: %p pgm: %p path: '%s' tns: %p '%s' RootNS: %p '%s' " \
             "(fp: %p p: %p)\n", this, pgm, path, tns, tns->getName(), RootNS, RootNS->getName(), from_pgm.pgm,
             src_pgm);
         qore_root_ns_private::runtimeImportClass(*RootNS, xsink, *tns, c, src_pgm, set_pub, new_name, inject,
-            injectedClass);
+            injectedClass, reexport);
     }
 }
 
 void qore_program_private::importHashDecl(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path,
-        const char* new_name, q_setpub_t set_pub) {
+        const char* new_name, q_setpub_t set_pub, bool reexport) {
     if (&from_pgm == this) {
         xsink->raiseException("HASHDECL-IMPORT-ERROR", "cannot import hashdecl \"%s\" with the same source and " \
             "target Program objects", path);
@@ -1447,19 +1451,23 @@ void qore_program_private::importHashDecl(ExceptionSink* xsink, qore_program_pri
 
     // find/create target namespace based on source namespace
     QoreNamespace* tns;
+    // When the imported symbol will be re-exported, mark each created namespace
+    // along the path public — otherwise scanMergeCommittedNamespace skips
+    // private namespaces during %requires merging, hiding all symbols inside.
     if (new_name && strstr(new_name, "::")) {
         NamedScope nscope(new_name);
 
         tns = qore_root_ns_private::runtimeFindCreateNamespacePath(*RootNS, nscope,
-            typed_hash_decl_private::get(*hd)->isPublic(), !hd->isSystem());
+            typed_hash_decl_private::get(*hd)->isPublic() || reexport, !hd->isSystem());
         qore_root_ns_private::runtimeImportHashDecl(*RootNS, xsink, *tns, hd, from_pgm.pgm, set_pub,
-            nscope.getIdentifier());
+            nscope.getIdentifier(), reexport);
     } else {
         tns = vns->root ? RootNS : qore_root_ns_private::runtimeFindCreateNamespacePath(*RootNS, *vns,
-            !hd->isSystem());
+            !hd->isSystem(), reexport);
         //printd(5, "qore_program_private::importHashDecl() this: %p path: %s nspath: %s tns: %p %s RootNS: %p %s\n",
         //  this, path, nspath.c_str(), tns, tns->getName(), RootNS, RootNS->getName());
-        qore_root_ns_private::runtimeImportHashDecl(*RootNS, xsink, *tns, hd, from_pgm.pgm, set_pub, new_name);
+        qore_root_ns_private::runtimeImportHashDecl(*RootNS, xsink, *tns, hd, from_pgm.pgm, set_pub, new_name,
+            reexport);
     }
 
     // Resolve cross-namespace parent hashdecl pointer after import
@@ -1468,6 +1476,86 @@ void qore_program_private::importHashDecl(ExceptionSink* xsink, qore_program_pri
         qore_root_ns_private* rpriv = qore_root_ns_private::get(*RootNS);
         qore_ns_private::get(*tns)->hashDeclList.resolveExternalParentHashDecls(rpriv);
     }
+}
+
+void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& parent, ExceptionSink* xsink) {
+    RootQoreNamespace* parent_RootNS = parent.priv->RootNS;
+    RootQoreNamespace* child_RootNS = child.priv->RootNS;
+    qore_root_ns_private* parent_root = qore_root_ns_private::get(*parent_RootNS);
+
+    static FILE* dbg = ([](){
+        FILE* f = fopen("/tmp/inheritParseImports.log", "a");
+        if (f) {
+            setvbuf(f, nullptr, _IOLBF, 0);
+            fprintf(f, "==== process started ====\n");
+        }
+        return f;
+    })();
+    if (dbg) {
+        fprintf(dbg, "ENTRY child=%p parent=%p thdmap.size=%zu clmap.size=%zu\n",
+            &child, &parent, parent_root->thdmap.size(), parent_root->clmap.size());
+    }
+
+    // Hashdecls: walk parent's root index, copy entries marked re-export into
+    // child. Each entry was tagged via Program::importHashDecl(... reexport=True)
+    // (or inherited from such) so the host explicitly opted to expose it.
+    // System entries are skipped: the static system namespace already provides
+    // them in the child.  Conflicts are swallowed silently — a duplicate name
+    // in the child means the child's own %requires chain or static namespace
+    // already has the symbol indexed, which is what we want.
+    for (const auto& i : parent_root->thdmap) {
+        const TypedHashDecl* hd = i.second.obj;
+        if (!hd) {
+            continue;
+        }
+        const typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
+        if (dbg) {
+            fprintf(dbg, "  hd '%s' reexport=%d sys=%d pub=%d\n",
+                hd->getName(), hdp->isReexport(), hdp->isSystem(), hdp->isPublic());
+        }
+        if (!hdp->isReexport() || hdp->isSystem()) {
+            continue;
+        }
+        if (dbg) {
+            fprintf(dbg, "  -> propagating hd '%s'\n", hd->getName());
+        }
+        QoreNamespace* tns = qore_root_ns_private::runtimeFindCreateNamespacePath(
+            *child_RootNS, *i.second.ns, true);
+        ExceptionSink xs;
+        qore_root_ns_private::runtimeImportHashDecl(*child_RootNS, &xs, *tns, hd, &parent,
+            CSP_UNCHANGED, nullptr, true);
+        xs.clear();
+    }
+
+    // Classes: same shape as hashdecls.
+    for (const auto& i : parent_root->clmap) {
+        const QoreClass* c = i.second.obj;
+        if (!c) {
+            continue;
+        }
+        if (dbg) {
+            fprintf(dbg, "  cl '%s' reexport=%d sys=%d\n",
+                c->getName(), qore_class_private::isReexport(*c), c->isSystem());
+        }
+        if (!qore_class_private::isReexport(*c) || c->isSystem()) {
+            continue;
+        }
+        if (dbg) {
+            fprintf(dbg, "  -> propagating cl '%s'\n", c->getName());
+        }
+        QoreNamespace* tns = qore_root_ns_private::runtimeFindCreateNamespacePath(
+            *child_RootNS, *i.second.ns, true);
+        ExceptionSink xs;
+        qore_root_ns_private::runtimeImportClass(*child_RootNS, &xs, *tns, c, &parent,
+            CSP_UNCHANGED, nullptr, false, nullptr, true);
+        xs.clear();
+    }
+
+    if (dbg) {
+        fprintf(dbg, "EXIT child=%p\n", &child);
+    }
+
+    (void)xsink;
 }
 
 void qore_program_private::importFunction(ExceptionSink* xsink, QoreFunction* u, const qore_ns_private& oldns, const char* new_name, bool inject) {

@@ -1420,9 +1420,11 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         mpgm->setScriptPath(modulePath.c_str());
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
-        // qore_program_private::inheritParseDefines for rationale)
+        // qore_program_private::inheritParseDefines for rationale).  Also
+        // inherit reexport-marked symbol imports.
         if (p) {
             qore_program_private::inheritParseDefines(*mpgm, *p);
+            qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
         }
     }
     // inherit execution mode from parent program
@@ -1855,9 +1857,11 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
-        // qore_program_private::inheritParseDefines for rationale)
+        // qore_program_private::inheritParseDefines for rationale).  Also
+        // inherit reexport-marked symbol imports.
         if (p) {
             qore_program_private::inheritParseDefines(*mpgm, *p);
+            qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
         }
     }
     // inherit execution mode from parent program
@@ -1956,9 +1960,11 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
         mpgm->setScriptPath(path);
         // Inherit user-set parse defines from the parent so module-source
         // %ifdef/%ifndef directives evaluate against the caller's view (see
-        // qore_program_private::inheritParseDefines for rationale)
+        // qore_program_private::inheritParseDefines for rationale).  Also
+        // inherit reexport-marked symbol imports.
         if (p) {
             qore_program_private::inheritParseDefines(*mpgm, *p);
+            qore_program_private::inheritParseImports(*mpgm, *p, &xsink);
         }
     }
     // inherit execution mode from parent program
