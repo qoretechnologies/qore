@@ -33,6 +33,7 @@
 #include <qore/QoreSandboxManager.h>
 #include <qore/TypedHashDecl.h>
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreThreadList.h"
 
 #include <climits>
 #include <cstdlib>
@@ -810,7 +811,15 @@ int QoreSandboxManager::getMaxRecursionDepth() const {
 }
 
 void QoreSandboxManager::requestInterrupt() {
-    interrupt_requested.store(true, std::memory_order_release);
+    // seq_cst pairs with seq_cst on the waiter side (register waiting_on, then check interrupt) to
+    // defeat the lost-wakeup race in QoreCondition::waitWithInterrupt
+    interrupt_requested.store(true, std::memory_order_seq_cst);
+
+    // Wake any threads currently blocked in QoreCondition::waitWithInterrupt — they re-check their
+    // cancel/interrupt state on wakeup.  We don't filter by program (no back-ref from manager to
+    // program); spurious wakeups for threads in other programs are harmless — those threads recheck
+    // their own program's interrupt state, find it not set, and resume waiting.
+    thread_list.wakeAllWaiters();
 
     // Copy callbacks under lock, then invoke outside lock to avoid deadlock
     // (callbacks may call unregisterCancelCallback() which needs the lock)
@@ -834,11 +843,11 @@ void QoreSandboxManager::requestInterrupt() {
 }
 
 void QoreSandboxManager::clearInterrupt() {
-    interrupt_requested.store(false, std::memory_order_release);
+    interrupt_requested.store(false, std::memory_order_seq_cst);
 }
 
 bool QoreSandboxManager::isInterruptRequested() const {
-    return interrupt_requested.load(std::memory_order_acquire);
+    return interrupt_requested.load(std::memory_order_seq_cst);
 }
 
 void QoreSandboxManager::registerCancelCallback(void* context, cancel_callback_t callback) {
@@ -855,7 +864,7 @@ void QoreSandboxManager::unregisterCancelCallback(void* context) {
 }
 
 bool QoreSandboxManager::checkIOInterrupt(ExceptionSink* xsink, const char* operation) const {
-    if (interrupt_requested.load(std::memory_order_acquire)) {
+    if (interrupt_requested.load(std::memory_order_seq_cst)) {
         xsink->raiseException("PROGRAM-INTERRUPTED",
             "program execution was interrupted during %s", operation);
         return true;
