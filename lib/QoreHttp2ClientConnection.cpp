@@ -656,8 +656,9 @@ void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
     // returns (the H2 cancel-abort race — see project_h2_cancel_race.md).
     poll_op_priv->disarmConnectionPriv();
 
-    // Cancel the op in the global AsyncIoController — this synchronously
-    // waits until the I/O thread stops processing the operation.  The I/O
+    // Cancel and close the op in the global AsyncIoController — this
+    // synchronously waits until the I/O thread stops processing the
+    // operation, then closes the socket on the controller thread.  The I/O
     // thread's cancel processing calls abort() on the poll op via
     // doCancelIntern → callAbort, so we must NOT call abort() again here.
     //
@@ -678,7 +679,7 @@ void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
                         CID_ASYNCIOCONTROLLER, &cancel_xsink)),
                 &cancel_xsink);
             if (ctl_priv_holder) {
-                ctl_priv_holder->cancel(sock_priv, &cancel_xsink);
+                ctl_priv_holder->cancelAndClose(sock_priv, &cancel_xsink);
             }
         }
         cancel_xsink.clear();

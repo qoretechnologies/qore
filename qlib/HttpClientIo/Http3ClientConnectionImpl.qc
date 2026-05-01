@@ -102,12 +102,18 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
-        # Check if the underlying QUIC session is still alive
-        if (!poll_op.isQuicSessionOpen()) {
-            return False;
-        }
         int total = poll_op.getActiveStreamCount() + pending_stream_count;
         if (max_concurrent_streams && total >= max_concurrent_streams) {
+            return False;
+        }
+        if (cs == HttpClientConnectionState::Connecting) {
+            return pending_stream_count < DefaultMaxPendingPerConnection;
+        }
+        # Check if the underlying QUIC session is still alive after the
+        # handshake has completed. During CONNECTING the session may not yet
+        # be open, but reserved stream handles will wait for readiness before
+        # submitting any request bytes.
+        if (!poll_op.isQuicSessionOpen()) {
             return False;
         }
         int quic_limit = poll_op.getQuicStreamLimit();
@@ -127,22 +133,24 @@ public class Http3ClientConnection inherits HttpClientConnection {
                 && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
-        if (!poll_op.isQuicSessionOpen()) {
-            return False;
-        }
         int total = poll_op.getActiveStreamCount() + pending_stream_count;
         if (max_concurrent_streams && total >= max_concurrent_streams) {
             return False;
         }
-        int quic_limit = poll_op.getQuicStreamLimit();
-        if (quic_limit && total >= quic_limit) {
-            return False;
-        }
-        # Cap pending reservations on Connecting connections to limit
-        # blast radius of a handshake failure
-        if (cs == HttpClientConnectionState::Connecting
-                && pending_stream_count >= DefaultMaxPendingPerConnection) {
-            return False;
+        if (cs == HttpClientConnectionState::Connecting) {
+            # Cap pending reservations on Connecting connections to limit
+            # blast radius of a handshake failure.
+            if (pending_stream_count >= DefaultMaxPendingPerConnection) {
+                return False;
+            }
+        } else {
+            if (!poll_op.isQuicSessionOpen()) {
+                return False;
+            }
+            int quic_limit = poll_op.getQuicStreamLimit();
+            if (quic_limit && total >= quic_limit) {
+                return False;
+            }
         }
         ++pending_stream_count;
         return True;

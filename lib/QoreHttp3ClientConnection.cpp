@@ -390,9 +390,10 @@ void Http3ClientConnection::clearAttempt(Attempt& a, ExceptionSink* xsink) {
     //   the PollInfo while the current ops_to_poll batch still holds a raw
     //   pointer to it.
     // - If an app thread is clearing a submitted attempt, route teardown
-    //   through controller.cancel().  The controller then invokes abort() on
-    //   the I/O thread, so the best-effort QUIC CONNECTION_CLOSE send stays
-    //   with the controller-owned socket path.
+    //   through controller.cancelAndClose().  The controller then invokes
+    //   abort() on the I/O thread and closes the socket on a controller
+    //   thread, so the best-effort QUIC CONNECTION_CLOSE send and fd
+    //   teardown stay with the controller-owned socket path.
     // - Unsubmitted attempts are not in the controller cache, so direct abort
     //   is the only cleanup path and cannot race controller polling.
     //
@@ -415,7 +416,7 @@ void Http3ClientConnection::clearAttempt(Attempt& a, ExceptionSink* xsink) {
                         CID_ASYNCIOCONTROLLER, &cancel_xsink)),
                 &cancel_xsink);
             if (ctl_priv_holder) {
-                ctl_priv_holder->cancel(sock_priv_local, &cancel_xsink);
+                ctl_priv_holder->cancelAndClose(sock_priv_local, &cancel_xsink);
                 canceled = !cancel_xsink;
             }
         }
@@ -1061,8 +1062,9 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
     // pattern as Http1/Http2ClientConnection::closeConnection.
     poll_op_priv->disarmConnectionPriv();
 
-    // Cancel the op in the global AsyncIoController — this synchronously
-    // waits until the I/O thread stops processing the operation.  The I/O
+    // Cancel and close the op in the global AsyncIoController — this
+    // synchronously waits until the I/O thread stops processing the
+    // operation, then closes the socket on the controller thread.  The I/O
     // thread's cancel processing calls abort() on the poll op via
     // doCancelIntern → callAbort, so we must NOT call abort() again here.
     //
@@ -1083,7 +1085,7 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
                         CID_ASYNCIOCONTROLLER, &cancel_xsink)),
                 &cancel_xsink);
             if (ctl_priv_holder) {
-                ctl_priv_holder->cancel(sock_priv, &cancel_xsink);
+                ctl_priv_holder->cancelAndClose(sock_priv, &cancel_xsink);
             }
         }
         cancel_xsink.clear();
