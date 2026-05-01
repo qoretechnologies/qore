@@ -757,8 +757,19 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         hash(old.hash),
         ptr(old.ptr),
         mud(old.mud ? old.mud->copy() : nullptr),
-        spgm(old.spgm && old.deref_source_program ? old.spgm->programRefSelf() : old.spgm),
-        deref_source_program(old.deref_source_program),
+        // Cross-program imports must hold the source program alive: when this
+        // copy lives in a different program from `old.spgm`, downstream code
+        // (e.g. module-jni's canonical-classloader cache, consumers calling
+        // through the imported class into source-program data) keeps raw
+        // pointers into the source, so the source must not be destroyed while
+        // the import exists.  In-program copies share the source's lifetime
+        // by construction and stay weak (deref_source_program=false) — exactly
+        // the existing semantics for namespace-tree copies inside one Program.
+        spgm(old.spgm && (old.deref_source_program
+                || (ns && ns->getProgram() != old.spgm))
+            ? old.spgm->programRefSelf() : old.spgm),
+        deref_source_program(old.spgm && (old.deref_source_program
+                || (ns && ns->getProgram() != old.spgm))),
         from_module(old.from_module),
         lang(old.lang) {
     QORE_TRACE("qore_class_private::qore_class_private(const qore_class_private& old)");
@@ -2685,6 +2696,10 @@ int BCAList::execBaseClassConstructorArgs(BCEAList* bceal, ExceptionSink* xsink)
 
 QoreProgram* QoreClass::getProgram() const {
     return priv->ns->getProgram();
+}
+
+QoreProgram* QoreClass::getSourceProgram() const {
+    return priv->spgm;
 }
 
 const QoreMethod* QoreClass::findStaticMethod(const char* nme) const {

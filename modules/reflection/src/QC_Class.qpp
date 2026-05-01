@@ -1515,7 +1515,14 @@ int Class::getInheritanceAccess(Class[QoreReflectionClass] base_class) [flags=CO
         return QoreValue();
     }
 
-    ClassAccess rv;
+    // initialise to Public — qore_class_private::inHierarchy() returns true
+    // without touching n_access when the match is at level 0 (cls==base) OR
+    // when the match is inside a chain of all-Public BCNodes (BCNode::inHierarchy
+    // only updates n_access via `if (rv && n_access < access)`, which never
+    // fires for Public BCNodes since 0 < 0 is false).  Without an initial value
+    // we'd fall through with stack garbage and get_access() may default-return 0,
+    // making a real public-inheritance hierarchy look like Inaccessible.
+    ClassAccess rv = Public;
     if (!c->cls->inHierarchy(*base_class->cls, rv)) {
         return 0;
     }
