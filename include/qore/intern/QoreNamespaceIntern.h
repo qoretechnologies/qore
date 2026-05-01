@@ -266,9 +266,9 @@ public:
     */
     DLLLOCAL void overrideFromModule(const char* mod_name) {
         if (mod_name) {
-            from_module = mod_name;
+            addModuleName(mod_name);
         } else {
-            from_module.clear();
+            from_modules.clear();
         }
     }
 
