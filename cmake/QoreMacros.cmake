@@ -444,8 +444,10 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     set(_qmod_flat_dir ${CMAKE_BINARY_DIR}/qlib-qmod)
     if (${_is_dir})
         set(_qmod_out_dir ${_qmod_flat_dir}/${_name})
+        set(_qmod_source_link ${CMAKE_SOURCE_DIR}/qlib/${_name}/${_name}.qmod)
     else()
         set(_qmod_out_dir ${_qmod_flat_dir})
+        set(_qmod_source_link ${CMAKE_SOURCE_DIR}/qlib/${_name}.qmod)
     endif()
     set(_qmod_out ${_qmod_out_dir}/${_name}.qmod)
 
@@ -517,8 +519,6 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 $<TARGET_FILE:qcc> -m ${_source_root}
                 --depfile=${_qmod_dep} -o ${_qmod_out}
-            COMMAND ${CMAKE_COMMAND} -E create_symlink
-                ${_qmod_out} ${CMAKE_SOURCE_DIR}/qlib/${_name}/${_name}.qmod
             DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
             DEPFILE ${_qmod_dep}
             COMMENT "AOT compile ${_name}.qmod"
@@ -554,8 +554,6 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 $<TARGET_FILE:qcc> -m ${_source_root}
                 --depfile=${_qmod_dep} -o ${_qmod_out}
-            COMMAND ${CMAKE_COMMAND} -E create_symlink
-                ${_qmod_out} ${CMAKE_SOURCE_DIR}/qlib/${_name}.qmod
             DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
             DEPFILE ${_qmod_dep}
             COMMENT "AOT compile ${_name}.qmod"
@@ -563,7 +561,19 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         )
     endif()
 
-    add_custom_target(${_name}-qmod ALL DEPENDS ${_qmod_out} ${_qmod_resource_copies})
+    add_custom_command(
+        OUTPUT ${_qmod_source_link}
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+            ${_qmod_out} ${_qmod_source_link}
+        DEPENDS ${_qmod_out}
+        COMMENT "Link ${_name}.qmod into source qlib"
+        VERBATIM
+    )
+
+    add_custom_target(${_name}-qmod ALL DEPENDS
+        ${_qmod_out}
+        ${_qmod_source_link}
+        ${_qmod_resource_copies})
     # Ensure qcc executable + libqore.so are built before this qmod
     # rule runs — target-level deps, not mtime deps, so a newer qcc
     # binary doesn't force a qmod rebuild on its own.
