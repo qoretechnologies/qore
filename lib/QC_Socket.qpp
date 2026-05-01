@@ -674,13 +674,19 @@ static int socket_exec_send_http_chunked_body_callback(QoreObject* self, QoreSoc
 static int socket_exec_send_http_message_callback(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
     if (socket_exec_check_http1_allowed(self, s, "sendHTTPMessageWithCallback", xsink)) {
         return -1;
     }
 
     QoreString hdr(s->getEncoding());
-    if (my_socket_priv::getPriv(*s)->getSendHttpMessageChunkedHeaders(xsink, hdr, info, method, path,
-            http_version, headers, QORE_SOURCE_SOCKET)) {
+    if (priv->getSendHttpMessageChunkedHeaders(xsink, hdr, info, method, path, http_version, headers,
+            QORE_SOURCE_SOCKET)) {
         return -1;
     }
 
@@ -694,6 +700,11 @@ static int socket_exec_send_http_response_callback(QoreObject* self, QoreSocketO
         int code, const char* desc, const char* http_version, const QoreHashNode* headers,
         const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
     int32_t stream_id = priv->getH2ActiveThreadStreamId();
     stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponseWithCallback", xsink);
     if (*xsink) {
@@ -728,6 +739,11 @@ static int socket_exec_send_http_response_input_stream(QoreObject* self, QoreSoc
     }
 
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
     int32_t stream_id = priv->getH2ActiveThreadStreamId();
     stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponse", xsink);
     if (*xsink) {
