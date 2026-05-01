@@ -4563,7 +4563,13 @@ public:
             http_expect_cleared = true;
         }
 
+        unsigned cancel_check = 0;
         while (!done) {
+            if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked body read")) {
+                state = State::Done;
+                return nullptr;
+            }
+
             if (!poll_state) {
                 startPoll(xsink);
                 if (*xsink || !poll_state) {
@@ -14524,7 +14530,13 @@ QoreHashNode* SocketReadHttpChunkedBodyPollOperation::continuePoll(ExceptionSink
         http_expect_cleared = true;
     }
 
+    unsigned cancel_check = 0;
     while (!received) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked body read")) {
+            chunked_body_state = ChunkedBodyState::DONE;
+            return nullptr;
+        }
+
         if (!poll_state) {
             startCurrentOp(xsink);
             if (*xsink) {
