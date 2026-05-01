@@ -2793,9 +2793,20 @@ static int qore_socket_object_exec_close(QoreSocketObject* s) {
 static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOperation* setup_poller,
         const char* owner_name, const char* goal, ExceptionSink* xsink) {
     s->ref();
+    ReferenceHolder<SocketSetupPollOperation> poller(setup_poller, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
-        qore_socket_object_make_poll_op(*sock_obj, setup_poller, goal, xsink), xsink);
+        qore_socket_object_make_poll_op(*sock_obj, poller.release(), goal, xsink), xsink);
     if (*xsink) {
         return -1;
     }
