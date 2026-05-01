@@ -584,12 +584,12 @@ void NegotiatingHttpClientConnection::closeConnection(ExceptionSink* xsink) {
         return;
     }
 
-    // Cancel from the AsyncIoController.  doCancelIntern will abort our
-    // neg poll op which transitions it to CLOSED and clears the inner
-    // connect op (which in turn clears non_block_flags).  Always cancel
-    // when submitted, even if the base connection state is already CLOSED:
-    // the I/O controller can still hold the poll op until the current
-    // callback is finalized.
+    // Cancel and close from the AsyncIoController.  doCancelIntern will
+    // abort our neg poll op which transitions it to CLOSED and clears the
+    // inner connect op (which in turn clears non_block_flags), then the
+    // controller closes the socket.  Always cancel when submitted, even if
+    // the base connection state is already CLOSED: the I/O controller can
+    // still hold the poll op until the current callback is finalized.
     if (submitted_to_controller && sock_priv) {
         ExceptionSink cancel_xsink;
         ReferenceHolder<QoreObject> ctl_obj_holder(
@@ -601,7 +601,7 @@ void NegotiatingHttpClientConnection::closeConnection(ExceptionSink* xsink) {
                         CID_ASYNCIOCONTROLLER, &cancel_xsink)),
                 &cancel_xsink);
             if (ctl_priv_holder) {
-                ctl_priv_holder->cancel(sock_priv, &cancel_xsink);
+                ctl_priv_holder->cancelAndClose(sock_priv, &cancel_xsink);
             }
         }
         cancel_xsink.clear();
