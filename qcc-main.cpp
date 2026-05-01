@@ -1166,6 +1166,12 @@ static bool dump_skip_string_ref(const QoreAOTBinaryReader& reader,
     return true;
 }
 
+static bool dump_skip_len_string_ref(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end) {
+    uint32_t len = 0;
+    return dump_read_u32(p, end, len) && dump_skip_string_ref(reader, p, end);
+}
+
 static const char* dump_aot_expr_kind_name(uint8_t kind) {
     const auto* info = getAOTExprSlotKindInfo(kind);
     if (info && info->name) {
@@ -1285,6 +1291,9 @@ static bool dump_skip_inline_expr_list(const QoreAOTBinaryReader& reader,
     }
     return true;
 }
+
+static bool dump_skip_serialized_value_no_summary(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end);
 
 static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end, uint8_t kind, bool slot_form,
@@ -1481,10 +1490,7 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 : dump_skip_bytes(p, end, 1);
 
         case AOTExprKind::CONST_VALUE: {
-            std::string value_error;
-            QoreValue v = reader.readValue(p, end, value_error);
-            v.discard(nullptr);
-            return value_error.empty();
+            return dump_skip_serialized_value_no_summary(reader, p, end);
         }
 
         case AOTExprKind::HASHDECL_NEW:
@@ -1542,28 +1548,24 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
             }
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
-        case AOTExprKind::CAST_HASHDECL: {
-            if (!dump_skip_string_ref(reader, p, end) || !dump_skip_bytes(p, end, 1)) {
-                return false;
-            }
-            if (!slot_form) {
-                uint8_t has_inner = 0;
-                if (!dump_read_u8(p, end, has_inner)) {
-                    return false;
-                }
-                if (has_inner && !dump_skip_inline_expr(reader, p, end, summary, func_name,
-                        child_ctx)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
+        case AOTExprKind::CAST_HASHDECL:
         case AOTExprKind::CAST_COMPLEX_HASH:
         case AOTExprKind::CAST_COMPLEX_LIST:
         case AOTExprKind::CAST_CLASS:
-        case AOTExprKind::CAST_ENUM:
-            return dump_skip_string_ref(reader, p, end) && dump_skip_bytes(p, end, 1);
+        case AOTExprKind::CAST_ENUM: {
+            if (!dump_skip_string_ref(reader, p, end) || !dump_skip_bytes(p, end, 1)) {
+                return false;
+            }
+            if (slot_form) {
+                return true;
+            }
+            uint8_t has_inner = 0;
+            if (!dump_read_u8(p, end, has_inner)) {
+                return false;
+            }
+            return !has_inner
+                || dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+        }
 
         case AOTExprKind::DOT_EVAL_TARGET: {
             if (!dump_skip_string_ref(reader, p, end)
@@ -1603,13 +1605,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 if (!dump_read_u8(p, end, has_default)) {
                     return false;
                 }
-                if (has_default) {
-                    std::string value_error;
-                    QoreValue dv = reader.readValue(p, end, value_error);
-                    dv.discard(nullptr);
-                    if (!value_error.empty()) {
-                        return false;
-                    }
+                if (has_default && !dump_skip_serialized_value_no_summary(reader, p, end)) {
+                    return false;
                 }
             }
             if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_CLOSURE_VARARGS_FLAGS) != 0) {
@@ -1902,12 +1899,6 @@ struct AOTDefaultDumpSummary {
     std::vector<Detail> expr_tree_details;
 };
 
-static bool dump_skip_len_string_ref(const QoreAOTBinaryReader& reader,
-        const uint8_t*& p, const uint8_t* end) {
-    uint32_t len = 0;
-    return dump_read_u32(p, end, len) && dump_skip_string_ref(reader, p, end);
-}
-
 static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
         const uint8_t*& p, const uint8_t* end, AOTDefaultDumpSummary& summary,
         std::string& error, bool top_level, const char* category,
@@ -2085,6 +2076,14 @@ static bool dump_skip_serialized_value(const QoreAOTBinaryReader& reader,
 
     error = "unknown serialized value tag " + std::to_string(static_cast<unsigned>(tag));
     return false;
+}
+
+static bool dump_skip_serialized_value_no_summary(const QoreAOTBinaryReader& reader,
+        const uint8_t*& p, const uint8_t* end) {
+    AOTDefaultDumpSummary summary;
+    std::string error;
+    return dump_skip_serialized_value(reader, p, end, summary, error, false,
+        "", "", "");
 }
 
 static std::string dump_owner_name(const char* preferred, const char* fallback) {
