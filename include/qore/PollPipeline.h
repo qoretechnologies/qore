@@ -164,6 +164,7 @@ public:
     DLLEXPORT void abort(ExceptionSink* xsink) override;
     DLLEXPORT QoreValue getOutput() const override;
     DLLEXPORT int getAndClearItemsPushed() override;
+    DLLEXPORT void setReadyEvents(int events) override;
     DLLEXPORT QoreHashNode* getResult(ExceptionSink* xsink) const;
 
     // --- Builder methods (app thread, before submit) ---
@@ -466,6 +467,9 @@ private:
 
     //! Per-continuePoll counter for items pushed to queues via PUSH_QUEUE
     int items_pushed_in_cycle = 0;
+
+    //! Events that woke the controller for this pipeline
+    int ready_events = 0;
 
     //! Output value (from final step or error)
     mutable QoreValue output;

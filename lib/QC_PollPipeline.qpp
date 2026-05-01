@@ -408,6 +408,10 @@ int PollPipelinePriv::addReadHttpBody(const char* method) {
 }
 
 int PollPipelinePriv::addDelegate(SocketPollOperationBase* op, QoreObject* op_obj) {
+    if (op->needsWorkerDispatch()) {
+        return -1;
+    }
+
     // Store the delegate op (ref'd)
     op->ROreference();
     op_obj->ref();
@@ -911,6 +915,10 @@ int PollPipelinePriv::getAndClearItemsPushed() {
     return result;
 }
 
+void PollPipelinePriv::setReadyEvents(int events) {
+    ready_events = events;
+}
+
 void PollPipelinePriv::setResultAction(AbstractAsyncAction* action) {
     assert(action);
     if (result_action) {
@@ -924,6 +932,8 @@ void PollPipelinePriv::setResultAction(AbstractAsyncAction* action) {
 
 QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
     items_pushed_in_cycle = 0;
+    int cycle_ready_events = ready_events;
+    ready_events = 0;
     while (true) {
         // If we have an active inner op, delegate to it
         if (current_op) {
@@ -1226,13 +1236,14 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                 // No complete frame in buffer — need to read from socket
                 // Use a non-blocking recv via inner op
                 if (!current_op) {
-                    // Check if data is available on the socket
-                    if (!sock_obj->isDataAvailable(xsink, 0)) {
-                        if (*xsink) {
-                            closed = true;
-                            return nullptr;
-                        }
-                        // No data available — complete without frame
+                    // Avoid Socket::isDataAvailable() here: it delegates to the
+                    // async controller and cannot be called from the I/O thread.
+                    // Use the readiness event that woke this pipeline plus
+                    // socket-level buffered data checks instead.
+                    bool read_ready = (cycle_ready_events & (SOCK_POLLIN | SOCK_POLLERR))
+                        || sock_obj->hasPendingData();
+                    if (!read_ready) {
+                        // No data available in this cycle — complete without frame
                         if (step.next_step >= 0) {
                             current_step = step.next_step;
                         } else {
@@ -1956,6 +1967,12 @@ int PollPipeline::addDelegate(object op) [dom=NETWORK] {
             xsink->raiseException("POLL-PIPELINE-ERROR",
                 "delegate object does not have SocketPollOperationBase private data");
         }
+        return -1;
+    }
+    if (spop->needsWorkerDispatch()) {
+        spop->deref(xsink);
+        xsink->raiseException("POLL-PIPELINE-ERROR",
+            "delegate object requires worker dispatch and cannot be run from PollPipeline");
         return -1;
     }
     // addDelegate takes its own refs; release the getReferencedPrivateData ref

@@ -3798,12 +3798,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         }
 
         // --- PHASE 2: continuePoll outside lock ---
-        // C++ poll operations (SocketPollOperationBase subclasses) run directly
-        // on the I/O thread via spop_base->continuePoll() — pure C++, no Qore
-        // interpreter. All HTTP client protocol ops (H1/H2/H3) are C++.
-        // Qore-language poll operations run on the I/O thread for trusted code
-        // or are dispatched to workers for sandboxed code. Server-side Qore
-        // poll ops will be migrated to PollPipeline or C++ in follow-on work.
+        // Pure C++ poll operations run directly on the I/O thread via
+        // spop_base->continuePoll(). Qore-language poll operations and C++
+        // wrappers that may call Qore, block, or perform sync I/O declare
+        // needsWorkerDispatch() and are dispatched to the worker pool.
         struct PollResult {
             std::string key;
             QoreHashNode* new_poll_info;  // Refed or nullptr
