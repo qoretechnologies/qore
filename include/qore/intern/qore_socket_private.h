@@ -55,6 +55,7 @@
 
 #include <cctype>
 #include <cerrno>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
@@ -871,12 +872,11 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     int64 tl_warning_us = 0;     // timeout threshold for network action warning in microseconds
     double tp_warning_bs = 0;    // throughput warning threshold in B/s
-    int64 tp_bytes_sent = 0,     // throughput: bytes sent
-        tp_bytes_recv = 0,       // throughput: bytes received
-        tp_us_sent = 0,          // throughput: time sending
-        tp_us_recv = 0,          // throughput: time receiving
-        tp_us_min = 0            // throughput: minimum time for transfer to be considered
-        ;
+    std::atomic<int64> tp_bytes_sent{0};  // throughput: bytes sent
+    std::atomic<int64> tp_bytes_recv{0};  // throughput: bytes received
+    std::atomic<int64> tp_us_sent{0};     // throughput: time sending
+    std::atomic<int64> tp_us_recv{0};     // throughput: time receiving
+    int64 tp_us_min = 0;         // throughput: minimum time for transfer to be considered
 
     //! callback argument for the warning queue
     QoreValue warn_callback_arg{};
@@ -2939,10 +2939,14 @@ struct qore_socket_private : public QoreReferenceCounter {
             h.setKeyValue("min_throughput_us", (int64)tp_us_min, 0);
         }
 
-        h.setKeyValue("bytes_sent", tp_bytes_sent + s.tp_bytes_sent, 0);
-        h.setKeyValue("bytes_recv", tp_bytes_recv + s.tp_bytes_sent, 0);
-        h.setKeyValue("us_sent", tp_us_sent + s.tp_us_sent, 0);
-        h.setKeyValue("us_recv", tp_us_recv + s.tp_us_recv, 0);
+        h.setKeyValue("bytes_sent", tp_bytes_sent.load(std::memory_order_relaxed)
+            + s.tp_bytes_sent.load(std::memory_order_relaxed), 0);
+        h.setKeyValue("bytes_recv", tp_bytes_recv.load(std::memory_order_relaxed)
+            + s.tp_bytes_recv.load(std::memory_order_relaxed), 0);
+        h.setKeyValue("us_sent", tp_us_sent.load(std::memory_order_relaxed)
+            + s.tp_us_sent.load(std::memory_order_relaxed), 0);
+        h.setKeyValue("us_recv", tp_us_recv.load(std::memory_order_relaxed)
+            + s.tp_us_recv.load(std::memory_order_relaxed), 0);
     }
 
     DLLLOCAL void getUsageInfo(QoreHashNode& h) const {
@@ -2953,10 +2957,10 @@ struct qore_socket_private : public QoreReferenceCounter {
             h.setKeyValue("min_throughput_us", (int64)tp_us_min, 0);
         }
 
-        h.setKeyValue("bytes_sent", tp_bytes_sent, 0);
-        h.setKeyValue("bytes_recv", tp_bytes_recv, 0);
-        h.setKeyValue("us_sent", tp_us_sent, 0);
-        h.setKeyValue("us_recv", tp_us_recv, 0);
+        h.setKeyValue("bytes_sent", tp_bytes_sent.load(std::memory_order_relaxed), 0);
+        h.setKeyValue("bytes_recv", tp_bytes_recv.load(std::memory_order_relaxed), 0);
+        h.setKeyValue("us_sent", tp_us_sent.load(std::memory_order_relaxed), 0);
+        h.setKeyValue("us_recv", tp_us_recv.load(std::memory_order_relaxed), 0);
     }
 
     DLLLOCAL QoreHashNode* getUsageInfo() const {
@@ -2966,10 +2970,10 @@ struct qore_socket_private : public QoreReferenceCounter {
     }
 
     DLLLOCAL void clearStats() {
-        tp_bytes_sent = 0;
-        tp_bytes_recv = 0;
-        tp_us_sent = 0;
-        tp_us_recv = 0;
+        tp_bytes_sent.store(0, std::memory_order_relaxed);
+        tp_bytes_recv.store(0, std::memory_order_relaxed);
+        tp_us_sent.store(0, std::memory_order_relaxed);
+        tp_us_recv.store(0, std::memory_order_relaxed);
     }
 
     DLLLOCAL void doTimeoutWarning(const char* op, int64 dt) {

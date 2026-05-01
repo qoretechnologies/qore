@@ -9556,17 +9556,18 @@ void PrivateQoreSocketThroughputHelper::finalize(int64 bytes) {
         return;
     }
 
+    int64 dt = q_clock_getmicros() - start;
     if (send) {
-        sock->tp_bytes_sent += bytes;
+        sock->tp_bytes_sent.fetch_add(bytes, std::memory_order_relaxed);
+        sock->tp_us_sent.fetch_add(dt, std::memory_order_relaxed);
     } else {
-        sock->tp_bytes_recv += bytes;
+        sock->tp_bytes_recv.fetch_add(bytes, std::memory_order_relaxed);
+        sock->tp_us_recv.fetch_add(dt, std::memory_order_relaxed);
     }
 
     if (!sock->tp_warning_bs) {
         return;
     }
-
-    int64 dt = q_clock_getmicros() - start;
 
     // ignore if less than event time threshold
     if (dt < sock->tp_us_min) {
