@@ -2730,18 +2730,39 @@ static int qore_socket_object_exec_connect_unix(QoreSocketObject* s, const char*
 static int qore_socket_object_exec_upgrade_ssl(QoreSocketObject* s, int timeout_ms, bool server,
         ExceptionSink* xsink) {
     s->ref();
-    const char* goal = server ? "upgrade-server-ssl" : "upgrade-client-ssl";
-    return qore_socket_object_exec_poll_no_output(s,
+    ReferenceHolder<SocketPollOperationBase> poller(
         server
             ? static_cast<SocketPollOperationBase*>(new SocketUpgradeServerSslPollOperation(xsink, s, true))
             : static_cast<SocketPollOperationBase*>(new SocketUpgradeClientSslPollOperation(xsink, s, true)),
-        timeout_ms, goal, goal, xsink);
+        xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
+    const char* goal = server ? "upgrade-server-ssl" : "upgrade-client-ssl";
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), timeout_ms, goal, goal, xsink);
 }
 
 static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSink* xsink) {
     s->ref();
-    return qore_socket_object_exec_poll_no_output(s, new SocketShutdownSslPollOperation(xsink, s, true), -1,
-        "shutdownSSL", "shutdown-ssl", xsink);
+    ReferenceHolder<SocketPollOperationBase> poller(new SocketShutdownSslPollOperation(xsink, s, true), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), -1, "shutdownSSL", "shutdown-ssl", xsink);
 }
 
 static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* owner_name, ExceptionSink* xsink,
@@ -2755,9 +2776,20 @@ static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* 
 static int qore_socket_object_exec_shutdown(QoreSocketObject* s, ExceptionSink* xsink) {
     s->ref();
     SocketShutdownPollOperation* shutdown_poller = new SocketShutdownPollOperation(s);
+    ReferenceHolder<SocketPollOperationBase> poller(shutdown_poller, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
-        qore_socket_object_make_poll_op(*sock_obj, shutdown_poller, "shutdown", xsink), xsink);
+        qore_socket_object_make_poll_op(*sock_obj, poller.release(), "shutdown", xsink), xsink);
     if (*xsink) {
         return -1;
     }
