@@ -116,6 +116,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("stop clear", \stopClearTest());
         addTestCase("stop", \stopTest());
         addTestCase("shared result queue", \sharedResultQueueTest());
+        addTestCase("result queue with onComplete", \resultQueueWithOnCompleteTest());
         addTestCase("no timeout", \noTimeoutTest());
         addTestCase("timeout timing", \timeoutTimingTest());
         addTestCase("immediate timeout", \immediateTimeoutTest());
@@ -609,6 +610,36 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertFalse(exists r2.ex, "shared queue result 2 should succeed");
         assertTrue((r1.other.goal == "shared-1" && r2.other.goal == "shared-2")
             || (r1.other.goal == "shared-2" && r2.other.goal == "shared-1"));
+    }
+
+    resultQueueWithOnCompleteTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        Queue shared = new Queue();
+        Counter callback_done(1);
+        hash<SocketPollResultInfo> callback_result;
+
+        AbstractPollOperation inner = rest.startPollSendRecv("GET", "/api_text");
+        DelegatingPollOperation wrapped(inner, sub (hash<SocketPollResultInfo> result) {
+            callback_result = cast<hash<SocketPollResultInfo>>(result);
+            callback_done.dec();
+        });
+
+        Queue returned = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": wrapped,
+            "owner": "queue-with-on-complete-owner",
+            "resultQueue": shared,
+        });
+        assertTrue(returned === shared, "submit should return the provided shared result Queue");
+
+        hash<SocketPollResultInfo> queued = shared.get(5s);
+        assertFalse(exists queued.ex, "shared queue result should succeed");
+        assertEq(0, callback_done.waitForZero(5s), "onComplete should also run");
+        assertFalse(exists callback_result.ex, "onComplete result should succeed");
+        assertEq(queued.canceled, callback_result.canceled, "queue and callback results should match");
     }
 
     noTimeoutTest() {

@@ -6270,26 +6270,36 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
     ASYNC_IO_TRACE("deliverResult: has_on_complete=%d spop_obj=%p queue=%p class=%s\n",
         (int)has_on_complete, (void*)spop_obj, (void*)queue,
         spop_obj ? spop_obj->getClassName() : "null");
-    if (has_on_complete && spop_obj) {
-        if (!result) {
-            // buildResultHash failed — don't dispatch onComplete with null result
-            // (the Qore method would receive NOTHING, causing PSEUDO-METHOD-DOES-NOT-EXIST
-            // when accessing result members)
-            log(QORE_LOG_LEVEL_ERROR, "deliverResult: buildResultHash returned null for %s; "
-                "skipping onComplete dispatch", spop_obj->getClassName());
-            spop_obj->deref(xsink);
+    bool dispatch_on_complete = has_on_complete && spop_obj;
+    if (dispatch_on_complete && !result) {
+        // buildResultHash failed — don't dispatch onComplete with null result
+        // (the Qore method would receive NOTHING, causing PSEUDO-METHOD-DOES-NOT-EXIST
+        // when accessing result members)
+        log(QORE_LOG_LEVEL_ERROR, "deliverResult: buildResultHash returned null for %s; "
+            "skipping onComplete dispatch", spop_obj->getClassName());
+        spop_obj->deref(xsink);
+        return;
+    }
+
+    if (queue) {
+        QoreHashNode* queue_result = dispatch_on_complete && result
+            ? result->hashRefSelf()
+            : result;
+        queue->push(xsink, queue_result);
+        if (!dispatch_on_complete) {
+            if (spop_obj) {
+                spop_obj->deref(xsink);
+            }
             return;
         }
+    }
+
+    if (dispatch_on_complete) {
         // Dispatch onComplete() to worker pool — no Qore code on the I/O thread.
         // The closure's captured program context ensures proper execution.
         ensureCallDispatcher();
         call_dispatcher.load(std::memory_order_acquire)->dispatchOnCompleteAsync(spop_obj, result,
             owner);
-    } else if (queue) {
-        if (spop_obj) {
-            spop_obj->deref(xsink);
-        }
-        queue->push(xsink, result);
     } else {
         // No onComplete callback and no queue — result is dropped.
         // This should not happen: submit() creates a safety-net queue when
