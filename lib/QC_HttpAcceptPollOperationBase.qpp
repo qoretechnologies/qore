@@ -115,16 +115,6 @@ static QoreHashNode* qore_http_accept_get_numeric_addr_info(QoreSocketObject* so
     return qore_socket_private::makeAddrInfo(addr, len, socketname);
 }
 
-static void qore_http_accept_set_numeric_addr_info(QoreHashNode* h, const char* key, QoreSocketObject* sock,
-        bool peer, ExceptionSink* xsink) {
-    ReferenceHolder<QoreHashNode> info(qore_http_accept_get_numeric_addr_info(sock, peer), xsink);
-    if (info) {
-        h->setKeyValue(key, info.release(), xsink);
-    } else {
-        h->setKeyValue(key, QoreValue(), xsink);
-    }
-}
-
 QoreHashNode* HttpAcceptPollOperationPriv::continuePoll(ExceptionSink* xsink) {
     if (goalReached()) {
         return nullptr;
@@ -182,11 +172,14 @@ QoreValue HttpAcceptPollOperationPriv::getOutput() const {
     h->setKeyValue("ssl", ssl, &xsink);
     h->setKeyValue("secure", secure, &xsink);
     h->setKeyValue("is_http2", is_http2, &xsink);
-    if (client_sock) {
-        qore_http_accept_set_numeric_addr_info(*h, "peer_info", client_sock, true, &xsink);
-        qore_http_accept_set_numeric_addr_info(*h, "socket_info", client_sock, false, &xsink);
+    if (peer_info) {
+        h->setKeyValue("peer_info", peer_info->hashRefSelf(), &xsink);
     } else {
         h->setKeyValue("peer_info", QoreValue(), &xsink);
+    }
+    if (socket_info) {
+        h->setKeyValue("socket_info", socket_info->hashRefSelf(), &xsink);
+    } else {
         h->setKeyValue("socket_info", QoreValue(), &xsink);
     }
     if (!negotiated_protocol.empty()) {
@@ -201,6 +194,14 @@ QoreValue HttpAcceptPollOperationPriv::getOutput() const {
 
 void HttpAcceptPollOperationPriv::cleanup(ExceptionSink* xsink) {
     releaseCurrentOp(xsink);
+    if (peer_info) {
+        peer_info->deref(xsink);
+        peer_info = nullptr;
+    }
+    if (socket_info) {
+        socket_info->deref(xsink);
+        socket_info = nullptr;
+    }
 
     if (client_sock) {
         client_sock->deref(xsink);
@@ -256,6 +257,9 @@ QoreHashNode* HttpAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* x
         accept_state = AcceptState::COMPLETE;
         return nullptr;
     }
+
+    peer_info = qore_http_accept_get_numeric_addr_info(client_sock, true);
+    socket_info = qore_http_accept_get_numeric_addr_info(client_sock, false);
 
     // Set TCP_NODELAY for immediate response sending
     client_sock->setNoDelayForAsyncPoll(1, xsink);

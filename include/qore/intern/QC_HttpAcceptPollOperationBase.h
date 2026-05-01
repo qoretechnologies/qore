@@ -173,6 +173,8 @@ private:
     bool ssl_accept_all_certs;              //!< Accept all client certificates
     std::string http_version;               //!< HTTP version mode string
     std::string negotiated_protocol;        //!< Negotiated ALPN protocol
+    QoreHashNode* peer_info = nullptr;      //!< Numeric peer address info captured on accept
+    QoreHashNode* socket_info = nullptr;    //!< Numeric local address info captured on accept
 
     // SSL config (stored for deferred application to client socket)
     QoreSSLCertificate* cert;               //!< ref'd SSL certificate (nullable)
