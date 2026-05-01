@@ -660,6 +660,9 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::Socket::setAlpnProtocols() "Socket::setAlpnProtocols()": sets ALPN protocols for TLS negotiation
       - @ref Qore::Socket::getAlpnProtocol() "Socket::getAlpnProtocol()": returns the negotiated ALPN protocol
       - @ref Qore::Socket::isHttp2() "Socket::isHttp2()": returns True if HTTP/2 was negotiated via ALPN
+      - @ref HttpServer::HttpServer::addListenerAsync() "HttpServer::addListenerAsync()" /
+        @ref HttpServer::HttpServer::addListenersAsync() "HttpServer::addListenersAsync()": Future-based listener
+        setup APIs that share the same async setup path as the synchronous listener methods
       - @ref Qore::HTTPClient::setHttp2Mode() "HTTPClient::setHttp2Mode()": sets HTTP/2 mode ("auto", "disabled", "required")
       - @ref Qore::HTTPClient::getHttp2Mode() "HTTPClient::getHttp2Mode()": returns current HTTP/2 mode
       - @ref Qore::HTTPClient::setHttp2Enabled() "HTTPClient::setHttp2Enabled()": enables/disables HTTP/2 support

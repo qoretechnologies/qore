@@ -216,6 +216,9 @@ log("started listener on %s", lh.desc);
       - async server request contexts now get numeric \c "peer-info" immediately without reverse DNS
       - reverse DNS is dispatched in parallel and exposed as optional \c "peer-info-future" for handlers that need it
       - moved peer info refresh to after SSL handshake completion when socket is stable
+    - added @ref HttpServer::HttpServer::addListenerAsync() "addListenerAsync()" and
+      @ref HttpServer::HttpServer::addListenersAsync() "addListenersAsync()" methods for Future-based listener setup
+      and routed synchronous listener methods through the same async setup path
     - removed high-frequency INFO log messages from async I/O hot paths to reduce log spam
     - fixed async I/O cache leak when clients disconnect during SSL handshake
     - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were
@@ -1019,27 +1022,37 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     */
     list<hash<auto>> addListeners(string bind, hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
-        list<hash<auto>> rv;
-        if (bind !~ /:\w+/) {
-            if (bind =~ /^\//) {
-                info.node = bind;
-                remove info.service;
-                rv = list(addListenerIntern(info).getInfo());
-            } else {
-                # assume service only
-                remove info.node;
-                info.service = bind;
-                rv = addINETListenersIntern(info, \errmap);
-            }
-        } else {
-            # add node and service
-            (info.node, info.service) = (bind =~ x/(.+):(\w+)/);
-            rv = addINETListenersIntern(info, \errmap);
-        }
+        list<hash<auto>> rv = addListenersAsync(bind, info, \errmap).get();
         if (info.sync) {
             waitForAsyncIo();
         }
         return rv;
+    }
+
+    #! asynchronously adds one or more dedicated listeners to the server with the given bind address
+    /** @param bind the bind address for the dedicated listener; this can be a port number or an address (or
+        hostname) and a port number separated by a colon (ex: \c "192.168.20.4:8021"); the bind address will overwrite
+        any \a node and \a service addresses in the \a info hash; all possible addresses will be bound to new
+        listeners
+        @param info a listener information hash
+        @param errmap an optional reference to a hash of error information keyed by bind address
+
+        @return a @ref Qore::Thread::Future "Future" resolving to a list of listener info hashes; see the return value
+        of HttpServer::getListenerInfo() for the description of each hash element in the list returned by this method
+
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+
+        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
+        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        to accept connections.
+
+        @since HttpServer 1.6
+    */
+    Future addListenersAsync(string bind, hash<HttpListenerOptionInfo> info,
+            *reference<hash<string, string>> errmap) {
+        return addListenersInternAsync(bind, info, \errmap);
     }
 
     #! adds one or more dedicated listeners to the server with the given bind address
@@ -1063,17 +1076,32 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @since HttpServer 0.3.13.1
     */
     list<hash<auto>> addListeners(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
-        list<hash<auto>> rv;
-        if (exists info.node && !exists info.service) {
-            # try to bind without a service, can be a UNIX domain socket
-            rv = list(addListenerIntern(info).getInfo());
-        } else {
-            rv = addINETListenersIntern(info, \errmap);
-        }
+        list<hash<auto>> rv = addListenersAsync(info, \errmap).get();
         if (info.sync) {
             waitForAsyncIo();
         }
         return rv;
+    }
+
+    #! asynchronously adds one or more dedicated listeners to the server with the given bind address
+    /** @param info a listener information hash
+        @param errmap an optional reference to a hash of error information keyed by bind address
+
+        @return a @ref Qore::Thread::Future "Future" resolving to a list of listener info hashes; see the return value
+        of HttpServer::getListenerInfo() for the description of each hash element in the list returned by this method
+
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+
+        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
+        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        to accept connections.
+
+        @since HttpServer 1.6
+    */
+    Future addListenersAsync(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
+        return addListenersInternAsync(info, \errmap);
     }
 
     #! adds a single global listener to the server
@@ -1090,12 +1118,32 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         Use @ref HttpServer::HttpServer::addListener "addListener(hash<HttpListenerOptionInfo>)" with \c sync: \c False to add listeners without blocking.
      */
     hash<auto> addListener(int port) {
-        hash<auto> rv = addListenerIntern(<HttpListenerOptionInfo>{
-            "service": port,
-        }).getInfo();
+        hash<auto> rv = addListenerAsync(port).get();
         # sync defaults to True, so wait for async I/O to be ready
         waitForAsyncIo();
         return rv;
+    }
+
+    #! asynchronously adds a single global listener to the server
+    /** @param port the port number
+
+        @return a @ref Qore::Thread::Future "Future" resolving to a listener info hash; see the return value of
+        HttpServer::HttpServer::getListenerInfo() for the description of the hash returned by this method
+
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+
+        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
+        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        to accept connections.
+
+        @since HttpServer 1.6
+     */
+    Future addListenerAsync(int port) {
+        return addListenerInternAsync(<HttpListenerOptionInfo>{
+            "service": port,
+        });
     }
 
     #! adds a single global listener to the server
@@ -1116,11 +1164,31 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @ref waitForAsyncIo() manually.
      */
     hash<auto> addListener(hash<HttpListenerOptionInfo> opts) {
-        hash<auto> rv = addListenerIntern(opts).getInfo();
+        hash<auto> rv = addListenerAsync(opts).get();
         if (opts.sync) {
             waitForAsyncIo();
         }
         return rv;
+    }
+
+    #! asynchronously adds a single global listener to the server
+    /** @param opts the listener options
+
+        @return a @ref Qore::Thread::Future "Future" resolving to a listener info hash; see the return value of
+        HttpServer::HttpServer::getListenerInfo() for the description of the hash returned by this method
+
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+
+        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
+        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        to accept connections.
+
+        @since HttpServer 1.6
+     */
+    Future addListenerAsync(hash<HttpListenerOptionInfo> opts) {
+        return addListenerInternAsync(opts);
     }
 
     #! Adds an HTTP/3 QUIC listener on the given UDP port
@@ -2601,6 +2669,23 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             sprintf("internal error: retry loop exhausted without a decision");
     }
 
+    private Future addListenerInternAsync(hash<HttpListenerOptionInfo> info) {
+        Promise p();
+        Future f = p.getFuture();
+        try {
+            getGlobalAsyncCtrl().submitTask(sub () {
+                try {
+                    p.set(addListenerIntern(info).getInfo());
+                } catch (hash<ExceptionInfo> ex) {
+                    p.setError(ex.err, ex.desc, ex.arg);
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+        return f;
+    }
+
     private Future resolveINETListenerAddressesAsync(hash<HttpListenerOptionInfo> info) {
         if (info.node || info.family != AF_UNSPEC) {
             return getaddrinfo_async(info.node, info.service, info.family, AIFlags);
@@ -2719,9 +2804,51 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return f;
     }
 
-    private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
+    private Future addListenerInfoListAsync(hash<HttpListenerOptionInfo> info) {
+        Promise p();
+        Future f = p.getFuture();
+        try {
+            getGlobalAsyncCtrl().submitTask(sub () {
+                try {
+                    p.set(list(addListenerIntern(info).getInfo()));
+                } catch (hash<ExceptionInfo> ex) {
+                    p.setError(ex.err, ex.desc, ex.arg);
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+        return f;
+    }
+
+    private Future addListenersInternAsync(string bind, hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
-        return addINETListenersInternAsync(info, \errmap).get();
+        if (bind !~ /:\w+/) {
+            if (bind =~ /^\//) {
+                info.node = bind;
+                remove info.service;
+                return addListenerInfoListAsync(info);
+            }
+
+            # assume service only
+            remove info.node;
+            info.service = bind;
+            return addINETListenersInternAsync(info, \errmap);
+        }
+
+        # add node and service
+        (info.node, info.service) = (bind =~ x/(.+):(\w+)/);
+        return addINETListenersInternAsync(info, \errmap);
+    }
+
+    private Future addListenersInternAsync(hash<HttpListenerOptionInfo> info,
+            *reference<hash<string, string>> errmap) {
+        if (exists info.node && !exists info.service) {
+            # try to bind without a service, can be a UNIX domain socket
+            return addListenerInfoListAsync(info);
+        }
+
+        return addINETListenersInternAsync(info, \errmap);
     }
 
     private hash<HttpResponseInfo> noHandlerError(hash<auto> cx, hash<auto> hdr, auto body) {
