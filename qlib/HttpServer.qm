@@ -1050,6 +1050,15 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
         to accept connections.
 
+        @par Example
+        @code{.py}
+        hash<string, string> errmap;
+        Future setup = server.addListenersAsync("127.0.0.1:8080",
+            <HttpListenerOptionInfo>{"sync": False}, \errmap);
+        list<hash<auto>> listeners = setup.get();
+        server.waitForAsyncIo();
+        @endcode
+
         @since HttpServer 1.6
     */
     Future addListenersAsync(string bind, hash<HttpListenerOptionInfo> info,
@@ -1100,6 +1109,17 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
         to accept connections.
 
+        @par Example
+        @code{.py}
+        hash<string, string> errmap;
+        Future setup = server.addListenersAsync(<HttpListenerOptionInfo>{
+            "service": 8080,
+            "sync": False,
+        }, \errmap);
+        list<hash<auto>> listeners = setup.get();
+        server.waitForAsyncIo();
+        @endcode
+
         @since HttpServer 1.6
     */
     Future addListenersAsync(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
@@ -1139,6 +1159,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
         "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
         to accept connections.
+
+        @par Example
+        @code{.py}
+        Future setup = server.addListenerAsync(8080);
+        hash<auto> listener = setup.get();
+        server.waitForAsyncIo();
+        @endcode
 
         @since HttpServer 1.6
      */
@@ -1186,6 +1213,16 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
         "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
         to accept connections.
+
+        @par Example
+        @code{.py}
+        Future setup = server.addListenerAsync(<HttpListenerOptionInfo>{
+            "service": 0,
+            "sync": False,
+        });
+        hash<auto> listener = setup.get();
+        server.waitForAsyncIo();
+        @endcode
 
         @since HttpServer 1.6
      */
@@ -5274,8 +5311,10 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             Queue pq();
-            code register_fn = header_info.register_persistent_queue;
-            code deregister_fn = header_info.deregister_persistent_queue;
+            code<nothing(string, Queue)> register_fn =
+                header_info.register_persistent_queue;
+            code<nothing(string)> deregister_fn =
+                header_info.deregister_persistent_queue;
             sock_key = s.uniqueHash();
             register_fn(sock_key, pq);
             on_exit deregister_fn(sock_key);
@@ -6126,11 +6165,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     return;
                 }
 
+                bool is_multiplexed = (conn_info.header_info.http2 ?? False)
+                    || (conn_info.header_info.http3 ?? False);
                 if (async_response && async_response.code) {
-                    sendMultiplexedResponse(s, conn_info.header_info, async_response);
+                    if (is_multiplexed) {
+                        sendMultiplexedResponse(s, conn_info.header_info, async_response);
+                    } else {
+                        sendResponseSync(s, async_response);
+                    }
                 }
 
-                if (conn_info.header_info.body_streaming) {
+                if (is_multiplexed && conn_info.header_info.body_streaming) {
                     conn_info.header_info.io_wake();
                 }
             } catch (hash<ExceptionInfo> ex) {
