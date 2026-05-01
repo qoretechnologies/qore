@@ -19,6 +19,8 @@ print_usage () {
   echo "  QORE_PERF_TESTS_ONLY    Set to '1' to run only performance tests (same as -P)."
   echo "  QORE_TEST_QMOD_DIR       Directory with AOT qmods to prefer before ./qlib."
   echo "  QORE_TEST_SOURCE_MODULES Set to '1' to ignore the default build qmod directory."
+  echo "  QORE_TEST_PRESERVE_PROVIDER_ENV"
+  echo "                           Set to '1' to preserve external provider discovery env vars."
 }
 
 err_multiple_format_opts() {
@@ -210,6 +212,14 @@ fi
 # Export build qore binary path so that tests spawning sub-processes (via backquote, etc.)
 # use the same build binary rather than the system-installed qore.
 export QORE_EXECUTABLE="$QORE"
+
+# Keep qore tests hermetic by default. Developer shells often have Qorus or
+# application provider discovery configured, which can make negative provider
+# lookup tests print unrelated module-load diagnostics.
+if [ "${QORE_TEST_PRESERVE_PROVIDER_ENV}" != "1" ]; then
+    unset QORE_DATA_PROVIDERS
+    unset QORE_PROVIDER_INDEX_DIR
+fi
 
 if [ $MEASURE_TIME -eq 1 ]; then
     # Test time commands.
