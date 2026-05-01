@@ -1186,6 +1186,12 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
     } else {
         pholder = mpgm = new QoreProgram(parseOptions);
         mpgm->setScriptPath(modulePath.c_str());
+        // Inherit user-set parse defines from the parent so module-source
+        // %ifdef/%ifndef directives evaluate against the caller's view (see
+        // qore_program_private::inheritParseDefines for rationale)
+        if (p) {
+            qore_program_private::inheritParseDefines(*mpgm, *p);
+        }
     }
     // issue #3592: must add feature first
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -1529,6 +1535,12 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromPath(ExceptionSink& xsi
     } else {
         pholder = mpgm = new QoreProgram(po);
         mpgm->setScriptPath(path);
+        // Inherit user-set parse defines from the parent so module-source
+        // %ifdef/%ifndef directives evaluate against the caller's view (see
+        // qore_program_private::inheritParseDefines for rationale)
+        if (p) {
+            qore_program_private::inheritParseDefines(*mpgm, *p);
+        }
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {
@@ -1620,6 +1632,12 @@ QoreAbstractModule* QoreModuleManager::loadUserModuleFromSource(ExceptionSink& x
     } else {
         pholder = mpgm = new QoreProgram(po);
         mpgm->setScriptPath(path);
+        // Inherit user-set parse defines from the parent so module-source
+        // %ifdef/%ifndef directives evaluate against the caller's view (see
+        // qore_program_private::inheritParseDefines for rationale)
+        if (p) {
+            qore_program_private::inheritParseDefines(*mpgm, *p);
+        }
     }
     // issue #3592: add feature to module container program immediately
     if (qore_program_private::get(*mpgm)->addUserFeature(feature)) {

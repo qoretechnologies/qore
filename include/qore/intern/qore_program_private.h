@@ -2314,6 +2314,27 @@ public:
         pgm->priv->parseDefine(loc, str, val);
     }
 
+    //! Copies all defines from `parent` into `child`.
+    /** Used by user-module loading to make the calling Program's host-application
+        defines (e.g. `HasQorusLocalRestHelper` in Qorus) visible during the module's
+        own source parse, so `%ifdef`/`%ifndef` directives in the module evaluate
+        against the same view as the caller.  Without this, host-side parse defines
+        do not propagate to the per-module Program created in loadUserModuleFromPath
+        et al., and conditional `%requires` blocks fire unintentionally.
+
+        Existing defines in `child` (typically platform/builtin values like
+        `QoreVersionString`, `Unix`, etc., set by `qore_program_private_base::newProgram()`)
+        are overwritten with the parent's value.  Since the parent's platform values
+        match the child's, this is idempotent for those entries; user-set entries
+        propagate as intended.
+     */
+    DLLLOCAL static void inheritParseDefines(QoreProgram& child, QoreProgram& parent) {
+        for (const auto& i : parent.priv->dmap) {
+            QoreValue val = i.second.refSelf();
+            child.priv->setDefine(i.first.c_str(), val, child.priv->parseSink);
+        }
+    }
+
     DLLLOCAL static void runTimeDefine(QoreProgram* pgm, const char* str, QoreValue val, ExceptionSink* xsink) {
         pgm->priv->runTimeDefine(str, val, xsink);
     }
