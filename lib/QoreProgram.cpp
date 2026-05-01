@@ -306,6 +306,7 @@ QoreListNode* domain_bitfield_to_string_list(int64 i, ExceptionSink* xsink) {
 const char** qore_warnings = qore_warnings_l;
 unsigned qore_num_warnings = NUM_WARNINGS;
 qore_program_private::qore_program_to_object_map_t qore_program_private::qore_program_to_object_map;
+qore_program_private::programid_to_program_map_t qore_program_private::programid_to_program_map;
 QoreRWLock qore_program_private::lck_programMap;
 volatile unsigned qore_program_private::programIdCounter = 1;
 
@@ -322,6 +323,7 @@ void qore_program_private::registerProgram() {
 #endif
     programId = programIdCounter++;
     qore_program_private::qore_program_to_object_map.insert(qore_program_to_object_map_t::value_type(pgm, nullptr));
+    qore_program_private::programid_to_program_map.insert(programid_to_program_map_t::value_type(programId, pgm));
     printd(5, "qore_program_private::registerProgram() this: %p pgm: %p, pgmid: %d\n", this, pgm, programId);
 }
 
@@ -344,6 +346,10 @@ qore_program_private::~qore_program_private() {
     assert(i != qore_program_to_object_map.end());
     assert(i->second == 0);
     qore_program_to_object_map.erase(i);
+    programid_to_program_map_t::iterator pi = programid_to_program_map.find(programId);
+    assert(pi != programid_to_program_map.end());
+    assert(pi->second == pgm);
+    programid_to_program_map.erase(pi);
     printd(5, "qore_program_private::~qore_program_private() this: %p pgm: %p, pgmid: %d removed\n", this, pgm, programId);
 
     statementByFileIndex.clear();

@@ -307,6 +307,14 @@ const char* QoreNamespace::getModuleName() const {
     return priv->getModuleName();
 }
 
+bool QoreNamespace::isFromModule(const char* mod) const {
+    return priv->isFromModule(mod);
+}
+
+size_t QoreNamespace::getModuleCount() const {
+    return priv->getModuleNames().size();
+}
+
 const char* QoreNamespace::getName() const {
    return priv->name.c_str();
 }
@@ -3735,27 +3743,20 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
             qore_ns_private* npns = new qore_ns_private(i->first.c_str(), *i->second->priv);
             nns = npns->ns;
             nns->priv->imported = true;
-
-            // fix from_module when a module extends another module's namespace: if the source namespace's
-            // from_module doesn't match the namespace name but a loaded module with the namespace's name exists,
-            // use that module's name so the namespace is correctly attributed to its original module
-            if (!npns->from_module.empty() && npns->from_module != i->first) {
-                if (QMM.findModuleUnlocked(i->first.c_str())) {
-                    printd(5, "qore_ns_private::copyMergeCommittedNamespace() fixing from_module for '%s' "
-                        "from '%s' to '%s'\n", i->first.c_str(), npns->from_module.c_str(), i->first.c_str());
-                    npns->from_module = i->first;
-                }
-            }
-
-            //printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s::' merged %p '%s::' pub: %d\n",
-            //    this, name.c_str(), nns, nns->getName(), nns->priv->pub);
             nns = nsl.runtimeAdd(nns, this)->ns;
-        } else if (nns->priv->from_module != i->first && i->second->priv->from_module == i->first) {
-            // fix from_module when a module's own namespace was previously created by another module:
-            // the source namespace's from_module matches the namespace name, so it's the authoritative module
-            printd(5, "qore_ns_private::copyMergeCommittedNamespace() fixing from_module for existing '%s' "
-                "from '%s' to '%s'\n", i->first.c_str(), nns->priv->from_module.c_str(), i->first.c_str());
-            nns->priv->from_module = i->first;
+        }
+
+        // Merge the source namespace's contributing modules into the destination so
+        // module-name lookups (isFromModule / get_module_root_ns_intern) see every
+        // module that contributed to the merged namespace.  This replaces the old
+        // single-string "fix-up" heuristics that picked one canonical contributor
+        // by namespace-name == module-name matching — that picked the wrong module
+        // whenever (a) the namespace name didn't match its first contributor's
+        // module name (e.g. HttpServerUtil publishing into ::HttpServer), and
+        // (b) a different loaded module happened to share the namespace's name
+        // (e.g. the qorus HttpServer module).
+        for (const auto& m : i->second->priv->getModuleNames()) {
+            nns->priv->addModuleName(m);
         }
 
         nns->priv->copyMergeCommittedNamespace(*i->second->priv);
@@ -3772,13 +3773,24 @@ void qore_ns_private::parseAssimilate(QoreNamespace* ans) {
 
     qore_ns_private* pns = ans->priv;
 
-    // fix from_module when a module extends its own namespace that was previously created by a dependency:
-    // if the current module context name matches the namespace name, this module owns the namespace
+    // Track the current module as a contributor when this namespace is being extended
+    // from inside a module's parse, but only when the module is the namespace's
+    // canonical declarer (the namespace name matches the module name).  Adding the
+    // module unconditionally — even for empty intermediate namespaces routed
+    // through (e.g. `OMQ` and `OMQ::UserApi` levels in a module that only declares
+    // `OMQ::UserApi::Mapper::Foo`) — falsely tags host-provided namespaces (e.g.
+    // qorus-core's native `OMQ::UserApi` in the universal Java compile context)
+    // as module-owned and trips the JNI legacy `qore.<X>` rejection.  The set-based
+    // contributor tracking remains useful for cases where a module declares a
+    // namespace whose name matches its own module name — those still get added
+    // here — and for cases where two different modules each declare the same
+    // public namespace (e.g. ::HttpServer fed by HttpServerUtil and qorus's own
+    // HttpServer module): both sides set the canonical match here at parse time
+    // and the contributor list is merged via copyMergeCommittedNamespace at
+    // commit/import time, which is where multi-contributor cases actually arise.
     const char* mod_name = get_module_context_name();
-    if (mod_name && from_module != name && name == mod_name) {
-        printd(5, "qore_ns_private::parseAssimilate() fixing from_module for '%s' from '%s' to '%s'\n",
-            name.c_str(), from_module.c_str(), mod_name);
-        from_module = mod_name;
+    if (mod_name && name == mod_name) {
+        addModuleName(mod_name);
     }
 
     // ensure that either both namespaces are public or both are not

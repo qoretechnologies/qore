@@ -403,6 +403,21 @@ public:
     */
     DLLEXPORT QoreProgram* getProgram() const;
 
+    //! Returns the source QoreProgram object — the program where the class was originally declared.
+    /** Distinct from @ref getProgram() which returns the program currently hosting the class
+        (for an imported class, the importer).  This accessor returns the original source
+        program preserved across imports via @c qore_class_private::spgm.
+
+        Imported classes hold a strong reference (regular @c ref(), not @c depRef) on the
+        source program for as long as the import exists, so the source is guaranteed alive
+        while the returned pointer is in scope.
+
+        Returns @c nullptr for builtin/system classes that have no associated program.
+
+        @since %Qore 2.4.0
+    */
+    DLLEXPORT QoreProgram* getSourceProgram() const;
+
     //! adds a builtin method variant to a class
     /** @par Example:
         @code
