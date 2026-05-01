@@ -1033,14 +1033,31 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
             new QoreStringNode(ssl_required ? "https" : "http"), xsink);
     }
     if (req_headers->getKeyValue(":authority").isNullOrNothing()) {
-        int default_port = ssl_required ? 443 : 80;
-        if (target_port == default_port) {
-            req_headers->setKeyValue(":authority",
-                new QoreStringNode(target_host.c_str()), xsink);
-        } else {
-            QoreStringNode* authority = new QoreStringNode();
-            authority->sprintf("%s:%d", target_host.c_str(), target_port);
-            req_headers->setKeyValue(":authority", authority, xsink);
+        bool authority_set = false;
+        if (user_headers) {
+            ConstHashIterator hi(user_headers);
+            while (hi.next()) {
+                if (!strcasecmp(hi.getKey(), "host") && !hi.get().isNothing()) {
+                    QoreStringValueHelper sv(hi.get());
+                    if (!sv->empty()) {
+                        req_headers->setKeyValue(":authority", new QoreStringNode(sv->c_str()), xsink);
+                        authority_set = true;
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (!authority_set) {
+            int default_port = ssl_required ? 443 : 80;
+            if (target_port == default_port) {
+                req_headers->setKeyValue(":authority",
+                    new QoreStringNode(target_host.c_str()), xsink);
+            } else {
+                QoreStringNode* authority = new QoreStringNode();
+                authority->sprintf("%s:%d", target_host.c_str(), target_port);
+                req_headers->setKeyValue(":authority", authority, xsink);
+            }
         }
     }
 

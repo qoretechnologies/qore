@@ -3391,6 +3391,7 @@ public class Http2Test inherits QUnit::Test {
                         {
                             AutoLock al(result_mutex);
                             test_results.server_request_headers = request.headers;
+                            test_results.server_request_authority = request.authority;
                         }
 
                         # Send response with duplicate headers:
@@ -3437,6 +3438,7 @@ public class Http2Test inherits QUnit::Test {
                 AbstractPollOperation spop = client.startPollSendRecv("GET", "/multi-header", NOTHING, {
                     "Accept": "text/plain",
                     "Cookie": ("a=1", "b=2", "c=3"),
+                    "Host": "override.example",
                     "X-Custom": ("first", "second"),
                 });
 
@@ -3502,21 +3504,29 @@ public class Http2Test inherits QUnit::Test {
                     "duplicate custom headers should be a list");
             }
 
-            # Test 4: Duplicate set-cookie response headers → stored as list
+            # Test 4: Host override is sent as :authority, not as a duplicate regular header
+            assertEq("override.example", test_results.server_request_authority ?? "",
+                "Host override should be sent as HTTP/2 :authority");
+            if (exists test_results.server_request_headers) {
+                assertFalse(exists test_results.server_request_headers.host,
+                    "Host should not be sent as a regular HTTP/2 header");
+            }
+
+            # Test 5: Duplicate set-cookie response headers → stored as list
             if (exists test_results.client_response_headers) {
                 assertEq(("session=abc123; Path=/", "theme=dark; Path=/"),
                     test_results.client_response_headers."set-cookie",
                     "duplicate set-cookie headers should be a list");
             }
 
-            # Test 5: Duplicate x-multi response headers → stored as list
+            # Test 6: Duplicate x-multi response headers → stored as list
             if (exists test_results.client_response_headers) {
                 assertEq(("val1", "val2"),
                     test_results.client_response_headers."x-multi",
                     "duplicate x-multi response headers should be a list");
             }
 
-            # Test 6: Single-value response header → plain string
+            # Test 7: Single-value response header → plain string
             if (exists test_results.client_response_headers) {
                 assertEq("text/plain", test_results.client_response_headers."content-type",
                     "single-value content-type should be a plain string");
