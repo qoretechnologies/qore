@@ -2768,9 +2768,19 @@ static int qore_socket_object_exec_shutdown_ssl(QoreSocketObject* s, ExceptionSi
 static int qore_socket_object_exec_http2_flush(QoreSocketObject* s, const char* owner_name, ExceptionSink* xsink,
         bool submit_ping = false, bool missing_h2_ok = false) {
     s->ref();
-    return qore_socket_object_exec_poll_no_output(s,
-        new SocketHttp2FlushPollOperation(xsink, s, true, submit_ping, missing_h2_ok), -1, owner_name, "done",
-        xsink);
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketHttp2FlushPollOperation(xsink, s, true, submit_ping, missing_h2_ok), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
+    return qore_socket_object_exec_poll_no_output(s, poller.release(), -1, owner_name, "done", xsink);
 }
 
 static int qore_socket_object_exec_shutdown(QoreSocketObject* s, ExceptionSink* xsink) {
@@ -2994,10 +3004,21 @@ static QoreSocketObject* qore_socket_object_exec_accept(QoreSocketObject* s, int
 }
 
 static int qore_socket_object_exec_send_poll(QoreSocketObject* s, SocketPollOperationBase* poller,
-        int timeout_ms, ExceptionSink* xsink) {
+        int timeout_ms, ExceptionSink* xsink, unsigned async_direction = NB_SEND) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, async_direction);
+    if (!async_guard) {
+        return -1;
+    }
+
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
-        qore_socket_object_make_poll_op(*sock_obj, poller, "send", xsink), xsink);
+        qore_socket_object_make_poll_op(*sock_obj, poller_holder.release(), "send", xsink), xsink);
     if (*xsink) {
         return -1;
     }
@@ -3896,7 +3917,7 @@ static int qore_socket_object_exec_send_http_response(QoreSocketObject* s, QoreH
         return qore_socket_object_exec_send_poll(s,
             new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, code, headers, *body_bin, false,
                 true),
-            timeout_ms, xsink);
+            timeout_ms, xsink, NB_ALL);
     }
 
     QoreString hdr(s->getEncoding());
@@ -4250,10 +4271,20 @@ static bool qore_socket_object_exec_wait_readiness(QoreSocketObject* s, int time
     s->ref();
     QoreSocketObjectReadinessPollOperation* readiness_poller = new QoreSocketObjectReadinessPollOperation(xsink, s,
         direction, events, waiting_state, ready_state);
+    ReferenceHolder<SocketPollOperationBase> poller(readiness_poller, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, direction);
+    if (!async_guard) {
+        return false;
+    }
 
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
-        qore_socket_object_make_poll_op(*sock_obj, readiness_poller, owner_name, xsink), xsink);
+        qore_socket_object_make_poll_op(*sock_obj, poller.release(), owner_name, xsink), xsink);
     if (*xsink) {
         return false;
     }
@@ -4280,10 +4311,20 @@ static bool qore_socket_object_exec_is_data_available(QoreSocketObject* s, int t
         ExceptionSink* xsink) {
     s->ref();
     SocketDataAvailablePollOperation* data_available_poller = new SocketDataAvailablePollOperation(xsink, s, true);
+    ReferenceHolder<SocketPollOperationBase> poller(data_available_poller, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return false;
+    }
 
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
     ReferenceHolder<QoreObject> op_obj(
-        qore_socket_object_make_poll_op(*sock_obj, data_available_poller, "isDataAvailable", xsink), xsink);
+        qore_socket_object_make_poll_op(*sock_obj, poller.release(), "isDataAvailable", xsink), xsink);
     if (*xsink) {
         return false;
     }

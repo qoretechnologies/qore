@@ -156,10 +156,45 @@ static QoreHashNode* socket_exec_poll_operation(QoreObject* self, QoreSocketObje
     return result.release();
 }
 
+class SocketExecAsyncIoGuard {
+public:
+    SocketExecAsyncIoGuard(my_socket_priv& priv, ExceptionSink* xsink, unsigned direction)
+            : priv(priv), direction(direction) {
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sync", xsink);
+        if (qore_on_async_io_thread() || (xsink && *xsink)) {
+            return;
+        }
+        AutoLocker al(priv.m);
+        active = !priv.startAsyncSequenceIo(xsink, direction);
+    }
+
+    ~SocketExecAsyncIoGuard() {
+        if (active) {
+            AutoLocker al(priv.m);
+            priv.clearAsyncSequenceIo(direction);
+        }
+    }
+
+    explicit operator bool() const {
+        return active;
+    }
+
+private:
+    my_socket_priv& priv;
+    unsigned direction;
+    bool active = false;
+};
+
 static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPollOperationBase* poller,
-        int timeout_ms, ExceptionSink* xsink) {
+        int timeout_ms, ExceptionSink* xsink, unsigned async_direction = NB_SEND) {
     ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
     if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, async_direction);
+    if (!async_guard) {
         return -1;
     }
 
@@ -351,35 +386,6 @@ static int socket_exec_send_bytes(QoreObject* self, QoreSocketObject* s, const v
     return socket_exec_send_binary(self, s, bin.release(), timeout_ms, xsink);
 }
 
-class SocketExecAsyncIoGuard {
-public:
-    SocketExecAsyncIoGuard(my_socket_priv& priv, ExceptionSink* xsink, unsigned direction)
-            : priv(priv), direction(direction) {
-        SocketSyncPoll::assertNotOnIoThread("Socket", "sync", xsink);
-        if (qore_on_async_io_thread() || (xsink && *xsink)) {
-            return;
-        }
-        AutoLocker al(priv.m);
-        active = !priv.startAsyncSequenceIo(xsink, direction);
-    }
-
-    ~SocketExecAsyncIoGuard() {
-        if (active) {
-            AutoLocker al(priv.m);
-            priv.clearAsyncSequenceIo(direction);
-        }
-    }
-
-    explicit operator bool() const {
-        return active;
-    }
-
-private:
-    my_socket_priv& priv;
-    unsigned direction;
-    bool active = false;
-};
-
 class SocketExecInputStreamRefGuard {
 public:
     SocketExecInputStreamRefGuard(InputStream* is, ExceptionSink* xsink, bool active)
@@ -453,7 +459,7 @@ static int socket_exec_send_http_response(QoreObject* self, QoreSocketObject* s,
         return socket_exec_send_poll(self, s,
             new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, code, headers, *body_bin, false,
                 true),
-            timeout_ms, xsink);
+            timeout_ms, xsink, NB_ALL);
     }
 
     QoreString hdr(s->getEncoding());
@@ -1450,6 +1456,12 @@ static bool socket_exec_wait_readiness(QoreObject* self, QoreSocketObject* s, in
         return false;
     }
 
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, direction);
+    if (!async_guard) {
+        return false;
+    }
+
     ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
     poller->setSelf(*op_obj);
     poller.release();
@@ -1486,6 +1498,12 @@ static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s,
     SocketDataAvailablePollOperation* data_available_poller = new SocketDataAvailablePollOperation(xsink, s, true);
     ReferenceHolder<SocketPollOperationBase> poller(data_available_poller, xsink);
     if (*xsink) {
+        return false;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
         return false;
     }
 
