@@ -160,8 +160,15 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         // Store parent path while old.parentHashDecl is still valid to avoid use-after-free
         // Use getPath() to get the full namespace path for cross-namespace inheritance
         parentHashDeclName(old.parentHashDecl ? get(*old.parentHashDecl)->getPath() : ""),
-        pub(false),
+        // Preserve the source's public flag so cross-program imports done with
+        // CSP_UNCHANGED (the documented "leave visibility as-is" mode) actually
+        // do leave it as-is — symmetric with qore_class_private's import ctor.
+        pub(old.pub),
         sys(old.sys),
+        // Preserve the source's reexport marker so inheritParseImports's
+        // child-Program propagation continues through transitive %requires
+        // chains: A → B (via reexport) → C will reach C.
+        reexport(old.reexport),
         parse_init_done(old.parse_init_done) {
     // copy member list
     for (auto& i : old.members.member_list) {

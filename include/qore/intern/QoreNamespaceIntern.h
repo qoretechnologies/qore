@@ -488,10 +488,10 @@ public:
 
     DLLLOCAL QoreClass* runtimeImportClass(ExceptionSink* xsink, const QoreClass* c, QoreProgram* spgm,
             q_setpub_t set_pub, const char* new_name = nullptr, bool inject = false,
-            const qore_class_private* injectedClass = nullptr);
+            const qore_class_private* injectedClass = nullptr, bool reexport = false);
 
     DLLLOCAL TypedHashDecl* runtimeImportHashDecl(ExceptionSink* xsink, const TypedHashDecl* hd, QoreProgram* spgm,
-            q_setpub_t set_pub, const char* new_name = nullptr);
+            q_setpub_t set_pub, const char* new_name = nullptr, bool reexport = false);
 
     DLLLOCAL const FunctionEntry* runtimeFindFunctionEntry(const char* name) {
         return func_list.findNode(name, true);
@@ -506,7 +506,7 @@ public:
     }
 
     DLLLOCAL QoreNamespace* findCreateNamespace(const char* nme, bool user, bool& is_new, qore_root_ns_private* rns);
-    DLLLOCAL QoreNamespace* findCreateNamespacePath(const nslist_t& nsl, bool user, bool& is_new);
+    DLLLOCAL QoreNamespace* findCreateNamespacePath(const nslist_t& nsl, bool user, bool& is_new, bool pub = false);
     DLLLOCAL QoreNamespace* findCreateNamespacePath(const NamedScope& nspath, bool pub, bool user, bool& is_new,
             int ignore_end = 1);
 
@@ -1297,8 +1297,8 @@ protected:
     // performed at runtime
     DLLLOCAL int runtimeImportClass(ExceptionSink* xsink, qore_ns_private& ns, const QoreClass* c, QoreProgram* spgm,
             q_setpub_t set_pub, const char* new_name = nullptr, bool inject = false,
-            const qore_class_private* injectedClass = nullptr) {
-        QoreClass* nc = ns.runtimeImportClass(xsink, c, spgm, set_pub, new_name, inject, injectedClass);
+            const qore_class_private* injectedClass = nullptr, bool reexport = false) {
+        QoreClass* nc = ns.runtimeImportClass(xsink, c, spgm, set_pub, new_name, inject, injectedClass, reexport);
         if (!nc)
             return -1;
 
@@ -1311,8 +1311,8 @@ protected:
 
     // performed at runtime
     DLLLOCAL int runtimeImportHashDecl(ExceptionSink* xsink, qore_ns_private& ns, const TypedHashDecl* hd,
-            QoreProgram* spgm, q_setpub_t set_pub, const char* new_name = nullptr) {
-        TypedHashDecl* nhd = ns.runtimeImportHashDecl(xsink, hd, spgm, set_pub, new_name);
+            QoreProgram* spgm, q_setpub_t set_pub, const char* new_name = nullptr, bool reexport = false) {
+        TypedHashDecl* nhd = ns.runtimeImportHashDecl(xsink, hd, spgm, set_pub, new_name, reexport);
         if (!nhd)
             return -1;
 
@@ -2245,7 +2245,7 @@ public:
         return nns;
     }
 
-    DLLLOCAL QoreNamespace* runtimeFindCreateNamespacePath(const qore_ns_private& ns, bool user) {
+    DLLLOCAL QoreNamespace* runtimeFindCreateNamespacePath(const qore_ns_private& ns, bool user, bool pub = false) {
         // get a list of namespaces from after the root (not including the root) to the current
         nslist_t nsl;
         ns.getNsList(nsl);
@@ -2254,7 +2254,7 @@ public:
             ns.name.c_str());
 
         bool is_new = false;
-        QoreNamespace* nns = findCreateNamespacePath(nsl, user, is_new);
+        QoreNamespace* nns = findCreateNamespacePath(nsl, user, is_new, pub);
         assert(ns.name == nns->getName());
         if (is_new) // add namespace index
             nsmap.update(nns->priv);
@@ -2331,8 +2331,8 @@ public:
     }
 
     DLLLOCAL static QoreNamespace* runtimeFindCreateNamespacePath(const RootQoreNamespace& rns,
-            const qore_ns_private& ns, bool user) {
-        return rns.rpriv->runtimeFindCreateNamespacePath(ns, user);
+            const qore_ns_private& ns, bool user, bool pub = false) {
+        return rns.rpriv->runtimeFindCreateNamespacePath(ns, user, pub);
     }
 
     DLLLOCAL static QoreNamespace* runtimeFindCreateNamespacePath(const RootQoreNamespace& rns,
@@ -2360,13 +2360,15 @@ public:
 
     DLLLOCAL static int runtimeImportClass(RootQoreNamespace& rns, ExceptionSink* xsink, QoreNamespace& ns,
             const QoreClass* c, QoreProgram* spgm, q_setpub_t set_pub, const char* new_name = 0, bool inject = false,
-            const qore_class_private* injectedClass = nullptr) {
-        return rns.rpriv->runtimeImportClass(xsink, *ns.priv, c, spgm, set_pub, new_name, inject, injectedClass);
+            const qore_class_private* injectedClass = nullptr, bool reexport = false) {
+        return rns.rpriv->runtimeImportClass(xsink, *ns.priv, c, spgm, set_pub, new_name, inject, injectedClass,
+            reexport);
     }
 
     DLLLOCAL static int runtimeImportHashDecl(RootQoreNamespace& rns, ExceptionSink* xsink, QoreNamespace& ns,
-            const TypedHashDecl* c, QoreProgram* spgm, q_setpub_t set_pub, const char* new_name = nullptr) {
-        return rns.rpriv->runtimeImportHashDecl(xsink, *ns.priv, c, spgm, set_pub, new_name);
+            const TypedHashDecl* c, QoreProgram* spgm, q_setpub_t set_pub, const char* new_name = nullptr,
+            bool reexport = false) {
+        return rns.rpriv->runtimeImportHashDecl(xsink, *ns.priv, c, spgm, set_pub, new_name, reexport);
     }
 
     DLLLOCAL static const QoreClass* runtimeFindClass(RootQoreNamespace& rns, const char* name,
