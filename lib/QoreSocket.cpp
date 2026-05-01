@@ -929,6 +929,11 @@ private:
         GetRecvTimeout,
         GetPort,
         SetMaxChunkedBodySize,
+        SetSslVerifyMode,
+        GetSslVerifyMode,
+        SetAcceptAllCertificates,
+        GetAcceptAllCertificates,
+        CaptureRemoteCertificates,
         SetHttp2MaxRequestBodySize,
     };
 
@@ -944,6 +949,11 @@ public:
         GetRecvTimeout,
         GetPort,
         SetMaxChunkedBodySize,
+        SetSslVerifyMode,
+        GetSslVerifyMode,
+        SetAcceptAllCertificates,
+        GetAcceptAllCertificates,
+        CaptureRemoteCertificates,
         SetHttp2MaxRequestBodySize,
     };
 
@@ -1080,6 +1090,34 @@ public:
                 rc = 0;
                 break;
             }
+            case Action::SetSslVerifyMode: {
+                qore_socket_private* priv = qore_socket_private::get(*sock);
+                priv->setSslVerifyMode(static_cast<int>(value));
+                rc = 0;
+                break;
+            }
+            case Action::GetSslVerifyMode: {
+                qore_socket_private* priv = qore_socket_private::get(*sock);
+                rc = priv->ssl_verify_mode;
+                break;
+            }
+            case Action::SetAcceptAllCertificates: {
+                qore_socket_private* priv = qore_socket_private::get(*sock);
+                priv->acceptAllCertificates(value != 0);
+                rc = 0;
+                break;
+            }
+            case Action::GetAcceptAllCertificates: {
+                qore_socket_private* priv = qore_socket_private::get(*sock);
+                rc = priv->ssl_accept_all_certs ? 1 : 0;
+                break;
+            }
+            case Action::CaptureRemoteCertificates: {
+                qore_socket_private* priv = qore_socket_private::get(*sock);
+                rc = priv->ssl_capture_remote_cert ? 1 : 0;
+                priv->ssl_capture_remote_cert = value != 0;
+                break;
+            }
             case Action::SetHttp2MaxRequestBodySize: {
                 qore_socket_private* priv = qore_socket_private::get(*sock);
                 priv->max_http2_body_size = value;
@@ -1145,6 +1183,16 @@ private:
                 return Action::GetPort;
             case ConfigAction::SetMaxChunkedBodySize:
                 return Action::SetMaxChunkedBodySize;
+            case ConfigAction::SetSslVerifyMode:
+                return Action::SetSslVerifyMode;
+            case ConfigAction::GetSslVerifyMode:
+                return Action::GetSslVerifyMode;
+            case ConfigAction::SetAcceptAllCertificates:
+                return Action::SetAcceptAllCertificates;
+            case ConfigAction::GetAcceptAllCertificates:
+                return Action::GetAcceptAllCertificates;
+            case ConfigAction::CaptureRemoteCertificates:
+                return Action::CaptureRemoteCertificates;
             case ConfigAction::SetHttp2MaxRequestBodySize:
                 return Action::SetHttp2MaxRequestBodySize;
         }
@@ -1163,6 +1211,11 @@ private:
             || action == Action::GetRecvTimeout
             || action == Action::GetPort
             || action == Action::SetMaxChunkedBodySize
+            || action == Action::SetSslVerifyMode
+            || action == Action::GetSslVerifyMode
+            || action == Action::SetAcceptAllCertificates
+            || action == Action::GetAcceptAllCertificates
+            || action == Action::CaptureRemoteCertificates
             || action == Action::SetHttp2MaxRequestBodySize;
     }
 
@@ -11413,28 +11466,38 @@ bool QoreSocket::pendingHttpChunkedBody() const {
 }
 
 void QoreSocket::setSslVerifyMode(int mode) {
-    priv->setSslVerifyMode(mode);
+    qore_socket_exec_setup_no_exception(this,
+        new QoreSocketControllerSetupPollOperation(this,
+            QoreSocketControllerSetupPollOperation::ConfigAction::SetSslVerifyMode, mode),
+        "setSslVerifyMode");
 }
 
 int QoreSocket::getSslVerifyMode() const {
-    return priv->ssl_verify_mode;
+    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
+        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
+            QoreSocketControllerSetupPollOperation::ConfigAction::GetSslVerifyMode),
+        "getSslVerifyMode");
 }
 
 void QoreSocket::acceptAllCertificates(bool accept_all) {
-    priv->acceptAllCertificates(accept_all);
+    qore_socket_exec_setup_no_exception(this,
+        new QoreSocketControllerSetupPollOperation(this,
+            QoreSocketControllerSetupPollOperation::ConfigAction::SetAcceptAllCertificates, accept_all),
+        "acceptAllCertificates");
 }
 
 bool QoreSocket::getAcceptAllCertificates() const {
-    return priv->ssl_accept_all_certs;
+    return qore_socket_exec_setup_no_exception(const_cast<QoreSocket*>(this),
+        new QoreSocketControllerSetupPollOperation(const_cast<QoreSocket*>(this),
+            QoreSocketControllerSetupPollOperation::ConfigAction::GetAcceptAllCertificates),
+        "getAcceptAllCertificates") > 0;
 }
 
 bool QoreSocket::captureRemoteCertificates(bool set) {
-    bool rv = priv->ssl_capture_remote_cert;
-    if (rv != set) {
-        priv->ssl_capture_remote_cert = set;
-    }
-    //printd(5, "QoreSocket::captureRemoteCertificates() priv: %p set: %d rv: %d\n", priv, set, rv);
-    return rv;
+    return qore_socket_exec_setup_no_exception(this,
+        new QoreSocketControllerSetupPollOperation(this,
+            QoreSocketControllerSetupPollOperation::ConfigAction::CaptureRemoteCertificates, set),
+        "captureRemoteCertificates") > 0;
 }
 
 QoreObject* QoreSocket::getRemoteCertificate() const {
@@ -12609,6 +12672,16 @@ SocketSetupPollOperation::Action SocketSetupPollOperation::getAction(ConfigActio
             return Action::GetPort;
         case ConfigAction::SetMaxChunkedBodySize:
             return Action::SetMaxChunkedBodySize;
+        case ConfigAction::SetSslVerifyMode:
+            return Action::SetSslVerifyMode;
+        case ConfigAction::GetSslVerifyMode:
+            return Action::GetSslVerifyMode;
+        case ConfigAction::SetAcceptAllCertificates:
+            return Action::SetAcceptAllCertificates;
+        case ConfigAction::GetAcceptAllCertificates:
+            return Action::GetAcceptAllCertificates;
+        case ConfigAction::CaptureRemoteCertificates:
+            return Action::CaptureRemoteCertificates;
         case ConfigAction::SetHttp2MaxRequestBodySize:
             return Action::SetHttp2MaxRequestBodySize;
     }
@@ -12627,6 +12700,11 @@ bool SocketSetupPollOperation::isConfigAction() const {
         || action == Action::GetRecvTimeout
         || action == Action::GetPort
         || action == Action::SetMaxChunkedBodySize
+        || action == Action::SetSslVerifyMode
+        || action == Action::GetSslVerifyMode
+        || action == Action::SetAcceptAllCertificates
+        || action == Action::GetAcceptAllCertificates
+        || action == Action::CaptureRemoteCertificates
         || action == Action::SetHttp2MaxRequestBodySize;
 }
 
@@ -12720,6 +12798,34 @@ QoreHashNode* SocketSetupPollOperation::continuePoll(ExceptionSink* xsink) {
             qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
             sp->max_chunked_body_size = value;
             rc = 0;
+            break;
+        }
+        case Action::SetSslVerifyMode: {
+            qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+            sp->setSslVerifyMode(static_cast<int>(value));
+            rc = 0;
+            break;
+        }
+        case Action::GetSslVerifyMode: {
+            qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+            rc = sp->ssl_verify_mode;
+            break;
+        }
+        case Action::SetAcceptAllCertificates: {
+            qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+            sp->acceptAllCertificates(value != 0);
+            rc = 0;
+            break;
+        }
+        case Action::GetAcceptAllCertificates: {
+            qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+            rc = sp->ssl_accept_all_certs ? 1 : 0;
+            break;
+        }
+        case Action::CaptureRemoteCertificates: {
+            qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+            rc = sp->ssl_capture_remote_cert ? 1 : 0;
+            sp->ssl_capture_remote_cert = value != 0;
             break;
         }
         case Action::SetHttp2MaxRequestBodySize: {

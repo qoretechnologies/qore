@@ -5898,28 +5898,59 @@ bool QoreSocketObject::pendingHttpChunkedBody() const {
 }
 
 void QoreSocketObject::setSslVerifyMode(int mode) {
-    AutoLocker al(priv->m);
-    priv->socket->setSslVerifyMode(mode);
+    ExceptionSink xsink;
+    qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
+        SocketSetupPollOperation::ConfigAction::SetSslVerifyMode, mode), "setSslVerifyMode", "done", &xsink);
+    if (xsink) {
+        xsink.clear();
+    }
 }
 
 int QoreSocketObject::getSslVerifyMode() const {
-    AutoLocker al(priv->m);
-    return priv->socket->getSslVerifyMode();
+    ExceptionSink xsink;
+    int rc = qore_socket_object_exec_setup(const_cast<QoreSocketObject*>(this),
+        new SocketSetupPollOperation(&xsink, const_cast<QoreSocketObject*>(this),
+            SocketSetupPollOperation::ConfigAction::GetSslVerifyMode), "getSslVerifyMode", "done", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return -1;
+    }
+    return rc;
 }
 
 void QoreSocketObject::acceptAllCertificates(bool accept_all) {
-    AutoLocker al(priv->m);
-    priv->socket->acceptAllCertificates(accept_all);
+    ExceptionSink xsink;
+    qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
+        SocketSetupPollOperation::ConfigAction::SetAcceptAllCertificates, accept_all), "acceptAllCertificates",
+        "done", &xsink);
+    if (xsink) {
+        xsink.clear();
+    }
 }
 
 bool QoreSocketObject::getAcceptAllCertificates() const {
-    AutoLocker al(priv->m);
-    return priv->socket->getAcceptAllCertificates();
+    ExceptionSink xsink;
+    int rc = qore_socket_object_exec_setup(const_cast<QoreSocketObject*>(this),
+        new SocketSetupPollOperation(&xsink, const_cast<QoreSocketObject*>(this),
+            SocketSetupPollOperation::ConfigAction::GetAcceptAllCertificates), "getAcceptAllCertificates", "done",
+        &xsink);
+    if (xsink) {
+        xsink.clear();
+        return false;
+    }
+    return rc > 0;
 }
 
 bool QoreSocketObject::captureRemoteCertificates(bool set) {
-    AutoLocker al(priv->m);
-    return priv->socket->captureRemoteCertificates(set);
+    ExceptionSink xsink;
+    int rc = qore_socket_object_exec_setup(this, new SocketSetupPollOperation(&xsink, this,
+        SocketSetupPollOperation::ConfigAction::CaptureRemoteCertificates, set), "captureRemoteCertificates",
+        "done", &xsink);
+    if (xsink) {
+        xsink.clear();
+        return false;
+    }
+    return rc > 0;
 }
 
 QoreObject* QoreSocketObject::getRemoteCertificate() const {

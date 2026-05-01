@@ -184,6 +184,11 @@ private:
         GetRecvTimeout,
         GetPort,
         SetMaxChunkedBodySize,
+        SetSslVerifyMode,
+        GetSslVerifyMode,
+        SetAcceptAllCertificates,
+        GetAcceptAllCertificates,
+        CaptureRemoteCertificates,
         SetHttp2MaxRequestBodySize,
     };
 
@@ -199,6 +204,11 @@ public:
         GetRecvTimeout,
         GetPort,
         SetMaxChunkedBodySize,
+        SetSslVerifyMode,
+        GetSslVerifyMode,
+        SetAcceptAllCertificates,
+        GetAcceptAllCertificates,
+        CaptureRemoteCertificates,
         SetHttp2MaxRequestBodySize,
     };
 
