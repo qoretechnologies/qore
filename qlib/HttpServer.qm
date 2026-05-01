@@ -2700,9 +2700,28 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return rv;
     }
 
+    private Future addINETListenersInternAsync(hash<HttpListenerOptionInfo> info,
+            *reference<hash<string, string>> errmap) {
+        Promise p();
+        Future f = p.getFuture();
+        try {
+            Future addr_f = resolveINETListenerAddressesAsync(info);
+            getGlobalAsyncCtrl().submitTask(sub () {
+                try {
+                    p.set(addINETListenersInternResolved(info, addr_f.get(), \errmap));
+                } catch (hash<ExceptionInfo> ex) {
+                    p.setError(ex.err, ex.desc, ex.arg);
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+        return f;
+    }
+
     private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
-        return addINETListenersInternResolved(info, resolveINETListenerAddressesAsync(info).get(), \errmap);
+        return addINETListenersInternAsync(info, \errmap).get();
     }
 
     private hash<HttpResponseInfo> noHandlerError(hash<auto> cx, hash<auto> hdr, auto body) {
