@@ -61,6 +61,7 @@
     - SocketUpgradeClientSslPollOperation — client-side TLS handshake
     - SocketReadHttpHeaderPollOperation — read HTTP response/request headers
     - SocketReadServerSentEventPollOperation — read one Server-Sent Event message
+    - SocketReadHttpChunkedBodyPollOperation — read one HTTP/1 chunked body or chunk
     - SocketReadHttpBodyPollOperation — read HTTP response body (Content-Length / chunked / close)
 
     @par NOT exported (stay internal)
@@ -614,6 +615,74 @@ private:
     DLLEXPORT void initTransform(ExceptionSink* xsink, const QoreStringNode* content_encoding);
     DLLEXPORT bool processSseChar(ExceptionSink* xsink, qore_socket_private* sp, char c);
     DLLEXPORT virtual int initPollState(ExceptionSink* xsink) override;
+    DLLEXPORT virtual bool abortNeedsClose() const override;
+};
+
+//! Non-blocking HTTP/1 chunked body reader
+/** Reads an HTTP/1 chunked transfer body from a connected socket.
+
+    This operation supports the return-value Socket APIs.  Callback and
+    OutputStream variants remain caller-thread orchestration paths because they
+    run Qore callbacks or stream methods.
+
+    @since %Qore 2.3
+*/
+class SocketReadHttpChunkedBodyPollOperation : public SocketRecvPollOperationBase {
+public:
+    //! Chunked body reading sub-states
+    enum class ChunkedBodyState {
+        RECV_CHUNK_SIZE,    //!< Reading chunk size line
+        RECV_CHUNK_DATA,    //!< Reading chunk payload + CRLF
+        RECV_TRAILER,       //!< Reading trailer lines after last chunk
+        DONE                //!< Chunked body reading complete
+    };
+
+    //! Creates the chunked body reader
+    /** @param xsink exception sink
+        @param sock the socket (caller must have ref'd it)
+        @param binary_body true to return the body as BinaryNode, false to return a string
+        @param read_once true to return after one data chunk
+        @param source event source identifier
+    */
+    DLLEXPORT SocketReadHttpChunkedBodyPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+            bool binary_body, bool read_once, int source);
+
+    //! Dereferences the operation; cleans up socket ref and poll state on last ref
+    DLLEXPORT virtual void deref(ExceptionSink* xsink) override;
+
+    DLLEXPORT virtual bool goalReached() const override;
+
+    DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+
+    DLLEXPORT virtual void abort(ExceptionSink* xsink) override;
+
+    //! Returns the chunked body hash
+    DLLEXPORT virtual QoreValue getOutput() const override;
+
+protected:
+    DLLEXPORT virtual const char* getStateImpl() const override;
+
+private:
+    mutable ReferenceHolder<QoreHashNode> out;
+    SimpleRefHolder<BinaryNode> body_bin;
+    SimpleRefHolder<QoreStringNode> body_str;
+    QoreString trailers;
+    ChunkedBodyState chunked_body_state = ChunkedBodyState::RECV_CHUNK_SIZE;
+    int64_t current_chunk_size = 0;
+    bool binary_body = true;
+    bool read_once = false;
+    bool current_read_to_string = true;
+    bool http_expect_cleared = false;
+    int source = QORE_SOURCE_SOCKET;
+    int authorized_tid = -1;
+    bool bytes_consumed = false;
+
+    DLLEXPORT void cleanup(ExceptionSink* xsink);
+    DLLEXPORT void startCurrentOp(ExceptionSink* xsink);
+    DLLEXPORT int setOutputBody(ExceptionSink* xsink);
+    DLLEXPORT int handleChunkSize(ExceptionSink* xsink);
+    DLLEXPORT int handleChunkData(ExceptionSink* xsink);
+    DLLEXPORT int handleTrailer(ExceptionSink* xsink);
     DLLEXPORT virtual bool abortNeedsClose() const override;
 };
 

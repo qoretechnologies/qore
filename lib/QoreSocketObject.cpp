@@ -3615,6 +3615,22 @@ static QoreHashNode* qore_socket_object_exec_read_http_chunked_body(QoreSocketOb
         return nullptr;
     }
 
+    if (!os && !recv_callback) {
+        s->ref();
+        ValueHolder rv(qore_socket_object_exec_recv_poll(s,
+            new SocketReadHttpChunkedBodyPollOperation(xsink, s, binary_body, read_once, QORE_SOURCE_SOCKET),
+            timeout_ms, owner_name, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv->getType() != NT_HASH) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR",
+                "expected hash output from async chunked body read operation, got '%s'", rv->getFullTypeName());
+            return nullptr;
+        }
+        return rv.release().get<QoreHashNode>();
+    }
+
     my_socket_priv* priv = my_socket_priv::getPriv(*s);
     QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
     if (!async_guard) {

@@ -14081,6 +14081,378 @@ bool SocketReadServerSentEventPollOperation::abortNeedsClose() const {
     return true;
 }
 
+SocketReadHttpChunkedBodyPollOperation::SocketReadHttpChunkedBodyPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock, bool binary_body, bool read_once, int source)
+        : SocketRecvPollOperationBase(sock, false), out(xsink),
+          body_bin(binary_body ? new BinaryNode : nullptr),
+          body_str(binary_body ? nullptr : new QoreStringNode(sock->getEncoding())),
+          trailers(sock->getEncoding()), binary_body(binary_body), read_once(read_once), source(source),
+          authorized_tid(q_gettid()) {
+    assert(!read_once || binary_body);
+}
+
+void SocketReadHttpChunkedBodyPollOperation::cleanup(ExceptionSink* xsink) {
+    out = nullptr;
+    body_bin.discard();
+    body_str.discard();
+    data.discard();
+    if (set_non_block) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        priv->clearNonBlock(NB_RECV);
+        set_non_block = false;
+    }
+    poll_state.reset();
+    if (sock) {
+        sock->deref(xsink);
+        sock = nullptr;
+    }
+}
+
+void SocketReadHttpChunkedBodyPollOperation::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        cleanup(xsink);
+        delete this;
+    }
+}
+
+void SocketReadHttpChunkedBodyPollOperation::startCurrentOp(ExceptionSink* xsink) {
+    assert(!poll_state);
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    AutoLocker al(priv->m);
+    if (priv->checkOpen(xsink)) {
+        return;
+    }
+    if (priv->setNonBlockFromAsyncController(xsink, NB_RECV, authorized_tid)) {
+        return;
+    }
+    set_non_block = true;
+    switch (chunked_body_state) {
+        case ChunkedBodyState::RECV_CHUNK_SIZE:
+        case ChunkedBodyState::RECV_TRAILER: {
+            current_read_to_string = true;
+            poll_state.reset(priv->socket->startRecvUntilBytes(xsink, "\r\n", 2));
+            break;
+        }
+        case ChunkedBodyState::RECV_CHUNK_DATA:
+            current_read_to_string = false;
+            poll_state.reset(priv->socket->startRecv(xsink, static_cast<size_t>(current_chunk_size + 2)));
+            break;
+        case ChunkedBodyState::DONE:
+            priv->clearNonBlock(NB_RECV);
+            set_non_block = false;
+            return;
+    }
+
+    if (*xsink || !poll_state) {
+        priv->clearNonBlock(NB_RECV);
+        set_non_block = false;
+    }
+}
+
+int SocketReadHttpChunkedBodyPollOperation::setOutputBody(ExceptionSink* xsink) {
+    out = new QoreHashNode(autoTypeInfo);
+    if (binary_body) {
+        out->setKeyValue("body", body_bin.release(), xsink);
+    } else {
+        out->setKeyValue("body", body_str.release(), xsink);
+    }
+    return *xsink ? -1 : 0;
+}
+
+int SocketReadHttpChunkedBodyPollOperation::handleChunkSize(ExceptionSink* xsink) {
+    ValueHolder line_val(data ? data->refSelf() : QoreValue(), xsink);
+    data.discard();
+    if (*xsink) {
+        return -1;
+    }
+    if (line_val->getType() != NT_STRING) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR",
+            "expected string output from async chunk-size read operation, got '%s'", line_val->getFullTypeName());
+        return -1;
+    }
+
+    const QoreStringNode* line = line_val->get<const QoreStringNode>();
+    const char* line_str = line->c_str();
+    size_t line_len = line->size();
+    if (line_len >= 2) {
+        line_len -= 2;
+    }
+
+    const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
+    size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
+    std::string hex(line_str, hex_len);
+    long chunk_size = strtol(hex.c_str(), nullptr, 16);
+    if (chunk_size < 0) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNK_SIZE, static_cast<size_t>(chunk_size), line_len, source);
+    bytes_consumed = true;
+
+    if (!chunk_size) {
+        if (setOutputBody(xsink)) {
+            return -1;
+        }
+        chunked_body_state = ChunkedBodyState::RECV_TRAILER;
+        return 0;
+    }
+
+    long max_read_size = static_cast<long>(std::numeric_limits<ssize_t>::max() - 2);
+    if (chunk_size > max_read_size) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
+            chunk_size);
+        return -1;
+    }
+
+    current_chunk_size = chunk_size;
+    chunked_body_state = ChunkedBodyState::RECV_CHUNK_DATA;
+    return 0;
+}
+
+int SocketReadHttpChunkedBodyPollOperation::handleChunkData(ExceptionSink* xsink) {
+    ValueHolder data_val(data ? data->refSelf() : QoreValue(), xsink);
+    data.discard();
+    if (*xsink) {
+        return -1;
+    }
+    if (data_val->getType() != NT_BINARY) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR",
+            "expected binary output from async chunk data read operation, got '%s'", data_val->getFullTypeName());
+        return -1;
+    }
+
+    const BinaryNode* bin = data_val->get<const BinaryNode>();
+    size_t chunk_size = static_cast<size_t>(current_chunk_size);
+    if (bin->size() < chunk_size + 2) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "read " QSD " bytes for HTTP chunk size " QSD,
+            bin->size(), chunk_size);
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_READ, source, bin->getPtr(), chunk_size);
+    if (binary_body) {
+        body_bin->append(bin->getPtr(), chunk_size);
+    } else {
+        body_str->concat(static_cast<const char*>(bin->getPtr()), chunk_size);
+    }
+    bytes_consumed = true;
+
+    int64 body_size = binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+    int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
+    if (max_chunked_body_size > 0 && body_size > max_chunked_body_size) {
+        xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+            body_size, max_chunked_body_size);
+        return -1;
+    }
+
+    priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, chunk_size, chunk_size + 2, source);
+    if (read_once) {
+        if (setOutputBody(xsink)) {
+            return -1;
+        }
+        chunked_body_state = ChunkedBodyState::DONE;
+        received = true;
+        return 0;
+    }
+
+    current_chunk_size = 0;
+    chunked_body_state = ChunkedBodyState::RECV_CHUNK_SIZE;
+    return 0;
+}
+
+int SocketReadHttpChunkedBodyPollOperation::handleTrailer(ExceptionSink* xsink) {
+    ValueHolder line_val(data ? data->refSelf() : QoreValue(), xsink);
+    data.discard();
+    if (*xsink) {
+        return -1;
+    }
+    if (line_val->getType() != NT_STRING) {
+        xsink->raiseException("READ-HTTP-CHUNK-ERROR",
+            "expected string output from async chunk trailer read operation, got '%s'",
+            line_val->getFullTypeName());
+        return -1;
+    }
+
+    const QoreStringNode* line = line_val->get<const QoreStringNode>();
+    bytes_consumed = true;
+    if (line->size() == 2 && !strcmp(line->c_str(), "\r\n")) {
+        if (!trailers.empty()) {
+            my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+            priv->convertHeaderToHash(**out, trailers);
+            if (*xsink) {
+                return -1;
+            }
+            priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, **out, source);
+        }
+        chunked_body_state = ChunkedBodyState::DONE;
+        received = true;
+        return 0;
+    }
+
+    trailers.concat(line->c_str(), line->size());
+    return 0;
+}
+
+QoreHashNode* SocketReadHttpChunkedBodyPollOperation::continuePoll(ExceptionSink* xsink) {
+    if (received) {
+        return nullptr;
+    }
+
+    if (!http_expect_cleared) {
+        my_socket_priv::getPriv(*sock)->clearHttpExpectChunkedBody();
+        http_expect_cleared = true;
+    }
+
+    while (!received) {
+        if (!poll_state) {
+            startCurrentOp(xsink);
+            if (*xsink) {
+                chunked_body_state = ChunkedBodyState::DONE;
+                return nullptr;
+            }
+            if (!poll_state) {
+                chunked_body_state = ChunkedBodyState::DONE;
+                received = true;
+                return nullptr;
+            }
+        }
+
+        int poll_rc = 0;
+        {
+            my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+            AutoLocker al(priv->m);
+
+            if (priv->checkOpen(xsink)) {
+                chunked_body_state = ChunkedBodyState::DONE;
+                return nullptr;
+            }
+
+            poll_rc = poll_state->continuePoll(xsink);
+            if (*xsink) {
+                poll_state.reset();
+                priv->clearNonBlock(NB_RECV);
+                set_non_block = false;
+                chunked_body_state = ChunkedBodyState::DONE;
+                return nullptr;
+            }
+            if (!poll_rc) {
+                SimpleRefHolder<BinaryNode> d(poll_state->takeOutput().get<BinaryNode>());
+                bool ok = true;
+                if (current_read_to_string) {
+                    size_t len = d->size();
+                    char* buf = reinterpret_cast<char*>(d->giveBuffer());
+                    char* nbuf = reinterpret_cast<char*>(q_realloc(buf, len + 1));
+                    if (!nbuf) {
+                        xsink->outOfMemory();
+                        ok = false;
+                    } else {
+                        nbuf[len] = '\0';
+                        data = new QoreStringNode(nbuf, len, len + 1, sock->getEncoding());
+                    }
+                } else {
+                    data = d.release();
+                }
+                poll_state.reset();
+                priv->clearNonBlock(NB_RECV);
+                set_non_block = false;
+                if (!ok) {
+                    chunked_body_state = ChunkedBodyState::DONE;
+                    return nullptr;
+                }
+            }
+        }
+
+        if (poll_rc) {
+            return getSocketPollInfoHash(xsink, poll_rc);
+        }
+
+        int rc = 0;
+        switch (chunked_body_state) {
+            case ChunkedBodyState::RECV_CHUNK_SIZE:
+                rc = handleChunkSize(xsink);
+                break;
+            case ChunkedBodyState::RECV_CHUNK_DATA:
+                rc = handleChunkData(xsink);
+                break;
+            case ChunkedBodyState::RECV_TRAILER:
+                rc = handleTrailer(xsink);
+                break;
+            case ChunkedBodyState::DONE:
+                received = true;
+                return nullptr;
+        }
+        if (rc || *xsink) {
+            chunked_body_state = ChunkedBodyState::DONE;
+            return nullptr;
+        }
+    }
+
+    return nullptr;
+}
+
+void SocketReadHttpChunkedBodyPollOperation::abort(ExceptionSink* xsink) {
+    bool needs_close = abortNeedsClose();
+    my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+    {
+        AutoLocker al(priv->m);
+        poll_state.reset();
+        if (set_non_block) {
+            priv->clearNonBlock(NB_RECV);
+            set_non_block = false;
+        }
+        if (needs_close) {
+            qore_socket_close_from_controller(priv->socket);
+        }
+    }
+    out = nullptr;
+    data.discard();
+    chunked_body_state = ChunkedBodyState::DONE;
+    received = true;
+}
+
+QoreValue SocketReadHttpChunkedBodyPollOperation::getOutput() const {
+    return out.release();
+}
+
+const char* SocketReadHttpChunkedBodyPollOperation::getStateImpl() const {
+    switch (chunked_body_state) {
+        case ChunkedBodyState::RECV_CHUNK_SIZE:
+            return "recv-chunk-size";
+        case ChunkedBodyState::RECV_CHUNK_DATA:
+            return "recv-chunk-data";
+        case ChunkedBodyState::RECV_TRAILER:
+            return "recv-chunk-trailer";
+        case ChunkedBodyState::DONE:
+            return "received";
+        default:
+            return "unknown";
+    }
+}
+
+bool SocketReadHttpChunkedBodyPollOperation::goalReached() const {
+    return received;
+}
+
+bool SocketReadHttpChunkedBodyPollOperation::abortNeedsClose() const {
+    if (bytes_consumed) {
+        return true;
+    }
+    if (!poll_state) {
+        return false;
+    }
+    if (current_read_to_string) {
+        assert(dynamic_cast<SocketRecvUntilBytesPollState*>(poll_state.get()));
+        return reinterpret_cast<SocketRecvUntilBytesPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+    }
+    assert(dynamic_cast<SocketRecvPollState*>(poll_state.get()));
+    return reinterpret_cast<SocketRecvPollState*>(poll_state.get())->getBytesReceived() ? true : false;
+}
+
 // SocketReadHttpBodyPollOperation implementation
 
 SocketReadHttpBodyPollOperation::SocketReadHttpBodyPollOperation(ExceptionSink* xsink,
