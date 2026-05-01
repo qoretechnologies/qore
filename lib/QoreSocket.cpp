@@ -4199,11 +4199,16 @@ static int qore_socket_exec_send_http_message(QoreSocket* s, QoreHashNode* info,
         const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
         const void* data, size_t size, const QoreStringNode* body_event, int source, int timeout_ms,
         ExceptionSink* xsink) {
+    qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_SEND);
+    if (!io_guard) {
+        return -1;
+    }
+
     if (qore_socket_exec_check_http1_allowed(s, "sendHTTPMessage", xsink)) {
         return -1;
     }
 
-    qore_socket_private* priv = qore_socket_private::get(*s);
     QoreString hdr(s->getEncoding());
     priv->getSendHttpMessageHeaders(hdr, info, method, path, http_version, headers, size, source);
 
@@ -4235,6 +4240,11 @@ static int qore_socket_exec_send_http_response(QoreSocket* s, QoreHashNode* info
     }
 
     qore_socket_private* priv = qore_socket_private::get(*s);
+    QoreSocketRawAsyncIoGuard send_guard(*priv, xsink, NB_SEND);
+    if (!send_guard) {
+        return -1;
+    }
+
     int32_t stream_id = priv->getH2ActiveThreadStreamId();
     ValueHolder h2_stream(qore_socket_exec_poll(s,
         new QoreSocketControllerHttp2ServerStreamPollOperation(s, stream_id, "sendHTTPResponse"),
