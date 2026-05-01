@@ -12,6 +12,14 @@
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/HttpClientStreamingIo
 %requires ../../../../qlib/WebSocketHandler.qm
 %requires ../../../../qlib/WebSocketClient.qm
 %requires ../../../../qlib/RestClientIo.qm
