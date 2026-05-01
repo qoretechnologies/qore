@@ -1140,10 +1140,20 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         // Assign the value to the loop variable
         QoreValue var_expr = foreach_stmt->getVar();
         if (var_expr && !var_expr.isNothing()) {
-            // Use StoreLValue for the assignment
-            auto* store_inst = builder.createStoreLValue(var_expr, value_val, stmt->loc);
-            if (!exception_stack.empty()) {
-                store_inst->exception_target = exception_stack.back();
+            // Simple variable targets can use normal assignment lowering; complex
+            // lvalues and reference-typed vars need StoreLValue write-through semantics.
+            const auto* var_node = dynamic_cast<const VarRefNode*>(var_expr.getInternalNode());
+            const QoreTypeInfo* var_type = var_node ? getVarRefTypeInfo(var_node) : nullptr;
+            if (var_node && var_node->getType() != VT_IMMEDIATE
+                    && !QoreTypeInfo::isReference(var_type)) {
+                if (!storeVarRef(var_node, value_val, error, "foreach assignment")) {
+                    return false;
+                }
+            } else {
+                auto* store_inst = builder.createStoreLValue(var_expr, value_val, stmt->loc);
+                if (!exception_stack.empty()) {
+                    store_inst->exception_target = exception_stack.back();
+                }
             }
         }
 

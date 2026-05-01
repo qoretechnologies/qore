@@ -1002,9 +1002,51 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::InvokeDotEvalMethodDirect:
             return nullptr;
 
-        // Invoke has its own instruction class
-        case QoreIROpcode::Invoke:
-            return &static_cast<const QoreIRInvokeInstruction*>(inst)->expr;
+        // Invoke has its own instruction class.  When operands are present for
+        // natively lowered invoke opcodes, the expression is metadata only
+        // (target identity, regex/type information, etc.) and its argument/base
+        // subtrees are not re-evaluated at runtime.  Walking those trees here
+        // marks operand locals AST-visible and forces unnecessary runtime-stack
+        // reloads after every call in hot AOT loops.
+        case QoreIROpcode::Invoke: {
+            const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
+            switch (inv->invoke_opcode) {
+                case QoreIROpcode::Call:
+                case QoreIROpcode::CallDirect:
+                case QoreIROpcode::CallIndirect:
+                case QoreIROpcode::CallMethod:
+                case QoreIROpcode::CallMethodDirect:
+                case QoreIROpcode::CallStatic:
+                case QoreIROpcode::CallStaticDirect:
+                    return nullptr;
+
+                case QoreIROpcode::RegexMatchBool:
+                case QoreIROpcode::RegexNMatchBool:
+                case QoreIROpcode::RegexExtractAny:
+                case QoreIROpcode::RegexExtractList:
+                case QoreIROpcode::ExistsAny:
+                case QoreIROpcode::ExistsBool:
+                case QoreIROpcode::InstanceOfBool:
+                case QoreIROpcode::KeysAny:
+                case QoreIROpcode::KeysList:
+                case QoreIROpcode::KeysHash:
+                case QoreIROpcode::ElementsAny:
+                case QoreIROpcode::ElementsInt:
+                case QoreIROpcode::CastAny:
+                case QoreIROpcode::CastList:
+                case QoreIROpcode::CastHash:
+                case QoreIROpcode::CastComplexHash:
+                case QoreIROpcode::CastObject:
+                case QoreIROpcode::CastEnum:
+                    return inv->operands.empty() ? &inv->expr : nullptr;
+
+                case QoreIROpcode::ListAssignAny:
+                    return inv->operands.size() >= 2 ? nullptr : &inv->expr;
+
+                default:
+                    return &inv->expr;
+            }
+        }
 
         // Native access opcodes with expr fields
         case QoreIROpcode::LoadStaticVar:
@@ -1038,6 +1080,37 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::VrnConstruct:
             return &static_cast<const QoreIRVrnConstructInstruction*>(inst)->expr;
 
+        // Native-lowered expression opcodes keep expr metadata for constants,
+        // regex/type details, or fallback identity.  When operands are present,
+        // the operand subtrees have already been lowered and are not evaluated
+        // through the AST at runtime.
+        case QoreIROpcode::RegexMatchBool:
+        case QoreIROpcode::RegexNMatchBool:
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList:
+        case QoreIROpcode::ExistsAny:
+        case QoreIROpcode::ExistsBool:
+        case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
+        case QoreIROpcode::CastAny:
+        case QoreIROpcode::CastList:
+        case QoreIROpcode::CastHash:
+        case QoreIROpcode::CastComplexHash:
+        case QoreIROpcode::CastObject:
+        case QoreIROpcode::CastEnum: {
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            return expr_inst->operands.empty() ? &expr_inst->expr : nullptr;
+        }
+
+        case QoreIROpcode::ListAssignAny: {
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            return expr_inst->operands.size() >= 2 ? nullptr : &expr_inst->expr;
+        }
+
         // DotEval opcodes delegate method calls to AST — the expr contains the
         // full QoreDotEvalOperatorNode including argument expressions that may
         // reference locals.
@@ -1049,18 +1122,9 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::DotEvalList:
         case QoreIROpcode::DotEvalHash:
         case QoreIROpcode::DotEvalObject:
-        // Regex ops delegate to AST
-        case QoreIROpcode::RegexMatchBool:
-        case QoreIROpcode::RegexNMatchBool:
-        case QoreIROpcode::RegexExtractAny:
-        case QoreIROpcode::RegexExtractList:
-        // List assignment delegates to AST (QoreIRExprInstruction)
         // NOTE: AddAssignLValue/SubAssignLValue are QoreIRLValueInstruction, not
         // QoreIRExprInstruction — they are handled by isLValueOp() + line 1008
-        case QoreIROpcode::ListAssignAny:
         // Elements/size ops delegate to AST
-        case QoreIROpcode::ElementsAny:
-        case QoreIROpcode::ElementsInt:
         // Map/select/cast ops delegate to AST
         case QoreIROpcode::MapSelectList:
         case QoreIROpcode::MapSelectAny:
@@ -1068,12 +1132,6 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::HashMapSelect:
         case QoreIROpcode::HashMapAny:
         case QoreIROpcode::HashMapSelectAny:
-        case QoreIROpcode::CastAny:
-        case QoreIROpcode::CastList:
-        case QoreIROpcode::CastHash:
-        case QoreIROpcode::CastComplexHash:
-        case QoreIROpcode::CastObject:
-        case QoreIROpcode::CastEnum:
         case QoreIROpcode::InvokeSimError:
         // Lvalue-modifying expression ops (modify variables via AST LValueHelper)
         // These delegate to AST and read local variables from the thread-local stack.
@@ -1098,12 +1156,6 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::TransliterateAny:
         case QoreIROpcode::TransliterateString:
         // Keys/exists/background ops delegate to AST
-        case QoreIROpcode::KeysAny:
-        case QoreIROpcode::KeysList:
-        case QoreIROpcode::KeysHash:
-        case QoreIROpcode::ExistsAny:
-        case QoreIROpcode::ExistsBool:
-        case QoreIROpcode::InstanceOfBool:
         case QoreIROpcode::BackgroundInt:
             if (dynamic_cast<const QoreIRBackgroundInstruction*>(inst)) {
                 return nullptr;
