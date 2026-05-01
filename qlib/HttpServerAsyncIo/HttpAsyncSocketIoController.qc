@@ -1376,7 +1376,7 @@ public class HttpAsyncSocketIoController {
                 "family": (request.peer_address ?? "") =~ /:/ ? AF_INET6 : AF_INET,
                 "familystr": (request.peer_address ?? "") =~ /:/ ? "ipv6" : "ipv4",
             },
-            "socket": listener.getSocketInfo(),
+            "socket": listener.getSocketInfo(False),
         });
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
             "sock": listener,

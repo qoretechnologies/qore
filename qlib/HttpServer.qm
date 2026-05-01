@@ -1161,7 +1161,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         udp_sock.bindINET(bind_addr, bind_port, True, family, SOCK_DGRAM);
 
         # Get the actual port that was bound
-        hash<auto> sock_info = udp_sock.getSocketInfo();
+        hash<auto> sock_info = udp_sock.getSocketInfo(False);
         int actual_port = sock_info.port;
 
         # Set up SSL certificate and key for QUIC
@@ -4169,7 +4169,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             # save socket port/path
-            socket_info = getSocketInfo() + {
+            socket_info = getSocketInfo(False) + {
                 "ssl": ssl,
                 "name": name,
                 "id": id,
