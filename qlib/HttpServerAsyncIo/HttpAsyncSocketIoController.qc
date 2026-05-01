@@ -3008,11 +3008,13 @@ public class HttpAsyncSocketIoController {
             remove connections{uh};
         }
 
-        # Cancel the poll operation from the I/O controller cache to release socket reference
+        # Close through the controller after the SSE poll result has returned.
+        # This avoids re-entering synchronous close/cancel from the poll
+        # operation's own in-flight continuePoll() worker.
         try {
-            controller.cancel(cinfo.sock);
+            cinfo.sock.close();
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::DEBUG, "Error cancelling SSE operation for %y: %s: %s", uh, ex.err, ex.desc);
+            log(LoggerLevel::DEBUG, "Error closing SSE socket for %y: %s: %s", uh, ex.err, ex.desc);
         }
 
         try {

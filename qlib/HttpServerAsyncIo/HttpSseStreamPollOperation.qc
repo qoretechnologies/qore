@@ -38,11 +38,12 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     public {
         #! State constants
         const STATE_STREAMING = "streaming";
-        #! Producer signalled end-of-stream; drain queued events, then close
+        #! Producer signalled end-of-stream; drain queued events, then complete
         /** Set by @ref close().  In this state @ref continuePoll() keeps
             flushing the @ref event_channel and any partially-written
-            @ref pending_data; once both are empty, the operation closes the
-            socket and transitions to @ref STATE_DISCONNECTED.  This avoids
+            @ref pending_data; once both are empty, the operation transitions
+            to @ref STATE_DISCONNECTED and the controller closes the socket
+            from the disconnect handler.  This avoids
             a race in the H1 response-header dispatch path where calling
             @ref abort() before the I/O controller has issued
             @c startPollSendHttpResponse would race ahead and leave the
@@ -197,16 +198,12 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         }
 
         # Graceful end-of-stream: producer signalled close() and we have
-        # now flushed the queue and any partial pending_data.  Close the
-        # socket here (the framework's handleSseDisconnect path does not
-        # close it) and transition to DISCONNECTED so the controller
-        # tears the connection down on the next poll.
+        # now flushed the queue and any partial pending_data.  Do not call
+        # Socket::close() here: continuePoll() is still in-flight in the
+        # async controller, and sync close/cancel would wait for this same
+        # worker to return.  The controller closes the socket from
+        # handleSseDisconnect() after this result is delivered.
         if (state == STATE_DRAINING) {
-            try {
-                sock.close();
-            } catch () {
-                # Ignore close errors
-            }
             state = STATE_DISCONNECTED;
             return NOTHING;
         }
@@ -358,12 +355,13 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         return event_channel.size();
     }
 
-    #! Initiates a graceful end-of-stream: drain queued events, then close
+    #! Initiates a graceful end-of-stream: drain queued events, then finish
     /** Use this when the SSE producer has finished emitting events and
         wants the stream to end cleanly.  Sets @ref state to
         @ref STATE_DRAINING and notifies @ref continuePoll(); the next
         poll cycle flushes any queued or partially-written data and
-        only then closes the socket.
+        only then finishes the poll operation so the controller can close the
+        socket after the in-flight poll worker has returned.
 
         Why a separate method from @ref abort(): the H1 SSE handoff
         spawns a producer thread (see
