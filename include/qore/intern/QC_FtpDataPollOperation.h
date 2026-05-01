@@ -194,6 +194,8 @@ public:
 private:
     // --- Helper methods ---
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
+    DLLLOCAL void closeDataSocket(ExceptionSink* xsink);
+    DLLLOCAL void closeAndSetClosed(ExceptionSink* xsink);
     DLLLOCAL void setClosed();
 
     // --- State handlers ---

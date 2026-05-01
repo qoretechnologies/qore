@@ -111,15 +111,13 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
                 current_op->deref(&xsink);
                 current_op = nullptr;
             }
-            data_state = FtpDataState::CLOSED;
+            closeAndSetClosed(&xsink);
         } else {
             current_op->setSelf(*this->self);
         }
     } else {
         // Start receiving immediately
-        if (startRecvData(&xsink)) {
-            data_state = FtpDataState::CLOSED;
-        }
+        startRecvData(&xsink);
     }
 }
 
@@ -141,16 +139,14 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
                 current_op->deref(&xsink);
                 current_op = nullptr;
             }
-            data_state = FtpDataState::CLOSED;
+            closeAndSetClosed(&xsink);
         } else {
             current_op->setSelf(*this->self);
         }
     } else {
         // Start sending immediately
         ExceptionSink xsink;
-        if (startSendData(&xsink)) {
-            data_state = FtpDataState::CLOSED;
-        }
+        startSendData(&xsink);
     }
 }
 
@@ -172,14 +168,12 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
                 current_op->deref(&xsink);
                 current_op = nullptr;
             }
-            data_state = FtpDataState::CLOSED;
+            closeAndSetClosed(&xsink);
         } else {
             current_op->setSelf(*this->self);
         }
     } else {
-        if (startRecvData(&xsink)) {
-            data_state = FtpDataState::CLOSED;
-        }
+        startRecvData(&xsink);
     }
 }
 
@@ -201,15 +195,13 @@ FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,
                 current_op->deref(&xsink);
                 current_op = nullptr;
             }
-            data_state = FtpDataState::CLOSED;
+            closeAndSetClosed(&xsink);
         } else {
             current_op->setSelf(*this->self);
         }
     } else {
         ExceptionSink xsink;
-        if (startSendData(&xsink)) {
-            data_state = FtpDataState::CLOSED;
-        }
+        startSendData(&xsink);
     }
 }
 
@@ -256,13 +248,9 @@ QoreValue FtpDataPollOperationPriv::getOutput() const {
 void FtpDataPollOperationPriv::abort(ExceptionSink* xsink) {
     if (current_op) {
         current_op->abort(xsink);
-        current_op->deref(xsink);
-        current_op = nullptr;
+        releaseCurrentOp(xsink);
     }
-    if (data_sock) {
-        data_sock->closeIo(xsink);
-    }
-    data_state = FtpDataState::CLOSED;
+    closeAndSetClosed(xsink);
 }
 
 void FtpDataPollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
@@ -270,6 +258,42 @@ void FtpDataPollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
         current_op->deref(xsink);
         current_op = nullptr;
     }
+}
+
+void FtpDataPollOperationPriv::closeDataSocket(ExceptionSink* xsink) {
+    if (!data_sock) {
+        return;
+    }
+
+    if (qore_on_async_io_thread()) {
+        data_sock->closeIo(xsink);
+        return;
+    }
+
+    ExceptionSink close_xsink;
+    ExceptionSink* close_sink = &close_xsink;
+    if (xsink && !*xsink) {
+        close_sink = xsink;
+    }
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(close_sink), close_sink);
+    if (!*close_sink && *ctl_obj) {
+        ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
+            static_cast<AsyncIoControllerPriv*>(
+                (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, close_sink)),
+            close_sink);
+        if (!*close_sink && *ctl_priv) {
+            ctl_priv->close(data_sock, close_sink);
+        }
+    }
+    if (close_sink == &close_xsink && close_xsink) {
+        close_xsink.clear();
+    }
+}
+
+void FtpDataPollOperationPriv::closeAndSetClosed(ExceptionSink* xsink) {
+    releaseCurrentOp(xsink);
+    closeDataSocket(xsink);
+    setClosed();
 }
 
 void FtpDataPollOperationPriv::setClosed() {
@@ -290,10 +314,11 @@ int FtpDataPollOperationPriv::startRecvData(ExceptionSink* xsink) {
         releaseCurrentOp(xsink);
         if (ftp_data_exception_is(*xsink, "SOCKET-NOT-OPEN")) {
             xsink->clear();
+            closeDataSocket(xsink);
             data_state = FtpDataState::DONE;
             return 0;
         }
-        setClosed();
+        closeAndSetClosed(xsink);
         return -1;
     }
     current_op->setSelf(*self);
@@ -309,8 +334,7 @@ int FtpDataPollOperationPriv::startSendData(ExceptionSink* xsink) {
         current_op = new SocketSendInputStreamPollOperation(xsink, data_sock, *send_input_stream, nullptr,
             -1, -1, false, true);
         if (*xsink) {
-            releaseCurrentOp(xsink);
-            setClosed();
+            closeAndSetClosed(xsink);
             return -1;
         }
         current_op->setSelf(*self);
@@ -331,8 +355,7 @@ int FtpDataPollOperationPriv::startSendData(ExceptionSink* xsink) {
     data_sock->ref();  // ref for inner op
     current_op = new SocketSendPollOperation(xsink, chunk, data_sock, true);
     if (*xsink) {
-        releaseCurrentOp(xsink);
-        setClosed();
+        closeAndSetClosed(xsink);
         return -1;
     }
     current_op->setSelf(*self);
@@ -366,7 +389,7 @@ QoreHashNode* FtpDataPollOperationPriv::handleConnecting(ExceptionSink* xsink) {
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
         xsink->assimilate(poll_xsink);
-        setClosed();
+        closeAndSetClosed(xsink);
         return nullptr;
     }
     if (poll_info) {
@@ -374,7 +397,7 @@ QoreHashNode* FtpDataPollOperationPriv::handleConnecting(ExceptionSink* xsink) {
     }
     if (!current_op->goalReached()) {
         xsink->raiseException("FTP-DATA-CONNECT-ERROR", "data channel connection failed");
-        setClosed();
+        closeAndSetClosed(xsink);
         return nullptr;
     }
     releaseCurrentOp(xsink);
@@ -384,8 +407,7 @@ QoreHashNode* FtpDataPollOperationPriv::handleConnecting(ExceptionSink* xsink) {
         data_sock->ref();  // ref for inner op
         current_op = new SocketUpgradeClientSslPollOperation(xsink, data_sock, true);
         if (*xsink) {
-            releaseCurrentOp(xsink);
-            setClosed();
+            closeAndSetClosed(xsink);
             return nullptr;
         }
         current_op->setSelf(*self);
@@ -419,7 +441,7 @@ QoreHashNode* FtpDataPollOperationPriv::handleSslUpgrade(ExceptionSink* xsink) {
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
         xsink->assimilate(poll_xsink);
-        setClosed();
+        closeAndSetClosed(xsink);
         return nullptr;
     }
     if (poll_info) {
@@ -427,7 +449,7 @@ QoreHashNode* FtpDataPollOperationPriv::handleSslUpgrade(ExceptionSink* xsink) {
     }
     if (!current_op->goalReached()) {
         xsink->raiseException("FTP-DATA-SSL-ERROR", "TLS handshake failed on data channel");
-        setClosed();
+        closeAndSetClosed(xsink);
         return nullptr;
     }
     releaseCurrentOp(xsink);
@@ -465,9 +487,7 @@ QoreHashNode* FtpDataPollOperationPriv::handleReceiving(ExceptionSink* xsink) {
             return nullptr;
         }
         xsink->assimilate(poll_xsink);
-        releaseCurrentOp(xsink);
-        data_sock->closeIo(xsink);
-        setClosed();
+        closeAndSetClosed(xsink);
         return nullptr;
     }
     if (poll_info) {
@@ -516,7 +536,7 @@ QoreHashNode* FtpDataPollOperationPriv::handleSending(ExceptionSink* xsink) {
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
         xsink->assimilate(poll_xsink);
-        setClosed();
+        closeAndSetClosed(xsink);
         return nullptr;
     }
     if (poll_info) {
@@ -524,7 +544,7 @@ QoreHashNode* FtpDataPollOperationPriv::handleSending(ExceptionSink* xsink) {
     }
     if (!current_op->goalReached()) {
         xsink->raiseException("FTP-DATA-SEND-ERROR", "failed to send data on data channel");
-        setClosed();
+        closeAndSetClosed(xsink);
         return nullptr;
     }
     releaseCurrentOp(xsink);
