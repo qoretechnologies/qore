@@ -3204,17 +3204,21 @@ public:
     }
 
     DLLLOCAL bool equal(const qore_class_private& qc) const {
-        if (&qc == this)
+        if (&qc == this) {
             return true;
+        }
 
-        if (qc.classID == classID || (qc.name == name && qc.hash == hash))
+        if (qc.classID == classID || (qc.name == name && qc.hash == hash)) {
             return true;
+        }
 
-        if (injectedClass && injectedClass->equal(qc))
+        if (injectedClass && injectedClass->equal(qc)) {
             return true;
+        }
 
-        if (qc.injectedClass && equal(*qc.injectedClass))
+        if (qc.injectedClass && equal(*qc.injectedClass)) {
             return true;
+        }
 
         return false;
     }

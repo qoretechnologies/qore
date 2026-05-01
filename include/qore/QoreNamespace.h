@@ -325,9 +325,44 @@ public:
     DLLEXPORT QoreProgram* getProgram() const;
 
     //! Returns the module name the namespace was loaded from or nullptr if it is a builtin namespace
-    /** @since %Qore 0.9.5
+    /** A namespace can host content from multiple modules; this method returns the first
+        module that contributed to the namespace, for backward compatibility. Use
+        @ref isFromModule(const char*) const to test membership of a specific module.
+
+        @since %Qore 0.9.5
     */
     DLLEXPORT const char* getModuleName() const;
+
+    //! Returns true iff the given module is among this namespace's contributors
+    /** A namespace may receive classes/functions/sub-namespaces from more than one module
+        (e.g. two modules each declaring `public namespace HttpServer { ... }`).  This
+        method tests membership across all contributors instead of the single-string
+        @ref getModuleName() — useful for code that needs to decide whether a namespace
+        was provided by a particular module without depending on which module contributed
+        first.
+
+        @param mod the module name to check
+
+        @return true if @a mod is a contributor to this namespace, false otherwise
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT bool isFromModule(const char* mod) const;
+
+    //! Returns the number of distinct modules that contributed to this namespace
+    /** Returns 0 for namespaces not produced by any module (system / parse-declared
+        without a current module context), 1 for single-module namespaces, and >1
+        for namespaces that span multiple modules (e.g. Qorus's ::OMQ namespace
+        contributed to by QorusVersion + QorusClientBase + QorusClientCore + ...).
+        Callers can use this to distinguish "module-owned" namespaces from shared
+        ones — useful for policy decisions like whether to allow access via the
+        legacy single-segment dotted path or to require the module-qualified form.
+
+        @return the number of contributing modules
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT size_t getModuleCount() const;
 
     //! Sets a key value in the namespace's key-value store unconditionally
     /** @param key the key to store
