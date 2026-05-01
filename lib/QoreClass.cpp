@@ -4002,15 +4002,17 @@ QoreValue qore_class_private::evalMethod(QoreObject* self, const char* nme, cons
             }
         }
 
-        if (exists && (mv.getType() == NT_FUNCREF || mv.getType() == NT_RUNTIME_CLOSURE)) {
+        if (exists) {
             ValueHolder mvh(mv, xsink);
             if (*xsink) {
                 return QoreValue();
             }
-            const ResolvedCallReferenceNode* ref =
-                dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode());
-            if (ref) {
-                return ref->execValue(args, xsink);
+            if (mv.getType() == NT_FUNCREF || mv.getType() == NT_RUNTIME_CLOSURE) {
+                const ResolvedCallReferenceNode* ref =
+                    dynamic_cast<const ResolvedCallReferenceNode*>(mv.getInternalNode());
+                if (ref) {
+                    return ref->execValue(args, xsink);
+                }
             }
         }
     }
