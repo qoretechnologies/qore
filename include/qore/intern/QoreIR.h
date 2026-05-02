@@ -2229,8 +2229,9 @@ public:
 
     // Set of LocalVar* pointers that are already instantiated by the caller
     // (tiered compilation: params from setupCall(), argvid/selfid from evalTiered(),
-    // all body locals from the statement tree).  The JIT must not
-    // re-instantiate/uninstantiate these.
+    // and AST-visible body locals from the statement tree).  IR-only body locals
+    // are intentionally excluded so the JIT can keep them in LLVM allocas
+    // without runtime local-stack traffic.
     std::unordered_set<const void*> pre_instantiated_locals;
 
     // Cached LocalVar* set for fast iteration in evalTiered() without per-call allocation.

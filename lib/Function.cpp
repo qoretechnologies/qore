@@ -2749,6 +2749,18 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
         }
     }
 
+    // Keep the compile-time pre-instantiated set aligned with evalTiered().
+    // IR-only body locals are deliberately not pushed on the TLS local stack;
+    // LLVM lowering must allocate/cache them locally instead of emitting
+    // qore_rt_load_local() entry loads.
+    for (LocalVar* lv : func->all_body_locals) {
+        const void* key = reinterpret_cast<const void*>(lv);
+        if (func->ir_only_locals.count(key)) {
+            func->pre_instantiated_locals.erase(key);
+            func->pre_instantiated_cache.erase(lv);
+        }
+    }
+
     // Third pass: set ir_only flags on fused instructions using computed ir_only_locals
     if (!func->ir_only_locals.empty()) {
         for (const auto& block : func->blocks) {

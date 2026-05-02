@@ -833,9 +833,16 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     entry_locals_set.clear();
     instantiated_non_entry_locals.clear();
     block_scoped_locals.clear();
+    current_body_locals.clear();
     local_cleanup_allocas.clear();
     closure_pre_inst_flags.clear();
     operand_remaining_uses.clear();
+
+    for (LocalVar* lv : func.all_body_locals) {
+        if (lv) {
+            current_body_locals.insert(reinterpret_cast<const void*>(lv));
+        }
+    }
 
     // First pass: identify block-scoped locals (those with explicit UninstantiateLocal
     // or InstantiateLocal)
@@ -858,6 +865,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     auto is_outer_scope_local = [&](const void* key) -> bool {
         return pre_instantiated_locals
             && !pre_instantiated_locals->count(key)
+            && !current_body_locals.count(key)
             && !block_scoped_locals.count(key);
     };
     bool is_first_block = true;
@@ -872,11 +880,12 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                 const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
                 if (linst->local && seen.insert(linst->local).second) {
                     auto key = reinterpret_cast<const void*>(linst->local);
-                    // Skip outer-scope variables: when pre_instantiated_locals is set,
-                    // variables NOT in it are from an outer scope (e.g. top-level locals
-                    // accessed from a sub).  These are already on the thread-local stack
-                    // and must not be instantiated/uninstantiated or cached in allocas —
-                    // they'll be accessed via qore_rt_load_local() on each use.
+                    // Skip true outer-scope variables: when pre_instantiated_locals
+                    // is set, variables not in that set and not owned by this
+                    // function are from an outer scope (e.g. top-level locals
+                    // accessed from a sub).  Current body locals can be omitted
+                    // from pre_instantiated_locals when they are IR-only, but they
+                    // still require local allocas instead of qore_rt_load_local().
                     // Locals with explicit InstantiateLocal/UninstantiateLocal are
                     // callee-owned block-scoped locals even if all_body_locals
                     // collection missed them; they still need an alloca and local
@@ -1009,8 +1018,11 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
         auto helper = module.getOrInsertFunction("qore_rt_instantiate_local",
                 llvm::FunctionType::get(void_type, {ptr_type}, false));
         for (LocalVar* var : entry_locals) {
-            if (pre_instantiated_locals &&
-                    pre_instantiated_locals->count(reinterpret_cast<const void*>(var))) {
+            const void* key = reinterpret_cast<const void*>(var);
+            if (pre_instantiated_locals && pre_instantiated_locals->count(key)) {
+                continue;
+            }
+            if (ir_only_body_locals.count(key)) {
                 continue;
             }
             llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(var));
@@ -1440,10 +1452,12 @@ void QoreIRToLLVM::emitOnBlockExitExec(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
     builder->CreateCall(helper, {obe_saved_count, xsink_arg});
     endNativeHandlerSlotCache(module, native_slot_cache);
-    // On-block-exit handlers execute user code and can mutate AOT body locals
-    // through the runtime local stack.  Refresh eagerly here: fused local ops
-    // can read allocas directly, so a lazy epoch alone is not sufficient.
-    reloadAllLocalsFromRuntime(module, llvm_func, false, true);
+    // On-block-exit handlers execute user code and can mutate AST-visible/AOT
+    // body locals through the runtime local stack.  Refresh eagerly here:
+    // fused local ops can read allocas directly, so a lazy epoch alone is not
+    // sufficient.  IR-only locals remain reload-exempt because they are not on
+    // the runtime local stack.
+    reloadAllLocalsFromRuntime(module, llvm_func, true, true);
 }
 
 void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
@@ -3980,9 +3994,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     // Propagate pre-instantiated locals set — always point to the set, even
-    // when empty.  An empty set means ALL LoadLocal targets are outer-scope
-    // variables (e.g. on_block_exit handler bodies that only reference enclosing
-    // function params).  A nullptr disables outer-scope checks entirely.
+    // when empty.  Locals outside this set and outside current_body_locals are
+    // outer-scope variables (e.g. on_block_exit handler bodies that only
+    // reference enclosing function params).  A nullptr disables outer-scope
+    // checks entirely.
     pre_instantiated_locals = &func.pre_instantiated_locals;
 
     // Propagate IR-only locals set for optimization (skip runtime sync for these)
@@ -5471,13 +5486,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 return true;
             }
 
-            // Outer-scope variables (not in pre_instantiated_locals and not block-scoped)
-            // must always be read from the runtime stack, like closure-bound locals.
-            // They're already on the thread-local variable stack from the calling scope
-            // and must not be cached in allocas (which would be initialized to NOTHING
-            // and become stale after any call that modifies the outer variable).
+            // Outer-scope variables (not current body locals, not pre-instantiated,
+            // and not block-scoped) must always be read from the runtime stack,
+            // like closure-bound locals.  They're already on the thread-local
+            // variable stack from the calling scope and must not be cached in
+            // allocas (which would be initialized to NOTHING and become stale
+            // after any call that modifies the outer variable).
             if (linst->local && pre_instantiated_locals
                     && !pre_instantiated_locals->count(key)
+                    && !current_body_locals.count(key)
                     && !block_scoped_locals.count(key)) {
                 llvm::Value* result;
                 if (aot_mode) {
@@ -5737,6 +5754,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             if (linst->local && pre_instantiated_locals
                     && !pre_instantiated_locals->count(key)
                     && !entry_locals_set.count(key)
+                    && !current_body_locals.count(key)
                     && !block_scoped_locals.count(key)
                     && !(aot_mode && linst->is_closure)) {
                 // Box the value for the runtime assign helper
@@ -5919,6 +5937,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             bool is_entry_local = entry_locals_set.count(key) > 0;
             bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
             if (!is_entry_local && !is_pre_instantiated &&
+                    !ir_only_body_locals.count(key) &&
                     instantiated_non_entry_locals.insert(key).second) {
                 // First store to this non-entry local - emit instantiation
                 if (aot_mode) {

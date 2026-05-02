@@ -243,6 +243,11 @@ private:
     // (block-scoped locals that need mid-function destruction)
     std::unordered_set<const void*> block_scoped_locals;
 
+    // Set of all body locals owned by the current IR function.  This is
+    // intentionally separate from pre_instantiated_locals: IR-only body locals
+    // can be callee-owned without being present on the runtime local stack.
+    std::unordered_set<const void*> current_body_locals;
+
     // For pre-instantiated closure-use block-scoped locals (loop-body closure captures):
     // i1 alloca flags tracking whether the CVV is currently on the cvstack.
     // Initialized to true (evalTiered pre-instantiates them).  Cleared to false by
