@@ -24,6 +24,30 @@
 
 #! Contains all public definitions in the FileLocationHandler module
 public namespace FileLocationHandler {
+class FileLocationHandlerFtpOutputStreamWrapper inherits OutputStreamWrapper {
+    private {
+        FtpClient client;
+        string file;
+        bool closed = False;
+    }
+
+    constructor(FtpClient client, string file) : OutputStreamWrapper(new BinaryOutputStream(), new WaitGroup()) {
+        self.client = client;
+        self.file = file;
+    }
+
+    close() {
+        if (closed) {
+            return;
+        }
+
+        BinaryOutputStream bos = cast<BinaryOutputStream>(getStream());
+        client.put(new BinaryInputStream(bos.getData()), file);
+        bos.close();
+        closed = True;
+    }
+}
+
 #! The class for handling "ftp(s)://"" locations
 /** Does not currently support non-blocking I/O operations
 */
@@ -92,22 +116,7 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an FTP transfer
     */
     private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
-        string file;
-        FtpClient f = getFtpClient(scheme, location, opts, \file);
-
-        StreamPipe pipe(False);
-
-        # run the I/O operation in the background
-        background sub () {
-            try {
-                OutputStream os = pipe.getOutputStream();
-                f.get(file, os);
-                os.close();
-            } catch (hash<ExceptionInfo> ex) {
-            }
-        }();
-
-        return new StreamReader(pipe.getInputStream(), opts.encoding);
+        return new StreamReader(getBinaryStreamImpl(scheme, location, opts), opts.encoding);
     }
 
     #! Retrieves a binary file from the given location
@@ -120,22 +129,7 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an FTP transfer
     */
     private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
-        string file;
-        FtpClient f = getFtpClient(scheme, location, opts, \file);
-
-        StreamPipe pipe(False);
-
-        # run the I/O operation in the background
-        background sub () {
-            try {
-                OutputStream os = pipe.getOutputStream();
-                f.get(file, os);
-                os.close();
-            } catch (hash<ExceptionInfo> ex) {
-            }
-        }();
-
-        return pipe.getInputStream();
+        return new BinaryInputStream(getBinaryFileImpl(scheme, location, opts));
     }
 
     #! Writes data to a file at the given location
@@ -168,40 +162,14 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
         @note
         - OutputStream::close() must be called to close the stream after writing terminates in order to avoid a
           deadlock
-        - The data written to the OutputStreamWrapper object is written in the background; to ensure that the data has
-          been written to the target, call OutputStreamWrapper::waitForIo()
+        - The data written to the OutputStreamWrapper object is uploaded when OutputStreamWrapper::close() is called;
+          OutputStreamWrapper::waitForIo() is retained for API compatibility
         - This method can throw any exception related to making an FTP transfer
     */
     private OutputStreamWrapper getOutputStreamImpl(string scheme, string location, *hash<auto> opts) {
         string file;
         FtpClient f = getFtpClient(scheme, location, opts, \file);
-
-        StreamPipe pipe(False);
-
-        WaitGroup io_counter();
-        io_counter.add();
-        OutputStreamWrapper rv(pipe.getOutputStream(), io_counter);
-
-        # run the I/O operation in the background
-        background sub () {
-            # on_exit must run AFTER setIoError so waitForIo() sees the
-            # error before the waitgroup reaches zero; placing done()
-            # inside the try would decrement the counter during unwinding
-            # and let waitForIo() return before catch assigned the error.
-            on_exit io_counter.done();
-            try {
-                Qore::InputStream is = pipe.getInputStream();
-                f.put(is, file);
-            } catch (hash<ExceptionInfo> ex) {
-                # Record the error so OutputStreamWrapper::waitForIo()
-                # can rethrow; previously this was silently dropped,
-                # leaving callers to misinterpret stale read-backs as
-                # the put result.
-                rv.setIoError(ex);
-            }
-        }();
-
-        return rv;
+        return new FileLocationHandlerFtpOutputStreamWrapper(f, file);
     }
 
     #! Gets supported read options
