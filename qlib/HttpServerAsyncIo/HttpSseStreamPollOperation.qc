@@ -96,6 +96,9 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             callers can keep wiring it without changing behavior.
         */
         *code<nothing()> wake_callback;
+
+        #! Maximum time producer/control threads may wait for the stream state lock
+        const StateLockTimeoutMs = 5000;
     }
 
     #! Creates the poll operation
@@ -116,7 +119,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param msg raw bytes to send (must already be SSE-framed, e.g. \c ":hb\\n\\n")
     */
     setHeartbeat(int interval_ms, string msg = DefaultSseHeartbeatMsg) {
-        AutoLock al(m);
+        lockState("setHeartbeat");
+        on_exit m.unlock();
         heartbeat_ms = interval_ms;
         heartbeat_msg = msg;
     }
@@ -129,7 +133,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param cb the wake callback
     */
     setWakeCallback(*code<nothing()> cb) {
-        AutoLock al(m);
+        lockState("setWakeCallback");
+        on_exit m.unlock();
         wake_callback = cb;
     }
 
@@ -140,7 +145,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns the current state
     string getState() {
-        AutoLock al(m);
+        lockState("getState");
+        on_exit m.unlock();
         return state;
     }
 
@@ -151,7 +157,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         before we drain the queued events.
     */
     bool goalReached() {
-        AutoLock al(m);
+        lockState("goalReached");
+        on_exit m.unlock();
         return state == STATE_DISCONNECTED || state == STATE_ERROR;
     }
 
@@ -289,7 +296,6 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param retry retry interval in ms (optional)
     */
     queueEvent(*string event_type, string data, *string id, *int retry) {
-        AutoLock al(m);
         event_channel.send({
             "type": event_type,
             "data": data,
@@ -303,7 +309,6 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     /** @param event hash with optional keys: type, data, id, retry
     */
     queueRawEvent(hash<auto> event) {
-        AutoLock al(m);
         event_channel.send(event);
         notifier.notify();
     }
@@ -312,7 +317,6 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     /** @param data already-formatted SSE text (e.g., from ServerSentEventHandler::encodeMessage())
     */
     queueRawString(string data) {
-        AutoLock al(m);
         event_channel.send(data);
         notifier.notify();
     }
@@ -348,7 +352,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns the output of the operation
     auto getOutput() {
-        AutoLock al(m);
+        lockState("getOutput");
+        on_exit m.unlock();
         return {
             "sock": sock,
             "state": state,
@@ -360,13 +365,15 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns True if the client disconnected
     bool isDisconnected() {
-        AutoLock al(m);
+        lockState("isDisconnected");
+        on_exit m.unlock();
         return state == STATE_DISCONNECTED;
     }
 
     #! Returns the number of queued events
     int getQueueSize() {
-        AutoLock al(m);
+        lockState("getQueueSize");
+        on_exit m.unlock();
         return event_channel.size();
     }
 
@@ -401,7 +408,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @since %Qore 2.4
     */
     close() {
-        AutoLock al(m);
+        lockState("close");
+        on_exit m.unlock();
         if (state == STATE_STREAMING) {
             state = STATE_DRAINING;
             notifier.notify();
@@ -411,7 +419,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     #! Aborts the operation and closes the connection
     abort() {
         {
-            AutoLock al(m);
+            lockState("abort");
+            on_exit m.unlock();
             state = STATE_DISCONNECTED;
             notifier.notify();
         }
@@ -419,6 +428,15 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             sock.close();
         } catch () {
             # Ignore close errors
+        }
+    }
+
+    private lockState(string caller) {
+        if (m.lock(StateLockTimeoutMs)) {
+            throw "SSE-STREAM-LOCK-TIMEOUT", sprintf(
+                "timed out after %d ms waiting for SSE stream state lock in %s(); "
+                "the async I/O controller worker may be blocked in continuePoll()",
+                StateLockTimeoutMs, caller);
         }
     }
 }
