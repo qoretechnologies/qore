@@ -652,10 +652,17 @@ class SalesforceTest inherits QUnit::Test {
     }
 
     connectionTest() {
-        string url = sprintf("http://%s:%s@localhost:8080", sfopts.username, sfopts.password);
-        remove sfopts{"username", "password"};
+        hash<auto> opts = {
+            "oauth2_client_id": sfopts.oauth2_client_id ?? get_random_string(),
+            "oauth2_client_secret": sfopts.oauth2_client_secret ?? get_random_string(),
+            "oauth2_grant_type": sfopts.oauth2_grant_type ?? "password",
+            "username": sfopts.username ?? "user",
+            "password": sfopts.password ?? "password",
+        };
+        string url = sprintf("http://%s:%s@localhost:8080", opts.username, opts.password);
+        remove opts{"username", "password"};
 
-        SalesforceRestConnection swsc("test", "test", url, {}, sfopts);
+        SalesforceRestConnection swsc("test", "test", url, {}, opts);
         assertEq(True, swsc instanceof SalesforceRestConnection);
 
         assertThrows("CONNECTION-OPTION-ERROR", sub () {
