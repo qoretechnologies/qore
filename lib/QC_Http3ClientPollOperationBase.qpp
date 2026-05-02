@@ -778,6 +778,8 @@ bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
     std::string sid = std::to_string(stream_id);
 
     AutoLocker al(stream_lock);
+    pending_stream_ids.erase(sid);
+
     // Clean up buffered responses
     auto pr_it = pending_responses.find(sid);
     if (pr_it != pending_responses.end()) {
@@ -1192,15 +1194,6 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
     priv->endSubmitFail();
 }
 
-//! Mark a client-side response stream for incremental body delivery
-/** @param stream_id the QUIC stream ID
-
-    @since %Qore 2.3
-*/
-nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
-    priv->setStreamStreaming(static_cast<int64_t>(stream_id), xsink);
-}
-
 //! Phase 3: register stream with a Promise for result delivery
 /** @param stream_id the QUIC stream ID
     @param promise the Promise to resolve with the response (pure C++ dispatch)
@@ -1320,6 +1313,12 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
     if (sse_install_eligible) {
         action->setSseInstallEligible();
     }
+    if (priv->setStreamStreaming(static_cast<int64_t>(stream_id), xsink)) {
+        ExceptionSink clean_xsink;
+        priv->cancelStream(static_cast<int64_t>(stream_id), &clean_xsink);
+        clean_xsink.clear();
+        return QoreValue();
+    }
     // Ownership: priv->registerStream takes the ref on success; see
     // registerStreamWithPromise for the rationale.
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
@@ -1362,6 +1361,12 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
     queue_ptr->deref(xsink);  // SseAction refs the queue itself
     if (notifier_ptr) {
         notifier_ptr->deref(xsink);  // SseAction refs the notifier itself
+    }
+    if (priv->setStreamStreaming(static_cast<int64_t>(stream_id), xsink)) {
+        ExceptionSink clean_xsink;
+        priv->cancelStream(static_cast<int64_t>(stream_id), &clean_xsink);
+        clean_xsink.clear();
+        return QoreValue();
     }
     // Ownership: priv->registerStream takes the ref on success; see
     // registerStreamWithPromise for the rationale.
