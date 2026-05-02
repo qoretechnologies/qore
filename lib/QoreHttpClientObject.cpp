@@ -6078,6 +6078,24 @@ public:
         }
     }
 
+    //! Constructor for connect mode (connection still CONNECTING)
+    HttpClientConnMgrPollOp(HttpClientConnectionBase* pending_conn,
+            QoreEventNotifier* notifier,
+            qore_httpclient_priv* priv_ref = nullptr,
+            QoreObject* client_obj = nullptr)
+        : notifier(notifier), priv_ref(priv_ref),
+          connect_mode(true), client_obj(client_obj),
+          pending_conn(pending_conn) {
+        assert(pending_conn);
+        if (notifier) {
+            notifier->ref();
+        }
+        if (client_obj) {
+            client_obj->ref();
+        }
+        pending_conn->ref();
+    }
+
     //! Constructor for deferred error mode
     HttpClientConnMgrPollOp(const char* err, const char* desc,
             QoreEventNotifier* notifier,
@@ -6290,6 +6308,9 @@ public:
         // continuePoll() when the notifier fd is readable; avoid a nested
         // zero-timeout poll here.
         if (!future && notifier) {
+            if (connect_mode && pending_conn) {
+                return continueConnectMode(xsink);
+            }
             if (!connect_mode_pre_notified && !connect_mode_wait_armed) {
                 connect_mode_wait_armed = true;
                 return getSocketPollInfoHash(xsink, SOCK_POLLIN);
@@ -6303,6 +6324,61 @@ public:
         // the "sock" member on self — avoids DGC cycle from storing a
         // QoreObject ref in C++ private data)
         return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
+    //! Handles connect-only mode while the conn_mgr connection is still CONNECTING.
+    DLLLOCAL QoreHashNode* continueConnectMode(ExceptionSink* xsink) {
+        bool decided = pending_conn->isClosed() || pending_conn->isReady() || pending_conn->wasReady();
+        if (!decided) {
+            if (connect_mode_wait_armed) {
+                notifier->acknowledge(xsink);
+                if (*xsink) {
+                    done = true;
+                    phase = Phase::DONE;
+                    clearPendingUnlocked(xsink);
+                    return nullptr;
+                }
+            } else {
+                connect_mode_wait_armed = true;
+            }
+            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        }
+
+        notifier->acknowledge(xsink);
+        if (*xsink) {
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+        connect_mode_wait_armed = false;
+
+        if (pending_conn->isClosed() && !pending_conn->wasReady()) {
+            ReferenceHolder<QoreHashNode> err_info(
+                pending_conn->getReferencedErrorInfo(), xsink);
+            const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
+            const char* desc_str = "connection failed during poll connect";
+            if (err_info) {
+                QoreValue ev = err_info->getKeyValue("err");
+                QoreValue dv = err_info->getKeyValue("desc");
+                if (ev.getType() == NT_STRING) {
+                    err_str = ev.get<const QoreStringNode>()->c_str();
+                }
+                if (dv.getType() == NT_STRING) {
+                    desc_str = dv.get<const QoreStringNode>()->c_str();
+                }
+            }
+            xsink->raiseException(err_str, "%s", desc_str);
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+
+        done = true;
+        phase = Phase::DONE;
+        clearPendingUnlocked(xsink);
+        return nullptr;
     }
 
     //! Handles WAITING_CONNECT phase.  Waits for notifier readiness, then
@@ -6980,13 +7056,19 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         return nullptr;
     }
 
+    // Keep the connection alive until the connect-mode poll op observes the
+    // final READY/CLOSED state.  The manager slot is released immediately; the
+    // poll op only holds a private ref for state/error inspection.
+    conn->ref();
     mgr.releaseConnection(conn);
 
     // Create poll op — no future for connect, just notifier signaling
     QoreEventNotifier* notifier_for_op = *notifier_holder;
     ReferenceHolder<HttpClientConnMgrPollOp> poller(
-        new HttpClientConnMgrPollOp(nullptr, notifier_for_op, this, self), xsink);
-    (*poller)->setConnectMode();
+        new HttpClientConnMgrPollOp(conn, notifier_for_op, this, self), xsink);
+    ExceptionSink deref_xsink;
+    conn->deref(&deref_xsink);
+    deref_xsink.clear();
 
     SocketPollOperationBase* p = *poller;
     ReferenceHolder<QoreObject> rv(
