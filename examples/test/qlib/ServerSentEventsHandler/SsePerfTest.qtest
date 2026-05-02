@@ -24,106 +24,108 @@
 #! Observer that tracks event counts, latencies, event IDs, and connection state
 class PerfObserver inherits Observer {
     private {
-        Mutex m();
-        Condition cond();
+        Queue event_q();
+        Queue connected_q();
         int event_count = 0;
         list<float> latencies();
         list<auto> event_ids();
         bool connected = False;
-        int waiting = 0;
     }
 
     update(string event_id, hash<auto> data_) {
-        m.lock();
-        on_exit m.unlock();
-
         if (event_id == EVENT_SSE_CONNECTED) {
-            connected = True;
-            if (waiting) {
-                cond.broadcast();
-            }
+            connected_q.push(True);
             return;
         }
         if (event_id == EVENT_SSE_CLOSED) {
             return;
         }
         if (event_id == EVENT_SSE_DATA) {
-            ++event_count;
-            if (data_.id.val()) {
-                event_ids += data_.id;
-            }
-            # If data contains a timestamp, compute latency
-            if (data_.data.typeCode() == NT_STRING && data_.data =~ /^ts:/) {
-                *string ts_str = (data_.data =~ x/^ts:(\d+)/)[0];
-                if (ts_str) {
-                    int sent_us = ts_str.toInt();
-                    int now_us_val = (now_us() - 1970-01-01).durationMicroseconds();
-                    float lat = (now_us_val - sent_us) / 1000.0;
-                    if (lat >= 0) {
-                        latencies += lat;
-                    }
-                }
-            }
-            if (waiting) {
-                cond.broadcast();
-            }
+            event_q.push(data_);
         }
     }
 
     waitForConnected(*timeout dur) {
-        date deadline = now_us() + (dur ?? 10s);
-        m.lock();
-        on_exit m.unlock();
-
-        while (!connected) {
-            if (now_us() >= deadline) {
-                throw "TIMEOUT", "waitForConnected timed out";
+        if (!connected) {
+            try {
+                connected_q.get(dur ?? 10s);
+                connected = True;
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUEUE-TIMEOUT") {
+                    throw "TIMEOUT", "waitForConnected timed out";
+                }
+                rethrow;
             }
-            ++waiting;
-            cond.wait(m, 1s);
-            --waiting;
         }
     }
 
     waitForEvents(int count, *timeout dur) {
         date deadline = now_us() + (dur ?? 30s);
-        m.lock();
-        on_exit m.unlock();
 
         while (event_count < count) {
             if (now_us() >= deadline) {
                 return;
             }
-            ++waiting;
-            cond.wait(m, 1s);
-            --waiting;
+            try {
+                recordEvent(event_q.get(100ms));
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    rethrow;
+                }
+            }
         }
     }
 
     int getEventCount() {
-        m.lock();
-        on_exit m.unlock();
+        drainEvents();
         return event_count;
     }
 
     list<float> getLatencies() {
-        m.lock();
-        on_exit m.unlock();
+        drainEvents();
         return latencies;
     }
 
     list<auto> getEventIds() {
-        m.lock();
-        on_exit m.unlock();
+        drainEvents();
         return event_ids;
     }
 
     clear() {
-        m.lock();
-        on_exit m.unlock();
+        while (exists event_q.tryGet()) {
+        }
         event_count = 0;
         remove latencies;
         remove event_ids;
+    }
+
+    private drainEvents() {
+        while (True) {
+            auto result = event_q.tryGet();
+            if (!exists result) {
+                return;
+            }
+            recordEvent(result.value);
+        }
+    }
+
+    private recordEvent(hash<auto> data_) {
+        ++event_count;
+        if (data_.id.val()) {
+            event_ids += data_.id;
+        }
+        # If data contains a timestamp, compute latency
+        if (data_.data.typeCode() == NT_STRING && data_.data =~ /^ts:/) {
+            *string ts_str = (data_.data =~ x/^ts:(\d+)/)[0];
+            if (ts_str) {
+                int sent_us = ts_str.toInt();
+                int now_us_val = (now_us() - 1970-01-01).durationMicroseconds();
+                float lat = (now_us_val - sent_us) / 1000.0;
+                if (lat >= 0) {
+                    latencies += lat;
+                }
+            }
+        }
     }
 }
 

@@ -57,6 +57,9 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     }
 
     private {
+        #! Protects poll-operation state shared by producer threads and controller workers
+        Mutex m();
+
         #! The SSE socket
         Socket sock;
 
@@ -113,6 +116,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param msg raw bytes to send (must already be SSE-framed, e.g. \c ":hb\\n\\n")
     */
     setHeartbeat(int interval_ms, string msg = DefaultSseHeartbeatMsg) {
+        AutoLock al(m);
         heartbeat_ms = interval_ms;
         heartbeat_msg = msg;
     }
@@ -125,6 +129,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param cb the wake callback
     */
     setWakeCallback(*code<nothing()> cb) {
+        AutoLock al(m);
         wake_callback = cb;
     }
 
@@ -135,6 +140,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns the current state
     string getState() {
+        AutoLock al(m);
         return state;
     }
 
@@ -145,6 +151,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         before we drain the queued events.
     */
     bool goalReached() {
+        AutoLock al(m);
         return state == STATE_DISCONNECTED || state == STATE_ERROR;
     }
 
@@ -152,6 +159,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     /** @return poll info for the next poll() call, or NOTHING if complete
     */
     *hash<SocketPollInfo> continuePoll() {
+        AutoLock al(m);
+
         # @ref STATE_DRAINING is also live: the producer has signalled
         # end-of-stream but we still need to flush queued events.
         if (state != STATE_STREAMING && state != STATE_DRAINING) {
@@ -280,6 +289,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param retry retry interval in ms (optional)
     */
     queueEvent(*string event_type, string data, *string id, *int retry) {
+        AutoLock al(m);
         event_channel.send({
             "type": event_type,
             "data": data,
@@ -293,6 +303,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     /** @param event hash with optional keys: type, data, id, retry
     */
     queueRawEvent(hash<auto> event) {
+        AutoLock al(m);
         event_channel.send(event);
         notifier.notify();
     }
@@ -301,6 +312,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     /** @param data already-formatted SSE text (e.g., from ServerSentEventHandler::encodeMessage())
     */
     queueRawString(string data) {
+        AutoLock al(m);
         event_channel.send(data);
         notifier.notify();
     }
@@ -336,6 +348,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns the output of the operation
     auto getOutput() {
+        AutoLock al(m);
         return {
             "sock": sock,
             "state": state,
@@ -347,11 +360,13 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns True if the client disconnected
     bool isDisconnected() {
+        AutoLock al(m);
         return state == STATE_DISCONNECTED;
     }
 
     #! Returns the number of queued events
     int getQueueSize() {
+        AutoLock al(m);
         return event_channel.size();
     }
 
@@ -386,6 +401,7 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @since %Qore 2.4
     */
     close() {
+        AutoLock al(m);
         if (state == STATE_STREAMING) {
             state = STATE_DRAINING;
             notifier.notify();
@@ -394,8 +410,11 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Aborts the operation and closes the connection
     abort() {
-        state = STATE_DISCONNECTED;
-        notifier.notify();
+        {
+            AutoLock al(m);
+            state = STATE_DISCONNECTED;
+            notifier.notify();
+        }
         try {
             sock.close();
         } catch () {

@@ -394,13 +394,25 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     sendAll(hash<SseMessageInfo> msg) {
         string str = encodeMessage(msg);
 
-        rwl.readLock();
-        on_exit rwl.readUnlock();
+        bool debug = isEnabledFor(LoggerLevel::DEBUG);
+        list<ServerSentEventConnection> conns();
+        list<string> ids();
+        {
+            rwl.readLock();
+            on_exit rwl.readUnlock();
+            foreach hash<auto> h in (ch.pairIterator()) {
+                if (debug) {
+                    ids += h.key;
+                }
+                conns += h.value;
+            }
+        }
 
         # push the data on all connection channels
-        map $1.sendEncoded(str), ch.iterator();
-        logInfo("SSE sent to connections: %y", keys ch);
-        #if (ch) logDebug("sending data to connections: %y", keys ch);
+        map $1.sendEncoded(str), conns.iterator();
+        if (debug) {
+            logDebug("SSE sent to connections: %y", ids);
+        }
     }
 
     #! sends a message to the given connection ID
