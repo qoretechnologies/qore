@@ -1491,17 +1491,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member_for_call(const char* memb
 
 // --- Static class variable access helper ---
 
-extern "C" DLLEXPORT uint64_t qore_rt_load_static_var(QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink) {
+static uint64_t qore_rt_load_static_var_impl(QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink,
+        bool preserve_weak_result) {
     // issue 3523: evaluate in case the value is a reference
     ValueHolder val(vi->getReferencedValue(var_name, xsink), xsink);
     if (*xsink) {
         return toBits(QoreValue());
     }
-    return toBits(val->needsEval() ? val->eval(xsink) : val.release());
+    return toBits(!preserve_weak_result && val->needsEval() ? val->eval(xsink) : val.release());
 }
 
-extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_by_path(const char* class_path,
-        const char* var_name, ExceptionSink* xsink) {
+extern "C" DLLEXPORT uint64_t qore_rt_load_static_var(QoreVarInfo* vi, const char* var_name,
+        ExceptionSink* xsink) {
+    return qore_rt_load_static_var_impl(vi, var_name, xsink, false);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_for_call(QoreVarInfo* vi, const char* var_name,
+        ExceptionSink* xsink) {
+    return qore_rt_load_static_var_impl(vi, var_name, xsink, true);
+}
+
+static uint64_t qore_rt_load_static_var_by_path_impl(const char* class_path,
+        const char* var_name, ExceptionSink* xsink, bool preserve_weak_result) {
     if (!class_path || !*class_path || !var_name || !*var_name) {
         xsink->raiseException("STATIC-VAR-ERROR", "cannot resolve static variable '%s::%s'",
             class_path ? class_path : "<null>", var_name ? var_name : "<null>");
@@ -1554,7 +1565,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_by_path(const char* class_
     QoreVarInfo* vi = const_cast<QoreVarInfo*>(
         reinterpret_cast<const QoreVarInfo*>(member));
     (void)owner_qc;
-    return qore_rt_load_static_var(vi, var_name, xsink);
+    return qore_rt_load_static_var_impl(vi, var_name, xsink, preserve_weak_result);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_by_path(const char* class_path,
+        const char* var_name, ExceptionSink* xsink) {
+    return qore_rt_load_static_var_by_path_impl(class_path, var_name, xsink, false);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_by_path_for_call(const char* class_path,
+        const char* var_name, ExceptionSink* xsink) {
+    return qore_rt_load_static_var_by_path_impl(class_path, var_name, xsink, true);
 }
 
 // --- Object instantiation helper ---
@@ -3117,7 +3138,8 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_find_throwing(
 
 // --- Specialized access helpers (Phase 5b optimizations) ---
 
-extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink) {
+static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key, ExceptionSink* xsink,
+        bool preserve_weak_result) {
     QoreValue raw_v = fromBits(hash_val);
     ValueEvalOptimizedRefHolder vh(raw_v, xsink);
     if (xsink && *xsink) {
@@ -3131,13 +3153,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const c
         if (!o || !o->isValid()) {
             return toBits(QoreValue());
         }
-        QoreValue rv = o->evalMember(key, xsink);
+        QoreValue rv = preserve_weak_result
+            ? o->getReferencedMemberNoMethod(key, xsink)
+            : o->evalMember(key, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
-        qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
+        if (!preserve_weak_result) {
+            qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
         }
         return toBits(rv);
     }
@@ -3155,9 +3181,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const c
             result.discard(xsink);
             return toBits(QoreValue());
         }
-        qore_rt_evaluate_owned_weak_reference_result(result, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
+        if (!preserve_weak_result) {
+            qore_rt_evaluate_owned_weak_reference_result(result, xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
         }
         return toBits(result);
     }
@@ -3172,26 +3200,41 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const c
             result.discard(xsink);
             return toBits(QoreValue());
         }
-        qore_rt_evaluate_owned_weak_reference_result(result, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
+        if (!preserve_weak_result) {
+            qore_rt_evaluate_owned_weak_reference_result(result, xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
         }
         return toBits(result);
     }
     if (v.getType() == NT_OBJECT) {
         QoreObject* o = const_cast<QoreObject*>(v.get<const QoreObject>());
-        QoreValue rv = o->evalMember(key, xsink);
+        QoreValue rv = preserve_weak_result
+            ? o->getReferencedMemberNoMethod(key, xsink)
+            : o->evalMember(key, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
-        qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
-        if (*xsink) {
-            return toBits(QoreValue());
+        if (!preserve_weak_result) {
+            qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
+            if (*xsink) {
+                return toBits(QoreValue());
+            }
         }
         return toBits(rv);
     }
     // Not a hash or object (or NOTHING/NULL): return NOTHING
     return toBits(QoreValue());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink) {
+    return qore_rt_hash_key_access_impl(hash_val, key, xsink, false);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_for_call(uint64_t hash_val, const char* key,
+        ExceptionSink* xsink) {
+    return qore_rt_hash_key_access_impl(hash_val, key, xsink, true);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key) {
@@ -3570,6 +3613,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_hash_set_key_value_t
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_access_throwing(
         uint64_t hash_val, const char* key, ExceptionSink* xsink) {
     uint64_t result = qore_rt_hash_key_access(hash_val, key, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_hash_key_access_for_call_throwing(
+        uint64_t hash_val, const char* key, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_hash_key_access_for_call(hash_val, key, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -4833,6 +4885,17 @@ extern "C" DLLEXPORT int32_t qore_rt_switch_string_lookup(uint64_t switch_val_bi
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QorePseudoMethods.h"
 
+static bool qore_rt_dot_eval_preserve_raw_base(const QoreValue& base) {
+    switch (base.getType()) {
+        case NT_WEAKREF:
+        case NT_WEAKREF_HASH:
+        case NT_WEAKREF_LIST:
+            return true;
+        default:
+            return false;
+    }
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base(uint64_t expr_bits, uint64_t base_bits, ExceptionSink* xsink) {
     QoreValue expr = fromBits(expr_bits);
     if (!expr.hasNode()) {
@@ -4843,11 +4906,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base(uint64_t expr_bits, uin
         // Fallback: shouldn't happen but be safe
         return qore_rt_invoke_expr(expr_bits, xsink);
     }
-    ValueEvalOptimizedRefHolder base(fromBits(base_bits), xsink);
+    QoreValue raw_base = fromBits(base_bits);
+    ValueEvalOptimizedRefHolder base_holder(xsink);
+    QoreValue base;
+    if (qore_rt_dot_eval_preserve_raw_base(raw_base)) {
+        base = raw_base;
+    } else {
+        base_holder.eval(raw_base);
+        base = *base_holder;
+    }
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
-    QoreValue result = dot_eval->evalWithBase(*base, xsink);
+    QoreValue result = dot_eval->evalWithBase(base, xsink);
     return toBits(result);
 }
 
@@ -7189,9 +7260,27 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_for_call_throwing(
+        QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_static_var_for_call(vi, var_name, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_by_path_throwing(
         const char* class_path, const char* var_name, ExceptionSink* xsink) {
     uint64_t result = qore_rt_load_static_var_by_path(class_path, var_name, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_static_var_by_path_for_call_throwing(
+        const char* class_path, const char* var_name, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_load_static_var_by_path_for_call(class_path, var_name, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -10198,11 +10287,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_method_direct(uint64_t base_bits,
     // This path is hit from the IR interpreter's null-method fallback, which already handles
     // this case via dot_eval_fallback_with_args before reaching here.
 
-    ValueEvalOptimizedRefHolder base_holder(fromBits(base_bits), xsink);
+    QoreValue raw_base = fromBits(base_bits);
+    ValueEvalOptimizedRefHolder base_holder(xsink);
+    QoreValue base;
+    if (qore_rt_dot_eval_preserve_raw_base(raw_base)) {
+        base = raw_base;
+    } else {
+        base_holder.eval(raw_base);
+        base = *base_holder;
+    }
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
-    QoreValue base = *base_holder;
 
     switch (base.getType()) {
         case NT_WEAKREF: {
@@ -10264,11 +10360,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t bas
     assert(method);
     assert(qc);
 
-    ValueEvalOptimizedRefHolder base_holder(fromBits(base_bits), xsink);
+    QoreValue raw_base = fromBits(base_bits);
+    ValueEvalOptimizedRefHolder base_holder(xsink);
+    QoreValue base;
+    if (qore_rt_dot_eval_preserve_raw_base(raw_base)) {
+        base = raw_base;
+    } else {
+        base_holder.eval(raw_base);
+        base = *base_holder;
+    }
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
-    QoreValue base = *base_holder;
 
     // Unwrap weak references — pseudo method handlers expect the underlying value
     if (base.getType() == NT_WEAKREF) {
@@ -10297,11 +10400,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t bas
 // from LLVM with a name-based runtime method dispatch
 DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
-    ValueEvalOptimizedRefHolder base_holder(base, xsink);
+    QoreValue raw_base = base;
+    ValueEvalOptimizedRefHolder base_holder(xsink);
+    if (!qore_rt_dot_eval_preserve_raw_base(raw_base)) {
+        base_holder.eval(raw_base);
+        base = *base_holder;
+    }
     if (xsink && *xsink) {
         return toBits(QoreValue());
     }
-    base = *base_holder;
 
     ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
     if (*xsink) {

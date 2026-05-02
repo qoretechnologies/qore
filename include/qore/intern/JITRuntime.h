@@ -38,6 +38,7 @@ class ExceptionSink;
 class QoreIRFunction;
 class QoreIRLValuePathInstruction;
 class QoreValue;
+class QoreVarInfo;
 class UserVariantBase;
 
 // C ABI helpers called by JIT-generated code.
@@ -461,8 +462,17 @@ uint64_t qore_rt_load_constant(const RuntimeConstantRefNode* node, ExceptionSink
 uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! Load a static class variable by class path and variable name; returns NaN-boxed QoreValue
+uint64_t qore_rt_load_static_var(QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_for_call(QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_throwing(QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_for_call_throwing(QoreVarInfo* vi, const char* var_name,
+        ExceptionSink* xsink);
 uint64_t qore_rt_load_static_var_by_path(const char* class_path, const char* var_name, ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_by_path_for_call(const char* class_path, const char* var_name,
+        ExceptionSink* xsink);
 uint64_t qore_rt_load_static_var_by_path_throwing(const char* class_path, const char* var_name,
+        ExceptionSink* xsink);
+uint64_t qore_rt_load_static_var_by_path_for_call_throwing(const char* class_path, const char* var_name,
         ExceptionSink* xsink);
 
 // --- Closure creation helper ---
@@ -633,6 +643,9 @@ void qore_rt_context_destroy(uint64_t state_ptr, ExceptionSink* xsink);
 //! Look up a key in a hash value; returns NaN-boxed result (with ref).
 //! Falls back to NOTHING if value is not a hash or key doesn't exist.
 uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSink* xsink);
+
+//! Look up a key for use as a method-call base; preserves raw weak-reference results.
+uint64_t qore_rt_hash_key_access_for_call(uint64_t hash_val, const char* key, ExceptionSink* xsink);
 
 //! Index into a list value; returns NaN-boxed result (with ref).
 //! Returns NOTHING if value is not a list or index is out of bounds.

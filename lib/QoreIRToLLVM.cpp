@@ -8013,7 +8013,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* base_boxed = boxValue(base, inst->operands[0].id);
                 llvm::Constant* key_const = builder->CreateGlobalString(inv->invoke_key_name,
                         "hash_key");
-                auto helper = module.getOrInsertFunction("qore_rt_hash_key_access",
+                const char* helper_name = dot_eval_only_bases.count(inst->result.id)
+                        ? "qore_rt_hash_key_access_for_call" : "qore_rt_hash_key_access";
+                auto helper = module.getOrInsertFunction(helper_name,
                         llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {base_boxed, key_const, xsink_arg});
                 // HashKeyAccess doesn't modify locals — no reload needed
@@ -8118,9 +8120,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             static_var->str, "static_var_name");
                     auto ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, ptr_type, ptr_type}, false);
-                    auto helper = module.getOrInsertFunction("qore_rt_load_static_var_by_path", ft);
-                    auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_load_static_var_by_path_throwing", ft);
+                    const bool for_call = dot_eval_only_bases.count(inst->result.id);
+                    auto helper = module.getOrInsertFunction(for_call
+                            ? "qore_rt_load_static_var_by_path_for_call"
+                            : "qore_rt_load_static_var_by_path", ft);
+                    auto helper_throwing = module.getOrInsertFunction(for_call
+                            ? "qore_rt_load_static_var_by_path_for_call_throwing"
+                            : "qore_rt_load_static_var_by_path_throwing", ft);
                     result = emitMaybeInvoke(helper, helper_throwing,
                             {class_path, var_name, xsink_arg}, module, llvm_func, inst);
                 } else {
@@ -8132,7 +8138,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* vi_as_ptr = builder->CreateIntToPtr(vi_ptr, ptr_type);
                     llvm::Constant* name_const = builder->CreateGlobalString(static_var->str,
                             "static_var_name");
-                    auto helper = module.getOrInsertFunction("qore_rt_load_static_var",
+                    const char* helper_name = dot_eval_only_bases.count(inst->result.id)
+                            ? "qore_rt_load_static_var_for_call" : "qore_rt_load_static_var";
+                    auto helper = module.getOrInsertFunction(helper_name,
                             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
                     result = builder->CreateCall(helper, {vi_as_ptr, name_const, xsink_arg});
                 }
@@ -10971,9 +10979,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     "hash_key");
             auto hka_ft = llvm::FunctionType::get(i64_type,
                     {i64_type, ptr_type, ptr_type}, false);
-            auto helper = module.getOrInsertFunction("qore_rt_hash_key_access", hka_ft);
+            const char* helper_name = dot_eval_only_bases.count(inst->result.id)
+                    ? "qore_rt_hash_key_access_for_call" : "qore_rt_hash_key_access";
+            const char* helper_throwing_name = dot_eval_only_bases.count(inst->result.id)
+                    ? "qore_rt_hash_key_access_for_call_throwing" : "qore_rt_hash_key_access_throwing";
+            auto helper = module.getOrInsertFunction(helper_name, hka_ft);
             auto helper_throwing = module.getOrInsertFunction(
-                    "qore_rt_hash_key_access_throwing", hka_ft);
+                    helper_throwing_name, hka_ft);
             values[inst->result.id] = emitMaybeInvoke(helper, helper_throwing,
                     {base_boxed, key_const, xsink_arg}, module, llvm_func, inst);
             nanboxed_values.insert(inst->result.id);
@@ -11330,9 +11342,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         static_var->str, "static_var_name");
                 auto lsv_ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, ptr_type, ptr_type}, false);
-                auto helper = module.getOrInsertFunction("qore_rt_load_static_var_by_path", lsv_ft);
-                auto helper_throwing = module.getOrInsertFunction(
-                        "qore_rt_load_static_var_by_path_throwing", lsv_ft);
+                const bool for_call = dot_eval_only_bases.count(inst->result.id);
+                auto helper = module.getOrInsertFunction(for_call
+                        ? "qore_rt_load_static_var_by_path_for_call"
+                        : "qore_rt_load_static_var_by_path", lsv_ft);
+                auto helper_throwing = module.getOrInsertFunction(for_call
+                        ? "qore_rt_load_static_var_by_path_for_call_throwing"
+                        : "qore_rt_load_static_var_by_path_throwing", lsv_ft);
                 result = emitMaybeInvoke(helper, helper_throwing,
                         {class_path, var_name, xsink_arg}, module, llvm_func, inst);
             } else {
@@ -11344,9 +11360,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         "static_var_name");
                 auto lsv_ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, ptr_type, ptr_type}, false);
-                auto helper = module.getOrInsertFunction("qore_rt_load_static_var", lsv_ft);
-                auto helper_throwing = module.getOrInsertFunction(
-                        "qore_rt_load_static_var_throwing", lsv_ft);
+                const bool for_call = dot_eval_only_bases.count(inst->result.id);
+                auto helper = module.getOrInsertFunction(for_call
+                        ? "qore_rt_load_static_var_for_call" : "qore_rt_load_static_var", lsv_ft);
+                auto helper_throwing = module.getOrInsertFunction(for_call
+                        ? "qore_rt_load_static_var_for_call_throwing"
+                        : "qore_rt_load_static_var_throwing", lsv_ft);
                 result = emitMaybeInvoke(helper, helper_throwing,
                         {vi_as_ptr, name_const, xsink_arg},
                         module, llvm_func, inst);

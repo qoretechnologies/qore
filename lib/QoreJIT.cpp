@@ -355,8 +355,14 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
 
     // Specialized access helpers (Phase 5b)
     addSymbol("qore_rt_hash_key_access", reinterpret_cast<void*>(&qore_rt_hash_key_access));
+    addSymbol("qore_rt_hash_key_access_for_call", reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call));
     addSymbol("qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access));
     addSymbol("qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat));
+    addSymbol("qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var));
+    addSymbol("qore_rt_load_static_var_for_call", reinterpret_cast<void*>(&qore_rt_load_static_var_for_call));
+    addSymbol("qore_rt_load_static_var_throwing", reinterpret_cast<void*>(&qore_rt_load_static_var_throwing));
+    addSymbol("qore_rt_load_static_var_for_call_throwing",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_for_call_throwing));
 
     // Optimized list iteration helpers (higher-order optimization)
     addSymbol("qore_rt_list_size", reinterpret_cast<void*>(&qore_rt_list_size));
@@ -393,8 +399,12 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
         reinterpret_cast<void*>(&qore_rt_list_assignment_value_throwing));
     addSymbol("qore_rt_load_static_var_by_path",
         reinterpret_cast<void*>(&qore_rt_load_static_var_by_path));
+    addSymbol("qore_rt_load_static_var_by_path_for_call",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call));
     addSymbol("qore_rt_load_static_var_by_path_throwing",
         reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_throwing));
+    addSymbol("qore_rt_load_static_var_by_path_for_call_throwing",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call_throwing));
     addSymbol("qore_rt_create_closure_aot", reinterpret_cast<void*>(&qore_rt_create_closure_aot));
     addSymbol("qore_rt_create_static_method_call_ref_aot",
         reinterpret_cast<void*>(&qore_rt_create_static_method_call_ref_aot));

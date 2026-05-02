@@ -1317,9 +1317,18 @@ static void countIRValueUse(std::vector<uint32_t>& counts, QoreIRValue value) {
     }
 }
 
+static void markIRValueUse(std::vector<uint8_t>& uses, QoreIRValue value) {
+    if (value.isValid() && value.id < uses.size()) {
+        uses[value.id] = 1;
+    }
+}
+
 static bool buildValueUseCounts(const QoreIRFunction& func,
-        std::vector<uint32_t>& counts, ExceptionSink* xsink) {
+        std::vector<uint32_t>& counts, std::vector<uint8_t>& dot_eval_only_bases,
+        ExceptionSink* xsink) {
     counts.assign(func.max_value_id + 1, 0);
+    std::vector<uint8_t> dot_eval_base_candidates(counts.size(), 0);
+    std::vector<uint8_t> non_dot_eval_uses(counts.size(), 0);
     size_t inst_count = 0;
     for (const auto& block : func.blocks) {
         for (const auto& inst_uptr : block->instructions) {
@@ -1335,22 +1344,26 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 case QoreIROpcode::BrIf: {
                     auto* br = static_cast<const QoreIRBranchIfInstruction*>(inst);
                     countIRValueUse(counts, br->condition);
+                    markIRValueUse(non_dot_eval_uses, br->condition);
                     break;
                 }
                 case QoreIROpcode::SwitchInt: {
                     auto* sw = static_cast<const QoreIRSwitchIntInstruction*>(inst);
                     countIRValueUse(counts, sw->switch_val);
+                    markIRValueUse(non_dot_eval_uses, sw->switch_val);
                     break;
                 }
                 case QoreIROpcode::SwitchString: {
                     auto* sw = static_cast<const QoreIRSwitchStringInstruction*>(inst);
                     countIRValueUse(counts, sw->switch_val);
+                    markIRValueUse(non_dot_eval_uses, sw->switch_val);
                     break;
                 }
                 case QoreIROpcode::Phi: {
                     auto* phi = static_cast<const QoreIRPhiInstruction*>(inst);
                     for (const QoreIRPhiIncoming& incoming : phi->incoming) {
                         countIRValueUse(counts, incoming.value);
+                        markIRValueUse(non_dot_eval_uses, incoming.value);
                     }
                     break;
                 }
@@ -1358,6 +1371,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                     auto* ret = static_cast<const QoreIRReturnInstruction*>(inst);
                     if (ret->has_value) {
                         countIRValueUse(counts, ret->value);
+                        markIRValueUse(non_dot_eval_uses, ret->value);
                     }
                     break;
                 }
@@ -1365,16 +1379,46 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
                 case QoreIROpcode::IteratorCreateReverse: {
                     auto* iter = static_cast<const QoreIRIteratorCreateInstruction*>(inst);
                     countIRValueUse(counts, iter->iterable);
+                    markIRValueUse(non_dot_eval_uses, iter->iterable);
                     break;
                 }
                 case QoreIROpcode::IteratorNext: {
                     auto* iter = static_cast<const QoreIRIteratorNextInstruction*>(inst);
                     countIRValueUse(counts, iter->iterator);
+                    markIRValueUse(non_dot_eval_uses, iter->iterator);
                     break;
                 }
                 default:
                     break;
             }
+
+            bool dot_eval = inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                || inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect;
+            if (!dot_eval && inst->opcode == QoreIROpcode::Invoke
+                    && !inst->operands.empty()) {
+                auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
+                dot_eval = isDotEvalInvokeOpcode(inv->invoke_opcode);
+            }
+
+            if (dot_eval && !inst->operands.empty()) {
+                markIRValueUse(dot_eval_base_candidates, inst->operands[0]);
+                for (size_t i = 1; i < inst->operands.size(); ++i) {
+                    markIRValueUse(non_dot_eval_uses, inst->operands[i]);
+                }
+            } else {
+                for (QoreIRValue operand : inst->operands) {
+                    markIRValueUse(non_dot_eval_uses, operand);
+                }
+            }
+        }
+    }
+    dot_eval_only_bases.assign(counts.size(), 0);
+    for (size_t i = 0; i < dot_eval_base_candidates.size(); ++i) {
+        if (((i % 100) == 0) && qore_check_cancel(xsink, "IR dot-eval base analysis")) {
+            return false;
+        }
+        if (dot_eval_base_candidates[i] && !non_dot_eval_uses[i]) {
+            dot_eval_only_bases[i] = 1;
         }
     }
     return true;
@@ -2300,9 +2344,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& load_slot_registered = frame.load_slot_registered;
     auto& local_owned_slots = frame.local_owned_slots;
     std::vector<uint32_t> value_use_counts;
-    if (!buildValueUseCounts(func, value_use_counts, xsink)) {
+    std::vector<uint8_t> dot_eval_only_bases;
+    if (!buildValueUseCounts(func, value_use_counts, dot_eval_only_bases, xsink)) {
         return false;
     }
+    auto isDotEvalOnlyBase = [&](const QoreIRInstruction* i) -> bool {
+        return i && i->result.isValid() && i->result.id < dot_eval_only_bases.size()
+            && dot_eval_only_bases[i->result.id];
+    };
 
     // Phase B2: Build reverse map for parent slot TLS access.
     // Maps slot_id -> LocalVar* for slots 0..parent_slot_count-1.
@@ -4566,6 +4615,7 @@ load_local_done:
             }
             case QoreIROpcode::HashKeyAccess: {
                 auto* hka_inst = static_cast<QoreIRHashKeyAccessInstruction*>(inst);
+                bool preserve_weak_result = isDotEvalOnlyBase(inst);
                 QoreValue raw_base = getIRValue(values, hka_inst->operands[0]);
                 ValueEvalOptimizedRefHolder base_holder(raw_base, xsink);
                 if (xsink && *xsink) {
@@ -4580,12 +4630,39 @@ load_local_done:
                 if (base.getType() == NT_WEAKREF) {
                     QoreObject* o = base.get<const WeakReferenceNode>()->get();
                     if (o && o->isValid()) {
-                        out = o->evalMember(hka_inst->key_name.c_str(), xsink);
+                        out = preserve_weak_result
+                            ? o->getReferencedMemberNoMethod(hka_inst->key_name.c_str(), xsink)
+                            : o->evalMember(hka_inst->key_name.c_str(), xsink);
                     }
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
+                    }
+                } else if (base.getType() == NT_WEAKREF_HASH) {
+                    const QoreHashNode* h = base.get<const WeakHashReferenceNode>()->get();
+                    if (h) {
+                        out = h->getKeyValue(hka_inst->key_name.c_str(), xsink);
+                        if (xsink && *xsink) {
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        out.refSelf();
+                        if (!h->getHashDecl() && !out.isNothing()) {
+                            const QoreTypeInfo* vti = h->getValueTypeInfo();
+                            if (QoreTypeInfo::hasType(vti) && vti != autoTypeInfo && vti != anyTypeInfo
+                                    && !QoreTypeInfo::superSetOf(vti, out.getTypeInfo())) {
+                                ValueHolder holder(out, xsink);
+                                QoreTypeInfo::acceptInputKey(vti, hka_inst->key_name.c_str(), *holder, xsink);
+                                if (xsink && *xsink) {
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupLocalCaches();
+                                    return false;
+                                }
+                                out = holder.release();
+                            }
+                        }
                     }
                 } else if (base.getType() == NT_HASH) {
                     const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -4612,18 +4689,22 @@ load_local_done:
                     }
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
-                    out = o->evalMember(hka_inst->key_name.c_str(), xsink);
+                    out = preserve_weak_result
+                        ? o->getReferencedMemberNoMethod(hka_inst->key_name.c_str(), xsink)
+                        : o->evalMember(hka_inst->key_name.c_str(), xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
                     }
                 }
-                evaluateOwnedWeakReferenceResult(out, xsink);
-                if (xsink && *xsink) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
+                if (!preserve_weak_result) {
+                    evaluateOwnedWeakReferenceResult(out, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                 }
                 // else: NOTHING for non-hash/non-object values
                 setValueSlot(values, hka_inst->result.id, out, xsink);
@@ -5423,14 +5504,15 @@ load_local_done:
                 auto* sm_inst = static_cast<QoreIRSelfMemberInstruction*>(inst);
                 QoreObject* obj = runtime_get_stack_object();
                 assert(obj);
-                // issue 3523: evaluate in case the value is a reference
                 ValueHolder val(obj->getReferencedMemberNoMethod(sm_inst->member_name.c_str(), xsink), xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
-                bool needs_eval = val->needsEval();
+                // Dot-eval method dispatch handles weak refs itself. Preserve the raw
+                // reference when this load is only used as a dot-eval base.
+                bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -5466,7 +5548,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                bool needs_eval = val->needsEval();
+                bool needs_eval = !isDotEvalOnlyBase(inst) && val->needsEval();
                 QoreValue out = needs_eval ? val->eval(xsink) : val.release();
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
