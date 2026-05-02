@@ -3432,8 +3432,9 @@ int get_value_byte_size(auto val) [flags=CONSTANT] {
 }
 
 //! Returns io_uring debug statistics for verifying that the io_uring code path is exercised in tests
-/** This function is only available in debug builds on Linux with io_uring support.
-    In release builds or on non-Linux platforms, it returns @ref nothing.
+/** This function is only available in debug builds on Linux with io_uring support and at least one
+    active event loop with runtime io_uring enabled.  In release builds, on non-Linux platforms, or
+    when runtime io_uring initialization is unavailable, it returns @ref nothing.
 
     @return a hash with the following keys, or @ref nothing if not available:
     - \c submits: (int) cumulative count of successfully submitted io_uring reads
@@ -3453,6 +3454,9 @@ if (stats_before && stats_after) {
 */
 *hash<auto> get_io_uring_debug_stats() {
 #if defined(DEBUG) && defined(__linux__) && defined(HAVE_IO_URING)
+    if (!QoreIoUring::getDebugActiveCount()) {
+        return QoreValue();
+    }
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("submits", (int64)QoreIoUring::getDebugSubmitCount(), xsink);
     rv->setKeyValue("completions", (int64)QoreIoUring::getDebugCompletionCount(), xsink);

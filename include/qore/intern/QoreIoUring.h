@@ -140,6 +140,11 @@ public:
         return debug_completion_count.load(std::memory_order_relaxed);
     }
 
+    //! Returns the number of active io_uring instances (debug only)
+    DLLLOCAL static unsigned getDebugActiveCount() {
+        return debug_active_count.load(std::memory_order_relaxed);
+    }
+
     //! Resets debug counters (debug only)
     DLLLOCAL static void resetDebugStats() {
         debug_submit_count.store(0, std::memory_order_relaxed);
@@ -160,6 +165,7 @@ private:
 #ifdef DEBUG
     static std::atomic<unsigned> debug_submit_count;
     static std::atomic<unsigned> debug_completion_count;
+    static std::atomic<unsigned> debug_active_count;
 #endif
 
     // Non-copyable
