@@ -231,7 +231,7 @@ public:
     DLLLOCAL void waitForOwnerIdle(const std::string& owner);
 
     //! Upper bound for automatic worker sizing; explicit setMaxCallbackWorkers() values may be higher
-    static constexpr int DEFAULT_WORKER_CAP = 32;
+    static constexpr int DEFAULT_WORKER_CAP = 512;
 
     //! Idle timeout before a worker thread exits (milliseconds)
     static constexpr int WORKER_IDLE_TIMEOUT_MS = 60000;

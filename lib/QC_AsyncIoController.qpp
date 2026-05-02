@@ -580,12 +580,13 @@ static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing
 //! Sets the maximum number of callback dispatcher worker threads on the global singleton
 /** Controls the concurrency of user callback dispatch off the I/O thread.
 
-    The default is @code{.py}hardware_concurrency()@endcode (the number of hardware threads),
-    capped at 32 and falling back to 4 if unavailable.
+    The default is @code{.py}hardware_concurrency() * 4@endcode, capped at 512 and falling
+    back to 4 if the hardware thread count is unavailable.
 
     Takes effect when the dispatcher or submitTask() pool is next created.
 
-    @param max_workers the maximum number of workers; 0 = auto (hardware_concurrency(), capped at 32, fallback 4)
+    @param max_workers the maximum number of workers; 0 = auto (hardware_concurrency() * 4,
+    capped at 512, fallback 4)
 
     @since %Qore 2.3
 */

@@ -325,7 +325,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Sets the maximum number of callback and task worker threads
     /** Controls concurrency for callbacks dispatched off the I/O thread and for
         @ref submitTask() work.  The default value of \c 0 auto-sizes to
-        \c hardware_concurrency() capped at 32, with a fallback of 4.
+        \c hardware_concurrency() * 4 capped at 512, with a fallback of 4.
 
         This setting takes effect when the underlying worker pool is next created.
 

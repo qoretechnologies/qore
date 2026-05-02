@@ -399,7 +399,10 @@ static int get_default_callback_worker_cap() {
     if (hw <= 0) {
         hw = 4;
     }
-    return std::max(1, std::min(hw, QoreCallDispatcher::DEFAULT_WORKER_CAP));
+    int workers = hw >= QoreCallDispatcher::DEFAULT_WORKER_CAP / 4
+        ? QoreCallDispatcher::DEFAULT_WORKER_CAP
+        : hw * 4;
+    return std::max(1, workers);
 }
 
 QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* controller)

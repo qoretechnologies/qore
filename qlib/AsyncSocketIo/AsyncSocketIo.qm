@@ -108,7 +108,7 @@ module AsyncSocketIo {
     - thread scaling: the I/O thread count adapts automatically to the host CPU count and can
       be overridden with the \c QORE_IO_THREADS environment variable; callback workers and
       tasks submitted with @ref AsyncSocketIo::AsyncSocketIoController::submitTask()
-      "submitTask()" are bounded by default to \c hardware_concurrency() capped at 32.
+      "submitTask()" are bounded by default to \c hardware_concurrency() * 4 capped at 512.
     - autostop race fix: eliminated a race condition where the I/O thread could exit during the
       autostop grace period while new operations were being submitted
     - \c onComplete/abort refactor: poll operations implement
