@@ -230,9 +230,8 @@ public:
     */
     DLLLOCAL void waitForOwnerIdle(const std::string& owner);
 
-    //! Maximum worker cap — workers exit when idle, so a large cap is safe; this just
-    //! prevents runaway thread creation under extreme load
-    static constexpr int DEFAULT_WORKER_CAP = 4096;
+    //! Upper bound for automatic worker sizing; explicit setMaxCallbackWorkers() values may be higher
+    static constexpr int DEFAULT_WORKER_CAP = 32;
 
     //! Idle timeout before a worker thread exits (milliseconds)
     static constexpr int WORKER_IDLE_TIMEOUT_MS = 60000;

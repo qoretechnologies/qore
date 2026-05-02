@@ -394,10 +394,18 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
 
 // --- QoreCallDispatcher implementation ---
 
+static int get_default_callback_worker_cap() {
+    int hw = std::thread::hardware_concurrency();
+    if (hw <= 0) {
+        hw = 4;
+    }
+    return std::max(1, std::min(hw, QoreCallDispatcher::DEFAULT_WORKER_CAP));
+}
+
 QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* controller)
     : ctrl(controller) {
     if (max_workers <= 0) {
-        this->max_workers = DEFAULT_WORKER_CAP;
+        this->max_workers = get_default_callback_worker_cap();
     } else {
         this->max_workers = max_workers;
     }
@@ -1138,7 +1146,15 @@ int AsyncIoControllerPriv::submitTask(ResolvedCallReferenceNode* task, ResolvedC
             return -1;
         }
         if (!thread_pool) {
-            thread_pool = new ThreadPool(xsink, 0, 0, 8, 5000);
+            int max_workers;
+            {
+                AutoLocker al(m);
+                max_workers = max_callback_workers;
+            }
+            if (max_workers <= 0) {
+                max_workers = get_default_callback_worker_cap();
+            }
+            thread_pool = new ThreadPool(xsink, max_workers, 0, std::min(max_workers, 8), 5000);
             if (*xsink) {
                 delete thread_pool;
                 thread_pool = nullptr;

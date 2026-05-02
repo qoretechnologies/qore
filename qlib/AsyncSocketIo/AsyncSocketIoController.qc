@@ -322,6 +322,19 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         Qore::AsyncIoController::setLogger(logger);
     }
 
+    #! Sets the maximum number of callback and task worker threads
+    /** Controls concurrency for callbacks dispatched off the I/O thread and for
+        @ref submitTask() work.  The default value of \c 0 auto-sizes to
+        \c hardware_concurrency() capped at 32, with a fallback of 4.
+
+        This setting takes effect when the underlying worker pool is next created.
+
+        @param max_workers maximum worker count; \c 0 means automatic sizing
+    */
+    setMaxCallbackWorkers(int max_workers = 0) {
+        Qore::AsyncIoController::setMaxCallbackWorkers(max_workers);
+    }
+
     #! Submits a task to the controller's callback thread pool for execution
     /** This is a convenience method for running arbitrary code on the thread pool without
         associating it with a socket poll operation.
