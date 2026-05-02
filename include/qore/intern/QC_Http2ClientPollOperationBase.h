@@ -240,6 +240,7 @@ public:
     }
 
     DLLLOCAL QoreHashNode* getErrorInfo() const {
+        AutoLocker al(stream_lock);
         if (error_info) {
             error_info->ref();
         }
@@ -247,6 +248,7 @@ public:
     }
 
     DLLLOCAL int getActiveStreamCount() const {
+        AutoLocker al(stream_lock);
         return active_stream_count;
     }
 
@@ -399,6 +401,9 @@ private:
     // --- Shared data (under stream_lock) ---
 
     mutable QoreThreadLock stream_lock;
+
+    //! Serializes multiplex reads against submitRequest's stream-id registration window
+    mutable QoreThreadLock submission_lock;
 
     //! Stream completion actions: stream_id string -> ref'd action
     /** Actions are pure C++ (no Qore interpreter) — execute/executeError

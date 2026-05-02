@@ -256,9 +256,10 @@ public:
         return rc;
     }
 
+    DLLLOCAL bool isConfigAction() const;
+
 private:
     DLLLOCAL static Action getAction(ConfigAction config_action);
-    DLLLOCAL bool isConfigAction() const;
     DLLLOCAL void init(ExceptionSink* xsink, bool defer_init);
     DLLLOCAL int initLocked(ExceptionSink* xsink);
     DLLLOCAL void clearNonBlockLocked();

@@ -73,6 +73,8 @@
 #include <cassert>
 #include <cctype>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
@@ -803,7 +805,8 @@ struct qore_httpclient_priv {
         (retry, Alt-Svc, cookies); this one is the minimal C++ base for
         the sync HTTPClient conversion.
     */
-    std::unique_ptr<HttpClientConnectionManagerBase> conn_mgr;
+    std::shared_ptr<HttpClientConnectionManagerBase> conn_mgr;
+    mutable std::mutex conn_mgr_lock;
 
     //! Set during user-initiated disconnect() to map HTTP1-ABORT errors
     //! on pending poll ops to SOCKET-NOT-OPEN (matching legacy semantics).
@@ -844,115 +847,151 @@ struct qore_httpclient_priv {
     }
 
     //! Returns the connection manager, creating it lazily if needed.
-    DLLLOCAL HttpClientConnectionManagerBase& getConnMgr(ExceptionSink* xsink) {
-        // Check if SSL settings or the effective protocol changed since
-        // the conn_mgr was created.  If so, reset so a fresh connection
-        // is established with the new settings.  The global H2 mode can
-        // change at runtime via set_global_http2_mode(); re-evaluate it.
-        if (conn_mgr) {
-            const auto& opts = conn_mgr->getOptions();
-            // Recompute the effective protocol
-            int gm = qore_global_http2_mode.load(std::memory_order_relaxed);
-            bool ld = qore_check_option(QLO_DISABLE_HTTP2);
-            // H2C_DIRECT is also an H2 protocol (over plain TCP, client
-            // sends the HTTP/2 preface on connect).  REQUIRED with SSL
-            // negotiates h2 via ALPN; REQUIRED without SSL is equivalent
-            // to H2C_DIRECT.  AUTO over SSL uses NEGOTIATE (per-connect
-            // ALPN via NegotiatingHttpClientConnection).
-            bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
-                    || http2_mode == HTTP2_MODE_H2C_DIRECT)
-                && gm != HTTP2_MODE_DISABLED && !ld;
-            bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
-                && gm != HTTP2_MODE_DISABLED && !ld;
-            HttpClientProtocol want_proto;
-            if (connection.is_unix) {
-                want_proto = HttpClientProtocol::H1;
-            } else if (http3_mode.load(std::memory_order_relaxed)
-                    == HTTP3_MODE_REQUIRED
-                    || (http3_active && connection.ssl)) {
-                want_proto = HttpClientProtocol::H3;
-            } else if (h2_hard) {
-                want_proto = HttpClientProtocol::H2;
-            } else if (h2_auto_ssl) {
-                want_proto = HttpClientProtocol::NEGOTIATE;
-            } else {
-                want_proto = HttpClientProtocol::H1;
-            }
-            std::string proxy_url = getConnMgrProxyUrl();
-            if (opts.protocol != want_proto
-                    || opts.proxy_url != proxy_url
-                    || opts.connect_timeout_ms != connect_timeout_ms
-                    || opts.request_timeout_ms != timeout
-                    || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
-                    || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
-                    || opts.client_cert != msock->cert
-                    || opts.client_key != msock->pk) {
-                conn_mgr.reset();
-            }
+    DLLLOCAL std::shared_ptr<HttpClientConnectionManagerBase> getConnMgrIfPresent() const {
+        std::lock_guard<std::mutex> lk(conn_mgr_lock);
+        return conn_mgr;
+    }
+
+    DLLLOCAL void dropConnMgr(bool close_old) {
+        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
+        {
+            std::lock_guard<std::mutex> lk(conn_mgr_lock);
+            old_mgr = std::move(conn_mgr);
+            conn_mgr.reset();
         }
-        if (!conn_mgr) {
-            HttpClientConnectionManagerBase::Options opts;
-            // Derive protocol from the HTTPClient's mode settings.
-            // HTTP2_MODE_AUTO over SSL maps to HttpClientProtocol::
-            // NEGOTIATE — the conn_mgr's NegotiatingHttpClientConnection
-            // path does per-connect ALPN over TLS and adopts the result
-            // into a concrete H1/H2 connection (see
-            // design/conn-mgr-alpn-negotiation.md).  REQUIRED and
-            // H2C_DIRECT map to H2, REQUIRED H3 maps to H3, and
-            // everything else maps to H1.  The global mode override
-            // must be checked here so that set_global_http2_mode("disabled")
-            // prevents H2 connections even for REQUIRED-mode clients
-            // (matches legacy connect).
-            {
-                int global_mode = qore_global_http2_mode.load(
-                    std::memory_order_relaxed);
-                bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+        if (close_old && old_mgr) {
+            ExceptionSink xsink;
+            old_mgr->closeAll(&xsink);
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL std::shared_ptr<HttpClientConnectionManagerBase> getConnMgr(ExceptionSink* xsink) {
+        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
+        std::shared_ptr<HttpClientConnectionManagerBase> rv;
+        {
+            // Check if SSL settings or the effective protocol changed since
+            // the conn_mgr was created.  If so, reset so a fresh connection
+            // is established with the new settings.  The global H2 mode can
+            // change at runtime via set_global_http2_mode(); re-evaluate it.
+            std::lock_guard<std::mutex> lk(conn_mgr_lock);
+            if (conn_mgr) {
+                const auto& opts = conn_mgr->getOptions();
+                // Recompute the effective protocol
+                int gm = qore_global_http2_mode.load(std::memory_order_relaxed);
+                bool ld = qore_check_option(QLO_DISABLE_HTTP2);
+                // H2C_DIRECT is also an H2 protocol (over plain TCP, client
+                // sends the HTTP/2 preface on connect).  REQUIRED with SSL
+                // negotiates h2 via ALPN; REQUIRED without SSL is equivalent
+                // to H2C_DIRECT.  AUTO over SSL uses NEGOTIATE (per-connect
+                // ALPN via NegotiatingHttpClientConnection).
                 bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
                         || http2_mode == HTTP2_MODE_H2C_DIRECT)
-                    && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-                bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO
-                    && connection.ssl
-                    && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-
+                    && gm != HTTP2_MODE_DISABLED && !ld;
+                bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
+                    && gm != HTTP2_MODE_DISABLED && !ld;
+                HttpClientProtocol want_proto;
                 if (connection.is_unix) {
-                    opts.protocol = HttpClientProtocol::H1;
+                    want_proto = HttpClientProtocol::H1;
                 } else if (http3_mode.load(std::memory_order_relaxed)
                         == HTTP3_MODE_REQUIRED
                         || (http3_active && connection.ssl)) {
-                    opts.protocol = HttpClientProtocol::H3;
+                    want_proto = HttpClientProtocol::H3;
                 } else if (h2_hard) {
-                    opts.protocol = HttpClientProtocol::H2;
+                    want_proto = HttpClientProtocol::H2;
                 } else if (h2_auto_ssl) {
-                    opts.protocol = HttpClientProtocol::NEGOTIATE;
+                    want_proto = HttpClientProtocol::NEGOTIATE;
                 } else {
-                    opts.protocol = HttpClientProtocol::H1;
+                    want_proto = HttpClientProtocol::H1;
+                }
+                std::string proxy_url = getConnMgrProxyUrl();
+                if (opts.protocol != want_proto
+                        || opts.proxy_url != proxy_url
+                        || opts.connect_timeout_ms != connect_timeout_ms
+                        || opts.request_timeout_ms != timeout
+                        || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
+                        || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
+                        || opts.client_cert != msock->cert
+                        || opts.client_key != msock->pk) {
+                    old_mgr = std::move(conn_mgr);
+                    conn_mgr.reset();
                 }
             }
-            opts.connect_timeout_ms = connect_timeout_ms;
-            opts.request_timeout_ms = timeout;
-            opts.idle_timeout_ms = 60000;
-            // SSL settings from the HTTPClient
-            opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
-            opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
-            opts.client_cert = msock->cert;
-            opts.client_key = msock->pk;
-            // Proxy URL from the existing connection info
-            opts.proxy_url = getConnMgrProxyUrl();
-            conn_mgr.reset(new HttpClientConnectionManagerBase(opts, xsink));
-            // New manager: clear user-disconnect flag (which may have been
-            // left set by a prior resetConnMgr — see resetConnMgr comments)
-            user_disconnect_in_progress.store(false, std::memory_order_release);
-            // Mirror the manager's effective protocol to the
-            // legacy-style @c http2_active / @c http3_active flags so
-            // @c isHttp2Active() / @c isHttp3Active() report correctly
-            // for conn_mgr-routed clients (issue 1.5a).  The manager's
-            // fixed-protocol model guarantees every connection it creates
-            // uses @c opts.protocol — no per-connection variance on a
-            // given HTTPClient instance.
-            http2_active = (opts.protocol == HttpClientProtocol::H2);
-            http3_active = (opts.protocol == HttpClientProtocol::H3);
+            if (!conn_mgr) {
+                HttpClientConnectionManagerBase::Options opts;
+                // Derive protocol from the HTTPClient's mode settings.
+                // HTTP2_MODE_AUTO over SSL maps to HttpClientProtocol::
+                // NEGOTIATE — the conn_mgr's NegotiatingHttpClientConnection
+                // path does per-connect ALPN over TLS and adopts the result
+                // into a concrete H1/H2 connection (see
+                // design/conn-mgr-alpn-negotiation.md).  REQUIRED and
+                // H2C_DIRECT map to H2, REQUIRED H3 maps to H3, and
+                // everything else maps to H1.  The global mode override
+                // must be checked here so that set_global_http2_mode("disabled")
+                // prevents H2 connections even for REQUIRED-mode clients
+                // (matches legacy connect).
+                {
+                    int global_mode = qore_global_http2_mode.load(
+                        std::memory_order_relaxed);
+                    bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+                    bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
+                            || http2_mode == HTTP2_MODE_H2C_DIRECT)
+                        && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+                    bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO
+                        && connection.ssl
+                        && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+
+                    if (connection.is_unix) {
+                        opts.protocol = HttpClientProtocol::H1;
+                    } else if (http3_mode.load(std::memory_order_relaxed)
+                            == HTTP3_MODE_REQUIRED
+                            || (http3_active && connection.ssl)) {
+                        opts.protocol = HttpClientProtocol::H3;
+                    } else if (h2_hard) {
+                        opts.protocol = HttpClientProtocol::H2;
+                    } else if (h2_auto_ssl) {
+                        opts.protocol = HttpClientProtocol::NEGOTIATE;
+                    } else {
+                        opts.protocol = HttpClientProtocol::H1;
+                    }
+                }
+                opts.connect_timeout_ms = connect_timeout_ms;
+                opts.request_timeout_ms = timeout;
+                opts.idle_timeout_ms = 60000;
+                // SSL settings from the HTTPClient
+                opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
+                opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
+                opts.client_cert = msock->cert;
+                opts.client_key = msock->pk;
+                // Proxy URL from the existing connection info
+                opts.proxy_url = getConnMgrProxyUrl();
+                std::shared_ptr<HttpClientConnectionManagerBase> new_mgr(
+                    new HttpClientConnectionManagerBase(opts, xsink));
+                if (*xsink) {
+                    return nullptr;
+                }
+                conn_mgr = std::move(new_mgr);
+                // New manager: clear user-disconnect flag (which may have been
+                // left set by a prior resetConnMgr — see resetConnMgr comments)
+                user_disconnect_in_progress.store(false, std::memory_order_release);
+                // Mirror the manager's effective protocol to the
+                // legacy-style @c http2_active / @c http3_active flags so
+                // @c isHttp2Active() / @c isHttp3Active() report correctly
+                // for conn_mgr-routed clients (issue 1.5a).  The manager's
+                // fixed-protocol model guarantees every connection it creates
+                // uses @c opts.protocol — no per-connection variance on a
+                // given HTTPClient instance.
+                http2_active = (opts.protocol == HttpClientProtocol::H2);
+                http3_active = (opts.protocol == HttpClientProtocol::H3);
+            }
+            rv = conn_mgr;
         }
-        return *conn_mgr;
+        if (old_mgr) {
+            ExceptionSink close_xsink;
+            old_mgr->closeAll(&close_xsink);
+            close_xsink.clear();
+        }
+        return rv;
     }
 
     // persistent count
@@ -1241,20 +1280,16 @@ struct qore_httpclient_priv {
     //! to distinguish user disconnect from other errors.  The flag stays
     //! set until the next new conn_mgr is created (see getConnMgr).
     DLLLOCAL void resetConnMgr() {
-        if (conn_mgr) {
-            user_disconnect_in_progress.store(true, std::memory_order_release);
-            ExceptionSink xsink;
-            conn_mgr->closeAll(&xsink);
-            conn_mgr.reset();
-            // Flag stays set — cleared on next getConnMgr() that creates
-            // a new manager.  This ensures poll ops whose futures are
-            // rejected asynchronously (after resetConnMgr returns) still
-            // see the flag and map HTTP1-ABORT → SOCKET-NOT-OPEN.
-            // Clear the protocol-active flags — the next getConnMgr will
-            // set them again for the new manager's protocol.
-            http2_active = false;
-            http3_active = false;
-        }
+        user_disconnect_in_progress.store(true, std::memory_order_release);
+        dropConnMgr(true);
+        // Flag stays set — cleared on next getConnMgr() that creates
+        // a new manager.  This ensures poll ops whose futures are
+        // rejected asynchronously (after resetConnMgr returns) still
+        // see the flag and map HTTP1-ABORT → SOCKET-NOT-OPEN.
+        // Clear the protocol-active flags — the next getConnMgr will
+        // set them again for the new manager's protocol.
+        http2_active = false;
+        http3_active = false;
     }
 
     DLLLOCAL int adoptH1SocketIntoMsock(Http1ClientConnection* h1, bool detach_manager,
@@ -1342,10 +1377,11 @@ struct qore_httpclient_priv {
         // the origin that conn_mgr handles internally from the
         // proxy_info it was configured with in getConnMgr().
         const char* scheme = connection.ssl ? "https" : "http";
-        HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
-        if (*xsink) {
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = getConnMgr(xsink);
+        if (*xsink || !mgr_holder) {
             return -1;
         }
+        HttpClientConnectionManagerBase& mgr = *mgr_holder;
         HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
             connection.host.c_str(), connection.port, xsink);
         if (!conn || *xsink) {
@@ -1450,7 +1486,8 @@ struct qore_httpclient_priv {
         // already-open manager connection.  Warm the pool here so later
         // sends can fail with PERSISTENCE-ERROR instead of silently
         // creating a replacement connection.
-        if ((!conn_mgr || !conn_mgr->getConnectionCount(connection.host.c_str(), connection.port))
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr = getConnMgrIfPresent();
+        if ((!mgr || !mgr->getConnectionCount(connection.host.c_str(), connection.port))
                 && connectViaConnMgr(xsink)) {
             return;
         }
@@ -1462,7 +1499,8 @@ struct qore_httpclient_priv {
     }
 
     DLLLOCAL bool checkPersistentConnMgrConnection(const con_info& c, ExceptionSink* xsink) const {
-        if (persistent && (!conn_mgr || !conn_mgr->getConnectionCount(c.host.c_str(), c.port))) {
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr = getConnMgrIfPresent();
+        if (persistent && (!mgr || !mgr->getConnectionCount(c.host.c_str(), c.port))) {
             xsink->raiseException("PERSISTENCE-ERROR", "the current connection has been temporarily marked as "
                 "persistent, but has been disconnected");
             return false;
@@ -3140,11 +3178,11 @@ bool QoreHttpClientObject::isHttp2Active() const {
     // @c isHttp2Active() check.  @c hasEverObservedProtocol() is sticky
     // — it answers "did this manager ever pool an H2 connection?",
     // which is what callers actually mean by "is HTTP/2 active?"
-    if (http_priv->conn_mgr) {
-        const auto& opts = http_priv->conn_mgr->getOptions();
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr = http_priv->getConnMgrIfPresent();
+    if (mgr) {
+        const auto& opts = mgr->getOptions();
         if (opts.protocol == HttpClientProtocol::NEGOTIATE) {
-            return http_priv->conn_mgr->hasEverObservedProtocol(
-                HttpClientProtocol::H2);
+            return mgr->hasEverObservedProtocol(HttpClientProtocol::H2);
         }
     }
     return false;
@@ -3236,10 +3274,11 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         }
     }
 
-    HttpClientConnectionManagerBase& mgr = http_priv->getConnMgr(xsink);
-    if (*xsink) {
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = http_priv->getConnMgr(xsink);
+    if (*xsink || !mgr_holder) {
         return nullptr;
     }
+    HttpClientConnectionManagerBase& mgr = *mgr_holder;
 
     HttpClientConnectionBase* conn = mgr.acquireConnection(scheme, this_connection.host.c_str(),
         this_connection.port, xsink);
@@ -3426,9 +3465,10 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
     }
 
     bool forced_h3 = !http_priv->http3_active.load(std::memory_order_acquire);
-    if (forced_h3 || (http_priv->conn_mgr
-            && http_priv->conn_mgr->getOptions().protocol != HttpClientProtocol::H3)) {
-        http_priv->conn_mgr.reset();
+    std::shared_ptr<HttpClientConnectionManagerBase> existing_mgr = http_priv->getConnMgrIfPresent();
+    if (forced_h3 || (existing_mgr
+            && existing_mgr->getOptions().protocol != HttpClientProtocol::H3)) {
+        http_priv->dropConnMgr(true);
         http_priv->http3_active = true;
         http_priv->http2_active = false;
     }
@@ -3436,15 +3476,16 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
     auto restore_forced_h3 = [&]() {
         if (forced_h3) {
             http_priv->http3_active = false;
-            http_priv->conn_mgr.reset();
+            http_priv->dropConnMgr(true);
         }
     };
 
-    HttpClientConnectionManagerBase& mgr = http_priv->getConnMgr(xsink);
-    if (*xsink) {
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = http_priv->getConnMgr(xsink);
+    if (*xsink || !mgr_holder) {
         restore_forced_h3();
         return nullptr;
     }
+    HttpClientConnectionManagerBase& mgr = *mgr_holder;
 
     HttpClientConnectionBase* conn = mgr.acquireConnection("https", this_connection.host.c_str(),
         this_connection.port, xsink);
@@ -4342,7 +4383,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             if (alt.has_value()) {
                 // Drop the existing (H1/H2/NEG) conn_mgr so getConnMgr()
                 // below allocates a fresh H3 conn_mgr.
-                conn_mgr.reset();
+                dropConnMgr(true);
                 http3_active = true;
                 http2_active = false;
                 attempted_h3_upgrade = true;
@@ -4350,10 +4391,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         }
 
         // Submit request via conn_mgr
-        HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
-        if (*xsink) {
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = getConnMgr(xsink);
+        if (*xsink || !mgr_holder) {
             return nullptr;
         }
+        HttpClientConnectionManagerBase& mgr = *mgr_holder;
         if (!checkPersistentConnMgrConnection(this_connection, xsink)) {
             return nullptr;
         }
@@ -5313,7 +5355,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     markAltSvcFailed(this_connection.host.c_str(),
                         this_connection.port);
                     http3_active = false;
-                    conn_mgr.reset();
+                    dropConnMgr(true);
                     xsink->clear();
                     continue;
                 }
@@ -5981,7 +6023,7 @@ public:
         @param client_obj HTTPClient QoreObject — poll op takes its own ref
     */
     HttpClientConnMgrPollOp(HttpClientConnectionBase* pending_conn,
-            HttpClientConnectionManagerBase* pending_mgr,
+            std::shared_ptr<HttpClientConnectionManagerBase> pending_mgr,
             std::string method, std::string path,
             QoreHashNode* pending_headers,
             BinaryNode* pending_body,
@@ -5994,7 +6036,7 @@ public:
           client_obj(client_obj),
           phase(Phase::WAITING_CONNECT),
           pending_conn(pending_conn),
-          pending_mgr(pending_mgr),
+          pending_mgr(std::move(pending_mgr)),
           pending_method(std::move(method)),
           pending_path(std::move(path)),
           pending_headers(pending_headers),
@@ -6003,7 +6045,7 @@ public:
           pending_streaming_response(pending_streaming_response) {
         assert(notifier);
         assert(pending_conn);
-        assert(pending_mgr);
+        assert(this->pending_mgr);
         assert(pending_promise);
         assert(future);
         future->ref();
@@ -6492,7 +6534,7 @@ private:
     //! the back-reference used to release the stream reservation if the
     //! request is never submitted.  headers/body/promise hold their own refs.
     HttpClientConnectionBase* pending_conn = nullptr;
-    HttpClientConnectionManagerBase* pending_mgr = nullptr;
+    std::shared_ptr<HttpClientConnectionManagerBase> pending_mgr;
     std::string pending_method;
     std::string pending_path;
     QoreHashNode* pending_headers = nullptr;
@@ -6545,10 +6587,11 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // Acquire connection without waiting — a fresh connection is returned
     // in CONNECTING state so the poll op can report "connecting" until the
     // I/O thread finishes TCP/SSL setup.
-    HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
-    if (*xsink) {
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = getConnMgr(xsink);
+    if (*xsink || !mgr_holder) {
         return nullptr;
     }
+    HttpClientConnectionManagerBase& mgr = *mgr_holder;
     HttpClientConnectionBase* conn = mgr.acquireConnectionAsync(scheme,
         this_connection.host.c_str(), this_connection.port, xsink);
     if (!conn || *xsink) {
@@ -6755,7 +6798,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             QoreHashNode* headers_raw = nh.release();  // ref consumed
             BinaryNode* body_raw = body_holder.release();  // nullable, ref consumed
             QorePromise* promise_raw_consumed = promise_holder.release();
-            poller = new HttpClientConnMgrPollOp(conn, &mgr,
+            poller = new HttpClientConnMgrPollOp(conn, mgr_holder,
                 std::string(method), std::string(msgpath),
                 headers_raw, body_raw, promise_raw_consumed,
                 future_raw, notifier_for_op, this, self, streaming_response);
@@ -6791,10 +6834,11 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
     // Acquire connection without waiting.  A fresh connection is returned
     // in CONNECTING state so the returned poll op can report "connecting"
     // until the async I/O controller finishes TCP/SSL setup.
-    HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
-    if (*xsink) {
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = getConnMgr(xsink);
+    if (*xsink || !mgr_holder) {
         return nullptr;
     }
+    HttpClientConnectionManagerBase& mgr = *mgr_holder;
     // acquireConnectionAsync can still fail synchronously before a controller
     // operation is submitted, for example on invalid setup.  Capture the error
     // and return a poll op that defers it to the continuePoll loop, matching
@@ -7428,7 +7472,8 @@ bool QoreHttpClientObject::isConnected() const {
     if (http_priv->msock->socket->isOpen()) {
         return true;
     }
-    return http_priv->conn_mgr && http_priv->conn_mgr->getPoolSize() > 0;
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr = http_priv->getConnMgrIfPresent();
+    return mgr && mgr->getPoolSize() > 0;
 }
 
 bool QoreHttpClientObject::isOpen() const {

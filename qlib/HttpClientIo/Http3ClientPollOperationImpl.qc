@@ -464,6 +464,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             } else {
                 stream_id = sock.submitQuicRequest(method, path, req_headers, body);
             }
+            self.setStreamStreaming(stream_id);
         } catch () {
             self.endSubmitFail();
             rethrow;
@@ -547,6 +548,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         int stream_id;
         try {
             stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+            self.setStreamStreaming(stream_id);
         } catch () {
             self.endSubmitFail();
             rethrow;

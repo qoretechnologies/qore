@@ -2709,6 +2709,11 @@ void QuicSession::setStreamStreaming(int64_t stream_id) {
     auto it = streams_.find(stream_id);
     if (it != streams_.end()) {
         it->second->streaming = true;
+        if (!is_server_ && it->second->headers_complete
+                && (!it->second->body.empty() || it->second->body_complete)) {
+            completed_streams_.push(stream_id);
+            has_completed_streams_.store(true, std::memory_order_release);
+        }
     }
 }
 

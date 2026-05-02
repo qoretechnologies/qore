@@ -696,7 +696,11 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
         for (size_t i = 0; i < buffered->size(); ++i) {
             QoreValue v = buffered->retrieveEntry(i);
             if (v.getType() == NT_HASH) {
-                action->execute(v, xsink);
+                // retrieveEntry() returns the list-owned value without
+                // taking a reference.  PromiseAction takes ownership of the
+                // QoreValue passed to execute(), while buffered->deref()
+                // below releases the list-owned reference.
+                action->execute(v.refSelf(), xsink);
             }
         }
         buffered->deref(xsink);
@@ -757,6 +761,17 @@ QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
     }
 
     return buffered;
+}
+
+int Http3ClientPollOperationPriv::setStreamStreaming(int64_t stream_id,
+        ExceptionSink* xsink) {
+    if (!sock_obj) {
+        xsink->raiseException("HTTP3-STATE-ERROR",
+            "cannot mark stream %lld for streaming: socket is not available",
+            (long long)stream_id);
+        return -1;
+    }
+    return sock_obj->setQuicClientStreamStreaming(stream_id, xsink);
 }
 
 bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink* xsink) {
@@ -1175,6 +1190,15 @@ nothing Http3ClientPollOperationBase::endSubmitOk(int stream_id) {
 */
 nothing Http3ClientPollOperationBase::endSubmitFail() {
     priv->endSubmitFail();
+}
+
+//! Mark a client-side response stream for incremental body delivery
+/** @param stream_id the QUIC stream ID
+
+    @since %Qore 2.3
+*/
+nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
+    priv->setStreamStreaming(static_cast<int64_t>(stream_id), xsink);
 }
 
 //! Phase 3: register stream with a Promise for result delivery

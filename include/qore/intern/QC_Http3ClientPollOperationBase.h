@@ -159,6 +159,9 @@ public:
     DLLLOCAL QoreListNode* registerStream(int64_t stream_id, AbstractAsyncAction* action,
         bool& need_cancel, ExceptionSink* xsink);
 
+    //! Mark a client-side HTTP/3 response stream for incremental body delivery
+    DLLLOCAL int setStreamStreaming(int64_t stream_id, ExceptionSink* xsink);
+
     //! Cancel a stream: removes and derefs the action
     /** @param stream_id the QUIC stream ID
         @param xsink for exception handling

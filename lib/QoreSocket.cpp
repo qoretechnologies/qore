@@ -1157,6 +1157,25 @@ public:
         return "binding";
     }
 
+    DLLLOCAL bool isConfigAction() const {
+        return action == Action::SetNoDelay
+            || action == Action::GetNoDelay
+            || action == Action::SetUserTimeout
+            || action == Action::GetUserTimeout
+            || action == Action::SetSendTimeout
+            || action == Action::SetRecvTimeout
+            || action == Action::GetSendTimeout
+            || action == Action::GetRecvTimeout
+            || action == Action::GetPort
+            || action == Action::SetMaxChunkedBodySize
+            || action == Action::SetSslVerifyMode
+            || action == Action::GetSslVerifyMode
+            || action == Action::SetAcceptAllCertificates
+            || action == Action::GetAcceptAllCertificates
+            || action == Action::CaptureRemoteCertificates
+            || action == Action::SetHttp2MaxRequestBodySize;
+    }
+
 private:
     DLLLOCAL QoreHashNode* continueBindInet(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* getResolverPollInfo(ExceptionSink* xsink) const;
@@ -1198,25 +1217,6 @@ private:
         }
         assert(false);
         return Action::GetNoDelay;
-    }
-
-    DLLLOCAL bool isConfigAction() const {
-        return action == Action::SetNoDelay
-            || action == Action::GetNoDelay
-            || action == Action::SetUserTimeout
-            || action == Action::GetUserTimeout
-            || action == Action::SetSendTimeout
-            || action == Action::SetRecvTimeout
-            || action == Action::GetSendTimeout
-            || action == Action::GetRecvTimeout
-            || action == Action::GetPort
-            || action == Action::SetMaxChunkedBodySize
-            || action == Action::SetSslVerifyMode
-            || action == Action::GetSslVerifyMode
-            || action == Action::SetAcceptAllCertificates
-            || action == Action::GetAcceptAllCertificates
-            || action == Action::CaptureRemoteCertificates
-            || action == Action::SetHttp2MaxRequestBodySize;
     }
 
     DLLLOCAL void copyAddress(const struct sockaddr* source, int size, ExceptionSink* xsink) {
@@ -4106,10 +4106,19 @@ static int qore_socket_exec_setup(QoreSocket* s, QoreSocketControllerSetupPollOp
         return -1;
     }
 
-    qore_socket_private* priv = qore_socket_private::get(*s);
-    QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
-    if (!io_guard) {
-        return -1;
+    bool config_action = poller->isConfigAction();
+    if (!config_action) {
+        qore_socket_private* priv = qore_socket_private::get(*s);
+        QoreSocketRawAsyncIoGuard io_guard(*priv, xsink, NB_ALL);
+        if (!io_guard) {
+            return -1;
+        }
+
+        ValueHolder result(qore_socket_exec_poll(s, poller_holder.release(), -1, owner_name, "done", xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        return qore_socket_get_setup_rc(*result, xsink);
     }
 
     ValueHolder result(qore_socket_exec_poll(s, poller_holder.release(), -1, owner_name, "done", xsink), xsink);
@@ -12815,6 +12824,10 @@ void SocketSetupPollOperation::init(ExceptionSink* xsink, bool defer_init) {
 int SocketSetupPollOperation::initLocked(ExceptionSink* xsink) {
     assert(sock->priv->m.trylock());
     if (initialized) {
+        return 0;
+    }
+    if (isConfigAction()) {
+        initialized = true;
         return 0;
     }
     if (!sock->priv->setNonBlockFromAsyncController(xsink, NB_ALL, controller_deferred_tid)) {

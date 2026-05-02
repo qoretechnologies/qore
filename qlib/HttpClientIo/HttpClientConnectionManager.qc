@@ -132,6 +132,21 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Shutdown flag
         bool shutdown = False;
 
+        #! Stable AsyncIoController owner id for this manager instance.
+        /** Do not use self.uniqueHash() directly for controller ownership:
+            object identity strings can be reused after destruction, while the
+            controller intentionally retains recent cancel tombstones for a
+            short race window.  A monotonic suffix makes owner reuse impossible
+            inside the process.
+        */
+        string owner_id;
+
+        #! Process-local manager id counter used in @ref owner_id.
+        static int next_manager_id = 0;
+
+        #! Lock for manager id allocation.
+        static Mutex manager_id_lock();
+
         #! Timestamp of the last idle-connection cleanup, used by @ref maybeCleanupIdle().
         /** Without periodic cleanup, idle connections accumulate in the pool indefinitely;
             each entry keeps a socket / TLS / HTTP2 / HTTP3 session graph alive, causing
@@ -203,8 +218,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (self.opts.max_request_retries < 0) {
             throw "HTTPCLIENT-OPTION-ERROR",
                 sprintf("max_request_retries must be >= 0 (0 = disabled), got %d",
-                    self.opts.max_request_retries);
+                self.opts.max_request_retries);
         }
+        {
+            AutoLock al(manager_id_lock);
+            owner_id = sprintf("HttpClientConnectionManager:%d:%s",
+                ++next_manager_id, self.uniqueHash());
+        }
+
         # Parse proxy URL if provided
         if (self.opts.proxy_url.val()) {
             hash<auto> purl;
@@ -950,7 +971,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             shutdown = True;
         }
 
-        string owner_id = self.uniqueHash();
         try {
             controller.cancelByOwner(owner_id);
         } catch (hash<ExceptionInfo> ex) {
@@ -1648,7 +1668,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             bool initial = True) {
         HttpClientPollOperation op = conn.getPollOperation();
         Socket sock = conn.getSocket();
-        string owner = self.uniqueHash();
+        string controller_key = sprintf("%s:conn:%d", owner_id, conn.getConnectionId());
 
         if (initial) {
             log(LoggerLevel::DEBUG, "submitting %s connection %d to controller for %s",
@@ -1692,7 +1712,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         controller.submit(<SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
-            "owner": owner,
+            "key": controller_key,
+            "owner": owner_id,
             "to": -1,
             "has_on_complete": True,
         });
@@ -1843,6 +1864,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             || err == "HTTP3-ABORT"
             || err == "HTTP3-EMPTY-READ"
             || err == "HTTP2-EMPTY-READ"
+            || err == "HTTP2-CONNECTION-CLOSED"
             || err == "HTTP2-CONNECT-ERROR"
             || err == "HTTP2-ALPN-ERROR"
             || err == "HTTP2-ABORT"
@@ -1874,6 +1896,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     private bool isH2cIncompatible(string err) {
         return err == "HTTP2-EMPTY-READ"
+            || err == "HTTP2-CONNECTION-CLOSED"
             || err == "HTTP2-CONNECT-ERROR"
             || err == "HTTP2-ALPN-ERROR"
             || err == "HTTP2-ABORT"
@@ -2080,8 +2103,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Internal: checks if a connection is alive at the transport level
-    /** Verifies that the underlying socket is open, the poll operation hasn't
-        detected any errors, and the idle window has not expired.
+    /** Verifies that the poll operation hasn't detected any errors, the
+        underlying socket is open once the connection has left CONNECTING, and
+        the idle window has not expired.
 
         Liveness detection is owned by the async I/O thread.  When a server
         sends FIN/RST, the I/O thread sees the POLLIN/POLLHUP via its
@@ -2102,6 +2126,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             log(LoggerLevel::DEBUG, "connection %d poll operation is %s",
                 conn.getConnectionId(), op.isClosed() ? "closed" : "errored");
             return False;
+        }
+        if (conn.getConnectionState() == HttpClientConnectionState::Connecting) {
+            return True;
         }
         if (!conn.getSocket().isOpen()) {
             log(LoggerLevel::DEBUG, "connection %d socket is closed",

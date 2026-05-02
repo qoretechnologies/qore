@@ -480,13 +480,10 @@ void Http2ClientPollOperationPriv::startMultiplex(ExceptionSink* xsink) {
     current_op->setSelf(*self);
     h2_state.store(H2State::READING, std::memory_order_release);
 
-    if (ssl_required) {
-        // HTTPS: ALPN already confirmed H2 during TLS handshake
-        h2_confirmed.store(true, std::memory_order_release);
-        fireReadyCallback(xsink);
-    }
-    // Plain HTTP (h2c): defer readyCallback until we see valid H2 output
-    // from the server, confirming it supports HTTP/2 prior knowledge
+    // Defer readyCallback until we see valid H2 output from the server.  ALPN
+    // proves protocol selection for HTTPS, but the connection is not useful for
+    // multiplexed requests until the client preface has been sent and the
+    // peer's SETTINGS frame has been processed.
 }
 
 QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
@@ -494,6 +491,16 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         setError("HTTP2-READ-ERROR", "read operation not initialized", xsink);
         return nullptr;
     }
+
+    // submitRequest() waits for controller-backed nghttp2 submission, then
+    // registers the returned stream id.  If that handoff is active, do not
+    // let the multiplex reader drain a fast response with no action; also do
+    // not block the I/O thread, since it may need to run the submit exec.
+    if (submission_lock.trylock() != 0) {
+        h2_state.store(H2State::WAIT_READ, std::memory_order_release);
+        return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+    }
+    AutoLocker submission_al(submission_lock, true);
 
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
@@ -656,6 +663,19 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         return applyIdleTimeout(poll_info, xsink);
     }
 
+    if (current_op->goalReached()) {
+        // The inner multiplex operation reached its terminal state without
+        // producing another response.  Surface the peer close immediately so
+        // pending streams are failed deterministically instead of spinning
+        // until HTTP2-EMPTY-READ hides the real state transition.
+        setError("HTTP2-CONNECTION-CLOSED",
+            active_stream_count > 0
+                ? "HTTP/2 connection closed while requests were active"
+                : "HTTP/2 connection closed by peer",
+            xsink);
+        return nullptr;
+    }
+
     ++empty_read_count;
     // Use a much shorter limit during h2c probing — if the server
     // doesn't respond with valid H2 frames quickly, it likely doesn't
@@ -753,6 +773,14 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
 }
 
 void Http2ClientPollOperationPriv::abort(ExceptionSink* xsink) {
+    {
+        AutoLocker al(stream_lock);
+        if (!error_info) {
+            error_info = new QoreHashNode(autoTypeInfo);
+            error_info->setKeyValue("err", new QoreStringNode("HTTP2-ABORT"), xsink);
+            error_info->setKeyValue("desc", new QoreStringNode("connection aborted"), xsink);
+        }
+    }
     h2_state.store(H2State::CLOSED, std::memory_order_release);
     if (current_op) {
         current_op->abort(xsink);
@@ -1080,6 +1108,8 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         action->deref(xsink);
         return -1;
     }
+
+    AutoLocker submission_al(submission_lock);
 
     bool reserved_stream_slot = false;
     auto release_reserved_stream_slot = [&]() {

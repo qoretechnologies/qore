@@ -887,7 +887,6 @@ void HttpClientConnectionManagerBase::onConnectionClosed(HttpClientConnectionBas
     // Remove the connection from its pool entry using the stashed key
     // for O(1) map lookup (the connection within the vector is still
     // a linear scan, but vectors are tiny — typically 1-3 entries per key).
-    bool removed = false;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
         const std::string& key = conn->getPoolKey();
@@ -901,24 +900,17 @@ void HttpClientConnectionManagerBase::onConnectionClosed(HttpClientConnectionBas
                         if (conns.empty()) {
                             pool_.erase(it);
                         }
-                        removed = true;
+                        // Drop the pool's ref later from an app thread.
+                        // Keep this append under pool_lock_: closeAll()
+                        // and processDeferredDeref() drain the same vector
+                        // under this lock, and concurrent I/O-thread close
+                        // callbacks can otherwise corrupt the vector.
+                        deferred_deref_.push_back(conn);
                         break;
                     }
                 }
             }
         }
-    }
-    // Drop the pool's ref on the connection.  This callback can run on
-    // the I/O thread (from continuePoll → setClosed → onClosedHook).
-    // If the deref triggers destruction, the connection destructor calls
-    // closeConnection → controller cancel on the poll op that is
-    // currently mid-continuePoll — a use-after-free / deadlock (cancel
-    // waits for the I/O thread, but we ARE the I/O thread).
-    //
-    // Stash the pointer and deref on a background thread so any
-    // destruction runs off the I/O thread.
-    if (removed) {
-        deferred_deref_.push_back(conn);
     }
     // Wake any thread waiting in create_cond_ for this key — we don't
     // know the key, so notify all.  Acceptable: spurious wakeups just

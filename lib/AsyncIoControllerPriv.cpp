@@ -1008,45 +1008,65 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     QoreHashNode* ex_hash = nullptr;
                     bool completed = false;
 
-                    ValueHolder rv(async_item.spop_obj->evalMethod("continuePoll", nullptr, &work_xsink),
-                        &work_xsink);
-                    if (work_xsink) {
-                        QoreException* ex_obj = work_xsink.getException();
-                        if (ex_obj) {
-                            ex_hash = ex_obj->makeExceptionObject();
-                        }
-                        work_xsink.clear();
-                    } else if (rv->getType() == NT_HASH) {
-                        new_poll_info = rv.release().get<QoreHashNode>();
-                    } else {
-                        completed = true;
-                    }
+                    {
+                        // Qore poll operations may mutate object-member state and
+                        // participate in reference-set scans.  Running many of
+                        // them concurrently from the dispatcher can deadlock in
+                        // reference-set invalidation, while running them on the
+                        // I/O thread is illegal.  Serialize only Qore-level
+                        // continuePoll() dispatch; normal callbacks remain
+                        // concurrent on the worker pool.
+                        AutoLocker cpl(qore_continue_poll_lock);
 
-                    // Dispatch stream-data-ready notifications for Http2/Http3 Qore poll ops.
-                    // Called here (on the worker) instead of the I/O thread so the I/O thread
-                    // is never blocked by Qore method invocations.
-                    if (!completed && !ex_hash) {
-                        ExceptionSink stream_xsink;
-                        ValueHolder streams_val(async_item.spop_obj->evalMethod(
-                            "getAndClearDataReadyStreams", nullptr, &stream_xsink), &stream_xsink);
-                        if (!stream_xsink && streams_val->getType() == NT_LIST) {
-                            const QoreListNode* sl = streams_val->get<const QoreListNode>();
-                            if (sl && sl->size() > 0) {
-                                for (size_t i = 0; i < sl->size(); ++i) {
-                                    QoreValue v = sl->retrieveEntry(i);
-                                    std::string skey;
-                                    if (v.getType() == NT_STRING) {
-                                        skey = v.get<const QoreStringNode>()->c_str();
-                                    } else {
-                                        skey = std::to_string(v.getAsBigInt());
+                        ValueHolder rv(async_item.spop_obj->evalMethod("continuePoll", nullptr, &work_xsink),
+                            &work_xsink);
+                        if (work_xsink) {
+                            QoreException* ex_obj = work_xsink.getException();
+                            if (ex_obj) {
+                                ex_hash = ex_obj->makeExceptionObject();
+                            }
+                            work_xsink.clear();
+                        } else if (rv->getType() == NT_HASH) {
+                            new_poll_info = rv.release().get<QoreHashNode>();
+                        } else {
+                            completed = true;
+                        }
+
+                        // Dispatch stream-data-ready notifications for Http2/Http3 Qore poll ops.
+                        // Called here (on the worker) instead of the I/O thread so the I/O thread
+                        // is never blocked by Qore method invocations.
+                        if (!completed && !ex_hash) {
+                            ExceptionSink stream_xsink;
+                            ValueHolder streams_val(async_item.spop_obj->evalMethod(
+                                "getAndClearDataReadyStreams", nullptr, &stream_xsink), &stream_xsink);
+                            if (!stream_xsink && streams_val->getType() == NT_LIST) {
+                                const QoreListNode* sl = streams_val->get<const QoreListNode>();
+                                if (sl && sl->size() > 0) {
+                                    for (size_t i = 0; i < sl->size(); ++i) {
+                                        if (!(i % 100) && qore_check_cancel(&work_xsink,
+                                                "async stream data dispatch")) {
+                                            QoreException* ex_obj = work_xsink.getException();
+                                            if (ex_obj) {
+                                                ex_hash = ex_obj->makeExceptionObject();
+                                            }
+                                            work_xsink.clear();
+                                            break;
+                                        }
+                                        QoreValue v = sl->retrieveEntry(i);
+                                        std::string skey;
+                                        if (v.getType() == NT_STRING) {
+                                            skey = v.get<const QoreStringNode>()->c_str();
+                                        } else {
+                                            skey = std::to_string(v.getAsBigInt());
+                                        }
+                                        async_item.controller->enqueueStreamDataDispatch(
+                                            async_item.spop_obj, skey, async_item.owner);
                                     }
-                                    async_item.controller->enqueueStreamDataDispatch(
-                                        async_item.spop_obj, skey, async_item.owner);
                                 }
                             }
+                            // Method may not exist — that's fine, not all Qore poll ops have it
+                            stream_xsink.clear();
                         }
-                        // Method may not exist — that's fine, not all Qore poll ops have it
-                        stream_xsink.clear();
                     }
 
                     // Send result back to the I/O thread

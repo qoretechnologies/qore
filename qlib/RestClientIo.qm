@@ -4766,6 +4766,12 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         #! EventNotifier for connection-readiness polling in SPS_CONNECTING state
         *EventNotifier connection_ready_notifier;
 
+        #! Connection associated with @ref connection_ready_notifier
+        *HttpClientIo::HttpClientConnection connection_ready_conn;
+
+        #! Connection associated with @ref oauth2_conn_notifier
+        *HttpClientIo::HttpClientConnection oauth2_connection_ready_conn;
+
         #! True after the first continuePoll() call in SPS_CONNECTING (poll info returned)
         bool waiting_for_connection = False;
 
@@ -4858,7 +4864,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
                 delete oauth2_conn_notifier;
                 waiting_for_oauth2_conn = False;
                 # Re-check: start a new connection if closed/failed
-                oauth2_conn_notifier = oauth2_rcio.startConnectionAsync();
+                checkTrackedConnectionFailure(oauth2_connection_ready_conn);
+                oauth2_connection_ready_conn = NOTHING;
+                oauth2_conn_notifier = startOAuth2ConnectionAsync();
                 if (oauth2_conn_notifier) {
                     # Still not ready — retry with new notifier
                     continue;
@@ -4901,6 +4909,8 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
                 connection_ready_notifier.acknowledge();
                 delete connection_ready_notifier;
                 waiting_for_connection = False;
+                checkTrackedConnectionFailure(connection_ready_conn);
+                connection_ready_conn = NOTHING;
                 on_error conn.authFailure();
                 doStartConnecting();
                 # Re-evaluate from the top of the loop: if doStartConnecting() transitioned
@@ -4993,7 +5003,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         oauth2_req = refresh_info{"path", "headers", "body"};
 
         # Start connection to the token endpoint asynchronously
-        oauth2_conn_notifier = oauth2_rcio.startConnectionAsync();
+        oauth2_conn_notifier = startOAuth2ConnectionAsync();
         if (!oauth2_conn_notifier) {
             # Connection already ready — submit request immediately
             doSubmitOAuth2Request();
@@ -5061,7 +5071,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         thread spawned by the PollingConnectionMonitor.
     */
     private doStartConnecting() {
-        connection_ready_notifier = rcio.startConnectionAsync();
+        connection_ready_notifier = startMainConnectionAsync();
         if (!connection_ready_notifier) {
             # startConnectionAsync() returns NOTHING for both "already READY" and
             # "already CLOSED/terminal" states.  Attempt to submit the ping; if the
@@ -5085,6 +5095,40 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         }
         # Connection still establishing — enter connecting state
         state = SPS_CONNECTING;
+    }
+
+    private *EventNotifier startMainConnectionAsync() {
+        HttpClientIo::HttpClientStreamHandle stream =
+            rcio.getConnectionManager().acquireStream(rcio.getUrl());
+        connection_ready_conn = stream.getConnection();
+        *EventNotifier rv = stream.getConnectionReadyNotifier();
+        if (!rv) {
+            checkTrackedConnectionFailure(connection_ready_conn);
+            connection_ready_conn = NOTHING;
+        }
+        return rv;
+    }
+
+    private *EventNotifier startOAuth2ConnectionAsync() {
+        HttpClientIo::HttpClientStreamHandle stream =
+            oauth2_rcio.getConnectionManager().acquireStream(oauth2_rcio.getUrl());
+        oauth2_connection_ready_conn = stream.getConnection();
+        *EventNotifier rv = stream.getConnectionReadyNotifier();
+        if (!rv) {
+            checkTrackedConnectionFailure(oauth2_connection_ready_conn);
+            oauth2_connection_ready_conn = NOTHING;
+        }
+        return rv;
+    }
+
+    private static checkTrackedConnectionFailure(*HttpClientIo::HttpClientConnection tracked_conn) {
+        if (!tracked_conn || !tracked_conn.isClosed()) {
+            return;
+        }
+        *hash<auto> err = tracked_conn.getPollOperation().getError();
+        if (err && err.err == "QOREADDRINFO-GETINFO-ERROR") {
+            throw err.err, err.desc ?? "host resolution failed";
+        }
     }
 
     #! Submits the ping request with EventNotifier signaling — no background thread

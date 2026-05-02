@@ -2840,15 +2840,19 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testPingPollNonExistentHost() {
-        # Connection to non-existent host — the error is thrown from the constructor
-        # of RestClientIoPingPollOperation (in doSubmitPing() → acquireStream() → DNS)
+        # Connection to non-existent host — startPollConnect() creates the
+        # asynchronous ping operation; DNS failure is reported when the poll
+        # operation is driven.
         RestConnection rc("ping-nohost", "ping-nohost",
             "http://nonexistent.invalid:9999", {}, {
                 "ping_method": "GET",
                 "ping_path": "/",
                 "connect_timeout": 1s,
             });
-        assertThrows("QOREADDRINFO-GETINFO-ERROR", sub () { rc.startPollConnect(); });
+        AbstractPollOperation op = rc.startPollConnect();
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        assertTrue(exists ex, "non-existent host ping should throw");
+        assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err);
     }
 
     #! Regression test: connection-closed notifier must trigger a retry, not throw HTTPCLIENT-NOT-READY

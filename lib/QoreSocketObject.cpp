@@ -2840,10 +2840,24 @@ static int qore_socket_object_exec_setup(QoreSocketObject* s, SocketSetupPollOpe
         return -1;
     }
 
-    my_socket_priv* priv = my_socket_priv::getPriv(*s);
-    QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
-    if (!async_guard) {
-        return -1;
+    bool config_action = poller->isConfigAction();
+    if (!config_action) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*s);
+        QoreSocketObjectAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+        if (!async_guard) {
+            return -1;
+        }
+
+        ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);
+        ReferenceHolder<QoreObject> op_obj(
+            qore_socket_object_make_poll_op(*sock_obj, poller.release(), goal, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        ReferenceHolder<QoreHashNode> result(
+            qore_socket_object_exec_poll_operation(s, *sock_obj, *op_obj, -1, owner_name, xsink), xsink);
+        return *xsink ? -1 : setup_poller->getRc();
     }
 
     ReferenceHolder<QoreObject> sock_obj(qore_socket_object_make_pollable_wrapper(s), xsink);

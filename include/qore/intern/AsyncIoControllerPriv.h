@@ -249,6 +249,7 @@ private:
     std::unordered_set<std::string> shutting_down_owners;      //!< Owners being torn down — skip callbacks
     std::unordered_map<std::string, int> active_per_owner;     //!< Per-owner in-flight callback count
     QoreCondition owner_idle_cond;              //!< Signaled when an owner's active count reaches zero
+    QoreThreadLock qore_continue_poll_lock;     //!< Serializes Qore-level continuePoll() dispatch
 
     //! Enqueue a work item, starting a worker if needed
     DLLLOCAL void enqueue(AsyncWorkItem&& item);
