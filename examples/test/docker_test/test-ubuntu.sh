@@ -136,8 +136,12 @@ fi
 
 
 # add Qore user and group
-groupadd -o -g ${QORE_GID} qore
-useradd -o -m -d /home/qore -u ${QORE_UID} -g ${QORE_GID} qore
+if ! getent group qore >/dev/null 2>&1; then
+    groupadd -o -g ${QORE_GID} qore
+fi
+if ! id qore >/dev/null 2>&1; then
+    useradd -o -m -d /home/qore -u ${QORE_UID} -g ${QORE_GID} qore
+fi
 
 # install gdb for crash diagnostics (captures backtraces on segfault)
 if ! command -v gdb > /dev/null 2>&1; then
@@ -171,6 +175,7 @@ chmod +x ./test/docker_test/qore_binary_selector.sh
 export QORE_DEBUG_BINARY="${QORE_SRC_DIR}/build/qore"
 export QORE_RELEASE_BINARY="${QORE_SRC_DIR}/build-release/qore"
 export QORE_BINARY="${QORE_SRC_DIR}/test/docker_test/qore_binary_selector.sh"
+export QORE_LIBDIR="${QORE_SRC_DIR}/build"
 
 # Set up LIBQORE path for run_tests.sh (installed from Debug build)
 if [ -f "${QORE_SRC_DIR}/build/libqore.so" ]; then
@@ -187,6 +192,7 @@ gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
     QORE_RELEASE_BINARY="${QORE_RELEASE_BINARY}" \
     QORE_BINARY="${QORE_BINARY}" \
+    QORE_LIBDIR="${QORE_LIBDIR}" \
     QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${QORE_SRC_DIR}/build/lib:${QORE_SRC_DIR}/build-release/lib:${QORE_SRC_DIR}/build/lib/.libs:${QORE_SRC_DIR}/build-release/lib/.libs:${LD_LIBRARY_PATH}" \

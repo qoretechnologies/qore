@@ -199,6 +199,7 @@ chmod +x ./test/docker_test/qore_binary_selector.sh
 export QORE_DEBUG_BINARY="${QORE_SRC_DIR}/build/qore"
 export QORE_RELEASE_BINARY="${QORE_SRC_DIR}/build-release/qore"
 export QORE_BINARY="${QORE_SRC_DIR}/test/docker_test/qore_binary_selector.sh"
+export QORE_LIBDIR="${QORE_SRC_DIR}/build"
 
 # Set up LIBQORE path for run_tests.sh (installed from Debug build)
 if [ -f "${QORE_SRC_DIR}/build/libqore.so" ]; then
@@ -215,6 +216,7 @@ gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
     QORE_RELEASE_BINARY="${QORE_RELEASE_BINARY}" \
     QORE_BINARY="${QORE_BINARY}" \
+    QORE_LIBDIR="${QORE_LIBDIR}" \
     QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${QORE_SRC_DIR}/build/lib:${QORE_SRC_DIR}/build-release/lib:${QORE_SRC_DIR}/build/lib/.libs:${QORE_SRC_DIR}/build-release/lib/.libs:${LD_LIBRARY_PATH}" \
