@@ -4054,27 +4054,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         # Handle send_callback responses (e.g. DataStream protocol)
         if (rv.send_callback) {
-            if (cx."header-info".http2) {
-                # HTTP/2: wrap send_callback in a CallbackInputStream and send via HTTP/2
-                # DATA frames; this handles Connect protocol streaming correctly
-                hash<auto> hdr = rv.hdr ?? {};
-                remove hdr."Transfer-Encoding";
-                # Create a dummy owner object to prevent premature GC of the callback
-                auto cb = rv.send_callback;
-                InputStream is = new CallbackInputStream(
-                    auto sub() { return cb(); }, cx.socketobject);
-                is.unassignThread();
-                async_response_out = <HttpAsyncResponseInfo>{
-                    "code": rv."code",
-                    "hdr": hdr,
-                    "input_stream": is,
-                    "close": cx.close ?? False,
-                    "cx": cx,
-                    "listener": listener,
-                };
-                listener.logResponse(cx, rv);
-                return;
-            }
             # Capture callback for the response-sending code
             async_response_out = <HttpAsyncResponseInfo>{
                 "code": rv."code",
@@ -5264,8 +5243,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # closure keeps the request alive past the re-check, the destructor's
             # handler.setPersistent(False) call hasn't fired yet, and the loop entry
             # below would erroneously dedicate this thread for the full TTL.
-            delete async_response.send_callback;
-            delete async_response.input_stream;
+            remove async_response.send_callback;
+            remove async_response.input_stream;
+            if (header_info.body_streaming) {
+                cleanupMultiplexedBodyStream(s, header_info);
+            }
             # Re-check persistence AFTER the response (incl. any inline streaming)
             # has been fully sent: a handler's persistence condition may become
             # false while the response was being produced.  Persistence is a
@@ -5279,6 +5261,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             if (!phi.handler.isPersistent()) {
                 log("cid %d: persistence released during initial response, "
                     "skipping dedicated mode", cx.id);
+                deregister_fn(sock_key);
+                drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
+                    getContextTemplate(info), phi, info);
                 return <HttpServerAsyncIo::HttpRequestResultInfo>{};
             }
             # Enter dedicated persistent loop
@@ -5299,8 +5284,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # framework objects (e.g. RestStreamRequest) can run their destructors
             # before the persistent queue loop is entered, releasing handler
             # persistence whose only condition was the in-flight stream.
-            delete async_response.send_callback;
-            delete async_response.input_stream;
+            remove async_response.send_callback;
+            remove async_response.input_stream;
             if (!phi.handler.isPersistent()) {
                 log("cid %d: persistence released during initial response, "
                     "skipping queued persistent mode", cx.id);
@@ -5336,6 +5321,24 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 return <HttpServerAsyncIo::HttpRequestResultInfo>{"dedicated": True};
             }
             # Response was sent directly by the handler
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+        }
+
+        if (is_multiplexed && async_response.code
+                && (async_response.send_callback
+                    || (async_response.input_stream
+                        && async_response.input_stream instanceof CallbackInputStream))
+                && !request_helper.isDedicated()) {
+            # send_callback / CallbackInputStream is Qore handler code and
+            # may close over thread-local iterators or reservations.  Drive
+            # it on the request thread; plain InputStream responses still use
+            # StreamResponseProducer below unless the handler is persistent.
+            sendMultiplexedStreamingResponseInline(s, header_info, async_response);
+            remove async_response.send_callback;
+            remove async_response.input_stream;
+            if (header_info.body_streaming) {
+                cleanupMultiplexedBodyStream(s, header_info);
+            }
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         }
 
@@ -5631,6 +5634,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # Build the data-producing callback: either from send_callback
         # directly, or by wrapping an InputStream
         code<*binary()> producer;
+        *InputStream reassigned_stream;
+        on_exit if (reassigned_stream) {
+            try {
+                reassigned_stream.unassignThread();
+            } catch () {
+            }
+        }
         if (response.send_callback) {
             auto cb = response.send_callback;
             producer = *binary sub () {
@@ -5642,6 +5652,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             };
         } else {
             InputStream is = response.input_stream;
+            is.reassignThread();
+            reassigned_stream = is;
             producer = *binary sub () {
                 return is.read(65536);
             };
@@ -5735,6 +5747,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
             io_wake();
             return;
+        }
+    }
+
+    #! Cleans up a multiplexed request body stream after handler dispatch
+    private cleanupMultiplexedBodyStream(Socket s, hash<auto> header_info) {
+        on_exit if (header_info.io_wake) {
+            header_info.io_wake();
+        }
+        if (header_info.http3) {
+            s.cleanupQuicStream(header_info.session_id, header_info.stream_id);
+        } else {
+            s.cleanupHttp2Stream(header_info.stream_id);
         }
     }
 
@@ -5974,8 +5998,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # their destructors before the persistence re-check below.  See
                 # the matching block in the initial-response path for rationale.
                 if (async_response) {
-                    delete async_response.send_callback;
-                    delete async_response.input_stream;
+                    remove async_response.send_callback;
+                    remove async_response.input_stream;
                 }
 
                 # For body_streaming requests where the handler returned early
@@ -5984,8 +6008,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # has already been queued via sendMultiplexedResponse() which
                 # uses nghttp2's internal state, not our streams map.
                 if (is_multiplexed && conn_info.header_info.body_streaming) {
-                    s.cleanupHttp2Stream(conn_info.header_info.stream_id);
-                    conn_info.header_info.io_wake();
+                    cleanupMultiplexedBodyStream(s, conn_info.header_info);
                 }
 
                 if (!is_multiplexed && (cx.close || !s.isOpen())) {
@@ -6169,14 +6192,25 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     || (conn_info.header_info.http3 ?? False);
                 if (async_response && async_response.code) {
                     if (is_multiplexed) {
-                        sendMultiplexedResponse(s, conn_info.header_info, async_response);
+                        if (async_response.send_callback
+                                || async_response.input_stream) {
+                            sendMultiplexedStreamingResponseInline(s,
+                                conn_info.header_info, async_response);
+                        } else {
+                            sendMultiplexedResponse(s, conn_info.header_info,
+                                async_response);
+                        }
                     } else {
                         sendResponseSync(s, async_response);
                     }
                 }
+                if (async_response) {
+                    remove async_response.send_callback;
+                    remove async_response.input_stream;
+                }
 
                 if (is_multiplexed && conn_info.header_info.body_streaming) {
-                    conn_info.header_info.io_wake();
+                    cleanupMultiplexedBodyStream(s, conn_info.header_info);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 string etxt = serv.getDebug()

@@ -3911,14 +3911,20 @@ int QuicSession::h3EndHeadersCallback(nghttp3_conn* /* conn */, int64_t stream_i
         // of traffic.
         if (stream->is_connect && !stream->connect_protocol.empty()) {
             stream->headers_complete = true;
-            stream->dispatched = true;
-            // Pin session in socket's map — same rationale as takeHeadersReadyStreamCopy
-            session->dispatched_stream_count_.fetch_add(1,
-                std::memory_order_release);
             session->completed_streams_.push(stream_id);
             session->has_completed_streams_.store(true, std::memory_order_release);
-            printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD
-                " CONNECT dispatched (body_complete=false, tunnel open)\n", stream_id);
+            if (session->is_server_) {
+                stream->dispatched = true;
+                // Pin session in socket's map — same rationale as takeHeadersReadyStreamCopy
+                session->dispatched_stream_count_.fetch_add(1,
+                    std::memory_order_release);
+                printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD
+                    " CONNECT dispatched (body_complete=false, tunnel open)\n", stream_id);
+            } else {
+                printd(5, "QuicSession::h3EndHeadersCallback() stream_id=" QLLD
+                    " client CONNECT headers ready (body_complete=false, tunnel open)\n",
+                    stream_id);
+            }
             return 0;
         }
 
@@ -4151,12 +4157,26 @@ int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id
     auto* session = static_cast<QuicSession*>(conn_user_data);
 
     try {
-        // For CONNECT tunnel streams, set body_complete and push the NOTHING sentinel
-        // directly to the registered Queue.  Do NOT call markStreamComplete() — the
-        // stream was already dispatched via h3EndHeaders and must not be re-dispatched.
+        // For CONNECT tunnel streams, set body_complete directly.  Server-side
+        // CONNECT request bodies are consumed through the registered connect
+        // Queue, while client-side CONNECT responses are delivered through the
+        // normal completed_streams_ path so ChannelAction/readData() sees the
+        // terminal end_stream event.
         auto it = session->streams_.find(stream_id);
         if (it != session->streams_.end() && it->second->is_connect) {
+            it->second->state = QuicStreamState::Closed;
             it->second->body_complete = true;
+            if (!session->is_server_) {
+                // This is the terminal response event.  Clear the long-lived
+                // tunnel flags before queueing so takeCompletedStream() moves
+                // and erases the stream instead of keeping a closed client
+                // stream in the session map.
+                it->second->connect_tunnel_active = false;
+                it->second->streaming = false;
+                session->completed_streams_.push(stream_id);
+                session->has_completed_streams_.store(true,
+                    std::memory_order_release);
+            }
             // Push NOTHING sentinel to registered Queue (if any) and release reference
             {
                 ExceptionSink xsink;

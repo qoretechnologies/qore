@@ -90,15 +90,14 @@ public class ServerSentEventClientDataProviderBase inherits DataProvider::Abstra
                 "display_name": "HTTP Version",
                 "short_desc": "HTTP version to use",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The HTTP version to use: `auto` (HTTP/2 if available, default), `1.0`, `1.1`, "
-                    "`2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires "
+                "desc": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), "
+                    "`1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. HTTP/3 requires "
                     "TLS and uses QUIC",
                 "default_value": "auto",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "auto",
-                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1; upgrade to "
-                            "HTTP/3 if advertised via Alt-Svc (default)",
+                        "desc": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
                     },
                     <AllowedValueInfo>{
                         "value": "1.0",

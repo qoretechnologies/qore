@@ -243,17 +243,19 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param data the data to send (can be NOTHING to send END_STREAM only)
         @param end_stream if True, signals end of stream
 
-        @return 0 on success, 1 if buffer full (backpressure), -1 on error
+        @return 0 on success, -1 on error
 
         @throw HTTP3-STATE-ERROR if the connection is not ready
+        @throw HTTP3-FLOW-CONTROL if the stream buffer does not drain
     */
     int sendStreamData(int stream_id, *data data, bool end_stream = False) {
         if (!self.isReady()) {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
         }
+        Socket sock = poll_op.getSocket();
         # Check if the underlying QUIC session is dead before sending
-        if (poll_op.getSocket().isQuicSessionClosed()) {
+        if (sock.isQuicSessionClosed()) {
             self.setClosed();
             throw "HTTP3-CONNECTION-CLOSED",
                 "QUIC session closed; connection evicted from pool";
@@ -266,13 +268,25 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "sending data on stream %d", stream_id);
-        int rv = poll_op.sendStreamData(stream_id, data, end_stream);
-
-        if (ctl) {
-            ctl.wakeSocket(getSocket());
+        int retries = 0;
+        while (True) {
+            int rv = poll_op.sendStreamData(stream_id, data, end_stream);
+            if (ctl) {
+                ctl.wakeSocket(sock);
+            }
+            if (rv != 1) {
+                return rv;
+            }
+            if (++retries > 200) {
+                throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer not "
+                    "draining after %d retries", stream_id, retries);
+            }
+            int drain_rv = sock.waitForQuicClientStreamDrain(stream_id, 50ms);
+            if (drain_rv == -1) {
+                throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream "
+                    "removed while waiting for drain", stream_id);
+            }
         }
-
-        return rv;
     }
 
     #! Submits a request with streaming support (HTTP/3-specific)

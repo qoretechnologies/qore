@@ -28,7 +28,8 @@ public namespace HttpClientIo {
 #! Unified connection pool manager with protocol auto-selection
 /** This class manages a pool of HTTP/1.1, HTTP/2, and HTTP/3 connections, providing:
 
-    - **Protocol auto-selection**: Start with HTTP/2, upgrade to HTTP/3 via Alt-Svc discovery
+    - **Protocol auto-selection**: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
+      preferring HTTP/3 when available
     - **Connection pooling**: Reuse connections across requests
     - **Load balancing**: Distribute streams across connections
     - **Automatic connection creation**: Create new connections as needed
@@ -1100,15 +1101,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Internal: resolves the protocol to use for a given URL
-    /** In auto mode: HTTPS starts with HTTP/2 and upgrades to HTTP/3 only when
-        an @c Alt-Svc response header advertises H3 support (RFC 7838).  Plain
-        HTTP uses HTTP/2 prior knowledge (h2c) first with HTTP/1.1 fallback.
+    /** In auto mode: HTTPS with no proxy uses a happy-eyeballs race between
+        HTTP/3 and HTTP/2, giving HTTP/3 a head start.  Plain HTTP uses
+        HTTP/1.1 unless HTTP/2 is explicitly requested.
         The protocol cache persists negotiation results to avoid repeated probes.
 
         @param url_info parsed URL info
         @param key the pool key "host:port"
 
-        @return "h1", "h2", or "h3"
+        @return "h1", "h2", "h3", or "happy-eyeballs"
     */
     private string resolveProtocol(hash<auto> url_info, string key) {
         if (opts.protocol == "h1") {
