@@ -31,6 +31,23 @@ integration points for other code.
   - Includes SSL/TLS negotiation state for accept operations where needed.
   - SocketHttp2ClientMultiplexPollOperation (C++) handles HTTP/2 client multiplexing at the frame level.
 
+## Canonical Socket I/O Model
+
+The async I/O controller is the canonical dispatch path for socket I/O.  Synchronous socket APIs are blocking
+facades: they create the same controller-backed poll operations used by async APIs and wait for completion from
+the caller thread through `AsyncIoController::exec()` or Future/Promise completion.  This applies to raw
+`Socket` / `QoreSocket` operations, HTTPClient connection-manager operations, and line protocol clients such as
+FTP, SMTP, and POP3.
+
+Direct socket helpers are reserved for code that is already running inside controller poll operations, or for
+teardown paths after ownership has moved to the I/O thread.  Socket ownership is derived from active controller,
+non-blocking, and directional sequence claims; there is no separate direct synchronous I/O mode.  Overlapping
+same-direction operations fail instead of mixing direct caller-thread I/O with controller-owned I/O.
+
+Blocking sync wrappers and user Qore code must not run on the I/O thread.  Qore poll operations and completion
+callbacks are worker-dispatched, while the I/O thread only drives controller commands, readiness, and pure C++
+poll-state work.
+
 ## Thread Model
 
 - **I/O thread** — one per controller instance
@@ -224,10 +241,14 @@ Connection pool manager with:
   a new one.
 - **Controller integration**: All managers share the global AsyncSocketIoController singleton
   (via `getGlobalAsyncIoController()`). New connections are submitted to the controller with
-  `to = -1s` (no timeout) and callback delivery. The callback re-submits the connection after
-  handling each result, keeping it alive in the event loop.
-- **Cleanup**: `closeAll()` calls `controller.cancelByOwner(self.uniqueHash())` for bulk cancellation
-  of all managed connections.
+  a manager-scoped key, `to = -1s` (no timeout), and callback delivery. The callback re-submits
+  the connection after handling each result, keeping it alive in the event loop. The explicit key
+  avoids default socket `uniqueHash()` reuse while the controller still has recent-cancel key
+  tombstones.
+- **Cleanup**: `closeAll()` calls `controller.cancelByOwner(owner_id)` for bulk cancellation
+  of all managed connections. `owner_id` is a stable per-manager id with a monotonic suffix;
+  it must not be derived solely from `self.uniqueHash()`, because object identity strings can
+  be reused while the controller still holds recent-cancel tombstones.
 
 ### Http2ClientConnection
 
@@ -498,10 +519,10 @@ Known failure modes include:
   shared I/O thread.
 - **SSL race after submit** (server-side): If clients connect immediately after `submit()` but
   before the I/O thread's Phase 1 snapshot captures the accept operation, the accept may not be
-  polled in time. Combined with macOS `O_NONBLOCK` inheritance on accepted sockets, this produced
-  `SSL_R_PACKET_LENGTH_TOO_LONG` in CI. Fixed by (1) `waitForProcessing()` for deterministic
-  readiness, (2) clearing `O_NONBLOCK` on accepted fds, (3) kqueue closed-fd detection. Callers
-  that need to connect immediately after submitting accept operations should use
+  polled in time. Combined with macOS `O_NONBLOCK` inheritance on accepted sockets, this can
+  produce invalid TLS handshakes. The required controls are (1) `waitForProcessing()` for
+  deterministic readiness, (2) clearing `O_NONBLOCK` on accepted fds, and (3) kqueue closed-fd
+  detection. Callers that need to connect immediately after submitting accept operations should use
   `waitForProcessing()` rather than `waitReady()`.
 - **Callback dispatch ordering** (client-side): Stream callbacks are dispatched in the order responses
   complete (FIFO from `completed_responses` deque), not in submission order. Callers must not assume
@@ -513,20 +534,20 @@ Known failure modes include:
 - **I/O thread autostop race**: When the cache is empty for 2s, the I/O thread sets `io_exiting=true`
   and breaks out of the main loop.  A concurrent `submit()` could pass the lock-free `running` check
   (still true), push a `SubmitOp` to the cmdq, and the exiting thread would silently drop it during
-  cleanup.  Fixed by: (1) setting `running=false` atomically with `io_exiting=true`, (2) re-queuing
-  `SubmitOp` commands during exit cleanup instead of dropping them, (3) post-push verification in
+  cleanup.  The controller prevents this by: (1) setting `running=false` atomically with
+  `io_exiting=true`, (2) re-queuing `SubmitOp` commands during exit cleanup instead of dropping
+  them, (3) post-push verification in
   `submit()` — if the I/O thread exited during the push, `startIntern()` restarts it.
 - **PROGRAM-ERROR shutdown race**: During program shutdown, `cancelByProgram` cancels all ops and
   flushes workers.  But the I/O thread could enqueue new callbacks between the flush and `ptid`
-  being set, causing workers to hit `PROGRAM-ERROR`.  Fixed by `markProgramShuttingDown()` /
-  `clearProgramShuttingDown()` on `QoreCallDispatcher` — workers check the set before calling
+  being set, causing workers to hit `PROGRAM-ERROR`.  `markProgramShuttingDown()` /
+  `clearProgramShuttingDown()` on `QoreCallDispatcher` cover this window: workers check the set before calling
   `evalMethod` and silently discard callbacks for dying programs.
 - **`releaseCurrentOp` leak**: `HttpAcceptPollOperationPriv` and `Http2PollOperationPriv` obtained
   their inner poll operation's private data via `getReferencedPrivateData()`, which adds an
   independent ref.  `releaseCurrentOp()` set `current_op = nullptr` without deref, leaking the
-  private data (and all its indirect data: sockets, SSL sessions, H2 streams).  Fixed by adding
-  `current_op->deref(xsink)` before nulling.  Any new wrapper that uses `getReferencedPrivateData()`
-  must follow this pattern.
+  private data (and all its indirect data: sockets, SSL sessions, H2 streams).  Wrappers that use
+  `getReferencedPrivateData()` must call `current_op->deref(xsink)` before nulling the pointer.
 - **`SocketPollOperationBase(self)` tRef rule**: The `QoreObjectWeakRefHolder self` member already
   calls `tRef()` in its constructor, so subclass constructors using the
   `SocketPollOperationBase(QoreObject* self)` form must NOT call `self->tRef()` again — that
@@ -566,8 +587,8 @@ The C++ layer guarantees correct socket fd cleanup — Qore-level code must not 
 
 2. **Controller auto-close via `needsCloseOnComplete()`:** `SocketPollOperationBase` provides a
    virtual `needsCloseOnComplete()` (default: false).  Poll operations override it to return true
-   for terminal states (CLOSED, TIMEOUT, ERROR) where the connection is dead.  In Phase 3, after
-   removing a completed operation from the cache, the controller checks this method and auto-closes
+   for terminal states (CLOSED, TIMEOUT, ERROR) where the connection is dead.  After removing a
+   completed operation from the cache, the controller checks this method and auto-closes
    the socket if true.  This is defense-in-depth: even if a poll operation's `continuePoll()` forgets
    to close, the controller catches it.
 
@@ -796,8 +817,7 @@ The chain end-to-end: ngtcp2 idle timer fires → `handleExpiryLocked` sets `idl
 the connection from the pool.
 
 Without this flag the session stays in `QCS::READING` forever even though ngtcp2 has acknowledged
-the idle timeout internally.  This was commit `432402a02` and was reproduced on drake's
-qorus-core as 64,796 leaked UDP sockets (fd limit hit at 65,536) before being fixed.
+the idle timeout internally, leaking the UDP fd and leaving the connection in the controller cache.
 
 ### HTTP/1.1 and HTTP/2 Client Idle Close Policy
 
@@ -846,7 +866,7 @@ the idle period and does a `recv(MSG_PEEK)` to confirm silence, then closes.  Qo
 The end state: H1/H2 idle connections are closed proactively by the poll op, invisibly to
 callers, with a deterministic upper bound (`idle_timeout`) on how long a stale pooled connection
 can survive.  Misbehaving peers that never close (infinite keepalive) no longer pin pool slots
-indefinitely.  This was commit `fa6f6b40a`.
+indefinitely.
 
 ### HTTP Client Connection Reuse Safety (curl-aligned model)
 
@@ -912,15 +932,12 @@ Layers, in firing order:
    stale-detect timer would be, but correct: it can't mistake a slow
    legitimate response for a dead connection.
 
-   **Why no in-band timer.**  An earlier design had a 500ms (later 5s)
-   `STALE_DETECT_TIMEOUT_MS` in `handleRecvHeader` that fired when no
-   response data arrived within the window.  This was removed because it
-   is an application-layer latency check masquerading as a connection
-   liveness check — a legitimately slow response (e.g., 1 MB POST + echo
-   on a debug-build CI runner under load) could exceed the window and be
-   falsely declared dead.  Curl made the same call: no in-band timer,
-   `Curl_retry_request` covers the race window via "first read failed
-   with 0 bytes received on a reused connection" → retry.
+   **Why no in-band timer.**  A fixed no-response timer in `handleRecvHeader`
+   would be an application-layer latency check masquerading as a connection
+   liveness check.  A legitimately slow response can exceed an arbitrary
+   window and be falsely declared dead.  Curl uses the same model: no
+   in-band timer; `Curl_retry_request` covers the race window via "first
+   read failed with 0 bytes received on a reused connection" → retry.
 
 Telemetry: layer 2's `idle_timeout` and `max_age` evictions log at WARN
 level (`evicting connection N at checkout: ...`) — operationally relevant
@@ -967,9 +984,7 @@ The `onComplete` MRO override above describes how the **Qore-side**
 dispatches `onComplete` via the worker pool, the Qore method walks the manager chain, and
 `handleConnectionResult()` evicts the connection from the pool.
 
-A parallel **C++-side** close-notification path was added as part of the Phase P3 prep
-work for the C++ port of `HttpClientConnectionManager` (see
-`design/http-client-manager-cpp-port.md` section 7.1).  The C++ path bypasses Qore method
+The C++ connection manager uses a parallel close-notification path that bypasses Qore method
 dispatch entirely:
 
 - `AbstractHttpPollConnectionPriv` exposes a virtual `onClosedHook()` method.
@@ -982,13 +997,12 @@ dispatch entirely:
 - The C++ manager registers itself via `connection->setManager(this)` after construction
   and calls `connection->setManager(nullptr)` before destruction (the lifetime contract).
 
-The two paths coexist for the duration of the porting effort:
+There are two supported close-notification mechanisms:
 
 | Layer | Close-notification mechanism |
 |-------|------------------------------|
-| Existing Qore `HttpClientIo::HttpClientConnectionManager` (P0–P5) | `onComplete` MRO override → worker pool dispatch → `handleConnectionResult` |
-| New C++ `HttpClientConnectionManagerBase` (P3+) | `onClosedHook` virtual → direct manager call from `setClosed()` |
-| Phase P6 rewire of the Qore manager to inherit from the C++ base | Switches to `onClosedHook` and drops the `onComplete` MRO machinery |
+| Qore `HttpClientIo::HttpClientConnectionManager` | `onComplete` MRO override → worker pool dispatch → `handleConnectionResult` |
+| C++ `HttpClientConnectionManagerBase` | `onClosedHook` virtual → direct manager call from `setClosed()` |
 
 Both paths rely on the same `setClosed()` invariant: state transitions to CLOSED on the
 first call, the broadcast and notifier signaling run, and (with the new addition) the
@@ -1019,13 +1033,9 @@ Program, its destructor runs `aio_program_cleanup()` → `cancelByProgram()` →
 reverse ordering, the current worker is still counted as active during its own Program
 destructor → the worker waits for itself and deadlocks.
 
-This was a latent bug that stayed dormant for years because the test thread's `closeAll()`
-path normally released the final Program ref before the worker finished.  It was exposed by
-the `onComplete` MRO override in commit `fa6f6b40a`, which caused `conn.close()` to run inside
-the worker — making the worker the last ref holder in `RestClientIo.qtest`.  Reproduction was
-gcore + gdb on a hung process; stack trace showed the self-wait
-(`waitForProgramIdle` → `pthread_cond_wait` on a condition that only this thread could
-signal, via its own counter decrement that hadn't run yet).  Fixed in commit `e31718a59`.
+If the worker drops the final Program reference before decrementing its active counters, Program
+destruction can run `aio_program_cleanup()` on the same worker and wait for the worker's own
+counter decrement.  The result is a self-wait in `waitForProgramIdle()`.
 
 **`async_item.pgm` holds the Program alive during step 3**, so previous object derefs in step
 2 cannot access a freed Program — this is why step 3 can safely do the decrement before step 4
