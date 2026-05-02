@@ -518,6 +518,12 @@ public:
     //! const-referenced reader (common from handler paths).
     mutable bool wrap_const_ref_in_rcr = false;
 
+    //! When true, VT_CONST_REF returns a deferred RuntimeConstantRefNode if
+    //! the ConstantEntry exists but its value has not been materialized yet.
+    //! Used while resolving class-constant value blobs after all constant
+    //! shells have been registered.
+    mutable bool defer_unresolved_const_refs = false;
+
     //! Open and validate a binary blob
     /** @param data pointer to the binary data
         @param size size of the binary data
@@ -1439,11 +1445,10 @@ class QoreAOTBinaryDeserializer {
         std::string type_path;
         uint8_t access;
         bool pending_init = false;  //!< init-func has not yet populated the value
-        QoreValue value;
-        //! Deferred VT_CONST_REF value. Class constants can reference constants
-        //! from later classes in the same AOT blob, so resolve after all class
-        //! constant entries have been registered.
-        std::string pending_const_ref_path;
+        //! Serialized value payload. Class constants are registered as shells
+        //! before this blob is deserialized so nested VT_CONST_REF entries can
+        //! resolve against same-class or same-module constants.
+        std::vector<uint8_t> value_blob;
     };
     std::vector<std::vector<PendingClassConstant>> pending_class_constants;
 
@@ -1762,11 +1767,6 @@ public:
         for (auto& class_members : pending_instance_members) {
             for (auto& pim : class_members) {
                 pim.default_val.discard(nullptr);
-            }
-        }
-        for (auto& class_consts : pending_class_constants) {
-            for (auto& pcc : class_consts) {
-                pcc.value.discard(nullptr);
             }
         }
         for (auto& hd_pair : pending_hashdecl_members) {

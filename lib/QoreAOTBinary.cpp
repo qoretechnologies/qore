@@ -678,33 +678,196 @@ static bool resolveDeferredConstRefDefault(std::string& path, QoreValue& default
     return true;
 }
 
+static bool skipAOTValueContainerType(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, const uint8_t* end, std::string& error) {
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS) == 0) {
+        return true;
+    }
+    if (ptr + 1 > end) {
+        error = "unexpected end of data skipping typed container value kind";
+        return false;
+    }
+    QoreAOTContainerValueType kind = static_cast<QoreAOTContainerValueType>(
+        QoreAOTBinaryReader::readU8(ptr));
+    if (kind == QoreAOTContainerValueType::Plain) {
+        return true;
+    }
+    if (kind != QoreAOTContainerValueType::Complex && kind != QoreAOTContainerValueType::HashDecl) {
+        error = "invalid typed container value kind while skipping value";
+        return false;
+    }
+    if (ptr + 8 > end) {
+        error = "unexpected end of data skipping typed container value type path";
+        return false;
+    }
+    ptr += 8;
+    return true;
+}
+
+static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, const uint8_t* end, std::string& error) {
+    if (ptr >= end) {
+        error = "unexpected end of data skipping value tag";
+        return false;
+    }
+    QoreAOTValueTag tag = static_cast<QoreAOTValueTag>(
+        QoreAOTBinaryReader::readU8(ptr));
+
+    auto skip_fixed = [&](size_t n, const char* what) -> bool {
+        if (static_cast<size_t>(end - ptr) < n) {
+            error = "unexpected end of data skipping ";
+            error += what;
+            return false;
+        }
+        ptr += n;
+        return true;
+    };
+
+    auto read_count = [&](uint32_t& count, const char* what) -> bool {
+        if (ptr + 4 > end) {
+            error = "unexpected end of data skipping ";
+            error += what;
+            return false;
+        }
+        count = QoreAOTBinaryReader::readU32(ptr);
+        return true;
+    };
+
+    switch (tag) {
+        case QoreAOTValueTag::VT_NOTHING:
+        case QoreAOTValueTag::VT_NULL:
+        case QoreAOTValueTag::VT_OPAQUE_DEFAULT:
+            return true;
+
+        case QoreAOTValueTag::VT_BOOL:
+            return skip_fixed(1, "bool value");
+
+        case QoreAOTValueTag::VT_INT64:
+        case QoreAOTValueTag::VT_FLOAT64:
+        case QoreAOTValueTag::VT_STRING:
+        case QoreAOTValueTag::VT_NUMBER:
+        case QoreAOTValueTag::VT_CONST_REF:
+            return skip_fixed(8, "scalar value payload");
+
+        case QoreAOTValueTag::VT_ABS_DATE:
+            return skip_fixed(16, "absolute date value");
+
+        case QoreAOTValueTag::VT_ABS_DATE_REGION:
+            return skip_fixed(16, "absolute date region value");
+
+        case QoreAOTValueTag::VT_REL_DATE:
+            return skip_fixed(56, "relative date value");
+
+        case QoreAOTValueTag::VT_BINARY: {
+            uint32_t len = 0;
+            if (!read_count(len, "binary length")) {
+                return false;
+            }
+            return skip_fixed(len, "binary payload");
+        }
+
+        case QoreAOTValueTag::VT_LIST: {
+            if (!skipAOTValueContainerType(reader, ptr, end, error)) {
+                return false;
+            }
+            uint32_t count = 0;
+            if (!read_count(count, "list count")) {
+                return false;
+            }
+            for (uint32_t i = 0; i < count; ++i) {
+                if (!skipAOTSerializedValue(reader, ptr, end, error)) {
+                    error += " in list element ";
+                    error += std::to_string(i);
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case QoreAOTValueTag::VT_HASH: {
+            if (!skipAOTValueContainerType(reader, ptr, end, error)) {
+                return false;
+            }
+            uint32_t count = 0;
+            if (!read_count(count, "hash count")) {
+                return false;
+            }
+            for (uint32_t i = 0; i < count; ++i) {
+                if (!skip_fixed(4, "hash key")) {
+                    return false;
+                }
+                if (!skipAOTSerializedValue(reader, ptr, end, error)) {
+                    error += " in hash value ";
+                    error += std::to_string(i);
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case QoreAOTValueTag::VT_ENUM:
+            return skip_fixed(16, "enum value");
+
+        case QoreAOTValueTag::VT_NEW_OBJECT: {
+            if (!skip_fixed(8, "new_object class path")) {
+                return false;
+            }
+            uint32_t nargs = 0;
+            if (!read_count(nargs, "new_object arg count")) {
+                return false;
+            }
+            for (uint32_t i = 0; i < nargs; ++i) {
+                if (!skipAOTSerializedValue(reader, ptr, end, error)) {
+                    error += " in new_object arg ";
+                    error += std::to_string(i);
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: {
+            if (!skip_fixed(9, "complex default kind and type path")) {
+                return false;
+            }
+            uint32_t nargs = 0;
+            if (!read_count(nargs, "complex default arg count")) {
+                return false;
+            }
+            for (uint32_t i = 0; i < nargs; ++i) {
+                if (!skipAOTSerializedValue(reader, ptr, end, error)) {
+                    error += " in complex default arg ";
+                    error += std::to_string(i);
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        case QoreAOTValueTag::VT_EXPR_TREE:
+        case QoreAOTValueTag::VT_EXPR_NATIVE: {
+            uint32_t blob_size = 0;
+            if (!read_count(blob_size, "expression blob size")) {
+                return false;
+            }
+            return skip_fixed(blob_size, "expression blob");
+        }
+
+        default:
+            error = "unknown value tag while skipping class constant value: "
+                + std::to_string(static_cast<int>(tag));
+            return false;
+    }
+}
+
 static bool readDeferredClassConstantValue(const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end, std::string& error,
-        QoreValue& value, std::string& pending_const_ref_path) {
-    if (ptr >= end) {
-        error = "unexpected end of data reading class constant value tag";
+        std::vector<uint8_t>& value_blob) {
+    const uint8_t* start = ptr;
+    if (!skipAOTSerializedValue(reader, ptr, end, error)) {
         return false;
     }
-    uint8_t tag_byte = *ptr;
-    if (tag_byte != static_cast<uint8_t>(QoreAOTValueTag::VT_CONST_REF)) {
-        value = reader.readValue(ptr, end, error);
-        return error.empty();
-    }
-
-    ++ptr;  // consume tag
-    if (ptr + 8 > end) {
-        error = "unexpected end of data reading class constant const_ref name";
-        return false;
-    }
-    (void)QoreAOTBinaryReader::readU32(ptr);  // name_len (unused)
-    uint32_t name_offset = QoreAOTBinaryReader::readU32(ptr);
-    const char* fqn = reader.getString(name_offset);
-    if (!fqn) {
-        error = "invalid string offset for class constant const_ref name";
-        return false;
-    }
-    pending_const_ref_path = fqn;
-    value = QoreValue();
+    value_blob.assign(start, ptr);
     return true;
 }
 
@@ -2302,7 +2465,8 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 error = "no current program for const_ref resolution";
                 return QoreValue();
             }
-            QoreValue rv = qore_aot_resolve_constant_path_value(pgm, fqn, false, wrap_const_ref_in_rcr);
+            QoreValue rv = qore_aot_resolve_constant_path_value(pgm, fqn,
+                defer_unresolved_const_refs, wrap_const_ref_in_rcr);
             if (!rv) {
                 printd(0, "AOT readValue: cannot resolve const_ref '%s'\n", fqn);
                 return QoreValue();
@@ -7341,10 +7505,9 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             const char* ctype_path = reader.readStringRef(ptr);
             uint8_t caccess = QoreAOTBinaryReader::readU8(ptr);
             uint8_t cpending = has_const_pending_flag ? QoreAOTBinaryReader::readU8(ptr) : 0;
-            QoreValue cval;
-            std::string pending_const_ref_path;
+            std::vector<uint8_t> value_blob;
             if (!readDeferredClassConstantValue(reader, ptr, end, error,
-                    cval, pending_const_ref_path)) {
+                    value_blob)) {
                 error = "class constant '" + std::string(cname ? cname : "(null)") + "': " + error;
                 return false;
             }
@@ -7355,11 +7518,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 pcc.type_path = ctype_path ? ctype_path : "";
                 pcc.access = caccess;
                 pcc.pending_init = (cpending != 0);
-                pcc.value = cval;
-                pcc.pending_const_ref_path = std::move(pending_const_ref_path);
+                pcc.value_blob = std::move(value_blob);
                 class_constants.push_back(std::move(pcc));
-            } else if (cval.hasNode()) {
-                cval.discard(nullptr);
             }
         }
         pending_class_constants.push_back(std::move(class_constants));
@@ -7971,16 +8131,9 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
             const QoreTypeInfo* ti = resolve_type(pcc, qc);
             type_vec.push_back(ti);
 
-            QoreValue initial_value = pcc.pending_const_ref_path.empty()
-                ? pcc.value : QoreValue();
-            if (pcc.pending_const_ref_path.empty()) {
-                apply_constant_type(pcc, qc, ti, initial_value);
-            }
-
             // Use addUserConstant to avoid setting sys=true on user classes
-            priv->addUserConstant(pcc.name.c_str(), initial_value,
+            priv->addUserConstant(pcc.name.c_str(), QoreValue(),
                 static_cast<ClassAccess>(pcc.access), ti);
-            pcc.value = QoreValue();  // transfer ownership to the ConstantEntry
 
             if (pcc.pending_init) {
                 // Pending init-func: parser-time references must defer to
@@ -8001,11 +8154,13 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
         }
     }
 
-    // Resolve direct class-constant VT_CONST_REF values after every class
-    // constant in this blob has a ConstantEntry.
+    // Resolve class-constant value blobs after every class constant in this
+    // blob has a ConstantEntry.  Nested VT_CONST_REF values inside folded
+    // hash/list constants (for example ConnectionScheme option defaults) can
+    // then resolve to sibling constants instead of becoming NOTHING.
     for (uint32_t i = 0; i < class_list.size() && i < pending_class_constants.size(); ++i) {
-        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class constant const-ref resolution")) {
-            error = "AOT class constant const-ref resolution cancelled";
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class constant value resolution")) {
+            error = "AOT class constant value resolution cancelled";
             return false;
         }
         QoreClass* qc = class_list[i];
@@ -8016,18 +8171,18 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
         qore_class_private* priv = qore_class_private::get(*qc);
         for (size_t j = 0; j < pending_class_constants[i].size(); ++j) {
             if (j && !(j % 100) && qore_check_cancel(nullptr,
-                    "AOT class constant const-ref resolution")) {
-                error = "AOT class constant const-ref resolution cancelled";
+                    "AOT class constant value resolution")) {
+                error = "AOT class constant value resolution cancelled";
                 return false;
             }
             auto& pcc = pending_class_constants[i][j];
-            if (pcc.pending_const_ref_path.empty() || pcc.pending_init) {
+            if (pcc.pending_init) {
                 continue;
             }
 
             ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
             if (!ce) {
-                error = "AOT cannot resolve deferred const-ref class constant '";
+                error = "AOT cannot resolve deferred value for class constant '";
                 error += qc->getName();
                 error += "::";
                 error += pcc.name;
@@ -8035,12 +8190,32 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
                 return false;
             }
 
-            QoreValue resolved = qore_aot_resolve_constant_path_value(getProgram(),
-                pcc.pending_const_ref_path.c_str(), true, false);
-            if (!resolved) {
-                error = "AOT cannot resolve deferred const-ref value '";
-                error += pcc.pending_const_ref_path;
-                error += "' for class constant '";
+            const uint8_t* vptr = pcc.value_blob.data();
+            const uint8_t* vend = vptr + pcc.value_blob.size();
+            std::string value_error;
+            struct ConstRefDeferGuard {
+                const QoreAOTBinaryReader& r;
+                bool prev;
+                ConstRefDeferGuard(const QoreAOTBinaryReader& r_, bool newv)
+                    : r(r_), prev(r_.defer_unresolved_const_refs) {
+                    r_.defer_unresolved_const_refs = newv;
+                }
+                ~ConstRefDeferGuard() { r.defer_unresolved_const_refs = prev; }
+            } defer_guard(reader, true);
+            QoreValue resolved = reader.readValue(vptr, vend, value_error);
+            if (!value_error.empty()) {
+                resolved.discard(nullptr);
+                error = "AOT cannot deserialize value for class constant '";
+                error += qc->getName();
+                error += "::";
+                error += pcc.name;
+                error += "': ";
+                error += value_error;
+                return false;
+            }
+            if (vptr != vend) {
+                resolved.discard(nullptr);
+                error = "AOT class constant value did not consume serialized payload for '";
                 error += qc->getName();
                 error += "::";
                 error += pcc.name;
@@ -8057,6 +8232,7 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
             ce->typeInfo = ti ? ti : resolved.getTypeInfo();
             ce->init = true;
             ce->aot_shell_pending = false;
+            pcc.value_blob.clear();
         }
     }
 

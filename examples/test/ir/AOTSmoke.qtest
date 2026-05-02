@@ -95,6 +95,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module hashdecl member compound lvalue",
             \testAOTModuleHashdeclMemberCompoundLValue());
         addTestCase("AOT module hashdecl class constants", \testAOTModuleHashdeclClassConstants());
+        addTestCase("AOT module nested class constant refs",
+            \testAOTModuleNestedClassConstantRefs());
         addTestCase("AOT module BCA hashdecl class constants",
             \testAOTModuleBcaHashdeclClassConstants());
         addTestCase("AOT module computed member defaults",
@@ -2335,6 +2337,90 @@ printf(\"%s\", read_schema());
 
         assertEq(interp_out, aot_out, "compiled module preserves hashdecl class constants: " + aot_out);
         assertEq("entity:id:string\n", aot_out, "hashdecl class constant keeps declared type");
+    }
+
+    testAOTModuleNestedClassConstantRefs() {
+        string tmp_dir = sprintf("/tmp/aot_nested_class_const_ref_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNestedClassConstRef {
+    version = \"1.0\";
+    desc = \"AOT nested class constant reference regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTNestedClassConstRef {
+    public class C {
+        public {
+            const Headers = {
+                \"Accept\": \"application/json\",
+            };
+            const AuthArgs = {
+                \"prompt\": \"consent\",
+            };
+            const Scopes = (
+                \"read\",
+                \"write\",
+            );
+            const Scheme = {
+                \"headers\": {
+                    \"default_value\": Headers,
+                },
+                \"auth\": {
+                    \"default_value\": AuthArgs,
+                },
+                \"scopes\": {
+                    \"default_value\": Scopes,
+                },
+                \"later_headers\": {
+                    \"default_value\": LaterHeaders,
+                },
+            };
+            const LaterHeaders = {
+                \"X-Later\": \"ok\",
+            };
+        }
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTNestedClassConstRef.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNestedClassConstRef.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "nested class const-ref module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTNestedClassConstRef
+
+hash<auto> h = AOTNestedClassConstRef::C::Scheme.headers.default_value;
+hash<auto> a = AOTNestedClassConstRef::C::Scheme.auth.default_value;
+list<string> s = AOTNestedClassConstRef::C::Scheme.scopes.default_value;
+hash<auto> l = AOTNestedClassConstRef::C::Scheme.later_headers.default_value;
+printf(\"%s:%s:%s:%s:%s\\n\", h.Accept, a.prompt, s[0], s[1], l.\"X-Later\");
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertFalse(out.regex("cannot resolve const_ref"),
+            "nested class const-ref qmod load is quiet: " + out);
+        assertEq("application/json:consent:read:write:ok\n", out,
+            "source-stripped qmod preserves nested sibling class constant refs");
     }
 
     testAOTModuleBcaHashdeclClassConstants() {
