@@ -704,6 +704,15 @@ static bool skipAOTValueContainerType(const QoreAOTBinaryReader& reader,
     return true;
 }
 
+static bool checkAOTSerializedValueSkipCancel(uint32_t i, std::string& error,
+        const char* context) {
+    if (i && !(i % 100) && qore_check_cancel(nullptr, context)) {
+        error = std::string(context) + " cancelled";
+        return false;
+    }
+    return true;
+}
+
 static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end, std::string& error) {
     if (ptr >= end) {
@@ -775,6 +784,10 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint32_t i = 0; i < count; ++i) {
+                if (!checkAOTSerializedValueSkipCancel(i, error,
+                        "AOT serialized list value skip")) {
+                    return false;
+                }
                 if (!skipAOTSerializedValue(reader, ptr, end, error)) {
                     error += " in list element ";
                     error += std::to_string(i);
@@ -793,6 +806,10 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint32_t i = 0; i < count; ++i) {
+                if (!checkAOTSerializedValueSkipCancel(i, error,
+                        "AOT serialized hash value skip")) {
+                    return false;
+                }
                 if (!skip_fixed(4, "hash key")) {
                     return false;
                 }
@@ -817,6 +834,10 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint32_t i = 0; i < nargs; ++i) {
+                if (!checkAOTSerializedValueSkipCancel(i, error,
+                        "AOT serialized new_object arg skip")) {
+                    return false;
+                }
                 if (!skipAOTSerializedValue(reader, ptr, end, error)) {
                     error += " in new_object arg ";
                     error += std::to_string(i);
@@ -835,6 +856,10 @@ static bool skipAOTSerializedValue(const QoreAOTBinaryReader& reader,
                 return false;
             }
             for (uint32_t i = 0; i < nargs; ++i) {
+                if (!checkAOTSerializedValueSkipCancel(i, error,
+                        "AOT serialized complex default arg skip")) {
+                    return false;
+                }
                 if (!skipAOTSerializedValue(reader, ptr, end, error)) {
                     error += " in complex default arg ";
                     error += std::to_string(i);
