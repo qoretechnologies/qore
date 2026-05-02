@@ -1414,7 +1414,7 @@ static bool buildValueUseCounts(const QoreIRFunction& func,
     }
     dot_eval_only_bases.assign(counts.size(), 0);
     for (size_t i = 0; i < dot_eval_base_candidates.size(); ++i) {
-        if (((i % 100) == 0) && qore_check_cancel(xsink, "IR dot-eval base analysis")) {
+        if (i && ((i % 100) == 0) && qore_check_cancel(xsink, "IR dot-eval base analysis")) {
             return false;
         }
         if (dot_eval_base_candidates[i] && !non_dot_eval_uses[i]) {
