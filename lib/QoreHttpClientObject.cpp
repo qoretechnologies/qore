@@ -1357,16 +1357,16 @@ struct qore_httpclient_priv {
     //! Connect via the conn_mgr for HTTPClient::connect() / persistent warm-up.
     /** Returns 0 on success, -1 on error (with xsink set).  Called from
         QoreHttpClientObject::connect() so the legacy HTTPClient::connect()
-        API still does what callers expect (fail fast on unreachable server,
-        open the inherited Socket for low-level Socket methods) while using
-        the conn_mgr connect path.  Persistent warm-up callers leave
-        @a adopt_h1_socket false, which keeps the connection in the pool.
+        API still does what callers expect for HTTP traffic: fail fast on an
+        unreachable server and leave a ready connection for subsequent sends.
+        The ready connection stays in the manager pool because all HTTP send
+        paths now route through the manager as well.
 
         Acquires a connection with the configured connect timeout,
         then releases its stream reservation.  @a proxy_connection is checked
         first so the correct scheme/host/port is used for proxied setups.
     */
-    DLLLOCAL int connectViaConnMgr(ExceptionSink* xsink, bool adopt_h1_socket = false) {
+    DLLLOCAL int connectViaConnMgr(ExceptionSink* xsink) {
         if (!connection.has_url()) {
             xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
                 "no URL set — cannot connect");
@@ -1387,22 +1387,11 @@ struct qore_httpclient_priv {
         if (!conn || *xsink) {
             return -1;
         }
-        ReferenceHolder<HttpClientConnectionBase> conn_holder(xsink);
-        if (adopt_h1_socket) {
-            conn->ref();
-            conn_holder = conn;
-        }
 
         // Release the stream reservation taken by acquireConnection.  The
         // connection stays in the pool; the next send() finds it ready and
         // reserves a stream of its own.
         mgr.releaseConnection(conn);
-        if (adopt_h1_socket) {
-            Http1ClientConnection* h1 = dynamic_cast<Http1ClientConnection*>(conn);
-            if (h1 && adoptH1SocketIntoMsock(h1, false, xsink)) {
-                return -1;
-            }
-        }
         return 0;
     }
 
@@ -4085,13 +4074,14 @@ int QoreHttpClientObject::connect(ExceptionSink* xsink) {
         return -1;
     }
 
-    // Connect through the conn_mgr, then adopt an H1 connection back into
-    // the inherited Socket so explicit connect()+Socket-method use remains
-    // compatible with the legacy HTTPClient API.
+    // Connect through the conn_mgr and keep the ready connection in the pool.
+    // Regular HTTP sends also use the conn_mgr, so extracting the socket here
+    // would strand constructor-time eager connects on a connection that the
+    // subsequent request path cannot reuse.
     close_priv = http_priv->disconnect_unlocked_prepare_close();
     sl.unlock();
     qore_httpclient_priv::closeReferencedSocket(close_priv);
-    return http_priv->connectViaConnMgr(xsink, true);
+    return http_priv->connectViaConnMgr(xsink);
 }
 
 void QoreHttpClientObject::disconnect() {

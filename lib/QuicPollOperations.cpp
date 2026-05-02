@@ -655,7 +655,7 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     int sent = sendQuicPacketsBatch(fd, pkt_batch_, nullptr, 0);
     if (sent < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EAGAIN fd=%d batch=%zu\n",
+            ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EAGAIN fd=%d batch=%d\n",
                 fd, pkt_batch_.size());
             return SOCK_POLLOUT;
         }
@@ -663,7 +663,7 @@ int SocketQuicClientPollOperation::sendPendingPackets(
         xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
         return -1;
     }
-    ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets SENT fd=%d sent=%d/%zu\n",
+    ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets SENT fd=%d sent=%d/%d\n",
         fd, sent, pkt_batch_.size());
     if (sent > 0 && sent < pkt_batch_.size()) {
         printd(1, "SocketQuicClientPollOperation::sendPendingPackets(): partial QUIC send: %d/%d packets\n",

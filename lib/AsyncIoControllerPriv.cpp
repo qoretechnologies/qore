@@ -3523,6 +3523,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     // it is populated at the bottom of each iteration after EventLoop::poll().
     std::unordered_set<std::string> ready_socket_hashes;
     std::unordered_map<std::string, int> ready_socket_events;
+    std::unordered_map<std::string, int> ready_key_events;
 
     // Deferred SSL pending set — nginx pattern: after continuePoll reads from an
     // SSL socket and returns poll_info (not completed), SSL-buffered data may remain
@@ -3713,6 +3714,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                 }
             };
+            auto expand_ready_key_events = [&](const std::unordered_map<std::string, int>& ready_events) {
+                for (auto& [key, event_mask] : ready_events) {
+                    try_queue(key, false, true, event_mask);
+                }
+            };
+            expand_ready_key_events(ready_key_events);
             expand_ready_events(ready_socket_events);
             expand_hashes(ready_socket_hashes, true);
             expand_hashes(woken_hashes, true);
@@ -4560,6 +4567,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             count, timeout_ms);
         ready_socket_hashes.clear();
         ready_socket_events.clear();
+        ready_key_events.clear();
 
         // Collect timer events and socket events from poll results
         struct TimerEvent {
@@ -4618,6 +4626,18 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         int event_mask = events[i].events & (QORE_EV_READ | QORE_EV_WRITE);
                         if (events[i].events & QORE_EV_ERROR) {
                             event_mask |= QORE_EV_ERROR;
+                        }
+                        auto xit = t.extra_fd_to_key_events.find(events[i].fd);
+                        if (xit != t.extra_fd_to_key_events.end()) {
+                            for (auto& [key, wanted_events] : xit->second) {
+                                int matched_events = wanted_events & event_mask;
+                                if (event_mask & QORE_EV_ERROR) {
+                                    matched_events |= QORE_EV_ERROR;
+                                }
+                                if (matched_events) {
+                                    ready_key_events[key] |= matched_events;
+                                }
+                            }
                         }
                         ready_socket_events[fsh_it->second] |= event_mask;
                     }
@@ -4741,6 +4761,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         t.registered_fds.clear();
         t.fd_to_sock_hash.clear();
         t.key_events.clear();
+        t.key_extra_fds.clear();
+        t.extra_fd_to_key_events.clear();
         t.sock_hash_to_keys.clear();
         t.socket_refcounts.clear();
 
@@ -5967,6 +5989,57 @@ void AsyncIoControllerPriv::applyEventUnion(IoThreadContext& t, QoreObject* sock
     }
 }
 
+int AsyncIoControllerPriv::computeExtraFdEventUnion(const IoThreadContext& t, int fd) const {
+    int result = 0;
+
+    // If an extra fd is also the primary socket fd, preserve the primary
+    // socket event interest when modifying the shared event-loop registration.
+    auto fsh_it = t.fd_to_sock_hash.find(fd);
+    if (fsh_it != t.fd_to_sock_hash.end()) {
+        auto fd_it = t.registered_fds.find(fsh_it->second);
+        if (fd_it != t.registered_fds.end() && fd_it->second == fd) {
+            auto eit = t.registered_events.find(fsh_it->second);
+            if (eit != t.registered_events.end()) {
+                result |= eit->second;
+            }
+        }
+    }
+
+    auto xit = t.extra_fd_to_key_events.find(fd);
+    if (xit != t.extra_fd_to_key_events.end()) {
+        for (auto& extra_event : xit->second) {
+            result |= extra_event.second;
+        }
+    }
+    return result;
+}
+
+int AsyncIoControllerPriv::removeExtraFdKey(IoThreadContext& t, int fd, const std::string& key) const {
+    auto xit = t.extra_fd_to_key_events.find(fd);
+    if (xit != t.extra_fd_to_key_events.end()) {
+        xit->second.erase(key);
+        if (xit->second.empty()) {
+            t.extra_fd_to_key_events.erase(xit);
+        }
+    }
+    return computeExtraFdEventUnion(t, fd);
+}
+
+void AsyncIoControllerPriv::removeExtraFdKeyRegistration(IoThreadContext& t, int fd,
+        const std::string& key, const std::string& expected_hash, ExceptionSink* xsink) {
+    int union_events = removeExtraFdKey(t, fd, key);
+    if (union_events) {
+        t.loop->modify(fd, union_events, xsink);
+        if (*xsink) {
+            printd(2, "removeExtraFdKeyRegistration() failed to modify fd %d event union; continuing\n", fd);
+            xsink->clear();
+        }
+        return;
+    }
+
+    releaseFdIfOwner(t, fd, expected_hash, xsink);
+}
+
 void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string& key,
         QoreObject* socket, QoreHashNode* poll_info, ExceptionSink* xsink) {
     // Map fd -> events (from ExtraPollFdInfo)
@@ -6007,7 +6080,7 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string
             // Guard against fd-recycling — if fd has been reassigned to a
             // different sock_hash since we registered it, leave the new
             // owner's state intact.
-            releaseFdIfOwner(t, fd, sock_hash, xsink);
+            removeExtraFdKeyRegistration(t, fd, key, sock_hash, xsink);
         }
     }
 
@@ -6024,15 +6097,24 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string
     // from new_fds during iteration (undefined behavior with unordered_set)
     std::vector<int> failed_fds;
     for (auto& [fd, ev_flags] : new_fd_events) {
-        if (!prev_fds.count(fd)) {
-            t.loop->add(fd, ev_flags, socket, xsink);
-            if (*xsink) {
-                // Non-fatal: the fd might not be epoll-compatible (e.g. regular file on Linux)
-                // The I/O loop still drives streaming via POLLOUT on the socket fd
-                printd(2, "updateExtraFds() failed to add fd %d to event loop; skipping\n", fd);
-                xsink->clear();
-                failed_fds.push_back(fd);
-            } else if (!sock_hash.empty()) {
+        bool had_extra_registration = t.extra_fd_to_key_events.find(fd) != t.extra_fd_to_key_events.end();
+        t.extra_fd_to_key_events[fd][key] = ev_flags;
+        int union_events = computeExtraFdEventUnion(t, fd);
+        if (prev_fds.count(fd) || had_extra_registration) {
+            t.loop->modify(fd, union_events, xsink);
+        } else {
+            t.loop->add(fd, union_events, socket, xsink);
+        }
+        if (*xsink) {
+            // Non-fatal: the fd might not be epoll-compatible (e.g. regular file on Linux)
+            // The I/O loop still drives streaming via POLLOUT on the socket fd
+            printd(2, "updateExtraFds() failed to update fd %d in event loop; skipping\n", fd);
+            xsink->clear();
+            failed_fds.push_back(fd);
+            removeExtraFdKey(t, fd, key);
+        } else if (!sock_hash.empty()) {
+            auto fsh_it = t.fd_to_sock_hash.find(fd);
+            if (fsh_it == t.fd_to_sock_hash.end()) {
                 t.fd_to_sock_hash[fd] = sock_hash;
             }
         }
@@ -6066,7 +6148,7 @@ void AsyncIoControllerPriv::unregisterExtraFds(IoThreadContext& t, const std::st
             }
         }
         for (int fd : it->second) {
-            releaseFdIfOwner(t, fd, key_sock_hash, xsink);
+            removeExtraFdKeyRegistration(t, fd, key, key_sock_hash, xsink);
         }
         t.key_extra_fds.erase(it);
     }

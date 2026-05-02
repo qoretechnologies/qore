@@ -850,6 +850,8 @@ private:
         std::unordered_map<std::string, std::unordered_set<std::string>> sock_hash_to_keys;
         std::unordered_map<int, std::string> fd_to_sock_hash;
         std::unordered_map<std::string, std::unordered_set<int>> key_extra_fds;
+        //! Extra fd readiness is key-scoped; primary socket event masks can be zero.
+        std::unordered_map<int, std::unordered_map<std::string, int>> extra_fd_to_key_events;
 
         //! Recently-cancelled operation keys — prevents re-submission of stale ops
         /** I/O-thread-only. Value is a TTL counter decremented each processCommands()
@@ -1066,6 +1068,16 @@ private:
     /** @since %Qore 2.3
     */
     DLLLOCAL void unregisterExtraFds(IoThreadContext& t, const std::string& key, ExceptionSink* xsink);
+
+    //! Compute the event union for an extra fd, preserving primary socket events if the fd is also a socket fd
+    DLLLOCAL int computeExtraFdEventUnion(const IoThreadContext& t, int fd) const;
+
+    //! Remove one key from an extra fd and return the remaining event union
+    DLLLOCAL int removeExtraFdKey(IoThreadContext& t, int fd, const std::string& key) const;
+
+    //! Remove one key from an extra fd registration and either modify or release the fd
+    DLLLOCAL void removeExtraFdKeyRegistration(IoThreadContext& t, int fd, const std::string& key,
+        const std::string& expected_hash, ExceptionSink* xsink);
 
     //! Release an old fd from event loop tracking, if still owned by expected_hash
     /** Safely removes \c old_fd from the kqueue/epoll registration and erases

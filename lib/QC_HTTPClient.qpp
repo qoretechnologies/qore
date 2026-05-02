@@ -1129,14 +1129,13 @@ bool HTTPClient::isSecure() [flags=CONSTANT] {
     return client->isSecure();
 }
 
-//! Connects to the remote socket; SSL/TLS negotiation is performed if required
+//! Connects to the remote HTTP endpoint; SSL/TLS negotiation is performed if required
 /** If the protocol indicates that a secure connection should be established (or HTTPClient::setSecure() was called
     previsouly), SSL/TLS negotiation will be attempted.
 
-    If the \c TCP_NODELAY flag has been set (see HTTPClient::setNoDelay()), then after a successful connection to the
-    remote socket, this option will be set on the socket. If an error occurs setting the \c TCP_NODELAY option, the
-    internal flag is set to false (use HTTPClient::getNoDelay() to check the flag's state) and the error code can be
-    retrieved with errno().
+    With async-I/O-backed HTTP dispatch, a successful call leaves a ready connection in the internal connection manager
+    pool for later HTTP requests.  HTTPClient::isOpen() reports this manager-backed state even when the inherited raw
+    Socket object is not directly connected.
 
     @par Example:
     @code{.py}
