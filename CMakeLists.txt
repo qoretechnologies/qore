@@ -483,6 +483,18 @@ find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
 
+# Homebrew LLVM loads zstd before Arrow, but can leave the zstd export set
+# without the aggregate target that a later Arrow find_dependency(zstd) expects.
+if (TARGET zstd::libzstd_shared AND NOT TARGET zstd::libzstd)
+    add_library(zstd::libzstd INTERFACE IMPORTED)
+    set_property(TARGET zstd::libzstd PROPERTY
+        INTERFACE_LINK_LIBRARIES zstd::libzstd_shared)
+elseif (TARGET zstd::libzstd_static AND NOT TARGET zstd::libzstd)
+    add_library(zstd::libzstd INTERFACE IMPORTED)
+    set_property(TARGET zstd::libzstd PROPERTY
+        INTERFACE_LINK_LIBRARIES zstd::libzstd_static)
+endif()
+
 # LLVM libraries - find_package(LLVM CONFIG) sets LLVM_LIBRARY_DIRS
 # but not LLVM_LIBRARIES, so we need to find the main LLVM library ourselves
 if(LLVM_LIBRARY_DIRS)

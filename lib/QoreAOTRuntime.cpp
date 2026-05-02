@@ -836,8 +836,8 @@ static const QoreClass* findPseudoClassByPath(const char* path) {
     return nullptr;
 }
 
-static constexpr const char* AOT_CLASS_REF_MODULE_PREFIX = "@qore-module:";
-static constexpr size_t AOT_CLASS_REF_MODULE_PREFIX_LEN = 13;
+static constexpr const char* AOT_RUNTIME_CLASS_REF_MODULE_PREFIX = "@qore-module:";
+static constexpr size_t AOT_RUNTIME_CLASS_REF_MODULE_PREFIX_LEN = 13;
 
 struct AOTClassRef {
     const char* path = nullptr;
@@ -852,9 +852,9 @@ static AOTClassRef decodeAOTClassRef(const char* class_ref) {
         return ref;
     }
 
-    if (!strncmp(class_ref, AOT_CLASS_REF_MODULE_PREFIX,
-            AOT_CLASS_REF_MODULE_PREFIX_LEN)) {
-        const char* module_start = class_ref + AOT_CLASS_REF_MODULE_PREFIX_LEN;
+    if (!strncmp(class_ref, AOT_RUNTIME_CLASS_REF_MODULE_PREFIX,
+            AOT_RUNTIME_CLASS_REF_MODULE_PREFIX_LEN)) {
+        const char* module_start = class_ref + AOT_RUNTIME_CLASS_REF_MODULE_PREFIX_LEN;
         const char* sep = strchr(module_start, '\n');
         if (sep) {
             ref.module_storage.assign(module_start, sep - module_start);
