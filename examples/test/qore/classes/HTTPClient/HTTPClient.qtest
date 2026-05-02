@@ -379,7 +379,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("serialization", \serializationTest());
         addTestCase("timeouts", \timeoutTest());
         addTestCase("pre-encoded-urls", \preEncodedUrlsTest());
-        addTestCase("connect opens inherited socket", \connectOpensInheritedSocketTest());
+        addTestCase("connect primes connection manager", \connectPrimesConnectionManagerTest());
         addTestCase("poll proxy test", \pollProxyTest());
         addTestCase("poll test", \pollTest());
         addTestCase("UNIX socket conn_mgr test", \unixSocketConnMgrTest());
@@ -464,7 +464,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertEq("hello%5B%5D", hc.send(NOTHING, "PUT", "?hello%5B%5D").body);
     }
 
-    connectOpensInheritedSocketTest() {
+    connectPrimesConnectionManagerTest() {
         Socket server();
         if (server.bind("127.0.0.1:0", True)) {
             throw "SOCKET-BIND-ERROR", strerror();
@@ -507,17 +507,16 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         on_exit hc.disconnect();
 
         hc.connect();
-        assertTrue(hc.isOpen(), "HTTPClient::connect() must leave inherited Socket open");
+        assertTrue(hc.isOpen(), "HTTPClient::connect() must leave a manager-backed connection open");
 
-        hash<auto> send_info;
-        hc.sendHTTPMessage("GET", "/", "1.1", {
-            "Host": sprintf("127.0.0.1:%d", port),
+        hash<auto> resp = hc.send(NOTHING, "GET", "/", {
             "Connection": "close",
-        }, NOTHING, \send_info);
+        });
+        assertEq(204, resp.status_code);
 
-        assertEq(0, done.waitForZero(5s), "server received inherited Socket request");
+        assertEq(0, done.waitForZero(5s), "server received request on manager-backed connection");
         if (server_ex) {
-            fail(sprintf("server failed while reading inherited Socket request: %s: %s",
+            fail(sprintf("server failed while reading manager-backed request: %s: %s",
                 server_ex.err, server_ex.desc));
         }
         assertEq("GET", req.method);
