@@ -1490,10 +1490,11 @@ static void ut_http2_adopt_socket_construct(UnitTestCounters& c) {
     }
 
     // The adopt ctor calls initAdoptedMultiplex which installs the H2
-    // multiplex op.  Because ssl_required is implicitly true on the
-    // adopt path, fireReadyCallback runs synchronously — verify.
-    UT_ASSERT(c, conn->isReady(),
-        "adopt-socket Http2 connection is READY after construction");
+    // multiplex op.  READY is intentionally deferred until valid peer
+    // SETTINGS arrive; this fake server reads the client preface and closes
+    // without responding, so construction must not mark the connection ready.
+    UT_ASSERT(c, !conn->isReady(),
+        "adopt-socket Http2 connection waits for peer SETTINGS before READY");
 
     // Close the connection cleanly; no request is submitted because the
     // peer is not a real H2 server.
