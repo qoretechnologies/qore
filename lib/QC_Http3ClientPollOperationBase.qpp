@@ -1194,6 +1194,20 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
     priv->endSubmitFail();
 }
 
+//! Marks an HTTP/3 client stream as streaming.
+/** Compatibility hook for Qore-level Http3ClientPollOperation implementations
+    that mark a streaming stream before registering the completion action.
+
+    Newer code paths call this internally from registerStreamWithChannel() and
+    registerStreamWithQueue(); calling it more than once for the same stream is
+    harmless.
+
+    @param stream_id the QUIC stream ID
+*/
+nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
+    priv->setStreamStreaming(static_cast<int64_t>(stream_id), xsink);
+}
+
 //! Phase 3: register stream with a Promise for result delivery
 /** @param stream_id the QUIC stream ID
     @param promise the Promise to resolve with the response (pure C++ dispatch)
