@@ -179,10 +179,11 @@ static bool qore_socket_is_accepting(qore_socket_private* priv) {
 #ifdef SO_ACCEPTCONN
     int val = 0;
     socklen_t len = sizeof(val);
-    return !getsockopt(priv->sock, SOL_SOCKET, SO_ACCEPTCONN, (GETSOCKOPT_ARG_4)&val, &len) && val;
-#else
-    return false;
+    if (!getsockopt(priv->sock, SOL_SOCKET, SO_ACCEPTCONN, (GETSOCKOPT_ARG_4)&val, &len)) {
+        return val || priv->listening;
+    }
 #endif
+    return priv->listening;
 }
 
 static int qore_socket_poll_fd_revents_now(int fd, short events, short& revents, const char* err, const char* desc,

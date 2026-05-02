@@ -2352,7 +2352,7 @@ public class Http2Test inherits QUnit::Test {
             SSLPrivateKey key(KeyPem);
 
             hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
-                "node": "localhost",
+                "node": "127.0.0.1",
                 "service": 0,
                 "cert": cert,
                 "key": key,

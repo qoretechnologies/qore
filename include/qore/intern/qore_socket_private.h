@@ -892,6 +892,8 @@ struct qore_socket_private : public QoreReferenceCounter {
         ssl_capture_remote_cert = false,
         event_data = false,
         sse_got_cr = false;
+    //! Tracks listen() state for platforms without reliable SO_ACCEPTCONN support.
+    bool listening = false;
     int in_op = -1,
         ssl_verify_mode = SSL_VERIFY_NONE;
 
@@ -1410,6 +1412,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         if (sse_got_cr) {
             sse_got_cr = false;
         }
+        listening = false;
         sfamily = AF_UNSPEC;
         stype = SOCK_STREAM;
         sprot = 0;
@@ -1666,9 +1669,14 @@ struct qore_socket_private : public QoreReferenceCounter {
             sock_get_error();
             return -1;
         }
+        listening = true;
         return 0;
 #else
-        return ::listen(sock, backlog);
+        int rc = ::listen(sock, backlog);
+        if (!rc) {
+            listening = true;
+        }
+        return rc;
 #endif
     }
 
@@ -2122,6 +2130,7 @@ struct qore_socket_private : public QoreReferenceCounter {
 
     DLLLOCAL void confirmConnected(const char* host) {
         resetCloseInterrupt();
+        listening = false;
         do_connected_event();
 
         // issue #3053: save hostname for SNI
@@ -2232,6 +2241,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         stype = sock_type;
         sprot = protocol;
         port = -1;
+        listening = false;
         return 0;
     }
 
@@ -2249,6 +2259,7 @@ struct qore_socket_private : public QoreReferenceCounter {
         stype = sock_type;
         sprot = protocol;
         port = -1;
+        listening = false;
         return 0;
     }
 
