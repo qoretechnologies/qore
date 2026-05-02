@@ -885,7 +885,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                                     QoreValue v = sl->retrieveEntry(i);
                                     std::string skey;
                                     if (v.getType() == NT_STRING) {
-                                        skey = v.get<const QoreStringNode>()->c_str();
+                                        QoreStringValueHelper str(v);
+                                        skey = str->c_str();
                                     } else {
                                         skey = std::to_string(v.getAsBigInt());
                                     }
@@ -923,8 +924,8 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         }
 
         if (work_xsink) {
-            const QoreStringNode* err_str = work_xsink.getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc_str = work_xsink.getExceptionDesc().get<const QoreStringNode>();
+            QoreStringValueHelper err_str(work_xsink.getExceptionErr());
+            QoreStringValueHelper desc_str(work_xsink.getExceptionDesc());
             const char* type_name = getDispatchTypeName(async_item.type);
             const char* class_name = async_item.spop_obj ? async_item.spop_obj->getClassName() : "null";
             const char* owner = async_item.owner.empty() ? "-" : async_item.owner.c_str();
@@ -936,15 +937,15 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
                     "(type=%s class=%s owner=%s key=%s stream_key=%s)",
                     method_name ? method_name : "unknown",
-                    err_str ? err_str->c_str() : "?",
-                    desc_str ? desc_str->c_str() : "?",
+                    *err_str ? err_str->c_str() : "?",
+                    *desc_str ? desc_str->c_str() : "?",
                     type_name, class_name, owner, key, stream_key);
             } else {
                 fprintf(stderr, "QoreCallDispatcher::workerLoop() %s exception: %s: %s "
                     "(type=%s class=%s owner=%s key=%s stream_key=%s)\n",
                     method_name ? method_name : "unknown",
-                    err_str ? err_str->c_str() : "?",
-                    desc_str ? desc_str->c_str() : "?",
+                    *err_str ? err_str->c_str() : "?",
+                    *desc_str ? desc_str->c_str() : "?",
                     type_name, class_name, owner, key, stream_key);
             }
             work_xsink.clear();
@@ -1307,7 +1308,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     v = info->getKeyValue("owner");
     std::string owner;
     if (v.getType() == NT_STRING) {
-        owner = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper str(v);
+        owner = str->c_str();
     }
     if (owner.empty()) {
         xsink->raiseException("ASYNC-IO-ERROR", "missing 'owner' field in SocketPollOperationInfo; "
@@ -1318,8 +1320,13 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // Get the key: custom key or socket unique hash
     v = info->getKeyValue("key");
     std::string uh;
-    if (v.getType() == NT_STRING && v.get<const QoreStringNode>()->size()) {
-        uh = v.get<const QoreStringNode>()->c_str();
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        if (str->size()) {
+            uh = str->c_str();
+        } else {
+            uh = getSocketHash(sock);
+        }
     } else {
         uh = getSocketHash(sock);
     }
@@ -3798,10 +3805,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         std::vector<QoreEventInfo> events;
         int count = t.loop->poll(events, timeout_ms, xsink);
         if (*xsink) {
-            const QoreStringNode* err = xsink->getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc = xsink->getExceptionDesc().get<const QoreStringNode>();
+            QoreStringValueHelper err(xsink->getExceptionErr());
+            QoreStringValueHelper desc(xsink->getExceptionDesc());
             log(QORE_LOG_LEVEL_ERROR, "EventLoop::poll() error: %s: %s",
-                err ? err->c_str() : "?", desc ? desc->c_str() : "?");
+                *err ? err->c_str() : "?", *desc ? desc->c_str() : "?");
             xsink->clear();
             continue;
         }
@@ -3945,14 +3952,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     std::move(c.buffer), &uring_xsink);
                 if (uring_xsink) {
                     // Log and clear — don't let one stream's error kill the loop
-                    const QoreStringNode* err = uring_xsink.getExceptionErr()
-                        .get<const QoreStringNode>();
-                    const QoreStringNode* desc = uring_xsink.getExceptionDesc()
-                        .get<const QoreStringNode>();
+                    QoreStringValueHelper err(uring_xsink.getExceptionErr());
+                    QoreStringValueHelper desc(uring_xsink.getExceptionDesc());
                     log(QORE_LOG_LEVEL_ERROR,
                         "io_uring completion error (stream %d): %s: %s",
-                        c.stream_id, err ? err->c_str() : "?",
-                        desc ? desc->c_str() : "?");
+                        c.stream_id, *err ? err->c_str() : "?",
+                        *desc ? desc->c_str() : "?");
                     uring_xsink.clear();
                 }
             }

@@ -128,8 +128,8 @@ static AbstractQoreNode* GETOPT_parse2_intern(ReferenceHolder<QoreHashNode>& rv,
     if (!l)
         return rv.release();
 
-    const QoreStringNode* err = l->retrieveEntry(0).get<const QoreStringNode>();
-    return xsink->raiseException("GETOPT-ERROR", err->stringRefSelf());
+    QoreStringNodeValueHelper err(l->retrieveEntry(0));
+    return xsink->raiseException("GETOPT-ERROR", err.getReferencedValue());
 }
 
 static AbstractQoreNode* GETOPT_parse3_intern(ReferenceHolder<QoreHashNode>& rv, ExceptionSink* xsink) {
@@ -140,10 +140,10 @@ static AbstractQoreNode* GETOPT_parse3_intern(ReferenceHolder<QoreHashNode>& rv,
     if (!l)
         return rv.release();
 
-    const QoreStringNode* err = l->retrieveEntry(0).get<const QoreStringNode>();
     const QoreStringNode* sn = getProgram()->getScriptName();
     if (sn)
         fprintf(stderr, "%s: ", sn->getBuffer());
+    QoreStringValueHelper err(l->retrieveEntry(0));
     fprintf(stderr, "%s\n", err->getBuffer());
     qore_exit_process(1);
 
@@ -168,7 +168,7 @@ static GetOpt* GETOPT_constructor_intern(const QoreHashNode* options, ExceptionS
             break;
         }
 
-        const QoreStringNode* str = v.get<const QoreStringNode>();
+        QoreStringValueHelper str(v);
 
         qore_type_t at = -1;
         const char *long_opt = 0;

@@ -379,8 +379,10 @@ int QoreSquareBracketsOperatorNode::doString(SimpleRefHolder<QoreStringNode>& re
     ValueHolder entry(doSquareBrackets(l, r, list_ok, xsink), xsink);
     if (*xsink)
         return -1;
-    if (!entry->isNothing())
-        qore_string_private::get(*ret)->concat(entry->get<QoreStringNode>());
+    if (!entry->isNothing()) {
+        QoreStringValueHelper str(*entry);
+        qore_string_private::get(*ret)->concat(*str);
+    }
     return 0;
 }
 
@@ -486,8 +488,10 @@ QoreValue QoreSquareBracketsOperatorNode::doSquareBrackets(const QoreValue l, co
             return l.get<const QoreListNode>()->getReferencedEntry(offset);
         }
 
-        case NT_STRING:
-            return l.get<const QoreStringNode>()->substr(offset, 1, xsink);
+        case NT_STRING: {
+            QoreStringNodeValueHelper str(l);
+            return str->substr(offset, 1, xsink);
+        }
 
         case NT_BINARY: {
             const BinaryNode* b = l.get<const BinaryNode>();

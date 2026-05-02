@@ -71,7 +71,8 @@ DBSCAN::constructor(hash<auto> options) {
 
     v = options->getKeyValue("metric");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
-        metric = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper metric_str(v);
+        metric = metric_str->c_str();
     }
 
     if (epsilon <= 0.0) {

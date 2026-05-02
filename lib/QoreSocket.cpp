@@ -2916,8 +2916,11 @@ static void write_sse_key_value(ExceptionSink* xsink, ReferenceHolder<QoreHashNo
     if (!v) {
         rv->setKeyValue(f, value.release(), xsink);
     } else {
-        v.get<QoreStringNode>()->concat('\n');
-        v.get<QoreStringNode>()->concat(*value, xsink);
+        QoreStringNodeValueHelper old_value(v);
+        QoreStringNode* str = new QoreStringNode(**old_value);
+        str->concat('\n');
+        str->concat(*value, xsink);
+        rv->setKeyValue(f, str, xsink);
         value->clear();
     }
 }
@@ -3130,7 +3133,7 @@ void SseAction::execute(QoreValue output, ExceptionSink* xsink) {
                 sse_buffer.concat((const char*)data->getPtr(), data->size());
             }
         } else if (body_val.getType() == NT_STRING) {
-            const QoreStringNode* data = body_val.get<const QoreStringNode>();
+            QoreStringValueHelper data(body_val);
             if (!data->empty()) {
                 sse_buffer.concat(data->c_str(), data->size());
             }
@@ -3919,7 +3922,8 @@ int32_t QoreSocket::submitHttp2PushPromise(int32_t stream_id, const char* path,
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper str(val);
+                h2_headers[key] = str->c_str();
             }
         }
     }
@@ -3943,7 +3947,8 @@ int QoreSocket::submitHttp2Response(int32_t stream_id, int status_code,
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper str(val);
+                h2_headers[key] = str->c_str();
             }
         }
     }
@@ -3966,7 +3971,8 @@ int QoreSocket::submitHttp2ConnectResponse(int32_t stream_id, int status_code,
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                h2_headers[key] = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper str(val);
+                h2_headers[key] = str->c_str();
             }
         }
     }
@@ -4016,7 +4022,8 @@ int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* 
         QoreValue val = hi.get();
         std::string skey(key);
         if (val.getType() == NT_STRING) {
-            append(skey, val.get<const QoreStringNode>()->c_str());
+            QoreStringValueHelper str(val);
+            append(skey, str->c_str());
         } else if (val.getType() == NT_LIST) {
             // Emit one HPACK entry per list element.  HTTP/2 explicitly
             // supports multiple header fields with the same name (and
@@ -4027,7 +4034,8 @@ int32_t QoreSocket::submitHttp2Request(const QoreHashNode* headers, const void* 
             for (size_t i = 0; i < l->size(); ++i) {
                 QoreValue elem = l->retrieveEntry(i);
                 if (elem.getType() == NT_STRING) {
-                    append(skey, elem.get<const QoreStringNode>()->c_str());
+                    QoreStringValueHelper str(elem);
+                    append(skey, str->c_str());
                 }
             }
         }
@@ -4097,7 +4105,8 @@ int QoreSocket::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailer
         while (hi.next()) {
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                trailer_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper str(val);
+                trailer_map[hi.getKey()] = str->c_str();
             }
         }
     }
@@ -6713,7 +6722,7 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkSize(ExceptionSink
         return nullptr;
     }
 
-    const QoreStringNode* line = line_val->get<const QoreStringNode>();
+    QoreStringValueHelper line(*line_val);
     const char* str = line->c_str();
     size_t len = line->size();
 
@@ -6794,7 +6803,7 @@ QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkCrlf(ExceptionSink
     releaseCurrentOp(xsink);
 
     if (line_val->getType() == NT_STRING) {
-        const QoreStringNode* line = line_val->get<const QoreStringNode>();
+        QoreStringValueHelper line(*line_val);
         if (line->size() == 2 && !strcmp(line->c_str(), "\r\n")) {
             // Empty line — chunked transfer complete
             body_state = BodyState::DONE;
@@ -7930,14 +7939,16 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                hdr_pairs.emplace_back(key, val.get<const QoreStringNode>()->c_str());
+                QoreStringValueHelper str(val);
+                hdr_pairs.emplace_back(key, str->c_str());
             } else if (val.getType() == NT_LIST) {
                 // Emit separate header entries for each list value
                 const QoreListNode* l = val.get<const QoreListNode>();
                 for (size_t i = 0; i < l->size(); ++i) {
                     QoreValue lv = l->retrieveEntry(i);
                     if (lv.getType() == NT_STRING) {
-                        hdr_pairs.emplace_back(key, lv.get<const QoreStringNode>()->c_str());
+                        QoreStringValueHelper str(lv);
+                        hdr_pairs.emplace_back(key, str->c_str());
                     }
                 }
             }
@@ -8130,7 +8141,8 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                const char* str_val = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper str(val);
+                const char* str_val = str->c_str();
                 hdr_map[key] = str_val;
                 if (!strcasecmp(key, "content-length")) {
                     char* endptr = nullptr;

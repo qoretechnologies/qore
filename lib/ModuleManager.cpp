@@ -236,7 +236,8 @@ int QoreModuleDefContext::set(const QoreProgramLocation* loc, const char* key, Q
         parse_error(*loc, "module key '%s' assigned type '%s' (expecting 'string')", key, val.getTypeName());
         err = -1;
     } else {
-        vmap[key] = val.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper str(val);
+        vmap[key] = str->c_str();
     }
 
     return err;
@@ -1466,7 +1467,8 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
         for (size_t i = 0; i < fileList->size(); ++i) {
             QoreString filePath(path);
             filePath += QORE_DIR_SEP_STR;
-            filePath += fileList->retrieveEntry(i).get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper file(fileList->retrieveEntry(i));
+            filePath += file->c_str();
 
             std::string fileCode = QoreDir::get_file_content(filePath);
             userModule->getProgram()->parsePending(fileCode.c_str(), filePath.c_str(), &xsink, &xsink, warning_mask);

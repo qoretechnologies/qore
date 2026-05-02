@@ -195,7 +195,8 @@ static bool wsIsControlFrame(const PollPipelinePriv::Context& ctx) {
     if (type_val.getType() != NT_STRING) {
         return false;
     }
-    const char* type = type_val.get<const QoreStringNode>()->c_str();
+    QoreStringValueHelper type_str(type_val);
+    const char* type = type_str->c_str();
     return (strcmp(type, "ping") == 0 || strcmp(type, "close") == 0);
 }
 
@@ -210,10 +211,11 @@ static PollPipelinePriv::TransformFn makeWsControlFrameHandler(
         }
         const QoreHashNode* h = ctx.last_output.get<const QoreHashNode>();
         QoreValue type_val = h->getKeyValue("type");
-        if (type_val.getType() != NT_STRING) {
-            return;
-        }
-        const char* type = type_val.get<const QoreStringNode>()->c_str();
+    if (type_val.getType() != NT_STRING) {
+        return;
+    }
+    QoreStringValueHelper type_str(type_val);
+    const char* type = type_str->c_str();
 
         if (strcmp(type, "ping") == 0) {
             // Auto-pong: encode PONG with same payload and push to send queue
@@ -250,8 +252,9 @@ static PollPipelinePriv::TransformFn makeWsControlFrameHandler(
             ctx.extra->setKeyValue("ws_close_code", static_cast<int64>(code), xsink);
             QoreValue reason_val = h->getKeyValue("data");
             if (reason_val.getType() == NT_STRING) {
+                QoreStringNodeValueHelper reason(reason_val);
                 ctx.extra->setKeyValue("ws_close_reason",
-                    reason_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+                    reason.getReferencedValue(), xsink);
             }
 
             if (we_initiated) {
@@ -259,12 +262,13 @@ static PollPipelinePriv::TransformFn makeWsControlFrameHandler(
                 ctx.extra->setKeyValue("ws_closed", true, xsink);
             } else {
                 // Peer initiated close — echo back
-                const char* reason = nullptr;
+                SimpleRefHolder<BinaryNode> close_frame;
                 if (reason_val.getType() == NT_STRING) {
-                    reason = reason_val.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper reason(reason_val);
+                    close_frame = WebSocketFrameEncoder::encodeClose(code, reason->c_str(), client_mask);
+                } else {
+                    close_frame = WebSocketFrameEncoder::encodeClose(code, nullptr, client_mask);
                 }
-                SimpleRefHolder<BinaryNode> close_frame(
-                    WebSocketFrameEncoder::encodeClose(code, reason, client_mask));
                 send_queue->push(xsink, close_frame.release());
                 if (!*xsink) {
                     ctx.extra->setKeyValue("ws_close_initiated", true, xsink);
@@ -504,7 +508,8 @@ int PollPipelinePriv::addValidateHeaderPrefix(const char* header_name, const cha
             xsink->raiseException(err.c_str(), "missing '%s' header in response", hdr.c_str());
             return;
         }
-        const char* actual = val.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper actual_str(val);
+        const char* actual = actual_str->c_str();
         if (strncasecmp(actual, prefix.c_str(), prefix.size()) != 0) {
             xsink->raiseException(err.c_str(),
                 "expected '%s' header starting with '%s', got '%s'",
@@ -546,7 +551,8 @@ int PollPipelinePriv::addValidateWebSocketAccept(const char* ws_key, const char*
             xsink->raiseException(err.c_str(), "missing Sec-WebSocket-Accept header");
             return;
         }
-        const char* actual = val.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper actual_str(val);
+        const char* actual = actual_str->c_str();
         if (strcmp(actual, expected_str.c_str()) != 0) {
             xsink->raiseException(err.c_str(),
                 "invalid Sec-WebSocket-Accept: got '%s', expected '%s'",
@@ -626,7 +632,8 @@ int PollPipelinePriv::addBranchOnContextValue(const char* key, const char* value
             if (v.getType() != NT_STRING) {
                 return false;
             }
-            return strcmp(v.get<const QoreStringNode>()->c_str(), val.c_str()) == 0;
+            QoreStringValueHelper str(v);
+            return strcmp(str->c_str(), val.c_str()) == 0;
         },
         true_step, false_step);
 }
@@ -663,7 +670,7 @@ int PollPipelinePriv::addValidateResponsePrefix(const char* prefix, const char* 
     std::string err(err_code);
     return addTransform([pfx, err](Context& ctx, ExceptionSink* xsink) {
         if (ctx.last_output.getType() == NT_STRING) {
-            const QoreStringNode* str_node = ctx.last_output.get<const QoreStringNode>();
+            QoreStringValueHelper str_node(ctx.last_output);
             const char* str = str_node->c_str();
             // Trim trailing whitespace for comparison
             size_t len = str_node->size();
@@ -694,12 +701,13 @@ int PollPipelinePriv::addCheckContains(const char* source_key, const char* subst
         bool found = false;
         QoreValue v = ctx.extra->getKeyValue(src.c_str());
         if (v.getType() == NT_STRING) {
-            found = strcasestr(v.get<const QoreStringNode>()->c_str(), sub.c_str()) != nullptr;
+            QoreStringValueHelper str(v);
+            found = strcasestr(str->c_str(), sub.c_str()) != nullptr;
         }
         // Also check ctx.last_output if source not in extra
         if (!found && ctx.last_output.getType() == NT_STRING) {
-            found = strcasestr(ctx.last_output.get<const QoreStringNode>()->c_str(),
-                sub.c_str()) != nullptr;
+            QoreStringValueHelper str(ctx.last_output);
+            found = strcasestr(str->c_str(), sub.c_str()) != nullptr;
         }
         ctx.extra->setKeyValue(res.c_str(), found, xsink);
     });
@@ -887,10 +895,10 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
             ExceptionSink poll_xsink;
             QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
             if (poll_xsink) {
-                const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-                const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-                setError(err_str ? err_str->c_str() : "POLL-PIPELINE-ERROR",
-                    desc_str ? desc_str->c_str() : "step failed", xsink);
+                QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+                QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+                setError(*err_str ? err_str->c_str() : "POLL-PIPELINE-ERROR",
+                    *desc_str ? desc_str->c_str() : "step failed", xsink);
                 // Propagate the original exception to the caller
                 xsink->assimilate(poll_xsink);
                 return nullptr;
@@ -910,7 +918,7 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                 // Special handling for RECV_LINE_RESPONSE: check for continuation lines
                 if (steps[current_step].type == StepType::RECV_LINE_RESPONSE) {
                     if (ctx.last_output.getType() == NT_STRING) {
-                        const QoreStringNode* line = ctx.last_output.get<const QoreStringNode>();
+                        QoreStringValueHelper line(ctx.last_output);
                         const char* str = line->c_str();
                         size_t len = line->size();
 
@@ -1020,7 +1028,7 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                             got_data = true;
                         }
                     } else if (ctx.last_output.getType() == NT_STRING) {
-                        const QoreStringNode* str = ctx.last_output.get<const QoreStringNode>();
+                        QoreStringValueHelper str(ctx.last_output);
                         if (str && str->size() > 0) {
                             if (!ctx.frame_buf) {
                                 ctx.frame_buf = new BinaryNode();
@@ -1436,7 +1444,8 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
                 // Check Transfer-Encoding: chunked
                 QoreValue te_val = ctx.headers->getKeyValue("transfer-encoding");
                 if (te_val.getType() == NT_STRING) {
-                    const char* te = te_val.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper te_str(te_val);
+                    const char* te = te_str->c_str();
                     if (strcasestr(te, "chunked")) {
                         chunked = true;
                     }
@@ -1451,7 +1460,8 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
                 // Check Connection: close
                 QoreValue conn_val = ctx.headers->getKeyValue("connection");
                 if (conn_val.getType() == NT_STRING) {
-                    const char* conn = conn_val.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper conn_str(conn_val);
+                    const char* conn = conn_str->c_str();
                     if (!strcasecmp(conn, "close")) {
                         conn_close = true;
                     }
@@ -1490,7 +1500,7 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             if (data.getType() == NT_BINARY) {
                 bin = data.get<BinaryNode>()->binRefSelf();
             } else if (data.getType() == NT_STRING) {
-                const QoreStringNode* str = data.get<const QoreStringNode>();
+                QoreStringValueHelper str(data);
                 bin = new BinaryNode();
                 bin->append(str->c_str(), str->size());
             } else {
@@ -1853,7 +1863,7 @@ int PollPipeline::addSend(data d) [dom=NETWORK] {
     if (d.getType() == NT_BINARY) {
         bin = d.get<BinaryNode>()->binRefSelf();
     } else if (d.getType() == NT_STRING) {
-        const QoreStringNode* str = d.get<const QoreStringNode>();
+        QoreStringValueHelper str(d);
         bin = new BinaryNode();
         bin->append(str->c_str(), str->size());
     } else {
@@ -2132,7 +2142,7 @@ int PollPipeline::addSetContextBinary(string key, data value) {
     if (value.getType() == NT_BINARY) {
         bin = value.get<BinaryNode>()->binRefSelf();
     } else if (value.getType() == NT_STRING) {
-        const QoreStringNode* str = value.get<const QoreStringNode>();
+        QoreStringValueHelper str(value);
         bin = new BinaryNode();
         bin->append(str->c_str(), str->size());
     } else {

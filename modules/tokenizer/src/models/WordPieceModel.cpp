@@ -62,9 +62,9 @@ WordPieceModel::WordPieceModel(const QoreHashNode* config, ExceptionSink* xsink)
     // Read unk_token - can be a string or an object with "content"
     QoreValue unk_val = config->getKeyValue("unk_token");
     if (unk_val.getType() == NT_STRING) {
-        const QoreStringNode* unk_str = safeGetString(unk_val);
-        if (unk_str) {
-            unk_token = unk_str->c_str();
+        std::string unk_str = safeGetStdString(unk_val);
+        if (!unk_str.empty()) {
+            unk_token = std::move(unk_str);
         }
     } else if (unk_val.getType() == NT_HASH) {
         const QoreHashNode* unk_hash = safeGetHash(unk_val);
@@ -79,9 +79,9 @@ WordPieceModel::WordPieceModel(const QoreHashNode* config, ExceptionSink* xsink)
     // Read continuing_subword_prefix
     QoreValue prefix_val = config->getKeyValue("continuing_subword_prefix");
     if (prefix_val.getType() == NT_STRING) {
-        const QoreStringNode* prefix_str = safeGetString(prefix_val);
-        if (prefix_str) {
-            continuing_subword_prefix = prefix_str->c_str();
+        std::string prefix_str = safeGetStdString(prefix_val);
+        if (!prefix_str.empty()) {
+            continuing_subword_prefix = std::move(prefix_str);
         }
     }
 

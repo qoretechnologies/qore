@@ -1744,7 +1744,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 use_switch_string = false;
                 break;
             }
-            const QoreStringNode* str = node->val.get<const QoreStringNode>();
+            QoreStringValueHelper str(node->val);
             string_cases.push_back({str->c_str(), cases[i].block});
         }
 
@@ -3180,7 +3180,8 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
     if (!hd) return false;
     const QoreValue right = hd->getRight();
     if (!right.hasNode() || right.getType() != NT_STRING) return false;
-    key_name = right.get<const QoreStringNode>()->c_str();
+    QoreStringValueHelper key(right);
+    key_name = key->c_str();
     key_expr = right;  // Also return the QoreValue for lowerExpression
     const auto* vr = dynamic_cast<const VarRefNode*>(hd->getLeft().getInternalNode());
     if (!vr) return false;
@@ -3385,7 +3386,8 @@ static bool extractLValuePath(const QoreValue& expr,
         LVPathStep step;
         if (right.hasNode() && right.getType() == NT_STRING) {
             step.kind = LVPathStepKind::HashKeyConst;
-            step.name = right.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper key(right);
+            step.name = key->c_str();
         } else {
             step.kind = LVPathStepKind::HashKey;
             // Store the expression to lower as a dynamic operand
@@ -4481,7 +4483,8 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
 }
 
 bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::string& error,
-        const char* context, const QoreValue* expr, const QoreProgramLocation* guard_loc, bool weak) {
+        const char* context, const QoreValue* expr, const QoreProgramLocation* guard_loc, bool weak,
+        QoreIRValue* store_result) {
     if (!var) {
         error = std::string("null lvalue in IR lowering (") + context + ")";
         return false;
@@ -4501,6 +4504,10 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             // comment for why closureUse() may be true even for VT_LOCAL.
             if (var->ref.id->closureUse()) {
                 auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                if (store_result) {
+                    store_inst->result = builder.getFunction()->createValue();
+                    *store_result = store_inst->result;
+                }
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -4511,6 +4518,10 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             }
             {
                 auto* store_inst = builder.createStoreLocal(var->ref.id, value, var->loc, weak);
+                if (store_result) {
+                    store_inst->result = builder.getFunction()->createValue();
+                    *store_result = store_inst->result;
+                }
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -4526,6 +4537,10 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             }
             {
                 auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                if (store_result) {
+                    store_inst->result = builder.getFunction()->createValue();
+                    *store_result = store_inst->result;
+                }
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -4542,6 +4557,10 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             }
             {
                 auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                if (store_result) {
+                    store_inst->result = builder.getFunction()->createValue();
+                    *store_result = store_inst->result;
+                }
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -4554,6 +4573,10 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             }
             {
                 auto* store_inst = builder.createStoreGlobal(var->ref.var, value, var->loc, weak);
+                if (store_result) {
+                    store_inst->result = builder.getFunction()->createValue();
+                    *store_result = store_inst->result;
+                }
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -4566,6 +4589,10 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             }
             {
                 auto* store_inst = builder.createStoreThreadLocal(var->ref.var, value, var->loc, weak);
+                if (store_result) {
+                    store_inst->result = builder.getFunction()->createValue();
+                    *store_result = store_inst->result;
+                }
                 if (!exception_stack.empty()) {
                     store_inst->exception_target = exception_stack.back();
                 }
@@ -5193,8 +5220,13 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         left_var = nullptr;
     }
     if (left_var) {
-        if (!storeVarRef(left_var, right, error, "assignment", &right_expr, nullptr, is_weak)) {
+        QoreIRValue store_result;
+        if (!storeVarRef(left_var, right, error, "assignment", &right_expr, nullptr, is_weak,
+                is_weak ? &store_result : nullptr)) {
             return QoreIRValue();
+        }
+        if (is_weak && store_result.isValid()) {
+            return store_result;
         }
     } else if (assign->getLeft().hasNode()) {
         // Fast path: const-key hash subscript → LoadLocal + HashKeyStore (no EXPR_TREE)
@@ -5277,8 +5309,15 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             inst->invoke_opcode = QoreIROpcode::StoreLValue;
             inst->weak = is_weak;
             builder.setBlock(normal_block);
+            if (is_weak) {
+                return inst->result;
+            }
         } else {
-            builder.createStoreLValue(assign->getLeft(), right, assign->loc, is_weak);
+            auto* store_inst = builder.createStoreLValue(assign->getLeft(), right, assign->loc, is_weak);
+            if (is_weak) {
+                store_inst->result = builder.getFunction()->createValue();
+                return store_inst->result;
+            }
         }
     } else {
         error = "unsupported lvalue for assignment IR lowering";
@@ -7559,7 +7598,8 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
     // member access via {"key"} syntax. qore_rt_hash_key_access handles both types.
     QoreValue right_val = op->getRight();
     if (right_val.hasNode() && right_val.getType() == NT_STRING) {
-        const char* key_str = right_val.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper key(right_val);
+        const char* key_str = key->c_str();
         // Lower the base expression
         QoreIRValue base_val = lowerExpression(op->getLeft(), error);
         if (!base_val.isValid()) {
@@ -8639,7 +8679,8 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
     const_keys.reserve(keys.size());
     for (size_t i = 0; i < keys.size(); ++i) {
         if (keys[i].getType() == NT_STRING) {
-            const_keys.push_back(keys[i].get<const QoreStringNode>()->c_str());
+            QoreStringValueHelper key(keys[i]);
+            const_keys.push_back(key->c_str());
         } else {
             all_const_keys = false;
             break;
@@ -9858,37 +9899,36 @@ static QoreIROpcode analyzeMapPattern(const QoreValue& map_expr, const QoreTypeI
 }
 
 // Helper: check if an expression is $1.key (hash object dereference with implicit arg and constant string key)
-// Returns the key name if matched, nullptr otherwise
-static const char* getImplicitHashKeyAccess(const QoreValue& expr) {
+static bool getImplicitHashKeyAccess(const QoreValue& expr, std::string& key_name) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* deref = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
     if (!deref) {
-        return nullptr;
+        return false;
     }
     // Check left is $1
     QoreValue left_val = deref->getLeft();
     auto* impl_arg = dynamic_cast<const QoreImplicitArgumentNode*>(left_val.getInternalNode());
     if (!impl_arg || impl_arg->getOffset() != 0) {
-        return nullptr;
+        return false;
     }
     // Check right is constant string
     QoreValue right_val = deref->getRight();
     if (!right_val.hasNode() || right_val.getType() != NT_STRING) {
-        return nullptr;
+        return false;
     }
-    return right_val.get<const QoreStringNode>()->c_str();
+    QoreStringValueHelper key(right_val);
+    key_name = key->c_str();
+    return true;
 }
 
 // Pattern analysis for hash-key map operations
 // Detects: map $1.key, list / map ($1.key + N), list / map ($1.key * N), list
 // Returns optimized opcode or MapAny for fallback
 // Sets key_name to the key name and constant_val for offset/scale patterns
-static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, const char*& key_name,
+static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, std::string& key_name,
         QoreValue& constant_val) {
     // Direct $1.key pattern
-    const char* key = getImplicitHashKeyAccess(map_expr);
-    if (key) {
-        key_name = key;
+    if (getImplicitHashKeyAccess(map_expr, key_name)) {
         return QoreIROpcode::MapHashKeyValue;
     }
 
@@ -9903,8 +9943,8 @@ static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, const ch
         QoreValue right = plus_op->getRight();
 
         // Pattern: $1.key + const
-        const char* k = getImplicitHashKeyAccess(left);
-        if (k && !right.hasNode() && (right.getType() == NT_INT)) {
+        std::string k;
+        if (getImplicitHashKeyAccess(left, k) && !right.hasNode() && (right.getType() == NT_INT)) {
             // Check result type is int
             const QoreTypeInfo* rtype = plus_op->getTypeInfo();
             if (QoreTypeInfo::parseReturns(rtype, NT_INT) == QTI_IDENT) {
@@ -9915,8 +9955,7 @@ static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, const ch
         }
 
         // Pattern: const + $1.key
-        k = getImplicitHashKeyAccess(right);
-        if (k && !left.hasNode() && (left.getType() == NT_INT)) {
+        if (getImplicitHashKeyAccess(right, k) && !left.hasNode() && (left.getType() == NT_INT)) {
             const QoreTypeInfo* rtype = plus_op->getTypeInfo();
             if (QoreTypeInfo::parseReturns(rtype, NT_INT) == QTI_IDENT) {
                 key_name = k;
@@ -9932,8 +9971,8 @@ static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, const ch
         QoreValue right = mul_op->getRight();
 
         // Pattern: $1.key * const
-        const char* k = getImplicitHashKeyAccess(left);
-        if (k && !right.hasNode() && (right.getType() == NT_INT)) {
+        std::string k;
+        if (getImplicitHashKeyAccess(left, k) && !right.hasNode() && (right.getType() == NT_INT)) {
             const QoreTypeInfo* rtype = mul_op->getTypeInfo();
             if (QoreTypeInfo::parseReturns(rtype, NT_INT) == QTI_IDENT) {
                 key_name = k;
@@ -9943,8 +9982,7 @@ static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, const ch
         }
 
         // Pattern: const * $1.key
-        k = getImplicitHashKeyAccess(right);
-        if (k && !left.hasNode() && (left.getType() == NT_INT)) {
+        if (getImplicitHashKeyAccess(right, k) && !left.hasNode() && (left.getType() == NT_INT)) {
             const QoreTypeInfo* rtype = mul_op->getTypeInfo();
             if (QoreTypeInfo::parseReturns(rtype, NT_INT) == QTI_IDENT) {
                 key_name = k;
@@ -9960,10 +9998,10 @@ static QoreIROpcode analyzeMapHashKeyPattern(const QoreValue& map_expr, const ch
 // Pattern analysis for hash map two-keys: map {$1.k1: $1.k2}, list
 // Returns HashMapTwoKeys opcode if both key and value are $1.key patterns
 static QoreIROpcode analyzeHashMapTwoKeysPattern(const QoreValue& key_expr, const QoreValue& val_expr,
-        const char*& key1_name, const char*& key2_name) {
-    const char* k1 = getImplicitHashKeyAccess(key_expr);
-    const char* k2 = getImplicitHashKeyAccess(val_expr);
-    if (k1 && k2) {
+        std::string& key1_name, std::string& key2_name) {
+    std::string k1;
+    std::string k2;
+    if (getImplicitHashKeyAccess(key_expr, k1) && getImplicitHashKeyAccess(val_expr, k2)) {
         key1_name = k1;
         key2_name = k2;
         return QoreIROpcode::HashMapTwoKeys;
@@ -10260,7 +10298,7 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
         const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
         if (elem_type && QoreTypeInfo::parseReturns(elem_type, NT_HASH) != QTI_NOT_EQUAL) {
-            const char* key_name = nullptr;
+            std::string key_name;
             QoreValue hk_constant;
             QoreIROpcode hk_opcode = analyzeMapHashKeyPattern(map->getLeft(), key_name, hk_constant);
 
@@ -10282,7 +10320,7 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
                 }
 
                 // Create the specialized instruction
-                auto* inst = builder.createMapHashKey(hk_opcode, key_name, nullptr, map->loc);
+                auto* inst = builder.createMapHashKey(hk_opcode, key_name.c_str(), nullptr, map->loc);
                 inst->operands.push_back(list_val);
 
                 // For offset/scale patterns, add the constant operand
@@ -10556,8 +10594,8 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
         const QoreTypeInfo* list_type = getExprTypeInfo(map->get(2));
         const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
         if (elem_type && QoreTypeInfo::parseReturns(elem_type, NT_HASH) != QTI_NOT_EQUAL) {
-            const char* key1_name = nullptr;
-            const char* key2_name = nullptr;
+            std::string key1_name;
+            std::string key2_name;
             QoreIROpcode hk_opcode = analyzeHashMapTwoKeysPattern(map->get(0), map->get(1),
                 key1_name, key2_name);
             if (hk_opcode == QoreIROpcode::HashMapTwoKeys) {
@@ -10568,7 +10606,7 @@ QoreIRValue QoreIRLowering::lowerHashMap(const QoreValue& expr, std::string& err
                 }
 
                 auto* inst = builder.createMapHashKey(QoreIROpcode::HashMapTwoKeys,
-                    key1_name, key2_name, map->loc);
+                    key1_name.c_str(), key2_name.c_str(), map->loc);
                 inst->operands.push_back(list_val);
                 return inst->result;
             }

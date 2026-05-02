@@ -3057,8 +3057,8 @@ static bool runIRExecutorRefcountExitSmoke() {
             std::cerr << "IR executor refcount checks failed (return value execute)\n";
             return false;
         }
-        if (return_value.getType() != NT_STRING || strcmp(return_value.get<QoreStringNode>()->getBuffer(),
-            "return.keep")) {
+        QoreStringValueHelper return_str(return_value);
+        if (return_value.getType() != NT_STRING || strcmp(return_str->getBuffer(), "return.keep")) {
             std::cerr << "IR executor refcount checks failed (return value content)\n";
             return_value.discard(&xsink);
             return false;

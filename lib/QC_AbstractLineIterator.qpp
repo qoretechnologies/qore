@@ -117,8 +117,8 @@ list<string> AbstractLineIterator::getSplitLine(string sep, string quote, string
             v->getTypeName());
         return QoreValue();
     }
-    const QoreStringNode* str = v->get<const QoreStringNode>();
-    ReferenceHolder<QoreListNode> rv(split_with_quote(xsink, sep, str, quote, trim_unquoted, &h, eol), xsink);
+    QoreStringValueHelper str(*v);
+    ReferenceHolder<QoreListNode> rv(split_with_quote(xsink, sep, *str, quote, trim_unquoted, &h, eol), xsink);
     if (*xsink) {
         ExceptionSink xsink2;
         ValueHolder line_num(self->evalMethod("index", nullptr, &xsink2), xsink);
@@ -166,4 +166,3 @@ while (i.next()) {
     @endcode
  */
 abstract int AbstractLineIterator::index();
-

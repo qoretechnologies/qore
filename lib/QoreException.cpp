@@ -129,7 +129,14 @@ QoreException* QoreException::rethrow() {
     const char *fn = nullptr;
     QoreHashNode* n = l->retrieveEntry(0).get<QoreHashNode>();
     // get function name
-    fn = !n ? "<unknown>" : n->getKeyValue("function").get<QoreStringNode>()->c_str();
+    std::string fn_storage;
+    if (n) {
+        QoreStringValueHelper fn_str(n->getKeyValue("function"));
+        fn_storage = fn_str->c_str();
+        fn = fn_storage.c_str();
+    } else {
+        fn = "<unknown>";
+    }
 
     const QoreProgramLocation* loc = get_runtime_location();
     if (loc) {

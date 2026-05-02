@@ -162,7 +162,7 @@ static int qore_linenoise_user_key_cb(const char* line, int pos, char** new_line
         QoreValue lineVal = h->getKeyValue("line");
         QoreValue posVal = h->getKeyValue("pos");
         if (lineVal.getType() == NT_STRING) {
-            QoreStringNode* newLine = lineVal.get<QoreStringNode>();
+            QoreStringValueHelper newLine(lineVal);
             *new_line = strdup(newLine->c_str());
         }
         if (posVal.getType() == NT_INT) {
@@ -233,7 +233,7 @@ static char* qore_linenoise_hints_cb(const char* input, int* color, int* bold) {
         // Return plain string hint with default color (dark grey)
         *color = 90;  // bright black (dark grey)
         *bold = 0;
-        QoreStringNode* str = ret->get<QoreStringNode>();
+        QoreStringValueHelper str(*ret);
         return strdup(str->c_str());
     }
 
@@ -248,7 +248,8 @@ static char* qore_linenoise_hints_cb(const char* input, int* color, int* bold) {
         *color = c.getType() == NT_INT ? (int)c.getAsBigInt() : 90;
         QoreValue b = h->getKeyValue("bold");
         *bold = b.getAsBool() ? 1 : 0;
-        return strdup(text.get<QoreStringNode>()->c_str());
+        QoreStringValueHelper str(text);
+        return strdup(str->c_str());
     }
 
     return NULL;
@@ -280,7 +281,7 @@ static char* qore_linenoise_syntax_cb(const char* buf) {
     }
 
     if (ret->getType() == NT_STRING) {
-        QoreStringNode* str = ret->get<QoreStringNode>();
+        QoreStringValueHelper str(*ret);
         return strdup(str->c_str());
     }
 

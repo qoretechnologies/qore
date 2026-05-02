@@ -112,13 +112,12 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::continuePoll(ExceptionSink* xsink
                 if (error_info) {
                     QoreValue err_v = error_info->getKeyValue("err");
                     QoreValue desc_v = error_info->getKeyValue("desc");
+                    QoreStringValueHelper err_str(err_v);
+                    QoreStringNodeValueHelper desc_str(desc_v);
                     xsink->raiseException(
-                        err_v.getType() == NT_STRING
-                            ? err_v.get<const QoreStringNode>()->c_str()
-                            : "HTTPCLIENT-NEGOTIATE-ERROR",
+                        err_v.getType() == NT_STRING ? err_str->c_str() : "HTTPCLIENT-NEGOTIATE-ERROR",
                         desc_v.getType() == NT_STRING
-                            ? new QoreStringNode(*desc_v.get<const QoreStringNode>())
-                            : new QoreStringNode("negotiation failed"));
+                            ? new QoreStringNode(**desc_str) : new QoreStringNode("negotiation failed"));
                 }
                 return nullptr;
             }
@@ -142,13 +141,13 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr()
-            .get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc()
-            .get<const QoreStringNode>();
+        QoreValue err_val = poll_xsink.getExceptionErr();
+        QoreValue desc_val = poll_xsink.getExceptionDesc();
+        QoreStringValueHelper err_str(err_val);
+        QoreStringValueHelper desc_str(desc_val);
         setError(
-            err_str ? err_str->c_str() : "HTTPCLIENT-NEGOTIATE-ERROR",
-            desc_str ? desc_str->c_str() : "TCP+TLS handshake failed",
+            err_val.getType() == NT_STRING ? err_str->c_str() : "HTTPCLIENT-NEGOTIATE-ERROR",
+            desc_val.getType() == NT_STRING ? desc_str->c_str() : "TCP+TLS handshake failed",
             xsink);
         poll_xsink.clear();
         return nullptr;

@@ -68,8 +68,10 @@ int64 q_get_value_byte_size(const QoreValue& v, ExceptionSink* xsink) {
         case NT_NOTHING:
         case NT_NULL:
             return 0;
-        case NT_STRING:
-            return v.get<const QoreStringNode>()->size();
+        case NT_STRING: {
+            QoreStringValueHelper str(v);
+            return str->size();
+        }
         case NT_BINARY:
             return v.get<const BinaryNode>()->size();
         case NT_INT:
@@ -3095,20 +3097,20 @@ try {
  */
 string get_ex_pos(hash<auto> ex) [flags=CONSTANT] {
     QoreValue n = ex->getKeyValue("file");
-    QoreStringNode* str = new QoreStringNode(n.getType() == NT_STRING
-        ? n.get<const QoreStringNode>()->c_str()
-        : "<unknown>");
+    QoreStringValueHelper file(n);
+    QoreStringNode* str = new QoreStringNode(n.getType() == NT_STRING ? file->c_str() : "<unknown>");
     int ln = (int)ex->getKeyValue("line").getAsBigInt();
     str->sprintf(":%d", ln);
     bool openparen = false;
     n = ex->getKeyValue("lang");
     if (n.getType() == NT_STRING) {
-        str->sprintf(" (%s", n.get<const QoreStringNode>()->c_str());
+        QoreStringValueHelper lang(n);
+        str->sprintf(" (%s", lang->c_str());
         openparen = true;
     }
     n = ex->getKeyValue("source");
     if (n.getType() == NT_STRING) {
-        const QoreStringNode* sstr = n.get<const QoreStringNode>();
+        QoreStringValueHelper sstr(n);
         if (!sstr->empty()) {
             int offset = (int)ex->getKeyValue("offset").getAsBigInt();
             str->concat(" ");

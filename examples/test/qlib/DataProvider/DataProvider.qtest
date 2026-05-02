@@ -536,6 +536,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("string test", \stringTest());
         addTestCase("data test", \dataTest());
         addTestCase("compat test", \compatTest());
+        addTestCase("optional typed hash field test", \optionalTypedHashFieldTest());
         addTestCase("pipeline test", \pipelineTest());
         addTestCase("pipeline metrics test", \pipelineMetricsTest());
         addTestCase("pipeline output callback test", \pipelineOutputCallbackTest());
@@ -1193,6 +1194,26 @@ public class DataProviderTest inherits QUnit::Test {
         h2 += {"a": 2};
         assertEq(h1, t1.acceptsValue(h1));
         assertEq(h2, t2.acceptsValue(h2));
+    }
+
+    optionalTypedHashFieldTest() {
+        AbstractDataProviderType optional_type = AbstractDataProviderType::get(new Type("*hash<StatInfo>"));
+        assertFalse(optional_type.isMandatory());
+        assertTrue(optional_type.isOrNothingType());
+        assertNothing(optional_type.acceptsValue());
+        assertEq(<StatInfo>{"size": 1}, optional_type.acceptsValue({"size": 1}));
+
+        HashDataType request_type();
+        request_type.addQoreFields({
+            "stat": {
+                "type": new Type("*hash<StatInfo>"),
+                "display_name": "Stat",
+            },
+        });
+
+        assertFalse(request_type.getField("stat").isMandatory());
+        assertEq({}, request_type.acceptsValue({}));
+        assertEq({"stat": <StatInfo>{"size": 1}}, request_type.acceptsValue({"stat": {"size": 1}}));
     }
 
     pipelineTest() {

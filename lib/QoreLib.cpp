@@ -672,7 +672,7 @@ static int process_opt(QoreString *cstr, char* param, QoreValue qv, int type, bo
     qore_type_t t = qv.getType();
 #ifdef DEBUG
     if (t == NT_STRING) {
-        const QoreStringNode* nstr = qv.get<const QoreStringNode>();
+        QoreStringValueHelper nstr(qv);
         printd(5, "process_opt() %p (%d) \"%s\"\n", nstr->getBuffer(), nstr->strlen(), nstr->getBuffer());
     }
 #endif
@@ -884,7 +884,8 @@ QoreStringNode* q_sprintf(const QoreListNode* params, int field, int offset, Exc
         return new QoreStringNode;
     }
 
-    return qore_sprintf_intern(xsink, pv.get<const QoreStringNode>(), params, offset + 1, field, -1, false);
+    QoreStringNodeValueHelper fmt(pv);
+    return qore_sprintf_intern(xsink, *fmt, params, offset + 1, field, -1, false);
 }
 
 QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, ExceptionSink* xsink) {
@@ -894,7 +895,7 @@ QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, Ex
         return new QoreStringNode;
     }
 
-    const QoreStringNode* fmt = pv.get<QoreStringNode>();
+    QoreStringNodeValueHelper fmt(pv);
 
     pv = get_param_value(params, offset + 1);
     int arg_offset;
@@ -920,7 +921,7 @@ QoreStringNode* q_vsprintf(const QoreListNode* params, int field, int offset, Ex
         }
     }
 
-    return qore_sprintf_intern(xsink, fmt, arg_list, arg_offset, field, last_arg, ignore_broken_sprintf);
+    return qore_sprintf_intern(xsink, *fmt, arg_list, arg_offset, field, last_arg, ignore_broken_sprintf);
 }
 
 static QoreValue do_method_intern(QoreObject* self, const QoreMethod* meth, ClassAccess access, const char* name, const qore_class_private* pcls, ExceptionSink* xsink) {
@@ -1637,16 +1638,21 @@ QoreParseListNode* make_args(const QoreProgramLocation* loc, QoreValue arg) {
     return l;
 }
 
-const char* check_hash_key(const QoreHashNode* h, const char* key, const char* err, ExceptionSink* xsink) {
+bool check_hash_key(const QoreHashNode* h, const char* key, const char* err, std::string& value,
+        ExceptionSink* xsink) {
+   value.clear();
    QoreValue p = h->getKeyValue(key);
-   if (p.isNothing())
-      return nullptr;
+   if (p.isNothing()) {
+      return false;
+   }
 
    if (p.getType() != NT_STRING) {
       xsink->raiseException(err, "'%s' key is not type 'string' but is type '%s'", key, p.getTypeName());
-      return nullptr;
+      return false;
    }
-   return p.get<const QoreStringNode>()->c_str();
+   QoreStringValueHelper str(p);
+   value = str->c_str();
+   return true;
 }
 
 // Handle GNU strerror_r() which returns char*
@@ -2020,9 +2026,11 @@ void LVarSet::add(LocalVar* var) {
 }
 
 bool q_parse_bool(QoreValue n) {
-    return n.getType() == NT_STRING
-        ? q_parse_bool(n.get<const QoreStringNode>()->c_str())
-        : n.getAsBool();
+    if (n.getType() == NT_STRING) {
+        QoreStringValueHelper str(n);
+        return q_parse_bool(str->c_str());
+    }
+    return n.getAsBool();
 }
 
 bool q_parse_bool(const char* str) {
@@ -2528,6 +2536,14 @@ void ensure_unique(AbstractQoreNode* *v, ExceptionSink* xsink) {
 }
 
 void ensure_unique(QoreValue& v, ExceptionSink* xsink) {
+    if (v.isShortString()) {
+        char buf[7];
+        v.getShortString(buf);
+        size_t len = v.shortStringLen();
+        v = new QoreStringNode(buf, len, QCS_UTF8);
+        return;
+    }
+
     if (!v.hasNode()) {
         return;
     }
@@ -2957,12 +2973,18 @@ bool ThreadBlock<ClosureStackEntry>::frameBoundary(int p) {
     return var[p].isFrameBoundary();
 }
 
-int q_get_data(const QoreValue& data, const char*& ptr, size_t& len) {
+int q_get_data(const QoreValue& data, const char*& ptr, size_t& len, std::string& string_storage) {
     switch (data.getType()) {
         case NT_STRING: {
-            const QoreStringNode* str = data.get<const QoreStringNode>();
-            ptr = str->getBuffer();
-            len = str->size();
+            QoreStringValueHelper str(data);
+            if (str.is_temp()) {
+                string_storage.assign(str->c_str(), str->size());
+                ptr = string_storage.data();
+                len = string_storage.size();
+            } else {
+                ptr = str->getBuffer();
+                len = str->size();
+            }
             return 0;
         }
         case NT_BINARY: {
@@ -2973,6 +2995,11 @@ int q_get_data(const QoreValue& data, const char*& ptr, size_t& len) {
         }
     }
     return -1;
+}
+
+int q_get_data(const QoreValue& data, const char*& ptr, size_t& len) {
+    thread_local std::string string_storage;
+    return q_get_data(data, ptr, len, string_storage);
 }
 
 static const char* get_full_type_name(const AbstractQoreNode* n, bool with_namespaces, QoreString* scratch) {

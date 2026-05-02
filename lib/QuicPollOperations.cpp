@@ -141,15 +141,15 @@ static void clampPollTimeoutToDeadline(QoreHashNode* poll_info, int64_t deadline
 
 //! Log and clear a readPacketBatch exception (shared by batch recv helpers)
 static void logBatchError(ExceptionSink* xsink, QuicSession* target, int batch_count) {
-    const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
-    const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+    QoreStringValueHelper err_str(xsink->getExceptionErr());
+    QoreStringValueHelper desc_str(xsink->getExceptionDesc());
     fprintf(stderr, "QUIC WARNING: readPacketBatch error "
         "(session %lld%s, %d packets): %s: %s\n",
         (long long)target->getSessionId(),
         target->isClosed() ? ", now closed" : "",
         batch_count,
-        err_str ? err_str->c_str() : "unknown",
-        desc_str ? desc_str->c_str() : "unknown");
+        *err_str ? err_str->c_str() : "unknown",
+        *desc_str ? desc_str->c_str() : "unknown");
     xsink->clear();
 }
 
@@ -346,13 +346,13 @@ static int recvAndDispatchQuicPackets(int fd, QoreDatagramDispatcher& dispatcher
         if (*xsink) {
             // Log exception details and continue; a single session error should not
             // stop the server from receiving packets for other sessions
-            const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+            QoreStringValueHelper err_str(xsink->getExceptionErr());
+            QoreStringValueHelper desc_str(xsink->getExceptionDesc());
             fprintf(stderr, "QUIC WARNING: readPacket error (session %lld%s): %s: %s\n",
                 (long long)target->getSessionId(),
                 target->isClosed() ? ", now closed" : "",
-                err_str ? err_str->c_str() : "unknown",
-                desc_str ? desc_str->c_str() : "unknown");
+                *err_str ? err_str->c_str() : "unknown",
+                *desc_str ? desc_str->c_str() : "unknown");
             xsink->clear();
         }
     }
@@ -1704,12 +1704,12 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         SSL_CTX* shared_ctx = sock->priv->socket->priv->getOrCreateQuicServerSslCtx(
             sock->priv->cert, sock->priv->pk, xsink);
         if (*xsink) {
-            const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+            QoreStringValueHelper err_str(xsink->getExceptionErr());
+            QoreStringValueHelper desc_str(xsink->getExceptionDesc());
             qore_async_io_log(QORE_LOG_LEVEL_WARN,
                 "QUIC: failed to create shared server SSL_CTX: %s: %s",
-                err_str ? err_str->c_str() : "unknown",
-                desc_str ? desc_str->c_str() : "unknown");
+                *err_str ? err_str->c_str() : "unknown",
+                *desc_str ? desc_str->c_str() : "unknown");
             xsink->clear();
             return 0;
         }
@@ -1727,12 +1727,12 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         if (*xsink || !new_session) {
             // Log and continue — a single client's failed handshake should not
             // abort the server for all other clients
-            const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+            QoreStringValueHelper err_str(xsink->getExceptionErr());
+            QoreStringValueHelper desc_str(xsink->getExceptionDesc());
             qore_async_io_log(QORE_LOG_LEVEL_WARN,
                 "QUIC: failed to create server session: %s: %s",
-                err_str ? err_str->c_str() : "unknown",
-                desc_str ? desc_str->c_str() : "unknown");
+                *err_str ? err_str->c_str() : "unknown",
+                *desc_str ? desc_str->c_str() : "unknown");
             xsink->clear();
             return 0;
         }
@@ -1771,13 +1771,13 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         // client cert is required but not provided) should not abort the entire
         // server listener.  Log the error and send a CONNECTION_CLOSE to the
         // client so it gets a clean error instead of timing out.
-        const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+        QoreStringValueHelper err_str(xsink->getExceptionErr());
+        QoreStringValueHelper desc_str(xsink->getExceptionDesc());
         qore_async_io_log(QORE_LOG_LEVEL_WARN,
             "QUIC: readPacket() failed for session %lld: %s: %s",
             (long long)target_session->getSessionId(),
-            err_str ? err_str->c_str() : "unknown",
-            desc_str ? desc_str->c_str() : "unknown");
+            *err_str ? err_str->c_str() : "unknown",
+            *desc_str ? desc_str->c_str() : "unknown");
         xsink->clear();
 
         // Send CONNECTION_CLOSE frame so the client gets an immediate error
@@ -1811,13 +1811,13 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         if (*xsink) {
             // Log and continue — a single session's HTTP/3 setup failure should not
             // halt the server for all other clients
-            const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
+            QoreStringValueHelper err_str(xsink->getExceptionErr());
+            QoreStringValueHelper desc_str(xsink->getExceptionDesc());
             qore_async_io_log(QORE_LOG_LEVEL_WARN,
                 "QUIC: setupHttp3() failed for session %lld: %s: %s",
                 (long long)target_session->getSessionId(),
-                err_str ? err_str->c_str() : "unknown",
-                desc_str ? desc_str->c_str() : "unknown");
+                *err_str ? err_str->c_str() : "unknown",
+                *desc_str ? desc_str->c_str() : "unknown");
             xsink->clear();
         }
     }

@@ -265,7 +265,7 @@ void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache, uint64_t* tra
 //! without popping the stack entry.  This triggers destructors (via decref)
 //! at block scope exit for pre-instantiated locals whose stack entry must
 //! remain for the caller to clean up.
-//! Uses thread_find_lvar() + del(xsink) — bypasses LValueHelper::assign()
+//! Uses raw stack lookup + del(xsink) — bypasses LValueHelper::assign()
 //! which asserts !*xsink (unsafe when a prior destructor already set xsink).
 void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsink);
 

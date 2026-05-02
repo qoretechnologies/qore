@@ -952,7 +952,8 @@ int QoreSocketObject::submitHttp2StreamingResponseHeadersAsync(int32_t stream_id
         while (hi.next()) {
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper str(val);
+                header_map[hi.getKey()] = str->c_str();
             }
         }
     }
@@ -1001,7 +1002,8 @@ int QoreSocketObject::sendHttp2TrailersAsync(int32_t stream_id, const QoreHashNo
         while (hi.next()) {
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                trailer_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper str(val);
+                trailer_map[hi.getKey()] = str->c_str();
             }
         }
     }
@@ -1069,7 +1071,8 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
         while (hi.next()) {
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                header_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper str(val);
+                header_map[hi.getKey()] = str->c_str();
             }
         }
     }
@@ -1090,7 +1093,8 @@ int QoreSocketObject::submitHttp2StreamingResponseWithStream(int32_t stream_id, 
             if (!strcasecmp(hi.getKey(), "content-length")) {
                 QoreValue v = hi.get();
                 if (v.getType() == NT_STRING) {
-                    const char* s = v.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper str(v);
+                    const char* s = str->c_str();
                     char* endptr = nullptr;
                     long long cl = strtoll(s, &endptr, 10);
                     if (endptr != s && cl >= 0) {

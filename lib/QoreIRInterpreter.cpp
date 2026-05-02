@@ -354,6 +354,31 @@ static QoreValue validateWeakRef(const QoreValue& val) {
     }
 }
 
+static inline bool isWeakReferenceType(qore_type_t type) {
+    return type == NT_WEAKREF || type == NT_WEAKREF_HASH || type == NT_WEAKREF_LIST;
+}
+
+static bool normalizeWeakReferenceForAssignment(QoreValue& value, ValueHolder& holder, ExceptionSink* xsink) {
+    if (!isWeakReferenceType(value.getType())) {
+        return false;
+    }
+    holder = value.eval(xsink);
+    if (xsink && *xsink) {
+        return true;
+    }
+    value = *holder;
+    return true;
+}
+
+static bool evaluateOwnedWeakReferenceResult(QoreValue& value, ExceptionSink* xsink) {
+    if (!isWeakReferenceType(value.getType())) {
+        return false;
+    }
+    ValueHolder old(value, xsink);
+    value = old->eval(xsink);
+    return true;
+}
+
 QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& left, const QoreValue& right,
         ExceptionSink* xsink) {
     switch (op) {
@@ -362,9 +387,12 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::EqFloat:
             return QoreValue(left.getAsFloat() == right.getAsFloat());
         case QoreIROpcode::EqString: {
-            const QoreStringNode* lstr = left.get<const QoreStringNode>();
-            const QoreStringNode* rstr = right.get<const QoreStringNode>();
-            return QoreValue(lstr && rstr && lstr->equalSoft(*rstr, xsink));
+            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
+                return QoreValue(false);
+            }
+            QoreStringNodeValueHelper lstr(left);
+            QoreStringNodeValueHelper rstr(right);
+            return QoreValue(lstr && rstr && lstr->equalSoft(**rstr, xsink));
         }
         case QoreIROpcode::EqAny:
             return QoreValue(QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
@@ -373,9 +401,12 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::NeFloat:
             return QoreValue(left.getAsFloat() != right.getAsFloat());
         case QoreIROpcode::NeString: {
-            const QoreStringNode* lstr = left.get<const QoreStringNode>();
-            const QoreStringNode* rstr = right.get<const QoreStringNode>();
-            return QoreValue(!lstr || !rstr || !lstr->equalSoft(*rstr, xsink));
+            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
+                return QoreValue(true);
+            }
+            QoreStringNodeValueHelper lstr(left);
+            QoreStringNodeValueHelper rstr(right);
+            return QoreValue(!lstr || !rstr || !lstr->equalSoft(**rstr, xsink));
         }
         case QoreIROpcode::NeAny:
             return QoreValue(!QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
@@ -388,9 +419,12 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::LtFloat:
             return QoreValue(left.getAsFloat() < right.getAsFloat());
         case QoreIROpcode::LtString: {
-            const QoreStringNode* lstr = left.get<const QoreStringNode>();
-            const QoreStringNode* rstr = right.get<const QoreStringNode>();
-            return QoreValue(lstr && rstr && (lstr->compare(rstr) < 0));
+            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
+                return QoreValue(false);
+            }
+            QoreStringNodeValueHelper lstr(left);
+            QoreStringNodeValueHelper rstr(right);
+            return QoreValue(lstr && rstr && (lstr->compare(*rstr) < 0));
         }
         case QoreIROpcode::LtAny:
             return QoreValue(QoreLogicalLessThanOperatorNode::doLessThan(left, right, xsink));
@@ -399,9 +433,12 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::LeFloat:
             return QoreValue(left.getAsFloat() <= right.getAsFloat());
         case QoreIROpcode::LeString: {
-            const QoreStringNode* lstr = left.get<const QoreStringNode>();
-            const QoreStringNode* rstr = right.get<const QoreStringNode>();
-            return QoreValue(lstr && rstr && (lstr->compare(rstr) <= 0));
+            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
+                return QoreValue(false);
+            }
+            QoreStringNodeValueHelper lstr(left);
+            QoreStringNodeValueHelper rstr(right);
+            return QoreValue(lstr && rstr && (lstr->compare(*rstr) <= 0));
         }
         case QoreIROpcode::LeAny:
             return QoreValue(QoreLogicalLessThanOrEqualsOperatorNode::doLessThanOrEquals(left, right, xsink));
@@ -410,9 +447,12 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::GtFloat:
             return QoreValue(left.getAsFloat() > right.getAsFloat());
         case QoreIROpcode::GtString: {
-            const QoreStringNode* lstr = left.get<const QoreStringNode>();
-            const QoreStringNode* rstr = right.get<const QoreStringNode>();
-            return QoreValue(lstr && rstr && (lstr->compare(rstr) > 0));
+            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
+                return QoreValue(false);
+            }
+            QoreStringNodeValueHelper lstr(left);
+            QoreStringNodeValueHelper rstr(right);
+            return QoreValue(lstr && rstr && (lstr->compare(*rstr) > 0));
         }
         case QoreIROpcode::GtAny:
             return QoreValue(QoreLogicalGreaterThanOperatorNode::doGreaterThan(left, right, xsink));
@@ -421,9 +461,12 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::GeFloat:
             return QoreValue(left.getAsFloat() >= right.getAsFloat());
         case QoreIROpcode::GeString: {
-            const QoreStringNode* lstr = left.get<const QoreStringNode>();
-            const QoreStringNode* rstr = right.get<const QoreStringNode>();
-            return QoreValue(lstr && rstr && (lstr->compare(rstr) >= 0));
+            if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
+                return QoreValue(false);
+            }
+            QoreStringNodeValueHelper lstr(left);
+            QoreStringNodeValueHelper rstr(right);
+            return QoreValue(lstr && rstr && (lstr->compare(*rstr) >= 0));
         }
         case QoreIROpcode::GeAny:
             return QoreValue(QoreLogicalGreaterThanOrEqualsOperatorNode::doGreaterThanOrEquals(left, right, xsink));
@@ -445,11 +488,11 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
             return QoreValue(l < r ? -1 : (l > r ? 1 : 0));
         }
         case QoreIROpcode::CmpString: {
-            const QoreStringNode* lstr = left.get<const QoreStringNode>();
-            const QoreStringNode* rstr = right.get<const QoreStringNode>();
             int64_t result = 0;
-            if (lstr && rstr) {
-                int cmp = lstr->compare(rstr);
+            if (left.getType() == NT_STRING && right.getType() == NT_STRING) {
+                QoreStringNodeValueHelper lstr(left);
+                QoreStringNodeValueHelper rstr(right);
+                int cmp = lstr->compare(*rstr);
                 result = cmp < 0 ? -1 : (cmp > 0 ? 1 : 0);  // normalize to -1/0/1
             }
             return QoreValue(result);
@@ -960,10 +1003,8 @@ static void cleanupValues(IRValueSlots& values, std::vector<uint32_t>& cleanup,
         QoreValue& slot = values[id];
         if (cleanup_log && slot.hasNode()) {
             if (slot.getType() == NT_STRING) {
-                auto* str = slot.get<QoreStringNode>();
-                if (str) {
-                    cleanup_log->push_back(str->getBuffer());
-                }
+                QoreStringValueHelper str(slot);
+                cleanup_log->push_back(str->getBuffer());
             } else {
                 cleanup_log->push_back(slot.getTypeName());
             }
@@ -1422,10 +1463,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return QoreIRInterpreter::evalUnary(op, val, xsink);
         }
         case QoreIROpcode::ToString: {
-            QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
-            switch (val.getType()) {
-                case NT_STRING:
-                    return QoreValue(val.get<const QoreStringNode>()->stringRefSelf());
+                QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
+                switch (val.getType()) {
+                case NT_STRING: {
+                    QoreStringNodeValueHelper str(val);
+                    return QoreValue(str.getReferencedValue());
+                }
                 case NT_INT:
                     return QoreValue(new QoreStringNodeMaker(QLLD, val.getAsBigInt()));
                 case NT_FLOAT:
@@ -3270,16 +3313,6 @@ next_instruction:
             // Update runtime_loc for exception/callstack reporting via cached pointers
             *rl_cache.stmt_ptr = nullptr;
             *rl_cache.loc_ptr = inst->loc;
-            // Discard ephemeral weak-ref values at statement boundaries
-            if (!ephemeral_weak_ref_slots.empty()) {
-                for (uint32_t slot : ephemeral_weak_ref_slots) {
-                    if (slot < values.size()) {
-                        values[slot].discard(xsink);
-                        values[slot] = QoreValue();
-                    }
-                }
-                ephemeral_weak_ref_slots.clear();
-            }
             last_ephemeral_line = inst->cached_start_line;
             if (!debug_active) {
                 last_debug_line = inst->cached_start_line;
@@ -3816,15 +3849,16 @@ next_instruction:
                 QoreValue first = getIRValue(values, inst->operands[0]);
                 const QoreEncoding* enc = QCS_DEFAULT;
                 if (first.getType() == NT_STRING) {
-                    enc = first.get<const QoreStringNode>()->getEncoding();
+                    QoreStringValueHelper first_str(first);
+                    enc = first_str->getEncoding();
                 }
                 QoreStringNode* result = new QoreStringNode(enc);
                 // Concatenate all operands
                 for (const auto& operand : inst->operands) {
                     QoreValue v = getIRValue(values, operand);
                     if (v.getType() == NT_STRING) {
-                        const QoreStringNode* s = v.get<const QoreStringNode>();
-                        result->concat(s, xsink);
+                        QoreStringValueHelper s(v);
+                        result->concat(*s, xsink);
                         if (xsink && *xsink) {
                             result->deref();
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -4236,8 +4270,8 @@ next_instruction:
                 prev_block = block;
                 // Search for matching case
                 QoreIRBasicBlock* target = sw->default_target;
-                const QoreStringNode* str = switch_val.get<const QoreStringNode>();
-                if (str) {
+                if (switch_val.getType() == NT_STRING) {
+                    QoreStringValueHelper str(switch_val);
                     for (const auto& c : sw->cases) {
                         if (str->equal(c.value.c_str())) {
                             target = c.target;
@@ -4318,7 +4352,7 @@ next_instruction:
                         // out slot's refSelf'd temp ref.
                         bool is_weak_ref_local = false;
                         if (!needs_deref && val.hasNode()) {
-                            LocalVarValue* lvv = thread_find_lvar(local_inst->local->getName());
+                            LocalVarValue* lvv = thread_try_find_lvar(local_inst->local->getName());
                             if (lvv) {
                                 qore_type_t raw_type = lvv->val.getType();
                                 if (raw_type == NT_WEAKREF || raw_type == NT_WEAKREF_HASH
@@ -4507,7 +4541,7 @@ load_local_done:
                             // with closureUse() set (captured by inner closures) but the
                             // current execution context is the function's own body, not a
                             // closure. In that case, the variable lives on the local stack.
-                            if (LocalVarValue* lvv = thread_find_lvar(local_inst->local->getName())) {
+                            if (LocalVarValue* lvv = thread_try_find_lvar(local_inst->local->getName())) {
                                 bool needs_deref = false;
                                 out = lvv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
@@ -4584,6 +4618,12 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
+                }
+                evaluateOwnedWeakReferenceResult(out, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 // else: NOTHING for non-hash/non-object values
                 setValueSlot(values, hka_inst->result.id, out, xsink);
@@ -5087,7 +5127,7 @@ load_local_done:
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->target_slot_id];
                         if (!lvv) {
-                            lvv = thread_find_lvar(fused_inst->target->getName());
+                            lvv = thread_try_find_lvar(fused_inst->target->getName());
                         }
                         if (lvv) {
                             discard(lvv->val.assign(result_val), xsink);
@@ -5146,7 +5186,7 @@ load_local_done:
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->slot_id];
                         if (!lvv) {
-                            lvv = thread_find_lvar(fused_inst->local->getName());
+                            lvv = thread_try_find_lvar(fused_inst->local->getName());
                         }
                         if (lvv) {
                             discard(lvv->val.assign(result_val), xsink);
@@ -5852,7 +5892,16 @@ load_local_done:
                 }
                 QoreIRValue operand = local_inst->operands.front();
                 QoreValue val = getIRValue(values, operand);
-                bool transfer_owned_operand = operand.isValid()
+                ValueHolder weak_eval_holder(xsink);
+                bool normalized_weak_ref = !local_inst->weak
+                    && normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                bool transfer_owned_operand = !normalized_weak_ref
+                    && operand.isValid()
                     && operand.id < values.size()
                     && operand.id < value_use_counts.size()
                     && value_use_counts[operand.id] == 1
@@ -5882,11 +5931,6 @@ load_local_done:
                     }
                     QoreValue stored = val.hasNode() ? val.refSelf() : val;
                     helper.assign(stored, "<lvalue>", true, true);
-                    if (operand.id < values.size()) {
-                        removeCleanupEntry(cleanup, operand.id);
-                        values[operand.id].discard(xsink);
-                        values[operand.id] = QoreValue();
-                    }
                     if (local_inst->slot_id != UINT32_MAX
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
@@ -5901,6 +5945,13 @@ load_local_done:
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
+                    }
+                    if (local_inst->result.isValid()) {
+                        QoreValue res = helper.getReferencedValue();
+                        setValueSlot(values, local_inst->result.id, res, xsink);
+                        if (res.hasNode()) {
+                            cleanup.push_back(local_inst->result.id);
+                        }
                     }
                     markParentLocalStoreDirty(local_inst);
                     ++ip;
@@ -5992,7 +6043,7 @@ load_local_done:
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
                                 LocalVarValue*& lvv = locals_lvar_cache[local_inst->slot_id];
                                 if (!lvv) {
-                                    lvv = thread_find_lvar(local_inst->local->getName());
+                                    lvv = thread_try_find_lvar(local_inst->local->getName());
                                 }
                                 if (lvv) {
                                     qore_type_t vt = val.getType();
@@ -6251,7 +6302,7 @@ load_local_done:
                             }
                             local_inst->local->uninstantiate(xsink);
                         } else {
-                            LocalVarValue* lvar = thread_find_lvar(local_inst->local->getName());
+                            LocalVarValue* lvar = thread_try_find_lvar(local_inst->local->getName());
                             if (lvar) {
                                 // Release ALL value slot references to this object
                                 // BEFORE lvar->del() so del() is the final deref and
@@ -6376,6 +6427,7 @@ load_local_done:
                     return false;
                 }
                 QoreValue val = getIRValue(values, local_inst->operands.front());
+                ValueHolder weak_eval_holder(xsink);
 
                 // Handle weak assignment by wrapping in WeakReferenceNode at runtime
                 if (local_inst->weak && val.hasNode()) {
@@ -6389,6 +6441,13 @@ load_local_done:
                     } else if (type == NT_LIST) {
                         QoreListNode* l = val.get<QoreListNode>();
                         val = new WeakListReferenceNode(l);
+                    }
+                } else if (!local_inst->weak) {
+                    normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
                     }
                 }
 
@@ -6408,6 +6467,13 @@ load_local_done:
                 // Write-through: update the actual closure variable so changes
                 // are visible outside the IR interpreter's local cache.
                 assignClosureVarValue(local_inst->local, val, xsink);
+                if (local_inst->result.isValid()) {
+                    QoreValue res = val.hasNode() ? val.refSelf() : val;
+                    setValueSlot(values, local_inst->result.id, res, xsink);
+                    if (res.hasNode()) {
+                        cleanup.push_back(local_inst->result.id);
+                    }
+                }
                 // Drop the initial ownership ref from weak node creation;
                 // storeValue() and assignClosureVarValue() each took their own ref
                 if (local_inst->weak && val.hasNode()
@@ -6460,6 +6526,7 @@ load_local_done:
                     return false;
                 }
                 QoreValue val = getIRValue(values, var_inst->operands.front());
+                ValueHolder weak_eval_holder(xsink);
 
                 // Handle weak assignment by wrapping in WeakReferenceNode at runtime
                 if (var_inst->weak && val.hasNode()) {
@@ -6474,12 +6541,26 @@ load_local_done:
                         QoreListNode* l = val.get<QoreListNode>();
                         val = new WeakListReferenceNode(l);
                     }
+                } else if (!var_inst->weak) {
+                    normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                 }
 
                 storeValue(globals, var_inst->var, val, xsink);
                 // Write-through: update the actual global variable so changes
                 // are visible outside the IR interpreter's local cache.
                 assignGlobalVarValue(var_inst->var, val, xsink);
+                if (var_inst->result.isValid()) {
+                    QoreValue res = val.hasNode() ? val.refSelf() : val;
+                    setValueSlot(values, var_inst->result.id, res, xsink);
+                    if (res.hasNode()) {
+                        cleanup.push_back(var_inst->result.id);
+                    }
+                }
                 // Drop the initial ownership ref from weak node creation;
                 // storeValue() and assignGlobalVarValue() each took their own ref
                 if (var_inst->weak && val.hasNode()
@@ -6531,6 +6612,7 @@ load_local_done:
                     return false;
                 }
                 QoreValue val = getIRValue(values, var_inst->operands.front());
+                ValueHolder weak_eval_holder(xsink);
 
                 // Handle weak assignment by wrapping in WeakReferenceNode at runtime
                 if (var_inst->weak && val.hasNode()) {
@@ -6545,11 +6627,25 @@ load_local_done:
                         QoreListNode* l = val.get<QoreListNode>();
                         val = new WeakListReferenceNode(l);
                     }
+                } else if (!var_inst->weak) {
+                    normalizeWeakReferenceForAssignment(val, weak_eval_holder, xsink);
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                 }
 
                 storeValue(threadlocals, var_inst->var, val, xsink);
                 // Write-through: update the actual thread-local variable.
                 assignGlobalVarValue(var_inst->var, val, xsink);
+                if (var_inst->result.isValid()) {
+                    QoreValue res = val.hasNode() ? val.refSelf() : val;
+                    setValueSlot(values, var_inst->result.id, res, xsink);
+                    if (res.hasNode()) {
+                        cleanup.push_back(var_inst->result.id);
+                    }
+                }
                 // Drop the initial ownership ref from weak node creation;
                 // storeValue() and assignGlobalVarValue() each took their own ref
                 if (var_inst->weak && val.hasNode()
@@ -7100,10 +7196,8 @@ load_local_done:
                         QoreValue& slot = values[id];
                         if (cleanup_log && slot.hasNode()) {
                             if (slot.getType() == NT_STRING) {
-                                auto* str = slot.get<QoreStringNode>();
-                                if (str) {
-                                    cleanup_log->push_back(str->getBuffer());
-                                }
+                                QoreStringValueHelper str(slot);
+                                cleanup_log->push_back(str->getBuffer());
                             } else {
                                 cleanup_log->push_back(slot.getTypeName());
                             }
@@ -7112,6 +7206,11 @@ load_local_done:
                         slot = QoreValue();
                     }
                 }
+                // Weak-reference loads are normal statement temporaries; the
+                // cleanup stack above owns their lifetime.  Clear bookkeeping
+                // after statement cleanup without tying lifetime to source lines,
+                // because a single expression can span multiple lines.
+                ephemeral_weak_ref_slots.clear();
                 ++ip;
                 break;
             }
@@ -7310,9 +7409,11 @@ load_local_done:
                 QoreValue val = getIRValue(values, inst->operands[0]);
                 QoreStringNode* str;
                 switch (val.getType()) {
-                    case NT_STRING:
-                        str = val.get<const QoreStringNode>()->stringRefSelf();
+                    case NT_STRING: {
+                        QoreStringNodeValueHelper val_str(val);
+                        str = val_str.getReferencedValue();
                         break;
+                    }
                     case NT_INT:
                         str = new QoreStringNodeMaker(QLLD, val.getAsBigInt());
                         break;
@@ -7805,6 +7906,7 @@ load_local_done:
                 // Scope the LValueHelper so it releases the object lock
                 // BEFORE cache invalidation (which may deref objects and
                 // try to acquire the same lock for GC scanning).
+                QoreValue res;
                 {
                     LValueHelper lvh(xsink);
                     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
@@ -7817,6 +7919,7 @@ load_local_done:
                         cleanupLocalCaches();
                         return false;
                     }
+                    res = lvh.getReferencedValue();
                 }
                 // lvh is now destructed — object lock released
                 invalidateLValuePathClosureCache(path_inst);
@@ -7850,11 +7953,8 @@ load_local_done:
                 }
 
                 if (path_inst->result.isValid()) {
-                    // Use refSelf() to create an independent reference — assign_val may also exist
-                    // in the operand slot, and cleanup would double-deref without this
-                    QoreValue result_val = assign_val.refSelf();
-                    setValueSlot(values, path_inst->result.id, result_val, xsink);
-                    if (result_val.hasNode()) {
+                    setValueSlot(values, path_inst->result.id, res, xsink);
+                    if (res.hasNode()) {
                         cleanup.push_back(path_inst->result.id);
                     }
                 }
@@ -8102,7 +8202,7 @@ load_local_done:
                         ReferenceNode* ref = nullptr;
                         if (lv) {
                             if (!lv->closureUse()) {
-                                LocalVarValue* lvv = thread_find_lvar(lv->getName());
+                                LocalVarValue* lvv = thread_try_find_lvar(lv->getName());
                                 if (lvv && lvv->val.getType() == NT_REFERENCE) {
                                     ref = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                                 }
@@ -8366,13 +8466,13 @@ load_local_done:
                                     while (hi.next()) {
                                         if (hi.get().getType() == NT_STRING) {
                                             QoreValue& v = (*qhi_priv::get(hi)->i)->val;
-                                            QoreStringNode* vs = v.get<QoreStringNode>();
-                                            if (!vs->is_unique()) {
-                                                QoreStringNode* old = vs;
-                                                vs = vs->copy();
-                                                old->deref();
-                                                v = vs;
+                                            ensure_unique(v, xsink);
+                                            if (*xsink) {
+                                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                                cleanupLocalCaches();
+                                                return false;
                                             }
+                                            QoreStringNode* vs = v.get<QoreStringNode>();
                                             count += static_cast<int64>(vs->chomp());
                                         }
                                     }
@@ -8500,8 +8600,8 @@ lvalue_path_unary_done:
                             auto* regex_op = dynamic_cast<const QoreRegexSubstOperatorNode*>(
                                 path_inst->pattern_expr.getInternalNode());
                             if (regex_op && regex_op->getRegexSubst()) {
-                                const QoreStringNode* str = lvh.getValue().get<const QoreStringNode>();
-                                QoreStringNode* nv = regex_op->getRegexSubst()->exec(str, xsink);
+                                QoreStringNodeValueHelper str(lvh.getValue());
+                                QoreStringNode* nv = regex_op->getRegexSubst()->exec(*str, xsink);
                                 if (!*xsink && nv) {
                                     lvh.assign(nv);
                                     if (path_inst->ref_rv) {
@@ -8521,8 +8621,8 @@ lvalue_path_unary_done:
                             auto* trans_op = dynamic_cast<const QoreTransliterationOperatorNode*>(
                                 path_inst->pattern_expr.getInternalNode());
                             if (trans_op && trans_op->getTransliteration()) {
-                                const QoreStringNode* str = lvh.getValue().get<const QoreStringNode>();
-                                QoreStringNode* nv = trans_op->getTransliteration()->exec(str, xsink);
+                                QoreStringNodeValueHelper str(lvh.getValue());
+                                QoreStringNode* nv = trans_op->getTransliteration()->exec(*str, xsink);
                                 if (!*xsink && nv) {
                                     lvh.assign(nv);
                                     if (path_inst->ref_rv) {
@@ -9703,7 +9803,7 @@ lvalue_path_unary_done:
                             const QoreListNode* l = base.get<const QoreListNode>();
                             res = QoreValue(static_cast<int64_t>(l->size()));
                         } else if (base_type == NT_STRING) {
-                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            QoreStringValueHelper s(base);
                             res = QoreValue(static_cast<int64_t>(s->strlen()));
                         } else if (base_type == NT_HASH) {
                             const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -9719,7 +9819,7 @@ lvalue_path_unary_done:
                         // Inline: strlen()/length() for strings
                         // strlen() returns byte length, length() returns character count
                         if (base_type == NT_STRING) {
-                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            QoreStringValueHelper s(base);
                             res = QoreValue(static_cast<int64_t>(
                                 !strcmp(method_name, "strlen") ? s->strlen() : s->length()));
                         } else {
@@ -9735,7 +9835,7 @@ lvalue_path_unary_done:
                             const QoreListNode* l = base.get<const QoreListNode>();
                             res = QoreValue(l->empty() ? true : false);
                         } else if (base_type == NT_STRING) {
-                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            QoreStringValueHelper s(base);
                             res = QoreValue(s->strlen() == 0 ? true : false);
                         } else if (base_type == NT_HASH) {
                             const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -9753,7 +9853,7 @@ lvalue_path_unary_done:
                             const QoreListNode* l = base.get<const QoreListNode>();
                             res = QoreValue(l->empty() ? false : true);
                         } else if (base_type == NT_STRING) {
-                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            QoreStringValueHelper s(base);
                             res = QoreValue(s->strlen() == 0 ? false : true);
                         } else if (base_type == NT_HASH) {
                             const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -9864,7 +9964,7 @@ lvalue_path_unary_done:
                             const QoreListNode* l = base.get<const QoreListNode>();
                             res = QoreValue(static_cast<int64_t>(l->size()));
                         } else if (base_type == NT_STRING) {
-                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            QoreStringValueHelper s(base);
                             res = QoreValue(static_cast<int64_t>(s->strlen()));
                         } else if (base_type == NT_HASH) {
                             const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -9880,7 +9980,7 @@ lvalue_path_unary_done:
                         // Inline: strlen()/length() for strings
                         // strlen() returns byte length, length() returns character count
                         if (base_type == NT_STRING) {
-                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            QoreStringValueHelper s(base);
                             res = QoreValue(static_cast<int64_t>(
                                 !strcmp(method_name, "strlen") ? s->strlen() : s->length()));
                         } else {
@@ -9896,7 +9996,7 @@ lvalue_path_unary_done:
                             const QoreListNode* l = base.get<const QoreListNode>();
                             res = QoreValue(l->empty() ? true : false);
                         } else if (base_type == NT_STRING) {
-                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            QoreStringValueHelper s(base);
                             res = QoreValue(s->strlen() == 0 ? true : false);
                         } else if (base_type == NT_HASH) {
                             const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -9914,7 +10014,7 @@ lvalue_path_unary_done:
                             const QoreListNode* l = base.get<const QoreListNode>();
                             res = QoreValue(l->empty() ? false : true);
                         } else if (base_type == NT_STRING) {
-                            const QoreStringNode* s = base.get<const QoreStringNode>();
+                            QoreStringValueHelper s(base);
                             res = QoreValue(s->strlen() == 0 ? false : true);
                         } else if (base_type == NT_HASH) {
                             const QoreHashNode* h = base.get<const QoreHashNode>();
@@ -10672,7 +10772,8 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
                 return QoreValue(static_cast<int64>(value.get<const QoreHashNode>()->size()));
             }
             if (t == NT_STRING) {
-                return QoreValue(static_cast<int64>(value.get<const QoreStringNode>()->length()));
+                QoreStringValueHelper str(value);
+                return QoreValue(static_cast<int64>(str->length()));
             }
             if (t == NT_BINARY) {
                 return QoreValue(static_cast<int64>(value.get<const BinaryNode>()->size()));
@@ -10730,21 +10831,23 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::AddString: {
             // Typed string concatenation - both operands are known to be strings
-            const QoreStringNode* ls = left.getType() == NT_STRING
-                ? left.get<const QoreStringNode>() : nullptr;
-            const QoreStringNode* rs = right.getType() == NT_STRING
-                ? right.get<const QoreStringNode>() : nullptr;
-            if (!ls && !rs) {
+            bool l_is_string = left.getType() == NT_STRING;
+            bool r_is_string = right.getType() == NT_STRING;
+            if (!l_is_string && !r_is_string) {
                 return QoreValue();  // Both NOTHING
             }
-            if (!ls) {
-                return QoreValue(rs->stringRefSelf());  // Copy right
+            if (!l_is_string) {
+                QoreStringNodeValueHelper rs(right);
+                return QoreValue(rs.getReferencedValue());  // Copy right
             }
-            if (!rs) {
-                return QoreValue(ls->stringRefSelf());  // Copy left
+            if (!r_is_string) {
+                QoreStringNodeValueHelper ls(left);
+                return QoreValue(ls.getReferencedValue());  // Copy left
             }
-            QoreStringNode* result = new QoreStringNode(*ls);
-            result->concat(rs, xsink);
+            QoreStringNodeValueHelper ls(left);
+            QoreStringNodeValueHelper rs(right);
+            QoreStringNode* result = new QoreStringNode(**ls);
+            result->concat(*rs, xsink);
             if (*xsink) {
                 result->deref();
                 return QoreValue();
@@ -11985,7 +12088,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 }
                 QoreStringValueHelper key(right);
                 QoreValue v = h->getKeyValue(key->c_str(), xsink);
-                return (xsink && *xsink) ? QoreValue() : v.refSelf();
+                if (xsink && *xsink) {
+                    return QoreValue();
+                }
+                QoreValue out = v.refSelf();
+                evaluateOwnedWeakReferenceResult(out, xsink);
+                return out;
             }
             if (bt == NT_OBJECT) {
                 QoreObject* o = const_cast<QoreObject*>(left.get<const QoreObject>());
@@ -11994,7 +12102,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 }
                 QoreStringValueHelper key(right);
                 ValueHolder rv(o->evalMember(key->c_str(), xsink), xsink);
-                return (xsink && *xsink) ? QoreValue() : rv.release();
+                if (xsink && *xsink) {
+                    return QoreValue();
+                }
+                QoreValue out = rv.release();
+                evaluateOwnedWeakReferenceResult(out, xsink);
+                return out;
             }
             return QoreValue();
         }
@@ -12012,7 +12125,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 return l->getReferencedEntry(right.getAsBigInt());
             }
             if (bt == NT_STRING) {
-                const QoreStringNode* s = left.get<const QoreStringNode>();
+                QoreStringNodeValueHelper s(left);
                 return s->substr(static_cast<qore_offset_t>(right.getAsBigInt()), 1, xsink);
             }
             if (bt == NT_BINARY) {
@@ -12032,7 +12145,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 const QoreHashNode* h = left.get<const QoreHashNode>();
                 QoreStringValueHelper kstr(right);
                 QoreValue result = h->getKeyValue(kstr->c_str(), xsink);
-                return xsink && *xsink ? QoreValue() : result.refSelf();
+                if (xsink && *xsink) {
+                    return QoreValue();
+                }
+                QoreValue out = result.refSelf();
+                evaluateOwnedWeakReferenceResult(out, xsink);
+                return out;
             }
             return QoreValue();
         }
@@ -12114,13 +12232,11 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
     }
     QoreValue assign_value = value;
     ValueHolder eval_holder(xsink);
-    qore_type_t value_type = value.getType();
-    if (!weak && (value_type == NT_WEAKREF || value_type == NT_WEAKREF_HASH || value_type == NT_WEAKREF_LIST)) {
-        eval_holder = value.eval(xsink);
-        if (*xsink) {
+    if (!weak) {
+        normalizeWeakReferenceForAssignment(assign_value, eval_holder, xsink);
+        if (xsink && *xsink) {
             return QoreValue();
         }
-        assign_value = *eval_holder;
     }
     // refSelf() before passing to assign() - assign() takes ownership via
     // assignAssume()/takeNode(), but value is a borrowed reference from the
@@ -12129,7 +12245,7 @@ QoreValue QoreIRInterpreter::evalLValueStore(const QoreValue& lvalue, const Qore
     if (helper.assign(assign_value.refSelf(), "<lvalue>", true, weak)) {
         return QoreValue();
     }
-    return assign_value.refSelf();
+    return helper.getReferencedValue();
 }
 
 QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& lvalue, ExceptionSink* xsink) {

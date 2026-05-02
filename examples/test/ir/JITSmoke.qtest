@@ -5996,6 +5996,49 @@ printf(\"%y\\n\", results);
             string result = trim(runScript(loop_code, mode));
             assertEq("[0, 1, 2, 3, 4]", result, sprintf("weak assignment in loop %s", mode));
         }
+
+        # The result of a weak assignment expression is the stored weak value,
+        # not a strong reference to the RHS. Assigning that result to another
+        # lvalue must not keep the original object alive after scope exit.
+        string expression_result_code = "%modern
+%allow-weak-references
+class ResultObj {
+    public { int val; }
+    constructor(int v) { val = v; }
+}
+auto weak;
+sub assign_result() {
+    ResultObj strong(123);
+    auto held = (weak := strong);
+    printf(\"%d:%d\\n\", weak.val, held.val);
+}
+assign_result();
+printf(\"%y\\n\", weak);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(expression_result_code, mode));
+            assertEq("123:123\nnull", result, sprintf("weak assignment expression result %s", mode));
+        }
+
+        string path_expression_result_code = "%modern
+%allow-weak-references
+class PathResultObj {
+    public { int val; }
+    constructor(int v) { val = v; }
+}
+hash<auto> h = {};
+sub assign_path_result() {
+    PathResultObj strong(456);
+    auto held = (h.weak := strong);
+    printf(\"%d:%d\\n\", h.weak.val, held.val);
+}
+assign_path_result();
+printf(\"%y\\n\", h.weak);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(path_expression_result_code, mode));
+            assertEq("456:456\nnull", result, sprintf("weak lvalue path assignment expression result %s", mode));
+        }
     }
 
     testGuardDeoptOnBlockExit() {

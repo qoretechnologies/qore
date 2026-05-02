@@ -85,6 +85,7 @@ static void Logger_deserializer(QoreObject& self, const QoreHashNode* sdata,
             }
         }
 
+        SimpleRefHolder<QoreStringNode> name_holder;
         const QoreStringNode* name = nullptr;
         val = sdata->getKeyValue("name");
         if (val) {
@@ -93,7 +94,9 @@ static void Logger_deserializer(QoreObject& self, const QoreHashNode* sdata,
                     "expecting 'string'", val.getTypeName());
                 return;
             }
-            name = val.get<const QoreStringNode>();
+            QoreStringNodeValueHelper name_str(val);
+            name_holder = name_str.getReferencedValue();
+            name = *name_holder;
         }
 
         const QoreObject* parent = nullptr;

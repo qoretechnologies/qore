@@ -1362,10 +1362,10 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
 static std::string qoreAOTExceptionText(ExceptionSink& xsink) {
     QoreValue e = xsink.getExceptionErr();
     QoreValue d = xsink.getExceptionDesc();
-    const char* es = e.getType() == NT_STRING && e.get<const QoreStringNode>()
-        ? e.get<const QoreStringNode>()->c_str() : "(?err)";
-    const char* ds = d.getType() == NT_STRING && d.get<const QoreStringNode>()
-        ? d.get<const QoreStringNode>()->c_str() : "(?desc)";
+    QoreStringValueHelper err(e);
+    QoreStringValueHelper desc(d);
+    const char* es = e.getType() == NT_STRING ? err->c_str() : "(?err)";
+    const char* ds = d.getType() == NT_STRING ? desc->c_str() : "(?desc)";
     std::string rv(es);
     rv += ": ";
     rv += ds;
@@ -1570,14 +1570,9 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
         }
         case NT_STRING: {
             writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_STRING));
-            const QoreStringNode* str = v.get<const QoreStringNode>();
-            if (str) {
-                writeU32(static_cast<uint32_t>(str->size()));
-                writeStringRef(str->c_str(), str->size());
-            } else {
-                writeU32(0);
-                writeStringRef("", 0);
-            }
+            QoreStringValueHelper str(v);
+            writeU32(static_cast<uint32_t>(str->size()));
+            writeStringRef(str->c_str(), str->size());
             return true;
         }
         case NT_DATE: {
@@ -8116,10 +8111,12 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
         if (xs.isException()) {
             QoreValue e = xs.getExceptionErr();
             QoreValue d = xs.getExceptionDesc();
+            QoreStringValueHelper es_str(e);
+            QoreStringValueHelper ds_str(d);
             const char* es = e.getType() == NT_STRING
-                ? e.get<const QoreStringNode>()->c_str() : "(?err)";
+                ? es_str->c_str() : "(?err)";
             const char* ds = d.getType() == NT_STRING
-                ? d.get<const QoreStringNode>()->c_str() : "(?desc)";
+                ? ds_str->c_str() : "(?desc)";
             printd(0, "AOT deser: class '%s' constant '%s' narrowing "
                 "to '%s' failed: %s: %s\n",
                 qc->getName(), pcc.name.c_str(),
@@ -8439,10 +8436,12 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                     // diagnostic.  Don't swallow silently.
                     QoreValue e = xs.getExceptionErr();
                     QoreValue d = xs.getExceptionDesc();
+                    QoreStringValueHelper es_str(e);
+                    QoreStringValueHelper ds_str(d);
                     const char* es = e.getType() == NT_STRING
-                        ? e.get<const QoreStringNode>()->c_str() : "(?err)";
+                        ? es_str->c_str() : "(?err)";
                     const char* ds = d.getType() == NT_STRING
-                        ? d.get<const QoreStringNode>()->c_str() : "(?desc)";
+                        ? ds_str->c_str() : "(?desc)";
                     printd(0, "AOT deser: hashdecl '%s' member '%s' default "
                         "narrowing to '%s' failed: %s: %s\n",
                         hd->getName(), phm.name.c_str(), phm.type_path.c_str(),
@@ -8895,10 +8894,12 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             if (xs.isException()) {
                 QoreValue e = xs.getExceptionErr();
                 QoreValue d = xs.getExceptionDesc();
+                QoreStringValueHelper es_str(e);
+                QoreStringValueHelper ds_str(d);
                 const char* es = e.getType() == NT_STRING
-                    ? e.get<const QoreStringNode>()->c_str() : "(?err)";
+                    ? es_str->c_str() : "(?err)";
                 const char* ds = d.getType() == NT_STRING
-                    ? d.get<const QoreStringNode>()->c_str() : "(?desc)";
+                    ? ds_str->c_str() : "(?desc)";
                 printd(0, "AOT deser: namespace constant '%s' narrowing "
                     "to '%s' failed: %s: %s\n",
                     name, type_path ? type_path : "(null)", es, ds);

@@ -75,7 +75,8 @@ static void TimeZone_deserializer(QoreObject& self, const QoreHashNode* sdata, Q
                     "expecting 'string'", val.getTypeName());
                 return;
             }
-            create_timezone_from_region(*val.get<QoreStringNode>(), self, xsink);
+            QoreStringNodeValueHelper region(val);
+            create_timezone_from_region(**region, self, xsink);
             return;
         }
 

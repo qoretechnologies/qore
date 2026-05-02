@@ -379,7 +379,8 @@ QoreNumberNode::QoreNumberNode(const QoreValue n) : SimpleValueQoreNode(NT_NUMBE
     }
 
     if (t == NT_STRING) {
-        priv = new qore_number_private(n.get<const QoreStringNode>()->c_str());
+        QoreStringValueHelper str(n);
+        priv = new qore_number_private(str->c_str());
         return;
     }
 
@@ -635,8 +636,10 @@ QoreNumberNode* QoreNumberNode::toNumber(const QoreValue n) {
     if (t == NT_FLOAT)
         return new QoreNumberNode(n.getAsFloat());
 
-    if (t == NT_STRING)
-        return new QoreNumberNode(n.get<const QoreStringNode>()->c_str());
+    if (t == NT_STRING) {
+        QoreStringValueHelper str(n);
+        return new QoreNumberNode(str->c_str());
+    }
 
     if (t == NT_INT)
         return new QoreNumberNode(n.getAsBigInt());

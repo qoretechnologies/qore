@@ -680,7 +680,8 @@ int QoreEnumCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& 
     if (!ed->isValidValue(val)) {
         QoreStringMaker desc("cannot cast value ");
         if (base_type == NT_STRING) {
-            desc.sprintf("'%s'", val.get<const QoreStringNode>()->c_str());
+            QoreStringValueHelper str(val);
+            desc.sprintf("'%s'", str->c_str());
         } else if (base_type == NT_INT) {
             desc.sprintf("%lld", val.getAsBigInt());
         } else {

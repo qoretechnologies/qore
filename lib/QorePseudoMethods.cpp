@@ -159,6 +159,15 @@ const QoreClass* qore_pseudo_get_class(const QoreTypeInfo* t) {
 QoreValue pseudo_classes_eval(const QoreValue n, const char *name, const QoreListNode *args, ExceptionSink *xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
     switch (n.getType()) {
+        case NT_STRING:
+            if (n.isShortString()) {
+                char buf[7];
+                n.getShortString(buf);
+                ValueHolder str(new QoreStringNode(buf, n.shortStringLen(), QCS_UTF8), xsink);
+                return qore_class_private::evalPseudoMethod(po_list[NT_STRING], *str, name, args, rc, xsink);
+            }
+            break;
+
         case NT_WEAKREF:
             return qore_class_private::evalPseudoMethod(po_list[NT_OBJECT],
                 QoreValue(n.get<WeakReferenceNode>()->get()), name, args, rc, xsink);

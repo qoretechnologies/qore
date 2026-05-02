@@ -304,15 +304,15 @@ constexpr OpcodeInfo OPCODE_REGISTRY[370] = {
     { "Return"                        , false, false, true ,  0, "Control transfer", false, true , "ControlFlowNode", false, false, false, false, false }, // 259
     { "ReturnNothing"                 , false, false, true ,  0, "Control transfer", false, true , "ControlFlowNode", false, false, false, false, false }, // 260
     { "LoadLocal"                     , true , false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 261
-    { "StoreLocal"                    , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 262
+    { "StoreLocal"                    , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", true , true , false, false, false }, // 262
     { "UninstantiateLocal"            , false, false, false,  0, "UninstantiateLocal", false, true , "ParseNode", false, false, false, false, false }, // 263
     { "LoadArg"                       , false, false, false, -1, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 264
     { "LoadClosure"                   , true , false, false, -1, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 265
-    { "StoreClosure"                  , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 266
+    { "StoreClosure"                  , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", true , true , false, false, false }, // 266
     { "LoadGlobal"                    , true , false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 267
-    { "StoreGlobal"                   , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 268
+    { "StoreGlobal"                   , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", true , true , false, false, false }, // 268
     { "LoadThreadLocal"               , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 269
-    { "StoreThreadLocal"              , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false, false }, // 270
+    { "StoreThreadLocal"              , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", true , true , false, false, false }, // 270
     { "LoadImplicitArg"               , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 271
     { "LoadImplicitArgv"              , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 272
     { "LoadImplicitElement"           , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false, false }, // 273

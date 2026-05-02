@@ -198,11 +198,12 @@ QoreValue QoreSquareBracketsRangeOperatorNode::evalImpl(RuntimeConfig& rc, bool&
                 return new QoreStringNode;
             }
 
+            QoreStringNodeValueHelper str(*seq);
             if (start < stop) {
-                return seq->get<const QoreStringNode>()->substr(start, stop - start + 1, xsink);
+                return str->substr(start, stop - start + 1, xsink);
             }
 
-            SimpleRefHolder<QoreStringNode> tmp(seq->get<const QoreStringNode>()->reverse());
+            SimpleRefHolder<QoreStringNode> tmp(str->reverse());
             return tmp->substr(seq_size - start - 1, start - stop + 1, xsink);
         }
         case NT_BINARY: {
@@ -296,7 +297,10 @@ bool QoreFunctionalSquareBracketsRangeOperator::getNextImpl(ValueOptionalRefHold
             val.setValue(seq->get<const QoreListNode>()->getReferencedEntry(i), true);
             break;
         case NT_STRING:
-            val.setValue(seq->get<const QoreStringNode>()->substr(i, 1, xsink), true);
+            {
+                QoreStringNodeValueHelper str(*seq);
+                val.setValue(str->substr(i, 1, xsink), true);
+            }
             break;
         case NT_BINARY: {
             const BinaryNode* b = seq->get<const BinaryNode>();
@@ -336,7 +340,11 @@ bool QoreSquareBracketsRangeOperatorNode::getEffectiveRange(const QoreValue& seq
 
     switch (seq_type) {
         case NT_LIST:   seq_size = seq.get<const QoreListNode>()->size(); break;
-        case NT_STRING: seq_size = seq.get<const QoreStringNode>()->size(); break;
+        case NT_STRING: {
+            QoreStringValueHelper str(seq);
+            seq_size = str->size();
+            break;
+        }
         case NT_BINARY: seq_size = seq.get<const BinaryNode>()->size(); break;
     }
 

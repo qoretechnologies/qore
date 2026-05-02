@@ -104,7 +104,8 @@ LogisticRegression::constructor(*hash<auto> options) {
         }
         v = options->getKeyValue("penalty");
         if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
-            penalty_str = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper penalty(v);
+            penalty_str = penalty->c_str();
         }
         v = options->getKeyValue("fit_intercept");
         if (!v.isNullOrNothing()) {

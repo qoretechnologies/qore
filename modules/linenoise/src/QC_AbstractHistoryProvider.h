@@ -58,7 +58,8 @@ public:
         if (*xsink || rv->getType() != NT_STRING) {
             return NULL;
         }
-        return strdup(rv->get<QoreStringNode>()->c_str());
+        QoreStringValueHelper str(*rv);
+        return strdup(str->c_str());
     }
 
     //! Invoke next(string prefix) -> *string; returns strdup'd string or NULL
@@ -69,7 +70,8 @@ public:
         if (*xsink || rv->getType() != NT_STRING) {
             return NULL;
         }
-        return strdup(rv->get<QoreStringNode>()->c_str());
+        QoreStringValueHelper str(*rv);
+        return strdup(str->c_str());
     }
 
     //! Invoke reset()
@@ -86,7 +88,8 @@ public:
         if (*xsink || rv->getType() != NT_STRING) {
             return NULL;
         }
-        return strdup(rv->get<QoreStringNode>()->c_str());
+        QoreStringValueHelper str(*rv);
+        return strdup(str->c_str());
     }
 };
 

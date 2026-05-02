@@ -39,44 +39,42 @@ std::unique_ptr<AbstractPreTokenizer> AbstractPreTokenizer::fromConfig(const Qor
         return nullptr;
     }
 
-    const QoreStringNode* type_str = safeGetString(type_val);
-    if (!type_str) {
+    std::string type = safeGetStdString(type_val);
+    if (type.empty()) {
         xsink->raiseException("PRETOKENIZER-CONFIG-ERROR",
             "pre_tokenizer config 'type' is not a string");
         return nullptr;
     }
 
-    const char* type = type_str->getBuffer();
-
-    if (!strcmp(type, "BertPreTokenizer")) {
+    if (type == "BertPreTokenizer") {
         return std::make_unique<BertPreTokenizer>();
     }
 
-    if (!strcmp(type, "ByteLevel")) {
+    if (type == "ByteLevel") {
         return std::make_unique<ByteLevelPreTokenizer>(config, xsink);
     }
 
-    if (!strcmp(type, "Metaspace")) {
+    if (type == "Metaspace") {
         return std::make_unique<MetaspacePreTokenizer>(config, xsink);
     }
 
-    if (!strcmp(type, "Whitespace")) {
+    if (type == "Whitespace") {
         return std::make_unique<WhitespacePreTokenizer>(false);
     }
 
-    if (!strcmp(type, "WhitespaceSplit")) {
+    if (type == "WhitespaceSplit") {
         return std::make_unique<WhitespacePreTokenizer>(true);
     }
 
-    if (!strcmp(type, "Sequence")) {
+    if (type == "Sequence") {
         return std::make_unique<SequencePreTokenizer>(config, xsink);
     }
 
-    if (!strcmp(type, "Punctuation")) {
+    if (type == "Punctuation") {
         return std::make_unique<PunctuationPreTokenizer>();
     }
 
-    if (!strcmp(type, "Digits")) {
+    if (type == "Digits") {
         bool individual = true;
         QoreValue iv = config->getKeyValue("individual_digits");
         if (!iv.isNullOrNothing()) {
@@ -85,12 +83,12 @@ std::unique_ptr<AbstractPreTokenizer> AbstractPreTokenizer::fromConfig(const Qor
         return std::make_unique<DigitsPreTokenizer>(individual);
     }
 
-    if (!strcmp(type, "Split")) {
+    if (type == "Split") {
         return std::make_unique<SplitPreTokenizer>(config, xsink);
     }
 
     xsink->raiseException("PRETOKENIZER-CONFIG-ERROR",
-        "unknown pre_tokenizer type '%s'", type);
+        "unknown pre_tokenizer type '%s'", type.c_str());
     return nullptr;
 }
 

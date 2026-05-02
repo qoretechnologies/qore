@@ -95,7 +95,7 @@ protected:
         // Return "null" if the target object has been deleted
         if (!obj->isValid()) {
             del = true;
-            return new QoreStringNode("null");
+            return new QoreString("null");
         }
         return obj->getAsString(del, foff, xsink);
     }

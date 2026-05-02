@@ -51,7 +51,8 @@ static SocketConnectPollOperation* get_connect_poll_operation(ExceptionSink* xsi
             url.getFullTypeName());
         return nullptr;
     }
-    return new SocketConnectPollOperation(xsink, ssl, url.get<QoreStringNode>()->c_str(), holder.release());
+    QoreStringValueHelper url_str(url);
+    return new SocketConnectPollOperation(xsink, ssl, url_str->c_str(), holder.release());
 }
 
 //! Socket poll operation object returned by Socket polling methods

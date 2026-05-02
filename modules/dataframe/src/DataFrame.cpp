@@ -498,14 +498,13 @@ QoreListNode* QoreDataFrame::toMatrix(const QoreListNode* col_list,
     std::vector<size_t> col_indices;
     if (col_list && col_list->size() > 0) {
         for (size_t i = 0; i < col_list->size(); ++i) {
-            const QoreStringNode* name = col_list->retrieveEntry(i)
-                .get<const QoreStringNode>();
-            if (!name) {
+            std::string name;
+            if (!getDataFrameString(col_list->retrieveEntry(i), name)) {
                 xsink->raiseException("DATAFRAME-ERROR",
                     "toMatrix column list element %zu is not a string", i);
                 return nullptr;
             }
-            int idx = getColIdx(name->c_str(), xsink);
+            int idx = getColIdx(name, xsink);
             if (idx < 0) {
                 return nullptr;
             }
@@ -513,7 +512,7 @@ QoreListNode* QoreDataFrame::toMatrix(const QoreListNode* col_list,
             if (t != ColumnType::FLOAT64 && t != ColumnType::INT64) {
                 xsink->raiseException("DATAFRAME-ERROR",
                     "toMatrix: column '%s' is %s, not numeric",
-                    name->c_str(), columnTypeName(t));
+                    name.c_str(), columnTypeName(t));
                 return nullptr;
             }
             col_indices.push_back(idx);
@@ -603,9 +602,9 @@ QoreDataFrame* QoreDataFrame::fromMatrix(const QoreListNode* matrix,
     std::vector<std::string> names;
     if (column_names && column_names->size() > 0) {
         for (size_t i = 0; i < column_names->size() && i < num_cols; ++i) {
-            const QoreStringNode* s = column_names->retrieveEntry(i)
-                .get<const QoreStringNode>();
-            names.push_back(s ? s->c_str() : ("col_" + std::to_string(i)));
+            std::string name;
+            names.push_back(getDataFrameString(column_names->retrieveEntry(i), name)
+                ? name : ("col_" + std::to_string(i)));
         }
     }
     while (names.size() < num_cols) {
@@ -730,14 +729,13 @@ QoreDataFrame* QoreDataFrame::select(const QoreListNode* col_list,
     df->n_rows = n_rows;
 
     for (size_t i = 0; i < col_list->size(); ++i) {
-        const QoreStringNode* name_node = col_list->retrieveEntry(i).get<const QoreStringNode>();
-        if (!name_node) {
+        std::string name;
+        if (!getDataFrameString(col_list->retrieveEntry(i), name)) {
             xsink->raiseException("DATAFRAME-ERROR",
                 "column list element %zu is not a string", i);
             delete df;
             return nullptr;
         }
-        std::string name = name_node->c_str();
         int idx = getColIdx(name, xsink);
         if (idx < 0) {
             delete df;
@@ -824,7 +822,8 @@ QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::strin
             const std::string& cell = cd.str_data[i];
             std::string cmp;
             if (value.getType() == NT_STRING) {
-                cmp = value.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper sh(value);
+                cmp = sh->c_str();
             } else {
                 QoreStringValueHelper sh(value);
                 cmp = sh->c_str();
@@ -875,13 +874,13 @@ QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
     std::vector<SortKey> keys;
 
     for (size_t i = 0; i < col_list->size(); ++i) {
-        const QoreStringNode* name = col_list->retrieveEntry(i).get<const QoreStringNode>();
-        if (!name) {
+        std::string name;
+        if (!getDataFrameString(col_list->retrieveEntry(i), name)) {
             xsink->raiseException("DATAFRAME-ERROR",
                 "sort column list element %zu is not a string", i);
             return nullptr;
         }
-        int idx = getColIdx(name->c_str(), xsink);
+        int idx = getColIdx(name, xsink);
         if (idx < 0) {
             return nullptr;
         }

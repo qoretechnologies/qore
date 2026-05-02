@@ -45,9 +45,9 @@ ReplaceNormalizer::ReplaceNormalizer(const QoreHashNode* config, ExceptionSink* 
         }
     } else {
         // Maybe it's a plain string
-        const QoreStringNode* str_node = safeGetString(config->getKeyValue("pattern"));
-        if (str_node) {
-            pattern = str_node->c_str();
+        std::string str = safeGetStdString(config->getKeyValue("pattern"));
+        if (!str.empty()) {
+            pattern = std::move(str);
         } else {
             xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
                 "ReplaceNormalizer: missing or invalid 'pattern' field");

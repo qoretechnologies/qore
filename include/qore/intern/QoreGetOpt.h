@@ -84,7 +84,8 @@ private:
    DLLLOCAL QoreGetOptNode* find(const char* opt) const;
    DLLLOCAL QoreGetOptNode* find(char opt) const;
    DLLLOCAL void doOption(QoreGetOptNode* n, QoreHashNode* h, const char* val);
-   DLLLOCAL char* getNextArgument(class QoreListNode* l, QoreHashNode* h, unsigned& i, const char* lopt, char sopt);
+   DLLLOCAL bool getNextArgument(class QoreListNode* l, QoreHashNode* h, unsigned& i, const char* lopt,
+      char sopt, std::string& arg);
 
 public:
    DLLLOCAL QoreGetOpt() {

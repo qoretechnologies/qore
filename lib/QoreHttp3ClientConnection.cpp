@@ -1114,7 +1114,8 @@ void Http3ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
         while (hi.next()) {
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                trailer_map[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper str(val);
+                trailer_map[hi.getKey()] = str->c_str();
             }
         }
     }

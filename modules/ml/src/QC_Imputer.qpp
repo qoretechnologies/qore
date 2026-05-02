@@ -62,7 +62,8 @@ Imputer::constructor(*hash<auto> options) {
     if (options) {
         QoreValue v = options->getKeyValue("strategy");
         if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
-            strategy = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper strategy_str(v);
+            strategy = strategy_str->c_str();
         }
         v = options->getKeyValue("constant_value");
         if (!v.isNullOrNothing()) {

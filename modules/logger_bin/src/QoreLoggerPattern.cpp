@@ -118,30 +118,31 @@ int QoreLoggerPattern::setPattern(const QoreStringNode* pattern, ExceptionSink* 
 
         ReferenceHolder<QoreHashNode> f(new QoreHashNode(autoTypeInfo), xsink);
         const QoreValue l0 = l->retrieveEntry(0);
-        if (l0.getType() == NT_STRING && !l0.get<const QoreStringNode>()->empty()) {
-            const QoreStringNode* l0str = l0.get<const QoreStringNode>();
+        QoreStringNodeValueHelper l0str(l0);
+        if (l0.getType() == NT_STRING && !l0str->empty()) {
             // check first pattern
-            ReferenceHolder<QoreListNode> opt(t1.extractSubstrings(*l0str, xsink), xsink);
+            ReferenceHolder<QoreListNode> opt(t1.extractSubstrings(**l0str, xsink), xsink);
             if (opt && !opt->empty()) {
                 assert(opt->size() == 3);
                 const QoreValue opt0 = opt->retrieveEntry(0);
-                bool lj = opt0.getType() == NT_STRING && *opt0.get<const QoreStringNode>() == "-";
-                //printd(5, "getPattern() 0 lj: %d (%s)\n", lj, opt0 ? opt0.get<const QoreStringNode>()->c_str() : "");
+                QoreStringValueHelper opt0str(opt0);
+                bool lj = opt0.getType() == NT_STRING && !strcmp(opt0str->c_str(), "-");
+                //printd(5, "getPattern() 0 lj: %d\n", lj);
                 f->setKeyValue("leftJustify", lj, xsink);
                 f->setKeyValue("minWidth", opt->retrieveEntry(1).getAsBigInt(), xsink);
                 f->setKeyValue("maxWidth", opt->retrieveEntry(2).getAsBigInt(), xsink);
             } else {
-                opt = t2.extractSubstrings(*l0str, xsink);
+                opt = t2.extractSubstrings(**l0str, xsink);
                 if (opt && !opt->empty()) {
                     assert(opt->size() == 2);
                     const QoreValue opt0 = opt->retrieveEntry(0);
-                    bool lj = opt0.getType() == NT_STRING && *opt0.get<const QoreStringNode>() == "-";
-                    //printd(5, "getPattern() 1 lj: %d (%s)\n", lj, opt0.getType() == NT_STRING ?
-                    //    opt0.get<const QoreStringNode>()->c_str() : "");
+                    QoreStringValueHelper opt0str(opt0);
+                    bool lj = opt0.getType() == NT_STRING && !strcmp(opt0str->c_str(), "-");
+                    //printd(5, "getPattern() 1 lj: %d\n", lj);
                     f->setKeyValue("leftJustify", lj, xsink);
                     f->setKeyValue("minWidth", opt->retrieveEntry(1).getAsBigInt(), xsink);
                 } else {
-                    opt = t3.extractSubstrings(*l0str, xsink);
+                    opt = t3.extractSubstrings(**l0str, xsink);
                     if (opt && !opt->empty()) {
                         assert(opt->size() == 1);
                         f->setKeyValue("maxWidth", opt->retrieveEntry(0).getAsBigInt(), xsink);
@@ -160,8 +161,8 @@ int QoreLoggerPattern::setPattern(const QoreStringNode* pattern, ExceptionSink* 
             const QoreValue l2 = l->retrieveEntry(2);
             if (l2) {
                 assert(l2.getType() == NT_STRING);
-                ReferenceHolder<QoreListNode> opt(t4.extractSubstrings(*l2.get<const QoreStringNode>(), xsink),
-                    xsink);
+                QoreStringNodeValueHelper l2str(l2);
+                ReferenceHolder<QoreListNode> opt(t4.extractSubstrings(**l2str, xsink), xsink);
                 if (opt && !opt->empty()) {
                     QoreValue opt0 = opt->retrieveEntry(0);
                     assert(opt0);
@@ -220,11 +221,12 @@ QoreStringNode* QoreLoggerPattern::format(ExceptionSink* xsink, const QoreLogger
     SimpleRefHolder<QoreStringNode> res(new QoreStringNode);
     assert(parsedPattern);
 
-    ConstListIterator i(parsedPattern);
+        ConstListIterator i(parsedPattern);
     while (i.next()) {
         const QoreValue a = i.getValue();
         if (a.getType() == NT_STRING) {
-            res->concat(a.get<const QoreStringNode>(), xsink);
+            QoreStringValueHelper str(a);
+            res->concat(*str, xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -234,24 +236,25 @@ QoreStringNode* QoreLoggerPattern::format(ExceptionSink* xsink, const QoreLogger
         const QoreHashNode* ah = a.get<const QoreHashNode>();
         const QoreValue key = ah->getKeyValue("key");
         assert(key.getType() == NT_STRING);
-        const QoreStringNode* keystr = key.get<const QoreStringNode>();
+        QoreStringNodeValueHelper keystr(key);
         const QoreValue option = ah->getKeyValue("option");
         assert(!option || option.getType() == NT_STRING);
-        const QoreStringNode* optstr = option ? option.get<const QoreStringNode>() : nullptr;
-        ValueHolder val(callResolveField(llp, event, ev, data, keystr, optstr, xsink), xsink);
+        QoreStringNodeValueHelper optstr(option);
+        ValueHolder val(callResolveField(llp, event, ev, data, *keystr, option ? *optstr : nullptr, xsink), xsink);
         if (*xsink) {
             return nullptr;
         }
         bool fallback = false;
         if (!val) {
             // try one char key if key is longer and has no {}, i.e. fix non-intuitive case
-            if (keystr->size() > 1 && !optstr) {
+            if (keystr->size() > 1 && !option) {
                 ValueHolder k(keystr->substr(0, 1, xsink), xsink);
                 if (*xsink) {
                     return nullptr;
                 }
                 assert(k->getType() == NT_STRING);
-                val = callResolveField(llp, event, ev, data, k->get<const QoreStringNode>(), nullptr, xsink);
+                QoreStringNodeValueHelper kstr(*k);
+                val = callResolveField(llp, event, ev, data, *kstr, nullptr, xsink);
                 fallback = (bool)val;
             }
             if (!val) {
@@ -264,26 +267,28 @@ QoreStringNode* QoreLoggerPattern::format(ExceptionSink* xsink, const QoreLogger
         QoreValue v = ah->getKeyValue("maxWidth");
         if (v) {
             assert(v.getType() == NT_INT);
-            val = val->get<const QoreStringNode>()->substr(0, v.getAsBigInt(), xsink);
+            QoreStringNodeValueHelper valstr(*val);
+            val = valstr->substr(0, v.getAsBigInt(), xsink);
         }
         v = ah->getKeyValue("minWidth");
         if (v) {
             assert(v.getType() == NT_INT);
             int64 minWidth = v.getAsBigInt();
-            size_t i = val->get<const QoreStringNode>()->size();
-            if (i < (size_t)minWidth) {
+            QoreStringNodeValueHelper valstr(*val);
+            size_t len = valstr->size();
+            if (len < (size_t)minWidth) {
                 // ensure unique value
-                if (!val->getInternalNode()->is_unique()) {
-                    val = val->get<const QoreStringNode>()->copy();
-                }
+                QoreStringNodeHolder padded(valstr->copy());
                 if (ah->getKeyValue("leftJustify").getAsBool()) {
-                    val->get<QoreStringNode>()->insertch(' ', i, minWidth - i);
+                    padded->insertch(' ', len, minWidth - len);
                 } else {
-                    val->get<QoreStringNode>()->insertch(' ', 0, minWidth - i);
+                    padded->insertch(' ', 0, minWidth - len);
                 }
+                val = padded.release();
             }
         }
-        res->concat(val->get<const QoreStringNode>(), xsink);
+        QoreStringValueHelper valstr(*val);
+        res->concat(*valstr, xsink);
         if (fallback) {
             res->concat(keystr->c_str() + 1, keystr->size() - 1);
         }

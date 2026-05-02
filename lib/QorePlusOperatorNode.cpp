@@ -80,11 +80,13 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     }
 
     if (lt == NT_STRING) {
-        QoreStringNodeHolder str(new QoreStringNode(*lh->get<const QoreStringNode>()));
+        QoreStringNodeValueHelper lstr(*lh);
+        QoreStringNodeHolder str(new QoreStringNode(**lstr));
 
-        if (rt == NT_STRING)
-            str->concat(rh->get<const QoreStringNode>(), xsink);
-        else {
+        if (rt == NT_STRING) {
+            QoreStringNodeValueHelper rstr(*rh);
+            str->concat(*rstr, xsink);
+        } else {
             QoreStringValueHelper r(*rh, str->getEncoding(), xsink);
             if (*xsink)
                 return QoreValue();
@@ -94,7 +96,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
     }
 
     if (rt == NT_STRING) {
-        const QoreStringNode* r = rh->get<const QoreStringNode>();
+        QoreStringNodeValueHelper r(*rh);
         QoreStringNodeValueHelper strval(*lh, r->getEncoding(), xsink);
         if (*xsink)
             return QoreValue();
@@ -103,7 +105,7 @@ QoreValue QorePlusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 
         QoreStringNode* rv = const_cast<QoreStringNode*>(*str);
 
-        rv->concat(r, xsink);
+        rv->concat(*r, xsink);
         if (*xsink)
             return QoreValue();
         return str.release();

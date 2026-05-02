@@ -65,6 +65,29 @@ if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-g
     apk add --no-cache krb5-dev
 fi
 
+if [ ! -f /usr/share/eigen3/cmake/Eigen3Config.cmake ] \
+    && [ ! -f /usr/lib/cmake/eigen3/Eigen3Config.cmake ] \
+    && [ ! -f /usr/lib64/cmake/eigen3/Eigen3Config.cmake ] \
+    && [ ! -f /usr/lib/x86_64-linux-gnu/cmake/eigen3/Eigen3Config.cmake ]; then
+    echo && echo "-- installing Eigen3 development headers --"
+    apk add --no-cache eigen-dev
+fi
+
+if ! command -v protoc > /dev/null 2>&1 \
+    && [ ! -f /usr/lib/cmake/protobuf/protobuf-config.cmake ] \
+    && [ ! -f /usr/lib64/cmake/protobuf/protobuf-config.cmake ] \
+    && [ ! -f /usr/lib/x86_64-linux-gnu/cmake/protobuf/protobuf-config.cmake ]; then
+    echo && echo "-- installing Protobuf development files --"
+    apk add --no-cache protobuf-dev
+fi
+
+if ! pkg-config --exists libutf8proc 2>/dev/null \
+    && [ ! -f /usr/include/utf8proc.h ] \
+    && [ ! -f /usr/local/include/utf8proc.h ]; then
+    echo && echo "-- installing utf8proc development files --"
+    apk add --no-cache utf8proc-dev
+fi
+
 # build or install Qore
 if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
     # Pre-built debug artifact from build stage — install it, then build release in parallel

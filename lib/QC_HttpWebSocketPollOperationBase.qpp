@@ -161,7 +161,7 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
                     }
                     output.discard(xsink);
                 } else if (output.getType() == NT_STRING) {
-                    const QoreStringNode* str = output.get<const QoreStringNode>();
+                    QoreStringValueHelper str(output);
                     if (str && str->size() > 0) {
                         decoder.appendData(str->c_str(), str->size());
                     }
@@ -722,13 +722,15 @@ void HttpWebSocketPollOperationPriv::setError(ExceptionSink* xsink) {
         ExceptionSink save_xsink;
         const QoreValue err_val = xsink->getExceptionErr();
         if (err_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper err(err_val);
             error_info->setKeyValue("err",
-                err_val.get<const QoreStringNode>()->stringRefSelf(), &save_xsink);
+                err.getReferencedValue(), &save_xsink);
         }
         const QoreValue desc_val = xsink->getExceptionDesc();
         if (desc_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper desc(desc_val);
             error_info->setKeyValue("desc",
-                desc_val.get<const QoreStringNode>()->stringRefSelf(), &save_xsink);
+                desc.getReferencedValue(), &save_xsink);
         }
     }
     if (frame_callback) {

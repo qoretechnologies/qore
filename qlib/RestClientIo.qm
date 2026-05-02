@@ -576,6 +576,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
         public {
             #! Accept header list
+            const SupportsCbor =
+%ifdef NoCbor
+                False
+%else
+                exists_function("make_cbor") && exists_function("parse_cbor")
+%endif
+            ;
+
             const AcceptList = (
 %ifndef NoYaml
                 MimeTypeYamlApp, MimeTypeYaml, MimeTypeYamlRpc,
@@ -586,13 +594,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 %ifndef NoJson
                 MimeTypeJsonRpc,
 %endif
-%ifndef NoCbor
-                MimeTypeCbor,
-%endif
                 MimeTypeFormUrlEncoded,
                 MimeTypeText,
                 MimeTypeOctetStream,
-            );
+            ) + (SupportsCbor ? (MimeTypeCbor,) : ());
 
             #! Accept header value
             const Accept = AcceptList.join(",");

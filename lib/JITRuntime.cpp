@@ -795,18 +795,61 @@ extern "C" DLLEXPORT void qore_rt_instantiate_local(LocalVar* var) {
     }
 }
 
-extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+static inline bool qore_rt_is_weak_reference_type(qore_type_t type) {
+    return type == NT_WEAKREF || type == NT_WEAKREF_HASH || type == NT_WEAKREF_LIST;
+}
+
+static bool qore_rt_normalize_weak_reference_for_assignment(QoreValue& val, ValueHolder& holder,
+        ExceptionSink* xsink) {
+    if (!qore_rt_is_weak_reference_type(val.getType())) {
+        return false;
+    }
+    holder = val.eval(xsink);
+    if (xsink && *xsink) {
+        return true;
+    }
+    val = *holder;
+    return true;
+}
+
+static bool qore_rt_evaluate_owned_weak_reference_result(QoreValue& val, ExceptionSink* xsink) {
+    if (!qore_rt_is_weak_reference_type(val.getType())) {
+        return false;
+    }
+    ValueHolder old(val, xsink);
+    val = old->eval(xsink);
+    return true;
+}
+
+static void qore_rt_assign_local_impl(LocalVar* var, uint64_t value, ExceptionSink* xsink,
+        bool check_types, bool normalize_weak_refs) {
     if (!var || *xsink) {
         return;
     }
     QoreValue val = fromBits(value);
+    ValueHolder weak_eval_holder(xsink);
+    if (normalize_weak_refs) {
+        qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
+        if (xsink && *xsink) {
+            return;
+        }
+    }
     LValueHelper helper(xsink);
     if (var->getLValue(helper, false, true)) {
         return;
     }
     // refSelf before assign — assign takes ownership of the reference
     QoreValue stored = val.hasNode() ? val.refSelf() : val;
-    helper.assign(stored);
+    helper.assign(stored, "<lvalue>", check_types);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_impl(var, value, xsink, true, false);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak(LocalVar* var, uint64_t value,
+        ExceptionSink* xsink) {
+    qore_rt_assign_local_impl(var, value, xsink, true, true);
 }
 
 static void qore_rt_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreValue& val,
@@ -863,6 +906,11 @@ static void qore_rt_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreV
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     QoreValue val = fromBits(value);
+    ValueHolder weak_eval_holder(xsink);
+    qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
     // Take our own reference before acceptAssignment so its internal
     // `discard(p)` (in the copy branch of acceptInputComplexList/Hash)
     // consumes OUR +1, not the caller's.  Otherwise, when the caller
@@ -923,18 +971,12 @@ extern "C" DLLEXPORT void qore_rt_strip_complex_type(uint64_t value) {
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
-    if (!var || *xsink) {
-        return;
-    }
-    QoreValue val = fromBits(value);
-    LValueHelper helper(xsink);
-    if (var->getLValue(helper, false, true)) {
-        return;
-    }
-    // refSelf before assign — assign takes ownership of the reference
-    QoreValue stored = val.hasNode() ? val.refSelf() : val;
-    // check_types=false — coercion has already been applied via qore_rt_coerce_value
-    helper.assign(stored, "<lvalue>", false);
+    qore_rt_assign_local_impl(var, value, xsink, false, false);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_eval_weak(LocalVar* var, uint64_t value,
+        ExceptionSink* xsink) {
+    qore_rt_assign_local_impl(var, value, xsink, false, true);
 }
 
 extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
@@ -955,7 +997,7 @@ extern "C" DLLEXPORT void qore_rt_sync_local(LocalVar* var, uint64_t value) {
     // handlers.  It is not a Qore-level assignment, so reference locals must be
     // written to their raw stack slot; LocalVar::getLValue() would follow the
     // reference and write through to the referenced lvalue.
-    LocalVarValue* lvv = thread_find_lvar(var->getName());
+    LocalVarValue* lvv = thread_try_find_lvar(var->getName());
     if (lvv && lvv->isRef()) {
         if (val.getType() == NT_REFERENCE) {
             QoreValue stored = val.refSelf();
@@ -1065,7 +1107,7 @@ extern "C" DLLEXPORT void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsin
         }
     } else {
         // Find the local on the thread-local variable stack by name pointer
-        LocalVarValue* lvar = thread_find_lvar(var->getName());
+        LocalVarValue* lvar = thread_try_find_lvar(var->getName());
         if (lvar) {
             // del() calls val.removeValue(true).discard(xsink) — no LValueHelper
             // assert, safe even when xsink already has an exception from a prior
@@ -1245,7 +1287,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_selectors(uint64_t left_bits, c
                 return toBits(QoreValue());
             }
             if (!entry->isNothing()) {
-                qore_string_private::get(*ret)->concat(entry->get<QoreStringNode>());
+                QoreStringValueHelper str(*entry);
+                qore_string_private::get(*ret)->concat(*str);
             }
         }
         return toBits(QoreValue(ret.release()));
@@ -1329,16 +1372,33 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_global(Var* var, ExceptionSink* xsink
     return toBits(result);
 }
 
-extern "C" DLLEXPORT void qore_rt_store_global(Var* var, uint64_t value, ExceptionSink* xsink) {
+static void qore_rt_store_global_impl(Var* var, uint64_t value, ExceptionSink* xsink,
+        bool normalize_weak_refs) {
     if (!var) {
         return;
     }
     QoreValue val = fromBits(value);
+    ValueHolder weak_eval_holder(xsink);
+    if (normalize_weak_refs) {
+        qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
+        if (xsink && *xsink) {
+            return;
+        }
+    }
     QoreValue stored = val.hasNode() ? val.refSelf() : val;
     LValueHelper helper(xsink);
     if (!var->getLValue(helper, false)) {
         helper.assign(stored);
     }
+}
+
+extern "C" DLLEXPORT void qore_rt_store_global(Var* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_store_global_impl(var, value, xsink, false);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_global_eval_weak(Var* var, uint64_t value,
+        ExceptionSink* xsink) {
+    qore_rt_store_global_impl(var, value, xsink, true);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_closure(ClosureVarValue* var, ExceptionSink* xsink) {
@@ -1353,16 +1413,33 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_closure(ClosureVarValue* var, Excepti
     return toBits(result);
 }
 
-extern "C" DLLEXPORT void qore_rt_store_closure(ClosureVarValue* var, uint64_t value, ExceptionSink* xsink) {
+static void qore_rt_store_closure_impl(ClosureVarValue* var, uint64_t value, ExceptionSink* xsink,
+        bool normalize_weak_refs) {
     if (!var) {
         return;
     }
     QoreValue val = fromBits(value);
+    ValueHolder weak_eval_holder(xsink);
+    if (normalize_weak_refs) {
+        qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
+        if (xsink && *xsink) {
+            return;
+        }
+    }
     QoreValue stored = val.hasNode() ? val.refSelf() : val;
     LValueHelper helper(xsink);
     if (!var->getLValue(helper, false)) {
         helper.assign(stored);
     }
+}
+
+extern "C" DLLEXPORT void qore_rt_store_closure(ClosureVarValue* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_store_closure_impl(var, value, xsink, false);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_closure_eval_weak(ClosureVarValue* var, uint64_t value,
+        ExceptionSink* xsink) {
+    qore_rt_store_closure_impl(var, value, xsink, true);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_thread_local(Var* var, ExceptionSink* xsink) {
@@ -1376,6 +1453,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_thread_local(Var* var, ExceptionSink*
 
 extern "C" DLLEXPORT void qore_rt_store_thread_local(Var* var, uint64_t value, ExceptionSink* xsink) {
     qore_rt_store_global(var, value, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_thread_local_eval_weak(Var* var, uint64_t value,
+        ExceptionSink* xsink) {
+    qore_rt_store_global_eval_weak(var, value, xsink);
 }
 
 // --- Self member access helper ---
@@ -1792,7 +1874,8 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
         if (!ed->isValidValue(inner)) {
             QoreStringMaker desc("cannot cast value ");
             if (base_type == NT_STRING) {
-                desc.sprintf("'%s'", inner.get<const QoreStringNode>()->c_str());
+                QoreStringValueHelper str(inner);
+                desc.sprintf("'%s'", str->c_str());
             } else if (base_type == NT_INT) {
                 desc.sprintf("%lld", inner.getAsBigInt());
             } else {
@@ -2724,9 +2807,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_to_string(uint64_t val_bits) {
     QoreValue val = fromBits(val_bits);
     QoreStringNode* str;
     switch (val.getType()) {
-        case NT_STRING:
-            str = val.get<const QoreStringNode>()->stringRefSelf();
+        case NT_STRING: {
+            QoreStringNodeValueHelper val_str(val);
+            str = val_str.getReferencedValue();
             break;
+        }
         case NT_INT:
             str = new QoreStringNodeMaker(QLLD, val.getAsBigInt());
             break;
@@ -3050,6 +3135,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const c
         if (*xsink) {
             return toBits(QoreValue());
         }
+        qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
         return toBits(rv);
     }
     if (v.getType() == NT_WEAKREF_HASH) {
@@ -3066,6 +3155,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const c
             result.discard(xsink);
             return toBits(QoreValue());
         }
+        qore_rt_evaluate_owned_weak_reference_result(result, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
         return toBits(result);
     }
     if (v.getType() == NT_HASH) {
@@ -3079,11 +3172,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access(uint64_t hash_val, const c
             result.discard(xsink);
             return toBits(QoreValue());
         }
+        qore_rt_evaluate_owned_weak_reference_result(result, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
         return toBits(result);
     }
     if (v.getType() == NT_OBJECT) {
         QoreObject* o = const_cast<QoreObject*>(v.get<const QoreObject>());
         QoreValue rv = o->evalMember(key, xsink);
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        qore_rt_evaluate_owned_weak_reference_result(rv, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
@@ -3428,7 +3529,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_access(uint64_t list_val, int64
             return toBits(l->getReferencedEntry(static_cast<size_t>(index)));
         }
     } else if (v.getType() == NT_STRING) {
-        const QoreStringNode* s = v.get<const QoreStringNode>();
+        QoreStringNodeValueHelper s(v);
         QoreStringNode* rv = s->substr(static_cast<qore_offset_t>(index), 1, xsink);
         return toBits(rv ? QoreValue(rv) : QoreValue());
     } else if (v.getType() == NT_BINARY) {
@@ -4233,7 +4334,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_map_two_keys(uint64_t list_val, const
             QoreValue val = h->getKeyValue(key2);
             QoreString key_str;
             if (k.getType() == NT_STRING) {
-                key_str.set(k.get<const QoreStringNode>()->c_str());
+                QoreStringValueHelper sh(k);
+                key_str.set(sh->c_str());
             } else {
                 QoreStringValueHelper sh(k);
                 key_str.set(sh->c_str());
@@ -4528,10 +4630,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat(uint64_t left, uint64_t righ
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
     if (lv.getType() == NT_STRING && rv.getType() == NT_STRING) {
-        const QoreStringNode* ls = lv.get<const QoreStringNode>();
-        const QoreStringNode* rs = rv.get<const QoreStringNode>();
-        QoreStringNode* result = new QoreStringNode(*ls);
-        result->concat(rs, xsink);
+        QoreStringNodeValueHelper ls(lv);
+        QoreStringNodeValueHelper rs(rv);
+        QoreStringNode* result = new QoreStringNode(**ls);
+        result->concat(*rs, xsink);
         if (xsink && *xsink) {
             result->deref();
             return toBits(QoreValue());
@@ -4546,23 +4648,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat(uint64_t left, uint64_t righ
 extern "C" DLLEXPORT uint64_t qore_rt_string_add_typed(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
-    // Caller guarantees both are strings, but handle NOTHING gracefully
-    const QoreStringNode* ls = lv.getType() == NT_STRING
-        ? lv.get<const QoreStringNode>() : nullptr;
-    const QoreStringNode* rs = rv.getType() == NT_STRING
-        ? rv.get<const QoreStringNode>() : nullptr;
-    if (!ls && !rs) {
+    bool l_is_string = lv.getType() == NT_STRING;
+    bool r_is_string = rv.getType() == NT_STRING;
+    // Caller guarantees both are strings, but handle NOTHING gracefully.
+    if (!l_is_string && !r_is_string) {
         return toBits(QoreValue());  // Both NOTHING
     }
-    if (!ls) {
-        return toBits(QoreValue(rs->stringRefSelf()));  // Copy right
+    if (!l_is_string) {
+        QoreStringNodeValueHelper rs(rv);
+        return toBits(QoreValue(rs.getReferencedValue()));  // Copy right
     }
-    if (!rs) {
-        return toBits(QoreValue(ls->stringRefSelf()));  // Copy left
+    if (!r_is_string) {
+        QoreStringNodeValueHelper ls(lv);
+        return toBits(QoreValue(ls.getReferencedValue()));  // Copy left
     }
     // Both are strings - concatenate
-    QoreStringNode* result = new QoreStringNode(*ls);
-    result->concat(rs, xsink);
+    QoreStringNodeValueHelper ls(lv);
+    QoreStringNodeValueHelper rs(rv);
+    QoreStringNode* result = new QoreStringNode(**ls);
+    result->concat(*rs, xsink);
     if (xsink && *xsink) {
         result->deref();
         return toBits(QoreValue());
@@ -4583,7 +4687,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi(uint64_t* args, int na
     for (int i = 0; i < nargs; ++i) {
         QoreValue v = fromBits(args[i]);
         if (v.getType() == NT_STRING) {
-            const QoreStringNode* s = v.get<const QoreStringNode>();
+            QoreStringValueHelper s(v);
             total_len += s->size();
             if (i == 0) {
                 enc = s->getEncoding();
@@ -4598,8 +4702,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi(uint64_t* args, int na
     for (int i = 0; i < nargs; ++i) {
         QoreValue v = fromBits(args[i]);
         if (v.getType() == NT_STRING) {
-            const QoreStringNode* s = v.get<const QoreStringNode>();
-            result->concat(s, xsink);
+            QoreStringValueHelper s(v);
+            result->concat(*s, xsink);
             if (xsink && *xsink) {
                 result->deref();
                 return toBits(QoreValue());
@@ -4616,9 +4720,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi(uint64_t* args, int na
 extern "C" DLLEXPORT uint64_t qore_rt_string_eq_typed(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
-    const QoreStringNode* ls = lv.get<const QoreStringNode>();
-    const QoreStringNode* rs = rv.get<const QoreStringNode>();
-    bool result = ls && rs && ls->equalSoft(*rs, xsink);
+    if (lv.getType() != NT_STRING || rv.getType() != NT_STRING) {
+        return toBits(QoreValue(false));
+    }
+    QoreStringNodeValueHelper ls(lv);
+    QoreStringNodeValueHelper rs(rv);
+    bool result = ls->equalSoft(**rs, xsink);
     return toBits(QoreValue(result));
 }
 
@@ -4627,9 +4734,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_eq_typed(uint64_t left, uint64_t ri
 extern "C" DLLEXPORT uint64_t qore_rt_string_ne_typed(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
-    const QoreStringNode* ls = lv.get<const QoreStringNode>();
-    const QoreStringNode* rs = rv.get<const QoreStringNode>();
-    bool result = !ls || !rs || !ls->equalSoft(*rs, xsink);
+    if (lv.getType() != NT_STRING || rv.getType() != NT_STRING) {
+        return toBits(QoreValue(true));
+    }
+    QoreStringNodeValueHelper ls(lv);
+    QoreStringNodeValueHelper rs(rv);
+    bool result = !ls->equalSoft(**rs, xsink);
     return toBits(QoreValue(result));
 }
 
@@ -4637,10 +4747,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_ne_typed(uint64_t left, uint64_t ri
 extern "C" DLLEXPORT uint64_t qore_rt_string_lt_typed(uint64_t left, uint64_t right) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
-    const QoreStringNode* ls = lv.get<const QoreStringNode>();
-    const QoreStringNode* rs = rv.get<const QoreStringNode>();
+    if (lv.getType() != NT_STRING || rv.getType() != NT_STRING) {
+        return toBits(QoreValue(false));
+    }
+    QoreStringNodeValueHelper ls(lv);
+    QoreStringNodeValueHelper rs(rv);
     // If either is null/NOTHING, result is false (consistent with Qore semantics)
-    bool result = ls && rs && (fast_string_compare(ls, rs) < 0);
+    bool result = fast_string_compare(*ls, *rs) < 0;
     return toBits(QoreValue(result));
 }
 
@@ -4648,9 +4761,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_lt_typed(uint64_t left, uint64_t ri
 extern "C" DLLEXPORT uint64_t qore_rt_string_le_typed(uint64_t left, uint64_t right) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
-    const QoreStringNode* ls = lv.get<const QoreStringNode>();
-    const QoreStringNode* rs = rv.get<const QoreStringNode>();
-    bool result = ls && rs && (fast_string_compare(ls, rs) <= 0);
+    if (lv.getType() != NT_STRING || rv.getType() != NT_STRING) {
+        return toBits(QoreValue(false));
+    }
+    QoreStringNodeValueHelper ls(lv);
+    QoreStringNodeValueHelper rs(rv);
+    bool result = fast_string_compare(*ls, *rs) <= 0;
     return toBits(QoreValue(result));
 }
 
@@ -4658,9 +4774,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_le_typed(uint64_t left, uint64_t ri
 extern "C" DLLEXPORT uint64_t qore_rt_string_gt_typed(uint64_t left, uint64_t right) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
-    const QoreStringNode* ls = lv.get<const QoreStringNode>();
-    const QoreStringNode* rs = rv.get<const QoreStringNode>();
-    bool result = ls && rs && (fast_string_compare(ls, rs) > 0);
+    if (lv.getType() != NT_STRING || rv.getType() != NT_STRING) {
+        return toBits(QoreValue(false));
+    }
+    QoreStringNodeValueHelper ls(lv);
+    QoreStringNodeValueHelper rs(rv);
+    bool result = fast_string_compare(*ls, *rs) > 0;
     return toBits(QoreValue(result));
 }
 
@@ -4668,9 +4787,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_gt_typed(uint64_t left, uint64_t ri
 extern "C" DLLEXPORT uint64_t qore_rt_string_ge_typed(uint64_t left, uint64_t right) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
-    const QoreStringNode* ls = lv.get<const QoreStringNode>();
-    const QoreStringNode* rs = rv.get<const QoreStringNode>();
-    bool result = ls && rs && (fast_string_compare(ls, rs) >= 0);
+    if (lv.getType() != NT_STRING || rv.getType() != NT_STRING) {
+        return toBits(QoreValue(false));
+    }
+    QoreStringNodeValueHelper ls(lv);
+    QoreStringNodeValueHelper rs(rv);
+    bool result = fast_string_compare(*ls, *rs) >= 0;
     return toBits(QoreValue(result));
 }
 
@@ -4679,10 +4801,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_ge_typed(uint64_t left, uint64_t ri
 extern "C" DLLEXPORT uint64_t qore_rt_string_cmp_typed(uint64_t left, uint64_t right) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
-    const QoreStringNode* ls = lv.get<const QoreStringNode>();
-    const QoreStringNode* rs = rv.get<const QoreStringNode>();
     // fast_string_compare already returns normalized -1/0/1
-    int64_t result = (ls && rs) ? fast_string_compare(ls, rs) : 0;
+    int64_t result = 0;
+    if (lv.getType() == NT_STRING && rv.getType() == NT_STRING) {
+        QoreStringNodeValueHelper ls(lv);
+        QoreStringNodeValueHelper rs(rv);
+        result = fast_string_compare(*ls, *rs);
+    }
     return toBits(QoreValue(result));
 }
 
@@ -4691,10 +4816,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_cmp_typed(uint64_t left, uint64_t r
 extern "C" DLLEXPORT int32_t qore_rt_switch_string_lookup(uint64_t switch_val_bits, const char** case_strings,
         int32_t num_cases) {
     QoreValue switch_val = fromBits(switch_val_bits);
-    const QoreStringNode* str = switch_val.get<const QoreStringNode>();
-    if (!str) {
+    if (switch_val.getType() != NT_STRING) {
         return -1;  // Not a string, go to default
     }
+    QoreStringNodeValueHelper str(switch_val);
     for (int32_t i = 0; i < num_cases; ++i) {
         if (str->equal(case_strings[i])) {
             return i;
@@ -6791,9 +6916,21 @@ extern "C" DLLEXPORT void qore_rt_assign_local_aot(QoreAOTContext* ctx, int32_t 
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_assign_local_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local_eval_weak(ctx->locals[idx], val, xsink);
+}
+
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     qore_rt_assign_local_no_coerce(ctx->locals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce_eval_weak_aot(QoreAOTContext* ctx,
+        int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local_no_coerce_eval_weak(ctx->locals[idx], val, xsink);
 }
 
 extern "C" DLLEXPORT void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val) {
@@ -6912,6 +7049,12 @@ extern "C" DLLEXPORT void qore_rt_store_global_aot(QoreAOTContext* ctx, int32_t 
     qore_rt_store_global(ctx->globals[idx], val, xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_store_global_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_globals);
+    qore_rt_store_global_eval_weak(ctx->globals[idx], val, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_thread_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_globals);
     return qore_rt_load_thread_local(ctx->globals[idx], xsink);
@@ -6920,6 +7063,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_thread_local_aot(QoreAOTContext* ctx,
 extern "C" DLLEXPORT void qore_rt_store_thread_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_globals);
     qore_rt_store_thread_local(ctx->globals[idx], val, xsink);
+}
+
+extern "C" DLLEXPORT void qore_rt_store_thread_local_eval_weak_aot(QoreAOTContext* ctx,
+        int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_globals);
+    qore_rt_store_thread_local_eval_weak(ctx->globals[idx], val, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_closure_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
@@ -6932,6 +7081,12 @@ extern "C" DLLEXPORT void qore_rt_store_closure_aot(QoreAOTContext* ctx, int32_t
     qore_rt_assign_local(ctx->locals[idx], val, xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_store_closure_eval_weak_aot(QoreAOTContext* ctx, int32_t idx,
+        uint64_t val, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    qore_rt_assign_local_eval_weak(ctx->locals[idx], val, xsink);
+}
+
 // --- Phase 2B Step 5: Local access category throwing wrappers ---
 
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_throwing(
@@ -6942,9 +7097,25 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_throwin
     }
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_eval_weak_throwing(
+        LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_eval_weak(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coerce_throwing(
         LocalVar* var, uint64_t value, ExceptionSink* xsink) {
     qore_rt_assign_local_no_coerce(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coerce_eval_weak_throwing(
+        LocalVar* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_assign_local_no_coerce_eval_weak(var, value, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -6976,6 +7147,14 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_throwin
     }
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_eval_weak_throwing(
+        Var* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_store_global_eval_weak(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_thread_local_throwing(
         Var* var, ExceptionSink* xsink) {
     uint64_t result = qore_rt_load_thread_local(var, xsink);
@@ -6988,6 +7167,14 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_thread_loca
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_thread_local_throwing(
         Var* var, uint64_t value, ExceptionSink* xsink) {
     qore_rt_store_thread_local(var, value, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_thread_local_eval_weak_throwing(
+        Var* var, uint64_t value, ExceptionSink* xsink) {
+    qore_rt_store_thread_local_eval_weak(var, value, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -7037,9 +7224,25 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_aot_thr
     }
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_eval_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_local_eval_weak_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coerce_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     qore_rt_assign_local_no_coerce_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_assign_local_no_coerce_eval_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_assign_local_no_coerce_eval_weak_aot(ctx, idx, val, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -7062,6 +7265,14 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_aot_thr
     }
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_global_eval_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_global_eval_weak_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_thread_local_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     uint64_t result = qore_rt_load_thread_local_aot(ctx, idx, xsink);
@@ -7079,6 +7290,14 @@ extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_thread_local_a
     }
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_thread_local_eval_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_thread_local_eval_weak_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_closure_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     uint64_t result = qore_rt_load_closure_aot(ctx, idx, xsink);
@@ -7091,6 +7310,14 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_load_closure_aot
 extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
     qore_rt_store_closure_aot(ctx, idx, val, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) void qore_rt_store_closure_eval_weak_aot_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t val, ExceptionSink* xsink) {
+    qore_rt_store_closure_eval_weak_aot(ctx, idx, val, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }
@@ -7242,7 +7469,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     if (lvh.assign(assign_val.refSelf(), "<lvalue path assign>", true, inst->weak)) {
         return toBits(QoreValue());
     }
-    return toBits(assign_val.refSelf());
+    return toBits(lvh.getReferencedValue());
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
@@ -7852,7 +8079,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             ReferenceNode* ref = nullptr;
             if (lv) {
                 if (!lv->closureUse()) {
-                    LocalVarValue* lvv = thread_find_lvar(lv->getName());
+                    LocalVarValue* lvv = thread_try_find_lvar(lv->getName());
                     if (lvv && lvv->val.getType() == NT_REFERENCE) {
                         ref = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                     }
@@ -8162,8 +8389,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
                 auto* regex_op = dynamic_cast<const QoreRegexSubstOperatorNode*>(
                     inst->pattern_expr.getInternalNode());
                 if (regex_op && regex_op->getRegexSubst()) {
-                    const QoreStringNode* str = lvh.getValue().get<const QoreStringNode>();
-                    QoreStringNode* nv = regex_op->getRegexSubst()->exec(str, xsink);
+                    QoreStringNodeValueHelper str(lvh.getValue());
+                    QoreStringNode* nv = regex_op->getRegexSubst()->exec(*str, xsink);
                     if (!*xsink && nv) {
                         lvh.assign(nv);
                         if (inst->ref_rv) {
@@ -8182,8 +8409,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
                 auto* trans_op = dynamic_cast<const QoreTransliterationOperatorNode*>(
                     inst->pattern_expr.getInternalNode());
                 if (trans_op && trans_op->getTransliteration()) {
-                    const QoreStringNode* str = lvh.getValue().get<const QoreStringNode>();
-                    QoreStringNode* nv = trans_op->getTransliteration()->exec(str, xsink);
+                    QoreStringNodeValueHelper str(lvh.getValue());
+                    QoreStringNode* nv = trans_op->getTransliteration()->exec(*str, xsink);
                     if (!*xsink && nv) {
                         lvh.assign(nv);
                         if (inst->ref_rv) {
@@ -10540,7 +10767,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits) {
             size = static_cast<int64_t>(v.get<const QoreListNode>()->size());
             break;
         case NT_STRING:
-            size = static_cast<int64_t>(v.get<const QoreStringNode>()->strlen());
+            {
+                QoreStringValueHelper str(v);
+                size = static_cast<int64_t>(str->strlen());
+            }
             break;
         case NT_HASH:
             size = static_cast<int64_t>(v.get<const QoreHashNode>()->size());
@@ -10558,7 +10788,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_size(uint64_t val_bits) {
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_length(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     if (v.getType() == NT_STRING) {
-        return toBits(QoreValue(static_cast<int64_t>(v.get<const QoreStringNode>()->length())));
+        QoreStringValueHelper str(v);
+        return toBits(QoreValue(static_cast<int64_t>(str->length())));
     }
     return toBits(QoreValue(static_cast<int64_t>(0)));
 }
@@ -10577,7 +10808,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_empty(uint64_t val_bits) {
             is_empty = v.get<const QoreListNode>()->empty();
             break;
         case NT_STRING:
-            is_empty = v.get<const QoreStringNode>()->strlen() == 0;
+            {
+                QoreStringValueHelper str(v);
+                is_empty = str->strlen() == 0;
+            }
             break;
         case NT_HASH:
             is_empty = v.get<const QoreHashNode>()->empty();
@@ -10607,7 +10841,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
             has_value = !v.get<const QoreListNode>()->empty();
             break;
         case NT_STRING:
-            has_value = v.get<const QoreStringNode>()->strlen() != 0;
+            {
+                QoreStringValueHelper str(v);
+                has_value = str->strlen() != 0;
+            }
             break;
         case NT_HASH:
             has_value = !v.get<const QoreHashNode>()->empty();

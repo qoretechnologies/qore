@@ -33,6 +33,8 @@
 
 #define _QORE_QORELIB_H
 
+#include <string>
+
 #include <qore/common.h>
 #include <qore/QoreThreadLock.h>
 #include <qore/qore_bitopts.h>
@@ -748,6 +750,9 @@ DLLEXPORT int q_set_thread_var_value(int frame, const char* name, const QoreValu
 
 //! returns the pointer and size for string or binary data (return 0); no change for other data (return -1)
 DLLEXPORT int q_get_data(const QoreValue& data, const char*& ptr, size_t& len);
+
+//! returns the pointer and size for string or binary data; string_storage backs inline short-string data
+DLLEXPORT int q_get_data(const QoreValue& data, const char*& ptr, size_t& len, std::string& string_storage);
 
 //! returns a list<string> of parse option strings for the given bitfield; a Qore-language exception is raised for invalid values
 /** @since %Qore 0.9

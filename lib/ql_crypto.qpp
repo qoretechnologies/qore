@@ -173,6 +173,8 @@ private:
     unsigned char *iv, *output;
     int output_len;
     const QoreEncoding* qe;
+    std::string key_storage[3];
+    std::string iv_storage;
 
     DLLLOCAL const char* getOrdinal(int n) {
         assert(n > 0 && n <= 3);
@@ -183,9 +185,10 @@ private:
         assert(n > 0 && n <= 3);
         const QoreValue pt = get_param_value(args, n);
         if (pt.getType() == NT_STRING) {
-            const QoreStringNode* str = pt.get<const QoreStringNode>();
-            key[n - 1] = (unsigned char*)str->getBuffer();
-            keylen[n - 1] = str->strlen();
+            QoreStringValueHelper str(pt);
+            key_storage[n - 1].assign(str->getBuffer(), str->strlen());
+            key[n - 1] = reinterpret_cast<unsigned char*>(key_storage[n - 1].data());
+            keylen[n - 1] = key_storage[n - 1].size();
             return;
         }
 
@@ -196,20 +199,26 @@ private:
 
     DLLLOCAL void setEncoding(const QoreListNode* args, int n) {
         QoreValue qv = get_param_value(args, n);
-        qe = qv.getType() == NT_STRING ? QEM.findCreate(qv.get<const QoreStringNode>()) : QCS_DEFAULT;
+        if (qv.getType() == NT_STRING) {
+            QoreStringValueHelper str(qv);
+            qe = QEM.findCreate(*str);
+        } else {
+            qe = QCS_DEFAULT;
+        }
     }
 
     // set the initialization vector (used with hard typing)
     DLLLOCAL int setIV(const char* err, const QoreValue pt, ExceptionSink* xsink) {
         assert(!pt.isNothing());
         if (pt.getType() == NT_STRING) {
-            const QoreStringNode* str = pt.get<const QoreStringNode>();
+            QoreStringValueHelper str(pt);
             if (str->strlen() < 8) {
                 xsink->raiseException(err, "the input vector must be at least 8 bytes long (%d bytes passed)",
                     str->strlen());
                 return -1;
             }
-            iv = (unsigned char*)str->getBuffer();
+            iv_storage.assign(str->getBuffer(), str->strlen());
+            iv = reinterpret_cast<unsigned char*>(iv_storage.data());
             return 0;
         }
 
@@ -3276,13 +3285,15 @@ Qore::TransformOutputStream ts(of, get_encryptor(Qore::CRYPTO_ALG_BLOWFISH, key)
     @since %Qore 0.8.13
  */
 Transform get_encryptor(string alg, data key, data iv = Qore::DefaultIV, *reference<binary> mac, *int mac_size, *data aad) [flags=RET_VALUE_ONLY] {
+    std::string key_storage;
     const char* keystr;
     size_t key_len;
-    q_get_data(key, keystr, key_len);
+    q_get_data(key, keystr, key_len, key_storage);
 
+    std::string iv_storage;
     const char* ivstr;
     size_t iv_len;
-    q_get_data(iv, ivstr, iv_len);
+    q_get_data(iv, ivstr, iv_len, iv_storage);
 
     if (check_mac(mac, mac_size, xsink)) {
         return QoreValue();
@@ -3290,8 +3301,9 @@ Transform get_encryptor(string alg, data key, data iv = Qore::DefaultIV, *refere
 
     const char* aadstr = nullptr;
     size_t aad_len = 0;
+    std::string aad_storage;
     if (aad) {
-        q_get_data(aad, aadstr, aad_len);
+        q_get_data(aad, aadstr, aad_len, aad_storage);
     }
 
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), true, keystr,
@@ -3331,23 +3343,27 @@ Qore::TransformOutputStream ts(of, get_decryptor(Qore::CRYPTO_ALG_BLOWFISH, key)
     @since %Qore 0.8.13
  */
 Transform get_decryptor(string alg, data key, data iv = Qore::DefaultIV, *data mac, *data aad) [flags=RET_VALUE_ONLY] {
+    std::string key_storage;
     const char* keystr;
     size_t key_len;
-    q_get_data(key, keystr, key_len);
+    q_get_data(key, keystr, key_len, key_storage);
 
+    std::string iv_storage;
     const char* ivstr;
     size_t iv_len;
-    q_get_data(iv, ivstr, iv_len);
+    q_get_data(iv, ivstr, iv_len, iv_storage);
 
     const char* macstr = nullptr;
     size_t mac_len = 0;
+    std::string mac_storage;
     if (mac)
-        q_get_data(mac, macstr, mac_len);
+        q_get_data(mac, macstr, mac_len, mac_storage);
 
     const char* aadstr = nullptr;
     size_t aad_len = 0;
+    std::string aad_storage;
     if (aad)
-        q_get_data(aad, aadstr, aad_len);
+        q_get_data(aad, aadstr, aad_len, aad_storage);
 
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
     return *xsink ? nullptr : new QoreObject(QC_TRANSFORM, getProgram(), t.release());
@@ -3386,17 +3402,20 @@ binary bin = encrypt(Qore::CRYPTO_ALG_BLOWFISH, data, key);
     @since %Qore 0.8.13
  */
 binary encrypt(string alg, data data, data key, data iv = Qore::DefaultIV, *reference<binary> mac, *int mac_size, *data aad) [flags=RET_VALUE_ONLY] {
+    std::string data_storage;
     const char* datastr;
     size_t data_len;
-    q_get_data(data, datastr, data_len);
+    q_get_data(data, datastr, data_len, data_storage);
 
+    std::string key_storage;
     const char* keystr;
     size_t key_len;
-    q_get_data(key, keystr, key_len);
+    q_get_data(key, keystr, key_len, key_storage);
 
+    std::string iv_storage;
     const char* ivstr;
     size_t iv_len;
-    q_get_data(iv, ivstr, iv_len);
+    q_get_data(iv, ivstr, iv_len, iv_storage);
 
     if (check_mac(mac, mac_size, xsink)) {
         return QoreValue();
@@ -3404,8 +3423,9 @@ binary encrypt(string alg, data data, data key, data iv = Qore::DefaultIV, *refe
 
     const char* aadstr = nullptr;
     size_t aad_len = 0;
+    std::string aad_storage;
     if (aad) {
-        q_get_data(aad, aadstr, aad_len);
+        q_get_data(aad, aadstr, aad_len, aad_storage);
     }
 
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), true, keystr,
@@ -3450,27 +3470,32 @@ binary bin = decrypt_to_binary(Qore::CRYPTO_ALG_BLOWFISH, data, key);
     @since %Qore 0.8.13
  */
 binary decrypt_to_binary(string alg, data data, data key, data iv = Qore::DefaultIV, *data mac, *data aad) [flags=RET_VALUE_ONLY] {
+    std::string data_storage;
     const char* datastr;
     size_t data_len;
-    q_get_data(data, datastr, data_len);
+    q_get_data(data, datastr, data_len, data_storage);
 
+    std::string key_storage;
     const char* keystr;
     size_t key_len;
-    q_get_data(key, keystr, key_len);
+    q_get_data(key, keystr, key_len, key_storage);
 
+    std::string iv_storage;
     const char* ivstr;
     size_t iv_len;
-    q_get_data(iv, ivstr, iv_len);
+    q_get_data(iv, ivstr, iv_len, iv_storage);
 
     const char* macstr = nullptr;
     size_t mac_len = 0;
+    std::string mac_storage;
     if (mac)
-        q_get_data(mac, macstr, mac_len);
+        q_get_data(mac, macstr, mac_len, mac_storage);
 
     const char* aadstr = nullptr;
     size_t aad_len = 0;
+    std::string aad_storage;
     if (aad)
-        q_get_data(aad, aadstr, aad_len);
+        q_get_data(aad, aadstr, aad_len, aad_storage);
 
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
     if (*xsink)
@@ -3512,27 +3537,32 @@ string str = decrypt_to_string(Qore::CRYPTO_ALG_BLOWFISH, data, key);
     @since %Qore 0.8.13
  */
 string decrypt_to_string(string alg, data data, data key, data iv = Qore::DefaultIV, *data mac, *data aad, *string encoding) [flags=RET_VALUE_ONLY] {
+    std::string data_storage;
     const char* datastr;
     size_t data_len;
-    q_get_data(data, datastr, data_len);
+    q_get_data(data, datastr, data_len, data_storage);
 
+    std::string key_storage;
     const char* keystr;
     size_t key_len;
-    q_get_data(key, keystr, key_len);
+    q_get_data(key, keystr, key_len, key_storage);
 
+    std::string iv_storage;
     const char* ivstr;
     size_t iv_len;
-    q_get_data(iv, ivstr, iv_len);
+    q_get_data(iv, ivstr, iv_len, iv_storage);
 
     const char* macstr = nullptr;
     size_t mac_len = 0;
+    std::string mac_storage;
     if (mac)
-        q_get_data(mac, macstr, mac_len);
+        q_get_data(mac, macstr, mac_len, mac_storage);
 
     const char* aadstr = nullptr;
     size_t aad_len = 0;
+    std::string aad_storage;
     if (aad)
-        q_get_data(aad, aadstr, aad_len);
+        q_get_data(aad, aadstr, aad_len, aad_storage);
 
     SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
     if (*xsink)
@@ -3706,14 +3736,16 @@ binary pbkdf2(string digest, data password, data salt, int iterations, int key_l
     }
 
     // get password data
+    std::string pass_storage;
     const char* pass_ptr;
     size_t pass_len;
-    q_get_data(password, pass_ptr, pass_len);
+    q_get_data(password, pass_ptr, pass_len, pass_storage);
 
     // get salt data
+    std::string salt_storage;
     const char* salt_ptr;
     size_t salt_len;
-    q_get_data(salt, salt_ptr, salt_len);
+    q_get_data(salt, salt_ptr, salt_len, salt_storage);
 
     // allocate output buffer
     SimpleRefHolder<BinaryNode> rv(new BinaryNode);

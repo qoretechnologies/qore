@@ -104,8 +104,8 @@ GMM::constructor(hash<auto> options) {
         seed = v.getAsBigInt();
     }
     v = options->getKeyValue("covariance_type");
-    if (!v.isNullOrNothing()) {
-        const QoreStringNode* ct = v.get<const QoreStringNode>();
+    if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
+        QoreStringValueHelper ct(v);
         covariance_type = ct->c_str();
     }
 

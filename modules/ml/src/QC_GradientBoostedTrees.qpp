@@ -100,7 +100,8 @@ GradientBoostedTrees::constructor(hash<auto> options) {
         }
         v = options->getKeyValue("task");
         if (v.getType() == NT_STRING) {
-            task = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper task_str(v);
+            task = task_str->c_str();
             if (task != "classification" && task != "regression") {
                 xsink->raiseException("ML-GBT-ERROR",
                     "task must be 'classification' or 'regression'");

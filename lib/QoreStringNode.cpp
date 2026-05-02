@@ -446,6 +446,8 @@ const QoreString* QoreNodeAsStringHelper::operator*() {
 }
 
 void QoreStringValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const QoreEncoding* enc) {
+    str = nullptr;
+    del = false;
     if (n.isEnum()) {
         setup(xsink, n.getEnumMember()->getValue(), enc);
         return;
@@ -457,6 +459,19 @@ void QoreStringValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const
     } else if (t == NT_FLOAT) {
         str = q_fix_decimal(new QoreStringMaker("%.9g", n.getAsFloat()), 0);
         del = true;
+    } else if (n.isShortString()) {
+        char buf[7];
+        n.getShortString(buf);
+        str = new QoreString(buf, n.shortStringLen(), QCS_UTF8);
+        del = true;
+        if (xsink && enc && enc != QCS_UTF8) {
+            QoreString* t = str->convertEncoding(enc, xsink);
+            if (!t) {
+                return;
+            }
+            delete str;
+            str = t;
+        }
     } else if (n.hasNode()) {
         const AbstractQoreNode* node = n.getInternalNode();
         //optimization to remove the need for a virtual function call in the most common case
@@ -505,6 +520,10 @@ const QoreString* QoreStringValueHelper::operator*() {
     return str;
 }
 
+QoreStringValueHelper::operator bool() const {
+    return str;
+}
+
 QoreString* QoreStringValueHelper::giveString() {
     if (!str) {
         return nullptr;
@@ -538,6 +557,8 @@ bool QoreStringValueHelper::is_temp() const {
 }
 
 void QoreStringNodeValueHelper::setup(ExceptionSink* xsink, const QoreValue n, const QoreEncoding* enc) {
+    str = nullptr;
+    del = false;
     if (n.isEnum()) {
         setup(xsink, n.getEnumBaseValue(), enc);
         return;
@@ -549,6 +570,19 @@ void QoreStringNodeValueHelper::setup(ExceptionSink* xsink, const QoreValue n, c
     } else if (t == NT_FLOAT) {
         str = q_fix_decimal(new QoreStringNodeMaker("%.9g", n.getAsFloat()), 0);
         del = true;
+    } else if (n.isShortString()) {
+        char buf[7];
+        n.getShortString(buf);
+        str = new QoreStringNode(buf, n.shortStringLen(), QCS_UTF8);
+        del = true;
+        if (xsink && enc && enc != QCS_UTF8) {
+            QoreStringNode* t = str->convertEncoding(enc, xsink);
+            if (!t) {
+                return;
+            }
+            str->deref();
+            str = t;
+        }
     } else if (n.hasNode()) {
         const AbstractQoreNode* node = n.getInternalNode();
         //optimization to remove the need for a virtual function call in the most common case
@@ -596,6 +630,10 @@ const QoreStringNode* QoreStringNodeValueHelper::operator->() {
 }
 
 const QoreStringNode* QoreStringNodeValueHelper::operator*() {
+    return str;
+}
+
+QoreStringNodeValueHelper::operator bool() const {
     return str;
 }
 

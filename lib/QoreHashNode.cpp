@@ -325,8 +325,8 @@ int qore_hash_private::parseCheckTypedAssignment(const QoreProgramLocation* loc,
                 if (res && (res == QTI_IDENT || (!strict_check || !may_not_match)))
                     continue;
                 QoreValue kn = keys[i];
-                const QoreStringNode* key = kn.getType() == NT_STRING ? kn.get<const QoreStringNode>() : nullptr;
-                if (key) {
+                if (kn.getType() == NT_STRING) {
+                    QoreStringValueHelper key(kn);
                     parse_error(*loc, "cannot %s 'hash<string, %s>' from key '%s' of a hash with incompatible " \
                         "value type '%s'", context_action, QoreTypeInfo::getName(vti), key->c_str(),
                         QoreTypeInfo::getName(vti2));

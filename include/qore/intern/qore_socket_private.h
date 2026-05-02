@@ -1427,8 +1427,11 @@ struct qore_socket_private {
     DLLLOCAL static void do_header(const char* key, QoreString& hdr, const QoreValue& v) {
         switch (v.getType()) {
             case NT_STRING:
-                hdr.sprintf("%s: %s\r\n", key, v.get<const QoreStringNode>()->c_str());
+            {
+                QoreStringValueHelper str(v);
+                hdr.sprintf("%s: %s\r\n", key, str->c_str());
                 break;
+            }
             case NT_INT:
                 hdr.sprintf("%s: " QLLD "\r\n", key, v.getAsBigInt());
                 break;
@@ -1471,9 +1474,11 @@ struct qore_socket_private {
                         addsize = false;
                         add_chunked = false;
                     } else if (!strcasecmp(key, "content-type")
-                        && (v.getType() == NT_STRING)
-                        && (*v.get<const QoreStringNode>() == "text/event-stream")) {
-                        addsize = false;
+                        && (v.getType() == NT_STRING)) {
+                        QoreStringValueHelper str(v);
+                        if (!strcmp(str->c_str(), "text/event-stream")) {
+                            addsize = false;
+                        }
                     }
                 }
                 if ((addsize || size) && !strcasecmp(key, "content-length")) {
@@ -4128,9 +4133,22 @@ struct qore_socket_private {
             // do not copy data here; set references and send the data directly
             const char* data_ptr = nullptr;
             size_t data_size = 0;
+            char short_string_buf[7];
 
             switch (res->getType()) {
                 case NT_STRING: {
+                    if (res->isShortString()) {
+                        data_size = res->shortStringLen();
+                        res->getShortString(short_string_buf);
+                        if (!data_size) {
+                            done = true;
+                            break;
+                        }
+                        buf.sprintf("%x\r\n", (int)data_size);
+                        data_ptr = short_string_buf;
+                        break;
+                    }
+
                     const QoreStringNode* str = res->get<const QoreStringNode>();
                     if (str->empty()) {
                         done = true;
@@ -4214,9 +4232,9 @@ struct qore_socket_private {
                 // do events
                 switch (res->getType()) {
                     case NT_STRING: {
-                        const QoreStringNode* str = res->get<const QoreStringNode>();
+                        QoreStringNodeValueHelper str(*res);
                         if (!str->empty()) {
-                            do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, source, *str);
+                            do_data_event(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, source, **str);
                         }
                         break;
                     }
@@ -4699,13 +4717,15 @@ struct qore_socket_private {
                             if (!joined.empty()) {
                                 joined += ", ";
                             }
-                            joined += li.getValue().get<const QoreStringNode>()->c_str();
+                            QoreStringValueHelper str(li.getValue());
+                            joined += str->c_str();
                         }
                         if (!joined.empty()) {
                             hdr_map[key] = joined;
                         }
                     } else if (val.getType() == NT_STRING) {
-                        hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+                        QoreStringValueHelper str(val);
+                        hdr_map[key] = str->c_str();
                     }
                 }
             }

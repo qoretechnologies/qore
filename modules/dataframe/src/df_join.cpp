@@ -217,14 +217,12 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
     std::vector<size_t> left_key_indices, right_key_indices;
     std::unordered_set<std::string> key_names;
     for (size_t i = 0; i < on_columns->size(); ++i) {
-        const QoreStringNode* name_node = on_columns->retrieveEntry(i)
-            .get<const QoreStringNode>();
-        if (!name_node) {
+        std::string name;
+        if (!getDataFrameString(on_columns->retrieveEntry(i), name)) {
             xsink->raiseException("DATAFRAME-JOIN-ERROR",
                 "join key list element %zu is not a string", i);
             return nullptr;
         }
-        std::string name = name_node->c_str();
         key_names.insert(name);
 
         auto lit = col_index.find(name);

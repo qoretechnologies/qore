@@ -233,8 +233,11 @@ int ExceptionSink::appendLastDescription(const char* fmt, ...) {
         }
     }
 
-    QoreStringNode* old_desc = priv->head->desc.get<QoreStringNode>();
-    old_desc->concat(new_desc->c_str(), new_desc->size());
+    QoreStringNodeValueHelper old_desc(priv->head->desc);
+    QoreStringNodeHolder desc(old_desc->copy());
+    desc->concat(new_desc->c_str(), new_desc->size());
+    priv->head->desc.discard(nullptr);
+    priv->head->desc = desc.release();
     return 0;
 }
 
@@ -254,8 +257,11 @@ int ExceptionSink::renamePrependLastException(const char* err, const char* desc_
         }
     }
 
-    QoreStringNode* old_desc = priv->head->desc.get<QoreStringNode>();
-    old_desc->prepend(new_desc->c_str(), new_desc->size());
+    QoreStringNodeValueHelper old_desc(priv->head->desc);
+    QoreStringNodeHolder desc(old_desc->copy());
+    desc->prepend(new_desc->c_str(), new_desc->size());
+    priv->head->desc.discard(nullptr);
+    priv->head->desc = desc.release();
 
     priv->head->err.discard(nullptr);
     priv->head->err = new QoreStringNode(err);
@@ -390,8 +396,9 @@ void ExceptionSink::raiseException(const QoreListNode* n) {
 }
 
 void ExceptionSink::raiseException(const QoreProgramLocation& loc, const char* err, QoreValue arg, QoreValue desc) {
+    QoreStringValueHelper desc_str(desc);
     printd(5, "ExceptionSink::raiseExceptionArg(%s, %s)\n", err,
-        desc.getType() == NT_STRING ? desc.get<QoreStringNode>()->c_str() : desc.getTypeName());
+        desc.getType() == NT_STRING ? desc_str->c_str() : desc.getTypeName());
     priv->insert(new QoreException(loc, err, desc, arg));
 }
 
@@ -467,8 +474,8 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
 
             if (i < cs->size()) {
                 found = true;
-                QoreStringNode* func = h->getKeyValue("function").get<QoreStringNode>();
-                QoreStringNode* type = h->getKeyValue("type").get<QoreStringNode>();
+                QoreStringValueHelper func(h->getKeyValue("function"));
+                QoreStringValueHelper type(h->getKeyValue("type"));
                 QoreExceptionLocation loc;
                 e->getLocation(loc);
 
@@ -494,16 +501,16 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
 
         bool hdr = false;
         if (e->type == CT_BUILTIN) {
-            QoreStringNode* err = e->err.get<QoreStringNode>();
+            QoreStringValueHelper err(e->err);
             assert(!err->empty());
-            QoreStringNode* desc = e->desc.get<QoreStringNode>();
+            QoreStringValueHelper desc(e->desc);
             assert(!desc->empty());
             printe("%s: %s", err->c_str(), desc->c_str());
             hdr = true;
         } else {
             if (!e->err.isNothing()) {
                 if (e->err.getType() == NT_STRING) {
-                    QoreStringNode *err = e->err.get<QoreStringNode>();
+                    QoreStringValueHelper err(e->err);
                     printe("%s", err->c_str());
                 } else {
                     QoreNodeAsStringHelper str(e->err, FMT_NORMAL, &xsink);
@@ -516,7 +523,7 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
 
             if (!e->desc.isNothing()) {
                 if (e->desc.getType() == NT_STRING) {
-                    QoreStringNode *desc = e->desc.get<QoreStringNode>();
+                    QoreStringValueHelper desc(e->desc);
                     printe("%s%s", hdr ? ", desc: " : ": ", desc->c_str());
                 } else {
                     QoreNodeAsStringHelper str(e->desc, FMT_NORMAL, &xsink);
@@ -531,7 +538,7 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
         // issue #3768: show "arg" unconditionally if present
         if (!e->arg.isNothing()) {
             if (e->arg.getType() == NT_STRING) {
-                QoreStringNode *arg = e->arg.get<QoreStringNode>();
+                QoreStringValueHelper arg(e->arg);
                 printe("%s%s", hdr ? ", arg: " : ": ", arg->c_str());
             } else {
                 QoreNodeAsStringHelper str(e->arg, FMT_NORMAL, &xsink);
@@ -545,29 +552,29 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
             for (unsigned i = 0; i < cs->size(); i++) {
                 int pos = cs->size() - i;
                 QoreHashNode* h = cs->retrieveEntry(i).get<QoreHashNode>();
-                QoreStringNode* strtype = h->getKeyValue("type").get<QoreStringNode>();
+                QoreStringValueHelper strtype(h->getKeyValue("type"));
                 const char* type = strtype->c_str();
                 int typecode = (int)h->getKeyValue("typecode").getAsBigInt();
                 if (!strcmp(type, "new-thread"))
                     printe(" %2d: *thread start*\n", pos);
                 else {
-                    QoreStringNode* fn = h->getKeyValue("file").get<QoreStringNode>();
-                    const char* fns = fn && !fn->empty() ? fn->c_str() : nullptr;
+                    QoreStringValueHelper fn(h->getKeyValue("file"));
+                    const char* fns = !fn->empty() ? fn->c_str() : nullptr;
                     int start_line = (int)h->getKeyValue("line").getAsBigInt();
                     int end_line = (int)h->getKeyValue("endline").getAsBigInt();
 
-                    QoreStringNode* src = h->getKeyValue("source").get<QoreStringNode>();
-                    const char* srcs = src && !src->empty() ? src->c_str() : nullptr;
+                    QoreStringValueHelper src(h->getKeyValue("source"));
+                    const char* srcs = !src->empty() ? src->c_str() : nullptr;
                     int offset = (int)h->getKeyValue("offset").getAsBigInt();
 
-                    QoreStringNode* lang = h->getKeyValue("lang").get<QoreStringNode>();
-                    const char* langs = lang && !lang->empty() ? lang->c_str() : nullptr;
+                    QoreStringValueHelper lang(h->getKeyValue("lang"));
+                    const char* langs = !lang->empty() ? lang->c_str() : nullptr;
 
                     printe(" %2d: ", pos);
 
                     if (typecode == CT_RETHROW) {
                         printe("RETHROW at ");
-                        if (fn) {
+                        if (!fn->empty()) {
                             printe("%s:", fn->getBuffer());
                         } else {
                             printe("line");
@@ -577,7 +584,7 @@ void ExceptionSink::defaultExceptionHandler(QoreException* e) {
                             printe(" (source %s:%d)", srcs, offset + start_line);
                         }
                     } else {
-                        QoreStringNode* fs = h->getKeyValue("function").get<QoreStringNode>();
+                        QoreStringValueHelper fs(h->getKeyValue("function"));
                         printe("%s() (", fs->getBuffer());
                         outputExceptionLocation(fns, start_line, end_line, srcs, offset, langs, type);
                     }
@@ -664,8 +671,8 @@ void ExceptionSink::defaultWarningHandler(QoreException* e) {
             e->type == CT_USER ? "user" : "builtin");
         printe("\n");
 
-        QoreStringNode* err  = e->err.get<QoreStringNode>();
-        QoreStringNode* desc = e->desc.get<QoreStringNode>();
+        QoreStringValueHelper err(e->err);
+        QoreStringValueHelper desc(e->desc);
 
         printe("%s: %s\n", err->c_str(), desc->c_str());
 

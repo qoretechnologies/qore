@@ -774,7 +774,8 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
         while (li.next()) {
             val = li.getValue();
             assert(val.getType() == NT_STRING);
-            QMM.runTimeLoadModule(*xsink, *xsink, val.get<const QoreStringNode>()->c_str(), pgm);
+            QoreStringValueHelper str(val);
+            QMM.runTimeLoadModule(*xsink, *xsink, str->c_str(), pgm);
             if (*xsink) {
                 return QoreValue();
             }
@@ -797,7 +798,8 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
             if (hashdeclObjectSerializationInfo->equal(oh->getHashDecl())) {
                 QoreValue v = oh->getKeyValue("_class");
                 assert(v.getType() == NT_STRING);
-                const char* cname = v.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper cname_str(v);
+                const char* cname = cname_str->c_str();
                 const QoreClass* cls = pgm->findClass(cname, xsink);
                 if (!cls) {
                     if (!*xsink) {
@@ -841,7 +843,8 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
 
                 QoreHashNode* val = context.oimap.find(key)->second.get<QoreHashNode>();
                 // deserialize in place
-                deserializeHashData(*v.get<const QoreStringNode>(), *oh, context, xsink, val);
+                QoreStringNodeValueHelper type(v);
+                deserializeHashData(**type, *oh, context, xsink, val);
                 if (*xsink) {
                     return QoreValue();
                 }
@@ -1168,8 +1171,9 @@ QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDes
                         "expecting 'string'", mv.getTypeName());
                     return QoreValue();
                 }
-                return deserializeEnumData(*ev.get<const QoreStringNode>(),
-                    *mv.get<const QoreStringNode>(), xsink);
+                QoreStringNodeValueHelper enum_path(ev);
+                QoreStringNodeValueHelper member_name(mv);
+                return deserializeEnumData(**enum_path, **member_name, xsink);
             }
         }
         QoreValue v = h->getKeyValue("_hash");
@@ -1180,7 +1184,8 @@ QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDes
                 return QoreValue();
             }
 
-            return deserializeHashData(*v.get<const QoreStringNode>(), *h, context, xsink);
+            QoreStringNodeValueHelper type(v);
+            return deserializeHashData(**type, *h, context, xsink);
         }
         v = h->getKeyValue("_index");
         if (v) {
@@ -1189,8 +1194,8 @@ QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDes
                     v.getTypeName());
                 return QoreValue();
             }
-            const char* key = v.get<const QoreStringNode>()->c_str();
-            return deserializeIndexedContainer(key, context, xsink);
+            QoreStringValueHelper key(v);
+            return deserializeIndexedContainer(key->c_str(), context, xsink);
         }
         v = h->getKeyValue("_weak");
         if (v) {
@@ -1199,8 +1204,8 @@ QoreValue QoreSerializable::deserializeData(const QoreValue val, QoreInternalDes
                     v.getTypeName());
                 return QoreValue();
             }
-            const char* key = v.get<const QoreStringNode>()->c_str();
-            return deserializeIndexedWeakReference(key, context, xsink);
+            QoreStringValueHelper key(v);
+            return deserializeIndexedWeakReference(key->c_str(), context, xsink);
         }
         v = h->getKeyValue("_list");
         if (v) {
@@ -1289,7 +1294,8 @@ QoreValue QoreSerializable::deserializeListData(QoreValue v, const QoreHashNode&
     }
 
     // get element type
-    const char* value_type = v.get<QoreStringNode>()->c_str();
+    QoreStringValueHelper type(v);
+    const char* value_type = type->c_str();
     const QoreTypeInfo* vti = qore_get_type_from_string_intern(value_type);
     if (!vti) {
         xsink->raiseException("DESERIALIZATION-ERROR", "'list has value type '%s' which cannot be matched to a "
@@ -1414,7 +1420,8 @@ int QoreSerializable::serializeValueToStream(const QoreValue val, StreamWriter& 
             return serializeHashToStream(*val.get<QoreHashNode>(), writer, xsink);
 
         case NT_STRING: {
-            return serializeStringToStream(*val.get<QoreStringNode>(), writer, xsink);
+            QoreStringValueHelper str(val);
+            return serializeStringToStream(writer, str->c_str(), str->size(), str->getEncoding(), xsink);
         }
 
         case NT_INT: {

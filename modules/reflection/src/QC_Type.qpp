@@ -100,7 +100,8 @@ static void Type_deserializer(QoreObject& self, const QoreHashNode* sdata, QoreD
             xsink->raiseException("DESERIALIZATION-ERROR", "Type serialization key 'type' has type '%s'; expecting 'string'", val.getTypeName());
             return;
         }
-        const QoreTypeInfo* type = qore_get_type_from_string(val.get<const QoreStringNode>()->c_str(), *xsink);
+        QoreStringValueHelper type_name(val);
+        const QoreTypeInfo* type = qore_get_type_from_string(type_name->c_str(), *xsink);
         if (*xsink) {
             return;
         }

@@ -88,13 +88,10 @@ QoreValue QoreChompOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
     while (hi.next()) {
         if (hi.get().getType() == NT_STRING) {
             QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+            // note that no exception can happen here
+            ensure_unique(v, xsink);
+            assert(!*xsink);
             QoreStringNode* vs = v.get<QoreStringNode>();
-            if (!vs->is_unique()) {
-                QoreStringNode* old = vs;
-                vs = vs->copy();
-                old->deref();
-                v = vs;
-            }
             count += vs->chomp();
         }
     }

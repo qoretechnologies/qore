@@ -675,7 +675,8 @@ struct qore_ftp_private {
             QoreHashNode* h = output->get<QoreHashNode>();
             QoreValue msg = h->getKeyValue("message");
             if (msg.getType() == NT_STRING) {
-                return msg.get<QoreStringNode>()->stringRefSelf();
+                QoreStringNodeValueHelper str(msg);
+                return str.getReferencedValue();
             }
         }
         return new QoreStringNode("");
@@ -703,7 +704,8 @@ struct qore_ftp_private {
             QoreHashNode* h = output->get<QoreHashNode>();
             QoreValue msg = h->getKeyValue("message");
             if (msg.getType() == NT_STRING) {
-                return msg.get<QoreStringNode>()->stringRefSelf();
+                QoreStringNodeValueHelper str(msg);
+                return str.getReferencedValue();
             }
         }
         return new QoreStringNode("");

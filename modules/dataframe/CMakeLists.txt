@@ -75,12 +75,8 @@ set(DF_CPP_SRC
     src/df_join.cpp
     src/df_window.cpp
     src/df_db.cpp
+    src/df_parquet.cpp
 )
-
-# Conditional Arrow/Parquet support
-if (HAVE_ARROW)
-    list(APPEND DF_CPP_SRC src/df_parquet.cpp)
-endif()
 
 # Process QPP files
 qore_wrap_qpp_value(DF_QPP_SOURCES DOXLIST _dox_src ${DF_QPP_SRC})

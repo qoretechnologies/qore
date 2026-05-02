@@ -123,31 +123,13 @@ int QoreLogicalComparisonOperatorNode::doComparison(const QoreValue& left, const
     qore_type_t lt = l.getType();
     qore_type_t rt = r.getType();
 
-    if (lt == NT_STRING) {
-        const QoreStringNode* ls = l.get<const QoreStringNode>();
-        if (rt == NT_STRING) {
-            const QoreStringNode* rs = r.get<const QoreStringNode>();
-            if (ls->getEncoding() != rs->getEncoding()) {
-                QoreStringValueHelper rstr(rs, ls->getEncoding(), xsink);
-                if (*xsink) {
-                    return 0;
-                }
-                return ls->compare(*rstr);
-            }
-            return ls->compare(rs);
-        }
+    if (lt == NT_STRING || rt == NT_STRING) {
+        QoreStringValueHelper ls(l);
         QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
         if (*xsink) {
             return 0;
         }
         return ls->compare(*rs);
-    } else if (rt == NT_STRING) {
-        const QoreStringNode* rs = r.get<const QoreStringNode>();
-        QoreStringValueHelper ls(l, rs->getEncoding(), xsink);
-        if (*xsink) {
-            return 0;
-        }
-        return ls->compare(rs);
     }
 
     if (lt == NT_NUMBER) {

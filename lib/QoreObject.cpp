@@ -271,7 +271,8 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
 
         ConstListIterator li(i.second);
         while (li.next()) {
-            const char* k = li.getValue().get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper key(li.getValue());
+            const char* k = key->c_str();
             bool exists;
             QoreValue v = odata->getKeyValueExistence(k, exists);
             if (!exists) {
@@ -290,7 +291,7 @@ QoreHashNode* qore_object_private::getSlice(const QoreListNode* l, ExceptionSink
 
         ConstListIterator mgli(*mgl);
         while (mgli.next()) {
-            const QoreStringNode* k = mgli.getValue().get<const QoreStringNode>();
+            QoreStringValueHelper k(mgli.getValue());
             ValueHolder n(qore_class_private::get(*theclass)->evalMemberGate(obj, k->c_str(), xsink), xsink);
             if (*xsink) {
                 return nullptr;

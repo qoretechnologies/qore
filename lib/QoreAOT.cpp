@@ -6097,10 +6097,11 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // Parse each .qc/.ql file for compilation and add to combined source
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
-                const QoreStringNode* filename = fileList->retrieveEntry(i).get<const QoreStringNode>();
-                if (!filename) {
+                QoreValue filename_val = fileList->retrieveEntry(i);
+                if (filename_val.getType() != NT_STRING) {
                     continue;
                 }
+                QoreStringValueHelper filename(filename_val);
 
                 std::string file_path = dir_str + "/" + filename->c_str();
                 std::string file_source = QoreDir::get_file_content(file_path.c_str());
@@ -7133,11 +7134,11 @@ bool QoreAOT::compileScriptFile(const char* target_file,
                 continue;
             }
             for (size_t i = 0; i < files->size(); ++i) {
-                const QoreStringNode* fn =
-                    files->retrieveEntry(i).get<const QoreStringNode>();
-                if (!fn) {
+                QoreValue fn_val = files->retrieveEntry(i);
+                if (fn_val.getType() != NT_STRING) {
                     continue;
                 }
+                QoreStringValueHelper fn(fn_val);
                 std::string qo_path = libdir + "/" + fn->c_str();
                 if (!readQoFragmentBlobs(qo_path, extracted_frags, error)) {
                     return false;
@@ -7580,9 +7581,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         if (fileList && fileList->size() > 0) {
             sorted_secondary_names.reserve(fileList->size());
             for (size_t i = 0; i < fileList->size(); ++i) {
-                const QoreStringNode* fn =
-                    fileList->retrieveEntry(i).get<const QoreStringNode>();
-                if (fn) {
+                QoreValue fn_val = fileList->retrieveEntry(i);
+                if (fn_val.getType() == NT_STRING) {
+                    QoreStringValueHelper fn(fn_val);
                     sorted_secondary_names.emplace_back(fn->c_str());
                 }
             }
@@ -8059,11 +8060,11 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         std::string combined_source = main_source;
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
-                const QoreStringNode* filename =
-                    fileList->retrieveEntry(i).get<const QoreStringNode>();
-                if (!filename) {
+                QoreValue filename_val = fileList->retrieveEntry(i);
+                if (filename_val.getType() != NT_STRING) {
                     continue;
                 }
+                QoreStringValueHelper filename(filename_val);
                 std::string file_path = dir_str + "/" + filename->c_str();
                 std::string file_source = QoreDir::get_file_content(file_path.c_str());
                 if (file_source.empty()) {
@@ -8543,11 +8544,11 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         std::string combined_source = main_source;
         if (fileList && fileList->size() > 0) {
             for (size_t i = 0; i < fileList->size(); ++i) {
-                const QoreStringNode* filename =
-                    fileList->retrieveEntry(i).get<const QoreStringNode>();
-                if (!filename) {
+                QoreValue filename_val = fileList->retrieveEntry(i);
+                if (filename_val.getType() != NT_STRING) {
                     continue;
                 }
+                QoreStringValueHelper filename(filename_val);
                 std::string file_path = dir_str + "/" + filename->c_str();
                 std::string file_source = QoreDir::get_file_content(file_path.c_str());
                 if (file_source.empty()) {
@@ -12923,10 +12924,12 @@ void captureLastError(ExceptionSink& xsink) {
     const QoreValue desc_val = xsink.getExceptionDesc();
     QoreString out;
     if (err_val.getType() == NT_STRING) {
-        out.sprintf("%s: ", err_val.get<const QoreStringNode>()->c_str());
+        QoreStringValueHelper err(err_val);
+        out.sprintf("%s: ", err->c_str());
     }
     if (desc_val.getType() == NT_STRING) {
-        out.concat(desc_val.get<const QoreStringNode>()->c_str());
+        QoreStringValueHelper desc(desc_val);
+        out.concat(desc->c_str());
     } else {
         out.concat("(no description)");
     }

@@ -577,12 +577,17 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
         ConnectionProvider::OptionHelper, AbstractRestClient {
     public {
         #! Data serialization support mapping codes to MIME types and de/serialization functions
+        const SupportsCbor =
+%ifdef NoCbor
+            False
+%else
+            exists_function("make_cbor") && exists_function("parse_cbor")
+%endif
+        ;
+
         const DataSerializationSupport = {
 %ifndef NoJson
             "json": MimeTypeJson,
-%endif
-%ifndef NoCbor
-            "cbor": MimeTypeCbor,
 %endif
 %ifndef NoYaml
             "yaml": MimeTypeYaml,
@@ -594,7 +599,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
             "url": MimeTypeFormUrlEncoded,
             "text": MimeTypeText,
             "bin": MimeTypeOctetStream,
-        };
+        } + (SupportsCbor ? {"cbor": MimeTypeCbor} : {});
 
 %ifndef NoYaml
         const DeserializeYaml = {
@@ -633,13 +638,10 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 %ifndef NoJson
             MimeTypeJsonRpc,
 %endif
-%ifndef NoCbor
-            MimeTypeCbor,
-%endif
             MimeTypeFormUrlEncoded,
             MimeTypeText,
             MimeTypeOctetStream,
-        );
+        ) + (SupportsCbor ? (MimeTypeCbor,) : ());
 
         #! Accept header value
         const Accept = AcceptList.join(",");
@@ -684,9 +686,6 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
 %ifndef NoJson
             "json": True,
 %endif
-%ifndef NoCbor
-            "cbor": True,
-%endif
 %ifndef NoYaml
             "yaml": True,
 %endif
@@ -697,7 +696,7 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
             "url": True,
             "text": True,
             "bin": True,
-        };
+        } + (SupportsCbor ? {"cbor": True} : {});
 
         #! Send content encoding options
         /** Send content encoding options are as follows:

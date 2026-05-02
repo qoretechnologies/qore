@@ -437,8 +437,8 @@ nothing SandboxManager::clearFilesystemSandboxRoot() {
         config->deref(xsink);
         return QoreValue();
     }
-    QoreStringNode* str = v.get<QoreStringNode>();
-    str->ref();
+    QoreStringNodeValueHelper str_value(v);
+    QoreStringNode* str = str_value.getReferencedValue();
     config->deref(xsink);
     return str;
 }

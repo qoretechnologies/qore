@@ -93,7 +93,10 @@ int AssertStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
                     return 0;
                 }
             } else if (msg_val->getType() == NT_STRING) {
-                msg_str = msg_val.takeReferencedValue().get<QoreStringNode>();
+                QoreValue msg_value = msg_val.takeReferencedValue();
+                QoreStringNodeValueHelper msg(msg_value);
+                msg_str = msg.getReferencedValue();
+                msg_value.discard(xsink);
             } else {
                 bool del;
                 QoreString* tmp = msg_val->getAsString(del, 0, xsink);
@@ -143,7 +146,10 @@ int AssertStatement::execImpl(RuntimeConfig& rc, QoreValue& return_value, Except
                     return 0;
                 }
             } else if (msg_val->getType() == NT_STRING) {
-                msg_str = msg_val.takeReferencedValue().get<QoreStringNode>();
+                QoreValue msg_value = msg_val.takeReferencedValue();
+                QoreStringNodeValueHelper msg(msg_value);
+                msg_str = msg.getReferencedValue();
+                msg_value.discard(xsink);
             } else {
                 bool del;
                 QoreString* tmp = msg_val->getAsString(del, 0, xsink);

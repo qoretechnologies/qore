@@ -64,7 +64,8 @@ SVM::constructor(hash<auto> options) {
         }
         v = options->getKeyValue("kernel");
         if (v.getType() == NT_STRING) {
-            kernel = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper kernel_str(v);
+            kernel = kernel_str->c_str();
             if (kernel != "linear" && kernel != "rbf") {
                 xsink->raiseException("ML-SVM-ERROR",
                     "kernel must be 'linear' or 'rbf'; got '%s'", kernel.c_str());

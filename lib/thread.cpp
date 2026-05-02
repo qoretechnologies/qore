@@ -1209,6 +1209,12 @@ LocalVarValue* thread_find_lvar(const char* id) {
     return td->tlpd->lvstack.find(id);
 }
 
+LocalVarValue* thread_try_find_lvar(const char* id) {
+    ThreadData* td = thread_data.get();
+    //printd(5, "thread_try_find_lvar() pgm: %p tlpd: %p id: %s\n", td->current_pgm, td->tlpd, id);
+    return td->tlpd->lvstack.findMaybe(id);
+}
+
 ClosureVarValue* thread_instantiate_closure_var(const char* n_id, const QoreTypeInfo* typeInfo, QoreValue& nval, bool assign) {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
     // Get declaration order for this stack entry (issue #5168)
@@ -3885,6 +3891,10 @@ bool qore_check_cancel(ExceptionSink* xsink, const char* operation) {
     }
 
     return false;
+}
+
+bool qore_check_io_interrupt(ExceptionSink* xsink, const char* operation) {
+    return qore_check_cancel(xsink, operation);
 }
 
 int qore_cancel_thread(int tid, const char* reason) {

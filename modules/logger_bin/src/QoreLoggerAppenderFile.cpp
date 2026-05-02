@@ -83,7 +83,8 @@ void QoreLoggerAppenderFile::processEventImpl(ExceptionSink* xsink, int64 type, 
         case EVENT_LOG: {
             qore_type_t t = params.getType();
             if (t == NT_STRING) {
-                f->write(params.get<const QoreStringNode>(), xsink);
+                QoreStringNodeValueHelper str(params);
+                f->write(*str, xsink);
             } else if (t == NT_BINARY) {
                 f->write(params.get<const BinaryNode>(), xsink);
             } else {
@@ -105,7 +106,8 @@ void QoreLoggerAppenderFile::openFile(ExceptionSink* xsink) {
             "expecting \"string\"", fn->getFullTypeName()));
     }
 
-    f->open2(xsink, fn->get<const QoreStringNode>()->c_str(), (int)DEFAULT_OPEN_FLAGS, 0644, f->getEncoding());
+    QoreStringValueHelper filename(*fn);
+    f->open2(xsink, filename->c_str(), (int)DEFAULT_OPEN_FLAGS, 0644, f->getEncoding());
 }
 
 void QoreLoggerAppenderFile::closeFile(ExceptionSink* xsink) {
@@ -116,7 +118,8 @@ void QoreLoggerAppenderFile::closeFileStatic(File* file, ExceptionSink* xsink) {
     file->close(xsink);
     if (*xsink) {
         const QoreValue v = xsink->getExceptionErr();
-        if (v.getType() == NT_STRING && *v.get<const QoreStringNode>() == "ILLEGAL-EXPRESSION") {
+        QoreStringValueHelper err(v);
+        if (v.getType() == NT_STRING && !strcmp(err->c_str(), "ILLEGAL-EXPRESSION")) {
             xsink->clear();
         }
     }

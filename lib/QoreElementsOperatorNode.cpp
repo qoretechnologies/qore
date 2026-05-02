@@ -54,7 +54,10 @@ QoreValue QoreElementsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* x
     switch (v->getType()) {
         case NT_LIST: return v->get<const QoreListNode>()->size();
         // return the number of characters in a string (not bytes)
-        case NT_STRING: return v->get<const QoreStringNode>()->length();
+        case NT_STRING: {
+            QoreStringValueHelper str(*v);
+            return str->length();
+        }
         case NT_HASH: return v->get<const QoreHashNode>()->size();
         case NT_OBJECT: return v->get<const QoreObject>()->size(xsink);
         case NT_BINARY: return v->get<const BinaryNode>()->size();

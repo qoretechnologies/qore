@@ -84,7 +84,8 @@ KMeans::constructor(hash<auto> options) {
     }
     v = options->getKeyValue("init");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
-        init_method = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper init(v);
+        init_method = init->c_str();
     }
 
     if (k < 1) {

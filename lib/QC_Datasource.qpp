@@ -56,42 +56,44 @@ static void ds_constructor_hash(const QoreHashNode* opts, QoreObject* self, Queu
         ExceptionSink* xsink) {
     ReferenceHolder<Queue> q(queue, xsink);
 
-    const char* str = check_hash_key(opts, "type", DSC_ERR, xsink);
+    std::string str;
+    bool has_type = check_hash_key(opts, "type", DSC_ERR, str, xsink);
     if (*xsink) return;
 
-    if (!str) {
+    if (!has_type) {
         xsink->raiseException(DSC_ERR, "expecting a string value with the 'type' key giving the driver name");
         return;
     }
 
-    DBIDriver* db_driver = DBI.find(str, xsink);
+    DBIDriver* db_driver = DBI.find(str.c_str(), xsink);
     if (!db_driver) {
         if (!*xsink)
-            xsink->raiseException("DATASOURCE-UNSUPPORTED-DATABASE", "DBI driver '%s' cannot be loaded", str);
+            xsink->raiseException("DATASOURCE-UNSUPPORTED-DATABASE", "DBI driver '%s' cannot be loaded",
+                str.c_str());
         return;
     }
 
     ReferenceHolder<ManagedDatasource> ds(new ManagedDatasource(db_driver), xsink);
 
-    str = check_hash_key(opts, "user", DSC_ERR, xsink);
+    bool found = check_hash_key(opts, "user", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingUsername(str);
+    if (found) ds->setPendingUsername(str.c_str());
 
-    str = check_hash_key(opts, "pass", DSC_ERR, xsink);
+    found = check_hash_key(opts, "pass", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingPassword(str);
+    if (found) ds->setPendingPassword(str.c_str());
 
-    str = check_hash_key(opts, "db", DSC_ERR, xsink);
+    found = check_hash_key(opts, "db", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingDBName(str);
+    if (found) ds->setPendingDBName(str.c_str());
 
-    str = check_hash_key(opts, "charset", DSC_ERR, xsink);
+    found = check_hash_key(opts, "charset", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingDBEncoding(str);
+    if (found) ds->setPendingDBEncoding(str.c_str());
 
-    str = check_hash_key(opts, "host", DSC_ERR, xsink);
+    found = check_hash_key(opts, "host", DSC_ERR, str, xsink);
     if (*xsink) return;
-    if (str) ds->setPendingHostName(str);
+    if (found) ds->setPendingHostName(str.c_str());
 
     int port = (int)opts->getKeyValue("port").getAsBigInt();
     if (port) {
@@ -167,7 +169,8 @@ static void Datasource_deserializer(QoreObject& self, const QoreHashNode* sdata,
                     "expecting 'string'", val.getTypeName());
                 return;
             }
-            create_datasource_from_conf(*val.get<QoreStringNode>(), self, nullptr, QoreValue(), xsink);
+            QoreStringNodeValueHelper conf(val);
+            create_datasource_from_conf(**conf, self, nullptr, QoreValue(), xsink);
             return;
         }
     }

@@ -239,10 +239,10 @@ QoreHashNode* Http3ServerPollOperationPriv::handleReading(ExceptionSink* xsink) 
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = read_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-        setError(err_str ? err_str->c_str() : "HTTP3-READ-ERROR",
-            desc_str ? desc_str->c_str() : "QUIC read error", xsink);
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP3-READ-ERROR",
+            *desc_str ? desc_str->c_str() : "QUIC read error", xsink);
         poll_xsink.clear();
         return nullptr;
     }
@@ -288,10 +288,10 @@ QoreHashNode* Http3ServerPollOperationPriv::handleSending(ExceptionSink* xsink) 
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = send_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-        setError(err_str ? err_str->c_str() : "HTTP3-SEND-ERROR",
-            desc_str ? desc_str->c_str() : "QUIC send error", xsink);
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP3-SEND-ERROR",
+            *desc_str ? desc_str->c_str() : "QUIC send error", xsink);
         poll_xsink.clear();
         return nullptr;
     }
@@ -320,10 +320,10 @@ QoreHashNode* Http3ServerPollOperationPriv::handleDraining(ExceptionSink* xsink)
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = read_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-        setError(err_str ? err_str->c_str() : "HTTP3-DRAIN-ERROR",
-            desc_str ? desc_str->c_str() : "QUIC drain error", xsink);
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP3-DRAIN-ERROR",
+            *desc_str ? desc_str->c_str() : "QUIC drain error", xsink);
         poll_xsink.clear();
         if (read_op) {
             read_op->abort(xsink);
@@ -574,9 +574,9 @@ void Http3ServerPollOperationPriv::shutdown(int64_t session_id, ExceptionSink* x
     ExceptionSink notice_xsink;
     sock_obj->submitQuicShutdownNotice(session_id, &notice_xsink);
     if (notice_xsink) {
-        const QoreStringNode* desc_str = notice_xsink.getExceptionDesc().get<const QoreStringNode>();
+        QoreStringValueHelper desc_str(notice_xsink.getExceptionDesc());
         setError("HTTP3-SHUTDOWN-ERROR",
-            desc_str ? desc_str->c_str() : "GOAWAY shutdown notice failed", xsink);
+            *desc_str ? desc_str->c_str() : "GOAWAY shutdown notice failed", xsink);
         notice_xsink.clear();
         if (read_op) {
             read_op->abort(xsink);

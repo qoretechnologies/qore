@@ -186,13 +186,15 @@ void QoreGetOpt::doOption(class QoreGetOptNode* n, class QoreHashNode* h, const 
     ha.assign(v, nullptr);
 }
 
-char* QoreGetOpt::getNextArgument(QoreListNode* l, QoreHashNode* h, unsigned& i, const char* lopt, char sopt) {
+bool QoreGetOpt::getNextArgument(QoreListNode* l, QoreHashNode* h, unsigned& i, const char* lopt, char sopt,
+        std::string& arg) {
     if (i < (l->size() - 1)) {
         i++;
         QoreValue v = l->retrieveEntry(i);
-        QoreStringNode* n = v.getType() == NT_STRING ? v.get<QoreStringNode>() : nullptr;
-        if (n) {
-            return (char*)n->c_str();
+        if (v.getType() == NT_STRING) {
+            QoreStringValueHelper str(v);
+            arg = str->c_str();
+            return true;
         }
     }
     QoreStringNode* err = new QoreStringNode;
@@ -203,7 +205,7 @@ char* QoreGetOpt::getNextArgument(QoreListNode* l, QoreHashNode* h, unsigned& i,
         err->sprintf("short option '-%c' requires an argument", sopt);
     }
     addError(h, err);
-    return nullptr;
+    return false;
 }
 
 void QoreGetOpt::processLongArg(const char* arg, QoreListNode* l, class QoreHashNode* h, unsigned &i, bool modify) {
@@ -234,13 +236,14 @@ void QoreGetOpt::processLongArg(const char* arg, QoreListNode* l, class QoreHash
         return;
     }
     bool do_modify = false;
+    std::string next_arg;
     // if we need a value and there isn't one, then try to get the next argument in the list
     if (w->argtype && !val && (w->option & QGO_OPT_MANDATORY)) {
-        val = (char* )getNextArgument(l, h, i, opt, '\0');
-        if (val && modify)
-            do_modify = true;
-        if (!val)
+        if (!getNextArgument(l, h, i, opt, '\0', next_arg))
             return;
+        val = (char*)next_arg.c_str();
+        if (modify)
+            do_modify = true;
     }
     doOption(w, h, val);
     if (do_modify) {
@@ -259,6 +262,7 @@ int QoreGetOpt::processShortArg(const char* arg, QoreListNode* l, class QoreHash
     }
     bool do_modify = false;
     const char* val = 0;
+    std::string next_arg;
     if (w->argtype != -1) {
         if ((j < (signed)(strlen(arg) - 1))
             && ((w->option & QGO_OPT_MANDATORY) || ((arg + j + 1)[0] == '='))) {
@@ -268,8 +272,9 @@ int QoreGetOpt::processShortArg(const char* arg, QoreListNode* l, class QoreHash
             j = 0;
         }
         else if (w->option & QGO_OPT_MANDATORY) {
-            if (!(val = getNextArgument(l, h, i, 0, opt)))
+            if (!getNextArgument(l, h, i, 0, opt, next_arg))
                 return 0;
+            val = next_arg.c_str();
             if (modify)
                 do_modify = true;
         }
@@ -291,7 +296,7 @@ QoreHashNode* QoreGetOpt::parse(QoreListNode* l, bool modify, ExceptionSink *xsi
         if (n.getType() != NT_STRING)
             continue;
 
-        QoreStringNode* str = n.get<QoreStringNode>();
+        QoreStringValueHelper str(n);
         const char* arg = str->c_str();
 
         if (arg[0] == '-') {

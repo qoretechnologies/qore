@@ -38,10 +38,15 @@
 
 #include <cctype>
 
+static const QoreStringNode* get_pseudo_string_arg(const QoreValue& v) {
+    assert(v.getType() == NT_STRING && !v.isShortString());
+    return reinterpret_cast<const QoreStringNode*>(v.getInternalNode());
+}
+
 //! Methods in this pseudo-class can be executed on @ref string "strings"
 /**
  */
-qclass <string> [arg=const QoreStringNode* str = v.get<const QoreStringNode>();vparent=<value>];
+qclass <string> [arg=const QoreStringNode* str = get_pseudo_string_arg(v);vparent=<value>];
 
 //! Returns Qore::NT_STRING
 /**

@@ -141,6 +141,16 @@ public:
     */
     DLLEXPORT QoreNamespace* copy(const QoreParseOptions& po = PO_DEFAULT) const;
 
+    //! returns a deep copy of the namespace using legacy int64 parse options
+    /** @deprecated use copy(const QoreParseOptions&) instead.
+        Kept exported for binary module compatibility with modules built before
+        QoreParseOptions replaced raw int64 parse-option bitfields.
+
+        @param po legacy int64 parse options to use when copying the namespace
+        @return a deep copy of the namespace
+    */
+    DLLEXPORT QoreNamespace* copy(int64 po) const;
+
     //! gets a hash of all classes in the namespace, the hash keys are the class names and the values are lists of strings giving the method names
     /**
         @see QoreHashNode

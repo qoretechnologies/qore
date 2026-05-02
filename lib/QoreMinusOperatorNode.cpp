@@ -118,7 +118,8 @@ QoreValue QoreMinusOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
         }
         if (rt == NT_STRING) {
             ReferenceHolder<QoreHashNode> nh(lh->get<const QoreHashNode>()->copy(), xsink);
-            nh->removeKey(rh->get<const QoreStringNode>(), xsink);
+            QoreStringValueHelper key(*rh);
+            nh->removeKey(*key, xsink);
             if (*xsink)
                 return QoreValue();
             return nh.release();

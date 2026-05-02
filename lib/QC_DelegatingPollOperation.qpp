@@ -199,7 +199,8 @@ protected:
             ExceptionSink xsink;
             ValueHolder rv(inner_obj->evalMethod("getState", nullptr, &xsink), &xsink);
             if (!xsink && rv->getType() == NT_STRING) {
-                cached_state = rv->get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper state(*rv);
+                cached_state.assign(state->c_str(), state->size());
                 return cached_state.c_str();
             }
         }

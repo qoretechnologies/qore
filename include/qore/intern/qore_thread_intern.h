@@ -700,6 +700,7 @@ DLLLOCAL const QoreListNode* thread_get_implicit_args();
 DLLLOCAL void thread_set_implicit_args(QoreListNode* argv);
 
 DLLLOCAL LocalVarValue* thread_find_lvar(const char* id);
+DLLLOCAL LocalVarValue* thread_try_find_lvar(const char* id);
 
 // to get the current runtime object
 DLLLOCAL QoreObject* runtime_get_stack_object();

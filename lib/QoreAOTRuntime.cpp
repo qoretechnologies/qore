@@ -8632,17 +8632,20 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
         QoreValue ex_desc = xsink.getExceptionDesc();
         QoreValue ex_arg = xsink.getExceptionArg();
         if (ex_err.getType() == NT_STRING) {
-            err->concat(ex_err.get<const QoreStringNode>()->c_str());
+            QoreStringValueHelper ex_err_str(ex_err);
+            err->concat(ex_err_str->c_str());
         } else {
             err->concat("unknown parse error");
         }
         if (ex_desc.getType() == NT_STRING) {
             err->concat(", desc: ");
-            err->concat(ex_desc.get<const QoreStringNode>()->c_str());
+            QoreStringValueHelper ex_desc_str(ex_desc);
+            err->concat(ex_desc_str->c_str());
         }
         if (ex_arg.getType() == NT_STRING) {
             err->concat(", arg: ");
-            err->concat(ex_arg.get<const QoreStringNode>()->c_str());
+            QoreStringValueHelper ex_arg_str(ex_arg);
+            err->concat(ex_arg_str->c_str());
         }
         xsink.clear();
         local_pgm->waitForTerminationAndDeref(nullptr);
@@ -8657,7 +8660,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
                 QoreValue ex_desc = xsink.getExceptionDesc();
                 if (ex_desc.getType() == NT_STRING) {
                     err->concat(": ");
-                    err->concat(ex_desc.get<const QoreStringNode>()->c_str());
+                    QoreStringValueHelper ex_desc_str(ex_desc);
+                    err->concat(ex_desc_str->c_str());
                 }
                 xsink.clear();
             }
@@ -8825,9 +8829,9 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
     // Check for exceptions during merge operations
     if (xsink) {
         const QoreValue err = xsink.getExceptionErr();
-        const char* err_str = (err.getType() == NT_STRING) ? err.get<const QoreStringNode>()->c_str() : "(unknown)";
+        QoreStringValueHelper err_str(err);
         printd(0, "AOT module ns_init '%s': WARNING - exception during namespace merge: %s\n",
-            mod_name, err_str);
+            mod_name, err.getType() == NT_STRING ? err_str->c_str() : "(unknown)");
     }
 
     printd(5, "AOT module ns_init '%s': merge complete\n", mod_name);
@@ -9480,20 +9484,21 @@ static void executeInitFunctions(
         if (xsink.isException()) {
             QoreValue err_val = xsink.getExceptionErr();
             QoreValue desc_val = xsink.getExceptionDesc();
+            QoreStringValueHelper err_str(err_val);
+            QoreStringValueHelper desc_str(desc_val);
             const bool is_pending = (err_val.getType() == NT_STRING
-                && !strcmp(err_val.get<const QoreStringNode>()->c_str(),
-                    "AOT-PENDING-CONSTANT"));
+                && !strcmp(err_str->c_str(), "AOT-PENDING-CONSTANT"));
             if (aotInitTraceEnabled()) {
                 fprintf(stderr, "[aot-init] call exception module=%s name=%s err=%s desc=%s pending=%d\n",
                     mod_name ? mod_name : "<none>", desc.name.c_str(),
-                    err_val.getType() == NT_STRING ? err_val.get<const QoreStringNode>()->c_str() : "?",
-                    desc_val.getType() == NT_STRING ? desc_val.get<const QoreStringNode>()->c_str() : "?",
+                    err_val.getType() == NT_STRING ? err_str->c_str() : "?",
+                    desc_val.getType() == NT_STRING ? desc_str->c_str() : "?",
                     (int)is_pending);
             }
             printd(5, "AOT init: '%s' raised exception: %s: %s%s\n",
                 desc.name.c_str(),
-                err_val.getType() == NT_STRING ? err_val.get<const QoreStringNode>()->c_str() : "?",
-                desc_val.getType() == NT_STRING ? desc_val.get<const QoreStringNode>()->c_str() : "?",
+                err_val.getType() == NT_STRING ? err_str->c_str() : "?",
+                desc_val.getType() == NT_STRING ? desc_str->c_str() : "?",
                 is_pending ? " (will retry)" : "");
             xsink.clear();
             if (is_pending && !run_module_init) {
@@ -9568,10 +9573,12 @@ static void executeInitFunctions(
                 if (aotInitTraceEnabled() && xsink.isException()) {
                     QoreValue err_val = xsink.getExceptionErr();
                     QoreValue desc_val = xsink.getExceptionDesc();
+                    QoreStringValueHelper err_str(err_val);
+                    QoreStringValueHelper desc_str(desc_val);
                     fprintf(stderr, "[aot-init] store constant exception module=%s ns=%s item=%s err=%s desc=%s\n",
                         mod_name ? mod_name : "<none>", desc.ns_path.c_str(), desc.item_name.c_str(),
-                        err_val.getType() == NT_STRING ? err_val.get<const QoreStringNode>()->c_str() : "?",
-                        desc_val.getType() == NT_STRING ? desc_val.get<const QoreStringNode>()->c_str() : "?");
+                        err_val.getType() == NT_STRING ? err_str->c_str() : "?",
+                        desc_val.getType() == NT_STRING ? desc_str->c_str() : "?");
                 }
                 result.discard(&xsink);
                 ++executed;

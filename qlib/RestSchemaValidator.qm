@@ -1987,14 +1987,20 @@ public namespace RestSchemaValidator {
     public class NullRestSchemaValidator inherits AbstractRestSchemaValidator {
         public {
             #! Data serialization support mapping codes to MIME types and de/serialization functions
+            const SupportsCbor =
+%ifdef NoCbor
+                False
+%else
+                exists_function("make_cbor") && exists_function("parse_cbor")
+%endif
+            ;
+
             const DataSerializationSupport =
 %ifndef NoJson
                 # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
                 (foldl $1 + $2, (map {$1: \make_json()}, keys MimeTypesJson)) +
 %endif
-%ifndef NoCbor
-                {MimeTypeCbor: \make_cbor()} +
-%endif
+                (SupportsCbor ? {MimeTypeCbor: get_call_reference("make_cbor")} : {}) +
             {
 %ifndef NoYaml
                 MimeTypeYamlRpc: \make_yaml(),
@@ -2086,9 +2092,7 @@ public namespace RestSchemaValidator {
                 # JSON-compatible MIME types from centralized list - use foldl to merge into single hash
                 (foldl $1 + $2, (map {$1: {"code": "json", "in": \parse_json()}}, keys MimeTypesJson)) +
 %endif
-%ifndef NoCbor
-                {MimeTypeCbor: {"code": "cbor", "in": \parse_cbor()}} +
-%endif
+                (SupportsCbor ? {MimeTypeCbor: {"code": "cbor", "in": get_call_reference("parse_cbor")}} : {}) +
             {
 %ifndef NoYaml
                 MimeTypeYamlRpc: DeserializeYaml,

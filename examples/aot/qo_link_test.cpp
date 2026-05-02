@@ -30,7 +30,7 @@ int main() {
         return 1;
     }
 
-    const QoreStringNode* s = result->get<const QoreStringNode>();
+    QoreStringValueHelper s(*result);
     printf("normalize_dir result: %s\n", s ? s->c_str() : "(null)");
 
     pgm->waitForTerminationAndDeref(&xsink);

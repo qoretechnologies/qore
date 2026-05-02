@@ -2783,13 +2783,19 @@ protected:
                 continue;
             }
             if (ptype == "string" || ptype == "softstring") {
-                fprintf(fp, "    const QoreStringNode* %s = HARD_QORE_VALUE_STRING(args, %d);\n", p.name.c_str(), i);
+                fprintf(fp,
+                        "    QoreStringNodeValueHelper qpp_string_helper_%d(get_hard_value_param(args, %d));\n"
+                        "    const QoreStringNode* %s = *qpp_string_helper_%d;\n",
+                        i, i, p.name.c_str(), i);
                 continue;
             }
             if (ptype == "*string" || ptype == "*softstring") {
                 fprintf(fp,
-                        "    const QoreStringNode* %s = get_param_value(args, %d).get<const QoreStringNode>();\n",
-                        p.name.c_str(), i);
+                        "    QoreValue qpp_string_value_%d = get_param_value(args, %d);\n"
+                        "    QoreStringNodeValueHelper qpp_string_helper_%d(qpp_string_value_%d);\n"
+                        "    const QoreStringNode* %s = qpp_string_value_%d.getType() == NT_STRING ? "
+                        "*qpp_string_helper_%d : nullptr;\n",
+                        i, i, i, i, p.name.c_str(), i, i);
                 continue;
             }
             if (ptype == "date" || ptype == "softdate") {
@@ -2885,8 +2891,10 @@ protected:
                         continue;
                     }
                     if (base == "string") {
-                        fprintf(fp, "    const QoreStringNode* %s = HARD_QORE_VALUE_STRING(args, %d);\n",
-                            p.name.c_str(), i);
+                        fprintf(fp,
+                            "    QoreStringNodeValueHelper qpp_string_helper_%d(get_hard_value_param(args, %d));\n"
+                            "    const QoreStringNode* %s = *qpp_string_helper_%d;\n",
+                            i, i, p.name.c_str(), i);
                         continue;
                     }
                     if (base == "float") {

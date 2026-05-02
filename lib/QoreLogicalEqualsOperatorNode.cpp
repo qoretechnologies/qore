@@ -128,25 +128,13 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
     //printf("QoreLogicalEqualsOperatorNode::softEqual() lt: %d rt: %d (%d %s)\n", lt, rt, right.type,
     //  right.getTypeName());
 
-    if (lt == NT_STRING) {
-        const QoreStringNode* ls = l.get<const QoreStringNode>();
-        if (rt == NT_STRING) {
-            return ls->equalSoft(*r.get<const QoreStringNode>(), xsink);
-        }
+    if (lt == NT_STRING || rt == NT_STRING) {
+        QoreStringValueHelper ls(l);
         QoreStringValueHelper rs(r, ls->getEncoding(), xsink);
         if (*xsink) {
             return false;
         }
-        return ls->equal(*rs);
-    }
-
-    if (rt == NT_STRING) {
-        const QoreStringNode* rs = r.get<const QoreStringNode>();
-        QoreStringValueHelper ls(l, rs->getEncoding(), xsink);
-        if (*xsink) {
-            return false;
-        }
-        return ls->equal(*rs);
+        return ls->equalSoft(*rs, xsink);
     }
 
     if (lt == NT_NUMBER) {

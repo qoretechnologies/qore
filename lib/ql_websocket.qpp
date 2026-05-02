@@ -65,10 +65,12 @@ binary ws_encode_frame(data msg, int op, softbool masked, softbool fin = True, i
     if (!msg.isNullOrNothing()) {
         switch (msg.getType()) {
             case NT_STRING: {
-                const QoreStringNode* str = msg.get<const QoreStringNode>();
+                QoreStringValueHelper str(msg);
                 payload = str->c_str();
                 payload_len = str->size();
-                break;
+                uint8_t rsv = static_cast<uint8_t>((rsv_bits >> 4) & 0x07);
+                return WebSocketFrameEncoder::encode(
+                    static_cast<WsOpcode>(op), payload, payload_len, (bool)fin, (bool)masked, rsv);
             }
             case NT_BINARY: {
                 const BinaryNode* bin = msg.get<const BinaryNode>();

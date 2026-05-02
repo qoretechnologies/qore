@@ -36,17 +36,15 @@ PrecompiledNormalizer::PrecompiledNormalizer(const QoreHashNode* config, Excepti
     }
 
     // Read the "precompiled_charsmap" field (base64-encoded string)
-    const QoreStringNode* charsmap_node = safeGetString(
-        config->getKeyValue("precompiled_charsmap"));
-    if (!charsmap_node) {
+    std::string charsmap = safeGetStdString(config->getKeyValue("precompiled_charsmap"));
+    if (charsmap.empty()) {
         xsink->raiseException("TOKENIZER-NORMALIZER-ERROR",
             "PrecompiledNormalizer config missing 'precompiled_charsmap' field");
         return;
     }
 
     // Decode base64 using Qore's built-in parseBase64()
-    SimpleRefHolder<BinaryNode> bin(parseBase64(charsmap_node->c_str(),
-        static_cast<int>(charsmap_node->size()), xsink));
+    SimpleRefHolder<BinaryNode> bin(parseBase64(charsmap.c_str(), static_cast<int>(charsmap.size()), xsink));
     if (*xsink) {
         return;
     }

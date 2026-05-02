@@ -64,7 +64,8 @@ SeasonalDecomposition::constructor(hash<auto> options) {
 
     v = options->getKeyValue("type");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
-        type = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper type_str(v);
+        type = type_str->c_str();
     }
 
     if (period < 2) {

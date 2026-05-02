@@ -368,7 +368,7 @@ QoreHashNode* FtpControlPollOperationPriv::handleRecvLine(ExceptionSink* xsink) 
         return nullptr;
     }
 
-    const QoreStringNode* line = line_val->get<const QoreStringNode>();
+    QoreStringValueHelper line(*line_val);
     const char* lstr = line->c_str();
     size_t llen = line->strlen();
 

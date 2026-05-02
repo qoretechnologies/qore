@@ -65,7 +65,8 @@ TextFeatures::constructor(*hash<auto> options) {
                     "'mode' option must be a string");
                 return;
             }
-            const char* m = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper mode_str(v);
+            const char* m = mode_str->c_str();
             if (strcmp(m, "tfidf") != 0 && strcmp(m, "count") != 0) {
                 xsink->raiseException("ML-TEXT-FEATURES-ERROR",
                     "invalid mode '%s': must be 'tfidf' or 'count'", m);
@@ -101,7 +102,8 @@ TextFeatures::constructor(*hash<auto> options) {
                     "'tokenizer_mode' option must be a string");
                 return;
             }
-            const char* tm = v.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper tokenizer_str(v);
+            const char* tm = tokenizer_str->c_str();
             if (strcmp(tm, "whitespace") != 0 && strcmp(tm, "subword") != 0) {
                 xsink->raiseException("ML-TEXT-FEATURES-ERROR",
                     "invalid tokenizer_mode '%s': must be 'whitespace' or 'subword'", tm);

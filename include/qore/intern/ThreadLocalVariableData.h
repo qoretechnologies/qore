@@ -110,20 +110,9 @@ public:
     }
 
     DLLLOCAL LocalVarValue* find(const char* id) {
-        Block* w = curr;
-        while (true) {
-            int p = w->pos;
-            while (p) {
-                --p;
-                LocalVarValue* var = &w->var[p];
-                if (var->id == id && !var->frame_boundary)
-                    return var;
-            }
-            w = w->prev;
-            assert(w);
-        }
-        // to avoid a warning on most compilers - note that this generates a warning on recent versions of aCC!
-        return 0;
+        LocalVarValue* rv = findMaybe(id);
+        assert(rv);
+        return rv;
     }
 
     // returns nullptr if not found; avoids assertions for lookup checks

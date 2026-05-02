@@ -234,13 +234,15 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
         error_info = new QoreHashNode(autoTypeInfo);
         const QoreValue err_val = xsink->getExceptionErr();
         if (err_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper err(err_val);
             error_info->setKeyValue("err",
-                err_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+                err.getReferencedValue(), xsink);
         }
         const QoreValue desc_val = xsink->getExceptionDesc();
         if (desc_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper desc(desc_val);
             error_info->setKeyValue("desc",
-                desc_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+                desc.getReferencedValue(), xsink);
         }
         // Push NOTHING sentinels to all registered stream Queues on error
         ExceptionSink clear_xsink;
@@ -344,13 +346,15 @@ QoreHashNode* Http2PollOperationPriv::continueSendPoll(ExceptionSink* xsink) {
         error_info = new QoreHashNode(autoTypeInfo);
         const QoreValue err_val = xsink->getExceptionErr();
         if (err_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper err(err_val);
             error_info->setKeyValue("err",
-                err_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+                err.getReferencedValue(), xsink);
         }
         const QoreValue desc_val = xsink->getExceptionDesc();
         if (desc_val.getType() == NT_STRING) {
+            QoreStringNodeValueHelper desc(desc_val);
             error_info->setKeyValue("desc",
-                desc_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+                desc.getReferencedValue(), xsink);
         }
         h2_state = H2ServerState::CLOSED;
         return nullptr;

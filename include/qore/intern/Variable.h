@@ -614,6 +614,14 @@ public:
     // only call if there is a reference-counted AbstractQoreNode value in place
     // FIXME: port operators to LValueHelper instead and remove this function
     DLLLOCAL void ensureUnique() {
+        QoreValue current = getValue();
+        if (current.isShortString()) {
+            char buf[7];
+            current.getShortString(buf);
+            assignNodeIntern(new QoreStringNode(buf, current.shortStringLen(), QCS_UTF8));
+            return;
+        }
+
         AbstractQoreNode* current_value = getNodeValue();
         assert(current_value && current_value->getType() != NT_OBJECT);
 

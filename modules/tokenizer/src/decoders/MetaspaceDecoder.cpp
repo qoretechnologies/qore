@@ -35,9 +35,9 @@ MetaspaceDecoder::MetaspaceDecoder(const QoreHashNode* config, ExceptionSink* xs
     // Check if prepend_scheme was explicitly provided in the config
     QoreValue scheme_val = config->getKeyValue("prepend_scheme");
     if (!scheme_val.isNullOrNothing() && scheme_val.getType() == NT_STRING) {
-        const QoreStringNode* scheme_str = scheme_val.get<const QoreStringNode>();
-        if (scheme_str && scheme_str->size() > 0) {
-            prepend_scheme = scheme_str->c_str();
+        std::string scheme_str = safeGetStdString(scheme_val);
+        if (!scheme_str.empty()) {
+            prepend_scheme = std::move(scheme_str);
         } else {
             // Explicit but empty: fall back to add_prefix_space
             QoreValue add_prefix = config->getKeyValue("add_prefix_space");

@@ -44,10 +44,10 @@ QoreValue QoreRegexSubstOperatorNode::evalImpl(bool& needs_deref, ExceptionSink 
     if (!v.checkType(NT_STRING))
         return QoreValue();
 
-    const QoreStringNode* str = v.getValue().get<const QoreStringNode>();
+    QoreStringNodeValueHelper str(v.getValue());
 
     // get new value
-    QoreStringNode* nv = regex->exec(str, xsink);
+    QoreStringNode* nv = regex->exec(*str, xsink);
 
     // if there is an exception above, nv = 0
     if (*xsink) {

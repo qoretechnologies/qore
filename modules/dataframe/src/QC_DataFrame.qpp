@@ -300,8 +300,9 @@ auto DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY] {
     // Convert column name list to std::vector
     std::vector<std::string> col_names;
     for (size_t i = 0; i < columns->size(); ++i) {
-        const QoreStringNode* s = columns->retrieveEntry(i).get<const QoreStringNode>();
-        if (s) {
+        QoreValue v = columns->retrieveEntry(i);
+        if (v.getType() == NT_STRING) {
+            QoreStringValueHelper s(v);
             col_names.push_back(s->c_str());
         }
     }
@@ -684,9 +685,9 @@ nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [d
         if (c > 0) {
             sql->concat(", ");
         }
-        const QoreStringNode* cname = col_names_list->retrieveEntry(c)
-            .get<const QoreStringNode>();
-        if (cname) {
+        QoreValue cname_val = col_names_list->retrieveEntry(c);
+        if (cname_val.getType() == NT_STRING) {
+            QoreStringValueHelper cname(cname_val);
             sql->concat(cname->c_str());
         }
     }

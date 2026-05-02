@@ -258,14 +258,14 @@ QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
         ASYNC_IO_TRACE("H2 handleConnecting: CONNECT ERROR: %s: %s target=%s:%d\n",
-            err_str ? err_str->c_str() : "?",
-            desc_str ? desc_str->c_str() : "?",
+            *err_str ? err_str->c_str() : "?",
+            *desc_str ? desc_str->c_str() : "?",
             target_host.c_str(), target_port);
-        setError(err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
-            desc_str ? desc_str->c_str() : "TCP connection failed", xsink);
+        setError(*err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
+            *desc_str ? desc_str->c_str() : "TCP connection failed", xsink);
         poll_xsink.clear();
         return nullptr;
     }
@@ -328,10 +328,10 @@ QoreHashNode* Http2ClientPollOperationPriv::handleProxyConnectSend(ExceptionSink
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-        setError(err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
-            desc_str ? desc_str->c_str() : "proxy CONNECT send failed", xsink);
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
+            *desc_str ? desc_str->c_str() : "proxy CONNECT send failed", xsink);
         poll_xsink.clear();
         return nullptr;
     }
@@ -368,10 +368,10 @@ QoreHashNode* Http2ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-        setError(err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
-            desc_str ? desc_str->c_str() : "proxy CONNECT response read failed", xsink);
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
+            *desc_str ? desc_str->c_str() : "proxy CONNECT response read failed", xsink);
         poll_xsink.clear();
         return nullptr;
     }
@@ -391,8 +391,9 @@ QoreHashNode* Http2ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink
                 if (status < 200 || status >= 300) {
                     SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
                     QoreValue msg_val = hdr->getKeyValue("status_message");
+                    QoreStringValueHelper msg_str(msg_val);
                     const char* msg = msg_val.getType() == NT_STRING
-                        ? msg_val.get<const QoreStringNode>()->c_str() : "unknown";
+                        ? msg_str->c_str() : "unknown";
                     desc->sprintf("proxy CONNECT failed with HTTP %d: %s", status, msg);
                     setError("HTTP2-CONNECT-ERROR", desc->c_str(), xsink);
                     return nullptr;
@@ -434,10 +435,10 @@ QoreHashNode* Http2ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-        setError(err_str ? err_str->c_str() : "HTTP2-SSL-ERROR",
-            desc_str ? desc_str->c_str() : "SSL upgrade failed", xsink);
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP2-SSL-ERROR",
+            *desc_str ? desc_str->c_str() : "SSL upgrade failed", xsink);
         poll_xsink.clear();
         return nullptr;
     }
@@ -499,10 +500,10 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-        setError(err_str ? err_str->c_str() : "HTTP2-READ-ERROR",
-            desc_str ? desc_str->c_str() : "HTTP/2 read error", xsink);
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP2-READ-ERROR",
+            *desc_str ? desc_str->c_str() : "HTTP/2 read error", xsink);
         poll_xsink.clear();
         return nullptr;
     }
@@ -1076,20 +1077,22 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
     // notifyPendingStreams.  The future would never resolve.  Surface the
     // closure error eagerly instead.
     if (h2_state.load(std::memory_order_acquire) == H2State::CLOSED) {
-        const char* err_str = "HTTP2-CONNECTION-CLOSED";
-        const char* desc_str = "connection closed before request could be submitted";
+        std::string err_str = "HTTP2-CONNECTION-CLOSED";
+        std::string desc_str = "connection closed before request could be submitted";
         if (error_info) {
             QoreValue ev = error_info->getKeyValue("err");
             QoreValue dv = error_info->getKeyValue("desc");
             if (ev.getType() == NT_STRING) {
-                err_str = ev.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper ev_str(ev);
+                err_str = ev_str->c_str();
             }
             if (dv.getType() == NT_STRING) {
-                desc_str = dv.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper dv_str(dv);
+                desc_str = dv_str->c_str();
             }
         }
         action->deref(xsink);
-        xsink->raiseException(err_str, "%s", desc_str);
+        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
         return -1;
     }
 
@@ -1725,7 +1728,7 @@ nothing Http2ClientPollOperationBase::sendStreamData(int stream_id, data data,
     if (data.getType() == NT_BINARY) {
         priv->sendStreamData(stream_id, data.get<const BinaryNode>(), end_stream, xsink);
     } else if (data.getType() == NT_STRING) {
-        const QoreStringNode* str = data.get<const QoreStringNode>();
+        QoreStringValueHelper str(data);
         SimpleRefHolder<BinaryNode> bin(new BinaryNode());
         bin->append(str->c_str(), str->size());
         priv->sendStreamData(stream_id, *bin, end_stream, xsink);

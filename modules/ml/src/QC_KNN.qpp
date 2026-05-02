@@ -88,17 +88,20 @@ KNN::constructor(hash<auto> options) {
 
     v = options->getKeyValue("metric");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
-        metric = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper metric_str(v);
+        metric = metric_str->c_str();
     }
 
     v = options->getKeyValue("task");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
-        task = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper task_str(v);
+        task = task_str->c_str();
     }
 
     v = options->getKeyValue("weight_func");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
-        weight_func = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper weight(v);
+        weight_func = weight->c_str();
     }
 
     if (k < 1) {

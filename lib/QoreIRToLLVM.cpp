@@ -250,7 +250,11 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
             llvm::FunctionType::get(void_type, {ptr_type}, false));
     module.getOrInsertFunction("qore_rt_assign_local",
             llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_assign_local_eval_weak",
+            llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_assign_local_no_coerce",
+            llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_assign_local_no_coerce_eval_weak",
             llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_coerce_value",
             llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
@@ -288,8 +292,11 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // store_global/store_thread_local: (ptr, i64, ptr) -> void
     auto* store_var_ft = llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false);
     module.getOrInsertFunction("qore_rt_store_global", store_var_ft);
+    module.getOrInsertFunction("qore_rt_store_global_eval_weak", store_var_ft);
     module.getOrInsertFunction("qore_rt_store_thread_local", store_var_ft);
+    module.getOrInsertFunction("qore_rt_store_thread_local_eval_weak", store_var_ft);
     module.getOrInsertFunction("qore_rt_store_closure", store_var_ft);
+    module.getOrInsertFunction("qore_rt_store_closure_eval_weak", store_var_ft);
 
     // LValue operation helpers
     // lvalue_load: (i64, ptr) -> i64
@@ -431,8 +438,12 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // assign_local_aot: (ptr, i32, i64, ptr) -> void
     module.getOrInsertFunction("qore_rt_assign_local_aot",
             llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_assign_local_eval_weak_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
     // assign_local_no_coerce_aot: (ptr, i32, i64, ptr) -> void
     module.getOrInsertFunction("qore_rt_assign_local_no_coerce_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_assign_local_no_coerce_eval_weak_aot",
             llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
     // instantiate_local_aot: (ptr, i32) -> void
     module.getOrInsertFunction("qore_rt_instantiate_local_aot",
@@ -448,15 +459,21 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // store_global_aot: (ptr, i32, i64, ptr) -> void
     module.getOrInsertFunction("qore_rt_store_global_aot",
             llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_store_global_eval_weak_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
     // load_thread_local_aot: (ptr, i32, ptr) -> i64
     module.getOrInsertFunction("qore_rt_load_thread_local_aot", aot_load_local_ft);
     // store_thread_local_aot: (ptr, i32, i64, ptr) -> void
     module.getOrInsertFunction("qore_rt_store_thread_local_aot",
             llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_store_thread_local_eval_weak_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
     // load_closure_aot: (ptr, i32, ptr) -> i64
     module.getOrInsertFunction("qore_rt_load_closure_aot", aot_load_local_ft);
     // store_closure_aot: (ptr, i32, i64, ptr) -> void
     module.getOrInsertFunction("qore_rt_store_closure_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_store_closure_eval_weak_aot",
             llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
     // invoke_expr_aot: (ptr, i32, ptr) -> i64
     module.getOrInsertFunction("qore_rt_invoke_expr_aot", aot_load_local_ft);
@@ -5885,8 +5902,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
                 if (aot_mode) {
                     bool use_no_coerce_outer = linst->weak || needs_value_coerce_outer || needs_type_strip_outer;
-                    const char* helper_name = use_no_coerce_outer ? "qore_rt_assign_local_no_coerce_aot"
-                            : "qore_rt_assign_local_aot";
+                    const char* helper_name = linst->weak ? "qore_rt_assign_local_no_coerce_aot"
+                            : (use_no_coerce_outer ? "qore_rt_assign_local_no_coerce_eval_weak_aot"
+                                : "qore_rt_assign_local_eval_weak_aot");
                     auto assign_helper = module.getOrInsertFunction(helper_name,
                             llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
@@ -5894,8 +5912,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, slot), boxed, xsink_arg});
                 } else {
                     bool use_no_coerce_outer_jit = linst->weak || needs_value_coerce_outer || needs_type_strip_outer;
-                    const char* helper_name = use_no_coerce_outer_jit ? "qore_rt_assign_local_no_coerce"
-                            : "qore_rt_assign_local";
+                    const char* helper_name = linst->weak ? "qore_rt_assign_local_no_coerce"
+                            : (use_no_coerce_outer_jit ? "qore_rt_assign_local_no_coerce_eval_weak"
+                                : "qore_rt_assign_local_eval_weak");
                     auto assign_helper = module.getOrInsertFunction(helper_name,
                             llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
                     llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
@@ -6279,16 +6298,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // IR interpreter's fast path accepts). Using no-coerce aligns with IR behavior.
                 bool use_no_coerce = needs_value_coerce || needs_type_strip
                     || linst->weak || QoreTypeInfo::getTypedHash(local_ti);
-                const char* aot_helper_name = use_no_coerce ? "qore_rt_assign_local_no_coerce_aot"
-                        : "qore_rt_assign_local_aot";
-                const char* aot_helper_throwing_name = use_no_coerce
+                const char* aot_helper_name = linst->weak ? "qore_rt_assign_local_no_coerce_aot"
+                        : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_aot"
+                            : "qore_rt_assign_local_eval_weak_aot");
+                const char* aot_helper_throwing_name = linst->weak
                         ? "qore_rt_assign_local_no_coerce_aot_throwing"
-                        : "qore_rt_assign_local_aot_throwing";
-                const char* jit_helper_name = use_no_coerce ? "qore_rt_assign_local_no_coerce"
-                        : "qore_rt_assign_local";
-                const char* jit_helper_throwing_name = use_no_coerce
+                        : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_aot_throwing"
+                            : "qore_rt_assign_local_eval_weak_aot_throwing");
+                const char* jit_helper_name = linst->weak ? "qore_rt_assign_local_no_coerce"
+                        : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak"
+                            : "qore_rt_assign_local_eval_weak");
+                const char* jit_helper_throwing_name = linst->weak
                         ? "qore_rt_assign_local_no_coerce_throwing"
-                        : "qore_rt_assign_local_throwing";
+                        : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_throwing"
+                            : "qore_rt_assign_local_eval_weak_throwing");
 
                 if (aot_mode) {
                     auto aot_ft = llvm::FunctionType::get(void_type,
@@ -10714,11 +10737,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 val_boxed = weak_boxed;
             }
             if (aot_mode) {
-                const char* helper_name = (inst->opcode == QoreIROpcode::StoreGlobal)
-                        ? "qore_rt_store_global_aot" : "qore_rt_store_thread_local_aot";
-                const char* helper_throwing_name = (inst->opcode == QoreIROpcode::StoreGlobal)
-                        ? "qore_rt_store_global_aot_throwing"
-                        : "qore_rt_store_thread_local_aot_throwing";
+                const char* helper_name = vinst->weak
+                        ? ((inst->opcode == QoreIROpcode::StoreGlobal)
+                            ? "qore_rt_store_global_aot" : "qore_rt_store_thread_local_aot")
+                        : ((inst->opcode == QoreIROpcode::StoreGlobal)
+                            ? "qore_rt_store_global_eval_weak_aot"
+                            : "qore_rt_store_thread_local_eval_weak_aot");
+                const char* helper_throwing_name = vinst->weak
+                        ? ((inst->opcode == QoreIROpcode::StoreGlobal)
+                            ? "qore_rt_store_global_aot_throwing"
+                            : "qore_rt_store_thread_local_aot_throwing")
+                        : ((inst->opcode == QoreIROpcode::StoreGlobal)
+                            ? "qore_rt_store_global_eval_weak_aot_throwing"
+                            : "qore_rt_store_thread_local_eval_weak_aot_throwing");
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getGlobalSlot(
                         reinterpret_cast<const void*>(vinst->var));
                 auto ft = llvm::FunctionType::get(void_type,
@@ -10730,11 +10761,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                          val_boxed, xsink_arg},
                         module, llvm_func, inst);
             } else {
-                const char* helper_name = (inst->opcode == QoreIROpcode::StoreGlobal)
-                        ? "qore_rt_store_global" : "qore_rt_store_thread_local";
-                const char* helper_throwing_name = (inst->opcode == QoreIROpcode::StoreGlobal)
-                        ? "qore_rt_store_global_throwing"
-                        : "qore_rt_store_thread_local_throwing";
+                const char* helper_name = vinst->weak
+                        ? ((inst->opcode == QoreIROpcode::StoreGlobal)
+                            ? "qore_rt_store_global" : "qore_rt_store_thread_local")
+                        : ((inst->opcode == QoreIROpcode::StoreGlobal)
+                            ? "qore_rt_store_global_eval_weak"
+                            : "qore_rt_store_thread_local_eval_weak");
+                const char* helper_throwing_name = vinst->weak
+                        ? ((inst->opcode == QoreIROpcode::StoreGlobal)
+                            ? "qore_rt_store_global_throwing"
+                            : "qore_rt_store_thread_local_throwing")
+                        : ((inst->opcode == QoreIROpcode::StoreGlobal)
+                            ? "qore_rt_store_global_eval_weak_throwing"
+                            : "qore_rt_store_thread_local_eval_weak_throwing");
                 llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(vinst->var));
                 llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
@@ -10747,6 +10786,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         module, llvm_func, inst);
             }
             emitExceptionCheck(module, llvm_func, inst);
+            if (inst->result.isValid()) {
+                values[inst->result.id] = val_boxed;
+                nanboxed_values.insert(inst->result.id);
+            }
             return true;
         }
         case QoreIROpcode::LoadClosure: {
@@ -10874,9 +10917,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 auto sc_ft = llvm::FunctionType::get(void_type,
                         {ptr_type, i32_type, i64_type, ptr_type}, false);
-                auto helper = module.getOrInsertFunction("qore_rt_store_closure_aot", sc_ft);
-                auto helper_throwing = module.getOrInsertFunction(
-                        "qore_rt_store_closure_aot_throwing", sc_ft);
+                const char* helper_name = linst->weak ? "qore_rt_store_closure_aot"
+                        : "qore_rt_store_closure_eval_weak_aot";
+                const char* helper_throwing_name = linst->weak
+                        ? "qore_rt_store_closure_aot_throwing"
+                        : "qore_rt_store_closure_eval_weak_aot_throwing";
+                auto helper = module.getOrInsertFunction(helper_name, sc_ft);
+                auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, sc_ft);
                 emitMaybeInvoke(helper, helper_throwing,
                         {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
                          val_boxed, xsink_arg},
@@ -10887,14 +10934,22 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                 auto al_ft = llvm::FunctionType::get(void_type,
                         {ptr_type, i64_type, ptr_type}, false);
-                auto helper = module.getOrInsertFunction("qore_rt_assign_local", al_ft);
-                auto helper_throwing = module.getOrInsertFunction(
-                        "qore_rt_assign_local_throwing", al_ft);
+                const char* helper_name = linst->weak ? "qore_rt_assign_local"
+                        : "qore_rt_assign_local_eval_weak";
+                const char* helper_throwing_name = linst->weak
+                        ? "qore_rt_assign_local_throwing"
+                        : "qore_rt_assign_local_eval_weak_throwing";
+                auto helper = module.getOrInsertFunction(helper_name, al_ft);
+                auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, al_ft);
                 emitMaybeInvoke(helper, helper_throwing,
                         {var_as_ptr, val_boxed, xsink_arg},
                         module, llvm_func, inst);
             }
             emitExceptionCheck(module, llvm_func, inst);
+            if (inst->result.isValid()) {
+                values[inst->result.id] = val_boxed;
+                nanboxed_values.insert(inst->result.id);
+            }
             return true;
         }
         case QoreIROpcode::LoadArg: {
@@ -15085,7 +15140,8 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
         return false;
     }
 
-    const char* key_str = nullptr;
+    std::string key_str;
+    bool has_key = false;
 
     // Check for QoreHashObjectDereferenceOperatorNode: $hash{"key"} syntax
     auto* hash_deref = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
@@ -15093,12 +15149,14 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
         // Check if the right side is a constant string key (not a list/hash slice)
         QoreValue right_val = hash_deref->getRight();
         if (right_val.hasNode() && right_val.getType() == NT_STRING) {
-            key_str = right_val.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper key(right_val);
+            key_str = key->c_str();
+            has_key = true;
         }
     }
 
     // Check for QoreDotEvalOperatorNode: $hash.key syntax
-    if (!key_str) {
+    if (!has_key) {
         auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(node);
         if (dot_eval) {
             MethodCallNode* m = dot_eval->getMethodCall();
@@ -15118,12 +15176,13 @@ bool QoreIRToLLVM::tryEmitHashKeyAccess(const QoreIRInstruction* inst, llvm::Mod
                 const QoreClass* pqc = qore_pseudo_get_class(NT_HASH);
                 if (!pqc || !pqc->findLocalMethod(m->getRawName())) {
                     key_str = m->getRawName();
+                    has_key = true;
                 }
             }
         }
     }
 
-    if (!key_str) {
+    if (!has_key) {
         return false;
     }
 

@@ -123,9 +123,9 @@ TemplateProcessor::TemplateProcessor(const QoreHashNode* config, ExceptionSink* 
             const QoreListNode* tokens_list = safeGetListKey(st_info, "tokens");
             if (tokens_list) {
                 for (size_t i = 0; i < tokens_list->size(); ++i) {
-                    const QoreStringNode* tok = safeGetString(tokens_list->retrieveEntry(i));
-                    if (tok) {
-                        info.tokens.push_back(tok->c_str());
+                    std::string tok = safeGetStdString(tokens_list->retrieveEntry(i));
+                    if (!tok.empty()) {
+                        info.tokens.push_back(std::move(tok));
                     }
                 }
             }
@@ -330,9 +330,9 @@ static void readSpecialToken(const QoreHashNode* config, const char* key,
         // [token_string, id] tuple
         const QoreListNode* tuple = safeGetList(val);
         if (tuple && tuple->size() >= 2) {
-            const QoreStringNode* tok = safeGetString(tuple->retrieveEntry(0));
-            if (tok) {
-                token_str = tok->c_str();
+            std::string tok = safeGetStdString(tuple->retrieveEntry(0));
+            if (!tok.empty()) {
+                token_str = std::move(tok);
             }
             token_id = (int)tuple->retrieveEntry(1).getAsBigInt();
         }

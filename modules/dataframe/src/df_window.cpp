@@ -34,9 +34,8 @@ static bool parseWindowSpec(const QoreHashNode* spec, WindowSpec& ws,
     if (v.getType() == NT_LIST) {
         const QoreListNode* list = v.get<const QoreListNode>();
         for (size_t i = 0; i < list->size(); ++i) {
-            const QoreStringNode* s = list->retrieveEntry(i).get<const QoreStringNode>();
-            if (s) {
-                std::string name = s->c_str();
+            std::string name;
+            if (getDataFrameString(list->retrieveEntry(i), name)) {
                 if (!col_index.count(name)) {
                     xsink->raiseException("DATAFRAME-COLUMN-ERROR",
                         "window partition_by column '%s' not found", name.c_str());
@@ -50,9 +49,8 @@ static bool parseWindowSpec(const QoreHashNode* spec, WindowSpec& ws,
     if (v.getType() == NT_LIST) {
         const QoreListNode* list = v.get<const QoreListNode>();
         for (size_t i = 0; i < list->size(); ++i) {
-            const QoreStringNode* s = list->retrieveEntry(i).get<const QoreStringNode>();
-            if (s) {
-                std::string name = s->c_str();
+            std::string name;
+            if (getDataFrameString(list->retrieveEntry(i), name)) {
                 if (!col_index.count(name)) {
                     xsink->raiseException("DATAFRAME-COLUMN-ERROR",
                         "window order_by column '%s' not found", name.c_str());
@@ -385,12 +383,12 @@ QoreDataFrame* QoreDataFrame::melt(const QoreListNode* id_vars,
     std::unordered_set<std::string> id_names;
     if (id_vars) {
         for (size_t i = 0; i < id_vars->size(); ++i) {
-            const QoreStringNode* s = id_vars->retrieveEntry(i).get<const QoreStringNode>();
-            if (s) {
-                int idx = getColIdx(s->c_str(), xsink);
+            std::string name;
+            if (getDataFrameString(id_vars->retrieveEntry(i), name)) {
+                int idx = getColIdx(name, xsink);
                 if (idx < 0) { return nullptr; }
                 id_indices.push_back(idx);
-                id_names.insert(s->c_str());
+                id_names.insert(name);
             }
         }
     }
@@ -400,12 +398,12 @@ QoreDataFrame* QoreDataFrame::melt(const QoreListNode* id_vars,
     std::vector<std::string> val_names;
     if (value_vars && value_vars->size() > 0) {
         for (size_t i = 0; i < value_vars->size(); ++i) {
-            const QoreStringNode* s = value_vars->retrieveEntry(i).get<const QoreStringNode>();
-            if (s) {
-                int idx = getColIdx(s->c_str(), xsink);
+            std::string name;
+            if (getDataFrameString(value_vars->retrieveEntry(i), name)) {
+                int idx = getColIdx(name, xsink);
                 if (idx < 0) { return nullptr; }
                 val_indices.push_back(idx);
-                val_names.push_back(s->c_str());
+                val_names.push_back(name);
             }
         }
     } else {

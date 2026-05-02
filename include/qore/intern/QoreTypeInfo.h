@@ -1728,7 +1728,8 @@ public:
     DLLLOCAL QoreHexBinaryTypeInfo() : QoreBaseNoConvertTypeInfo("hexbinary", q_accept_vec_t {
             {NT_BINARY, nullptr, true},
             {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-                    discard(n.assign(n.get<const QoreStringNode>()->parseHex(xsink)), xsink);
+                    QoreStringNodeValueHelper str(n);
+                    discard(n.assign(str->parseHex(xsink)), xsink);
                 }
             },
             }, q_return_vec_t {{NT_BINARY, true}}) {
@@ -1754,7 +1755,8 @@ public:
     DLLLOCAL QoreHexBinaryOrNothingTypeInfo() : QoreBaseOrNothingNoConvertTypeInfo("*hexbinary", q_accept_vec_t {
             {NT_BINARY, nullptr, true},
             {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-                    discard(n.assign(n.get<const QoreStringNode>()->parseHex(xsink)), xsink);
+                    QoreStringNodeValueHelper str(n);
+                    discard(n.assign(str->parseHex(xsink)), xsink);
                 }
             },
             {NT_NOTHING, nullptr},
@@ -1774,7 +1776,8 @@ public:
     DLLLOCAL QoreBase64BinaryTypeInfo() : QoreBaseNoConvertTypeInfo("base64binary", q_accept_vec_t {
             {NT_BINARY, nullptr, true},
             {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-                    discard(n.assign(n.get<const QoreStringNode>()->parseBase64(xsink)), xsink);
+                    QoreStringNodeValueHelper str(n);
+                    discard(n.assign(str->parseBase64(xsink)), xsink);
                 }
             },
             }, q_return_vec_t {{NT_BINARY, true}}) {
@@ -1800,7 +1803,8 @@ public:
     DLLLOCAL QoreBase64BinaryOrNothingTypeInfo() : QoreBaseOrNothingNoConvertTypeInfo("*base64binary", q_accept_vec_t {
             {NT_BINARY, nullptr, true},
             {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-                    discard(n.assign(n.get<const QoreStringNode>()->parseBase64(xsink)), xsink);
+                    QoreStringNodeValueHelper str(n);
+                    discard(n.assign(str->parseBase64(xsink)), xsink);
                 }
             },
             {NT_NOTHING, nullptr},
@@ -1820,7 +1824,8 @@ public:
     DLLLOCAL QoreBase64UrlBinaryTypeInfo() : QoreBaseNoConvertTypeInfo("base64urlbinary", q_accept_vec_t {
             {NT_BINARY, nullptr, true},
             {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-                    discard(n.assign(n.get<const QoreStringNode>()->parseBase64Url(xsink)), xsink);
+                    QoreStringNodeValueHelper str(n);
+                    discard(n.assign(str->parseBase64Url(xsink)), xsink);
                 }
             },
             }, q_return_vec_t {{NT_BINARY, true}}) {
@@ -1846,7 +1851,8 @@ public:
     DLLLOCAL QoreBase64UrlBinaryOrNothingTypeInfo() : QoreBaseOrNothingNoConvertTypeInfo("*base64urlbinary", q_accept_vec_t {
             {NT_BINARY, nullptr, true},
             {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-                    discard(n.assign(n.get<const QoreStringNode>()->parseBase64Url(xsink)), xsink);
+                    QoreStringNodeValueHelper str(n);
+                    discard(n.assign(str->parseBase64Url(xsink)), xsink);
                 }
             },
             {NT_NOTHING, nullptr},
@@ -2605,7 +2611,8 @@ public:
             }
          },
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(new QoreNumberNode(n.get<const QoreStringNode>()->c_str())), xsink);
+               QoreStringValueHelper str(n);
+               discard(n.assign(new QoreNumberNode(str->c_str())), xsink);
             }
          },
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -2652,7 +2659,8 @@ public:
             }
          },
          {NT_STRING, [] (QoreValue& n, ExceptionSink* xsink) {
-               discard(n.assign(new QoreNumberNode(n.get<const QoreStringNode>()->c_str())), xsink);
+               QoreStringValueHelper str(n);
+               discard(n.assign(new QoreNumberNode(str->c_str())), xsink);
             }
          },
          {NT_DATE, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -2687,7 +2695,7 @@ public:
             {NT_BINARY, nullptr, true},
             {NT_STRING,
                 [] (QoreValue& n, ExceptionSink* xsink) {
-                    const QoreStringNode* str = n.get<const QoreStringNode>();
+                    QoreStringValueHelper str(n);
                     SimpleRefHolder<BinaryNode> bn(new BinaryNode);
                     bn->append((const void*)str->c_str(), str->size());
                     discard(n.assign(bn.release()), xsink);
@@ -2723,7 +2731,7 @@ public:
             {NT_BINARY, nullptr, true},
             {NT_STRING,
                 [] (QoreValue& n, ExceptionSink* xsink) {
-                    const QoreStringNode* str = n.get<const QoreStringNode>();
+                    QoreStringValueHelper str(n);
                     SimpleRefHolder<BinaryNode> bn(new BinaryNode);
                     bn->append((const void*)str->c_str(), str->size());
                     discard(n.assign(bn.release()), xsink);

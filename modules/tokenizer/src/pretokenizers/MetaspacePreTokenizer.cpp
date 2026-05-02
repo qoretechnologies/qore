@@ -34,27 +34,27 @@ MetaspacePreTokenizer::MetaspacePreTokenizer(const QoreHashNode* config, Excepti
     // Read "replacement" key
     QoreValue v = config->getKeyValue("replacement");
     if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = safeGetString(v);
-        if (str) {
-            replacement = str->getBuffer();
+        std::string str = safeGetStdString(v);
+        if (!str.empty()) {
+            replacement = std::move(str);
         }
     }
 
     // Read "str_rep" as alternative key name (some tokenizer.json files use this)
     v = config->getKeyValue("str_rep");
     if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = safeGetString(v);
-        if (str) {
-            replacement = str->getBuffer();
+        std::string str = safeGetStdString(v);
+        if (!str.empty()) {
+            replacement = std::move(str);
         }
     }
 
     // Read "prepend_scheme" key
     v = config->getKeyValue("prepend_scheme");
     if (!v.isNullOrNothing()) {
-        const QoreStringNode* str = safeGetString(v);
-        if (str) {
-            prepend_scheme = parsePrependScheme(str->getBuffer());
+        std::string str = safeGetStdString(v);
+        if (!str.empty()) {
+            prepend_scheme = parsePrependScheme(str);
         }
     }
 

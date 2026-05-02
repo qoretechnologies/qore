@@ -100,9 +100,8 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
             }
         }
 
-        //printd(5, "QoreParseHashNode::parseInitImpl() this: %p i: %d '%s': '%s'\n", this, i,
-        //    keys[i].getType() == NT_STRING ? keys[i].get<const QoreStringNode>()->c_str() : keys[i].getFullTypeName(),
-        //    values[i].getFullTypeName());
+        //printd(5, "QoreParseHashNode::parseInitImpl() this: %p i: %d key type '%s': value type '%s'\n",
+        //    this, i, keys[i].getFullTypeName(), values[i].getFullTypeName());
 
         if (!i) {
             if (vtypes[0] && vtypes[0] != anyTypeInfo) {

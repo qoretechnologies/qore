@@ -2120,6 +2120,9 @@ QoreProgram::QoreProgram() : priv(new qore_program_private(this, PO_DEFAULT)) {
 QoreProgram::QoreProgram(const QoreParseOptions& po) : priv(new qore_program_private(this, po)) {
 }
 
+QoreProgram::QoreProgram(int64 po) : QoreProgram(QoreParseOptions(po)) {
+}
+
 QoreProgram::QoreProgram(QoreProgram* pgm, const QoreParseOptions& po, bool ec, const char* ecn)
         : priv(new qore_program_private(this, po, pgm)) {
     printd(QPP_DBG_LVL, "QoreProgram::QoreProgram(), this: %p, pgm: %p, priv: %p, pgmid: %d\n", this, pgm, priv,
@@ -2179,6 +2182,10 @@ RootQoreNamespace* QoreProgram::getRootNS() const {
 
 QoreParseOptions QoreProgram::getParseOptions() const {
     return priv->pwo.parse_options;
+}
+
+int64 QoreProgram::getParseOptions64() const {
+    return getParseOptions().getLo();
 }
 
 QoreListNode* QoreProgram::getUserFunctionList() {

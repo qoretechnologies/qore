@@ -278,7 +278,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
 
                         // get ostr offset so we can recalculate after concatenating
                         size_t offset = ststr - ostr;
-                        const QoreStringNode* new_line = v->get<const QoreStringNode>();
+                        QoreStringNodeValueHelper new_line(*v);
                         // add line separator
                         size_t eol_len;
                         if (!eol) {
@@ -292,7 +292,7 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                             buf->concat(teol->c_str());
                             eol_len = teol->size();
                         }
-                        buf->concat(new_line, xsink);
+                        buf->concat(*new_line, xsink);
                         if (*xsink) {
                             return nullptr;
                         }

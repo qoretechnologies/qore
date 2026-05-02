@@ -69,15 +69,17 @@ static void QoreReflectionClass_deserializer(QoreObject& self, const QoreHashNod
                     "expecting 'string'", val.getFullTypeName());
                 return;
             }
+            QoreStringValueHelper class_name(val);
             ReferenceHolder<QoreReflectionClass> cls(new QoreReflectionClass(xsink,
-                val.get<const QoreStringNode>()->c_str(), getProgram()), xsink);
+                class_name->c_str(), getProgram()), xsink);
             if (*xsink) {
                 QoreValue exerr = xsink->getExceptionErr();
                 assert(exerr.getType() == NT_STRING);
                 QoreValue exdesc = xsink->getExceptionDesc();
                 assert(exdesc.getType() == NT_STRING);
-                QoreStringMaker desc("%s: %s", exerr.get<const QoreStringNode>()->c_str(),
-                    exdesc.get<const QoreStringNode>()->c_str());
+                QoreStringValueHelper err(exerr);
+                QoreStringValueHelper edesc(exdesc);
+                QoreStringMaker desc("%s: %s", err->c_str(), edesc->c_str());
                 xsink->renamePrependLastException("DESERIALIZATION-ERROR", desc.c_str());
             } else {
                 self.setPrivate(CID_ABSTRACTCLASS, cls.release());

@@ -801,7 +801,7 @@ private:
     const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred (parse-time only)
 
     DLLLOCAL LocalVarValue* get_var() const {
-        return thread_find_lvar(name.c_str());
+        return thread_try_find_lvar(name.c_str());
     }
 
     //! Helper to detect if a type is an auto type that can be narrowed

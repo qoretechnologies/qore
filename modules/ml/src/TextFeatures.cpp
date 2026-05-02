@@ -89,7 +89,7 @@ void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) 
                 v.getTypeName());
             return;
         }
-        const QoreStringNode* str = v.get<const QoreStringNode>();
+        QoreStringValueHelper str(v);
         std::vector<std::string> tokens = tokenize(str->c_str());
 
         // Count unique terms in this document
@@ -186,7 +186,7 @@ QoreListNode* QoreTextFeatures::transform(const QoreListNode* documents,
                 v.getTypeName());
             return nullptr;
         }
-        const QoreStringNode* str = v.get<const QoreStringNode>();
+        QoreStringValueHelper str(v);
         std::vector<std::string> tokens = tokenize(str->c_str());
 
         // Count term frequencies

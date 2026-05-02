@@ -47,35 +47,42 @@ static const char *DSPC_ERR = "DATASOURCEPOOL-CONSTRUCTOR-ERROR";
 static void dsp_constructor_hash(const QoreHashNode* opts, QoreObject* self, Queue* queue, const QoreValue& arg, ExceptionSink* xsink) {
    ReferenceHolder<Queue> q(queue, xsink);
 
-   const char *str = check_hash_key(opts, "type", DSPC_ERR, xsink);
+   std::string str;
+   bool has_type = check_hash_key(opts, "type", DSPC_ERR, str, xsink);
    if (*xsink)
       return;
 
-   if (!str) {
+   if (!has_type) {
       xsink->raiseException(DSPC_ERR, "expecting a string value with the 'type' key giving the driver name");
       return;
    }
 
-   DBIDriver* db_driver = DBI.find(str);
+   DBIDriver* db_driver = DBI.find(str.c_str());
    if (!db_driver) {
       if (!*xsink)
-         xsink->raiseException("DATASOURCEPOOL-UNSUPPORTED-DATABASE", "no DBI driver can be found for database type '%s'", str);
+         xsink->raiseException("DATASOURCEPOOL-UNSUPPORTED-DATABASE",
+            "no DBI driver can be found for database type '%s'", str.c_str());
       return;
    }
 
-   const char* user = check_hash_key(opts, "user", DSPC_ERR, xsink);
+   std::string user;
+   bool has_user = check_hash_key(opts, "user", DSPC_ERR, user, xsink);
    if (*xsink) return;
 
-   const char* pass = check_hash_key(opts, "pass", DSPC_ERR, xsink);
+   std::string pass;
+   bool has_pass = check_hash_key(opts, "pass", DSPC_ERR, pass, xsink);
    if (*xsink) return;
 
-   const char* db = check_hash_key(opts, "db", DSPC_ERR, xsink);
+   std::string db;
+   bool has_db = check_hash_key(opts, "db", DSPC_ERR, db, xsink);
    if (*xsink) return;
 
-   const char* charset = check_hash_key(opts, "charset", DSPC_ERR, xsink);
+   std::string charset;
+   bool has_charset = check_hash_key(opts, "charset", DSPC_ERR, charset, xsink);
    if (*xsink) return;
 
-   const char* host = check_hash_key(opts, "host", DSPC_ERR, xsink);
+   std::string host;
+   bool has_host = check_hash_key(opts, "host", DSPC_ERR, host, xsink);
    if (*xsink) return;
 
    bool found;
@@ -131,7 +138,10 @@ static void dsp_constructor_hash(const QoreHashNode* opts, QoreObject* self, Que
    if (!max)
       max = DP_MAX;
 
-   SimpleRefHolder<DatasourcePool> ds(new DatasourcePool(xsink, db_driver, user, pass, db, charset, host, min, max, port, opt_hash, q.release(), arg.refSelf()));
+   SimpleRefHolder<DatasourcePool> ds(new DatasourcePool(xsink, db_driver,
+      has_user ? user.c_str() : nullptr, has_pass ? pass.c_str() : nullptr, has_db ? db.c_str() : nullptr,
+      has_charset ? charset.c_str() : nullptr, has_host ? host.c_str() : nullptr, min, max, port, opt_hash,
+      q.release(), arg.refSelf()));
    if (!*xsink)
       self->setPrivate(CID_DATASOURCEPOOL, ds.release());
    else
@@ -161,7 +171,8 @@ static void DatasourcePool_deserializer(QoreObject& self, const QoreHashNode* sd
                 return;
             }
 
-            ReferenceHolder<QoreHashNode> h(parseDatasource(val.get<QoreStringNode>()->c_str(), xsink), xsink);
+            QoreStringValueHelper conf(val);
+            ReferenceHolder<QoreHashNode> h(parseDatasource(conf->c_str(), xsink), xsink);
             if (!h) {
                 assert(*xsink);
                 return;

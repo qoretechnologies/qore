@@ -161,13 +161,14 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
     if (status_code < expected_status_lo || status_code > expected_status_hi) {
         // Try to get status message from response headers
         QoreValue info_val = output->getKeyValue("info");
-        const char* status_message = "";
+        std::string status_message;
         if (info_val.getType() == NT_HASH) {
             QoreValue resp_hdr = info_val.get<QoreHashNode>()->getKeyValue("response-headers");
             if (resp_hdr.getType() == NT_HASH) {
                 QoreValue sm_val = resp_hdr.get<QoreHashNode>()->getKeyValue("status_message");
                 if (sm_val.getType() == NT_STRING) {
-                    status_message = sm_val.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper sm(sm_val);
+                    status_message = sm->c_str();
                 }
             }
         }
@@ -175,10 +176,10 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
         QoreStringNode* desc = new QoreStringNode;
         if (expected_status_lo == expected_status_hi) {
             desc->sprintf("expected status %d, got %d %s",
-                expected_status_lo, status_code, status_message);
+                expected_status_lo, status_code, status_message.c_str());
         } else {
             desc->sprintf("expected status %d-%d, got %d %s",
-                expected_status_lo, expected_status_hi, status_code, status_message);
+                expected_status_lo, expected_status_hi, status_code, status_message.c_str());
         }
         xsink->raiseException(err_code.c_str(), desc);
         setError(desc->c_str(), xsink);
@@ -198,9 +199,12 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
     // Validate header if configured (e.g. Content-Type: text/event-stream)
     if (!validate_header_name.empty() && response_headers) {
         QoreValue hdr_val = response_headers->getKeyValue(validate_header_name.c_str());
+        std::string hdr_storage;
         const char* hdr_str = nullptr;
         if (hdr_val.getType() == NT_STRING) {
-            hdr_str = hdr_val.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper hdr(hdr_val);
+            hdr_storage = hdr->c_str();
+            hdr_str = hdr_storage.c_str();
         }
 
         if (!hdr_str) {
@@ -229,9 +233,12 @@ void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
     // Validate WebSocket Sec-WebSocket-Accept if configured
     if (!expected_ws_accept.empty() && response_headers) {
         QoreValue accept_val = response_headers->getKeyValue("sec-websocket-accept");
+        std::string accept_storage;
         const char* accept_str = nullptr;
         if (accept_val.getType() == NT_STRING) {
-            accept_str = accept_val.get<const QoreStringNode>()->c_str();
+            QoreStringValueHelper accept(accept_val);
+            accept_storage = accept->c_str();
+            accept_str = accept_storage.c_str();
         }
 
         if (!accept_str) {

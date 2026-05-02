@@ -834,6 +834,10 @@ QoreNamespace* QoreNamespace::copy(const QoreParseOptions& po) const {
     return new QoreNamespace(*this, po);
 }
 
+QoreNamespace* QoreNamespace::copy(int64 po) const {
+    return copy(QoreParseOptions(po));
+}
+
 QoreNamespaceList::QoreNamespaceList(const QoreNamespaceList& old, const QoreParseOptions& po, const qore_ns_private& parent) {
     if ((po & PO_NO_API) == PO_NO_API) {
         return;
@@ -2512,7 +2516,8 @@ static void get_params(const QoreListNode* params, QoreString& desc) {
             desc.concat("<unknown>");
         }
         else {
-            desc.concat(v.get<QoreStringNode>()->c_str());
+            QoreStringValueHelper str(v);
+            desc.concat(str->c_str());
         }
         if (!li.last())
             desc.concat(", ");
@@ -2592,18 +2597,18 @@ const AbstractQoreFunctionVariant* qore_root_ns_private::runtimeFindCall(const c
                 return nullptr;
             }
             // get string value for type
-            const QoreString& tname = *v.get<const QoreStringNode>();
+            QoreStringValueHelper tname(v);
             // issue #2601: ensure that the string is not empty (client error)
-            if (tname.empty()) {
+            if (tname->empty()) {
                 xsink->raiseException("FIND-CALL-ERROR", "call \"%s()\" parameter %lu is an empty string", name,
                     li.index() + 1);
                 return nullptr;
             }
             // look up type from string
-            const QoreTypeInfo* ti = qore_get_type_from_string_intern(tname.c_str());
+            const QoreTypeInfo* ti = qore_get_type_from_string_intern(tname->c_str());
             if (!ti) {
                 xsink->raiseException("FIND-CALL-ERROR", "call \"%s()\" parameter %lu \"%s\" cannot be " \
-                    "resolved to a known type", name, li.index() + 1, tname.c_str());
+                    "resolved to a known type", name, li.index() + 1, tname->c_str());
                 return nullptr;
             }
             tvec.push_back(ti);

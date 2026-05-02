@@ -176,10 +176,10 @@ QoreHashNode* Http3ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     QoreHashNode* poll_info = inner_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
         // Extract error details before clearing
-        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-        setError(err_str ? err_str->c_str() : "HTTP3-CONNECT-ERROR",
-            desc_str ? desc_str->c_str() : "QUIC connection failed", xsink);
+        QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+        QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+        setError(*err_str ? err_str->c_str() : "HTTP3-CONNECT-ERROR",
+            *desc_str ? desc_str->c_str() : "QUIC connection failed", xsink);
         poll_xsink.clear();
         cleanupPendingState();
         return nullptr;
@@ -249,13 +249,11 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         if (poll_xsink) {
             // Extract error and propagate
             QoreException* ex_obj = poll_xsink.getException();
-            const QoreStringNode* err_str = nullptr;
-            const QoreStringNode* desc_str = nullptr;
             if (ex_obj) {
-                err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
-                desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
-                setError(err_str ? err_str->c_str() : "HTTP3-READ-ERROR",
-                    desc_str ? desc_str->c_str() : "QUIC read error", xsink);
+                QoreStringValueHelper err_str(poll_xsink.getExceptionErr());
+                QoreStringValueHelper desc_str(poll_xsink.getExceptionDesc());
+                setError(*err_str ? err_str->c_str() : "HTTP3-READ-ERROR",
+                    *desc_str ? desc_str->c_str() : "QUIC read error", xsink);
             } else {
                 setError("HTTP3-READ-ERROR", "QUIC read error", xsink);
             }
@@ -377,13 +375,13 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 // exception rather than an empty "successful" response.
                 // Without this, callers cannot distinguish peer-reset from
                 // empty response — leading to silent data loss.
-                const QoreStringNode* err_str =
-                    resp->getKeyValue("err").get<const QoreStringNode>();
-                const QoreStringNode* desc_str =
-                    resp->getKeyValue("desc").get<const QoreStringNode>();
-                if (err_str) {
+                QoreValue err_val = resp->getKeyValue("err");
+                if (err_val.getType() == NT_STRING) {
+                    QoreValue desc_val = resp->getKeyValue("desc");
+                    QoreStringValueHelper err_str(err_val);
+                    QoreStringValueHelper desc_str(desc_val);
                     std::string err_copy = err_str->c_str();
-                    std::string desc_copy = desc_str ? desc_str->c_str() : "";
+                    std::string desc_copy = desc_val.getType() == NT_STRING ? desc_str->c_str() : "";
                     action->executeError(err_copy.c_str(), desc_copy.c_str(), xsink);
                 } else {
                     action->execute(resp.release(), xsink);
@@ -644,7 +642,8 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
             }
             QoreValue val = hi.get();
             if (val.getType() == NT_STRING) {
-                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper val_str(val);
+                hdr_map[key] = val_str->c_str();
             }
         }
     }
@@ -682,23 +681,25 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
         // default), surfacing as FUTURE-TIMEOUT.  Surface the closure error
         // eagerly and release the action's ref.
         if (need_cancel) {
-            const char* err_str = "HTTP3-CONNECTION-CLOSED";
-            const char* desc_str = "connection closed before request could be submitted";
+            std::string err_str = "HTTP3-CONNECTION-CLOSED";
+            std::string desc_str = "connection closed before request could be submitted";
             if (error_info) {
                 QoreValue ev = error_info->getKeyValue("err");
                 QoreValue dv = error_info->getKeyValue("desc");
                 if (ev.getType() == NT_STRING) {
-                    err_str = ev.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper ev_str(ev);
+                    err_str = ev_str->c_str();
                 }
                 if (dv.getType() == NT_STRING) {
-                    desc_str = dv.get<const QoreStringNode>()->c_str();
+                    QoreStringValueHelper dv_str(dv);
+                    desc_str = dv_str->c_str();
                 }
             }
             ExceptionSink fire_xs;
-            action->executeError(err_str, desc_str, &fire_xs);
+            action->executeError(err_str.c_str(), desc_str.c_str(), &fire_xs);
             fire_xs.clear();
             if (!*xsink) {
-                xsink->raiseException(err_str, "%s", desc_str);
+                xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
             }
         }
         action->deref(xsink);

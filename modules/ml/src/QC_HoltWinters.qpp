@@ -88,7 +88,8 @@ HoltWinters::constructor(hash<auto> options) {
     }
     v = options->getKeyValue("seasonal_type");
     if (!v.isNullOrNothing() && v.getType() == NT_STRING) {
-        seasonal_type = v.get<const QoreStringNode>()->c_str();
+        QoreStringValueHelper seasonal(v);
+        seasonal_type = seasonal->c_str();
     }
     v = options->getKeyValue("damped");
     if (!v.isNullOrNothing()) {

@@ -164,16 +164,18 @@ public:
                 assert(v.getType() == NT_HASH);
                 QoreValue kv = v.get<const QoreHashNode>()->getKeyValue("file");
                 if (kv.getType() == NT_STRING) {
-                    const QoreStringNode* str = kv.get<const QoreStringNode>();
-                    if (*str != "<builtin>") {
+                    QoreStringValueHelper str(kv);
+                    if (strcmp(str->c_str(), "<builtin>")) {
                         loc.file = str->c_str();
                         kv = v.get<const QoreHashNode>()->getKeyValue("source");
                         if (kv.getType() == NT_STRING) {
-                            loc.source = kv.get<const QoreStringNode>()->c_str();
+                            QoreStringValueHelper source(kv);
+                            loc.source = source->c_str();
                         }
                         kv = v.get<const QoreHashNode>()->getKeyValue("lang");
                         if (kv.getType() == NT_STRING) {
-                            loc.lang = kv.get<const QoreStringNode>()->c_str();
+                            QoreStringValueHelper lang(kv);
+                            loc.lang = lang->c_str();
                         }
                         kv = v.get<const QoreHashNode>()->getKeyValue("line");
                         loc.start_line = kv.getAsBigInt();

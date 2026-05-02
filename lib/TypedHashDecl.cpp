@@ -306,8 +306,8 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
                 for (unsigned i = 0; i < keys.size(); ++i) {
                     // check key
                     QoreValue kn = keys[i];
-                    const QoreStringNode* key = kn.getType() == NT_STRING ? kn.get<const QoreStringNode>() : nullptr;
-                    if (key) {
+                    if (kn.getType() == NT_STRING) {
+                        QoreStringValueHelper key(kn);
                         const HashDeclMemberInfo* m = findMember(key->c_str());
                         if (!m) {
                             parse_error(*loc, "hashdecl '%s' hash initializer value from %s contains unknown key '%s'",

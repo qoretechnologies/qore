@@ -460,8 +460,11 @@ static bool krb5_network_sandbox_allows_unmanaged_library_io(ExceptionSink* xsin
     }
 
     QoreValue policy = config->getKeyValue("default_policy");
-    const QoreStringNode* policy_str = policy.get<const QoreStringNode>();
-    bool default_allow = policy_str && !strcmp(policy_str->c_str(), "allow");
+    bool default_allow = false;
+    if (policy.getType() == NT_STRING) {
+        QoreStringValueHelper policy_str(policy);
+        default_allow = !strcmp(policy_str->c_str(), "allow");
+    }
     const QoreListNode* allowed_hosts = config->getKeyValue("allowed_hosts").get<const QoreListNode>();
     const QoreListNode* allowed_ports = config->getKeyValue("allowed_ports").get<const QoreListNode>();
     bool unrestricted = default_allow

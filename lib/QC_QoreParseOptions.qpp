@@ -119,7 +119,8 @@ ParseOptions::constructor(list<string> names) {
             xsink->raiseException("PARSE-OPTION-ERROR", "list element %d is not a string", (int)li.index());
             return;
         }
-        QoreParseOptions opt = QoreParseOptionsData::resolveOption(v.get<const QoreStringNode>(), xsink);
+        QoreStringNodeValueHelper name(v);
+        QoreParseOptions opt = QoreParseOptionsData::resolveOption(*name, xsink);
         if (*xsink) {
             return;
         }

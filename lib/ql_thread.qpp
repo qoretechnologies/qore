@@ -1476,11 +1476,13 @@ list<auto> parallel_map(code callable, list<auto> items, int threads = 0) [dom=T
             QoreValue err = state.error_info->getKeyValue("err");
             QoreValue desc = state.error_info->getKeyValue("desc");
             QoreValue arg = state.error_info->getKeyValue("arg");
+            QoreStringValueHelper err_str(err);
+            QoreStringValueHelper desc_str(desc);
             xsink->raiseExceptionArg(
-                err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "PARALLEL-ERROR",
+                err.getType() == NT_STRING ? err_str->c_str() : "PARALLEL-ERROR",
                 arg.refSelf(),
                 "%s",
-                desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str()
+                desc.getType() == NT_STRING ? desc_str->c_str()
                     : "unknown error in parallel execution");
         } else {
             xsink->raiseException("PARALLEL-ERROR", "unknown error in parallel execution");
@@ -1600,11 +1602,13 @@ nothing parallel_foreach(code callable, list<auto> items, int threads = 0) [dom=
             QoreValue err = state.error_info->getKeyValue("err");
             QoreValue desc = state.error_info->getKeyValue("desc");
             QoreValue arg = state.error_info->getKeyValue("arg");
+            QoreStringValueHelper err_str(err);
+            QoreStringValueHelper desc_str(desc);
             xsink->raiseExceptionArg(
-                err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "PARALLEL-ERROR",
+                err.getType() == NT_STRING ? err_str->c_str() : "PARALLEL-ERROR",
                 arg.refSelf(),
                 "%s",
-                desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str()
+                desc.getType() == NT_STRING ? desc_str->c_str()
                     : "unknown error in parallel execution");
         } else {
             xsink->raiseException("PARALLEL-ERROR", "unknown error in parallel execution");
@@ -1784,7 +1788,7 @@ auto channel_select(list<auto> cases, timeout timeout_ms = 0) [dom=THREAD_CLASS,
                 "channel_select() case %d: 'op' is not a string", i);
             return QoreValue();
         }
-        const QoreStringNode* op_str = op_val.get<const QoreStringNode>();
+        QoreStringValueHelper op_str(op_val);
         bool is_send = !strcmp(op_str->c_str(), "send");
         if (!is_send && strcmp(op_str->c_str(), "recv")) {
             channel->deref(xsink);

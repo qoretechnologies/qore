@@ -95,7 +95,8 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
             bool only_class = (bool)QoreTypeInfo::getUniqueReturnClass(lti);
             qore_type_t rt = right.getType();
             if (rt == NT_STRING) {
-                const char* member = right.get<const QoreStringNode>()->c_str();
+                QoreStringValueHelper member_str(right);
+                const char* member = member_str->c_str();
                 if (qore_class_private::parseCheckMemberAccess(*qc, loc, member, parse_context.typeInfo,
                     parse_context.pflag) && !err) {
                     err = -1;
@@ -106,8 +107,10 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
             } else if (rt == NT_LIST) { // check object slices as well if strings are available
                 ConstListIterator li(right.get<const QoreListNode>());
                 while (li.next()) {
-                    if (li.getValue().getType() == NT_STRING) {
-                        const char* member = li.getValue().get<const QoreStringNode>()->c_str();
+                    QoreValue member_val = li.getValue();
+                    if (member_val.getType() == NT_STRING) {
+                        QoreStringValueHelper member_str(member_val);
+                        const char* member = member_str->c_str();
                         const QoreTypeInfo* mti = nullptr;
                         if (qore_class_private::parseCheckMemberAccess(*qc, loc, member, mti, parse_context.pflag)
                             && !err) {
@@ -124,7 +127,8 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
                     bool only_hashdecl = (bool)QoreTypeInfo::getUniqueReturnHashDecl(lti);
                     qore_type_t rt = right.getType();
                     if (rt == NT_STRING) {
-                        const char* member = right.get<const QoreStringNode>()->c_str();
+                        QoreStringValueHelper member_str(right);
+                        const char* member = member_str->c_str();
                         if (typed_hash_decl_private::get(*hd)->parseCheckMemberAccess(loc, member,
                             parse_context.typeInfo, parse_context.pflag) && !err) {
                             err = -1;
@@ -135,8 +139,10 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
                     } else if (rt == NT_LIST) { // check object slices as well if strings are available
                         ConstListIterator li(right.get<const QoreListNode>());
                         while (li.next()) {
-                            if (li.getValue().getType() == NT_STRING) {
-                                const char* member = li.getValue().get<const QoreStringNode>()->c_str();
+                            QoreValue member_val = li.getValue();
+                            if (member_val.getType() == NT_STRING) {
+                                QoreStringValueHelper member_str(member_val);
+                                const char* member = member_str->c_str();
                                 const QoreTypeInfo* mti = nullptr;
                                 if (typed_hash_decl_private::get(*hd)->parseCheckMemberAccess(loc, member, mti,
                                     parse_context.pflag)

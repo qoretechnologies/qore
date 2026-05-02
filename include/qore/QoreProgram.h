@@ -171,6 +171,15 @@ public:
     */
     DLLEXPORT QoreProgram(const QoreParseOptions& parse_options);
 
+    //! creates the object and sets legacy int64 parse options
+    /** @deprecated use QoreProgram(const QoreParseOptions&) instead.
+        Kept exported for binary module compatibility with modules built before
+        QoreParseOptions replaced raw int64 parse-option bitfields.
+
+        @param parse_options the legacy int64 parse options mask for the QoreProgram object
+    */
+    DLLEXPORT QoreProgram(int64 parse_options);
+
     //! calls a function from the function name and returns the return value
     /** if the function does not exist, an exception is added to "xsink"
         @param name the name of the function to call
@@ -506,6 +515,15 @@ public:
 
     //! returns the parse options currently set for this program
     DLLEXPORT QoreParseOptions getParseOptions() const;
+
+    //! returns the low 64 bits of the parse options currently set for this program
+    /** @deprecated use getParseOptions() instead.
+        Kept exported for binary module compatibility with modules built before
+        QoreParseOptions replaced raw int64 parse-option bitfields.
+
+        @return the legacy int64 parse option bitfield
+    */
+    DLLEXPORT int64 getParseOptions64() const;
 
     //! sets the parse options and adds Qore-language exception information if an error occurs
     /**

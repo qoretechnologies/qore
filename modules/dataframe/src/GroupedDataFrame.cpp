@@ -241,15 +241,14 @@ QoreDataFrame* QoreGroupedDataFrame::agg(const QoreHashNode* agg_spec,
         // Get function name(s)
         QoreValue func_val = hi.get();
         std::vector<std::string> funcs;
-        if (func_val.getType() == NT_STRING) {
-            funcs.push_back(func_val.get<const QoreStringNode>()->c_str());
+        std::string func;
+        if (getDataFrameString(func_val, func)) {
+            funcs.push_back(func);
         } else if (func_val.getType() == NT_LIST) {
             const QoreListNode* func_list = func_val.get<const QoreListNode>();
             for (size_t i = 0; i < func_list->size(); ++i) {
-                const QoreStringNode* fs = func_list->retrieveEntry(i)
-                    .get<const QoreStringNode>();
-                if (fs) {
-                    funcs.push_back(fs->c_str());
+                if (getDataFrameString(func_list->retrieveEntry(i), func)) {
+                    funcs.push_back(func);
                 }
             }
         }

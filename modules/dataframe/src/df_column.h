@@ -35,6 +35,17 @@ enum class ColumnType : int {
 //! Returns the string name of a column type
 DLLLOCAL const char* columnTypeName(ColumnType type);
 
+//! Safely extracts a Qore string value, including short-string values.
+static inline bool getDataFrameString(QoreValue v, std::string& out) {
+    if (v.getType() != NT_STRING) {
+        return false;
+    }
+
+    QoreStringValueHelper str(v);
+    out = str->c_str();
+    return true;
+}
+
 //! Column data — immutable after construction (shared across DataFrames via shared_ptr)
 struct ColumnData {
     ColumnType type;
