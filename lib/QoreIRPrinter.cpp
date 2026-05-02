@@ -561,6 +561,8 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 auto* nhdfh_inst = dynamic_cast<const QoreIRNewHashDeclFromHashInstruction*>(inst.get());
                 if (nhdfh_inst && nhdfh_inst->hd) {
                     out << " <" << nhdfh_inst->hd->getName() << ">";
+                } else if (nhdfh_inst && !nhdfh_inst->hd_path.empty()) {
+                    out << " <" << nhdfh_inst->hd_path << ">";
                 }
             } else if (inst->opcode == QoreIROpcode::CallMethodDirect) {
                 // Print the devirtualized method name

@@ -96,6 +96,37 @@ static_assert(QORE_IR_MAX_OPCODE == 369,
 extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
         int32_t count, const uint64_t* selector_bits, ExceptionSink* xsink);
 
+static const TypedHashDecl* resolveNewHashDeclFromHashTarget(
+        const QoreIRNewHashDeclFromHashInstruction& inst, ExceptionSink* xsink) {
+    if (inst.hd) {
+        return inst.hd;
+    }
+    if (inst.hd_path.empty()) {
+        if (xsink) {
+            xsink->raiseException("HASHDECL-ERROR",
+                "cannot resolve hashdecl for NewHashDeclFromHash: missing serialized path");
+        }
+        return nullptr;
+    }
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        if (xsink) {
+            xsink->raiseException("HASHDECL-ERROR",
+                "cannot resolve hashdecl '%s': no program context", inst.hd_path.c_str());
+        }
+        return nullptr;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
+        *pp->RootNS, inst.hd_path.c_str(), found_ns);
+    if (!hd && xsink) {
+        xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'",
+            inst.hd_path.c_str());
+    }
+    return hd;
+}
+
 static QoreHashNode* makeImplicitHashForLValueType(const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_HASH)) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot convert lvalue declared as %s to a hash",
@@ -5735,7 +5766,18 @@ load_local_done:
                 QoreValue hash_val = getIRValue(values, inst->operands[0]);
                 const QoreHashNode* init = hash_val.getType() == NT_HASH
                     ? hash_val.get<const QoreHashNode>() : nullptr;
-                QoreHashNode* result = typed_hash_decl_private::get(*nhdfh_inst->hd)->newHash(
+                const TypedHashDecl* hd = resolveNewHashDeclFromHashTarget(*nhdfh_inst, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                if (!hd) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(
                     init, nhdfh_inst->runtime_check, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

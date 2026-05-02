@@ -2227,10 +2227,18 @@ static std::unique_ptr<QoreIRInstruction> readVrnConstruct(
 
 static bool writeNewHashDeclFromHash(AOTInstWriteCtx& ctx) {
     auto* ni = static_cast<const QoreIRNewHashDeclFromHashInstruction*>(ctx.inst);
-    if (!ni->hd) {
+    std::string hd_path_storage;
+    const char* hd_path = nullptr;
+    if (ni->hd) {
+        hd_path_storage = ni->hd->getNamespacePath();
+        hd_path = hd_path_storage.c_str();
+    } else if (!ni->hd_path.empty()) {
+        hd_path = ni->hd_path.c_str();
+    }
+    if (!hd_path || !*hd_path) {
         return false;
     }
-    ctx.writer.writeStringRef(ni->hd->getNamespacePath().c_str());
+    ctx.writer.writeStringRef(hd_path);
     ctx.writer.writeU8(ni->runtime_check ? 1 : 0);
     return true;
 }
@@ -2254,12 +2262,8 @@ static std::unique_ptr<QoreIRInstruction> readNewHashDeclFromHash(
     const qore_ns_private* found_ns = nullptr;
     const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
         *pp->RootNS, hd_path, found_ns);
-    if (!hd) {
-        printd(0, "AOT readNewHashDeclFromHash: cannot resolve hashdecl '%s'\n", hd_path);
-        return nullptr;
-    }
 
-    auto* ni = new QoreIRNewHashDeclFromHashInstruction(hd, runtime_check != 0);
+    auto* ni = new QoreIRNewHashDeclFromHashInstruction(hd_path, hd, runtime_check != 0);
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
     ni->result = QoreIRValue(result_id);
     ni->operands = operands;

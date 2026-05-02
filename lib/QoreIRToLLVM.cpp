@@ -11741,9 +11741,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,
                     nhdfh_inst->runtime_check ? 1 : 0);
             llvm::Value* result;
-            if (aot_mode) {
-                // AOT: resolve hashdecl by namespace path at runtime
-                std::string hd_path = nhdfh_inst->hd->getNamespacePath();
+            if (aot_mode || !nhdfh_inst->hd) {
+                // AOT and source-stripped debug IR resolve hashdecls by
+                // namespace path because compile-time pointers are not stable.
+                std::string hd_path = !nhdfh_inst->hd_path.empty()
+                    ? nhdfh_inst->hd_path
+                    : (nhdfh_inst->hd ? nhdfh_inst->hd->getNamespacePath() : "");
+                if (hd_path.empty()) {
+                    error = "NewHashDeclFromHash is missing hashdecl path";
+                    return false;
+                }
                 llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
                 auto nhdfhp_ft = llvm::FunctionType::get(i64_type,
                         {ptr_type, i64_type, i32_type, ptr_type}, false);

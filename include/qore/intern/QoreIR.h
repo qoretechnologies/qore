@@ -1573,7 +1573,15 @@ public:
               runtime_check(n_runtime_check) {
     }
 
+    QoreIRNewHashDeclFromHashInstruction(const char* n_hd_path, const TypedHashDecl* n_hd,
+            bool n_runtime_check)
+            : QoreIRInstruction(QoreIROpcode::NewHashDeclFromHash), hd(n_hd),
+              hd_path(n_hd_path ? n_hd_path : ""),
+              runtime_check(n_runtime_check) {
+    }
+
     const TypedHashDecl* hd;    //!< Target hashdecl type
+    std::string hd_path;        //!< Target hashdecl path for source-stripped AOT/runtime resolution
     bool runtime_check;         //!< Whether to validate keys at runtime
 };
 

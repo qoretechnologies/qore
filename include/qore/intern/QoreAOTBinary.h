@@ -1440,6 +1440,10 @@ class QoreAOTBinaryDeserializer {
         uint8_t access;
         bool pending_init = false;  //!< init-func has not yet populated the value
         QoreValue value;
+        //! Deferred VT_CONST_REF value. Class constants can reference constants
+        //! from later classes in the same AOT blob, so resolve after all class
+        //! constant entries have been registered.
+        std::string pending_const_ref_path;
     };
     std::vector<std::vector<PendingClassConstant>> pending_class_constants;
 
