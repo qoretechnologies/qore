@@ -743,6 +743,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         LoggerAppenderStream la("test", layout, sw);
         la.setQueue(new LoggerAppenderQueue());
         la.open();
+        on_exit try { la.close(); } catch () {}
         debug_logger.addAppender(la);
 
         AsyncSocketIoController io_controller(debug_logger);

@@ -647,8 +647,8 @@ int PollPipelinePriv::addSetContextValue(const char* key, const char* value) {
 
 int PollPipelinePriv::addSetContextBinary(const char* key, BinaryNode* data) {
     std::string k(key);
-    data->ref();  // take a ref for the lambda capture
-    // Use shared_ptr to manage the binary in the lambda
+    // Take ownership of the caller's ref and keep it alive for the transform
+    // lambda. Each execution stores its own ref in ctx.extra.
     auto data_ptr = std::shared_ptr<BinaryNode>(data, [](BinaryNode* b) {
         ExceptionSink xsink;
         b->deref(&xsink);
