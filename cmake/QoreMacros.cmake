@@ -270,14 +270,14 @@ MACRO (QORE_EXTERNAL_BINARY_MODULE _module_name _version)
         unset(_qore_qm_metadata_dep_found)
     endif()
     if (NOT DEFINED QORE_QM_METADATA_ENV)
-        set(_qore_external_module_path "${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/qlib")
+        set(_qore_external_module_path "${CMAKE_SOURCE_DIR}/qlib:${CMAKE_BINARY_DIR}")
         if (DEFINED QORE_BUILDTREE_USER_MODULE_PATH
                 AND NOT "${QORE_BUILDTREE_USER_MODULE_PATH}" STREQUAL "")
             set(_qore_external_module_path
                 "${_qore_external_module_path}:${QORE_BUILDTREE_USER_MODULE_PATH}")
         endif()
         set(QORE_QM_METADATA_ENV
-            "QORE_MODULE_DIR=${_qore_external_module_path}:$ENV{QORE_MODULE_DIR}"
+            "QORE_MODULE_DIR=${_qore_external_module_path}"
             "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}")
         unset(_qore_external_module_path)
     endif()
@@ -502,6 +502,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         set(_qmod_source_link ${CMAKE_SOURCE_DIR}/qlib/${_name}.qmod)
     endif()
     set(_qmod_out ${_qmod_out_dir}/${_name}.qmod)
+    file(MAKE_DIRECTORY ${_qmod_out_dir})
 
     # One-shot cleanup of stale flat artifacts from the pre-subdir layout
     # (cmake commit that moved split-dir qmods into subdirs).  Without this,
@@ -539,11 +540,19 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # by make for rebuild triggers when the source changes.
     set(_qmod_resource_copies "")
     set(_qmod_resource_srcs "")
+    set(_qmod_jar_srcs "")
+    set(_qmod_jar_stage_commands "")
     if (${_is_dir})
         file(GLOB _qmod_resource_srcs
             "${_source_root}/*.svg"
             "${_source_root}/*.yaml"
             "${_source_root}/*.json")
+        if (IS_DIRECTORY "${_source_root}/jar")
+            file(GLOB _qmod_jar_srcs "${_source_root}/jar/*.jar")
+            set(_qmod_jar_stage_commands
+                COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}/jar
+                COMMAND ${CMAKE_COMMAND} -E copy_directory ${_source_root}/jar ${_qmod_out_dir}/jar)
+        endif()
     endif()
 
     # Dependency strategy: qmod output depends on the module's own
@@ -567,11 +576,13 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         add_custom_command(
             OUTPUT ${_qmod_out}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
+            ${_qmod_jar_stage_commands}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qore_qcc_command} -m ${_source_root}
                 --depfile=${_qmod_dep} -o ${_qmod_out}
-            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
+            DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP}
             DEPFILE ${_qmod_dep}
+            WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
             VERBATIM
         )
@@ -606,6 +617,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
                 --depfile=${_qmod_dep} -o ${_qmod_out}
             DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
             DEPFILE ${_qmod_dep}
+            WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
             VERBATIM
         )
