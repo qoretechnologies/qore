@@ -1168,6 +1168,23 @@ class Test inherits QUnit::Test {
             unlink(fn);
         }
 
+        # unnamed LoggerAppenderFile: lifecycle markers must not dereference a missing appender name
+        {
+            LoggerAppenderFile la(new LoggerLayoutPattern("%m%n"), fn);
+            assertEq("", la.getName(), "unnamed appender name is empty");
+            la.setLifecycleMarkers(True);
+            la.open();
+            la.post(new LoggerEvent("Logger", "a", LoggerLevel::getLevelInfo(), "hello"));
+            la.close();
+            string content = ReadOnlyFile::readTextFile(fn);
+            list<string> lines = content.split("\n");
+            assertEq(3, lines.size(), "unnamed open marker + payload + close marker");
+            assertRegex("^# .* logger= action=opened file=" + fn + "\$", lines[0]);
+            assertEq("hello", lines[1]);
+            assertRegex("^# .* logger= action=closing file=" + fn + "\$", lines[2]);
+            unlink(fn);
+        }
+
         # rotate: marker in old file ("rotated -> X.1"), marker in new file ("rotated <- X.1")
         {
             LoggerAppenderFileRotate la("LIFE", new LoggerLayoutPattern("%m%n"), fn, 3);
