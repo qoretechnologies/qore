@@ -177,12 +177,20 @@ public:
     static constexpr size_t QUIC_CLIENT_INITIAL_MAX_STREAM_DATA = 16 * 1024 * 1024;
     static constexpr size_t QUIC_CLIENT_INITIAL_MAX_DATA = 16 * 1024 * 1024;
 
-    //! Idle timeout in nanoseconds (ngtcp2 uses ngtcp2_tstamp units)
-    /** 30 seconds prevents resource exhaustion from lost or malicious connections.
-        Both client and server use this value; the effective timeout is the minimum
-        of the two endpoints' advertised values (RFC 9000 Section 10.1).
+    //! Default idle timeout in nanoseconds (ngtcp2 uses ngtcp2_tstamp units)
+    /** 75 seconds matches nginx's default `keepalive_timeout` for HTTP/3
+        (which is also what nginx advertises as `MAX_IDLE_TIMEOUT`); see
+        nginx 1.29.4 src/http/v3/ngx_http_v3_request.c:73.  The previous
+        value of 30s was too aggressive for systems that re-use pooled
+        connections across multi-second test gaps — pool entries were being
+        silently closed by the peer's idle timer between back-to-back
+        requests, surfacing as transient HTTP3-CONNECTION-CLOSED retries.
+
+        Both client and server use this value as the *advertised* upper
+        bound; the effective timeout is the minimum of the two endpoints'
+        advertised values (RFC 9000 §10.1).
     */
-    static constexpr uint64_t QUIC_IDLE_TIMEOUT_NS = 30ULL * NGTCP2_SECONDS;
+    static constexpr uint64_t QUIC_IDLE_TIMEOUT_NS = 75ULL * NGTCP2_SECONDS;
 
     //! Maximum active connection IDs (CIDs) advertised to the peer
     /** Each migration consumes one CID; 8 allows 7 migrations before CID
@@ -1040,6 +1048,14 @@ private:
     */
     DLLLOCAL void updateKeepAliveLocked();
 
+    //! Arms the keepalive cooldown deadline; call when @c streams_ becomes empty
+    /** Sets @c keepalive_cooldown_until_ = @c now + (peer_max_idle * 2/3).  Must
+        be called *before* @ref updateKeepAliveLocked() so that the cooldown
+        check observes the new deadline.  No-op if the peer announced no idle
+        timeout.  Caller must hold @c mtx_.
+    */
+    DLLLOCAL void armKeepAliveCooldownLocked();
+
     // --- ngtcp2 static callbacks ---
 
     //! Callback to get ngtcp2_conn from conn_ref (for TLS integration)
@@ -1261,6 +1277,19 @@ private:
         close — no CONNECTION_CLOSE frame is sent.
     */
     std::atomic<bool> idle_closed_{false};
+    //! Keepalive grace deadline after the last stream completes; 0 = no cooldown active.
+    /** Mirrors curl's `cf_ngtcp2_setup_keep_alive` policy ("disable keepalive when
+        no streams pending") plus a defensive cooldown window.  When @c streams_
+        transitions from non-empty to empty we set this to
+        @c now + (peer_max_idle * 2/3).  @ref updateKeepAliveLocked() then keeps
+        PINGing until this deadline so a new request submitted shortly after the
+        last response (the common pool-reuse pattern) does not race the peer's
+        idle-close timer.  Re-evaluated from @ref handleExpiryLocked so PINGs are
+        actually disabled when the cooldown expires without a new stream —
+        preventing the "PING forever" leak the curl pattern tries to avoid.
+        Caller must hold @c mtx_.
+    */
+    ngtcp2_tstamp keepalive_cooldown_until_{0};
     std::atomic<bool> goaway_received_{false};       //!< true when GOAWAY received from peer
     std::atomic<bool> path_migrated_{false};         //!< set by pathValidationCallback on SUCCESS; cleared by clearPathMigrated()
     //! Address change generation counter — incremented each time remote_addr_ is updated.

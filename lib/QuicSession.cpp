@@ -1515,6 +1515,16 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
     // Timer expiry generates retransmission packets
     pending_write_.store(true, std::memory_order_release);
 
+    // Re-evaluate keepalive: if a cooldown was armed when streams_ became
+    // empty, this is the wakeup that lets us disable PINGs once the cooldown
+    // deadline passes.  Without this hook, an idle session keeps sending
+    // PINGs forever (the curl pattern explicitly disables keepalive when
+    // idle to avoid this leak).  Cheap when no cooldown is active —
+    // updateKeepAliveLocked() takes the streams-active branch and returns.
+    if (keepalive_cooldown_until_) {
+        updateKeepAliveLocked();
+    }
+
     return 0;
 }
 
@@ -2687,6 +2697,10 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
                     std::memory_order_release);
             }
             streams_.erase(it);
+            // Arm the keepalive cooldown if this drained the last stream.
+            if (streams_.empty()) {
+                armKeepAliveCooldownLocked();
+            }
             updateKeepAliveLocked();
             return result;
         }
@@ -2809,6 +2823,9 @@ void QuicSession::cleanupStream(int64_t stream_id) {
             notify_data = true;
         }
         streams_.erase(it);
+        if (streams_.empty()) {
+            armKeepAliveCooldownLocked();
+        }
         updateKeepAliveLocked();
         if (notify_data) {
             notifyStreamData();
@@ -2863,6 +2880,9 @@ int QuicSession::resetStream(int64_t stream_id) {
             notify_data = true;
         }
         streams_.erase(it);
+        if (streams_.empty()) {
+            armKeepAliveCooldownLocked();
+        }
         updateKeepAliveLocked();
         if (notify_data) {
             notifyStreamData();
@@ -3045,6 +3065,9 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
                 std::memory_order_release);
         }
         streams_.erase(sit);
+    }
+    if (streams_.empty()) {
+        armKeepAliveCooldownLocked();
     }
     updateKeepAliveLocked();
 
@@ -3392,19 +3415,62 @@ void QuicSession::updateKeepAliveLocked() {
         // Peer announced no idle timeout — keepalive is meaningless; disable
         // it so we never wake up just to ping.
         ngtcp2_conn_set_keep_alive_timeout(conn_, UINT64_MAX);
+        keepalive_cooldown_until_ = 0;
         return;
     }
-    if (streams_.empty()) {
-        // No active streams — let the peer's idle timer close the connection.
-        // Without this, idle H3 client connections accumulate forever because
-        // our keepalive pings keep resetting the peer's idle timer.
-        ngtcp2_conn_set_keep_alive_timeout(conn_, UINT64_MAX);
+    if (!streams_.empty()) {
+        // Streams are active — keep the connection alive at half the peer's
+        // idle timeout so a dead peer is detected promptly.  Mirrors curl's
+        // cf_ngtcp2_setup_keep_alive (lib/vquic/curl_ngtcp2.c:180-215).
+        ngtcp2_duration keep_ns =
+            (rp->max_idle_timeout > 1) ? (rp->max_idle_timeout / 2) : 1;
+        ngtcp2_conn_set_keep_alive_timeout(conn_, keep_ns);
+        // Active streams cancel any prior cooldown.
+        keepalive_cooldown_until_ = 0;
         return;
     }
-    // Streams are active — keep the connection alive at half the peer's
-    // idle timeout so a dead peer is detected promptly.
-    ngtcp2_duration keep_ns = (rp->max_idle_timeout > 1) ? (rp->max_idle_timeout / 2) : 1;
-    ngtcp2_conn_set_keep_alive_timeout(conn_, keep_ns);
+    // No active streams.  Prefer to keep PINGing for a short cooldown window
+    // so a back-to-back request submitted shortly after the last response
+    // does not race the peer's idle-close timer (the common pool-reuse
+    // pattern).  Without the cooldown, we'd disable keepalive immediately,
+    // and a new request submitted within a few seconds could land on a
+    // session the peer has already silently closed.
+    ngtcp2_tstamp now = timestamp();
+    if (keepalive_cooldown_until_ && now < keepalive_cooldown_until_) {
+        // Still within cooldown — keep keepalive enabled.  PINGs continue
+        // firing every peer_max_idle/2; each fire eventually re-enters
+        // handleExpiryLocked which calls back into this method to re-check
+        // whether the cooldown has expired.
+        ngtcp2_duration keep_ns =
+            (rp->max_idle_timeout > 1) ? (rp->max_idle_timeout / 2) : 1;
+        ngtcp2_conn_set_keep_alive_timeout(conn_, keep_ns);
+        return;
+    }
+    // Cooldown expired (or never armed) and no streams — disable keepalive.
+    // Without this, idle pooled H3 client connections accumulate forever
+    // because our keepalive pings keep resetting the peer's idle timer (the
+    // curl pattern).
+    ngtcp2_conn_set_keep_alive_timeout(conn_, UINT64_MAX);
+    keepalive_cooldown_until_ = 0;
+}
+
+void QuicSession::armKeepAliveCooldownLocked() {
+    if (!conn_) {
+        return;
+    }
+    const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params(conn_);
+    if (!rp || !rp->max_idle_timeout) {
+        return;
+    }
+    // 2/3 of peer_max_idle balances two concerns: long enough to bridge
+    // typical back-to-back request gaps (a few seconds), short enough that
+    // an abandoned pool entry winds down well before the peer gives up on
+    // it.  At the default 75s peer max_idle this is 50s of grace.
+    ngtcp2_duration cooldown_ns = (rp->max_idle_timeout * 2) / 3;
+    if (cooldown_ns < 1) {
+        cooldown_ns = 1;
+    }
+    keepalive_cooldown_until_ = timestamp() + cooldown_ns;
 }
 
 int QuicSession::extendMaxLocalStreamsBidiCallback(ngtcp2_conn* /* conn */,
