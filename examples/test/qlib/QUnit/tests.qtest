@@ -37,6 +37,7 @@ public class QUnitTest inherits QUnit::Test {
         addTestCase("Dependency injection tests", \testInjectedClass());
         addTestCase("Test empty test", \testEmptyTest());
         addTestCase("misc test", \testMisc());
+        addTestCase("assertion name truncation", \testTruncateAssertionName());
 
         set_return_value(main());
     }
@@ -235,6 +236,43 @@ public class QUnitTest inherits QUnit::Test {
                 assertTrue(ex.desc =~ /hello\\nmars/);
             }
         }
+    }
+
+    testTruncateAssertionName() {
+        # save and restore the global so changes don't leak across test cases
+        *int saved = QUnit::name_max_chars;
+        on_exit QUnit::name_max_chars = saved;
+
+        QUnit::name_max_chars = 80;
+
+        # short single-line names pass through unchanged
+        assertEq("short name", QUnit::Test::truncateAssertionName("short name"));
+
+        # multi-line names collapse at the first newline with a trailing "..."
+        assertEq("first line...", QUnit::Test::truncateAssertionName("first line\nsecond line"));
+
+        # \r\n line endings: the trailing \r before the \n is stripped
+        assertEq("first line...", QUnit::Test::truncateAssertionName("first line\r\nsecond"));
+
+        # over-long single-line names are cut to exactly the budget, including the "..."
+        string long_name = strmul("x", 200);
+        string truncated = QUnit::Test::truncateAssertionName(long_name);
+        assertEq(80, truncated.length(), "truncated length matches name_max_chars");
+        assertEq("...", truncated.substr(truncated.length() - 3));
+        assertEq(strmul("x", 77), truncated.substr(0, 77));
+
+        # a non-positive limit disables truncation entirely
+        QUnit::name_max_chars = 0;
+        assertEq(long_name, QUnit::Test::truncateAssertionName(long_name));
+        string mline = "line one\nline two";
+        assertEq(mline, QUnit::Test::truncateAssertionName(mline));
+
+        # multi-byte characters are counted as characters, not bytes (each "é" is 2 bytes in UTF-8)
+        QUnit::name_max_chars = 10;
+        string multibyte = strmul("é", 20);
+        string mb_trunc = QUnit::Test::truncateAssertionName(multibyte);
+        assertEq(10, mb_trunc.length(), "char-counted, not byte-counted");
+        assertEq(strmul("é", 7) + "...", mb_trunc);
     }
 
     testInjectedClass() {
