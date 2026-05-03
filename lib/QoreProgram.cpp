@@ -2801,6 +2801,14 @@ QoreDebugProgram::~QoreDebugProgram() {
    delete priv;
 }
 
+void QoreDebugProgram::refForCallback() {
+   ref();
+}
+
+void QoreDebugProgram::derefForCallback(ExceptionSink* xsink) {
+   deref(xsink);
+}
+
 void QoreDebugProgram::onAttach(QoreProgram *pgm, DebugRunStateEnum &rs, const AbstractStatement* &rts, ExceptionSink* xsink) {
     printd(5, "QoreDebugProgram::onAttach() this: %p\n", this);
     rs = DBG_RS_RUN;

@@ -219,6 +219,24 @@ public namespace QUnit {
 #! Whether assertion timestamps are enabled (-T flag or QUNIT_TIMESTAMPS env var)
 our bool timestamps_enabled;
 
+#! Default character budget for assertion-name display when @ref name_max_chars is unset
+public const DefaultNameMaxChars = 80;
+
+#! Maximum characters to display for an assertion name in OK / SKIP output
+/** Names exceeding this limit (or containing line breaks) are truncated with a trailing
+    \c "..." so verbose logs stay scannable when callers misuse the \c name argument as a
+    long description. The full text is preserved in failure output (see
+    @ref TestCase::checkException()) and is unaffected by this setting.
+
+    Three states:
+    - @ref nothing (the default): use @ref QUnit::DefaultNameMaxChars
+    - a positive integer: use that character budget
+    - \c 0 or negative: disable truncation entirely
+
+    Configurable via the \c QUNIT_NAME_MAX_CHARS environment variable.
+*/
+our *int name_max_chars;
+
 #! An abstract class representing test result interface
 public class AbstractTestResult {
     public {
@@ -733,6 +751,8 @@ public class TestReporter {
         printOption("QUNIT_INCLUDE", "comma-separated whitelist patterns", offset);
         printOption("QUNIT_EXCLUDE", "comma-separated blacklist patterns", offset);
         printOption("QUNIT_TIMESTAMPS", "enable timestamps (same as -T)", offset);
+        printOption("QUNIT_NAME_MAX_CHARS", "max chars for assertion name in OK/SKIP output (0 disables)",
+            offset);
         print("\n    Patterns support glob-style wildcards: * (any chars), ? (single char)\n");
     }
 
@@ -749,6 +769,14 @@ public class TestReporter {
         # Enable timestamps from -T flag or QUNIT_TIMESTAMPS env var
         if (m_options.timestamps || getenv("QUNIT_TIMESTAMPS")) {
             QUnit::timestamps_enabled = True;
+        }
+
+        # Allow QUNIT_NAME_MAX_CHARS to override the default OK / SKIP name truncation budget
+        {
+            *string mc = getenv("QUNIT_NAME_MAX_CHARS");
+            if (mc.val()) {
+                QUnit::name_max_chars = mc.toInt();
+            }
         }
 
         if (m_options.verbose && m_options.quiet && m_options.format) {
@@ -2318,9 +2346,13 @@ fail("Unexpected code executed");
     }
 
     #! returns the assertion name for display purposes
+    /** Truncates long or multi-line names so verbose OK / SKIP output stays scannable when
+        callers misuse the \c name argument as a long description; failure output paths use the
+        raw name and are unaffected. See @ref QUnit::name_max_chars and \c QUNIT_NAME_MAX_CHARS.
+    */
     static string getAssertionName(*string name) {
         if (exists name)
-            return sprintf("%y", name);
+            return sprintf("%y", Test::truncateAssertionName(name));
         *string np;
         {
             list<auto> l = TestCase::getStackList(get_thread_call_stack());
@@ -2328,6 +2360,36 @@ fail("Unexpected code executed");
                 np = foldl $1 + " <- " + $2, l;
         }
         return np ? sprintf("at %s", np) : "<no name>";
+    }
+
+    #! truncates an assertion name to @ref QUnit::name_max_chars characters at the first line break or limit
+    /** Cuts at the first \c "\n" (trimming a trailing \c "\r" left over from \c "\r\n") so a misused
+        multi-line description collapses to its first line, then enforces a character (not byte) cap and
+        appends \c "..." to indicate truncation. The final string is at most @ref QUnit::name_max_chars
+        characters. A non-positive limit disables truncation.
+    */
+    static string truncateAssertionName(string name) {
+        int max = QUnit::name_max_chars ?? QUnit::DefaultNameMaxChars;
+        if (max <= 0) {
+            return name;
+        }
+        bool truncated = False;
+        int nl = name.find("\n");
+        if (nl >= 0) {
+            name = name.substr(0, nl);
+            int len = name.length();
+            if (len > 0 && name[len - 1] == "\r") {
+                name = name.substr(0, len - 1);
+            }
+            truncated = True;
+        }
+        if (name.length() > max) {
+            name = name.substr(0, max - 3);
+            truncated = True;
+        } else if (truncated && name.length() > max - 3) {
+            name = name.substr(0, max - 3);
+        }
+        return truncated ? name + "..." : name;
     }
 
     #! Returns True if the keys given in the first hash match those in the second hash

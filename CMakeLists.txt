@@ -2351,6 +2351,7 @@ qore_user_module("qlib/QoreRagUtils" "QoreTokenizerUtils;OpenAiRestClient;Voyage
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpUtil.qm" "Util")
+qore_user_module("qlib/LineCoverage.qm" "")
 qore_user_module("qlib/HttpServerUtil.qm" "HttpUtil;Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
 qore_user_module("qlib/MailMessage.qm" "Mime")
 

@@ -585,8 +585,8 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         PerplexityChatStreamDataProvider stream = cast<PerplexityChatStreamDataProvider>(
             prov.getChildProvider("stream-chat"));
         StreamObserver stream_observer();
-        stream.registerObserver(stream_observer);
-        stream.observersReady();
+        cast<Observable>(stream).registerObserver(stream_observer);
+        cast<DelayedObservable>(stream).observersReady();
         stream.doRequest({
             "model": "sonar",
             "messages": (

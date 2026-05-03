@@ -67,6 +67,15 @@
 #include <sys/time.h>
 
 #include <ares.h>
+#include <ares_version.h>
+
+// ares_channel_t was exposed publicly in c-ares 1.22.0 (Oct 2023). On older
+// releases (e.g. Debian 12 ships 1.18.1) only `ares_channel` exists, which is
+// itself a typedef for `struct ares_channeldata *`. Provide the missing struct
+// alias so code can use `ares_channel_t*` uniformly.
+#if ARES_VERSION < 0x011600
+typedef struct ares_channeldata ares_channel_t;
+#endif
 
 #ifdef DARWIN
 #include <sys/event.h>

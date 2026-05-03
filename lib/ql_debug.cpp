@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreDebugProgram.h>
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
@@ -36,6 +37,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_Counter.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
@@ -268,6 +270,127 @@ static void ut_asyncio_construction(UnitTestCounters& c) {
     UT_ASSERT(c, ctrl->getAutostop(), "autostop defaults to true");
     ctrl->deref(&xsink);
     UT_ASSERT(c, !xsink, "cleanup succeeds without exception");
+}
+
+class ForeignThreadDebugProgram : public QoreDebugProgram {
+public:
+    std::atomic<int> attach_count{0};
+    std::atomic<int> step_count{0};
+
+    DLLLOCAL void onAttach(QoreProgram* pgm, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        ++attach_count;
+        rs = DBG_RS_STEP;
+    }
+
+    DLLLOCAL void onStep(QoreProgram* pgm, const StatementBlock* blockStatement, const AbstractStatement* statement,
+            unsigned bkptId, int& flow, DebugRunStateEnum& rs, const AbstractStatement*& rts,
+            ExceptionSink* xsink) override {
+        ++step_count;
+        rs = DBG_RS_STEP;
+    }
+};
+
+static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QoreProgram* parent) {
+    ExceptionSink xsink;
+    QoreProgram* pgm = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER);
+    pgm->parse("%modern\n"
+        "our Counter ready;\n"
+        "our Counter release;\n"
+        "int sub foreign_debug_target() {\n"
+        "    ready.dec();\n"
+        "    release.waitForZero();\n"
+        "    int i = 0;\n"
+        "    ++i;\n"
+        "    return i;\n"
+        "}\n"
+        "hash<auto> sub wait_foreign_debug_target() {\n"
+        "    ready.waitForZero();\n"
+        "    return {};\n"
+        "}\n"
+        "hash<auto> sub release_foreign_debug_target() {\n"
+        "    release.dec();\n"
+        "    return {};\n"
+        "}\n",
+        "foreign-debug-test", &xsink, nullptr, 0);
+    UT_ASSERT(c, !xsink, "foreign debug target program parses");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        pgm->waitForTerminationAndDeref(&xsink);
+        return;
+    }
+    pgm->setGlobalVarValue("ready", new QoreObject(QC_COUNTER, pgm, new Counter(1)), &xsink);
+    UT_ASSERT(c, !xsink, "foreign debug target ready counter initializes");
+    pgm->setGlobalVarValue("release", new QoreObject(QC_COUNTER, pgm, new Counter(1)), &xsink);
+    UT_ASSERT(c, !xsink, "foreign debug target release counter initializes");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        pgm->waitForTerminationAndDeref(&xsink);
+        return;
+    }
+
+    ForeignThreadDebugProgram dbg;
+    std::atomic<bool> thread_error{false};
+    std::atomic<int64_t> thread_result{0};
+    std::thread th([&]() {
+        QoreForeignThreadHelper fth;
+        if (!fth) {
+            thread_error.store(true, std::memory_order_release);
+            return;
+        }
+
+        ExceptionSink txsink;
+        QoreValue rv = pgm->callFunction("foreign_debug_target", nullptr, &txsink);
+        if (txsink) {
+            txsink.handleExceptions();
+            thread_error.store(true, std::memory_order_release);
+            txsink.clear();
+        } else {
+            thread_result.store(rv.getAsBigInt(), std::memory_order_release);
+        }
+        rv.discard(&txsink);
+    });
+
+    QoreValue wait_rv = pgm->callFunction("wait_foreign_debug_target", nullptr, &xsink);
+    wait_rv.discard(&xsink);
+    UT_ASSERT(c, !xsink, "foreign thread enters Qore target");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+    }
+
+    dbg.addProgram(pgm, &xsink);
+    UT_ASSERT(c, !xsink, "debugger attaches to active foreign target program");
+    int break_rc = dbg.breakProgram(pgm);
+    UT_ASSERT_EQ(c, -3, break_rc,
+        "breakProgram reports no interruptible active target program threads");
+
+    dbg.removeProgram(pgm);
+    dbg.waitForTerminationAndClear(&xsink);
+    UT_ASSERT(c, !xsink, "debugger cleanup succeeds");
+
+    QoreValue release_rv = pgm->callFunction("release_foreign_debug_target", nullptr, &xsink);
+    release_rv.discard(&xsink);
+    UT_ASSERT(c, !xsink, "foreign debug target release succeeds");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+    }
+    th.join();
+
+    UT_ASSERT(c, !thread_error.load(std::memory_order_acquire), "foreign thread executes Qore target");
+    UT_ASSERT_EQ(c, 1, thread_result.load(std::memory_order_acquire), "foreign thread target return value");
+    UT_ASSERT_EQ(c, 0, dbg.attach_count.load(std::memory_order_acquire),
+        "foreign thread does not run debugger attach callback");
+    UT_ASSERT_EQ(c, 0, dbg.step_count.load(std::memory_order_acquire),
+        "foreign thread does not run debugger step callback");
+
+    pgm->waitForTerminationAndDeref(&xsink);
+    UT_ASSERT(c, !xsink, "foreign debug target program cleanup succeeds");
 }
 
 static void ut_asyncio_autostop(UnitTestCounters& c) {
@@ -2681,9 +2804,24 @@ static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, Runti
 }
 #endif
 
+static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* xsink) {
+    QoreHashNode* result = new QoreHashNode(autoTypeInfo);
+    result->setKeyValue("test_count", c.test_count, xsink);
+    result->setKeyValue("pass_count", c.pass_count, xsink);
+    result->setKeyValue("fail_count", c.fail_count, xsink);
+    return result;
+}
+
+static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    UnitTestCounters c;
+    ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
+    return make_unit_test_result(c, xsink);
+}
+
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
 
+    ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_asyncio_construction(c);
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);
@@ -2735,11 +2873,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_proxy_h1_connect(c);
     ut_manager_proxy_h3_rejected(c);
 
-    QoreHashNode* result = new QoreHashNode(autoTypeInfo);
-    result->setKeyValue("test_count", c.test_count, xsink);
-    result->setKeyValue("pass_count", c.pass_count, xsink);
-    result->setKeyValue("fail_count", c.fail_count, xsink);
-    return result;
+    return make_unit_test_result(c, xsink);
 }
 
 void init_debug_functions(QoreNamespace& qns) {
@@ -2747,6 +2881,7 @@ void init_debug_functions(QoreNamespace& qns) {
         autoTypeInfo, QORE_PARAM_NO_ARG, "node", softBoolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "shallow");
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEFAULT, listTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
+    qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,

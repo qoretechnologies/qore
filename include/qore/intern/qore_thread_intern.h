@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1151,6 +1151,8 @@ public:
    DLLLOCAL void delProgram(QoreProgram* pgm);
    DLLLOCAL bool saveProgram(bool runtime, ExceptionSink* xsink);
    DLLLOCAL void del(ExceptionSink* xsink);
+   DLLLOCAL bool canRunDebugCallbacks() const;
+   DLLLOCAL bool isActiveProgram(QoreProgram* pgm) const;
 
    //! Clears thread-local data in all referenced programs without unregistering the thread
    /** Clears the thread-local hash (tld) for each program this thread has data in.

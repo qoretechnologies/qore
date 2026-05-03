@@ -1210,6 +1210,58 @@ static QoreObject* qore_socket_object_make_pollable_wrapper(QoreSocketObject* s)
     return new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), s);
 }
 
+static int qore_socket_object_parse_http2_request_headers(const QoreHashNode* headers, std::string& method,
+        std::string& path, std::vector<std::pair<std::string, std::string>>& request_headers,
+        ExceptionSink* xsink) {
+    if (!headers) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
+        return -1;
+    }
+
+    request_headers.reserve(headers->size() + 4);
+    auto append = [&](const std::string& key, const char* sval) {
+        if (key == ":method") {
+            if (sval && *sval) {
+                method = sval;
+            }
+        } else if (key == ":path") {
+            if (sval && *sval) {
+                path = sval;
+            }
+        }
+        request_headers.emplace_back(key, sval ? sval : "");
+    };
+
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        const char* key = hi.getKey();
+        QoreValue val = hi.get();
+        std::string skey(key);
+        if (val.getType() == NT_STRING) {
+            append(skey, val.get<const QoreStringNode>()->c_str());
+        } else if (val.getType() == NT_LIST) {
+            const QoreListNode* l = val.get<const QoreListNode>();
+            for (size_t i = 0; i < l->size(); ++i) {
+                QoreValue elem = l->retrieveEntry(i);
+                if (elem.getType() == NT_STRING) {
+                    append(skey, elem.get<const QoreStringNode>()->c_str());
+                }
+            }
+        }
+    }
+
+    if (method.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
+        return -1;
+    }
+    if (path.empty()) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
+        return -1;
+    }
+
+    return 0;
+}
+
 static std::shared_ptr<QuicSession> qore_socket_object_get_quic_session(const QoreSocketObject* s,
         int64_t session_id) {
     my_socket_priv* priv = my_socket_priv::getPriv(*const_cast<QoreSocketObject*>(s));
@@ -1615,50 +1667,7 @@ public:
 
 private:
     DLLLOCAL void parseRequestHeaders(const QoreHashNode* headers, ExceptionSink* xsink) {
-        if (!headers) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request headers are required");
-            return;
-        }
-
-        request_headers.reserve(headers->size() + 4);
-        auto append = [&](const std::string& key, const char* sval) {
-            if (key == ":method") {
-                if (sval && *sval) {
-                    method = sval;
-                }
-            } else if (key == ":path") {
-                if (sval && *sval) {
-                    path = sval;
-                }
-            }
-            request_headers.emplace_back(key, sval ? sval : "");
-        };
-
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            const char* key = hi.getKey();
-            QoreValue val = hi.get();
-            std::string skey(key);
-            if (val.getType() == NT_STRING) {
-                append(skey, val.get<const QoreStringNode>()->c_str());
-            } else if (val.getType() == NT_LIST) {
-                const QoreListNode* l = val.get<const QoreListNode>();
-                for (size_t i = 0; i < l->size(); ++i) {
-                    QoreValue elem = l->retrieveEntry(i);
-                    if (elem.getType() == NT_STRING) {
-                        append(skey, elem.get<const QoreStringNode>()->c_str());
-                    }
-                }
-            }
-        }
-
-        if (method.empty()) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':method' header is missing or empty");
-            return;
-        }
-        if (path.empty()) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 request ':path' header is missing or empty");
-        }
+        qore_socket_object_parse_http2_request_headers(headers, method, path, request_headers, xsink);
     }
 
     QoreSocketObject* sock;
@@ -5342,6 +5351,35 @@ int QoreSocketObject::submitHttp2ConnectResponse(int32_t stream_id, int status_c
 
 static int32_t qore_socket_object_submit_http2_request(QoreSocketObject* s, const QoreHashNode* headers,
         const void* body, size_t body_len, ExceptionSink* xsink, bool streaming, bool wake_controller) {
+    // Fast path: if the caller is already running on the async I/O
+    // controller's I/O thread (ex: an HCIO poll operation's continuePoll
+    // submitting a request as it transitions through state), dispatching
+    // through the controller would deadlock because assertNotOnIoThread() would
+    // raise SOCKET-SYNC-ON-IO-THREAD-ERROR before we even reached the H2
+    // session. But the underlying h2->submitRequest() is a non-blocking
+    // nghttp2 enqueue (no socket I/O happens in the call), so it is safe to
+    // invoke inline on the I/O thread.  This mirrors the same pattern used
+    // by setHttp2StreamStreaming(), sendHttp2StreamDataForAsyncPoll(), and
+    // readHttp2StreamDataForAsyncPoll(); the only socket APIs the I/O
+    // thread is permitted to take are the ones that do not themselves wait
+    // on socket readiness. No wakeIoThread() is needed: we are the I/O
+    // thread; the next continuePoll cycle picks up the new stream.
+    if (qore_on_async_io_thread()) {
+        std::string method;
+        std::string path;
+        std::vector<std::pair<std::string, std::string>> request_headers;
+        if (qore_socket_object_parse_http2_request_headers(headers, method, path, request_headers, xsink)) {
+            return -1;
+        }
+        Http2SessionPtr h2 = qore_socket_object_get_h2_session(s);
+        if (!h2) {
+            xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session active");
+            return -1;
+        }
+        return h2->submitRequest(method.c_str(), path.c_str(), request_headers,
+            body, body_len, xsink, streaming);
+    }
+
     QoreSocketObjectHttp2EnqueuePollOperation* poller =
         new QoreSocketObjectHttp2EnqueuePollOperation(s, headers, body, body_len, streaming, wake_controller, xsink);
     if (*xsink) {
@@ -6057,6 +6095,33 @@ bool QoreSocketObject::isQuic() const {
 static int64_t qore_socket_object_submit_quic_request(QoreSocketObject* s, const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink,
         bool streaming, bool wake_controller, const char* owner_name) {
+    // Fast path: see qore_socket_object_submit_http2_request for the
+    // full rationale.  In short: when the caller is already on the
+    // async I/O controller's I/O thread (ex: an HCIO H3 poll
+    // operation's continuePoll), dispatching the submission through
+    // the controller would self-deadlock because assertNotOnIoThread()
+    // raises SOCKET-SYNC-ON-IO-THREAD-ERROR. QuicSession::submitRequest
+    // / submitRequestStreaming are non-blocking ngtcp2/nghttp3 enqueues
+    // (no socket I/O happens in the call), so they are safe to invoke
+    // inline on the I/O thread. This mirrors the pattern already used by
+    // sendQuicClientStreamDataForAsyncPoll() etc. The only socket
+    // APIs the I/O thread is permitted to call are the ones that do not
+    // themselves wait on socket readiness. No wakeIoThread() is needed:
+    // we are the I/O thread.
+    if (qore_on_async_io_thread()) {
+        std::shared_ptr<QuicSession> session = qore_socket_object_get_first_quic_session(s);
+        if (!session) {
+            xsink->raiseException("HTTP3-ERROR", "no HTTP/3 session active");
+            return -1;
+        }
+        strcase_str_map_t header_map;
+        qore_socket_object_set_quic_headers(header_map, headers);
+        if (streaming) {
+            return session->submitRequestStreaming(method, path, header_map, xsink);
+        }
+        return session->submitRequest(method, path, header_map, body, body_len, xsink);
+    }
+
     return qore_socket_object_exec_quic_enqueue_int(s,
         new QoreSocketObjectQuicEnqueuePollOperation(s, method, path, headers, body, body_len, streaming,
             wake_controller),

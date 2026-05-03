@@ -657,12 +657,16 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
             return {};
         }
 
-        SmtpSendPollOperation op = sock.isOpen()
-            ? new SmtpSendPollOperation(self, sock, message, hello_reply, !logged_in && user)
-            : new SmtpSendPollOperation(self, message);
+        bool implicit_connect = !sock.isOpen();
+        SmtpSendPollOperation op = implicit_connect
+            ? new SmtpSendPollOperation(self, message)
+            : new SmtpSendPollOperation(self, sock, message, hello_reply, !logged_in && user);
 
         try {
-            execPollOperation(op, sprintf("smtp-send:%s", connect));
+            # implicit-connect pipeline includes connect + auth + send, so bound by connectTimeout;
+            # send-only pipeline on an already-connected socket uses the readTimeout default
+            execPollOperation(op, sprintf("smtp-send:%s", connect),
+                implicit_connect ? connectTimeout : readTimeout);
             logged_in = False;
             hash<auto> reply = op.getReply();
             if (sock.isOpen()) {
@@ -826,7 +830,7 @@ smtp.setEventQueue();
     }
 
     # Execute a polling operation synchronously through the global AsyncIoController
-    private execPollOperation(Qore::AbstractPollOperation op, string owner) {
+    private execPollOperation(Qore::AbstractPollOperation op, string owner, timeout to = readTimeout) {
         *hash<SocketPollInfo> pi = op.continuePoll();
         if (!pi) {
             if (!op.goalReached()) {
@@ -839,7 +843,7 @@ smtp.setEventQueue();
             "sock": pi.socket,
             "spop": op,
             "owner": owner,
-            "to": readTimeout,
+            "to": to,
         });
         if (result.ex) {
             throw result.ex.err, result.ex.desc;
@@ -855,7 +859,7 @@ smtp.setEventQueue();
     private connectAsyncIntern() {
         try {
             SmtpPingPollOperation op(self, sock);
-            execPollOperation(op, sprintf("smtp-connect:%s", connect));
+            execPollOperation(op, sprintf("smtp-connect:%s", connect), connectTimeout);
             esmtp = op.isEsmtp();
             hello_reply = op.getHelloReply();
             if (op.didTls()) {

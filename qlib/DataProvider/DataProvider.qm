@@ -50,7 +50,7 @@
 %endtry
 
 module DataProvider {
-    version = "3.3.0";
+    version = "3.4.0";
     desc = "user module for data integration patterns and data and API introspection";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -1026,6 +1026,13 @@ if (errors) {
     @endcode
 
     @section dataprovider_relnotes Release Notes
+
+    @subsection dataprovider_v3_4 DataProvider v3.4
+    - added @ref DataProvider::AbstractSimulationRecorder "AbstractSimulationRecorder" and
+      @ref DataProvider::AbstractDataProvider::simulateRequest() "AbstractDataProvider::simulateRequest()" for
+      side-effect-free dry-run execution
+    - added @ref DataProvider::AbstractDataProvider::getSimulationVolatileFields()
+      "AbstractDataProvider::getSimulationVolatileFields()" for simulation signature hashing
 
     @subsection dataprovider_v3_3 DataProvider v3.3
     - added 67 generic DPQL expressions for use in data-driven contexts (arithmetic, string

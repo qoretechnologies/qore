@@ -48,7 +48,10 @@ public namespace HttpClientIo {
 public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, HttpClientPollOperation {
     public {
         #! Maximum STREAM_ID_BLOCKED retries before signaling capacity error
-        const MaxStreamBlockedRetries = 3;
+        const MaxStreamBlockedRetries = 14;
+
+        #! Maximum STREAM_ID_BLOCKED retry backoff in milliseconds
+        const MaxStreamBlockedBackoffMs = 128;
     }
 
     private {
@@ -67,6 +70,64 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
         #! Lock protecting stream listener registration and dispatch
         Mutex stream_listener_mutex();
+    }
+
+    #! Submits a request to the QUIC layer, waiting briefly for stream ID credit if needed
+    /** QUIC stream limits are cumulative, not just active-stream based.  A fast
+        sequential caller can consume the peer's advertised stream ID credit
+        before the peer's MAX_STREAMS update is processed, especially on slower
+        CI runners.  Treat STREAM_ID_BLOCKED as transient backpressure first;
+        only surface capacity after a bounded condition-wait retry budget.
+    */
+    private int submitQuicRequestWithStreamCredit(Socket sock, string method, string path,
+            hash<auto> req_headers, *data body, bool streaming, int max_streams) {
+        int retries = 0;
+        while (True) {
+            try {
+                if (streaming) {
+                    return sock.submitQuicRequestStreaming(method, path, req_headers);
+                }
+                return sock.submitQuicRequest(method, path, req_headers, body);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
+                        && retries < MaxStreamBlockedRetries) {
+                    ++retries;
+                    int backoff_val = 1 << (retries - 1);
+                    if (backoff_val > MaxStreamBlockedBackoffMs) {
+                        backoff_val = MaxStreamBlockedBackoffMs;
+                    }
+                    log(LoggerLevel::DEBUG,
+                        "STREAM_ID_BLOCKED retry %d/%d (backoff %dms)",
+                        retries, MaxStreamBlockedRetries, backoff_val);
+                    self.waitStreamCapacity(backoff_val);
+                    if (!self.isReady()) {
+                        throw "HTTP3-STATE-ERROR",
+                            sprintf("connection closed during STREAM_ID_BLOCKED "
+                                "retry (state: %y)", self.getState());
+                    }
+                    continue;
+                }
+                if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/) {
+                    int captured_active = self.getActiveStreamCount();
+                    if (captured_active && (!max_streams || captured_active < max_streams)) {
+                        self.setQuicStreamLimit(captured_active);
+                    }
+                    log(LoggerLevel::DEBUG,
+                        "STREAM_ID_BLOCKED after %d retries - signaling "
+                        "capacity error (active: %d, quic_limit: %d)",
+                        MaxStreamBlockedRetries, captured_active,
+                        self.getQuicStreamLimit());
+                    throw "HTTP3-CAPACITY-ERROR",
+                        sprintf("QUIC stream limit reached on connection"
+                            " (active_streams: %d)", captured_active);
+                }
+                if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
+                        || ex.err == "QUIC-RECV-ERROR") {
+                    self.setSubmitError(ex.err, ex.desc);
+                }
+                rethrow;
+            }
+        }
     }
 
     #! Creates the poll operation for a new QUIC connection
@@ -203,59 +264,9 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
         Socket sock = self.getSocket();
         int stream_id;
-        int retries = 0;
         try {
-            while (True) {
-                try {
-                    if (streaming) {
-                        stream_id = sock.submitQuicRequestStreaming(method, path, req_headers);
-                    } else {
-                        stream_id = sock.submitQuicRequest(method, path, req_headers, body);
-                    }
-                    break;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
-                            && retries < MaxStreamBlockedRetries) {
-                        ++retries;
-                        # Backoff: 1ms, 2ms, 4ms
-                        int backoff_val = 1 << (retries - 1);
-                        log(LoggerLevel::DEBUG,
-                            "STREAM_ID_BLOCKED retry %d/%d (backoff %dms)",
-                            retries, MaxStreamBlockedRetries, backoff_val);
-                        # Wait on condition — signaled when continuePoll()
-                        # drains completed streams and frees stream slots.
-                        self.waitStreamCapacity(backoff_val);
-
-                        if (!self.isReady()) {
-                            throw "HTTP3-STATE-ERROR",
-                                sprintf("connection closed during STREAM_ID_BLOCKED "
-                                    "retry (state: %y)", self.getState());
-                        }
-                        continue;
-                    }
-                    if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/) {
-                        # Retries exhausted — record the limit
-                        int captured_active = self.getActiveStreamCount();
-                        if (!max_streams || captured_active < max_streams) {
-                            self.setQuicStreamLimit(captured_active);
-                        }
-                        log(LoggerLevel::DEBUG,
-                            "STREAM_ID_BLOCKED after %d retries — signaling "
-                            "capacity error (active: %d, quic_limit: %d)",
-                            MaxStreamBlockedRetries, captured_active,
-                            self.getQuicStreamLimit());
-                        throw "HTTP3-CAPACITY-ERROR",
-                            sprintf("QUIC stream limit reached on connection"
-                                " (active_streams: %d)", captured_active);
-                    }
-                    # Connection death errors — mark as closed immediately
-                    if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
-                            || ex.err == "QUIC-RECV-ERROR") {
-                        self.setSubmitError(ex.err, ex.desc);
-                    }
-                    rethrow;
-                }
-            }
+            stream_id = submitQuicRequestWithStreamCredit(sock, method, path,
+                req_headers, body, streaming, max_streams);
         } catch () {
             # Ensure submits_in_progress is decremented on all failure paths
             self.endSubmitFail();
@@ -277,19 +288,6 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             throw "HTTP3-STATE-ERROR",
                 sprintf("connection closed during request submission (state: %y)",
                     self.getState());
-        }
-
-        # Deliver any buffered responses by resolving the Promise directly
-        if (reg_result.buffered) {
-            foreach hash<auto> resp in (reg_result.buffered) {
-                resp.protocol = "h3";
-                if (resp.end_stream.toBool()) {
-                    # Final response — resolve the Promise and clean up
-                    try { promise.set(resp); } catch () {}
-                    self.cancelStream(stream_id);
-                    break;
-                }
-            }
         }
 
         return stream_id;
@@ -339,41 +337,9 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
         Socket sock = self.getSocket();
         int stream_id;
-        int retries = 0;
         try {
-            while (True) {
-                try {
-                    stream_id = sock.submitQuicRequest(method, path, req_headers, body);
-                    break;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
-                            && retries < MaxStreamBlockedRetries) {
-                        ++retries;
-                        int backoff_val = 1 << (retries - 1);
-                        self.waitStreamCapacity(backoff_val);
-                        if (!self.isReady()) {
-                            throw "HTTP3-STATE-ERROR",
-                                sprintf("connection closed during STREAM_ID_BLOCKED "
-                                    "retry (state: %y)", self.getState());
-                        }
-                        continue;
-                    }
-                    if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/) {
-                        int captured_active = self.getActiveStreamCount();
-                        if (!max_streams || captured_active < max_streams) {
-                            self.setQuicStreamLimit(captured_active);
-                        }
-                        throw "HTTP3-CAPACITY-ERROR",
-                            sprintf("QUIC stream limit reached on connection"
-                                " (active_streams: %d)", captured_active);
-                    }
-                    if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
-                            || ex.err == "QUIC-RECV-ERROR") {
-                        self.setSubmitError(ex.err, ex.desc);
-                    }
-                    rethrow;
-                }
-            }
+            stream_id = submitQuicRequestWithStreamCredit(sock, method, path,
+                req_headers, body, False, max_streams);
         } catch () {
             self.endSubmitFail();
             rethrow;
@@ -393,20 +359,6 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             throw "HTTP3-STATE-ERROR",
                 sprintf("connection closed during request submission (state: %y)",
                     self.getState());
-        }
-
-        # Deliver buffered responses directly — also signal notifier since the
-        # CompositeAction won't fire for data buffered before registration
-        if (reg_result.buffered) {
-            foreach hash<auto> resp in (reg_result.buffered) {
-                resp.protocol = "h3";
-                if (resp.end_stream.toBool()) {
-                    try { promise.set(resp); } catch () {}
-                    notifier.notify();
-                    self.cancelStream(stream_id);
-                    break;
-                }
-            }
         }
 
         return stream_id;
@@ -459,11 +411,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         Socket sock = self.getSocket();
         int stream_id;
         try {
-            if (streaming) {
-                stream_id = sock.submitQuicRequestStreaming(method, path, req_headers);
-            } else {
-                stream_id = sock.submitQuicRequest(method, path, req_headers, body);
-            }
+            stream_id = submitQuicRequestWithStreamCredit(sock, method, path,
+                req_headers, body, streaming, max_streams);
         } catch () {
             self.endSubmitFail();
             rethrow;
@@ -484,14 +433,6 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             throw "HTTP3-STATE-ERROR",
                 sprintf("connection closed during request submission (state: %y)",
                     self.getState());
-        }
-
-        # Deliver any responses that arrived during the submit-to-registration window
-        if (reg_result.buffered) {
-            foreach hash<auto> resp in (reg_result.buffered) {
-                resp.protocol = "h3";
-                channel.send(resp);
-            }
         }
 
         return stream_id;
@@ -546,7 +487,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         Socket sock = self.getSocket();
         int stream_id;
         try {
-            stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+            stream_id = submitQuicRequestWithStreamCredit(sock, method, path,
+                req_headers, body, False, max_streams);
         } catch () {
             self.endSubmitFail();
             rethrow;

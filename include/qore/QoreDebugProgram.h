@@ -6,7 +6,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -86,6 +86,9 @@ public:
    //! creates the object
    DLLEXPORT QoreDebugProgram();
 
+   DLLLOCAL virtual void refForCallback();
+
+   DLLLOCAL virtual void derefForCallback(ExceptionSink* xsink);
 
    DLLEXPORT void addProgram(QoreProgram *pgm, ExceptionSink* xsink);
    DLLEXPORT void removeProgram(QoreProgram *pgm);
@@ -130,13 +133,16 @@ public:
 
    /**
     * Break specific program thread
-    * @return 0 if the operation was successful, -1 if the target program does not allow debugging, -2 if xxx
+    * @return 0 if the operation was successful, -1 if the target program does not allow debugging, -2 if the
+    * target program is not attached, or -3 if the thread is not active in the target program or cannot run debugger
+    * callbacks
     */
    DLLEXPORT int breakProgramThread(QoreProgram *pgm, int tid) const;
 
    /**
     * Break program, i.e. all threads
-    * @return 0 if the operation was successful, -1 if the target program does not allow debugging, -2 if xxx
+    * @return 0 if the operation was successful, -1 if the target program does not allow debugging, -2 if the
+    * target program is not attached, or -3 if no active target program thread can run debugger callbacks
     */
    DLLEXPORT int breakProgram(QoreProgram *pgm) const;
 
@@ -153,5 +159,3 @@ public:
 };
 
 #endif /* INCLUDE_QORE_QOREDEBUGPROGRAM_H_ */
-
-

@@ -167,6 +167,54 @@ class MyDebugProgram inherits DebugProgram {
 
 }
 
+class NoopDebugProgram inherits DebugProgram {
+    onAttach(ProgramControl pgm, reference runState, reference runToStatementId) {
+        runState = DebugRun;
+    }
+
+    onDetach(ProgramControl pgm, reference runState, reference runToStatementId) {
+        runState = DebugDetach;
+    }
+
+    onStep(ProgramControl pgm, int blockStatementId, *int statementId,
+            *int breakpointId, reference flow, reference runState,
+            reference runToStatementId) {
+        runState = DebugRun;
+    }
+
+    onFunctionEnter(ProgramControl pgm, int statementId, reference runState,
+            reference runToStatementId) {
+        runState = DebugRun;
+    }
+
+    onFunctionExit(ProgramControl pgm, int statementId, reference returnValue,
+            reference runState, reference runToStatementId) {
+        runState = DebugRun;
+    }
+
+    onException(ProgramControl pgm, int statementId, hash ex, reference dismiss,
+            reference runState, reference runToStatementId) {
+        runState = DebugRun;
+    }
+
+    onExit(ProgramControl pgm, int statementId, reference returnValue,
+            reference runState, reference runToStatementId) {
+        runState = DebugDetach;
+    }
+}
+
+*DebugProgram self_clearing_debug_program;
+bool self_clearing_attached = False;
+
+class SelfClearingDebugProgram inherits NoopDebugProgram {
+    onAttach(ProgramControl pgm, reference runState,
+            reference runToStatementId) {
+        self_clearing_attached = True;
+        self_clearing_debug_program = NOTHING;
+        runState = DebugDetach;
+    }
+}
+
 %exec-class DebugTest
 
 class DebugTest inherits QUnit::Test {
@@ -192,6 +240,9 @@ class DebugTest inherits QUnit::Test {
         addTestCase("SingleThreadDebugTest", \singleThreadDebugTest());
         addTestCase("SingleThreadBreakpointTest", \singleThreadBreakpointTest());
         addTestCase("MultiThreadBreakTest", \multiThreadBreakTest());   # problem in valrind because of timing ?
+        addTestCase("ConcurrentAttachDetachTest", \concurrentAttachDetachTest());
+        addTestCase("DebugCallbackLifetimeTest",
+            \debugCallbackLifetimeTest());
         addTestCase("InterruptedCountTest", \interruptedCountTest());
         #addTestCase("MultiThreadDebugTest", \multiThreadDebugTest());
 
@@ -586,6 +637,58 @@ class DebugTest inherits QUnit::Test {
     }
 
     multiThreadDebugTest() {
+    }
+
+    attachDetachWorker(Counter ready, Counter start_gate, Counter done) {
+        ready.dec();
+        start_gate.waitForZero(10s);
+        int total = 0;
+        for (int i = 0; i < 5000; ++i) {
+            total += i;
+        }
+        done.dec();
+    }
+
+    concurrentAttachDetachTest() {
+        int worker_count = 8;
+        Counter ready(worker_count);
+        Counter start_gate(1);
+        Counter done(worker_count);
+        NoopDebugProgram dbg();
+        for (int i = 0; i < worker_count; ++i) {
+            background attachDetachWorker(ready, start_gate, done);
+        }
+
+        testAssertionValue("workers entered debug target program",
+            ready.waitForZero(10s), 0);
+
+        for (int i = 0; i < 50; ++i) {
+            dbg.addProgram(thisProgram);
+            testAssertionValue("break attached debug program",
+                dbg.breakProgram(thisProgram), 0);
+            dbg.removeProgram(thisProgram);
+        }
+
+        dbg.addProgram(thisProgram);
+        testAssertionValue("break attached debug program before release",
+            dbg.breakProgram(thisProgram), 0);
+        start_gate.dec();
+        testAssertionValue("workers finished under debugger attach",
+            done.waitForZero(10s), 0);
+        dbg.removeProgram(thisProgram);
+        dbg.waitForTerminationAndClear();
+    }
+
+    debugCallbackLifetimeTest() {
+        self_clearing_attached = False;
+        self_clearing_debug_program = new SelfClearingDebugProgram();
+        self_clearing_debug_program.addProgram(thisProgram);
+        int trigger_attach = 1;
+        assertEq(1, trigger_attach);
+        assertTrue(self_clearing_attached,
+            "debug callback ran after addProgram()");
+        assertEq(NOTHING, self_clearing_debug_program,
+            "debug callback can release its last Qore reference");
     }
 
     interruptedCountTest() {

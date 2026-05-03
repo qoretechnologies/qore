@@ -244,7 +244,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         # via low throughput (testSkip if < 500 requests)
         date end_time = now_us() + 5s;
         int count = 0;
-        int errors = 0;
+        list<string> errors = ();
 
         while (now_us() < end_time) {
             try {
@@ -252,10 +252,14 @@ l50Xb2GWQesIt9k5jF5IOw==
                 if (resp.status_code == 200) {
                     count++;
                 } else {
-                    errors++;
+                    if (errors.size() < 10) {
+                        push errors, sprintf("unexpected status code: %d", resp.status_code);
+                    }
                 }
             } catch (hash<ExceptionInfo> ex) {
-                errors++;
+                if (errors.size() < 10) {
+                    push errors, sprintf("%s: %s", ex.err, ex.desc);
+                }
                 if (m_options.verbose > 1) {
                     printf("throughput error: %s: %s\n", ex.err, ex.desc);
                 }
@@ -268,7 +272,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             return;
         }
 
-        assertEq(0, errors, "no errors during sustained throughput");
+        assertEq(0, errors.size(),
+            sprintf("no errors during sustained throughput: %y", errors));
         assertTrue(count > 0, sprintf("throughput > 0: %d requests in 5s", count));
 
         if (m_options.verbose) {
@@ -285,7 +290,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         date end_time = now_us() + 5s;
         int count = 0;
         int total_bytes = 0;
-        int errors = 0;
+        list<string> errors = ();
 
         while (now_us() < end_time) {
             try {
@@ -297,10 +302,14 @@ l50Xb2GWQesIt9k5jF5IOw==
                         ? resp.body.toString("UTF-8") : resp.body;
                     total_bytes += body_str.size();
                 } else {
-                    errors++;
+                    if (errors.size() < 10) {
+                        push errors, sprintf("unexpected status code: %d", resp.status_code);
+                    }
                 }
             } catch (hash<ExceptionInfo> ex) {
-                errors++;
+                if (errors.size() < 10) {
+                    push errors, sprintf("%s: %s", ex.err, ex.desc);
+                }
                 if (m_options.verbose > 1) {
                     printf("large body throughput error: %s: %s\n", ex.err, ex.desc);
                 }
@@ -312,7 +321,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             return;
         }
 
-        assertEq(0, errors, "no errors during large body throughput");
+        assertEq(0, errors.size(),
+            sprintf("no errors during large body throughput: %y", errors));
         assertTrue(count > 0, sprintf("throughput > 0: %d requests in 5s", count));
 
         if (m_options.verbose) {
