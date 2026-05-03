@@ -1615,6 +1615,32 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
+        # Idempotent End-Persistent: if the client sends "Qorus-Connection:
+        # End-Persistent" but the persistent loop already self-deregistered
+        # (the common case after a successful commit/rollback), short-circuit
+        # with 200 OK rather than dispatching to the regular handler.  Without
+        # this the request would be routed as POST /api/.../services/sqlutil
+        # with an empty body, producing a confusing 4xx error response.  See
+        # Qorus issue 1704 for the original race window.  NOTE: must extract
+        # to *string first — calling .lwr() directly on a missing hash key
+        # raises PSEUDO-METHOD-DOES-NOT-EXIST.
+        *string qcon_hdr = hdr."qorus-connection";
+        if (qcon_hdr && qcon_hdr.lwr() == "end-persistent") {
+            log(LoggerLevel::DEBUG, "HTTP/3 orphaned End-Persistent acked 200 OK: "
+                "session=%d stream=%d (no persistent queue)",
+                session_id, stream_id);
+            try {
+                listener.submitQuicResponse(session_id, stream_id, 200,
+                    {"content-type": "text/plain"}, "OK");
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG, "failed to ack orphaned End-Persistent "
+                    "for session=%d stream=%d: %s: %s",
+                    session_id, stream_id, ex.err, ex.desc);
+            }
+            controller.wakeSocket(listener);
+            return;
+        }
+
         # Dispatch to handler thread pool
         # NOTE: for body_streaming requests, HttpServer calls resume_body_streaming (in
         # header-info) as an *early* resume right after the framework finishes reading the
@@ -3357,6 +3383,29 @@ public class HttpAsyncSocketIoController {
                 "body_streaming": body_streaming,
                 "resume_reading": resume_reading,
             });
+            return;
+        }
+
+        # Idempotent End-Persistent: if the client sends "Qorus-Connection:
+        # End-Persistent" but the persistent loop already self-deregistered,
+        # short-circuit with 200 OK rather than dispatching to the regular
+        # handler.  See HTTP/3 dispatch path for the rationale (Qorus issue
+        # 1704).  Mirrors the explicit End-Persistent block in
+        # HttpServer.qm:5862 inside the persistent loop.  Must extract to
+        # *string first — calling .lwr() on a missing key raises
+        # PSEUDO-METHOD-DOES-NOT-EXIST.
+        *string qcon_hdr = hdr."qorus-connection";
+        if (qcon_hdr && qcon_hdr.lwr() == "end-persistent") {
+            log(LoggerLevel::DEBUG, "HTTP/2 orphaned End-Persistent acked 200 OK: "
+                "%y stream=%d (no persistent queue)", uh, stream_id);
+            try {
+                cinfo.sock.submitHttp2Response(stream_id, 200,
+                    {"content-type": "text/plain"}, "OK");
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG, "failed to ack orphaned End-Persistent "
+                    "for %y stream=%d: %s: %s", uh, stream_id, ex.err, ex.desc);
+            }
+            controller.wakeSocket(cinfo.sock);
             return;
         }
 
