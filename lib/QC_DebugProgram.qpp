@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -224,7 +224,7 @@ abstract DebugProgram::onExit(ProgramControl[QoreProgram] pgm, int statement, re
 
 //! Break particular program thread
 /**
-  * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set), -2 if the program has not been set as a debug target, or -3 if the given thread is not active in the target program
+  * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set), -2 if the program has not been set as a debug target, or -3 if the given thread is not active in the target program or cannot run debugger callbacks
   */
 int DebugProgram::breakProgramThread(ProgramControl[QoreProgram] pgm, int tid) {
    return dpgm->breakProgramThread(*pgm, tid);
@@ -232,7 +232,7 @@ int DebugProgram::breakProgramThread(ProgramControl[QoreProgram] pgm, int tid) {
 
 //! Break program, i.e. all threads
 /**
-  * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set) or -2 if the program has not been set as a debug target
+  * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set), -2 if the program has not been set as a debug target, or -3 if no active target program thread can run debugger callbacks
   */
 int DebugProgram::breakProgram(ProgramControl[QoreProgram] pgm) {
    return dpgm->breakProgram(*pgm);

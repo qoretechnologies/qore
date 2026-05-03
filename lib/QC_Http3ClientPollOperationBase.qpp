@@ -581,9 +581,14 @@ void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
 
 void Http3ClientPollOperationPriv::checkCapacity(int max_streams, ExceptionSink* xsink) {
     AutoLocker al(stream_lock);
-    if (max_streams && active_stream_count >= max_streams) {
+    int effective_max_streams = max_streams;
+    if (quic_stream_limit
+            && (!effective_max_streams || quic_stream_limit < effective_max_streams)) {
+        effective_max_streams = quic_stream_limit;
+    }
+    if (effective_max_streams && active_stream_count >= effective_max_streams) {
         xsink->raiseException("HTTP3-CAPACITY-ERROR",
-            "connection at capacity: %d/%d streams", active_stream_count, max_streams);
+            "connection at capacity: %d/%d streams", active_stream_count, effective_max_streams);
     }
 }
 
@@ -692,17 +697,7 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     // Dispatch any buffered responses (race: response arrived before register)
     if (buffered) {
-        // Dispatch buffered responses through the action
-        for (size_t i = 0; i < buffered->size(); ++i) {
-            QoreValue v = buffered->retrieveEntry(i);
-            if (v.getType() == NT_HASH) {
-                // retrieveEntry() returns the list-owned value without
-                // taking a reference.  PromiseAction takes ownership of the
-                // QoreValue passed to execute(), while buffered->deref()
-                // below releases the list-owned reference.
-                action->execute(v.refSelf(), xsink);
-            }
-        }
+        dispatchBufferedResponses(stream_id, action, buffered, xsink);
         buffered->deref(xsink);
     }
 
@@ -811,6 +806,81 @@ bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
         stream_capacity_cond.signal();
     }
     return true;
+}
+
+bool Http3ClientPollOperationPriv::completeStream(int64_t stream_id, ExceptionSink* xsink) {
+    std::string sid = std::to_string(stream_id);
+
+    AutoLocker al(stream_lock);
+    pending_stream_ids.erase(sid);
+
+    auto it = stream_actions.find(sid);
+    if (it == stream_actions.end()) {
+        return false;
+    }
+
+    ChannelAction* ch_action = dynamic_cast<ChannelAction*>(it->second);
+    if (ch_action && ch_action->isSseInstallEligible()) {
+        auto completed_it = completed_channel_actions.find(sid);
+        if (completed_it != completed_channel_actions.end()) {
+            completed_it->second->deref(xsink);
+        }
+        completed_channel_actions[sid] = ch_action;
+    } else {
+        it->second->deref(xsink);
+    }
+    stream_actions.erase(it);
+
+    assert(active_stream_count > 0);
+    if (active_stream_count > 0) {
+        --active_stream_count;
+    }
+    if (stream_blocked_waiters > 0) {
+        stream_capacity_cond.signal();
+    }
+    return true;
+}
+
+void Http3ClientPollOperationPriv::dispatchBufferedResponses(int64_t stream_id,
+        AbstractAsyncAction* action, QoreListNode* buffered, ExceptionSink* xsink) {
+    if (!action || !buffered) {
+        return;
+    }
+
+    // Keep the action alive while completeStream() drops stream_actions' ref
+    // before dispatching a buffered final response.
+    action->ref();
+    for (size_t i = 0; i < buffered->size(); ++i) {
+        QoreValue v = buffered->retrieveEntry(i);
+        if (v.getType() != NT_HASH) {
+            continue;
+        }
+
+        QoreHashNode* resp = v.get<QoreHashNode>();
+        bool is_end = resp->getKeyValue("end_stream").getAsBool();
+        if (is_end) {
+            completeStream(stream_id, xsink);
+        }
+
+        const QoreStringNode* err_str =
+            resp->getKeyValue("err").get<const QoreStringNode>();
+        const QoreStringNode* desc_str =
+            resp->getKeyValue("desc").get<const QoreStringNode>();
+        if (err_str) {
+            std::string err_copy = err_str->c_str();
+            std::string desc_copy = desc_str ? desc_str->c_str() : "";
+            action->executeError(err_copy.c_str(), desc_copy.c_str(), xsink);
+        } else {
+            action->execute(v.refSelf(), xsink);
+        }
+        if (is_end) {
+            if (action->isStreaming()) {
+                action->complete(xsink);
+            }
+            break;
+        }
+    }
+    action->deref(xsink);
 }
 
 void Http3ClientPollOperationPriv::waitStreamCapacity(int64_t timeout_ms) {
@@ -1212,7 +1282,7 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
 /** @param stream_id the QUIC stream ID
     @param promise the Promise to resolve with the response (pure C++ dispatch)
 
-    @return hash with: "need_cancel" (bool), "buffered" (list or NOTHING)
+    @return hash with: "need_cancel" (bool)
 */
 *hash<auto> Http3ClientPollOperationBase::registerStreamWithPromise(int stream_id, Promise[QorePromise] promise) {
     bool need_cancel = false;
@@ -1230,15 +1300,19 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
     // initial ref (priv->registerStream did not take ownership in that
     // branch).
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
+    AbstractAsyncAction* registered_action = nullptr;
     if (!need_cancel && !*xsink) {
-        action.release();
+        registered_action = action.release();
+    }
+    if (buffered) {
+        if (registered_action) {
+            priv->dispatchBufferedResponses(stream_id, registered_action, buffered, xsink);
+        }
+        buffered->deref(xsink);
     }
 
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("need_cancel", need_cancel, xsink);
-    if (buffered) {
-        rv->setKeyValue("buffered", buffered, xsink);
-    }
     return rv.release();
 }
 
@@ -1251,7 +1325,7 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
     @param promise the Promise to resolve with the response
     @param notifier EventNotifier to signal after the Promise is resolved
 
-    @return hash with: "need_cancel" (bool), "buffered" (list or NOTHING)
+    @return hash with: "need_cancel" (bool)
 
     @since %Qore 2.3
 */
@@ -1274,15 +1348,19 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
     // Ownership: priv->registerStream takes the ref on success; see
     // registerStreamWithPromise for the rationale.
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
+    AbstractAsyncAction* registered_action = nullptr;
     if (!need_cancel && !*xsink) {
-        action.release();
+        registered_action = action.release();
+    }
+    if (buffered) {
+        if (registered_action) {
+            priv->dispatchBufferedResponses(stream_id, registered_action, buffered, xsink);
+        }
+        buffered->deref(xsink);
     }
 
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("need_cancel", need_cancel, xsink);
-    if (buffered) {
-        rv->setKeyValue("buffered", buffered, xsink);
-    }
     return rv.release();
 }
 
@@ -1298,7 +1376,7 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
     callers that do not intend to install SSE state must leave this \c False to avoid
     holding the action for the lifetime of the connection
 
-    @return hash with: "need_cancel" (bool), "buffered" (list or NOTHING)
+    @return hash with: "need_cancel" (bool)
 */
 *hash<auto> Http3ClientPollOperationBase::registerStreamWithChannel(int stream_id, object channel,
         *EventNotifier[QoreEventNotifier] notifier,
@@ -1336,15 +1414,19 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
     // Ownership: priv->registerStream takes the ref on success; see
     // registerStreamWithPromise for the rationale.
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
+    AbstractAsyncAction* registered_action = nullptr;
     if (!need_cancel && !*xsink) {
-        action.release();
+        registered_action = action.release();
+    }
+    if (buffered) {
+        if (registered_action) {
+            priv->dispatchBufferedResponses(stream_id, registered_action, buffered, xsink);
+        }
+        buffered->deref(xsink);
     }
 
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
     rv->setKeyValue("need_cancel", need_cancel, xsink);
-    if (buffered) {
-        rv->setKeyValue("buffered", buffered, xsink);
-    }
     return rv.release();
 }
 
@@ -1386,18 +1468,18 @@ nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
     // registerStreamWithPromise for the rationale.
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
     if (*xsink) {
+        if (buffered) {
+            buffered->deref(xsink);
+        }
         return QoreValue();
     }
+    AbstractAsyncAction* registered_action = nullptr;
     if (!need_cancel) {
-        action.release();
+        registered_action = action.release();
     }
     if (buffered) {
-        for (size_t i = 0, e = buffered->size(); i < e; ++i) {
-            action->execute(buffered->retrieveEntry(i).refSelf(), xsink);
-            if (*xsink) {
-                buffered->deref(xsink);
-                return QoreValue();
-            }
+        if (registered_action) {
+            priv->dispatchBufferedResponses(stream_id, registered_action, buffered, xsink);
         }
         buffered->deref(xsink);
     }
