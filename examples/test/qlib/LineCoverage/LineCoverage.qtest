@@ -21,6 +21,8 @@ class LineCoverageTest inherits QUnit::Test {
     constructor() : QUnit::Test("LineCoverage", "1.0", \ARGV) {
         addTestCase("ProgramControl exposes statement IDs",
             \testProgramControlStatementIds());
+        addTestCase("create_recorder returns a recorder",
+            \testCreateRecorder());
         addTestCase("Recorder reports covered and uncovered lines",
             \testRecorderReportsLineCoverage());
         addTestCase("Recorder reset and clear state",
@@ -40,6 +42,15 @@ class LineCoverageTest inherits QUnit::Test {
             "statement info resolves to the target source file");
         assertTrue(info.start_line > 0,
             "statement info includes a source start line");
+    }
+
+    testCreateRecorder() {
+        object recorder = LineCoverage::create_recorder();
+        hash<auto> report = recorder.snapshot();
+        assertEq(0, report.line_count,
+            "new factory-created recorder has no loaded lines");
+        assertEq(100.0, report.coverage_percent,
+            "empty factory-created recorder has complete coverage");
     }
 
     testRecorderReportsLineCoverage() {

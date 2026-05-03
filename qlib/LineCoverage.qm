@@ -52,11 +52,23 @@ module LineCoverage {
 
     @subsection lc_v0_1 v0.1
     - initial @ref LineCoverage::Recorder "Recorder" API
+    - initial @ref LineCoverage::create_recorder() "create_recorder()" API
     - line, file, and statement hit summaries
 */
 
 #! Namespace for Qore Program line coverage collection
 public namespace LineCoverage {
+    #! Creates a line coverage recorder
+    /** This function provides a stable dynamic API for code that loads the
+        module at runtime and cannot refer to @ref Recorder at parse time.
+
+        @param options reserved for future extension
+        @return a new @ref Recorder object
+    */
+    public object sub create_recorder(*hash<auto> options) {
+        return new Recorder(options);
+    }
+
     #! Records executed statement locations for one or more Program instances
     /**
         The recorder attaches to @ref Qore::ProgramControl "ProgramControl"
