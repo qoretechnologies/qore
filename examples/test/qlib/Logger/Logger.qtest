@@ -33,6 +33,7 @@ class Test inherits QUnit::Test {
         addTestCase("LoggerAppenderFileRotate", \testLoggerAppenderFileRotate());
         addTestCase("LoggerAppenderFileRing", \testLoggerAppenderFileRing());
         addTestCase("LoggerAppenderFileArchive", \testLoggerAppenderFileArchive());
+        addTestCase("LoggerAppenderFile lifecycle markers", \testLifecycleMarkers());
         addTestCase("Logger", \testLogger());
         set_return_value(main());
     }
@@ -1132,5 +1133,65 @@ class Test inherits QUnit::Test {
         assertEq(Logger::LoggerLevel::getLevel("OFF"), l1.getLevel());
         l1.decLevel();
         assertEq(Logger::LoggerLevel::getLevel("FATAL"), l1.getLevel());
+    }
+
+    testLifecycleMarkers() {
+        string fn = tmp_location() + DirSep + UNIQUE_NAME + "-lifecycle.log";
+        unlink(fn);
+        on_exit unlink(fn);
+
+        # default: markers off, content unchanged
+        {
+            LoggerAppenderFile la("LIFE", new LoggerLayoutPattern("%m%n"), fn);
+            assertFalse(la.lifecycleMarkersEnabled(), "markers off by default");
+            la.open();
+            la.post(new LoggerEvent("Logger", "a", LoggerLevel::getLevelInfo(), "hello"));
+            la.close();
+            assertEq("hello\n", ReadOnlyFile::readTextFile(fn), "no marker noise when disabled");
+            unlink(fn);
+        }
+
+        # plain LoggerAppenderFile: open / close markers via the C++ base
+        {
+            LoggerAppenderFile la("LIFE", new LoggerLayoutPattern("%m%n"), fn);
+            la.setLifecycleMarkers(True);
+            assertTrue(la.lifecycleMarkersEnabled());
+            la.open();
+            la.post(new LoggerEvent("Logger", "a", LoggerLevel::getLevelInfo(), "hello"));
+            la.close();
+            string content = ReadOnlyFile::readTextFile(fn);
+            list<string> lines = content.split("\n");
+            assertEq(3, lines.size(), "open marker + payload + close marker");
+            assertRegex("^# .* logger=LIFE action=opened file=" + fn + "\$", lines[0]);
+            assertEq("hello", lines[1]);
+            assertRegex("^# .* logger=LIFE action=closing file=" + fn + "\$", lines[2]);
+            unlink(fn);
+        }
+
+        # rotate: marker in old file ("rotated -> X.1"), marker in new file ("rotated <- X.1")
+        {
+            LoggerAppenderFileRotate la("LIFE", new LoggerLayoutPattern("%m%n"), fn, 3);
+            la.setLifecycleMarkers(True);
+            la.open();
+            la.post(new LoggerEvent("Logger", "a", LoggerLevel::getLevelInfo(), "first"));
+            la.rotate();
+            la.post(new LoggerEvent("Logger", "a", LoggerLevel::getLevelInfo(), "second"));
+            la.close();
+
+            # rotated archive at fn.1 should contain: opened, first, rotated -> fn.1
+            string archive = ReadOnlyFile::readTextFile(fn + ".1");
+            assertRegex("action=opened", archive);
+            assertRegex("first", archive);
+            assertRegex("action=rotated.*-> " + fn + ".1", archive);
+
+            # current file at fn should contain: rotated <- fn.1, second, closing
+            string current = ReadOnlyFile::readTextFile(fn);
+            assertRegex("action=rotated.*<- " + fn + ".1", current);
+            assertRegex("second", current);
+            assertRegex("action=closing", current);
+
+            unlink(fn);
+            unlink(fn + ".1");
+        }
     }
 }

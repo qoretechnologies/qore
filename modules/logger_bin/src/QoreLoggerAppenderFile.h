@@ -68,9 +68,21 @@ public:
 
     DLLLOCAL static void closeFileStatic(File* f, ExceptionSink* xsink);
 
+    //! Writes a single comment-style lifecycle marker line to the current file when markers are enabled
+    /** No-op when markers are disabled or the file is not open. The line is prefixed with @c "#"
+        so line-oriented log parsers can drop it cheaply. Format:
+        @code # YYYY-MM-DDTHH:mm:SS.xx logger=<name> action=<action> file=<path>[ <detail>] @endcode
+    */
+    DLLLOCAL void writeLifecycleMarker(ExceptionSink* xsink, const char* action, const QoreStringNode* detail);
+
+    DLLLOCAL bool lifecycleMarkersEnabled() const { return lifecycle_markers; }
+
+    DLLLOCAL void setLifecycleMarkers(bool enable) { lifecycle_markers = enable; }
+
 protected:
     File* f = nullptr;
     const QoreEncoding* enc = nullptr;
+    bool lifecycle_markers = false;
 
     DLLLOCAL void init(const QoreStringNode* filename, const QoreEncoding* enc, ExceptionSink* xsink);
 

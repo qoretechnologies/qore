@@ -73,12 +73,21 @@ void QoreLoggerAppenderFile::processEventImpl(ExceptionSink* xsink, int64 type, 
     switch (type) {
         case EVENT_OPEN:
             openFile(xsink);
+            if (!*xsink) {
+                writeLifecycleMarker(xsink, "opened", nullptr);
+            }
             break;
         case EVENT_CLOSE:
+            // best-effort: write the marker to the still-open fd before closing; ignored if fd is not open
+            writeLifecycleMarker(xsink, "closing", nullptr);
             closeFile(xsink);
             break;
         case EVENT_REOPEN:
+            writeLifecycleMarker(xsink, "reopening", nullptr);
             reopen(xsink);
+            if (!*xsink) {
+                writeLifecycleMarker(xsink, "reopened", nullptr);
+            }
             break;
         case EVENT_LOG: {
             qore_type_t t = params.getType();
@@ -125,6 +134,38 @@ void QoreLoggerAppenderFile::closeFileStatic(File* file, ExceptionSink* xsink) {
 void QoreLoggerAppenderFile::reopen(ExceptionSink* xsink) {
     // issue #4842: reopen atomically without closing
     openFile(xsink);
+}
+
+void QoreLoggerAppenderFile::writeLifecycleMarker(ExceptionSink* xsink, const char* action,
+        const QoreStringNode* detail) {
+    if (!lifecycle_markers || !f->isOpen()) {
+        return;
+    }
+    // wall-clock timestamp; the marker is intentionally independent of the layout
+    DateTime now;
+    now.setNow();
+    QoreString ts;
+    now.format(ts, "YYYY-MM-DDTHH:mm:SS.xx");
+
+    QoreStringNodeHolder name(getName());
+    // own the reference returned by getReferencedMemberNoMethod so it's released after we read it
+    ValueHolder fname_v(self->getReferencedMemberNoMethod("fileName", xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    QoreStringNodeValueHelper fname(*fname_v);
+
+    QoreStringNodeHolder line(new QoreStringNode(f->getEncoding()));
+    line->sprintf("# %s logger=%s action=%s file=%s",
+        ts.c_str(),
+        name->c_str(),
+        action,
+        fname->c_str());
+    if (detail && !detail->empty()) {
+        line->sprintf(" %s", detail->c_str());
+    }
+    line->concat('\n');
+    f->write(*line, xsink);
 }
 
 void QoreLoggerAppenderFile::derefIntern(ExceptionSink* xsink) {

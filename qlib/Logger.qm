@@ -865,18 +865,30 @@ public class LoggerAppenderFileRotate inherits public AbstractLoggerAppenderFile
                         rename(fn[i-1], fn[i]);
                         i--;
                     }
+                    if (lifecycleMarkersEnabled()) {
+                        writeLifecycleMarker("rotated", sprintf("-> %s", fn[0]));
+                    }
                     # issue #4842: rotate atomically
                     File f(encoding);
                     # first rename old file
                     rename(fileName, fn[0]);
                     # reopen file atomically
                     file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                    if (lifecycleMarkersEnabled()) {
+                        writeLifecycleMarker("rotated", sprintf("<- %s", fn[0]));
+                    }
                 }
                 break;
 
             case EVENT_REOPEN:
+                if (lifecycleMarkersEnabled()) {
+                    writeLifecycleMarker("reopening", NOTHING);
+                }
                 # reopen file atomically
                 file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                if (lifecycleMarkersEnabled()) {
+                    writeLifecycleMarker("reopened", NOTHING);
+                }
                 break;
 
             default:
@@ -1019,11 +1031,20 @@ public class LoggerAppenderFileRing inherits public AbstractLoggerAppenderFileRo
             case EVENT_ROTATE:
                 if (patternData.count > 0) {
                     # issue #4842: rotate atomically
+                    string old_fn = fileName;
                     patternData.index = (patternData.index + 1) % patternData.count;
                     patternData.timestamp = now_us();
-                    fileName = format(patternData);
+                    string new_fn = format(patternData);
+                    if (lifecycleMarkersEnabled()) {
+                        # written via the still-open fd to old_fn; fileName member is still old_fn
+                        writeLifecycleMarker("rotated", sprintf("-> %s", new_fn));
+                    }
+                    fileName = new_fn;
                     # create new file and reopen atomically
                     file.open2(fileName, O_CREAT | O_APPEND | O_WRONLY | O_TRUNC);
+                    if (lifecycleMarkersEnabled()) {
+                        writeLifecycleMarker("rotated", sprintf("<- %s", old_fn));
+                    }
                 }
                 break;
             default:
@@ -1154,9 +1175,16 @@ public class LoggerAppenderFileArchive inherits public LoggerAppenderFile, priva
             case EVENT_ARCHIVE:
                 mkdir_ex(dirname(params), 0777, True);
                 if (isOpen()) {
+                    if (lifecycleMarkersEnabled()) {
+                        # written via the still-open fd to the file that is about to be renamed
+                        writeLifecycleMarker("archived", sprintf("-> %s", params));
+                    }
                     # issue #4842: do not close the file here, allow it to be reopened atomically
                     rename(fileName, params);
                     LoggerAppenderFile::processEventImpl(EVENT_OPEN);
+                    if (lifecycleMarkersEnabled()) {
+                        writeLifecycleMarker("archived", sprintf("<- %s", params));
+                    }
                 } else {
                     rename(fileName, params);
                 }

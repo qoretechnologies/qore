@@ -122,3 +122,42 @@ static LoggerAppenderFile::closeFileStatic(File[File] file) {
 LoggerAppenderFile::reopen() {
     a->reopen(xsink);
 }
+
+//! Returns @ref True if file lifecycle markers are emitted on open / close / reopen / rotate events
+/** @since %Qore 2.3
+*/
+bool LoggerAppenderFile::lifecycleMarkersEnabled() [flags=CONSTANT] {
+    return a->lifecycleMarkersEnabled();
+}
+
+//! Enables or disables lifecycle marker output on this appender
+/** When enabled, a single \c "#"-prefixed comment line is written to the log file each time the file is opened,
+    closed, reopened, or rotated. Disabled by default for backwards compatibility with existing log parsers.
+
+    The marker line has the form:
+    @verbatim # YYYY-MM-DDTHH:mm:SS.xx logger=<name> action=<action> file=<path>[ <detail>]@endverbatim
+
+    Note that the close marker is best-effort: it is written from the destructor / explicit close path and is not
+    emitted if the process is terminated abnormally (e.g. \c SIGKILL).
+
+    @param enable @ref True to emit markers, @ref False to suppress them
+
+    @since %Qore 2.3
+*/
+LoggerAppenderFile::setLifecycleMarkers(bool enable) {
+    a->setLifecycleMarkers(enable);
+}
+
+//! Writes a single lifecycle marker line to the current file (subclass hook for rotation events)
+/** This is intended for use by Qore-side rotation subclasses that drive their own rename + reopen dance and need
+    to bracket the change with markers. No-op when @ref lifecycleMarkersEnabled() is @ref False or the file is not
+    currently open.
+
+    @param action a short action label (e.g. \c "rotated", \c "archived")
+    @param detail optional free-form text appended after the standard fields (e.g. \c "-> /var/log/app.log.1")
+
+    @since %Qore 2.3
+*/
+LoggerAppenderFile::writeLifecycleMarker(string action, *string detail) {
+    a->writeLifecycleMarker(xsink, action->c_str(), detail);
+}
