@@ -3153,9 +3153,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
         if (!o || !o->isValid()) {
             return toBits(QoreValue());
         }
-        QoreValue rv = preserve_weak_result
-            ? o->getReferencedMemberNoMethod(key, xsink)
-            : o->evalMember(key, xsink);
+        QoreValue rv = o->evalMember(key, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }
@@ -3210,9 +3208,7 @@ static uint64_t qore_rt_hash_key_access_impl(uint64_t hash_val, const char* key,
     }
     if (v.getType() == NT_OBJECT) {
         QoreObject* o = const_cast<QoreObject*>(v.get<const QoreObject>());
-        QoreValue rv = preserve_weak_result
-            ? o->getReferencedMemberNoMethod(key, xsink)
-            : o->evalMember(key, xsink);
+        QoreValue rv = o->evalMember(key, xsink);
         if (*xsink) {
             return toBits(QoreValue());
         }

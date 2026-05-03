@@ -4630,9 +4630,7 @@ load_local_done:
                 if (base.getType() == NT_WEAKREF) {
                     QoreObject* o = base.get<const WeakReferenceNode>()->get();
                     if (o && o->isValid()) {
-                        out = preserve_weak_result
-                            ? o->getReferencedMemberNoMethod(hka_inst->key_name.c_str(), xsink)
-                            : o->evalMember(hka_inst->key_name.c_str(), xsink);
+                        out = o->evalMember(hka_inst->key_name.c_str(), xsink);
                     }
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -4689,9 +4687,7 @@ load_local_done:
                     }
                 } else if (base.getType() == NT_OBJECT) {
                     QoreObject* o = const_cast<QoreObject*>(base.get<const QoreObject>());
-                    out = preserve_weak_result
-                        ? o->getReferencedMemberNoMethod(hka_inst->key_name.c_str(), xsink)
-                        : o->evalMember(hka_inst->key_name.c_str(), xsink);
+                    out = o->evalMember(hka_inst->key_name.c_str(), xsink);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();

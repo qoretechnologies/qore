@@ -43,6 +43,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testWeakBranchConditionReleasesTemp());
         addTestCase("AOT weak dot-eval invoke releases base",
             \testWeakDotEvalInvokeReleasesBase());
+        addTestCase("AOT dot-eval memberGate base",
+            \testDotEvalMemberGateBase());
         addTestCase("AOT string operations", \testStringOps());
         addTestCase("AOT regex switch", \testSwitchRegex());
         addTestCase("AOT exit code", \testExitCode());
@@ -732,6 +734,33 @@ printf(\"after=%d\\n\", destroyed);
             + result.compile_out);
         assertEq("inside=1\nafter=1\n", result.run_out,
             "AOT InvokeDotEvalMethodDirect must release weak-load base before exception branch");
+    }
+
+    testDotEvalMemberGateBase() {
+        string code = "%modern
+class Inner {
+    string openInputStream() {
+        return \"ok\";
+    }
+}
+
+class Outer {
+    auto memberGate(string key) {
+        if (key == \"file\") {
+            return new Inner();
+        }
+        return NOTHING;
+    }
+}
+
+Outer outer();
+printf(\"%s\\n\", outer.file.openInputStream());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "dot-eval memberGate base regression fully precompiled: "
+            + result.compile_out);
+        assertEq("ok\n", result.run_out,
+            "AOT HashKeyAccess must use normal object lookup for dot-eval bases");
     }
 
     testStringOps() {
