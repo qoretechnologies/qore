@@ -24,6 +24,16 @@ class FtpServer {
         const PollInterval = 250ms;
     }
 
+    private bool isSocketDisconnectError(hash<ExceptionInfo> ex, string io_err) {
+        if (ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-CLOSED") {
+            return True;
+        }
+        if (ex.err != io_err) {
+            return False;
+        }
+        return ex.arg == ECONNRESET || ex.arg == ECONNABORTED || ex.arg == EPIPE;
+    }
+
     constructor(int port, int verbose = 0, string address = "localhost") {
         self.verbose = verbose;
         s.bindINET(address, port.toString(), True);
@@ -79,7 +89,7 @@ class FtpServer {
             # errors ftpGetCommand() treats as clean shutdown.  Prevents
             # an unhandled background-thread exception when the test races
             # the client-side close against a pending server reply.
-            if (ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-CLOSED") {
+            if (isSocketDisconnectError(ex, "SOCKET-SEND-ERROR")) {
                 return;
             }
             rethrow;
@@ -96,8 +106,8 @@ class FtpServer {
                 str += c;
                 if (c == "\n")
                     break;
-            } catch (hash ex) {
-                if (ex.err == "SOCKET-NOT-OPEN" || ex.err == "SOCKET-CLOSED")
+            } catch (hash<ExceptionInfo> ex) {
+                if (isSocketDisconnectError(ex, "SOCKET-RECV-ERROR"))
                     return "";
                 if (ex.err != "SOCKET-TIMEOUT")
                     rethrow;

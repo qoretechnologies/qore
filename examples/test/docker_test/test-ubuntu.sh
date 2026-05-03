@@ -38,9 +38,9 @@ fi
 
 export MAKE_JOBS=${MAKE_JOBS:-6}
 
-if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi; then
-    echo && echo "-- installing Kerberos 5 development headers --"
-    apt-get update -qq && apt-get install -y -qq libkrb5-dev
+if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi libcares; then
+    echo && echo "-- installing Kerberos 5 and c-ares development headers --"
+    apt-get update -qq && apt-get install -y -qq libkrb5-dev libcares-dev
 fi
 
 # build or install Qore

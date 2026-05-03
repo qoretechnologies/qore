@@ -274,7 +274,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore
-    @par New Required Libraries: nghttp2, ngtcp2, nghttp3, Brotli, Zstd, LZ4, Eigen3, libprotobuf, and Kerberos 5
+    @par New Required Libraries: nghttp2, ngtcp2, nghttp3, c-ares, Brotli, Zstd, LZ4, Eigen3, libprotobuf, and Kerberos 5
     @parblock
     The following libraries are now required build dependencies for %Qore and cannot be disabled at build time:
     - <b>nghttp2:</b> HTTP/2 support is always available
@@ -282,6 +282,8 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       The \c ngtcp2_crypto_ossl backend requires OpenSSL 3.5+ (QUIC TLS API). On platforms with
       older OpenSSL (e.g., Ubuntu 24.04, macOS Homebrew), build ngtcp2 and nghttp3 from source
       with OpenSSL 3.5+; see the \c BUILDING file for instructions.
+    - <b><a href="https://c-ares.org/">c-ares</a></b>: asynchronous DNS resolution is available
+      for socket I/O so hostname lookups do not block async I/O controller threads
     - <b>Brotli, Zstd, LZ4:</b> Compression formats are always available
     - <b><a href="https://eigen.tuxfamily.org/">Eigen3</a></b> (>= 3.4, including Eigen 5.x):
       used by the new @ref mlintro "ml" binary module for linear algebra operations.
@@ -295,15 +297,15 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     Systems that previously built %Qore without these libraries will need to install the development packages:
     - <b>Debian/Ubuntu:</b> \c libnghttp2-dev, \c libngtcp2-dev, \c libngtcp2-crypto-ossl-dev,
       \c libnghttp3-dev, \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev, \c libeigen3-dev,
-      \c libprotobuf-dev, \c libkrb5-dev
+      \c libprotobuf-dev, \c libkrb5-dev, \c libcares-dev
     - <b>RHEL/Fedora:</b> \c nghttp2-devel, \c ngtcp2-devel, \c ngtcp2-crypto-ossl-devel,
       \c nghttp3-devel, \c brotli-devel, \c libzstd-devel, \c lz4-devel, \c eigen3-devel,
-      \c protobuf-devel, \c krb5-devel
+      \c protobuf-devel, \c krb5-devel, \c c-ares-devel
     - <b>Alpine:</b> \c nghttp2-dev, \c ngtcp2-dev, \c ngtcp2-crypto-ossl-dev,
       \c nghttp3-dev, \c brotli-dev, \c zstd-dev, \c lz4-dev, \c eigen-dev, \c protobuf-dev,
-      \c krb5-dev
-    - <b>macOS (Homebrew):</b> \c eigen, \c protobuf, \c krb5
-    - <b>macOS (MacPorts):</b> \c eigen3, \c protobuf3-cpp, \c kerberos5
+      \c krb5-dev, \c c-ares-dev
+    - <b>macOS (Homebrew):</b> \c eigen, \c protobuf, \c krb5, \c c-ares
+    - <b>macOS (MacPorts):</b> \c eigen3, \c protobuf3-cpp, \c kerberos5, \c c-ares
 
     The following @ref Qore::Option "Option" namespace constants are now always \c True:
     - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
@@ -640,6 +642,9 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::Thread::Queue::tryPop() "Queue::tryPop()": non-blocking pop that returns a hash with a
         \c "value" key containing the last entry on the queue, or @ref nothing if the queue is empty;
         disambiguates an empty queue from a @ref nothing value in the queue
+      - @ref Qore::AsyncIoController::exec() "AsyncIoController::exec()": blocking companion to
+        @ref Qore::AsyncIoController::submit() "AsyncIoController::submit()" that executes the I/O work
+        through the async I/O controller and waits for the result
       - @ref Qore::Socket::startPollSendHttpResponse() "Socket::startPollSendHttpResponse()": sends an HTTP
         response in non-blocking mode with proper \c Content-Length header handling
       - @ref Qore::Socket::startPollSendHttpResponseWithStream() "Socket::startPollSendHttpResponseWithStream()":
@@ -655,6 +660,9 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::Socket::setAlpnProtocols() "Socket::setAlpnProtocols()": sets ALPN protocols for TLS negotiation
       - @ref Qore::Socket::getAlpnProtocol() "Socket::getAlpnProtocol()": returns the negotiated ALPN protocol
       - @ref Qore::Socket::isHttp2() "Socket::isHttp2()": returns True if HTTP/2 was negotiated via ALPN
+      - @ref HttpServer::HttpServer::addListenerAsync() "HttpServer::addListenerAsync()" /
+        @ref HttpServer::HttpServer::addListenersAsync() "HttpServer::addListenersAsync()": Future-based listener
+        setup APIs that share the same async setup path as the synchronous listener methods
       - @ref Qore::HTTPClient::setHttp2Mode() "HTTPClient::setHttp2Mode()": sets HTTP/2 mode ("auto", "disabled", "required")
       - @ref Qore::HTTPClient::getHttp2Mode() "HTTPClient::getHttp2Mode()": returns current HTTP/2 mode
       - @ref Qore::HTTPClient::setHttp2Enabled() "HTTPClient::setHttp2Enabled()": enables/disables HTTP/2 support
@@ -695,6 +703,10 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::clock_getseconds() "clock_getseconds()"
       - @ref Qore::deflate_raw() "deflate_raw()": raw DEFLATE compression (RFC 1951) without zlib/gzip headers
         (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
+      - @ref Qore::getaddrinfo_async() "getaddrinfo_async()": Future-returning async DNS address lookup backed by
+        the global async I/O controller and c-ares
+      - @ref Qore::getnameinfo_async() "getnameinfo_async()": Future-returning async reverse DNS lookup for
+        peer-style address information backed by the global async I/O controller and c-ares
       - @ref Qore::get_value_byte_size() "get_value_byte_size()": returns the approximate memory size in bytes of any Qore value;
         recursively calculates sizes for hashes and lists, returns exact sizes for strings and binary data
       - @ref Qore::inflate_raw_to_binary() "inflate_raw_to_binary()": raw DEFLATE decompression to binary
@@ -948,8 +960,9 @@ cargo install tree-sitter-cli@0.26.5
         - new @ref HttpServer::HttpServer::isAsyncMode() "HttpServer::isAsyncMode()" method to check if async mode is enabled
         - new \c HttpServer::queueAsyncResponse() method for async response sending
         - set \c async_mode to \c False in @ref HttpServer::HttpServerOptionInfo "HttpServerOptionInfo" to disable
-      - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
-        by disabling DNS hostname lookups and moving calls to after SSL handshake completion
+      - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive;
+        async request contexts now get numeric \c "peer-info" immediately and expose optional
+        \c "peer-info-future" for handlers that need reverse DNS
       - QUIC/HTTP/3 listener support via \c addQuicListener() for serving HTTP/3 over UDP
       - InputStream streaming response support: handlers can return an \c InputStream as the response body
         for memory-efficient streaming across HTTP/1.x, HTTP/2, and HTTP/3

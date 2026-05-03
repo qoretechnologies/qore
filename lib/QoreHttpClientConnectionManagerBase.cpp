@@ -40,6 +40,7 @@
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/SocketSyncPoll.h"
 
 #include <chrono>
 #include <cstdio>
@@ -286,11 +287,19 @@ void HttpClientConnectionManagerBase::closeAndDerefAfterLockDrop(
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnection", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/true, xsink);
 }
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionAsync(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "acquireConnectionAsync", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
     return acquireConnectionImpl(scheme, host, port, /*wait_for_ready=*/false, xsink);
 }
 
@@ -328,6 +337,12 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
         {
             std::unique_lock<std::mutex> cl(create_lock_);
             if (creating_.count(key)) {
+                SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase",
+                    wait_for_ready ? "acquireConnection" : "acquireConnectionAsync", xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+
                 auto deadline = std::chrono::steady_clock::now()
                     + std::chrono::milliseconds(opts_.connect_timeout_ms);
                 bool became_free = create_cond_.wait_until(cl, deadline,
@@ -547,7 +562,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 //
                 // After the CONNECT tunnel + SSL upgrade completes (H1
                 // connection reaches READY), we read the negotiated ALPN
-                // from the socket:
+                // captured from the async SSL upgrade operation:
                 // - "h2" → extract socket, adopt into Http2ClientConnection
                 // - "http/1.1" or empty → keep the H1 connection
                 ReferenceHolder<Http1ClientConnection> h1(
@@ -579,14 +594,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     return nullptr;
                 }
 
-                // Read the ALPN result from the tunneled+SSL socket.
-                QoreSocketObject* h1_sock = h1->getSocketPriv();
-                SimpleRefHolder<QoreStringNode> alpn(
-                    h1_sock ? h1_sock->getAlpnProtocol() : nullptr);
-                std::string alpn_id;
-                if (alpn && !alpn->empty()) {
-                    alpn_id = alpn->c_str();
-                }
+                std::string alpn_id = h1->getNegotiatedProtocol();
 
                 if (alpn_id == "h2") {
                     // Protocol escalation: extract socket, adopt into H2.
@@ -879,7 +887,6 @@ void HttpClientConnectionManagerBase::onConnectionClosed(HttpClientConnectionBas
     // Remove the connection from its pool entry using the stashed key
     // for O(1) map lookup (the connection within the vector is still
     // a linear scan, but vectors are tiny — typically 1-3 entries per key).
-    bool removed = false;
     {
         std::unique_lock<std::shared_mutex> wl(pool_lock_);
         const std::string& key = conn->getPoolKey();
@@ -893,24 +900,17 @@ void HttpClientConnectionManagerBase::onConnectionClosed(HttpClientConnectionBas
                         if (conns.empty()) {
                             pool_.erase(it);
                         }
-                        removed = true;
+                        // Drop the pool's ref later from an app thread.
+                        // Keep this append under pool_lock_: closeAll()
+                        // and processDeferredDeref() drain the same vector
+                        // under this lock, and concurrent I/O-thread close
+                        // callbacks can otherwise corrupt the vector.
+                        deferred_deref_.push_back(conn);
                         break;
                     }
                 }
             }
         }
-    }
-    // Drop the pool's ref on the connection.  This callback can run on
-    // the I/O thread (from continuePoll → setClosed → onClosedHook).
-    // If the deref triggers destruction, the connection destructor calls
-    // closeConnection → controller cancel on the poll op that is
-    // currently mid-continuePoll — a use-after-free / deadlock (cancel
-    // waits for the I/O thread, but we ARE the I/O thread).
-    //
-    // Stash the pointer and deref on a background thread so any
-    // destruction runs off the I/O thread.
-    if (removed) {
-        deferred_deref_.push_back(conn);
     }
     // Wake any thread waiting in create_cond_ for this key — we don't
     // know the key, so notify all.  Acceptable: spurious wakeups just
@@ -929,6 +929,11 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HttpClientConnectionManagerBase", "request", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return nullptr;

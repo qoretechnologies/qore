@@ -225,6 +225,11 @@ public:
         return error_info;
     }
 
+    DLLLOCAL std::string getNegotiatedProtocol() const {
+        AutoLocker al(stream_lock);
+        return negotiated_protocol;
+    }
+
     DLLLOCAL int getActiveStreamCount() const {
         return active_stream_count;
     }
@@ -393,6 +398,9 @@ private:
 
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
+
+    //! ALPN protocol captured from the async SSL upgrade output.
+    std::string negotiated_protocol;
 
     //! Protocol-switched notifier object (ref'd or nullptr)
     /** Called from the I/O thread after raw data is dispatched in

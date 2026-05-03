@@ -139,7 +139,7 @@ public class Http1SseConnection inherits AbstractSseConnection {
     }
 
     close() {
-        poll_op.abort();
+        poll_op.close();
     }
 
     abort() {

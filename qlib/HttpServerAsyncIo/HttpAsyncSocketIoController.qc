@@ -167,8 +167,8 @@ public class HttpAsyncSocketIoController {
         hash<string, int> accept_counts;
         int accept_seq = 0;
 
-        #! Queues for persistent HTTP/2/HTTP/3 connections keyed by socket unique hash
-        /** When a handler opts into persistence for a multiplexed connection, the handler
+        #! Queues for persistent HTTP connections keyed by socket/session unique hash
+        /** When a handler opts into persistence for a connection, the handler
             pool thread enters a dedicated loop and registers a Queue here. Subsequent
             requests on the same connection are routed to the Queue instead of dispatching
             to a new pool thread, ensuring thread affinity for thread-local resources
@@ -274,7 +274,7 @@ public class HttpAsyncSocketIoController {
     stop() {
         # Set stopping flag first — prevents handler tasks from submitting new operations
         # Copy keys under lock, then cancel without holding the lock
-        # to avoid deadlock with I/O thread callbacks that also acquire m
+        # to avoid deadlock with controller callbacks that also acquire m
         *list<string> listener_keys;
         *list<Socket> conn_sockets;
         *list<string> conn_keys;
@@ -285,7 +285,15 @@ public class HttpAsyncSocketIoController {
             listener_keys = keys listeners;
             if (connections) {
                 conn_keys = keys connections;
-                conn_sockets = map connections{$1}.sock, keys connections;
+                conn_sockets = ();
+                foreach string uh in (conn_keys) {
+                    hash<HttpActiveConnectionInfo> cinfo =
+                        cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                    if (cinfo.state != HttpConnectionState::Http3
+                            && cinfo.state != HttpConnectionState::Http3Sending) {
+                        push conn_sockets, cinfo.sock;
+                    }
+                }
             }
             listeners = {};
             connections = {};
@@ -308,11 +316,14 @@ public class HttpAsyncSocketIoController {
                 # ignore - operation may have already completed
             }
         }
-        # Also cancel by socket for non-QUIC connections (HTTP/1.x, HTTP/2) where
-        # the cache key is the socket unique hash
+        # Also cancel and close by socket for non-QUIC connections
+        # (HTTP/1.x, HTTP/2) where the cache key is the socket unique hash.
+        # HTTP/3 is intentionally skipped here because QUIC sessions share the
+        # listener UDP socket; closing one logical connection would break the
+        # other sessions on the listener.
         foreach Socket sock in (conn_sockets) {
             try {
-                controller.cancel(sock);
+                controller.cancelAndClose(sock);
             } catch () {
                 # ignore - operation may have already completed
             }
@@ -337,7 +348,15 @@ public class HttpAsyncSocketIoController {
             AutoWriteLock al(m);
             if (connections) {
                 conn_keys = keys connections;
-                conn_sockets = map connections{$1}.sock, keys connections;
+                conn_sockets = ();
+                foreach string uh in (conn_keys) {
+                    hash<HttpActiveConnectionInfo> cinfo =
+                        cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                    if (cinfo.state != HttpConnectionState::Http3
+                            && cinfo.state != HttpConnectionState::Http3Sending) {
+                        push conn_sockets, cinfo.sock;
+                    }
+                }
                 connections = {};
             } else {
                 conn_keys = NOTHING;
@@ -351,7 +370,7 @@ public class HttpAsyncSocketIoController {
         }
         foreach Socket sock in (conn_sockets) {
             try {
-                controller.cancel(sock);
+                controller.cancelAndClose(sock);
             } catch () {}
         }
         # Reset stopping flag so the controller can be restarted
@@ -376,7 +395,7 @@ public class HttpAsyncSocketIoController {
         controller.waitStop();
     }
 
-    #! Registers a persistent queue for a multiplexed connection
+    #! Registers a persistent queue for a connection
     /** Called by a handler pool thread when entering dedicated persistent mode.
         Subsequent requests on the same connection will be routed to the Queue
         instead of dispatching to a new pool thread.
@@ -391,7 +410,7 @@ public class HttpAsyncSocketIoController {
         persistent_queues{key} = {"queue": q, "filter": filter};
     }
 
-    #! Deregisters a persistent queue for a multiplexed connection
+    #! Deregisters a persistent queue for a connection
     /** Called when the dedicated handler pool thread exits its persistent loop.
 
         @param key the socket unique hash identifying the connection
@@ -403,7 +422,7 @@ public class HttpAsyncSocketIoController {
         remove persistent_queues{key};
     }
 
-    #! Returns the persistent queue for a multiplexed connection, or NOTHING if none
+    #! Returns the persistent queue for a connection, or NOTHING if none
     /** @param key the socket unique hash identifying the connection
         @param hdr the request headers to test against the filter (if any)
         @return the Queue if a dedicated thread is waiting and the filter passes, or NOTHING
@@ -429,8 +448,38 @@ public class HttpAsyncSocketIoController {
         return queue;
     }
 
+    private hash<auto> addPersistentQueueClosures(hash<auto> header_info) {
+        header_info.register_persistent_queue = sub (string key, Queue q,
+                *code<bool(hash<auto>)> filter) {
+            self.registerPersistentQueue(key, q, filter);
+        };
+        header_info.deregister_persistent_queue = sub (string key) {
+            self.deregisterPersistentQueue(key);
+        };
+        return header_info;
+    }
+
+    private bool routeRequestToPersistentQueue(string uh, hash<HttpConnectionInfo> conn_info) {
+        *Queue pq = getPersistentQueue(uh, conn_info.hdr);
+        if (!pq) {
+            return False;
+        }
+
+        log(LoggerLevel::DEBUG, "HTTP/1.x request routed to persistent queue: %y %s %s",
+            uh, conn_info.hdr.method, conn_info.hdr.path);
+        {
+            AutoWriteLock al(m);
+            remove connections{uh};
+        }
+        pq.push({
+            "type": "request",
+            "conn_info": conn_info,
+        });
+        return True;
+    }
+
     #! Signals persistent queues for a closed connection to exit
-    /** Called when a multiplexed connection closes so that dedicated handler pool
+    /** Called when a connection closes so that dedicated handler pool
         threads blocked on Queue::get() are unblocked and can exit cleanly.
 
         @param uh the connection unique hash
@@ -555,6 +604,7 @@ public class HttpAsyncSocketIoController {
             listener.setSslVerifyMode(ssl_verify_flags);
         }
         listener.acceptAllCertificates(ssl_accept_all_certs);
+        hash<auto> socket_info = listener.getSocketInfo(False);
 
         {
             AutoWriteLock al(m);
@@ -574,6 +624,7 @@ public class HttpAsyncSocketIoController {
                 "ssl_verify_flags": ssl_verify_flags,
                 "get_remote_certs": get_remote_certs,
                 "http_listener": http_listener,
+                "socket_info": socket_info,
             };
         }
         # Remove listener from map if submitQuicAcceptOp fails
@@ -792,6 +843,7 @@ public class HttpAsyncSocketIoController {
                 "state": HttpConnectionState::KeepAlive,
                 "keep_alive_op": ka_op,
                 "ttl": ttl,
+                "ssl": cx.ssl ?? False,
             };
         }
 
@@ -828,6 +880,7 @@ public class HttpAsyncSocketIoController {
                 "target": target,
                 "state": HttpConnectionState::WebSocket,
                 "stream_op": poll_op,
+                "ssl": cx.ssl ?? False,
             };
         }
         submitConnectionOp(uh, cinfo);
@@ -922,6 +975,7 @@ public class HttpAsyncSocketIoController {
             "sock": listener,
             "spop": op,
             "key": op_key,
+            "thread_key": listener.uniqueHash(),
             "owner": owner,
             "to": -1s,  # no timeout for accepts
         });
@@ -946,7 +1000,7 @@ public class HttpAsyncSocketIoController {
         @param http_version the HTTP version for the listener (e.g. \c "1.1", \c "2")
         @param owner the listener owner key used for tracking accept counts
 
-        @note This method runs on the I/O callback thread and must not block.
+        @note This method runs on an async callback dispatcher worker and must not block.
     */
     handleAcceptResult(hash<SocketPollResultInfo> result, Socket listener,
             HttpAsyncTarget target, bool ssl, auto cert, auto key,
@@ -1021,6 +1075,64 @@ public class HttpAsyncSocketIoController {
         handleAcceptComplete(linfo, output);
     }
 
+    private hash<auto> getUnknownConnectionContext() {
+        # Keep the outer hash wide enough to add non-hash values such as peer-info-future.
+        return cast<hash<auto>>({
+            "peer": {"address": "unknown", "address_desc": "unknown", "port": 0},
+            "socket": {"address": "unknown", "address_desc": "unknown", "port": 0},
+        });
+    }
+
+    private *Future startPeerInfoFuture(hash<auto> peer_info) {
+        *string address = peer_info.address;
+        if (!address || address == "unknown" || address == "quic") {
+            return NOTHING;
+        }
+
+        int family = peer_info.family ?? (address =~ /:/ ? AF_INET6 : AF_INET);
+        if (family != AF_INET && family != AF_INET6) {
+            return NOTHING;
+        }
+
+        try {
+            # Keep the typed local; direct soft return can otherwise lose the Future value.
+            *Future f = getnameinfo_async(address, family, peer_info.port ?? 0);
+            return f;
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Could not start async reverse DNS for %s: %s: %s",
+                peer_info.address_desc ?? address, ex.err, ex.desc);
+        }
+
+        return NOTHING;
+    }
+
+    private hash<auto> getAcceptConnectionContext(hash<auto> output, string uh, string phase) {
+        *hash<auto> peer_info = output.peer_info;
+        *hash<auto> socket_info = output.socket_info;
+        if (!peer_info || !socket_info) {
+            log(LoggerLevel::DEBUG, "No numeric peer info in accept output for %s connection %s", phase, uh);
+            return getUnknownConnectionContext();
+        }
+
+        hash<auto> cx = cast<hash<auto>>({
+            "peer": peer_info,
+            "socket": socket_info,
+        });
+
+        *Future peer_info_future = startPeerInfoFuture(peer_info);
+        if (peer_info_future !== NOTHING) {
+            cx{"peer-info-future"} = peer_info_future;
+        }
+
+        return cx;
+    }
+
+    private hash<auto> getActiveConnectionContext(string uh) {
+        AutoReadLock al(m);
+        *hash<HttpActiveConnectionInfo> cinfo = connections{uh};
+        return cinfo ? cinfo.cx : getUnknownConnectionContext();
+    }
+
     #! Handles accept completion
     private handleAcceptComplete(hash<HttpListenerInfo> linfo, hash<auto> output) {
         Socket sock = output.sock;
@@ -1048,17 +1160,12 @@ public class HttpAsyncSocketIoController {
             if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
                 log(LoggerLevel::INFO,
                     "Accept complete: sock=%s ssl=%y secure=%y http2=%y",
-                    uh, output.ssl, sock.isSecure(), output.is_http2);
+                    uh, output.ssl, output.secure ?? False, output.is_http2);
             }
         }
 
-        if (output.ssl && !sock.isSecure()) {
-            # Don't call getPeerInfo() here - can block I/O thread if client closes socket
-            # Will populate peer info after SSL handshake completes and socket is stable
-            hash<auto> cx = {
-                "peer": {"address": "unknown", "address_desc": "unknown", "port": 0},
-                "socket": {"address": "unknown", "address_desc": "unknown", "port": 0},
-            };
+        if (output.ssl && !(output.secure ?? False)) {
+            hash<auto> cx = getAcceptConnectionContext(output, uh, "SSL");
 
             if (linfo.cert) {
                 sock.setCertificate(linfo.cert);
@@ -1099,6 +1206,7 @@ public class HttpAsyncSocketIoController {
                 "ssl_op": ssl_op,
                 "http_version": output.http_version,
                 "is_http2": False,
+                "ssl": False,
             };
             hash<HttpActiveConnectionInfo> cinfo;
             {
@@ -1113,19 +1221,7 @@ public class HttpAsyncSocketIoController {
 
         # Check if this is an HTTP/2 connection
         if (output.is_http2) {
-            # Get peer info safely - no DNS lookup
-            hash<auto> cx = {"peer": {"address": "unknown", "address_desc": "unknown", "port": 0}, "socket": {"address": "unknown", "address_desc": "unknown", "port": 0}};
-            if (sock.isOpen()) {
-                try {
-                    cx = {
-                        "peer": sock.getPeerInfo(False),    # No DNS blocking
-                        "socket": sock.getSocketInfo(),
-                    };
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::DEBUG, "Could not get peer info for h2c connection %s: %s: %s",
-                        uh, ex.err, ex.desc);
-                }
-            }
+            hash<auto> cx = getAcceptConnectionContext(output, uh, "h2c");
 
             Http2PollOperation h2op(sock, True);
 
@@ -1137,6 +1233,7 @@ public class HttpAsyncSocketIoController {
                 "state": HttpConnectionState::Http2,
                 "stream_op": h2op,
                 "is_http2": True,
+                "ssl": output.secure ?? False,
             };
             hash<HttpActiveConnectionInfo> cinfo;
             {
@@ -1150,19 +1247,7 @@ public class HttpAsyncSocketIoController {
         }
 
         # HTTP/1.x path (no SSL)
-        # Get peer info safely - no DNS lookup
-        hash<auto> cx = {"peer": {"address": "unknown", "address_desc": "unknown", "port": 0}, "socket": {"address": "unknown", "address_desc": "unknown", "port": 0}};
-        if (sock.isOpen()) {
-            try {
-                cx = {
-                    "peer": sock.getPeerInfo(False),    # No DNS blocking
-                    "socket": sock.getSocketInfo(),
-                };
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "Could not get peer info for HTTP/1.x connection %s: %s: %s",
-                    uh, ex.err, ex.desc);
-            }
-        }
+        hash<auto> cx = getAcceptConnectionContext(output, uh, "HTTP/1.x");
 
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
             "sock": sock,
@@ -1172,6 +1257,7 @@ public class HttpAsyncSocketIoController {
             "state": HttpConnectionState::ReadHeader,
             "http_version": output.http_version,
             "is_http2": False,
+            "ssl": output.secure ?? False,
         };
         hash<HttpActiveConnectionInfo> cinfo;
         {
@@ -1212,6 +1298,7 @@ public class HttpAsyncSocketIoController {
             "sock": listener,
             "spop": h3op,
             "key": op_key,
+            "thread_key": listener.uniqueHash(),
             "owner": owner,
             "to": -1s,  # no timeout for QUIC accept
         });
@@ -1278,6 +1365,7 @@ public class HttpAsyncSocketIoController {
                 "sock": listener,
                 "spop": h3op,
                 "key": sprintf("quic-read:%s:%d", owner, seq),
+                "thread_key": listener.uniqueHash(),
                 "owner": owner,
                 "to": -1s,
             });
@@ -1337,22 +1425,37 @@ public class HttpAsyncSocketIoController {
         # HttpListener::getContextTemplate(info.cx.peer) before calling
         # processNativeRequest().  Error paths in this controller use
         # submitQuicResponse() directly, bypassing cx entirely.
+        # Keep the outer hash wide enough to add peer-info-future below.
+        hash<auto> cx = cast<hash<auto>>({
+            "peer": {
+                "address": request.peer_address ?? "quic",
+                "address_desc": request.peer_address ?? "quic",
+                "port": request.peer_port ?? 0,
+                "family": (request.peer_address ?? "") =~ /:/ ? AF_INET6 : AF_INET,
+                "familystr": (request.peer_address ?? "") =~ /:/ ? "ipv6" : "ipv4",
+            },
+            "socket": linfo.socket_info ?? {
+                "address": "quic",
+                "address_desc": "quic",
+                "port": 0,
+                "family": AF_INET,
+                "familystr": "ipv4",
+            },
+        });
         hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
             "sock": listener,
             "listener": linfo.http_listener,
-            "cx": {
-                "peer": {
-                    "address": request.peer_address ?? "quic",
-                    "address_desc": request.peer_address ?? "quic",
-                    "port": request.peer_port ?? 0,
-                },
-                "socket": listener.getSocketInfo(),
-            },
+            "cx": cx,
             "target": target,
             "state": HttpConnectionState::Http3,
             "stream_op": h3op,
             "is_http2": False,
+            "ssl": True,
         };
+        *Future peer_info_future = startPeerInfoFuture(new_cinfo.cx.peer);
+        if (peer_info_future !== NOTHING) {
+            new_cinfo.cx{"peer-info-future"} = peer_info_future;
+        }
 
         {
             AutoWriteLock al(m);
@@ -1757,23 +1860,13 @@ public class HttpAsyncSocketIoController {
 
         # SSL handshake complete - socket is now stable and validated
         Socket sock = result.sock;
+        hash<auto> cx = getActiveConnectionContext(uh);
+        hash<auto> peer_info = cx.peer;
+        hash<auto> socket_info = cx.socket;
 
-        # Now safe to get peer info - socket established, DNS disabled
-        hash<auto> peer_info = {"address": "unknown", "address_desc": "unknown", "port": 0};
-        hash<auto> socket_info = {"address": "unknown", "address_desc": "unknown", "port": 0};
-        if (sock.isOpen()) {
-            try {
-                peer_info = sock.getPeerInfo(False);      # host_lookup=False - no DNS blocking
-                socket_info = sock.getSocketInfo();
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "Could not get peer info after SSL handshake for %s: %s: %s",
-                    uh, ex.err, ex.desc);
-                # Continue with fallback values - not critical
-            }
-        }
-
-        *string negotiated = sock.getAlpnProtocol();
-        bool is_http2 = (negotiated == "h2");
+        hash<auto> ssl_output = result.spop.getOutput();
+        *string negotiated = ssl_output.negotiated_protocol;
+        bool is_http2 = ssl_output.is_http2;
 
         if ((http_version == HttpVersionMode::Http20 || http_version == "2") && !is_http2) {
             log(LoggerLevel::WARN, "HTTP/2 required but client negotiated: %y", negotiated ?? "none");
@@ -1809,9 +1902,15 @@ public class HttpAsyncSocketIoController {
                     conn_info.state = HttpConnectionState::Http2;
                     conn_info.stream_op = h2op;
                     conn_info.is_http2 = True;
+                    conn_info.ssl = True;
                     # Update cx with real peer info now that socket is stable
                     conn_info.cx.peer = peer_info;
                     conn_info.cx.socket = socket_info;
+                    if (exists cx{"peer-info-future"}) {
+                        conn_info.cx{"peer-info-future"} = cx{"peer-info-future"};
+                    } else {
+                        remove conn_info.cx{"peer-info-future"};
+                    }
                     cinfo = connections{uh} = conn_info;
                 }
             } else {
@@ -1826,9 +1925,15 @@ public class HttpAsyncSocketIoController {
                     hash<HttpActiveConnectionInfo> conn_info = cast<hash<HttpActiveConnectionInfo>>(connections{uh});
                     conn_info.state = HttpConnectionState::ReadHeader;
                     conn_info.is_http2 = False;
+                    conn_info.ssl = True;
                     # Update cx with real peer info now that socket is stable
                     conn_info.cx.peer = peer_info;
                     conn_info.cx.socket = socket_info;
+                    if (exists cx{"peer-info-future"}) {
+                        conn_info.cx{"peer-info-future"} = cx{"peer-info-future"};
+                    } else {
+                        remove conn_info.cx{"peer-info-future"};
+                    }
                     cinfo = connections{uh} = conn_info;
                 }
             }
@@ -2094,7 +2199,7 @@ public class HttpAsyncSocketIoController {
         @param orig_state the @ref HttpConnectionState that was active when the operation
             was submitted; used to dispatch to the correct handler
 
-        @note This method runs on the I/O callback thread and must not block.
+        @note This method runs on an async callback dispatcher worker and must not block.
     */
     handleConnectionResult(hash<SocketPollResultInfo> result, string uh,
             string orig_state) {
@@ -2427,6 +2532,7 @@ public class HttpAsyncSocketIoController {
 
     #! Handles header read completion
     private handleHeaderComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, hash<auto> output) {
+        output.info = addPersistentQueueClosures(output.info);
         hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
             "sock": cinfo.sock,
             "hdr": output.hdr,
@@ -2434,7 +2540,7 @@ public class HttpAsyncSocketIoController {
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
-            "ssl": cinfo.sock.isSecure(),
+            "ssl": cinfo.ssl,
         };
 
         log(LoggerLevel::DEBUG, "Header complete for keep-alive: %y", uh);
@@ -2479,6 +2585,10 @@ public class HttpAsyncSocketIoController {
             }
         }
 
+        if (routeRequestToPersistentQueue(uh, conn_info)) {
+            return;
+        }
+
         # Remove from our tracking
         {
             AutoWriteLock al(m);
@@ -2506,8 +2616,8 @@ public class HttpAsyncSocketIoController {
 
         # tryInlineRequest returned NOTHING — dispatch to the handler_pool.
         # onHttpRequest / processNativeRequest may read the request body or
-        # perform blocking I/O, so it must run on a handler thread, not the
-        # call_dispatcher worker.
+        # block while waiting for controller-backed socket I/O, so it must run
+        # on a handler thread, not the call_dispatcher worker.
         code request_handler = sub () {
             try {
                 hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
@@ -2551,7 +2661,7 @@ public class HttpAsyncSocketIoController {
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
-            "ssl": cinfo.sock.isSecure(),
+            "ssl": cinfo.ssl,
         };
 
         # Store the pre-read body for the handler (same convention as H2/H3)
@@ -2561,6 +2671,10 @@ public class HttpAsyncSocketIoController {
 
         log(LoggerLevel::DEBUG, "Body read complete for %y: %d bytes", uh,
             body_data ? body_data.size() : 0);
+
+        if (routeRequestToPersistentQueue(uh, conn_info)) {
+            return;
+        }
 
         # Remove from our tracking — handler thread owns the socket now
         {
@@ -2666,6 +2780,7 @@ public class HttpAsyncSocketIoController {
                     "state": HttpConnectionState::SendStreamAndReadHeader,
                     "stream_op": fused_op,
                     "ttl": ttl,
+                    "ssl": linfo.ssl,
                 };
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
@@ -2704,6 +2819,7 @@ public class HttpAsyncSocketIoController {
                     "target": target,
                     "state": HttpConnectionState::SendStreamResponse,
                     "stream_op": send_op,
+                    "ssl": linfo.ssl,
                 };
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
@@ -2740,6 +2856,7 @@ public class HttpAsyncSocketIoController {
                     "state": HttpConnectionState::SendAndReadHeader,
                     "stream_op": fused_op,
                     "ttl": ttl,
+                    "ssl": linfo.ssl,
                 };
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
@@ -2775,6 +2892,7 @@ public class HttpAsyncSocketIoController {
                     "state": HttpConnectionState::SendStreamAndReadHeader,
                     "stream_op": fused_op,
                     "ttl": ttl,
+                    "ssl": linfo.ssl,
                 };
                 hash<HttpActiveConnectionInfo> cinfo;
                 {
@@ -2796,10 +2914,11 @@ public class HttpAsyncSocketIoController {
                 string status_msg = result.status_message ?? "Unknown";
                 if (result.send_callback) {
                     # Drain the send_callback on the handler thread (the
-                    # callback is user code that must run here), then send
-                    # the materialized body via async I/O.
-                    # sendHTTPResponseWithCallback is a blocking call that
-                    # hangs on non-blocking sockets after the EAGAIN fix.
+                    # callback is user code that must run here), then submit
+                    # the materialized body via controller-backed async I/O.
+                    # This keeps Qore callback execution off the I/O thread
+                    # and preserves the H1 connection state-machine paths
+                    # below for close and keep-alive handling.
                     binary buf;
                     while (True) {
                         auto chunk = result.send_callback();
@@ -2827,6 +2946,7 @@ public class HttpAsyncSocketIoController {
                             "state": HttpConnectionState::SendAndReadHeader,
                             "stream_op": fused_op,
                             "ttl": ttl,
+                            "ssl": linfo.ssl,
                         };
                         hash<HttpActiveConnectionInfo> cinfo;
                         {
@@ -2849,6 +2969,7 @@ public class HttpAsyncSocketIoController {
                         "target": target,
                         "state": HttpConnectionState::SendStreamResponse,
                         "stream_op": send_op,
+                        "ssl": linfo.ssl,
                     };
                     hash<HttpActiveConnectionInfo> cinfo;
                     {
@@ -2896,6 +3017,7 @@ public class HttpAsyncSocketIoController {
                             # Store pending streaming info for transition after header send
                             "pending_stream_type": stream_state,
                             "pending_stream_op": result.stream_operation,
+                            "ssl": linfo.ssl,
                         };
                     }
                     submitConnectionOp(uh, cinfo);
@@ -2916,6 +3038,7 @@ public class HttpAsyncSocketIoController {
                         "state": stream_state,
                         "stream_op": result.stream_operation,
                         "ttl": result.ttl ?? DefaultIdleTimeout,
+                        "ssl": linfo.ssl,
                     };
                 }
                 submitConnectionOp(uh, cinfo);
@@ -3005,11 +3128,13 @@ public class HttpAsyncSocketIoController {
             remove connections{uh};
         }
 
-        # Cancel the poll operation from the I/O controller cache to release socket reference
+        # Close through the controller after the SSE poll result has returned.
+        # This avoids re-entering synchronous close/cancel from the poll
+        # operation's own in-flight continuePoll() worker.
         try {
-            controller.cancel(cinfo.sock);
+            cinfo.sock.close();
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::DEBUG, "Error cancelling SSE operation for %y: %s: %s", uh, ex.err, ex.desc);
+            log(LoggerLevel::DEBUG, "Error closing SSE socket for %y: %s: %s", uh, ex.err, ex.desc);
         }
 
         try {
@@ -3203,7 +3328,7 @@ public class HttpAsyncSocketIoController {
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
-            "ssl": cinfo.sock.isSecure(),
+            "ssl": cinfo.ssl,
         };
 
         # Check for persistent queue — if a dedicated thread is waiting for this
@@ -3426,7 +3551,7 @@ public class HttpAsyncSocketIoController {
             "listener": cinfo.listener,
             "cx": cinfo.cx,
             "keep_alive": True,
-            "ssl": cinfo.sock.isSecure(),
+            "ssl": cinfo.ssl,
         };
 
         # Dispatch to handler thread pool
@@ -3777,6 +3902,9 @@ hashdecl HttpListenerInfo {
     #! HTTP listener object for handler dispatch (used for QUIC/HTTP/3 listeners)
     *HttpServer::HttpListenerInterface http_listener;
 
+    #! Numeric local socket info captured when the listener is registered
+    *hash<auto> socket_info;
+
     #! The Http3ServerPollOperation accepting QUIC connections (QUIC listeners only)
     /** Used by reloadListenerCertificateByHttpListener() to stage a TLS-material
         swap that the H3 op applies on the I/O thread without contending for the
@@ -3819,6 +3947,9 @@ hashdecl HttpActiveConnectionInfo {
 
     #! True if this is an HTTP/2 connection
     bool is_http2 = False;
+
+    #! True if SSL/TLS is active for this connection
+    bool ssl = False;
 
     #! Pending streaming state type (set during header send before SSE/WS transition)
     *string pending_stream_type;

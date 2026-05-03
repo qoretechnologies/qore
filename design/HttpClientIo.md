@@ -142,15 +142,17 @@ The `HttpClientConnectionManager` uses the `protocol` option to select the trans
 
 | `protocol` | Behavior |
 |------------|----------|
-| `"auto"` | Try HTTP/3 (QUIC) first for `https://` URLs; fall back to HTTP/2 on failure. Use HTTP/2 for `http://` URLs (QUIC requires TLS). |
-| `"h2"` | Force HTTP/2 (TCP + TLS) for all connections. |
-| `"h3"` | Force HTTP/3 (QUIC) for all connections. Fails for `http://` URLs. |
+| `"auto"` | Use HTTP/3-first happy eyeballs for `https://` URLs; fall back to HTTP/2 when H3 is unavailable. Use HTTP/1.1 for `http://` URLs unless h2c is explicitly requested. |
+| `"h1"` | Force HTTP/1.1. |
+| `"h2"` | Force HTTP/2 (TLS ALPN for HTTPS, h2c prior knowledge for HTTP). |
+| `"h3"` | Force HTTP/3 (QUIC). Fails for `http://` URLs. |
 
 Auto-selection fallback logic:
-1. Attempt QUIC connection with a short timeout (e.g. 3s or half the `connect_timeout`)
-2. On QUIC failure (no UDP path, server doesn't support QUIC, etc.), fall back to HTTP/2
-3. Cache the successful protocol per host:port for subsequent connections
-4. Periodic re-probe of HTTP/3 for hosts that fell back (e.g. every 5 minutes)
+1. Start HTTP/3 first and give it a short stagger window.
+2. Start HTTP/2 in parallel if HTTP/3 has not connected yet.
+3. Use the first ready connection and cancel the loser.
+4. Cache the successful protocol per host:port for subsequent connections.
+5. Periodically re-probe HTTP/3 for hosts that fell back.
 
 ### Public Methods
 

@@ -126,13 +126,14 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
                 "display_name": "HTTP Version",
                 "short_desc": "The HTTP version to use",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The HTTP version to use: `auto` (HTTP/2 if available, default), `1.0`, `1.1`, "
-                    "or `2.0`. HTTP/2 requires TLS and is negotiated via ALPN",
+                "desc": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), "
+                    "`1.0`, `1.1`, `2.0`, or `3.0`. HTTP/2 requires TLS and is negotiated via ALPN. "
+                    "HTTP/3 requires TLS and uses QUIC",
                 "default_value": "auto",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "auto",
-                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1 (default)",
+                        "desc": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed (default)",
                     },
                     <AllowedValueInfo>{
                         "value": "1.0",
@@ -145,6 +146,10 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
                     <AllowedValueInfo>{
                         "value": "2.0",
                         "desc": "Require HTTP/2, fail if the server doesn't support it (TLS required)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "3.0",
+                        "desc": "Require HTTP/3 (QUIC), fail if unavailable (TLS required)",
                     },
                 ),
             },

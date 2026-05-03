@@ -258,9 +258,6 @@ public class Pop3Client inherits Logger::LoggerWrapper, ConnectionProvider::Opti
         # log password
         bool log_pass = False;
 
-        # sasl flag
-        bool sasl;
-
         # cached server capabilities from CAPA command (RFC 2449)
         *hash<string, bool> capabilities;
 
@@ -555,7 +552,7 @@ pop3.connect();
     */
     connect() {
         AutoLock am(mutex);
-        connectIntern();
+        connectAsyncIntern();
     }
 
     #! returns a hash of mail messages keyed by message ID or @ref nothing if no messages are available on the server
@@ -574,7 +571,7 @@ pop3.connect();
     *hash<auto> getMail() {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            return getMailAsyncIntern();
         }
 
         *hash<auto> mih += listIntern();
@@ -601,7 +598,7 @@ pop3.connect();
     MailMessage::Message getMessage(string id) {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            return getMessageAsyncIntern(id);
         }
 
         return retrIntern(id);
@@ -631,7 +628,7 @@ hash<auto> h = pop3.stat();
     hash<auto> stat() {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            return statAsyncIntern();
         }
 
         return statIntern();
@@ -663,7 +660,7 @@ map printf("%s: %d byte%s\n", $1.getKey(), $1.getValue(), $1.getValue() == 1 ? "
     *hash<auto> list() {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            return listAsyncIntern();
         }
 
         return listIntern();
@@ -688,10 +685,10 @@ pop3.del(msgid);
     del(softstring msg) {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            connectAsyncIntern();
         }
 
-        sendCommand("DELE %s", msg);
+        connectedCommandAsyncIntern(sprintf("DELE %s", msg));
     }
 
     #! Sends a \c "DELE" command to delete one or more messages on the server
@@ -711,10 +708,10 @@ pop3.del(msgidlist);
     del(list<auto> l) {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            connectAsyncIntern();
         }
 
-        map sendCommand("DELE %s", $1), l;
+        map connectedCommandAsyncIntern(sprintf("DELE %s", $1)), l;
     }
 
     #! send a \c "NOOP" command to the POP3 server
@@ -734,10 +731,11 @@ pop3.noop();
     noop() {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            commandAsyncIntern("NOOP");
+            return;
         }
 
-        sendCommand("NOOP");
+        connectedCommandAsyncIntern("NOOP");
     }
 
     #! Send a \c "RSET" command to the POP3 server which will unmark messages marked for deletion
@@ -757,10 +755,11 @@ pop3.reset();
     reset() {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            commandAsyncIntern("RSET");
+            return;
         }
 
-        sendCommand("RSET");
+        connectedCommandAsyncIntern("RSET");
     }
 
     #! Returns the server's capabilities using the \c "CAPA" command (RFC 2449)
@@ -792,7 +791,7 @@ if (caps.UIDL) {
     *hash<string, bool> capa() {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            return capaAsyncIntern();
         }
 
         return capaIntern();
@@ -823,7 +822,11 @@ if (pop3.hasCapability("UIDL")) {
     bool hasCapability(string cap) {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            if (!capabilities) {
+                *hash<string, bool> caps = capaAsyncIntern();
+                capabilities = caps ?? {};
+            }
+            return capabilities{cap.upr()} ?? False;
         }
 
         if (!capabilities) {
@@ -872,7 +875,7 @@ foreach hash<auto> i in (uidls.pairIterator()) {
     *hash<string, string> uidl() {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            return uidlAsyncIntern();
         }
 
         return uidlIntern();
@@ -902,7 +905,7 @@ printf("Message 1 has UIDL: %s\n", uid);
     *string uidl(softstring msg) {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            return uidlAsyncIntern(msg);
         }
 
         return uidlIntern(msg);
@@ -937,7 +940,7 @@ string preview = pop3.top("1", 10);
     string top(softstring msg, int lines = 0) {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            return topAsyncIntern(msg, lines);
         }
 
         return topIntern(msg, lines);
@@ -966,7 +969,7 @@ printf("From: %s\nSubject: %s\n", msg.getFrom(), msg.getSubject());
     MailMessage::Message getMessageHeaders(softstring msg) {
         AutoLock am(mutex);
         if (!isConnected()) {
-            connectIntern();
+            return new MailMessage::Message(topAsyncIntern(msg, 0));
         }
 
         string raw = topIntern(msg, 0);
@@ -1204,21 +1207,198 @@ pop3.setEventQueue();
     }
 
     #! @cond nodoc
+    private *hash<auto> getMailAsyncIntern() {
+        Pop3FetchPollOperation fetch(self);
+
+        Pop3StatPollOperation stat_op = fetch.getStatOp();
+        execPollOperation(stat_op, sprintf("pop3-fetch-stat:%s", connect));
+
+        *Pop3RetrPollOperation retr_op = fetch.createRetrOp();
+        if (retr_op) {
+            execPollOperation(retr_op, sprintf("pop3-fetch-retr:%s", connect));
+        }
+
+        return fetch.getMail();
+    }
+
+    private hash<auto> statAsyncIntern() {
+        Pop3CommandPollOperation op = commandAsyncIntern("STAT");
+        string r = op.getResponseLine();
+        my (softint num, softint size) = (r =~ x/\+OK ([0-9]+) ([0-9]+)/);
+        logDbg("messages: %d total size: %d bytes", num, size);
+        return {
+            "num": num,
+            "size": size,
+        };
+    }
+
+    private *hash<auto> listAsyncIntern() {
+        hash<auto> mih;
+        Pop3CommandPollOperation op = commandAsyncIntern("LIST", True);
+        foreach string ml in (op.getDataString().split("\r\n")) {
+            if (!ml.val() || ml == ".") {
+                continue;
+            }
+            (string id, softint size) = (ml =~ x/^([0-9]+) ([0-9]+)/);
+            mih{id}.size = size;
+        }
+        return mih.empty() ? NOTHING : mih;
+    }
+
+    private Pop3CommandPollOperation commandAsyncIntern(string command, bool multi = False) {
+        Pop3CommandPollOperation op(self, command, multi);
+        execPollOperation(op, sprintf("pop3-command:%s:%s", connect, command));
+        return op;
+    }
+
+    private Pop3ConnectedCommandPollOperation connectedCommandAsyncIntern(string command, bool multi = False) {
+        Pop3ConnectedCommandPollOperation op(sock, command, multi);
+        execPollOperation(op, sprintf("pop3-connected-command:%s:%s", connect, command));
+        return op;
+    }
+
+    private MailMessage::Message getMessageAsyncIntern(softstring id) {
+        date start = now_us();
+        Pop3CommandPollOperation op = commandAsyncIntern(sprintf("RETR %s", id), True);
+        string msg = op.getDataString();
+        Message mmsg = new MailMessage::Message(msg);
+        int na = mmsg.getAttachments().size();
+        log("got msg %s (%d bytes, %d attachment%s) in %y", id, msg.size(), na, na == 1 ? "" : "s",
+            now_us() - start);
+        return mmsg;
+    }
+
+    private *hash<string, bool> capaAsyncIntern() {
+        try {
+            Pop3CommandPollOperation op = commandAsyncIntern("CAPA", True);
+            *string data = op.getData();
+            capabilities = {};
+            if (!data.val()) {
+                return;
+            }
+
+            foreach string cap in (data.split("\r\n")) {
+                trim cap;
+                if (!cap.val() || cap == ".") {
+                    continue;
+                }
+                string capName = (cap =~ x/^(\S+)/)[0];
+                if (capName) {
+                    capabilities{capName.upr()} = True;
+                }
+            }
+            logDbg("server capabilities: %y", keys capabilities);
+            return capabilities;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "POP3-SERVER-ERROR") {
+                logDbg("CAPA command not supported by server");
+                capabilities = {};
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    private *hash<string, string> uidlAsyncIntern() {
+        try {
+            Pop3CommandPollOperation op = commandAsyncIntern("UIDL", True);
+            *string data = op.getData();
+            if (!data.val()) {
+                return;
+            }
+
+            hash<string, string> uidls;
+            foreach string line in (data.split("\r\n")) {
+                trim line;
+                if (!line.val() || line == ".") {
+                    continue;
+                }
+                (*string id, *string uid) = (line =~ x/^([0-9]+) (.+)$/);
+                if (id && uid) {
+                    uidls{id} = uid;
+                }
+            }
+            return uidls;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "POP3-SERVER-ERROR") {
+                logDbg("UIDL command not supported by server");
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    private *string uidlAsyncIntern(softstring msg) {
+        try {
+            Pop3CommandPollOperation op = commandAsyncIntern(sprintf("UIDL %s", msg));
+            string r = op.getResponseLine();
+            *string uid = (r =~ x/^\+OK\s+\d+\s+(.+)$/)[0];
+            return uid;
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "POP3-SERVER-ERROR") {
+                logDbg("UIDL command failed for message %s", msg);
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    private string topAsyncIntern(softstring msg, int lines) {
+        Pop3CommandPollOperation op = commandAsyncIntern(sprintf("TOP %s %d", msg, lines), True);
+        return op.getDataString();
+    }
+
+    private connectAsyncIntern() {
+        try {
+            Pop3PingPollOperation op(self, sock, False);
+            execPollOperation(op, sprintf("pop3-connect:%s", connect));
+        } catch (hash<ExceptionInfo> ex) {
+            sock.close();
+            rethrow;
+        }
+    }
+
+    private execPollOperation(Qore::AbstractPollOperation op, string owner) {
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (!pi) {
+            if (!op.goalReached()) {
+                throw "ASYNC-IO-ERROR", sprintf("%s operation ended before reaching goal: %s", owner, op.getState());
+            }
+            return;
+        }
+
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": pi.socket,
+            "spop": op,
+            "owner": owner,
+            "to": ioTimeout,
+        });
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc;
+        }
+        if (result.canceled) {
+            throw "ASYNC-IO-CANCELED", sprintf("%s operation was canceled", owner);
+        }
+        if (!op.goalReached()) {
+            throw "ASYNC-IO-ERROR", sprintf("%s operation ended before reaching goal: %s", owner, op.getState());
+        }
+    }
+
     # don't reimplement this method; fix/enhance it in the module
     final private disconnectIntern() {
         if (isConnected()) {
             # send QUIT command if "noquit" is not set and ignore error
             if (!noquit)
-                try { sendCommand("QUIT"); } catch (hash<ExceptionInfo> ex) { }
+                try { connectedCommandAsyncIntern("QUIT"); } catch (hash<ExceptionInfo> ex) { }
             sock.close();
-            sock.shutdown();
         }
     }
 
     # don't reimplement this method; fix/enhance it in the module
     final private MailMessage::Message retrIntern(softstring id) {
         date start = now_us();
-        string msg = sendCommandMultiStr("RETR %s", id);
+        Pop3ConnectedCommandPollOperation op = connectedCommandAsyncIntern(sprintf("RETR %s", id), True);
+        string msg = op.getDataString();
         Message mmsg = new MailMessage::Message(msg);
         int na = mmsg.getAttachments().size();
         log("got msg %s (%d bytes, %d attachment%s) in %y", id, msg.size(), na, na == 1 ? "" : "s", now_us() - start);
@@ -1227,7 +1407,8 @@ pop3.setEventQueue();
 
     # don't reimplement this method; fix/enhance it in the module
     final private hash statIntern() {
-        string r = sendCommand("STAT");
+        Pop3ConnectedCommandPollOperation op = connectedCommandAsyncIntern("STAT");
+        string r = op.getResponseLine();
         my (softint num, softint size) = (r =~ x/\+OK ([0-9]+) ([0-9]+)/);
         logDbg("messages: %d total size: %d bytes", num, size);
         return {
@@ -1238,12 +1419,13 @@ pop3.setEventQueue();
 
     # don't reimplement this method; fix/enhance it in the module
     final private *hash<auto> listIntern() {
-        list<auto> l = sendCommandMulti("LIST");
-        # ignore first line (status line)
-        shift l;
         # message info hash
         hash<auto> mih;
-        foreach string ml in (l) {
+        Pop3ConnectedCommandPollOperation op = connectedCommandAsyncIntern("LIST", True);
+        foreach string ml in (op.getDataString().split("\r\n")) {
+            if (!ml.val() || ml == ".") {
+                continue;
+            }
             (string id, softint size) = (ml =~ x/^([0-9]+) ([0-9]+)/);
             mih{id}.size = size;
         }
@@ -1260,12 +1442,13 @@ pop3.setEventQueue();
         }
 
         try {
-            list<string> l = sendCommandMulti("CAPA");
-            # ignore first line (status line)
-            shift l;
+            Pop3ConnectedCommandPollOperation op = connectedCommandAsyncIntern("CAPA", True);
             # parse capabilities into hash
             capabilities = {};
-            foreach string cap in (l) {
+            foreach string cap in (op.getDataString().split("\r\n")) {
+                if (!cap.val() || cap == ".") {
+                    continue;
+                }
                 # capability names are case-insensitive; store uppercase
                 string capName = (cap =~ x/^(\S+)/)[0];
                 if (capName) {
@@ -1289,12 +1472,13 @@ pop3.setEventQueue();
     # RFC 1939 UIDL command (optional)
     final private *hash<string, string> uidlIntern() {
         try {
-            list<string> l = sendCommandMulti("UIDL");
-            # ignore first line (status line)
-            shift l;
+            Pop3ConnectedCommandPollOperation op = connectedCommandAsyncIntern("UIDL", True);
             # parse UIDL responses into hash
             hash<string, string> uidls;
-            foreach string ul in (l) {
+            foreach string ul in (op.getDataString().split("\r\n")) {
+                if (!ul.val() || ul == ".") {
+                    continue;
+                }
                 (*string id, *string uid) = (ul =~ x/^([0-9]+) (.+)$/);
                 if (id && uid) {
                     uidls{id} = uid;
@@ -1315,7 +1499,8 @@ pop3.setEventQueue();
     # RFC 1939 UIDL command for single message
     final private *string uidlIntern(softstring msg) {
         try {
-            string r = sendCommand("UIDL %s", msg);
+            Pop3ConnectedCommandPollOperation op = connectedCommandAsyncIntern(sprintf("UIDL %s", msg));
+            string r = op.getResponseLine();
             # parse response: +OK msgnum uniqueid
             *string uid = (r =~ x/^\+OK\s+\d+\s+(.+)$/)[0];
             return uid;
@@ -1332,87 +1517,8 @@ pop3.setEventQueue();
     # don't reimplement this method; fix/enhance it in the module
     # RFC 1939 TOP command (optional)
     final private string topIntern(softstring msg, int lines) {
-        return sendCommandMultiStr("TOP %s %d", msg, lines);
-    }
-
-    # read a line from the socket (terminated with \n)
-    private string readLine(timeout to) {
-        string str;
-        int c = 0;
-        do {
-            c = sock.recvu1(to);
-            str += chr(c);
-        } while (c != 10);
-
-        return str;
-    }
-
-    # gets a trimmed one-line response from the server, throws an exception if an error response is received
-    # don't reimplement this method; fix/enhance it in the module
-    final private string getResponse() {
-        string r = readLine(ioTimeout);
-        trim r;
-        logDbg("read: %y", r.size() ? r : "EOF");
-        if (sasl) {
-            sasl = False;
-            if (r !~ /^\+OK/) {
-%ifndef NoJson
-                string msg = r;
-                msg =~ s/^\s*\+\s*//;
-                hash<auto> err;
-                try {
-                    err = parse_json(parse_base64_string_to_string(msg));
-                } catch (hash<ExceptionInfo> ex) {
-                    logError("Failed to parse error response (msg: %y): %s", r, get_exception_string(ex));
-                    throw "POP3-SERVER-ERROR", sprintf("unable to parse SASL error response from server: %y: %s: %s",
-                        r, ex.err, ex.desc);
-                }
-                throw "POP3-SERVER-ERROR", "SASL error returned from command", err;
-%else
-                throw "POP3-SERVER-ERROR", sprintf("No JSON module available; unable to parse SASL error response "
-                    "from server: %y", r);
-%endif
-            }
-        } else {
-            if (r !~ /^\+OK/) {
-                throw "POP3-SERVER-ERROR", r;
-            }
-        }
-        return r;
-    }
-
-    # gets a trimmed multi-line response from the server, throws an exception if an error response is received
-    # don't reimplement this method; fix/enhance it in the module
-    final private list<string> getResponseMulti() {
-        list<string> l = ();
-        l += getResponse();
-        while (True) {
-            string r = readLine(ioTimeout);
-            trim r;
-            logDbg("read: %y", r);
-            if (r == ".") {
-                break;
-            }
-            l += r;
-        }
-        return l;
-    }
-
-    # gets a multi-line response from the server, throws an exception if an error response is received
-    # does not include the first line in the response
-    # don't reimplement this method; fix/enhance it in the module
-    final private string getResponseMultiStr() {
-        getResponse();
-        string rv;
-        while (True) {
-            string r = readLine(ioTimeout);
-            if (r == ".\r\n") {
-                break;
-            }
-            rv += r;
-        }
-        logDbg("read data: %d bytes", rv.size());
-        return rv;
+        Pop3ConnectedCommandPollOperation op = connectedCommandAsyncIntern(sprintf("TOP %s %d", msg, lines), True);
+        return op.getDataString();
     }
 
     private log(string msg, ...) {
@@ -1437,117 +1543,6 @@ pop3.setEventQueue();
             }
             logArgs(LoggerLevel::DEBUG, "%s", "Pop3Client: " + msg);
         }
-    }
-
-    # don't reimplement this method; fix/enhance it in the module
-    final private sendCommandIntern(string str, *bool masked) {
-        if (logger) {
-            if (masked) {
-                string lstr = str;
-                lstr =~ s/(\w+) (.*)/$1 **MASKED** /;
-                logDbg("send: %y", trim(lstr));
-            } else
-                logDbg("send: %y", trim(str));
-        }
-
-        sock.send(str, ioTimeout);
-    }
-
-    # don't reimplement this method; fix/enhance it in the module
-    final private list<string> sendCommandMulti(string str, ...) {
-        str = vsprintf(str + "\r\n", argv);
-        sendCommandIntern(str);
-        return getResponseMulti();
-    }
-
-    # don't reimplement this method; fix/enhance it in the module
-    final private string sendCommandMultiStr(string str, ...) {
-        str = vsprintf(str + "\r\n", argv);
-        sendCommandIntern(str);
-        return getResponseMultiStr();
-    }
-
-    # don't reimplement this method; fix/enhance it in the module
-    final private string sendCommand(string str, ...) {
-        str = vsprintf(str + "\r\n", argv);
-        sendCommandIntern(str);
-        return getResponse();
-    }
-
-    # don't reimplement this method; fix/enhance it in the module
-    final private string sendCommandMasked(string str, ...) {
-        str = vsprintf(str + "\r\n", argv);
-        sendCommandIntern(str, True);
-        return getResponse();
-    }
-
-    private loginIntern(string r) {
-        # use SASL XOAUTH2 if a token is present
-        if (token.val()) {
-            doSaslXoauth2Login();
-            return;
-        }
-        # try to login with APOP if an RFC822-compliant msg-id is included in the last part of the login string
-        *string apop = (r =~ x/(<.*>)$/)[0];
-        if (apop.val()) {
-            doApopLogin(apop);
-        } else {
-            doLogin();
-        }
-    }
-
-    private doApopLogin(string apop) {
-        # send APOP command with APOP secret
-        sendCommand("APOP %s %s", user, (apop + pass).toMD5());
-        log("logged in with APOP as %y", user);
-    }
-
-    private doLogin() {
-        # login with USER and PASS
-        sendCommand("USER %s", user);
-        if (!log_pass) {
-            sendCommandMasked("PASS %s", pass);
-        } else {
-            sendCommand("PASS %s", pass);
-        }
-
-        log("logged in with USER and PASS as %y", user);
-    }
-
-    private doSaslXoauth2Login() {
-        string login = sprintf("user=%s%sauth=Bearer %s%s%s", user, CtrlA, token, CtrlA, CtrlA).toBase64();
-        sasl = True;
-        if (!log_pass) {
-            sendCommandMasked("AUTH XOAUTH2 %s", login);
-        } else {
-            sendCommand("AUTH XOAUTH2 %s", login);
-        }
-        log("logged in with SASL XOAUTH2 as %y", user);
-    }
-
-    private doSSLIntern() {
-        sock.upgradeClientToSSL(connectTimeout);
-        log("secure connection established (%s %s)", sock.getSSLCipherName(), sock.getSSLCipherVersion());
-    }
-
-    # when this method returns without an exception, the object is in the TRANSACTION state
-    private connectIntern() {
-        logDbg("connecting to %s (timeout %y)", connect, milliseconds(connectTimeout));
-        sock.connect(connect, connectTimeout);
-        logDbg("connected to %s", connect);
-        if (tls) {
-            doSSLIntern();
-        }
-        string r = getResponse();
-
-        if (!tls && starttls) {
-            sendCommand("STLS");
-            doSSLIntern();
-        }
-
-        # AUTHORIZATION state - now log in
-        loginIntern(r);
-        # TRANSACTION state
     }
 
     private forceDisconnectIntern() {
@@ -1607,11 +1602,7 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
     #! Creates the object based on the Pop3Client
     /** Builds the complete POP3 ping pipeline from connection configuration.
 
-        The pipeline supports XOAUTH2 and USER/PASS authentication methods.
-        APOP authentication is not supported in the pipeline implementation
-        because it requires runtime greeting analysis (regex extraction of
-        the APOP msg-id) and MD5 computation, which cannot be pre-computed
-        at pipeline construction time.
+        The pipeline supports XOAUTH2, APOP, and USER/PASS authentication methods.
 
         @param pop3 the Pop3Client whose connection info drives the pipeline
 
@@ -1620,8 +1611,27 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
         @since %Pop3Client 2.2
     */
     constructor(Pop3Client pop3) : PollPipeline(new Socket()) {
+        setup(pop3, True);
+    }
+
+    #! Creates the object based on the Pop3Client and an existing socket
+    /** Builds the complete POP3 authentication pipeline from connection configuration.
+
+        @param pop3 the Pop3Client whose connection info drives the pipeline
+        @param sock the socket to connect and leave open after the pipeline completes
+        @param send_noop if True, send a NOOP after authentication
+
+        @throw POP3-POLL-ERROR if the POP3 server returns an error response
+
+        @since %Pop3Client 2.2
+    */
+    constructor(Pop3Client pop3, Socket sock, bool send_noop = True) : PollPipeline(sock) {
+        setup(pop3, send_noop);
+    }
+
+    private setup(Pop3Client pop3, bool send_noop) {
         hash<auto> info = pop3.getInfo();
-        goal = "ping";
+        goal = send_noop ? "ping" : "connect";
 
         bool has_token = info.token.val();
         bool need_stls = !info.ssl && info.tls ? True : False;
@@ -1643,28 +1653,34 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
         #   3: setContextBinary("user_cmd")
         #   4: setContextBinary("pass_cmd")
         #   5: connect or connectSsl
-        #   6: recvUntilBytes("\n")            — read greeting
-        #   7: validateResponsePrefix("+OK")   — validate greeting
-        #   8: branch(need_stls, 9, 13)        — STLS decision
-        #   9: send("STLS\r\n")
-        #  10: recvUntilBytes("\n")            — read STLS reply
-        #  11: validateResponsePrefix("+OK")   — validate STLS reply
-        #  12: sslUpgrade()
-        #  13: branch(has_token, 14, 18)       — auth method decision
-        #  14: sendFromContext("xoauth2_cmd")
-        #  15: recvUntilBytes("\n")            — read XOAUTH2 reply
-        #  16: validateResponsePrefix("+OK")   — validate XOAUTH2 reply
-        #  17: branch(has_token, 24, 24)       — unconditional jump to NOOP
-        #  18: sendFromContext("user_cmd")
-        #  19: recvUntilBytes("\n")            — read USER reply
-        #  20: validateResponsePrefix("+OK")   — validate USER reply
-        #  21: sendFromContext("pass_cmd")
-        #  22: recvUntilBytes("\n")            — read PASS reply
-        #  23: validateResponsePrefix("+OK")   — validate PASS reply
-        #  24: send("NOOP\r\n")
-        #  25: recvUntilBytes("\n")            — read NOOP reply
-        #  26: validateResponsePrefix("+OK")   — validate NOOP reply
-        #  27: (past end → pipeline complete)
+        #   6: recvUntilBytes("\n")            - read greeting
+        #   7: validateResponsePrefix("+OK")   - validate greeting
+        #   8: makePop3ApopCommand             - derive APOP command from greeting if available
+        #   9: branch(need_stls, 10, 14)       - STLS decision
+        #  10: send("STLS\r\n")
+        #  11: recvUntilBytes("\n")            - read STLS reply
+        #  12: validateResponsePrefix("+OK")   - validate STLS reply
+        #  13: sslUpgrade()
+        #  14: branch(has_token, 15, 19)       - XOAUTH2 decision
+        #  15: sendFromContext("xoauth2_cmd")
+        #  16: recvUntilBytes("\n")            - read XOAUTH2 reply
+        #  17: validateResponsePrefix("+OK")   - validate XOAUTH2 reply
+        #  18: goto(30)                        - skip remaining auth methods
+        #  19: branch(has_apop, 20, 24)        - APOP decision
+        #  20: sendFromContext("apop_cmd")
+        #  21: recvUntilBytes("\n")            - read APOP reply
+        #  22: validateResponsePrefix("+OK")   - validate APOP reply
+        #  23: goto(30)                        - skip USER/PASS
+        #  24: sendFromContext("user_cmd")
+        #  25: recvUntilBytes("\n")            - read USER reply
+        #  26: validateResponsePrefix("+OK")   - validate USER reply
+        #  27: sendFromContext("pass_cmd")
+        #  28: recvUntilBytes("\n")            - read PASS reply
+        #  29: validateResponsePrefix("+OK")   - validate PASS reply
+        #  30: optional send("NOOP\r\n")
+        #  31: optional recvUntilBytes("\n")   - read NOOP reply
+        #  32: optional validateResponsePrefix("+OK")
+        #  33: (past end -> pipeline complete)
 
         # --- Steps 0-4: configuration transforms ---
         addSetContextBool("need_stls", need_stls);                  # 0
@@ -1683,47 +1699,56 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
         # --- Steps 6-7: read and validate server greeting ---
         addRecvUntilBytes("\n");                                    # 6
         addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 7
+        addMakePop3ApopCommand("apop_cmd", "has_apop", info.user, info.pass); # 8
 
-        # --- Step 8: branch on STLS decision ---
-        addBranchOnContextKey("need_stls", 9, 13);                 # 8
+        # --- Step 9: branch on STLS decision ---
+        addBranchOnContextKey("need_stls", 10, 14);                # 9
 
-        # --- Steps 9-12: STARTTLS handshake ---
-        addSend("STLS\r\n");                                       # 9
-        addRecvUntilBytes("\n");                                    # 10
-        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 11
-        addSslUpgrade();                                           # 12
+        # --- Steps 10-13: STARTTLS handshake ---
+        addSend("STLS\r\n");                                       # 10
+        addRecvUntilBytes("\n");                                    # 11
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 12
+        addSslUpgrade();                                           # 13
 
-        # --- Step 13: branch on auth method ---
-        addBranchOnContextKey("has_token", 14, 18);                # 13
+        # --- Step 14: branch on auth method ---
+        addBranchOnContextKey("has_token", 15, 19);                # 14
 
-        # --- Steps 14-17: XOAUTH2 auth path ---
-        addSendFromContext("xoauth2_cmd");                         # 14
-        addRecvUntilBytes("\n");                                    # 15
-        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 16
-        # Unconditional jump to NOOP (has_token is always true here)
-        addBranchOnContextKey("has_token", 24, 24);                # 17
+        # --- Steps 15-18: XOAUTH2 auth path ---
+        addSendFromContext("xoauth2_cmd");                         # 15
+        addRecvUntilBytes("\n");                                    # 16
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 17
+        addGoto(30);                                               # 18
 
-        # --- Steps 18-23: USER/PASS auth path ---
-        addSendFromContext("user_cmd");                             # 18
-        addRecvUntilBytes("\n");                                    # 19
-        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 20
-        addSendFromContext("pass_cmd");                             # 21
-        addRecvUntilBytes("\n");                                    # 22
-        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 23
+        # --- Steps 19-23: APOP auth path ---
+        addBranchOnContextKey("has_apop", 20, 24);                 # 19
+        addSendFromContext("apop_cmd");                            # 20
+        addRecvUntilBytes("\n");                                    # 21
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 22
+        addGoto(30);                                               # 23
 
-        # --- Steps 24-26: NOOP ping ---
-        addSend("NOOP\r\n");                                       # 24
+        # --- Steps 24-29: USER/PASS auth path ---
+        addSendFromContext("user_cmd");                            # 24
         addRecvUntilBytes("\n");                                    # 25
         addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 26
+        addSendFromContext("pass_cmd");                            # 27
+        addRecvUntilBytes("\n");                                    # 28
+        addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 29
 
-        # --- Step 27 (past end): pipeline completes automatically ---
+        if (send_noop) {
+            # --- Steps 30-32: NOOP ping ---
+            addSend("NOOP\r\n");                                   # 30
+            addRecvUntilBytes("\n");                                # 31
+            addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");   # 32
+        }
+
+        # --- Step 30 or 33 (past end): pipeline completes automatically ---
     }
 
     #! Returns the goal
-    /** @return "ping"
+    /** @return the configured goal, either \c "ping" or \c "connect"
     */
     string getGoal() {
-        return "ping";
+        return goal;
     }
 
     #! Returns the current state mapped to Pop3PingState values for backward compatibility
@@ -1740,13 +1765,273 @@ public class Pop3PingPollOperation inherits Qore::PollPipeline {
     }
 }
 
-#! POP3 stat poll operation — connects, authenticates, and runs STAT + LIST
+#! POP3 command poll operation - connects, authenticates, runs one command, and quits
+/** Generic one-shot POP3 command pipeline used by blocking Pop3Client methods
+    when the client does not already have an open stateful session.
+
+    @since Pop3Client 2.2
+*/
+public class Pop3CommandPollOperation inherits Qore::PollPipeline {
+    private {
+        #! Internal queue receiving the command response line
+        int response_queue_id;
+        #! Internal queue receiving an optional dot-terminated response body
+        int data_queue_id;
+        #! True if this command has a dot-terminated response body
+        bool multi_response;
+    }
+
+    #! Creates a one-shot POP3 command operation
+    /** @param pop3 the Pop3Client whose connection info drives the pipeline
+        @param command command text without trailing CRLF
+        @param multi if True, read a dot-terminated response body after the +OK line
+
+        @throw POP3-SERVER-ERROR if the POP3 server returns an error response
+    */
+    constructor(Pop3Client pop3, string command, bool multi = False) : PollPipeline(new Socket()) {
+        hash<auto> info = pop3.getInfo();
+        goal = "command";
+        multi_response = multi;
+        response_queue_id = addQueue();
+        if (multi_response) {
+            data_queue_id = addQueue();
+        }
+
+        bool has_token = info.token.val();
+        bool need_stls = !info.ssl && info.tls ? True : False;
+
+        string xoauth2_cmd = "";
+        if (has_token) {
+            string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, Pop3Client::CtrlA, info.token,
+                Pop3Client::CtrlA, Pop3Client::CtrlA).toBase64();
+            xoauth2_cmd = sprintf("AUTH XOAUTH2 %s\r\n", login);
+        }
+        string user_cmd = sprintf("USER %s\r\n", info.user);
+        string pass_cmd = sprintf("PASS %s\r\n", info.pass);
+
+        addSetContextBool("need_stls", need_stls);
+        addSetContextBool("has_token", has_token);
+        addSetContextBinary("xoauth2_cmd", xoauth2_cmd);
+        addSetContextBinary("user_cmd", user_cmd);
+        addSetContextBinary("pass_cmd", pass_cmd);
+
+        if (info.ssl) {
+            addConnectSsl(info.target);
+        } else {
+            addConnect(info.target);
+        }
+
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
+        addMakePop3ApopCommand("apop_cmd", "has_apop", info.user, info.pass);
+
+        addBranchOnContextKey("need_stls", 10, 14);
+
+        addSend("STLS\r\n");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
+        addSslUpgrade();
+
+        addBranchOnContextKey("has_token", 15, 19);
+
+        addSendFromContext("xoauth2_cmd");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
+        addGoto(30);
+
+        addBranchOnContextKey("has_apop", 20, 24);
+        addSendFromContext("apop_cmd");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
+        addGoto(30);
+
+        addSendFromContext("user_cmd");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
+        addSendFromContext("pass_cmd");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
+
+        addSend(command + "\r\n");
+        addRecvUntilBytes("\n");
+        addPushQueue(response_queue_id);
+        addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
+
+        if (multi_response) {
+            addRecvUntilBytes(".\r\n");
+            addPushQueue(data_queue_id);
+        }
+
+        addSend("QUIT\r\n");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
+    }
+
+    #! Returns the goal
+    /** @return \c "command"
+    */
+    string getGoal() {
+        return "command";
+    }
+
+    #! Returns the current pipeline state
+    /** @return the current pipeline state
+    */
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (isClosed()) {
+            return "error";
+        }
+        return PollPipeline::getState();
+    }
+
+    #! Returns the single-line command response
+    /** @return the trimmed single-line command response
+    */
+    string getResponseLine() {
+        *string r = getQueueItem(response_queue_id);
+        if (!r.val()) {
+            return "";
+        }
+        trim r;
+        return r;
+    }
+
+    #! Returns the dot-terminated response body without the terminator
+    /** @return the dot-terminated response body without the terminator, or @ref NOTHING if there is no body
+    */
+    *string getData() {
+        if (!multi_response) {
+            return;
+        }
+
+        *string body = getQueueItem(data_queue_id);
+        if (!body.val()) {
+            return;
+        }
+        if (body =~ /\.\r\n$/) {
+            body = extract body, 0, body.size() - 3;
+        }
+        return body;
+    }
+
+    #! Returns the dot-terminated response body as a non-optional string
+    /** @return the dot-terminated response body without the terminator, or an empty string if there is no body
+    */
+    string getDataString() {
+        return getData() ?? "";
+    }
+}
+
+#! POP3 connected command poll operation - runs one command on an existing authenticated socket
+/** Generic connected POP3 command pipeline used by blocking Pop3Client methods
+    when the client already has an open stateful session.
+
+    @since Pop3Client 2.2
+*/
+public class Pop3ConnectedCommandPollOperation inherits Qore::PollPipeline {
+    private {
+        #! Internal queue receiving the command response line
+        int response_queue_id;
+        #! Internal queue receiving an optional dot-terminated response body
+        int data_queue_id;
+        #! True if this command has a dot-terminated response body
+        bool multi_response;
+    }
+
+    #! Creates a connected POP3 command operation
+    /** @param sock the connected and authenticated POP3 socket
+        @param command command text without trailing CRLF
+        @param multi if True, read a dot-terminated response body after the +OK line
+
+        @throw POP3-SERVER-ERROR if the POP3 server returns an error response
+    */
+    constructor(Socket sock, string command, bool multi = False) : PollPipeline(sock) {
+        goal = "connected-command";
+        multi_response = multi;
+        response_queue_id = addQueue();
+        if (multi_response) {
+            data_queue_id = addQueue();
+        }
+
+        addSend(command + "\r\n");
+        addRecvUntilBytes("\n");
+        addPushQueue(response_queue_id);
+        addValidateResponsePrefix("+OK", "POP3-SERVER-ERROR");
+
+        if (multi_response) {
+            addRecvUntilBytes(".\r\n");
+            addPushQueue(data_queue_id);
+        }
+    }
+
+    #! Returns the goal
+    /** @return \c "connected-command"
+    */
+    string getGoal() {
+        return "connected-command";
+    }
+
+    #! Returns the current pipeline state
+    /** @return the current pipeline state
+    */
+    string getState() {
+        if (goalReached()) {
+            return "complete";
+        }
+        if (isClosed()) {
+            return "error";
+        }
+        return PollPipeline::getState();
+    }
+
+    #! Returns the single-line command response
+    /** @return the trimmed single-line command response
+    */
+    string getResponseLine() {
+        *string r = getQueueItem(response_queue_id);
+        if (!r.val()) {
+            return "";
+        }
+        trim r;
+        return r;
+    }
+
+    #! Returns the dot-terminated response body without the terminator
+    /** @return the dot-terminated response body without the terminator, or @ref NOTHING if there is no body
+    */
+    *string getData() {
+        if (!multi_response) {
+            return;
+        }
+
+        *string body = getQueueItem(data_queue_id);
+        if (!body.val()) {
+            return;
+        }
+        if (body =~ /\.\r\n$/) {
+            body = extract body, 0, body.size() - 3;
+        }
+        return body;
+    }
+
+    #! Returns the dot-terminated response body as a non-optional string
+    /** @return the dot-terminated response body without the terminator, or an empty string if there is no body
+    */
+    string getDataString() {
+        return getData() ?? "";
+    }
+}
+
+#! POP3 stat poll operation - connects, authenticates, and runs STAT + LIST
 /** Builds on the same connect + auth sequence as @ref Pop3PingPollOperation,
     but replaces the NOOP ping with STAT + LIST to retrieve the mailbox
     message list.
 
-    After completion, call @ref getStatResult() for the message count and
-    @ref getListResult() for the per-message size hash. The socket remains
+    After completion, call @ref getStat() for the message count and
+    @ref getList() for the per-message size hash. The socket remains
     connected for subsequent RETR operations.
 
     @since Pop3Client 2.2
@@ -1755,6 +2040,14 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
     private {
         #! Reference to the socket for hand-off to RETR pipeline
         Socket my_sock;
+        #! Internal queue receiving the STAT response line
+        int stat_queue_id;
+        #! Internal queue receiving the LIST response body
+        int list_queue_id;
+        #! Parsed message info keyed by message ID
+        hash<auto> message_info;
+        #! Parsed STAT info
+        hash<auto> stat_info;
     }
 
     #! Creates the stat pipeline
@@ -1763,6 +2056,8 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
     constructor(Pop3Client pop3) : PollPipeline(my_sock = Pop3StatPollOperation::makeSocket()) {
         hash<auto> info = pop3.getInfo();
         goal = "stat";
+        stat_queue_id = addQueue();
+        list_queue_id = addQueue();
 
         bool has_token = info.token.val();
         bool need_stls = !info.ssl && info.tls ? True : False;
@@ -1794,26 +2089,34 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
         # --- Steps 6-7: read and validate server greeting ---
         addRecvUntilBytes("\n");
         addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+        addMakePop3ApopCommand("apop_cmd", "has_apop", info.user, info.pass);
 
-        # --- Step 8: branch on STLS decision ---
-        addBranchOnContextKey("need_stls", 9, 13);
+        # --- Step 9: branch on STLS decision ---
+        addBranchOnContextKey("need_stls", 10, 14);
 
-        # --- Steps 9-12: STARTTLS handshake ---
+        # --- Steps 10-13: STARTTLS handshake ---
         addSend("STLS\r\n");
         addRecvUntilBytes("\n");
         addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
         addSslUpgrade();
 
-        # --- Step 13: branch on auth method ---
-        addBranchOnContextKey("has_token", 14, 18);
+        # --- Step 14: branch on auth method ---
+        addBranchOnContextKey("has_token", 15, 19);
 
-        # --- Steps 14-17: XOAUTH2 auth path ---
+        # --- Steps 15-18: XOAUTH2 auth path ---
         addSendFromContext("xoauth2_cmd");
         addRecvUntilBytes("\n");
         addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
-        addBranchOnContextKey("has_token", 24, 24);
+        addGoto(30);
 
-        # --- Steps 18-23: USER/PASS auth path ---
+        # --- Steps 19-23: APOP auth path ---
+        addBranchOnContextKey("has_apop", 20, 24);
+        addSendFromContext("apop_cmd");
+        addRecvUntilBytes("\n");
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
+        addGoto(30);
+
+        # --- Steps 24-29: USER/PASS auth path ---
         addSendFromContext("user_cmd");
         addRecvUntilBytes("\n");
         addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
@@ -1821,19 +2124,21 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
         addRecvUntilBytes("\n");
         addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
 
-        # --- Steps 24-26: STAT command ---
-        addSend("STAT\r\n");                                       # 24
-        addRecvUntilBytes("\n");                                    # 25
-        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");      # 26
+        # --- Steps 30-32: STAT command ---
+        addSend("STAT\r\n");                                       # 30
+        addRecvUntilBytes("\n");                                    # 31
+        addPushQueue(stat_queue_id);
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");      # 32
 
-        # --- Steps 27-30: LIST command (dot-terminated multi-line response) ---
-        addSend("LIST\r\n");                                       # 27
-        addRecvUntilBytes("\n");                                    # 28 — +OK response line
-        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");      # 29
+        # --- Steps 33-36: LIST command (dot-terminated multi-line response) ---
+        addSend("LIST\r\n");                                       # 33
+        addRecvUntilBytes("\n");                                    # 34 - +OK response line
+        addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");      # 35
         # Dot-terminator: ".\r\n" on its own line. After +OK line consumed,
-        # next data starts at column 0 — safe to match ".\r\n" directly.
-        addRecvUntilBytes(".\r\n");                                # 30 — dot-terminated body
-        # Step 31 (past end): pipeline complete
+        # next data starts at column 0 - safe to match ".\r\n" directly.
+        addRecvUntilBytes(".\r\n");                                # 36 - dot-terminated body
+        addPushQueue(list_queue_id);
+        # Step 38 (past end): pipeline complete
     }
 
     #! Returns the socket for hand-off to a RETR pipeline
@@ -1860,9 +2165,51 @@ public class Pop3StatPollOperation inherits Qore::PollPipeline {
         }
         return PollPipeline::getState();
     }
+
+    #! Returns STAT command data in Pop3Client::stat() format
+    hash<auto> getStat() {
+        if (!stat_info.empty()) {
+            return stat_info;
+        }
+
+        *string r = getQueueItem(stat_queue_id);
+        if (!r.val()) {
+            return {};
+        }
+        trim r;
+        my (softint num, softint size) = (r =~ x/\+OK ([0-9]+) ([0-9]+)/);
+        return stat_info = {
+            "num": num,
+            "size": size,
+        };
+    }
+
+    #! Returns LIST command data in Pop3Client::list() format
+    *hash<auto> getList() {
+        if (!message_info.empty()) {
+            return message_info;
+        }
+
+        *string list_text = getQueueItem(list_queue_id);
+        if (!list_text.val()) {
+            return;
+        }
+
+        foreach string line in (list_text.split("\r\n")) {
+            trim line;
+            if (!line.val() || line == ".") {
+                continue;
+            }
+            (*string id, softint size) = (line =~ x/^([0-9]+)\s+([0-9]+)/);
+            if (id.val()) {
+                message_info{id}.size = size;
+            }
+        }
+        return message_info.empty() ? NOTHING : message_info;
+    }
 }
 
-#! POP3 retrieve poll operation — fetches messages on an already-connected socket
+#! POP3 retrieve poll operation - fetches messages on an already-connected socket
 /** Takes an already-connected and authenticated POP3 socket (from
     @ref Pop3StatPollOperation) and a list of message IDs, then statically
     unrolls RETR + optional DELE commands per message, followed by QUIT.
@@ -1875,6 +2222,8 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
         hash<string, string> messages = {};
         #! Current message index (for tracking during pipeline execution)
         list<string> msg_ids;
+        #! Internal queue receiving message bodies as they are read
+        int body_queue_id;
     }
 
     #! Creates the retrieve pipeline
@@ -1886,6 +2235,7 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
             : PollPipeline(sock) {
         msg_ids = ids;
         goal = "retr";
+        body_queue_id = addQueue();
 
         # Statically unroll RETR per message
         foreach string id in (ids) {
@@ -1896,6 +2246,7 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
             addValidateResponsePrefix("+OK", "POP3-FETCH-ERROR");
             # Read dot-terminated message body (".\r\n" on its own line)
             addRecvUntilBytes(".\r\n");
+            addPushQueue(body_queue_id);
 
             if (do_delete) {
                 addSend(sprintf("DELE %s\r\n", id));
@@ -1924,15 +2275,34 @@ public class Pop3RetrPollOperation inherits Qore::PollPipeline {
         }
         return PollPipeline::getState();
     }
+
+    #! Returns fetched raw message bodies keyed by message ID
+    hash<string, string> getMessages() {
+        if (!messages.empty()) {
+            return messages;
+        }
+
+        foreach string id in (msg_ids) {
+            *string body = getQueueItem(body_queue_id);
+            if (!body.val()) {
+                continue;
+            }
+            if (body =~ /\.\r\n$/) {
+                body = extract body, 0, body.size() - 3;
+            }
+            messages{id} = body;
+        }
+        return messages;
+    }
 }
 
-#! POP3 fetch orchestrator — two-phase: STAT+LIST then RETR per message
+#! POP3 fetch orchestrator - two-phase: STAT+LIST then RETR per message
 /** Composes @ref Pop3StatPollOperation and @ref Pop3RetrPollOperation.
     Phase 1 runs the stat op (connect+auth+STAT+LIST). The caller submits it
     to the AsyncIoController. When it completes, call @ref createRetrOp() to
     build the RETR pipeline for the discovered messages, then submit that.
 
-    This follows the same pattern as @ref FtpClientPollOperation — the
+    This follows the same pattern as @ref FtpClientPollOperation - the
     orchestrator manages sub-operations but does not inherit
     @c AbstractPollOperation itself.
 
@@ -1946,6 +2316,8 @@ public class Pop3FetchPollOperation {
         *Pop3RetrPollOperation retr_op;
         #! Parsed message IDs from LIST
         list<string> msg_ids = ();
+        #! Parsed message info keyed by message ID
+        hash<auto> message_info;
     }
 
     #! Creates the fetch orchestrator
@@ -1971,10 +2343,7 @@ public class Pop3FetchPollOperation {
     */
     *Pop3RetrPollOperation createRetrOp() {
         # Parse LIST output to get message IDs
-        *auto output = stat_op.getOutput();
-        if (output.typeCode() == NT_STRING) {
-            parseListOutput(output);
-        }
+        parseListOutput(stat_op.getList());
 
         if (!msg_ids) {
             return NOTHING;
@@ -1993,6 +2362,23 @@ public class Pop3FetchPollOperation {
     #! Returns the number of messages in the mailbox
     int getMessageCount() {
         return msg_ids.size();
+    }
+
+    #! Returns fetched messages in Pop3Client::getMail() format
+    *hash<auto> getMail() {
+        if (message_info.empty()) {
+            return;
+        }
+
+        if (retr_op) {
+            hash<string, string> messages = retr_op.getMessages();
+            foreach string id in (keys message_info) {
+                if (messages.hasKey(id)) {
+                    message_info{id}.msg = new MailMessage::Message(messages{id});
+                }
+            }
+        }
+        return message_info;
     }
 
     #! Returns True when all phases are complete
@@ -2025,19 +2411,13 @@ public class Pop3FetchPollOperation {
     }
 
     #! Parse LIST output into message IDs
-    private parseListOutput(*string list_text) {
-        if (!list_text.val()) {
+    private parseListOutput(*hash<auto> list_info) {
+        if (!list_info) {
             return;
         }
-        foreach string line in (list_text.split("\r\n")) {
-            trim line;
-            if (!line.val() || line == ".") {
-                continue;
-            }
-            *string id = (line =~ x/^(\d+)\s/)[0];
-            if (id.val()) {
-                msg_ids += id;
-            }
+        foreach string id in (keys list_info) {
+            msg_ids += id;
+            message_info{id}.size = list_info{id}.size;
         }
     }
 }
@@ -2191,8 +2571,8 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
         @since %Pop3Client 2.1
     */
     private pingImpl() {
-        Pop3Client client = get();
-        client.noop();
+        Pop3PingPollOperation op(getImpl(False));
+        execPollOperation(op, sprintf("pop3-ping:%s", name));
     }
 
     #! returns a @ref Pop3Client object
@@ -2207,6 +2587,33 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
             sc.connect();
         }
         return sc;
+    }
+
+    #! Execute a polling operation synchronously through the global AsyncIoController
+    private static execPollOperation(Qore::AbstractPollOperation op, string owner, timeout to = 30s) {
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (!pi) {
+            if (!op.goalReached()) {
+                throw "ASYNC-IO-ERROR", sprintf("%s operation ended before reaching goal: %s", owner, op.getState());
+            }
+            return;
+        }
+
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": pi.socket,
+            "spop": op,
+            "owner": owner,
+            "to": to,
+        });
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc;
+        }
+        if (result.canceled) {
+            throw "ASYNC-IO-CANCELED", sprintf("%s operation was canceled", owner);
+        }
+        if (!op.goalReached()) {
+            throw "ASYNC-IO-ERROR", sprintf("%s operation ended before reaching goal: %s", owner, op.getState());
+        }
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

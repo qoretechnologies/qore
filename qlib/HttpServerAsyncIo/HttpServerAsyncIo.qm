@@ -91,7 +91,7 @@ module HttpServerAsyncIo {
       @c cx."header-info".register_body_queue (the I/O thread pushes one
       binary chunk per DATA frame and a NOTHING sentinel at END_STREAM).
       Outbound DATA / HEADERS / trailers go through the async-safe
-      @c Socket HTTP/2 methods followed by @c io_wake().  All built-in
+      @c Socket HTTP/2 methods that wake the owning controller.  All built-in
       response paths (regular, send_callback, InputStream, SSE setup,
       RST_STREAM-on-error) use this convention.
     - SSE streams send comment heartbeats by default across HTTP/1.x, HTTP/2,
@@ -170,9 +170,11 @@ public namespace HttpServerAsyncIo {
         */
         bool dedicated = False;
 
-        #! callback for sending chunked response data where each callback return is one HTTP chunk
-        /** When set, the controller calls @ref Qore::Socket::sendHTTPResponseWithCallback()
-            "sendHTTPResponseWithCallback()" with this callback instead of sending the body directly.
+        #! callback for producing streaming response data
+        /** When set, the controller invokes the callback on a handler worker.
+            HTTP/1.x materializes the returned chunks and submits the socket write
+            through async poll operations; HTTP/2 and HTTP/3 wrap the callback as
+            an InputStream and send DATA frames through the async controller.
 
 
             @see send_timeout
@@ -193,8 +195,8 @@ public namespace HttpServerAsyncIo {
         - \c body_streaming: \c True when the client sent HEADERS without END_STREAM (request body
           not yet complete); the handler registers a @ref Queue "Queue" via
           \c register_body_queue to receive inbound DATA chunks (NOTHING sentinel = END_STREAM)
-          and writes outgoing DATA via \c Socket::sendHttp2StreamData() followed by
-          \c io_wake()
+          and writes outgoing DATA via \c Socket::sendHttp2StreamData(), which
+          delegates enqueue/wake handling to the async I/O controller
         - \c headers_end_stream: \c True if END_STREAM was on the HEADERS frame (e.g., GET with
           no body); when \c True, \c body_streaming is \c False and there is no body to read
         - \c io_wake: a code closure to call after queuing outgoing data to wake the I/O thread

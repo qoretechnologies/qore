@@ -99,6 +99,8 @@ struct con_info {
 
     DLLLOCAL int set_url(QoreURL& url, bool& port_set, ExceptionSink* xsink) {
         port = 0;
+        is_unix = false;
+        unix_urlencoded_path.clear();
         if (url.getPort()) {
             port = url.getPort();
             port_set = true;

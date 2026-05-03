@@ -174,45 +174,20 @@ private:
     // Pending command (set by submitCommand, consumed by continuePoll)
     std::string pending_cmd;
 
-    // Sync-blocking infrastructure (for sync callers using async controller)
-    QoreThreadLock sync_lock;
-    QoreCondition sync_cond;
-    bool sync_done = false;
-
 public:
-    //! Signal sync caller that the operation has completed
-    /** Called from onComplete() (worker thread) to wake the blocking sync thread.
-    */
-    DLLLOCAL void signalCompletion() {
-        AutoLocker al(sync_lock);
-        sync_done = true;
-        sync_cond.signal();
-    }
-
-    //! Block until the operation signals completion or timeout
-    /** @param timeout_ms maximum wait time in milliseconds
-        @param xsink exception sink
-        @return 0 on success, -1 on timeout or error
-    */
-    DLLLOCAL int waitForCompletion(int timeout_ms, ExceptionSink* xsink) {
-        AutoLocker al(sync_lock);
-        while (!sync_done) {
-            int rc = sync_cond.wait(sync_lock, timeout_ms);
-            if (rc == ETIMEDOUT) {
-                xsink->raiseException("SOCKET-TIMEOUT", "FTP operation timed out after %d ms", timeout_ms);
-                return -1;
-            }
-        }
-        sync_done = false;  // reset for next use
-        return 0;
-    }
-
     //! Submit this operation to the global async I/O controller
     /** @param xsink exception sink
         @param owner owner string for controller cache (default: "ftp-ctrl")
-        @return 0 on success, -1 on error
+        @param timeout_ms operation timeout in milliseconds
+        @param replace true to replace any existing operation with the same key
+        @return referenced Queue object on success, nullptr on error
     */
-    DLLLOCAL int submitToController(ExceptionSink* xsink, const char* owner = "ftp-ctrl");
+    DLLLOCAL QoreObject* submitToController(ExceptionSink* xsink, const char* owner = "ftp-ctrl",
+        int timeout_ms = -1, bool replace = true);
+
+    //! Execute this operation through the global async I/O controller and block for the result
+    DLLLOCAL QoreHashNode* execOnController(ExceptionSink* xsink, const char* owner = "ftp-ctrl",
+        int timeout_ms = -1, bool replace = true);
 
 private:
     // --- Helper methods ---
@@ -272,35 +247,14 @@ public:
     DLLLOCAL QoreValue getOutput() const override;
 
     //! Submit this operation to the global async I/O controller
-    DLLLOCAL int submitToController(ExceptionSink* xsink, const char* owner = "ftp-port-accept");
-
-    // Sync-blocking infrastructure (same pattern as FtpControlPollOperationPriv)
-    QoreThreadLock sync_lock;
-    QoreCondition sync_cond;
-    bool sync_done = false;
-
-    DLLLOCAL void signalCompletion() {
-        AutoLocker al(sync_lock);
-        sync_done = true;
-        sync_cond.signal();
-    }
-
-    DLLLOCAL int waitForCompletion(int timeout_ms, ExceptionSink* xsink) {
-        AutoLocker al(sync_lock);
-        while (!sync_done) {
-            int rc = sync_cond.wait(sync_lock, timeout_ms);
-            if (rc == ETIMEDOUT) {
-                xsink->raiseException("SOCKET-TIMEOUT",
-                    "FTP PORT accept timed out after %d ms", timeout_ms);
-                return -1;
-            }
-        }
-        sync_done = false;
-        return 0;
-    }
+    DLLLOCAL QoreObject* submitToController(ExceptionSink* xsink, const char* owner = "ftp-port-accept",
+        int timeout_ms = -1, bool replace = false);
 
     //! Returns the accepted socket (not ref'd — caller must ref if needed)
     DLLLOCAL QoreSocketObject* getAcceptedSocket() const { return client_sock; }
+
+    //! Returns the listener socket (not ref'd; caller must not deref)
+    DLLLOCAL QoreSocketObject* getListenerSocket() const { return listener; }
 
 protected:
     DLLLOCAL const char* getStateImpl() const override;

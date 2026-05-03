@@ -409,11 +409,12 @@ ftp.get("file.txt", "/tmp/file-1.txt");
 
     @throw FTP-RECEIVE-ERROR Incomplete message received on control port
     @throw FTP-FILE-OPEN-ERROR Could not create the local file
+    @throw FTP-FILE-WRITE-ERROR Could not replace the local file after transfer
     @throw FTP-GET-ERROR There was an error retrieving the file
 
     @note
     - see FtpClient::connect() for additional exceptions that could be thrown when connections are implicitly established
-    - any existing file with the same name is truncated before writing
+    - any existing file with the same name is opened and truncated only after the transfer succeeds
 
     @see FtpClient::getAsString(), FtpClient::getAsData()
 */

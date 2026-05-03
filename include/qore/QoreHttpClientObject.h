@@ -358,15 +358,15 @@ public:
     */
     DLLEXPORT bool hasHttp2StreamData(int32_t stream_id) const;
 
-    //! Checks if HTTP/2 stream data is available, polling the socket if needed
+    //! Checks if HTTP/2 stream data is available on the active CONNECT stream
     /** @param stream_id the stream ID to check
         @param timeout_ms timeout in milliseconds for polling
         @param xsink if an error occurs, the Qore-language exception information will be added here
         @return true if data is available, false otherwise
 
-        @note This method first checks for buffered data, then polls the socket for new
-        HTTP/2 frames if no data is buffered. This is the correct way to check for
-        data availability when using HTTP/2 streams.
+        @note For HTTP/2 streams created by sendHttp2Connect(), this method waits on the
+        connection-manager stream channel. If HTTP/2 is not active, the method falls back to
+        the inherited Socket data-availability check for HTTP/1 upgraded connections.
 
         @since %Qore 2.3
     */
@@ -708,13 +708,11 @@ public:
     */
     DLLEXPORT bool hasStreamingChannel() const;
 
-    //! Reports whether the client is open, including when a conn_mgr streaming channel is held.
-    /** When the client is using conn_mgr (`use_conn_mgr=true`), the
-        legacy @c msock socket is never connected, so the inherited
-        @c Socket::isOpen reports @c false even while the client is
-        actively streaming.  This override reports @c true whenever a
-        conn_mgr streaming channel is held; otherwise it falls through
-        to the legacy socket check.
+    //! Reports whether the client is open, including conn_mgr state.
+    /** With conn_mgr-backed dispatch, the legacy @c msock socket is not
+        connected for regular request/response flows.  This override reports
+        @c true whenever a conn_mgr connection or streaming channel is active;
+        otherwise it falls through to the legacy socket check.
 
         @since %Qore 2.3
     */
@@ -838,15 +836,19 @@ public:
     **/
     DLLEXPORT int getConnectTimeout() const;
 
-    //! Enables or disables async connection manager dispatch for simple H1 requests
-    /** @param enable true to enable, false to disable
+    //! Compatibility setter for async connection manager dispatch
+    /** Synchronous HTTPClient I/O now delegates through the async connection
+        manager wherever possible.  This setter is retained for source
+        compatibility; passing @c false no longer disables the manager.
+
+        @param enable ignored
 
         @since %Qore 2.3
     */
     DLLEXPORT void setUseConnectionManager(bool enable);
 
-    //! Returns true if async connection manager dispatch is enabled
-    /** @return true if the connection manager is enabled
+    //! Returns true because async connection manager dispatch is always enabled
+    /** @return true
 
         @since %Qore 2.3
     */

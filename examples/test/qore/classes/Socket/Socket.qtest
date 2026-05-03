@@ -12,6 +12,9 @@ const i1 = 10;
 const i2 = 5121;
 const i4 = 2393921;
 const i8 = 12309309203932;
+const u1 = 250;
+const u2 = 60000;
+const u4 = 4000000000;
 
 const http_headers = (
     "Accept"       : "text",
@@ -105,6 +108,24 @@ P1CvlJwL79QntIvjfC5nRMHwMy2wE6Eqt57sFlUnvD25CbbX/TNDSNqXhXQbYaCZ
 I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 -----END CERTIFICATE-----";
 
+class UnsafeSocketInputStream inherits InputStream {
+    *binary read(int limit) {
+        return <01>;
+    }
+
+    int peek() {
+        return 1;
+    }
+}
+
+class UnsafeSocketOutputStream inherits OutputStream {
+    write(binary data) {
+    }
+
+    close() {
+    }
+}
+
 class SocketTest inherits QUnit::Test {
     private {
         auto o;
@@ -143,15 +164,27 @@ class SocketTest inherits QUnit::Test {
 
         addTestCase("Accept poll test", \acceptPollTest());
         addTestCase("HTTP response poll test", \httpResponsePollTest());
+        addTestCase("HTTP header string test", \httpHeaderStringTest());
+        addTestCase("HTTP chunked body trailer test", \httpChunkedBodyTrailerTest());
+        addTestCase("SSE read test", \serverSentEventReadTest());
+        addTestCase("concurrent sync send/recv test", \concurrentSyncSendRecvTest());
         addTestCase("send binary test", \sendBinaryTest());
         addTestCase("send close test", \sendCloseTest());
+        addTestCase("isDataAvailable close test", \isDataAvailableCloseTest());
         addTestCase("poll test", \pollTest());
+        addTestCase("poll extra fd test", \pollExtraFdTest());
+        addTestCase("poll timeout hint test", \pollTimeoutHintTest());
         addTestCase("tls13 test", \tls13Test());
         addTestCase("connection ID", \connectionIdTest());
         addTestCase("Client/Server Socket tests", \clientServerSocketTest());
         addTestCase("Unconnected Socket tests", \unconnectedSocketTest());
         addTestCase("Random Port tests", \randomPortSocketTest());
+        addTestCase("UNIX socket connect", \unixSocketConnectTest());
+        addTestCase("Stream socket transfer", \streamSocketTransferTest());
+        addTestCase("Unsafe stream socket transfer rejection", \unsafeStreamSocketTransferRejectionTest());
         addTestCase("SSL read test", \sslReadTest());
+        addTestCase("SSL upgrade test", \sslUpgradeTest());
+        addTestCase("SSL upgrade poll output test", \sslUpgradePollOutputTest());
         addTestCase("SSL poll send partial test", \sslPollSendPartialTest());
         addTestCase("SSL write disconnect test", \sslWriteDisconnectTest());
         addTestCase("ALPN test", \alpnTest());
@@ -399,6 +432,439 @@ class SocketTest inherits QUnit::Test {
         }
     }
 
+    httpHeaderStringTest() {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Counter cnt(1);
+        Queue release_client();
+        background sub () {
+            Socket client();
+            client.connect("localhost:" + port);
+            client.send("HTTP/1.1 204 No Content\r\nX-Test: value\r\nContent-Length: 5\r\n\r\nhello");
+            release_client.get(5s);
+            cnt.dec();
+        }();
+
+        Socket conn = server.accept(5s);
+        string header = conn.readHTTPHeaderString(5s);
+        assertTrue(conn.isDataAvailable(5s));
+        assertEq("hello", conn.recv(5, 5s));
+        release_client.push(True);
+        cnt.waitForZero(5s);
+        assertEq("HTTP/1.1 204 No Content\r\nX-Test: value\r\nContent-Length: 5\n", header);
+    }
+
+    httpChunkedBodyTrailerTest() {
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Counter cnt(1);
+        string received;
+        background sub () {
+            Socket client();
+            client.connect("localhost:" + port);
+            received = client.recv(22, 5s);
+            cnt.dec();
+        }();
+
+        Socket conn = server.accept(5s);
+        conn.sendHTTPChunkedBodyTrailer({"X-Trailer": "done"}, 5s);
+        cnt.waitForZero(5s);
+        assertEq("0\r\nX-Trailer: done\r\n\r\n", received);
+
+        Socket server2();
+        server2.bind("localhost:0");
+        server2.listen();
+        port = server2.getSocketInfo().port;
+
+        string expected = "2\r\nhe\r\n2\r\nll\r\n1\r\no\r\n0\r\nX-Trailer: done\r\n\r\n";
+        cnt.inc();
+        background sub () {
+            Socket client();
+            client.connect("localhost:" + port);
+            received = client.recv(expected.size(), 5s);
+            cnt.dec();
+        }();
+
+        conn = server2.accept(5s);
+        StringInputStream input_stream("hello");
+        conn.sendHTTPChunkedBodyFromInputStream(input_stream, 2, 5s, hash<auto> sub () {
+            return {"X-Trailer": "done"};
+        });
+        cnt.waitForZero(5s);
+        assertEq(expected, received);
+
+        Socket server3();
+        server3.bind("localhost:0");
+        server3.listen();
+        port = server3.getSocketInfo().port;
+
+        hash<auto> response_headers;
+        hash<auto> response_body;
+        cnt.inc();
+        background sub () {
+            Socket client();
+            client.connect("localhost:" + port);
+            response_headers = client.readHTTPHeader(5s);
+            response_body = client.readHTTPChunkedBody(5s);
+            cnt.dec();
+        }();
+
+        conn = server3.accept(5s);
+        int callback_pos = 0;
+        hash<auto> info;
+        conn.sendHTTPResponseWithCallback(auto sub () {
+            ++callback_pos;
+            if (callback_pos == 1) {
+                return "he";
+            }
+            if (callback_pos == 2) {
+                return "llo";
+            }
+            return {"X-Trailer": "done"};
+        }, 200, "OK", "1.1", http_headers, \info, 5s);
+        cnt.waitForZero(5s);
+        assertEq("HTTP/1.1 200 OK", info."response-uri");
+        assertEq("chunked", response_headers."transfer-encoding");
+        assertEq("hello", response_body.body);
+        assertEq("done", response_body."x-trailer");
+
+        Socket guard_server();
+        guard_server.bind("localhost:0");
+        guard_server.listen();
+        int guard_port = guard_server.getSocketInfo().port;
+        Queue guard_entered();
+        Queue guard_release();
+        Queue guard_sender_result();
+        Queue guard_client_result();
+        background sub () {
+            try {
+                Socket client();
+                client.connect("localhost:" + guard_port);
+                client.send("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+                client.readHTTPHeader(5s);
+                client.readHTTPChunkedBody(5s);
+                guard_client_result.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                guard_client_result.push(ex);
+            }
+        }();
+
+        Socket guard_conn = guard_server.accept(5s);
+        guard_conn.readHTTPHeader(5s);
+        background sub () {
+            try {
+                guard_conn.sendHTTPResponseWithCallback(auto sub () {
+                    guard_entered.push(True);
+                    guard_release.get(5s);
+                    return NOTHING;
+                }, 200, "OK", "1.1", http_headers, 5s);
+                guard_sender_result.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                guard_sender_result.push(ex);
+            }
+        }();
+        assertTrue(guard_entered.get(5s));
+        assertThrows("SOCKET-ASYNC-MODE-ERROR", sub () { guard_conn.startPollSend("x"); });
+        guard_release.push(True);
+        auto guard_result = guard_sender_result.get(5s);
+        if (guard_result.typeCode() == NT_HASH) {
+            fail(sprintf("Guard sender exception: %s: %s", guard_result.err, guard_result.desc));
+        }
+        assertTrue(guard_result);
+        guard_result = guard_client_result.get(5s);
+        if (guard_result.typeCode() == NT_HASH) {
+            fail(sprintf("Guard client exception: %s: %s", guard_result.err, guard_result.desc));
+        }
+        assertTrue(guard_result);
+
+        Queue q();
+        background sub () {
+            try {
+                Socket server4();
+                server4.bind("localhost:0");
+                server4.listen();
+                q.push(server4.getSocketInfo().port);
+
+                Socket peer = server4.accept(5s);
+                peer.send("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+                    "2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client4();
+        client4.connect("localhost:" + q.get(5s));
+        response_headers = client4.readHTTPHeader(5s);
+        response_body = client4.readHTTPChunkedBodyBinary(5s);
+        assertEq("chunked", response_headers."transfer-encoding");
+        assertEq(<68656c6c6f>, response_body.body);
+        assertEq("done", response_body."x-trailer");
+        auto server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+
+        background sub () {
+            try {
+                Socket server5();
+                server5.bind("localhost:0");
+                server5.listen();
+                q.push(server5.getSocketInfo().port);
+
+                Socket peer = server5.accept(5s);
+                peer.send("2\r\nhe\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client5();
+        client5.connect("localhost:" + q.get(5s));
+        response_body = client5.readHTTPChunk(5s);
+        assertEq(<6865>, response_body.body);
+        response_body = client5.readHTTPChunk(5s);
+        assertEq(0, response_body.body.size());
+        assertEq("done", response_body."x-trailer");
+        server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+
+        background sub () {
+            try {
+                Socket server6();
+                server6.bind("localhost:0");
+                server6.listen();
+                q.push(server6.getSocketInfo().port);
+
+                Socket peer = server6.accept(5s);
+                peer.send("2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client6();
+        client6.connect("localhost:" + q.get(5s));
+        BinaryOutputStream output_stream();
+        response_body = client6.readHTTPChunkedBodyToOutputStream(output_stream, 5s);
+        assertEq(<68656c6c6f>, output_stream.getData());
+        assertEq("done", response_body."x-trailer");
+        server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+
+        background sub () {
+            try {
+                Socket server7();
+                server7.bind("localhost:0");
+                server7.listen();
+                q.push(server7.getSocketInfo().port);
+
+                Socket peer = server7.accept(5s);
+                peer.send("2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client7();
+        client7.connect("localhost:" + q.get(5s));
+        list<hash<auto>> callback_events = ();
+        client7.readHTTPChunkedBodyWithCallback(sub (hash<auto> h) {
+            callback_events += h;
+        }, 5s);
+        assertEq(3, callback_events.size());
+        assertEq("he", callback_events[0].data);
+        assertEq("llo", callback_events[1].data);
+        assertEq("done", callback_events[2].hdr."x-trailer");
+        server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+
+        background sub () {
+            try {
+                Socket server8();
+                server8.bind("localhost:0");
+                server8.listen();
+                q.push(server8.getSocketInfo().port);
+
+                Socket peer = server8.accept(5s);
+                peer.send("2\r\nhe\r\n3\r\nllo\r\n0\r\nX-Trailer: done\r\n\r\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client8();
+        client8.connect("localhost:" + q.get(5s));
+        callback_events = ();
+        client8.readHTTPChunkedBodyBinaryWithCallback(sub (hash<auto> h) {
+            callback_events += h;
+        }, 5s);
+        assertEq(3, callback_events.size());
+        assertEq(<6865>, callback_events[0].data);
+        assertEq(<6c6c6f>, callback_events[1].data);
+        assertEq("done", callback_events[2].hdr."x-trailer");
+        server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+    }
+
+    private binary gzipSseMessage(string msg) {
+        BinaryOutputStream bos();
+        TransformOutputStream tos(bos, get_compressor(COMPRESSION_ALG_GZIP));
+        tos.write(binary(msg));
+        tos.close();
+        return bos.getData();
+    }
+
+    serverSentEventReadTest() {
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind("localhost:0");
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(5s);
+                peer.send("event: alpha\r\ndata: one\r\nid: 1\r\n\r\ndata: two\n\n", 5s);
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client();
+        client.connect("localhost:" + q.get(5s));
+
+        hash<SseMessageInfo> event1 = client.readServerSentEvent(5s);
+        assertEq("alpha", event1.event);
+        assertEq("one", event1.data);
+        assertEq("1", event1.id);
+
+        hash<SseMessageInfo> event2 = client.readServerSentEvent("identity", 5s);
+        assertEq("two", event2.data);
+
+        auto server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+
+        binary payload = gzipSseMessage("event: beta\r\ndata: zipped\r\nid: 2\r\n\r\n");
+
+        Queue q2();
+        background sub () {
+            try {
+                Socket server();
+                server.bind("localhost:0");
+                server.listen();
+                q2.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(5s);
+                peer.send(payload, 5s);
+                q2.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q2.push(ex);
+            }
+        }();
+
+        Socket encoded_client();
+        encoded_client.connect("localhost:" + q2.get(5s));
+
+        hash<SseMessageInfo> encoded_event = encoded_client.readServerSentEvent(COMPRESSION_ALG_GZIP, 5s);
+        assertEq("beta", encoded_event.event);
+        assertEq("zipped", encoded_event.data);
+        assertEq("2", encoded_event.id);
+
+        auto encoded_server_result = q2.get(5s);
+        if (encoded_server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Encoded SSE server exception: %s: %s", encoded_server_result.err,
+                encoded_server_result.desc));
+        }
+        assertTrue(encoded_server_result);
+    }
+
+    concurrentSyncSendRecvTest() {
+        binary client_payload = get_random_bytes(128 * 1024);
+        binary server_payload = get_random_bytes(128 * 1024);
+
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                if (server.bind("127.0.0.1:0", True)) {
+                    throw "SOCKET-BIND-ERROR", strerror();
+                }
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(5s);
+                binary received;
+                while (received.size() < client_payload.size()) {
+                    received += peer.recvBinary(client_payload.size() - received.size(), 5s);
+                }
+                peer.send(server_payload, 5s);
+                q.push(received);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client();
+        client.connect("127.0.0.1:" + q.get(5s));
+
+        Queue recv_result();
+        background sub () {
+            try {
+                binary received;
+                while (received.size() < server_payload.size()) {
+                    received += client.recvBinary(server_payload.size() - received.size(), 5s);
+                }
+                recv_result.push(received);
+            } catch (hash<ExceptionInfo> ex) {
+                recv_result.push(ex);
+            }
+        }();
+
+        usleep(100ms);
+        client.send(client_payload, 5s);
+
+        auto client_received = recv_result.get(5s);
+        if (client_received.typeCode() == NT_HASH) {
+            fail(sprintf("Client recv exception: %s: %s", client_received.err, client_received.desc));
+        }
+        assertEq(server_payload, client_received);
+
+        auto server_received = q.get(5s);
+        if (server_received.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_received.err, server_received.desc));
+        }
+        assertEq(client_payload, server_received);
+    }
+
     sendBinaryTest() {
         {
             Socket s0();
@@ -507,6 +973,30 @@ class SocketTest inherits QUnit::Test {
         assertEq(str, str0);
     }
 
+    isDataAvailableCloseTest() {
+        Socket server();
+
+        if (server.bind("127.0.0.1:0", True)) {
+            throw "SOCKET-BIND-ERROR", strerror();
+        }
+        server.listen();
+        int port = server.getSocketInfo().port;
+        Counter cnt(1);
+
+        background sub () {
+            on_exit cnt.dec();
+            Socket client();
+            client.connect("127.0.0.1:" + port, 10s);
+            client.close();
+        }();
+
+        Socket peer = server.accept(10s);
+        assertThrows("SOCKET-CLOSED", sub () {
+            peer.isDataAvailable(5s);
+        });
+        cnt.waitForZero(5s);
+    }
+
     pollTest() {
         Socket s0();
         Socket s1();
@@ -579,6 +1069,8 @@ class SocketTest inherits QUnit::Test {
             assertTrue(s2.isOpen());
             assertTrue(s0.isOpen());
             assertTrue(s0.isDataAvailable());
+            assertTrue(s2.isWriteFinished(5s));
+            assertFalse(s2.isDataAvailable());
 
             Socket s3 = s0.accept(1ms);
             string test_msg = get_random_string();
@@ -1108,6 +1600,107 @@ class SocketTest inherits QUnit::Test {
         s.acceptSSL(15s);
     }
 
+    sslUpgradeTest() {
+        Queue q();
+
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                server.setCertificate(TestCert);
+                server.setPrivateKey(TestCert);
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                peer.upgradeServerToSSL(15s);
+                assertTrue(peer.isSecure());
+                peer.upgradeServerToSSL(15s);
+                peer.send("ok");
+                peer.shutdownSSL();
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        Socket client();
+        client.connect("127.0.0.1:" + q.get());
+        client.upgradeClientToSSL(15s);
+        assertTrue(client.isSecure());
+        client.upgradeClientToSSL(15s);
+        assertEq("ok", client.recv(2));
+        client.shutdownSSL();
+
+        auto server_result = q.get();
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
+    }
+
+    sslUpgradePollOutputTest() {
+        Socket server();
+        server.bind(0);
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.setAlpnProtocols(("h2", "http/1.1"));
+        client.connect("127.0.0.1:" + port);
+
+        Socket peer = server.accept(15s);
+        peer.setCertificate(TestCert);
+        peer.setPrivateKey(TestCert);
+        peer.setAlpnProtocols(("h2", "http/1.1"));
+
+        SocketPollOperation server_op = peer.startPollUpgradeServerToSSL();
+        SocketPollOperation client_op = client.startPollUpgradeClientToSSL();
+
+        date deadline = now_us() + 15s;
+        while ((!server_op.goalReached() || !client_op.goalReached()) && now_us() < deadline) {
+            list<hash<SocketPollInfo>> poll_list = ();
+
+            if (!server_op.goalReached()) {
+                *hash<SocketPollInfo> server_info = server_op.continuePoll();
+                if (server_info) {
+                    poll_list += server_info;
+                }
+            }
+
+            if (!client_op.goalReached()) {
+                *hash<SocketPollInfo> client_info = client_op.continuePoll();
+                if (client_info) {
+                    poll_list += client_info;
+                }
+            }
+
+            if (poll_list) {
+                Socket::poll(poll_list, 1s);
+            } else {
+                usleep(1ms);
+            }
+        }
+
+        assertTrue(server_op.goalReached(), "server SSL poll upgrade should complete");
+        assertTrue(client_op.goalReached(), "client SSL poll upgrade should complete");
+
+        hash<auto> server_out = server_op.getOutput();
+        hash<auto> client_out = client_op.getOutput();
+
+        assertTrue(server_out.secure);
+        assertTrue(client_out.secure);
+        assertEq(server_out.negotiated_protocol, client_out.negotiated_protocol);
+        assertEq(server_out.negotiated_protocol == "h2", server_out.is_http2);
+        assertEq(client_out.negotiated_protocol == "h2", client_out.is_http2);
+
+        client.shutdownSSL();
+        peer.shutdownSSL();
+        client.close();
+        peer.close();
+        server.close();
+    }
+
     # Reproduces an SSL async send edge case: partial writes that require polling.
     sslPollSendPartialTest() {
         binary bigmsg = get_random_bytes(32 * 1024 * 1024);
@@ -1267,6 +1860,208 @@ class SocketTest inherits QUnit::Test {
         c.waitForZero();
     }
 
+    unixSocketConnectTest() {
+%ifdef Windows
+        testSkip("skipping because UNIX-domain sockets are not available on Windows");
+%endif
+
+        string path = tmp_location() + DirSep + "qore-socket-" + get_random_string(12);
+        on_exit unlink(path);
+
+        Socket server();
+        server.bindUNIX(path);
+        server.listen();
+
+        string msg = "hello over unix";
+        background sub () {
+            Socket client();
+            client.connectUNIX(path);
+            client.send(msg);
+        }();
+
+        Socket peer = server.accept(10s);
+        assertEq(msg, peer.recv(msg.size()));
+    }
+
+    pollExtraFdTest() {
+%ifdef Windows
+        testSkip("skipping because File::getPipe() is not available on Windows");
+%endif
+
+        Socket s();
+        s.bindINET("127.0.0.1", 0);
+        s.listen();
+
+        hash<PipeInfo> pipe = File::getPipe();
+        ReadOnlyFile read = pipe.read;
+        File write = pipe.write;
+        write.write("x");
+
+        list<hash<SocketPollInfo>> ready = Socket::poll((
+            <SocketPollInfo>{
+                "events": 0,
+                "socket": s,
+                "extra_fds": (
+                    <ExtraPollFdInfo>{
+                        "fd": read.getPollableDescriptor(),
+                        "events": 0,
+                    },
+                ),
+            },
+        ), 5s);
+        assertEq(1, ready.size());
+        assertEq(SOCK_POLLIN, ready[0].events);
+        assertEq(s, ready[0].socket);
+        assertEq(binary("x"), read.readShortBinary(1, 1000));
+    }
+
+    pollTimeoutHintTest() {
+        Socket s();
+        s.bindINET("127.0.0.1", 0);
+        s.listen();
+
+        date start = now_us();
+        list<hash<SocketPollInfo>> ready = Socket::poll((
+            <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": s,
+                "poll_timeout_ms": 25,
+            },
+        ), 5s);
+        date elapsed = now_us() - start;
+
+        assertEq(0, ready.size());
+        assertTrue(elapsed < 1s, "poll_timeout_ms should wake before caller timeout");
+    }
+
+    streamSocketTransferTest() {
+        Socket server();
+        server.bindINET("127.0.0.1", 0);
+        server.listen();
+
+        int port = server.getSocketInfo().port;
+        string payload = strmul("stream-data-", 10000);
+        Counter c(1);
+
+        background sub () {
+            on_exit c.dec();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 10s);
+            StringInputStream input_stream(payload);
+            client.sendFromInputStream(input_stream, payload.size(), 10s);
+            assertEq("OK", client.recv(2, 10s));
+        }();
+
+        Socket peer = server.accept(10s);
+        StringOutputStream output_stream();
+        peer.recvToOutputStream(output_stream, payload.size(), 10s);
+        assertEq(payload, output_stream.getData());
+        peer.send("OK");
+        c.waitForZero();
+
+        string file_path = tmp_location() + DirSep + "qore-socket-stream-" + get_random_string(12);
+        on_exit unlink(file_path);
+        FileOutputStream fos(file_path);
+        fos.write(binary(payload));
+        fos.close();
+
+        c.inc();
+        background sub () {
+            on_exit c.dec();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 10s);
+            FileInputStream input_stream(file_path);
+            client.sendFromInputStream(input_stream, payload.size(), 10s);
+            assertEq("OK", client.recv(2, 10s));
+        }();
+
+        peer = server.accept(10s);
+        StringOutputStream file_output_stream();
+        peer.recvToOutputStream(file_output_stream, payload.size(), 10s);
+        assertEq(payload, file_output_stream.getData());
+        peer.send("OK");
+        c.waitForZero();
+
+        string recv_file_path = tmp_location() + DirSep + "qore-socket-recv-stream-" + get_random_string(12);
+        on_exit unlink(recv_file_path);
+
+        c.inc();
+        background sub () {
+            on_exit c.dec();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 10s);
+            client.send(payload);
+            assertEq("OK", client.recv(2, 10s));
+        }();
+
+        peer = server.accept(10s);
+        FileOutputStream recv_file_output_stream(recv_file_path);
+        peer.recvToOutputStream(recv_file_output_stream, payload.size(), 10s);
+        recv_file_output_stream.close();
+        assertEq(payload, ReadOnlyFile::readTextFile(recv_file_path));
+        peer.send("OK");
+        c.waitForZero();
+
+        c.inc();
+        background sub () {
+            on_exit c.dec();
+            Socket client();
+            client.connectINET("127.0.0.1", port, 10s);
+            StringInputStream input_stream(payload);
+            client.sendFromInputStream(input_stream, -1, 10s);
+            client.close();
+        }();
+
+        peer = server.accept(10s);
+        StringOutputStream output_stream2();
+        peer.recvToOutputStream(output_stream2, -1, 10s);
+        assertEq(payload, output_stream2.getData());
+        c.waitForZero();
+    }
+
+    unsafeStreamSocketTransferRejectionTest() {
+        Socket server();
+        server.bindINET("127.0.0.1", 0);
+        server.listen();
+
+        Socket client();
+        client.connectINET("127.0.0.1", server.getSocketInfo().port, 10s);
+        Socket peer = server.accept(10s);
+        on_exit client.close();
+        on_exit peer.close();
+
+        UnsafeSocketInputStream is();
+        UnsafeSocketOutputStream os();
+
+        assertThrows("SOCKET-SEND-ERROR", sub() {
+            client.sendFromInputStream(is, 1, 10s);
+        });
+        assertThrows("SOCKET-RECV-ERROR", sub() {
+            peer.recvToOutputStream(os, 1, 10s);
+        });
+        assertThrows("SOCKET-SEND-ERROR", sub() {
+            client.sendHTTPChunkedBodyFromInputStream(is, 1, 10s);
+        });
+        assertThrows("SOCKET-SEND-ERROR", sub() {
+            client.sendHTTPResponse(200, "OK", "1.1", {"Transfer-Encoding": "chunked"}, is, 1);
+        });
+
+        string closed_output_path = tmp_location() + DirSep + "qore-socket-closed-output-" + get_random_string(12);
+        on_exit unlink(closed_output_path);
+        FileOutputStream closed_os(closed_output_path);
+        closed_os.close();
+        assertThrows("SOCKET-RECV-ERROR", sub() {
+            peer.recvToOutputStream(closed_os, 1, 10s);
+        });
+
+        assertFalse(peer.isDataAvailable(100ms));
+
+        client.send("1\r\nx\r\n0\r\n\r\n", 10s);
+        assertThrows("SOCKET-WRITE-ERROR", sub() {
+            peer.readHTTPChunkedBodyToOutputStream(os, 10s);
+        });
+    }
+
     unconnectedSocketTest() {
         Socket s();
         assertThrows("SOCKET-NOT-OPEN", \s.upgradeClientToSSL());
@@ -1278,6 +2073,7 @@ class SocketTest inherits QUnit::Test {
         assertThrows("SOCKET-NOT-OPEN", \s.recvBinary(), 1);
         assertThrows("SOCKET-NOT-OPEN", \s.send(), "1");
         assertThrows("SOCKET-NOT-OPEN", \s.sendi1(), 1);
+        s.shutdownSSL();
 
         assertEq(NOTHING, s.verifyPeerCertificate());
         assertEq(NOTHING, s.getSSLCipherName());
@@ -1449,6 +2245,26 @@ class SocketTest inherits QUnit::Test {
         assertEq(i8, m, who + " sendi8LSB");
         s.send("OK");
 
+        m = s.recvu1();
+        assertEq(u1, m, who + " recvu1");
+        s.send("OK");
+
+        m = s.recvu2();
+        assertEq(u2, m, who + " recvu2");
+        s.send("OK");
+
+        m = s.recvu4();
+        assertEq(u4, m, who + " recvu4");
+        s.send("OK");
+
+        m = s.recvu2LSB();
+        assertEq(u2, m, who + " recvu2LSB");
+        s.send("OK");
+
+        m = s.recvu4LSB();
+        assertEq(u4, m, who + " recvu4LSB");
+        s.send("OK");
+
         hash<auto> info;
         m = s.readHTTPHeader(-1, \info);
         assertEq(Type::Hash, info."headers-raw".type());
@@ -1492,6 +2308,18 @@ class SocketTest inherits QUnit::Test {
         get_response(s);
         SocketTest::check_send(s.sendi8LSB(i8), "i8LSB");
         get_response(s);
+
+        SocketTest::check_send(s.send(binary("\xfa")), "u1");
+        get_response(s);
+        SocketTest::check_send(s.send(binary("\xea\x60")), "u2");
+        get_response(s);
+        SocketTest::check_send(s.send(binary("\xee\x6b\x28\x00")), "u4");
+        get_response(s);
+        SocketTest::check_send(s.send(binary("\x60\xea")), "u2LSB");
+        get_response(s);
+        SocketTest::check_send(s.send(binary("\x00\x28\x6b\xee")), "u4LSB");
+        get_response(s);
+
         s.sendHTTPMessage("POST", "none", "1.1", http_headers, XString);
         get_http_response(s);
         s.sendHTTPMessage("GET", "none", "1.1", http_headers);
@@ -1792,13 +2620,12 @@ class SocketTest inherits QUnit::Test {
         server.close();
     }
 
-    #! Verifies fd_generation re-verification in SocketSyncPoll::waitReleasingLock().
+    #! Verifies fd_generation re-verification in controller-backed sync waits.
     /** This test uses the debug-only @c dbg_force_fd_swap_next_wait() builtin
         to arm a one-shot flag that simulates an fd swap during a sync Socket
-        recv()'s lock-yielding wait phase.  When the helper re-acquires the
-        outer mutex and sees the bumped generation counter, it must abort
-        with a @c SOCKET-CLOSED exception rather than retrying on a
-        potentially stale fd.
+        recv()'s controller wait phase.  When the controller sees the bumped
+        generation counter, it must abort with a @c SOCKET-CLOSED exception
+        rather than retrying on a potentially stale fd.
 
         Without the fd_generation re-verification, a racing close() during
         the wait window would leave the sync helper operating on a
@@ -1825,11 +2652,10 @@ class SocketTest inherits QUnit::Test {
         assertTrue(accepted.isOpen());
 
         # Arm the one-shot hook.  The hook bumps fd_generation inside
-        # the wait window; because no real close() fires, asyncIoWait()
-        # still runs until its natural timeout — so we use a short
-        # (500ms) budget.  When the wait returns and waitReleasingLock
-        # re-acquires the mutex, the generation mismatch is detected
-        # and recv() must throw SOCKET-CLOSED (not SOCKET-TIMEOUT).
+        # the wait window; because no real close() fires, the controller
+        # wait still runs until its natural timeout — so we use a short
+        # (500ms) budget.  When the wait returns, the generation mismatch
+        # is detected and recv() must throw SOCKET-CLOSED (not SOCKET-TIMEOUT).
         try {
             call_function("dbg_force_fd_swap_next_wait", accepted);
         } catch (hash<ExceptionInfo> ex) {

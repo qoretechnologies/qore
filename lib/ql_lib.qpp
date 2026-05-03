@@ -37,6 +37,8 @@
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/ModuleInfo.h"
+#include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QC_FutureImpl.h"
 
 #include <cerrno>
 #include <csignal>
@@ -47,6 +49,9 @@
 #include <sys/param.h>
 #include <sys/types.h>
 #include <unistd.h>
+#ifdef HAVE_ARPA_INET_H
+#include <arpa/inet.h>
+#endif
 #ifdef __linux__
 #include <poll.h>
 #include <spawn.h>
@@ -101,6 +106,216 @@ AbstractQoreNode* missing_function_error(const char* func, ExceptionSink* xsink)
 
 AbstractQoreNode* missing_function_error(const char* func, const char* opt, ExceptionSink* xsink) {
    return xsink->raiseException("MISSING-FEATURE-ERROR", "this system does not implement %s(); for maximum portability use the constant Option::HAVE_%s to check if this function is implemented before calling", func, opt);
+}
+
+static const QoreHashNode* q_get_addrinfo_hash(const QoreValue& v) {
+    return v.getType() == NT_HASH ? v.get<const QoreHashNode>() : nullptr;
+}
+
+static const QoreStringNode* q_get_hash_string_value(const QoreHashNode& h, const char* key) {
+    QoreValue v = h.getKeyValue(key);
+    return v.getType() == NT_STRING ? v.get<const QoreStringNode>() : nullptr;
+}
+
+static int q_get_hash_int_value(const QoreHashNode& h, const char* key, int def = 0) {
+    QoreValue v = h.getKeyValue(key);
+    return v.isNullOrNothing() ? def : static_cast<int>(v.getAsBigInt());
+}
+
+static QoreStringNode* q_gethostbyname_to_string_asyncio(const char* host) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreListNode> addrs(qore_socket_resolve_addrinfo_asyncio(&xsink, host, nullptr, Q_AF_UNSPEC, 0),
+        &xsink);
+    if (xsink || !addrs || addrs->empty()) {
+        xsink.clear();
+        return nullptr;
+    }
+
+    ConstListIterator li(*addrs);
+    while (li.next()) {
+        const QoreHashNode* h = q_get_addrinfo_hash(li.getValue());
+        if (!h) {
+            continue;
+        }
+        const QoreStringNode* address = q_get_hash_string_value(*h, "address");
+        if (address) {
+            return address->stringRefSelf();
+        }
+    }
+
+    return nullptr;
+}
+
+static QoreHashNode* q_gethostbyname_to_hash_asyncio(const char* host) {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreListNode> addrs(
+        qore_socket_resolve_addrinfo_asyncio(&xsink, host, nullptr, Q_AF_UNSPEC, AI_CANONNAME), &xsink);
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), &xsink);
+    ReferenceHolder<QoreListNode> addresses(new QoreListNode(stringTypeInfo), &xsink);
+    if (xsink || !addrs || addrs->empty() || !result || !addresses) {
+        xsink.clear();
+        return nullptr;
+    }
+
+    const QoreHashNode* first = nullptr;
+    int first_family = AF_UNSPEC;
+    ConstListIterator li(*addrs);
+    while (li.next()) {
+        const QoreHashNode* h = q_get_addrinfo_hash(li.getValue());
+        if (!h) {
+            continue;
+        }
+        if (!first) {
+            first = h;
+            first_family = q_get_hash_int_value(*h, "family", AF_UNSPEC);
+        }
+        if (q_get_hash_int_value(*h, "family", AF_UNSPEC) == first_family) {
+            const QoreStringNode* address = q_get_hash_string_value(*h, "address");
+            if (address) {
+                addresses->push(address->stringRefSelf(), &xsink);
+                if (xsink) {
+                    xsink.clear();
+                    return nullptr;
+                }
+            }
+        }
+    }
+
+    if (!first || addresses->empty()) {
+        return nullptr;
+    }
+
+    qore_hash_private* rh = qore_hash_private::get(**result);
+    const QoreStringNode* canonname = q_get_hash_string_value(*first, "canonname");
+    rh->setKeyValueIntern("name", canonname ? canonname->stringRefSelf() : new QoreStringNode(host));
+    rh->setKeyValueIntern("aliases", new QoreListNode(stringTypeInfo));
+    switch (first_family) {
+        case AF_INET:
+            rh->setKeyValueIntern("typename", new QoreStringNode("ipv4"));
+            rh->setKeyValueIntern("type", AF_INET);
+            rh->setKeyValueIntern("len", 4);
+            break;
+        case AF_INET6:
+            rh->setKeyValueIntern("typename", new QoreStringNode("ipv6"));
+            rh->setKeyValueIntern("type", AF_INET6);
+            rh->setKeyValueIntern("len", 16);
+            break;
+        default:
+            rh->setKeyValueIntern("typename", new QoreStringNode("unknown"));
+            break;
+    }
+    rh->setKeyValueIntern("addresses", addresses.release());
+
+    return result.release();
+}
+
+static int q_gethost_lookup_family(int type) {
+    if (type >= 0) {
+        return type;
+    }
+
+    switch (type) {
+        case Q_AF_UNSPEC:
+            return AF_UNSPEC;
+        case Q_AF_INET6:
+            return AF_INET6;
+    }
+
+    return AF_INET;
+}
+
+static int q_gethostbyaddr_sockaddr(ExceptionSink* xsink, const char* addr, int type,
+        struct sockaddr_storage& sa, socklen_t& len, const char* err);
+
+static int q_gethostbyaddr_sockaddr(ExceptionSink* xsink, const char* addr, int type,
+        struct sockaddr_storage& sa, socklen_t& len) {
+    return q_gethostbyaddr_sockaddr(xsink, addr, type, sa, len, "GETHOSTBYADDR-ERROR");
+}
+
+static int q_gethostbyaddr_sockaddr(ExceptionSink* xsink, const char* addr, int type,
+        struct sockaddr_storage& sa, socklen_t& len, const char* err) {
+    type = q_gethost_lookup_family(type);
+    memset(&sa, 0, sizeof(sa));
+
+    void* dst = nullptr;
+    if (type == AF_INET) {
+        struct sockaddr_in* in = reinterpret_cast<struct sockaddr_in*>(&sa);
+        in->sin_family = AF_INET;
+        dst = &in->sin_addr;
+        len = sizeof(struct sockaddr_in);
+    } else if (type == AF_INET6) {
+        struct sockaddr_in6* in6 = reinterpret_cast<struct sockaddr_in6*>(&sa);
+        in6->sin6_family = AF_INET6;
+        dst = &in6->sin6_addr;
+        len = sizeof(struct sockaddr_in6);
+    } else {
+        xsink->raiseException(err,
+            "%d is an invalid address type (valid types are AF_INET=%d, AF_INET6=%d)", type, AF_INET, AF_INET6);
+        return -1;
+    }
+
+    int rc = inet_pton(type, addr, dst);
+    if (rc == 0) {
+        xsink->raiseException(err, "'%s' is not a valid address for %s addresses", addr,
+            type == AF_INET ? "AF_INET (IPv4)" : "AF_INET6 (IPv6)");
+        return -1;
+    }
+    if (rc < 0) {
+        return -1;
+    }
+
+    return type;
+}
+
+static int q_getnameinfo_sockaddr(ExceptionSink* xsink, const char* addr, int type, int port,
+        struct sockaddr_storage& sa, socklen_t& len) {
+    type = q_gethostbyaddr_sockaddr(xsink, addr, type, sa, len, "QOREADDRINFO-GETNAMEINFO-ERROR");
+    if (type < 0) {
+        return -1;
+    }
+
+    if (port < 0 || port > 65535) {
+        xsink->raiseException("QOREADDRINFO-GETNAMEINFO-ERROR",
+            "%d is an invalid port number for reverse address resolution", port);
+        return -1;
+    }
+
+    if (type == AF_INET) {
+        reinterpret_cast<struct sockaddr_in*>(&sa)->sin_port = htons(static_cast<uint16_t>(port));
+    } else if (type == AF_INET6) {
+        reinterpret_cast<struct sockaddr_in6*>(&sa)->sin6_port = htons(static_cast<uint16_t>(port));
+    }
+
+    return type;
+}
+
+static QoreStringNode* q_gethostbyaddr_to_string_asyncio(ExceptionSink* xsink, const char* addr, int type) {
+    struct sockaddr_storage sa;
+    socklen_t len = 0;
+    if (q_gethostbyaddr_sockaddr(xsink, addr, type, sa, len) < 0) {
+        return nullptr;
+    }
+
+    ExceptionSink lookup_xsink;
+    ReferenceHolder<QoreHashNode> result(qore_socket_resolve_hostbyaddr_asyncio(&lookup_xsink, sa, len),
+        &lookup_xsink);
+    if (lookup_xsink || !result) {
+        lookup_xsink.clear();
+        return nullptr;
+    }
+
+    const QoreStringNode* name = q_get_hash_string_value(**result, "name");
+    return name ? name->stringRefSelf() : nullptr;
+}
+
+static QoreHashNode* q_gethostbyaddr_to_hash_asyncio(ExceptionSink* xsink, const char* addr, int type) {
+    struct sockaddr_storage sa;
+    socklen_t len = 0;
+    if (q_gethostbyaddr_sockaddr(xsink, addr, type, sa, len) < 0) {
+        return nullptr;
+    }
+
+    return qore_socket_resolve_hostbyaddr_asyncio(xsink, sa, len);
 }
 
 /** @defgroup library_option_constants Qore Library Option Constants
@@ -1146,6 +1361,8 @@ int setsid() [dom=PROCESS] {
 
     @return the first address corresponding to the hostname passed as an argument or @ref nothing if the lookup fails
 
+    @note delegates to the global async I/O controller and blocks until the async DNS lookup completes
+
     @par Example:
     @code{.py}
 *string addr = gethostbyname(host);
@@ -1156,7 +1373,7 @@ if (!exists host)
     @see gethostbyname_long() for a version of this function that returns all host information, including all hostname aliases and all addresses
  */
 *string gethostbyname(string name) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyname_to_string(name->c_str());
+   return q_gethostbyname_to_string_asyncio(name->c_str());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1173,6 +1390,8 @@ nothing gethostbyname() [flags=RUNTIME_NOOP] {
 
     @return the official hostname corresponding to the network addressed passed as an argument
 
+    @note delegates to the global async I/O controller and blocks until the async reverse DNS lookup completes
+
     @par Example:
     @code{.py}
 *string hostname = gethostbyaddr("192.168.0.33");
@@ -1185,7 +1404,7 @@ if (!exists hostname)
     @see gethostbyaddr_long() for a version of this function that returns all host information, including all hostname aliases and all addresses
  */
 *string gethostbyaddr(string addr, softint type = AF_INET) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyaddr_to_string(xsink, addr->c_str(), type);
+   return q_gethostbyaddr_to_string_asyncio(xsink, addr->c_str(), type);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1200,6 +1419,8 @@ nothing gethostbyaddr() [flags=RUNTIME_NOOP] {
 
     @return @ref host_information_hash "a hash" representing all host and address information corresponding to the hostname passed as an argument
 
+    @note delegates to the global async I/O controller and blocks until the async DNS lookup completes
+
     @par Example:
     @code{.py}
 *hash<auto> ah = gethostbyname_long(host);
@@ -1210,7 +1431,7 @@ if (!ah)
     @see gethostbyname() for a version of this function that returns just the first network address corresponding to the hostname
  */
 *hash<auto> gethostbyname_long(string name) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyname_to_hash(name->c_str());
+   return q_gethostbyname_to_hash_asyncio(name->c_str());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1227,6 +1448,8 @@ nothing gethostbyname_long() [flags=RUNTIME_NOOP] {
 
     @return @ref host_information_hash "a hash" representing all host and address information corresponding to the address and address type passed as arguments
 
+    @note delegates to the global async I/O controller and blocks until the async reverse DNS lookup completes
+
     @par Example:
     @code{.py}
 *hash<auto> ah = gethostbyaddr_long("192.168.0.33");
@@ -1239,7 +1462,7 @@ if (!ah)
     @see gethostbyaddr() for a simpler version of this function that returns just a single hostname for the address
  */
 *hash<auto> gethostbyaddr_long(string addr, softint type = AF_INET) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return q_gethostbyaddr_to_hash(xsink, addr->c_str(), type);
+   return q_gethostbyaddr_to_hash_asyncio(xsink, addr->c_str(), type);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1250,6 +1473,9 @@ nothing gethostbyaddr_long() [flags=RUNTIME_NOOP] {
 
 //! Returns a list of @ref address_information_hash for the given node name or string address; if no lookup can be performed then an exception is thrown
 /** Either node or service may be @ref nothing but not both or a \c QOREADDRINFO-GETINFO-ERROR exception will be thrown
+
+    This function delegates resolution to the global async I/O controller and blocks the caller until the
+    controller-backed lookup completes.
 
     @param node The host name or node name to look up
     @param service The service name to look up to a port number
@@ -1266,7 +1492,77 @@ list<hash<auto>> l = getaddrinfo("localhost");
     @throw QOREADDRINFO-GETINFO-ERROR nodename nor servname provided, or not known
  */
 list<hash<auto>> getaddrinfo(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
-   return q_getaddrinfo_to_list(xsink, node ? node->c_str() : 0, service ? service->c_str() : 0, (int)family, (int)flags);
+   return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : 0, service ? service->c_str() : 0,
+      (int)family, (int)flags);
+}
+
+//! Starts an asynchronous address information lookup and returns a Future for the result
+/** Either node or service may be @ref nothing but not both or the returned Future will be rejected with a
+    \c QOREADDRINFO-GETINFO-ERROR exception.
+
+    This function submits the lookup to the global async I/O controller and returns immediately.  The implementation
+    creates any internal pollable object needed by the controller; callers do not need to create a Socket or
+    EventNotifier for DNS lookups.
+
+    @param node The host name or node name to look up
+    @param service The service name to look up to a port number
+    @param family The @ref network_address_family_constants "address family" for the lookup, must be one of Qore::AF_INET, Qore::AF_INET6, or Qore::AF_UNSPEC, meaning to return all possible addresses
+    @param flags see @ref network_address_information_constants for possible values to be combined with @ref bitwise_or_operator "binary or"
+    @param socktype a hint for the type of socket; 0 = any socket type
+    @param protocol a hint for the protocol number; 0 = the default protocol
+    @param timeout_ms the timeout for the controller-backed resolution operation; -1 = never timeout
+
+    @return a Future that resolves to a list of @ref address_information_hash for the given node name or string address
+
+    @par Example:
+    @code{.py}
+Future f = getaddrinfo_async("localhost");
+list<hash<auto>> l = f.get();
+    @endcode
+
+    @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
+
+    @since %Qore 2.3
+ */
+Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout_ms = -1) [dom=EXTERNAL_INFO] {
+   QoreFuture* future = qore_socket_resolve_addrinfo_asyncio_future(xsink, node ? node->c_str() : 0,
+      service ? service->c_str() : 0, (int)family, (int)flags, (int)socktype, (int)protocol, timeout_ms);
+   return future ? new QoreObject(QC_FUTUREIMPL, getProgram(), future) : nullptr;
+}
+
+//! Starts an asynchronous reverse address lookup and returns a Future for peer-style address information
+/** This function submits reverse address resolution to the global async I/O controller and returns immediately.
+    The returned Future resolves to a hash in the same address-info shape used by
+    @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()", with numeric address fields always present and
+    hostname fields present when reverse DNS succeeds.
+
+    @param addr the numeric IPv4 or IPv6 address to resolve
+    @param family the address family, must be one of Qore::AF_INET or Qore::AF_INET6
+    @param port the peer port to include in the returned hash
+    @param timeout_ms the timeout for the controller-backed reverse resolution operation; -1 = never timeout
+
+    @return a Future that resolves to a hash with peer-style address information
+
+    @par Example:
+    @code{.py}
+Future f = getnameinfo_async("127.0.0.1", AF_INET, 12345);
+hash<auto> peer_info = f.get(100ms);
+    @endcode
+
+    @throw QOREADDRINFO-GETNAMEINFO-ERROR invalid address information
+    @throw ASYNC-IO-ERROR the lookup could not be submitted to the global async I/O controller
+
+    @since %Qore 2.3
+ */
+Future getnameinfo_async(string addr, softint family = AF_INET, softint port = 0, timeout timeout_ms = -1) [dom=EXTERNAL_INFO] {
+   struct sockaddr_storage sa;
+   socklen_t len = 0;
+   if (q_getnameinfo_sockaddr(xsink, addr->c_str(), family, port, sa, len) < 0) {
+      return QoreValue();
+   }
+
+   QoreFuture* future = qore_socket_resolve_nameinfo_asyncio_future(xsink, sa, len, timeout_ms);
+   return future ? new QoreObject(QC_FUTUREIMPL, getProgram(), future) : nullptr;
 }
 
 //! closes all possible file descriptors; useful in "daemon" processes that may have inherited open file descriptors

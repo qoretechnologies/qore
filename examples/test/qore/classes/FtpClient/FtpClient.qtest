@@ -99,9 +99,7 @@ class FtpTest inherits QUnit::Test {
     }
 
     #! Ensures the local test file exists with test content
-    /** This is needed because FtpClient::get() can delete the file if pre_get() fails
-        (e.g., during timeout tests with very short timeouts)
-    */
+    /** Defensive restoration used if a timeout-path assertion fails before the next test reconnects. */
     ensureLocalFile() {
         if (!hstat(local_path)) {
             writeLocalFile(local_path);
@@ -260,12 +258,27 @@ class FtpTest inherits QUnit::Test {
         serv.setBroken("retr", 2s);
         fc.setTimeout(20ms);
         {
-            # FtpClient::get() can delete the file if pre_get() fails, so ensure it's restored
+            string before_get_timeout = ReadOnlyFile::readTextFile(local_path);
             on_exit ensureLocalFile();
+
+            string get_timeout_dest = local_path;
+            *string get_timeout_link;
+            on_exit {
+                if (exists get_timeout_link) {
+                    unlink(get_timeout_link);
+                }
+            }
+            if (PlatformOS != "Windows") {
+                get_timeout_link = tmp_location() + '/ftptest-link.' + get_random_string(12);
+                symlink(local_path, get_timeout_link);
+                assertTrue(is_link(get_timeout_link));
+                assertEq(local_path, readlink(get_timeout_link));
+                get_timeout_dest = get_timeout_link;
+            }
 
             *string err;
             try {
-                fc.get(local_path, local_path);
+                fc.get(local_path, get_timeout_dest);
             }
             catch (hash<ExceptionInfo> ex) {
                 err = ex.err;
@@ -274,6 +287,11 @@ class FtpTest inherits QUnit::Test {
                 assertTrue(err =~ /^(SOCKET-|FTP-)/,
                     sprintf("expected SOCKET-* or FTP-* error, got: %y", err));
             }
+            if (exists get_timeout_link) {
+                assertTrue(is_link(get_timeout_link));
+                assertEq(local_path, readlink(get_timeout_link));
+            }
+            assertEq(before_get_timeout, ReadOnlyFile::readTextFile(local_path));
         }
 
         # reconnect after timeout to ensure clean FTP protocol state
@@ -416,7 +434,7 @@ class FtpTest inherits QUnit::Test {
         serv.setBroken("retr", 2s);
         fc.setTimeout(20ms);
         {
-            # FtpClient::get() can delete the file if pre_get() fails, so ensure it's restored
+            string before_get_timeout = ReadOnlyFile::readTextFile(local_path);
             on_exit ensureLocalFile();
 
             *string err;
@@ -430,6 +448,7 @@ class FtpTest inherits QUnit::Test {
                 assertTrue(err =~ /^(SOCKET-|FTP-)/,
                     sprintf("expected SOCKET-* or FTP-* error, got: %y", err));
             }
+            assertEq(before_get_timeout, ReadOnlyFile::readTextFile(local_path));
         }
 
         # reconnect after timeout to ensure clean FTP protocol state

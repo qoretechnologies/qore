@@ -59,6 +59,14 @@ class FtpClientIoTest inherits QUnit::Test {
         assertFalse(op.isReady());
         assertFalse(op.isClosed());
         assertEq(0, op.getLastResponseCode());
+
+        # Finish the login handshake so the test observes the server response
+        # instead of dropping the operation while the fake server is replying.
+        drivePollOp(op);
+        assertTrue(op.isReady(), "operation should be in ready state after login");
+        assertTrue(op.goalReached(), "goal should be reached after login");
+        int code = op.getLastResponseCode();
+        assertTrue(code >= 200 && code < 300, sprintf("expected 2xx login code, got %d", code));
     }
 
     testControlPollOperationLogin() {
@@ -107,11 +115,42 @@ class FtpClientIoTest inherits QUnit::Test {
     }
 
     testDataPollOperationBasic() {
-        # Test basic construction
-        FtpDataPollOperation data_op("localhost", port);
+        Queue q();
+        binary payload = binary("ftp-data-payload");
+        background sub () {
+            try {
+                Socket data_server();
+                if (data_server.bind("127.0.0.1:0", True)) {
+                    throw "TEST-ERROR", "failed to bind data server";
+                }
+                data_server.listen();
+                q.push(data_server.getSocketInfo().port);
+
+                Socket peer = data_server.accept(5s);
+                peer.send(payload, 5s);
+                peer.close();
+                q.push(True);
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int data_port = q.get(5s);
+        FtpDataPollOperation data_op("127.0.0.1", data_port);
         assertEq("FtpDataPollOperation", data_op.className());
         assertEq("data-connecting", data_op.getState());
         assertEq("ftp-data-recv", data_op.getGoal());
         assertFalse(data_op.goalReached());
+
+        drivePollOp(data_op);
+        assertTrue(data_op.goalReached(), "data operation should finish after server close");
+        assertTrue(data_op.isDone(), "data operation should be done after EOF");
+        assertEq(payload, data_op.getOutput());
+
+        auto server_result = q.get(5s);
+        if (server_result.typeCode() == NT_HASH) {
+            fail(sprintf("Data server exception: %s: %s", server_result.err, server_result.desc));
+        }
+        assertTrue(server_result);
     }
 }

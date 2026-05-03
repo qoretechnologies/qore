@@ -66,6 +66,7 @@ HttpAcceptPollOperationPriv::HttpAcceptPollOperationPriv(QoreObject* self,
       accept_state(AcceptState::ACCEPTING),
       ssl(ssl),
       do_ssl_handshake(do_ssl_handshake),
+      secure(false),
       is_http2(false),
       ssl_verify_flags(ssl_verify_flags),
       ssl_accept_all_certs(ssl_accept_all_certs),
@@ -84,6 +85,34 @@ HttpAcceptPollOperationPriv::~HttpAcceptPollOperationPriv() {
 
 bool HttpAcceptPollOperationPriv::goalReached() const {
     return accept_state == AcceptState::COMPLETE;
+}
+
+static QoreHashNode* qore_http_accept_get_numeric_addr_info(QoreSocketObject* sock, bool peer) {
+    ExceptionSink xsink;
+    struct sockaddr_storage addr = {};
+    socklen_t len = 0;
+    std::string socketname;
+
+    {
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        if (priv->checkValid(&xsink)) {
+            xsink.clear();
+            return nullptr;
+        }
+
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        int rc = peer
+            ? sp->getPeerSockAddr(&xsink, addr, len)
+            : sp->getSocketSockAddr(&xsink, addr, len);
+        if (xsink || rc) {
+            xsink.clear();
+            return nullptr;
+        }
+        socketname = sp->socketname;
+    }
+
+    return qore_socket_private::makeAddrInfo(addr, len, socketname);
 }
 
 QoreHashNode* HttpAcceptPollOperationPriv::continuePoll(ExceptionSink* xsink) {
@@ -125,7 +154,7 @@ void HttpAcceptPollOperationPriv::abort(ExceptionSink* xsink) {
     }
     if (client_sock_obj) {
         // Close via the QoreSocketObject to ensure proper cleanup
-        client_sock->close();
+        client_sock->closeIo(xsink);
     }
     accept_state = AcceptState::COMPLETE;
 }
@@ -141,7 +170,18 @@ QoreValue HttpAcceptPollOperationPriv::getOutput() const {
         h->setKeyValue("sock", QoreValue(), &xsink);
     }
     h->setKeyValue("ssl", ssl, &xsink);
+    h->setKeyValue("secure", secure, &xsink);
     h->setKeyValue("is_http2", is_http2, &xsink);
+    if (peer_info) {
+        h->setKeyValue("peer_info", peer_info->hashRefSelf(), &xsink);
+    } else {
+        h->setKeyValue("peer_info", QoreValue(), &xsink);
+    }
+    if (socket_info) {
+        h->setKeyValue("socket_info", socket_info->hashRefSelf(), &xsink);
+    } else {
+        h->setKeyValue("socket_info", QoreValue(), &xsink);
+    }
     if (!negotiated_protocol.empty()) {
         h->setKeyValue("negotiated_protocol", new QoreStringNode(negotiated_protocol), &xsink);
     } else {
@@ -154,6 +194,14 @@ QoreValue HttpAcceptPollOperationPriv::getOutput() const {
 
 void HttpAcceptPollOperationPriv::cleanup(ExceptionSink* xsink) {
     releaseCurrentOp(xsink);
+    if (peer_info) {
+        peer_info->deref(xsink);
+        peer_info = nullptr;
+    }
+    if (socket_info) {
+        socket_info->deref(xsink);
+        socket_info = nullptr;
+    }
 
     if (client_sock) {
         client_sock->deref(xsink);
@@ -210,8 +258,15 @@ QoreHashNode* HttpAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* x
         return nullptr;
     }
 
+    peer_info = qore_http_accept_get_numeric_addr_info(client_sock, true);
+    socket_info = qore_http_accept_get_numeric_addr_info(client_sock, false);
+
     // Set TCP_NODELAY for immediate response sending
-    client_sock->setNoDelay(1);
+    client_sock->setNoDelayForAsyncPoll(1, xsink);
+    if (*xsink) {
+        accept_state = AcceptState::COMPLETE;
+        return nullptr;
+    }
 
     printd(5, "HttpAcceptPollOperationPriv::handleAcceptComplete() client_sock=%p ssl=%d\n",
         client_sock, (int)ssl);
@@ -220,7 +275,8 @@ QoreHashNode* HttpAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* x
         // Check if SSL handshake was already performed during accept
         // (happens when the listener socket has SSL configured — startPollAccept()
         // automatically upgrades the accepted socket to SSL)
-        if (client_sock->isSecure()) {
+        secure = client_sock->isSecureForAsyncPoll();
+        if (secure) {
             if (checkAlpn(xsink)) {
                 return nullptr;
             }
@@ -257,6 +313,7 @@ QoreHashNode* HttpAcceptPollOperationPriv::handleSslComplete(ExceptionSink* xsin
     if (checkAlpn(xsink)) {
         return nullptr;
     }
+    secure = true;
 
     printd(5, "HttpAcceptPollOperationPriv::handleSslComplete() alpn=%s http2=%d\n",
         negotiated_protocol.c_str(), (int)is_http2);
@@ -292,7 +349,7 @@ int HttpAcceptPollOperationPriv::startSslHandshake(ExceptionSink* xsink) {
     // Set ALPN protocols based on http_version mode
     ReferenceHolder<QoreListNode> alpn(buildAlpnList(), xsink);
     if (alpn) {
-        client_sock->setAlpnProtocols(*alpn, xsink);
+        client_sock->setAlpnProtocolsForAsyncPoll(*alpn, xsink);
         if (*xsink) {
             accept_state = AcceptState::COMPLETE;
             return -1;
@@ -325,7 +382,7 @@ int HttpAcceptPollOperationPriv::startSslHandshake(ExceptionSink* xsink) {
 
 int HttpAcceptPollOperationPriv::checkAlpn(ExceptionSink* xsink) {
     // Get the negotiated ALPN protocol from the client socket
-    SimpleRefHolder<QoreStringNode> proto(client_sock->getAlpnProtocol());
+    SimpleRefHolder<QoreStringNode> proto(client_sock->getAlpnProtocolForAsyncPoll());
     if (proto && proto->size()) {
         negotiated_protocol = proto->c_str();
         is_http2 = (negotiated_protocol == "h2");
@@ -334,7 +391,7 @@ int HttpAcceptPollOperationPriv::checkAlpn(ExceptionSink* xsink) {
     // If HTTP/2 is required but not negotiated, reject the connection
     if ((http_version == "2.0" || http_version == "2") && !is_http2) {
         if (client_sock) {
-            client_sock->close();
+            client_sock->closeIo(xsink);
         }
         xsink->raiseException("HTTP2-REQUIRED-ERROR",
             "HTTP/2 required but client negotiated: %s",
@@ -426,6 +483,11 @@ HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, obje
         const_cast<QoreObject*>(accept_op)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink)),
         xsink);
     if (*xsink || !accept_priv) {
+        return;
+    }
+    if (accept_priv->needsWorkerDispatch()) {
+        xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-ERROR",
+            "accept_op requires worker dispatch and cannot be used by HttpAcceptPollOperationBase");
         return;
     }
 

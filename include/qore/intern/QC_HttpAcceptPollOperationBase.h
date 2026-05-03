@@ -108,9 +108,12 @@ public:
     /** The returned hash contains:
         - \c sock: the accepted QoreSocketObject (ref'd)
         - \c ssl: true if SSL
+        - \c secure: true if SSL is already active on the accepted socket
         - \c is_http2: true if HTTP/2 was negotiated
         - \c negotiated_protocol: ALPN protocol string or nullptr
         - \c http_version: the configured HTTP version mode
+        - \c peer_info: numeric peer address info for the accepted socket, or nullptr
+        - \c socket_info: numeric local address info for the accepted socket, or nullptr
     */
     DLLLOCAL QoreValue getOutput() const override;
 
@@ -164,11 +167,14 @@ private:
     // Configuration
     bool ssl;                               //!< SSL required
     bool do_ssl_handshake;                  //!< Perform SSL handshake in this op
+    bool secure;                            //!< SSL is active on the accepted socket
     bool is_http2;                          //!< HTTP/2 was negotiated
     int ssl_verify_flags;                   //!< SSL verification flags
     bool ssl_accept_all_certs;              //!< Accept all client certificates
     std::string http_version;               //!< HTTP version mode string
     std::string negotiated_protocol;        //!< Negotiated ALPN protocol
+    QoreHashNode* peer_info = nullptr;      //!< Numeric peer address info captured on accept
+    QoreHashNode* socket_info = nullptr;    //!< Numeric local address info captured on accept
 
     // SSL config (stored for deferred application to client socket)
     QoreSSLCertificate* cert;               //!< ref'd SSL certificate (nullable)

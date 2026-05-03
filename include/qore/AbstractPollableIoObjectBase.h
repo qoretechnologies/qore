@@ -91,6 +91,17 @@ public:
     */
     DLLLOCAL const std::string& getUniqueHash() const { return io_unique_hash; }
 
+    //! Returns the async I/O identity hash used to group operations on one I/O object
+    /** Subclasses that are lightweight wrappers around another object can
+        override this so independently-created wrappers still map to the same
+        controller-level socket identity.
+
+        @return stable async I/O identity hash
+
+        @since %Qore 2.3
+    */
+    virtual const std::string& getIoIdentityHash() const { return io_unique_hash; }
+
 private:
     std::string io_unique_hash;   //!< Stable unique identity (address reuse safe)
 };

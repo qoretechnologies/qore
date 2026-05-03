@@ -93,6 +93,14 @@ hashdecl Qore::SocketPollOperationInfo {
     */
     *string key;
 
+    //! Optional I/O thread affinity key; default: key
+    /** Allows several operations with distinct cache keys to be routed to the same
+        I/O thread for coordinated cancellation and readiness barriers.
+
+        @since %Qore 2.3
+    */
+    *string thread_key;
+
     //! Force onComplete dispatch even if the C++ auto-detection doesn't find an override
     /** Works around C++/Qore multiple inheritance method resolution order issues where
         findMethod("onComplete") returns the base no-op from the wrong parent class.
@@ -223,6 +231,32 @@ static *Queue AsyncIoController::submit(hash<SocketPollOperationInfo> info, *boo
     return ctrl->submit(obj, info->hashRefSelf(), replace, xsink);
 }
 
+//! Executes an async I/O operation on the global singleton and waits for its result
+/** This is the blocking companion to @ref submit(). It uses the controller event loop
+    for the actual I/O operation, then waits on the operation's result Queue.
+
+    @param info the operation info hash
+    @param replace if @ref True "True", cancel any existing operation with the same key
+
+    @return the operation result hash
+
+    @throw ASYNC-IO-ERROR if the controller is shutting down, the info hash is invalid,
+    or the operation uses an @ref AbstractPollOperation::onComplete() "onComplete()"
+    callback, or if called from the async I/O thread
+
+    @since %Qore 2.3
+*/
+static hash<SocketPollResultInfo> AsyncIoController::exec(hash<SocketPollOperationInfo> info, *bool replace) {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    return ctrl->exec(obj, info->hashRefSelf(), replace, xsink);
+}
+
 //! Cancels an operation by socket on the global singleton
 /** @param sock the socket whose operation should be canceled
     @return @ref True "True" if an operation was found and canceled
@@ -257,10 +291,7 @@ static bool AsyncIoController::cancelAndClose(AbstractPollableIoObjectBase[Abstr
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
-    bool rv = ctrl->cancel(*sock, xsink);
-    // Close the I/O object via the type-safe virtual method
-    sock->closeIo(xsink);
-    return rv;
+    return ctrl->cancelAndClose(*sock, xsink);
 }
 
 //! Cancels an operation by key on the global singleton
@@ -386,6 +417,9 @@ static bool AsyncIoController::waitReady(*timeout to) {
 //! Waits until the global singleton has processed all currently submitted operations
 /** @param to timeout for waiting; use 0 to wait indefinitely
     @return @ref True "True" if all submitted operations have been processed
+
+    @throw ASYNC-IO-ERROR if called from an async I/O controller I/O thread
+
     @since %Qore 2.3
 */
 static bool AsyncIoController::waitForProcessing(*timeout to) {

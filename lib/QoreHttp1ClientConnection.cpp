@@ -211,29 +211,37 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         }
     }
 
-    // 2. Build the TCP connect target string "host:port".
-    //    When a proxy is configured, we connect to the proxy, not the target.
+    // 2. Build the connect operation. When a proxy is configured, we
+    //    connect to the proxy, not the target. For UNIX-domain HTTP
+    //    targets, target_host carries the socket path and target_port is 0.
     bool use_proxy = !proxy_host.empty();
     bool use_proxy_tunnel = use_proxy && ssl_required;
     bool use_proxy_plain = use_proxy && !ssl_required;
+    bool use_unix_target = !use_proxy && target_port == 0
+        && !target_host.empty() && target_host[0] == '/';
 
     const char* connect_host = use_proxy ? proxy_host.c_str() : target_host.c_str();
     int connect_port = use_proxy ? proxy_port : target_port;
 
-    char target_str[256];
-    int n = snprintf(target_str, sizeof(target_str), "%s:%d", connect_host, connect_port);
-    if (n <= 0 || (size_t)n >= sizeof(target_str)) {
-        xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-            "connect target host:port string too long: host='%s' port=%d",
-            connect_host, connect_port);
-        return -1;
+    char target_str[256] = {};
+    if (!use_unix_target) {
+        int n = snprintf(target_str, sizeof(target_str), "%s:%d", connect_host, connect_port);
+        if (n <= 0 || (size_t)n >= sizeof(target_str)) {
+            xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
+                "connect target host:port string too long: host='%s' port=%d",
+                connect_host, connect_port);
+            return -1;
+        }
     }
 
     // 3. Create the SocketConnectPollOperation.  The ctor takes an already-ref'd
     //    QoreSocketObject pointer and adopts it.
     sock_priv_raw->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw), xsink);
+        use_unix_target
+            ? new SocketConnectPollOperation(xsink, false, target_host.c_str(), SOCK_STREAM, 0, sock_priv_raw, true)
+            : new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw, true),
+        xsink);
     if (*xsink) {
         return -1;
     }
@@ -450,6 +458,14 @@ int Http1ClientConnection::getActiveStreamCount() const {
         return 0;
     }
     return poll_op_priv->getActiveStreamCount();
+}
+
+std::string Http1ClientConnection::getNegotiatedProtocol() const {
+    MethodGuard g(const_cast<Http1ClientConnection*>(this));
+    if (!g.acquired() || !poll_op_priv) {
+        return std::string();
+    }
+    return poll_op_priv->getNegotiatedProtocol();
 }
 
 QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const char* path,
@@ -828,8 +844,9 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
     // pattern as Http2ClientConnection::closeConnection.
     poll_op_priv->disarmConnectionPriv();
 
-    // Cancel the op in the global AsyncIoController — this synchronously
-    // waits until the I/O thread stops processing the operation.  The I/O
+    // Cancel and close the op in the global AsyncIoController — this
+    // synchronously waits until the I/O thread stops processing the
+    // operation, then closes the socket on the controller thread.  The I/O
     // thread's cancel processing calls abort() on the poll op via
     // doCancelIntern → callAbort, so we must NOT call abort() again here.
     //
@@ -850,7 +867,7 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
                         CID_ASYNCIOCONTROLLER, &cancel_xsink)),
                 &cancel_xsink);
             if (ctl_priv_holder) {
-                ctl_priv_holder->cancel(sock_priv, &cancel_xsink);
+                ctl_priv_holder->cancelAndClose(sock_priv, &cancel_xsink);
             }
         }
         cancel_xsink.clear();

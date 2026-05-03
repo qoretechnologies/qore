@@ -289,12 +289,12 @@ public class WebSocketClientAsyncIoTest inherits QUnit::Test {
         });
         assertTrue(wsc_default.isAsyncIo(), "default mode reports True (async_io enabled by default)");
 
-        # Explicit non-async mode
+        # Explicit false is a compatibility no-op; socket I/O is always async
         WebSocketClient wsc_sync(sub (auto msg) {}, {
             "url": "ws://127.0.0.1:" + linfo.port,
             "async_io": False,
         });
-        assertFalse(wsc_sync.isAsyncIo(), "sync mode reports False");
+        assertTrue(wsc_sync.isAsyncIo(), "async_io False is ignored");
 
         # Explicit async mode
         WebSocketClient wsc_async(sub (auto msg) {}, {

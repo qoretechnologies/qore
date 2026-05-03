@@ -175,7 +175,7 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
         target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
 
     // TCP + SSL handshake done.  Read the negotiated ALPN protocol.
-    SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocol());
+    SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocolForAsyncPoll());
     std::string alpn_id;
     if (alpn && !alpn->empty()) {
         alpn_id = alpn->c_str();
@@ -373,7 +373,7 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
     //    drive TCP connect followed by the TLS handshake.
     sock_priv_raw->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, true, target_str, sock_priv_raw),
+        new SocketConnectPollOperation(xsink, true, target_str, sock_priv_raw, true),
         xsink);
     if (*xsink) {
         return -1;
@@ -584,12 +584,12 @@ void NegotiatingHttpClientConnection::closeConnection(ExceptionSink* xsink) {
         return;
     }
 
-    // Cancel from the AsyncIoController.  doCancelIntern will abort our
-    // neg poll op which transitions it to CLOSED and clears the inner
-    // connect op (which in turn clears non_block_flags).  Always cancel
-    // when submitted, even if the base connection state is already CLOSED:
-    // the I/O controller can still hold the poll op until the current
-    // callback is finalized.
+    // Cancel and close from the AsyncIoController.  doCancelIntern will
+    // abort our neg poll op which transitions it to CLOSED and clears the
+    // inner connect op (which in turn clears non_block_flags), then the
+    // controller closes the socket.  Always cancel when submitted, even if
+    // the base connection state is already CLOSED: the I/O controller can
+    // still hold the poll op until the current callback is finalized.
     if (submitted_to_controller && sock_priv) {
         ExceptionSink cancel_xsink;
         ReferenceHolder<QoreObject> ctl_obj_holder(
@@ -601,7 +601,7 @@ void NegotiatingHttpClientConnection::closeConnection(ExceptionSink* xsink) {
                         CID_ASYNCIOCONTROLLER, &cancel_xsink)),
                 &cancel_xsink);
             if (ctl_priv_holder) {
-                ctl_priv_holder->cancel(sock_priv, &cancel_xsink);
+                ctl_priv_holder->cancelAndClose(sock_priv, &cancel_xsink);
             }
         }
         cancel_xsink.clear();

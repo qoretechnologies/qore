@@ -35,13 +35,23 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Queue.h"
+#include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/ssl_constants.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/SocketSyncPoll.h"
 #include "qore/QoreSSLCertificate.h"
 #include "qore/QoreSSLPrivateKey.h"
 
 #include <cerrno>
+#include <atomic>
+#include <cstdlib>
 #include <cstring>
+#include <limits>
+#include <string>
+
+extern qore_classid_t CID_ASYNCIOCONTROLLER;
+
+static std::atomic<uint64_t> socket_qore_sync_exec_seq{0};
 
 static void hash_set_int_key(QoreHashNode& h, int k, const char* str) {
     char buf[15];
@@ -68,6 +78,1777 @@ static int64 checkOpenResult(int rc, const char *method_name, ExceptionSink *xsi
         return 0;
     }
     return rc;
+}
+
+static void socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
+    QoreValue err = ex->getKeyValue("err");
+    QoreValue desc = ex->getKeyValue("desc");
+    QoreValue arg = ex->getKeyValue("arg");
+    xsink->raiseException(
+        err.getType() == NT_STRING
+            ? err.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("ASYNC-IO-ERROR"),
+        desc.getType() == NT_STRING
+            ? desc.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("async socket operation failed"),
+        arg.refSelf());
+}
+
+static QoreHashNode* socket_exec_poll_operation(QoreObject* self, QoreSocketObject* s, QoreObject* op_obj,
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", owner_name, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (!ctl_obj) {
+        return nullptr;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return nullptr;
+    }
+
+    SimpleRefHolder<QoreStringNode> socket_hash(self->getUniqueHash());
+    std::string owner("Socket::sync:");
+    owner += owner_name;
+    owner += ':';
+    owner += socket_hash->c_str();
+
+    std::string key("Socket::sync:");
+    key += owner_name;
+    key += ':';
+    key += socket_hash->c_str();
+    // Several synchronous callers can delegate work for the same socket at the
+    // same time; keep the cache key unique while thread_key preserves affinity.
+    key += ':';
+    key += std::to_string(++socket_qore_sync_exec_seq);
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
+    info->setKeyValue("sock", self->objectRefSelf(), xsink);
+    info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("key", new QoreStringNode(key), xsink);
+    info->setKeyValue("thread_key", new QoreStringNode(s->getUniqueHash()), xsink);
+    info->setKeyValue("to", timeout_ms, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(ctrl->exec(*ctl_obj, info.release(), false, xsink), xsink);
+    if (*xsink || !result) {
+        return nullptr;
+    }
+
+    QoreValue ex = result->getKeyValue("ex");
+    if (ex.getType() == NT_HASH) {
+        if (ex_out) {
+            *ex_out = ex.get<const QoreHashNode>()->hashRefSelf();
+            return nullptr;
+        }
+        socket_raise_poll_result_exception(ex.get<const QoreHashNode>(), xsink);
+        return nullptr;
+    }
+    return result.release();
+}
+
+class SocketExecAsyncIoGuard {
+public:
+    SocketExecAsyncIoGuard(my_socket_priv& priv, ExceptionSink* xsink, unsigned direction)
+            : priv(priv), direction(direction) {
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sync", xsink);
+        if (qore_on_async_io_thread() || (xsink && *xsink)) {
+            return;
+        }
+        AutoLocker al(priv.m);
+        active = !priv.startAsyncSequenceIo(xsink, direction);
+    }
+
+    ~SocketExecAsyncIoGuard() {
+        if (active) {
+            AutoLocker al(priv.m);
+            priv.clearAsyncSequenceIo(direction);
+        }
+    }
+
+    explicit operator bool() const {
+        return active;
+    }
+
+private:
+    my_socket_priv& priv;
+    unsigned direction;
+    bool active = false;
+};
+
+static int socket_exec_send_poll(QoreObject* self, QoreSocketObject* s, SocketPollOperationBase* poller,
+        int timeout_ms, ExceptionSink* xsink, unsigned async_direction = NB_SEND) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, async_direction);
+    if (!async_guard) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("send"), xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, timeout_ms, "send", xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+class SocketExecHttp1AllowedPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL SocketExecHttp1AllowedPollOperation(QoreSocketObject* sock, const char* mname)
+            : sock(sock), mname(mname) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        if (priv->hasH2SessionForAsyncPoll()) {
+            xsink->raiseException("HTTP2-ERROR",
+                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "http1-checked" : "checking-http1";
+    }
+
+private:
+    QoreSocketObject* sock;
+    std::string mname;
+    bool done = false;
+};
+
+class SocketExecHttp2ServerStreamPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL SocketExecHttp2ServerStreamPollOperation(QoreSocketObject* sock, int32_t stream_id,
+            const char* mname)
+            : sock(sock), stream_id(stream_id), mname(mname) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        output = -1;
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (done) {
+            return nullptr;
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        if (!priv->hasH2SessionForAsyncPoll()) {
+            output = -1;
+        } else if (priv->isH2ServerSessionForAsyncPoll() && stream_id > 0) {
+            output = stream_id;
+        } else {
+            xsink->raiseException("HTTP2-ERROR",
+                "HTTP/1 message attempted on HTTP/2 connection (Socket::%s)", mname.c_str());
+            output = -1;
+        }
+        done = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return static_cast<int64>(output);
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return done ? "http2-server-stream-checked" : "checking-http2-server-stream";
+    }
+
+private:
+    QoreSocketObject* sock;
+    int32_t stream_id;
+    std::string mname;
+    int32_t output = -1;
+    bool done = false;
+};
+
+static QoreValue socket_exec_poll_output(QoreObject* self, QoreSocketObject* s, SocketPollOperationBase* poller,
+        const char* owner_name, const char* goal, ExceptionSink* xsink) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, -1, owner_name, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return poller->getOutput();
+}
+
+static int socket_exec_check_http1_allowed(QoreObject* self, QoreSocketObject* s, const char* mname,
+        ExceptionSink* xsink) {
+    ValueHolder rv(socket_exec_poll_output(self, s, new SocketExecHttp1AllowedPollOperation(s, mname),
+        mname, "http1-checked", xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int32_t socket_exec_get_http2_server_stream(QoreObject* self, QoreSocketObject* s, int32_t stream_id,
+        const char* mname, ExceptionSink* xsink) {
+    ValueHolder rv(socket_exec_poll_output(self, s,
+        new SocketExecHttp2ServerStreamPollOperation(s, stream_id, mname), mname,
+        "http2-server-stream-checked", xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return rv->isNothing() ? -1 : static_cast<int32_t>(rv->getAsBigInt());
+}
+
+static int socket_exec_send_binary(QoreObject* self, QoreSocketObject* s, BinaryNode* data,
+        int timeout_ms, ExceptionSink* xsink) {
+    s->ref();
+    return socket_exec_send_poll(self, s, new SocketSendPollOperation(xsink, data, s, true), timeout_ms, xsink);
+}
+
+static int socket_exec_send_string(QoreObject* self, QoreSocketObject* s, const QoreStringNode* data,
+        int timeout_ms, bool convert_encoding, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> tmp;
+    if (convert_encoding && data->getEncoding() != s->getEncoding()) {
+        tmp = data->convertEncoding(s->getEncoding(), xsink);
+        if (*xsink) {
+            return -1;
+        }
+    }
+
+    s->ref();
+    return socket_exec_send_poll(self, s, new SocketSendPollOperation(xsink,
+        tmp ? tmp.release() : data->stringRefSelf(), s, true), timeout_ms, xsink);
+}
+
+static int socket_exec_send_string_bytes(QoreObject* self, QoreSocketObject* s, const QoreStringNode* data,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+    bin->append(data->c_str(), data->strlen());
+    return socket_exec_send_binary(self, s, bin.release(), timeout_ms, xsink);
+}
+
+static int socket_exec_send_bytes(QoreObject* self, QoreSocketObject* s, const void* data, size_t size,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+    bin->append(data, size);
+    return socket_exec_send_binary(self, s, bin.release(), timeout_ms, xsink);
+}
+
+class SocketExecInputStreamRefGuard {
+public:
+    SocketExecInputStreamRefGuard(InputStream* is, ExceptionSink* xsink, bool active)
+            : is(active ? is : nullptr), xsink(xsink) {
+        if (this->is) {
+            this->is->ref();
+        }
+    }
+
+    ~SocketExecInputStreamRefGuard() {
+        if (is) {
+            is->deref(xsink);
+        }
+    }
+
+private:
+    InputStream* is;
+    ExceptionSink* xsink;
+};
+
+static int socket_exec_send_http_message(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+        const void* data, size_t size, const QoreStringNode* body_event, int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
+    if (socket_exec_check_http1_allowed(self, s, "sendHTTPMessage", xsink)) {
+        return -1;
+    }
+
+    QoreString hdr(s->getEncoding());
+    if (priv->getSendHttpMessageHeaders(xsink, hdr, info, method, path, http_version, headers, size,
+            QORE_SOURCE_SOCKET)) {
+        return -1;
+    }
+
+    SimpleRefHolder<BinaryNode> msg(new BinaryNode());
+    msg->append(hdr.c_str(), hdr.size());
+    if (size && data) {
+        msg->append(data, size);
+    }
+
+    int rc = socket_exec_send_binary(self, s, msg.release(), timeout_ms, xsink);
+    if (!rc && size && data) {
+        if (body_event) {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, *body_event);
+        } else {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, data, size);
+        }
+    }
+    return rc;
+}
+
+static int socket_exec_send_http_response(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        int code, const char* desc, const char* http_version, const QoreHashNode* headers,
+        const void* data, size_t size, const QoreStringNode* body_event, int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
+    int32_t stream_id = priv->getH2ActiveThreadStreamId();
+    stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponse", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (stream_id > 0) {
+        QoreString status_line(s->getEncoding());
+        priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
+
+        SimpleRefHolder<BinaryNode> body_bin;
+        if (size && data) {
+            body_bin = new BinaryNode;
+            body_bin->append(data, size);
+        }
+
+        s->ref();
+        return socket_exec_send_poll(self, s,
+            new SocketHttp2SendResponsePollOperation(xsink, s, nullptr, stream_id, code, headers, *body_bin, false,
+                true),
+            timeout_ms, xsink, NB_ALL);
+    }
+
+    QoreString hdr(s->getEncoding());
+    if (priv->getSendHttpResponseHeaders(xsink, hdr, info, code, desc, http_version, headers, size,
+            QORE_SOURCE_SOCKET)) {
+        return -1;
+    }
+
+    SimpleRefHolder<BinaryNode> msg(new BinaryNode());
+    msg->append(hdr.c_str(), hdr.size());
+    if (size && data) {
+        msg->append(data, size);
+    }
+
+    int rc = socket_exec_send_binary(self, s, msg.release(), timeout_ms, xsink);
+    if (!rc && size && data) {
+        if (body_event) {
+            priv->doDataEvent(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, *body_event);
+        } else {
+            priv->doDataEvent(QORE_EVENT_SOCKET_DATA_SENT, QORE_SOURCE_SOCKET, data, size);
+        }
+    }
+    return rc;
+}
+
+static int socket_exec_send_http_chunked_body_trailer(QoreObject* self, QoreSocketObject* s,
+        const QoreHashNode* trailer, int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
+    QoreString hdr(s->getEncoding());
+    hdr.concat("0\r\n");
+    qore_socket_private::do_headers(hdr, trailer, 0, false);
+
+    int rc = socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink);
+    if (!rc && trailer) {
+        priv->doHeaderEvent(QORE_EVENT_HTTP_FOOTERS_SENT, QORE_SOURCE_SOCKET, *trailer);
+    }
+    return rc;
+}
+
+static void socket_exec_set_http_chunk_prefix(QoreString& prefix, size_t size) {
+    prefix.sprintf(QLLX "\r\n", static_cast<unsigned long long>(size));
+}
+
+static int socket_exec_run_http_trailer_callback(const ResolvedCallReferenceNode* trailer_callback,
+        ReferenceHolder<QoreHashNode>& trailer, ExceptionSink* xsink) {
+    if (!trailer_callback) {
+        return 0;
+    }
+
+    ValueHolder rv(trailer_callback->execValue(nullptr, xsink), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    switch (rv->getType()) {
+        case NT_NOTHING:
+            break;
+        case NT_HASH:
+            trailer = rv.release().get<QoreHashNode>();
+            break;
+        default:
+            xsink->raiseException("HTTP-TRAILER-ERROR", "chunked callback returned type '%s'; expecting 'hash' "
+                "or 'NOTHING'", rv->getTypeName());
+            return -1;
+    }
+    return 0;
+}
+
+static int socket_exec_send_http_chunked_body_input_stream_poll(QoreObject* self, QoreSocketObject* s,
+        InputStream* input_stream, QoreObject* input_stream_obj, size_t max_chunk_size, int timeout_ms,
+        bool send_terminal_chunk, ExceptionSink* xsink, bool reassign_after) {
+    if (!input_stream->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return -1;
+    }
+
+    SocketExecInputStreamRefGuard caller_ref(input_stream, xsink, reassign_after);
+    s->ref();
+    input_stream->ref();
+    if (input_stream_obj) {
+        input_stream_obj->ref();
+    }
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendHttpChunkedInputStreamPollOperation(xsink, s, input_stream, input_stream_obj,
+            max_chunk_size, timeout_ms, send_terminal_chunk, QORE_SOURCE_SOCKET, true),
+        xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    input_stream->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    int rc = socket_exec_send_poll(self, s, poller.release(), -1, xsink);
+    if (reassign_after) {
+        if (!*xsink) {
+            input_stream->reassignThread(xsink);
+        } else {
+            ExceptionSink reassign_xsink;
+            input_stream->reassignThread(&reassign_xsink);
+            if (reassign_xsink) {
+                reassign_xsink.clear();
+            }
+        }
+    }
+    return rc;
+}
+
+static int socket_exec_send_http_chunked_body_input_stream(QoreObject* self, QoreSocketObject* s,
+        InputStream* input_stream, QoreObject* input_stream_obj, size_t max_chunk_size,
+        const ResolvedCallReferenceNode* trailer_callback, int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "sendHTTPChunkedBodyFromInputStream", xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
+    int rc = socket_exec_send_http_chunked_body_input_stream_poll(self, s, input_stream, input_stream_obj,
+        max_chunk_size, timeout_ms, !trailer_callback, xsink, true);
+    if (rc) {
+        return -1;
+    }
+    if (!trailer_callback) {
+        return 0;
+    }
+
+    ReferenceHolder<QoreHashNode> trailer(xsink);
+    if (socket_exec_run_http_trailer_callback(trailer_callback, trailer, xsink)) {
+        return -1;
+    }
+    if (trailer) {
+        return socket_exec_send_http_chunked_body_trailer(self, s, *trailer, timeout_ms, xsink);
+    }
+    return socket_exec_send_bytes(self, s, "0\r\n\r\n", 5, timeout_ms, xsink);
+}
+
+static int socket_exec_send_http_chunked_body_callback(QoreObject* self, QoreSocketObject* s,
+        const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked callback send")) {
+            return -1;
+        }
+
+        ValueHolder res(send_callback->execValue(nullptr, xsink), xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        const void* data = nullptr;
+        size_t size = 0;
+        const QoreStringNode* body_event = nullptr;
+        bool done = false;
+
+        switch (res->getType()) {
+            case NT_STRING: {
+                const QoreStringNode* str = res->get<const QoreStringNode>();
+                if (str->empty()) {
+                    done = true;
+                    break;
+                }
+                data = str->c_str();
+                size = str->size();
+                body_event = str;
+                break;
+            }
+            case NT_BINARY: {
+                const BinaryNode* bin = res->get<const BinaryNode>();
+                if (bin->empty()) {
+                    done = true;
+                    break;
+                }
+                data = bin->getPtr();
+                size = bin->size();
+                break;
+            }
+            case NT_HASH:
+                return socket_exec_send_http_chunked_body_trailer(self, s, res->get<const QoreHashNode>(),
+                    timeout_ms, xsink);
+            case NT_NOTHING:
+            case NT_NULL:
+                done = true;
+                break;
+            default:
+                xsink->raiseException("SOCKET-CALLBACK-ERROR", "HTTP chunked data callback returned type '%s'; "
+                    "expecting one of: 'string', 'binary', 'hash', 'nothing' (or 'NULL')", res->getTypeName());
+                return -1;
+        }
+
+        if (done) {
+            return socket_exec_send_bytes(self, s, "0\r\n\r\n", 5, timeout_ms, xsink);
+        }
+
+        QoreString prefix;
+        socket_exec_set_http_chunk_prefix(prefix, size);
+        if (socket_exec_send_bytes(self, s, prefix.c_str(), prefix.size(), timeout_ms, xsink)
+                || socket_exec_send_bytes(self, s, data, size, timeout_ms, xsink)
+                || socket_exec_send_bytes(self, s, "\r\n", 2, timeout_ms, xsink)) {
+            return -1;
+        }
+
+        if (body_event) {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET,
+                *body_event);
+        } else {
+            my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_SENT, QORE_SOURCE_SOCKET,
+                data, size);
+        }
+    }
+}
+
+static int socket_exec_send_http_message_callback(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+        const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
+    if (socket_exec_check_http1_allowed(self, s, "sendHTTPMessageWithCallback", xsink)) {
+        return -1;
+    }
+
+    QoreString hdr(s->getEncoding());
+    if (priv->getSendHttpMessageChunkedHeaders(xsink, hdr, info, method, path, http_version, headers,
+            QORE_SOURCE_SOCKET)) {
+        return -1;
+    }
+
+    if (socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
+        return -1;
+    }
+    return socket_exec_send_http_chunked_body_callback(self, s, send_callback, timeout_ms, xsink);
+}
+
+static int socket_exec_send_http_response_callback(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        int code, const char* desc, const char* http_version, const QoreHashNode* headers,
+        const ResolvedCallReferenceNode* send_callback, int timeout_ms, ExceptionSink* xsink) {
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
+    int32_t stream_id = priv->getH2ActiveThreadStreamId();
+    stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponseWithCallback", xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    QoreString hdr(s->getEncoding());
+    if (stream_id > 0) {
+        priv->getSendHttpResponseStatusLine(hdr, info, code, desc, http_version);
+        xsink->raiseException("HTTP2-ERROR",
+            "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
+        return -1;
+    }
+    if (priv->getSendHttpResponseChunkedHeaders(xsink, hdr, info, code, desc, http_version, headers,
+            QORE_SOURCE_SOCKET)) {
+        return -1;
+    }
+
+    if (socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
+        return -1;
+    }
+    return socket_exec_send_http_chunked_body_callback(self, s, send_callback, timeout_ms, xsink);
+}
+
+static int socket_exec_send_http_response_input_stream(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        int code, const char* desc, const char* http_version, const QoreHashNode* headers, InputStream* input_stream,
+        QoreObject* input_stream_obj, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback,
+        int timeout_ms, ExceptionSink* xsink) {
+    if (!input_stream->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return -1;
+    }
+
+    int32_t stream_id = priv->getH2ActiveThreadStreamId();
+    stream_id = socket_exec_get_http2_server_stream(self, s, stream_id, "sendHTTPResponse", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    if (stream_id > 0) {
+        QoreString status_line(s->getEncoding());
+        priv->getSendHttpResponseStatusLine(status_line, info, code, desc, http_version);
+        xsink->raiseException("HTTP2-ERROR",
+            "chunked/streaming responses are not supported via Socket::sendHTTPResponse() on HTTP/2");
+        return -1;
+    }
+
+    QoreString hdr(s->getEncoding());
+    if (priv->getSendHttpResponseHeaders(xsink, hdr, info, code, desc, http_version, headers, 0,
+            QORE_SOURCE_SOCKET)) {
+        return -1;
+    }
+
+    if (socket_exec_send_bytes(self, s, hdr.c_str(), hdr.size(), timeout_ms, xsink)) {
+        return -1;
+    }
+    return socket_exec_send_http_chunked_body_input_stream(self, s, input_stream, input_stream_obj, max_chunk_size,
+        trailer_callback, timeout_ms, xsink);
+}
+
+static int socket_exec_connect_operation(QoreObject* self, QoreSocketObject* s,
+        SocketPollOperationBase* connect_poller, int timeout_ms, bool ssl, ExceptionSink* xsink) {
+    ReferenceHolder<SocketPollOperationBase> poller(connect_poller, xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    const char* goal = ssl ? "connect-ssl" : "connect";
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, timeout_ms, goal, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int socket_exec_connect(QoreObject* self, QoreSocketObject* s, const char* target, int timeout_ms,
+        bool ssl, ExceptionSink* xsink) {
+    s->ref();
+    return socket_exec_connect_operation(self, s, new SocketConnectPollOperation(xsink, ssl, target, s, true),
+        timeout_ms, ssl, xsink);
+}
+
+static int socket_exec_connect_inet(QoreObject* self, QoreSocketObject* s, const char* host, const char* service,
+        int family, int socktype, int protocol, int timeout_ms, bool ssl, ExceptionSink* xsink) {
+    s->ref();
+    return socket_exec_connect_operation(self, s,
+        new SocketConnectPollOperation(xsink, ssl, host, service, family, socktype, protocol, s, true),
+        timeout_ms, ssl, xsink);
+}
+
+static int socket_exec_connect_unix(QoreObject* self, QoreSocketObject* s, const char* path, int socktype,
+        int protocol, int timeout_ms, bool ssl, ExceptionSink* xsink) {
+    s->ref();
+    return socket_exec_connect_operation(self, s,
+        new SocketConnectPollOperation(xsink, ssl, path, socktype, protocol, s, true), timeout_ms, ssl, xsink);
+}
+
+static int socket_exec_upgrade_ssl(QoreObject* self, QoreSocketObject* s, int timeout_ms, bool server,
+        ExceptionSink* xsink) {
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        server
+            ? static_cast<SocketPollOperationBase*>(new SocketUpgradeServerSslPollOperation(xsink, s, true))
+            : static_cast<SocketPollOperationBase*>(new SocketUpgradeClientSslPollOperation(xsink, s, true)),
+        xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    const char* goal = server ? "upgrade-server-ssl" : "upgrade-client-ssl";
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, timeout_ms, goal, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static bool socket_exec_exception_is(const QoreHashNode* ex, const char* err_name) {
+    QoreValue err = ex->getKeyValue("err");
+    return err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), err_name);
+}
+
+static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int timeout_ms, bool ssl,
+        bool accept_timeout_returns_nothing, ExceptionSink* xsink) {
+    s->ref();
+    SocketAcceptPollOperation* accept_poller = new SocketAcceptPollOperation(xsink, s, ssl, true);
+    ReferenceHolder<SocketPollOperationBase> poller(accept_poller, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_ALL);
+    if (!async_guard) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    const char* goal = ssl ? "accept-ssl" : "accept";
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, timeout_ms, goal, xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (ex_holder) {
+        if (accept_timeout_returns_nothing && socket_exec_exception_is(*ex_holder, "SOCKET-TIMEOUT")
+                && !strcmp(static_cast<SocketPollOperationBase*>(accept_poller)->getStateImpl(), "accepting")) {
+            return QoreValue();
+        }
+        socket_raise_poll_result_exception(*ex_holder, xsink);
+        return QoreValue();
+    }
+
+    ValueHolder output(accept_poller->getOutput(), xsink);
+    if (output->isNothing()) {
+        return QoreValue();
+    }
+    if (output->getType() != NT_OBJECT) {
+        xsink->raiseException("SOCKET-ACCEPT-ERROR",
+            "expected Socket object from async accept operation, got '%s'",
+            output->getFullTypeName());
+        return QoreValue();
+    }
+
+    QoreObject* ns = output->get<QoreObject>();
+    SimpleRefHolder<QoreSocketObject> n(
+        static_cast<QoreSocketObject*>(ns->getReferencedPrivateData(CID_SOCKET, xsink)));
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (!n) {
+        xsink->raiseException("SOCKET-ACCEPT-ERROR", "accepted object does not contain Socket private data");
+        return QoreValue();
+    }
+
+    my_socket_priv::setAccept(**n, ns);
+    return output.release();
+}
+
+static QoreValue socket_exec_recv_poll(QoreObject* self, QoreSocketObject* s, SocketRecvPollOperationBase* poller,
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink) {
+    SocketRecvPollOperationBase* recv_poller = poller;
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, timeout_ms, owner_name, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return recv_poller->getOutput();
+}
+
+static QoreValue socket_exec_recv_value(QoreObject* self, QoreSocketObject* s, int64 size, int timeout_ms,
+        bool to_string, ExceptionSink* xsink) {
+    s->ref();
+    if (size > 0) {
+        if (size > std::numeric_limits<ssize_t>::max()) {
+            xsink->raiseException("SOCKET-RECV-ERROR",
+                "requested receive size " QLLD " exceeds the maximum supported size",
+                size);
+            s->deref(xsink);
+            return QoreValue();
+        }
+        return socket_exec_recv_poll(self, s,
+            new SocketRecvPollOperation(xsink, static_cast<ssize_t>(size), s, to_string, true),
+            timeout_ms, "recv", xsink);
+    }
+    return socket_exec_recv_poll(self, s, new SocketRecvDataPollOperation(xsink, s, to_string, true),
+        timeout_ms, "recv", xsink);
+}
+
+static QoreStringNode* socket_exec_recv_string(QoreObject* self, QoreSocketObject* s, int64 size,
+        int timeout_ms, ExceptionSink* xsink) {
+    ValueHolder result(socket_exec_recv_value(self, s, size, timeout_ms, true, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new QoreStringNode;
+    }
+    if (result->getType() != NT_STRING) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected string data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<QoreStringNode>();
+}
+
+static BinaryNode* socket_exec_recv_binary(QoreObject* self, QoreSocketObject* s, int64 size,
+        int timeout_ms, ExceptionSink* xsink) {
+    ValueHolder result(socket_exec_recv_value(self, s, size, timeout_ms, false, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new BinaryNode;
+    }
+    if (result->getType() != NT_BINARY) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<BinaryNode>();
+}
+
+static BinaryNode* socket_exec_recv_bytes(QoreObject* self, QoreSocketObject* s, size_t size,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> bin(socket_exec_recv_binary(self, s, size, timeout_ms, xsink));
+    if (*xsink) {
+        return nullptr;
+    }
+    if (bin->size() != size) {
+        xsink->raiseException("SOCKET-RECV-ERROR",
+            "expected " QLLD " byte(s) from async receive operation, got " QLLD,
+            static_cast<int64>(size), static_cast<int64>(bin->size()));
+        return nullptr;
+    }
+    return bin.release();
+}
+
+static BinaryNode* socket_exec_recv_some_binary(QoreObject* self, QoreSocketObject* s, size_t size,
+        int timeout_ms, ExceptionSink* xsink, const char* owner_name = "recvToOutputStream") {
+    s->ref();
+    ValueHolder result(socket_exec_recv_poll(self, s,
+        new SocketRecvSomePollOperation(xsink, static_cast<ssize_t>(size), s, false, true),
+        timeout_ms, owner_name, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new BinaryNode;
+    }
+    if (result->getType() != NT_BINARY) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected binary data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<BinaryNode>();
+}
+
+class SocketExecOutputStreamRefGuard {
+public:
+    SocketExecOutputStreamRefGuard(OutputStream* os, ExceptionSink* xsink, bool active)
+            : os(active ? os : nullptr), xsink(xsink) {
+        if (this->os) {
+            this->os->ref();
+        }
+    }
+
+    ~SocketExecOutputStreamRefGuard() {
+        if (os) {
+            os->deref(xsink);
+        }
+    }
+
+private:
+    OutputStream* os;
+    ExceptionSink* xsink;
+};
+
+static void socket_exec_send_input_stream(QoreObject* self, QoreSocketObject* s, InputStream* input_stream,
+        QoreObject* input_stream_obj, int64 size, int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "sendFromInputStream", xsink);
+    if (*xsink || !size) {
+        return;
+    }
+    if (!input_stream->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-SEND-ERROR", "InputStream is not I/O thread safe");
+        return;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_SEND);
+    if (!async_guard) {
+        return;
+    }
+
+    SocketExecInputStreamRefGuard caller_ref(input_stream, xsink, true);
+    s->ref();
+    input_stream->ref();
+    if (input_stream_obj) {
+        input_stream_obj->ref();
+    }
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendInputStreamPollOperation(xsink, s, input_stream, input_stream_obj, size, timeout_ms, true, true),
+        xsink);
+    if (*xsink) {
+        return;
+    }
+
+    input_stream->unassignThread(xsink);
+    if (*xsink) {
+        return;
+    }
+
+    socket_exec_send_poll(self, s, poller.release(), -1, xsink);
+    if (!*xsink) {
+        input_stream->reassignThread(xsink);
+    } else {
+        ExceptionSink reassign_xsink;
+        input_stream->reassignThread(&reassign_xsink);
+        if (reassign_xsink) {
+            reassign_xsink.clear();
+        }
+    }
+}
+
+static int socket_exec_recv_output_stream_poll(QoreObject* self, QoreSocketObject* s, OutputStream* os,
+        int64 size, int timeout_ms, ExceptionSink* xsink, bool reassign_after, bool emit_data_events) {
+    if (!size) {
+        return 0;
+    }
+    if (!os->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "OutputStream is not I/O thread safe");
+        return -1;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return -1;
+    }
+
+    SocketExecOutputStreamRefGuard caller_ref(os, xsink, reassign_after);
+    s->ref();
+    os->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketRecvOutputStreamPollOperation(xsink, s, os, nullptr, size, timeout_ms, emit_data_events, true),
+        xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    os->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, -1, "recvToOutputStream", xsink), xsink);
+    if (reassign_after) {
+        if (!*xsink) {
+            os->reassignThread(xsink);
+        } else {
+            ExceptionSink reassign_xsink;
+            os->reassignThread(&reassign_xsink);
+            if (reassign_xsink) {
+                reassign_xsink.clear();
+            }
+        }
+    }
+    return *xsink ? -1 : 0;
+}
+
+static int socket_exec_write_output_stream_poll(QoreObject* self, QoreSocketObject* s, OutputStream* os,
+        const BinaryNode& data, int timeout_ms, ExceptionSink* xsink, bool reassign_after) {
+    if (!data.size()) {
+        return 0;
+    }
+    if (!os->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-WRITE-ERROR", "OutputStream is not I/O thread safe");
+        return -1;
+    }
+
+    SocketExecOutputStreamRefGuard caller_ref(os, xsink, reassign_after);
+    s->ref();
+    os->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketWriteOutputStreamPollOperation(xsink, s, os, nullptr,
+            static_cast<BinaryNode*>(data.refSelf()), timeout_ms), xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("written"), xsink);
+    }
+    if (*xsink) {
+        return -1;
+    }
+
+    os->unassignThread(xsink);
+    if (*xsink) {
+        return -1;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, -1, "writeOutputStream", xsink), xsink);
+    if (reassign_after) {
+        if (!*xsink) {
+            os->reassignThread(xsink);
+        } else {
+            ExceptionSink reassign_xsink;
+            os->reassignThread(&reassign_xsink);
+            if (reassign_xsink) {
+                reassign_xsink.clear();
+            }
+        }
+    }
+    return *xsink ? -1 : 0;
+}
+
+static void socket_exec_recv_to_output_stream(QoreObject* self, QoreSocketObject* s, OutputStream* os,
+        int64 size, int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "recvToOutputStream", xsink);
+    if (*xsink) {
+        return;
+    }
+
+    socket_exec_recv_output_stream_poll(self, s, os, size, timeout_ms, xsink, true, false);
+}
+
+static QoreHashNode* socket_exec_read_http_header(QoreObject* self, QoreSocketObject* s, QoreHashNode* info,
+        int timeout_ms, ExceptionSink* xsink) {
+    s->ref();
+    SocketReadHttpHeaderPollOperation* header_poller = new SocketReadHttpHeaderPollOperation(xsink, s, true);
+    ReferenceHolder<SocketPollOperationBase> poller(header_poller, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, timeout_ms, "readHTTPHeader", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ValueHolder output(header_poller->getOutput(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (output->getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected hash output from async HTTP header operation, got '%s'",
+            output->getFullTypeName());
+        return nullptr;
+    }
+
+    QoreHashNode* output_hash = output->get<QoreHashNode>();
+    QoreValue hdr_val = output_hash->getKeyValue("hdr");
+    if (hdr_val.getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected 'hdr' hash output from async HTTP header operation, got '%s'",
+            hdr_val.getFullTypeName());
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> hdr(hdr_val.get<const QoreHashNode>()->hashRefSelf(), xsink);
+    if (info) {
+        QoreValue info_val = output_hash->getKeyValue("info");
+        if (info_val.getType() != NT_HASH) {
+            xsink->raiseException("SOCKET-HTTP-ERROR",
+                "expected 'info' hash output from async HTTP header operation, got '%s'",
+                info_val.getFullTypeName());
+            return nullptr;
+        }
+        info->merge(info_val.get<const QoreHashNode>(), xsink);
+    }
+    return *xsink ? nullptr : hdr.release();
+}
+
+static QoreStringNode* socket_exec_read_http_header_string(QoreObject* self, QoreSocketObject* s,
+        int timeout_ms, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n\r\n"));
+    s->ref();
+    ValueHolder result(socket_exec_recv_poll(self, s,
+        new SocketRecvUntilBytesPollOperation(xsink, *pattern, s, true, true),
+        timeout_ms, "readHTTPHeaderString", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->getType() != NT_STRING) {
+        xsink->raiseException("SOCKET-HTTP-ERROR",
+            "expected string output from async HTTP header string operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+
+    QoreStringNode* raw = result->get<QoreStringNode>();
+    const size_t len = raw->size();
+    SimpleRefHolder<QoreStringNode> hdr;
+    if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
+        hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
+        hdr->concat('\n');
+    } else {
+        hdr = raw->stringRefSelf();
+    }
+
+    my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_HEADERS_READ, QORE_SOURCE_SOCKET, **hdr);
+    return hdr.release();
+}
+
+class SocketReadinessPollOperation : public SocketPollOperationBase {
+public:
+    SocketReadinessPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, unsigned direction, int events,
+            const char* waiting_state, const char* ready_state)
+            : sock(sock), direction(direction), events(events), waiting_state(waiting_state), ready_state(ready_state) {
+        init(xsink, true);
+    }
+
+    DLLLOCAL void init(ExceptionSink* xsink, bool defer_init) {
+        if (defer_init) {
+            controller_deferred_tid = q_gettid();
+            return;
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        initLocked(xsink);
+    }
+
+    DLLLOCAL int initLocked(ExceptionSink* xsink) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        assert(priv->m.trylock());
+        if (initialized) {
+            return 0;
+        }
+        if (priv->checkOpen(xsink)
+                || priv->setNonBlockFromAsyncController(xsink, direction, controller_deferred_tid)) {
+            return -1;
+        }
+        set_non_block = true;
+        initialized = true;
+        return 0;
+    }
+
+    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            clearNonBlock();
+            sock->deref(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return ready;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
+        clearNonBlock();
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (!initialized) {
+            my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+            AutoLocker al(priv->m);
+            if (initLocked(xsink)) {
+                return nullptr;
+            }
+        }
+
+        if (!waiting) {
+            waiting = true;
+            return getSocketPollInfoHash(xsink, events);
+        }
+
+        my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+        AutoLocker al(priv->m);
+        if (set_non_block) {
+            priv->clearNonBlock(direction);
+            set_non_block = false;
+        }
+        if (priv->checkOpen(xsink)) {
+            return nullptr;
+        }
+        ready = true;
+        return nullptr;
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        return ready;
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        return ready ? ready_state : waiting_state;
+    }
+
+private:
+    DLLLOCAL void clearNonBlock() {
+        if (set_non_block) {
+            my_socket_priv* priv = my_socket_priv::getPriv(*sock);
+            AutoLocker al(priv->m);
+            priv->clearNonBlock(direction);
+            set_non_block = false;
+        }
+    }
+
+    QoreSocketObject* sock;
+    unsigned direction;
+    int events;
+    const char* waiting_state;
+    const char* ready_state;
+    bool waiting = false;
+    bool ready = false;
+    bool set_non_block = false;
+    bool initialized = false;
+    int controller_deferred_tid = -1;
+};
+
+static bool socket_exec_wait_readiness(QoreObject* self, QoreSocketObject* s, int timeout_ms, unsigned direction,
+        int events, const char* owner_name, const char* waiting_state, const char* ready_state,
+        ExceptionSink* xsink) {
+    s->ref();
+    SocketReadinessPollOperation* readiness_poller = new SocketReadinessPollOperation(xsink, s, direction, events,
+        waiting_state, ready_state);
+    ReferenceHolder<SocketPollOperationBase> poller(readiness_poller, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, direction);
+    if (!async_guard) {
+        return false;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(owner_name), xsink);
+    }
+    if (*xsink) {
+        return false;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, timeout_ms, owner_name, xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (ex_holder) {
+        if (socket_exec_exception_is(*ex_holder, "SOCKET-TIMEOUT")) {
+            return false;
+        }
+        socket_raise_poll_result_exception(*ex_holder, xsink);
+        return false;
+    }
+
+    return readiness_poller->goalReached();
+}
+
+static bool socket_exec_is_data_available(QoreObject* self, QoreSocketObject* s, int timeout_ms,
+        ExceptionSink* xsink) {
+    s->ref();
+    SocketDataAvailablePollOperation* data_available_poller = new SocketDataAvailablePollOperation(xsink, s, true);
+    ReferenceHolder<SocketPollOperationBase> poller(data_available_poller, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return false;
+    }
+
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*op_obj);
+    poller.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", self->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode("isDataAvailable"), xsink);
+    }
+    if (*xsink) {
+        return false;
+    }
+
+    QoreHashNode* ex = nullptr;
+    ReferenceHolder<QoreHashNode> result(
+        socket_exec_poll_operation(self, s, *op_obj, timeout_ms, "isDataAvailable", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (ex_holder) {
+        if (socket_exec_exception_is(*ex_holder, "SOCKET-TIMEOUT")) {
+            return false;
+        }
+        socket_raise_poll_result_exception(*ex_holder, xsink);
+        return false;
+    }
+
+    return data_available_poller->goalReached();
+}
+
+static size_t socket_exec_http_line_payload_size(const QoreStringNode& line) {
+    size_t len = line.size();
+    const char* str = line.c_str();
+    if (len >= 2 && str[len - 2] == '\r' && str[len - 1] == '\n') {
+        return len - 2;
+    }
+    if (len && str[len - 1] == '\n') {
+        return len - 1;
+    }
+    return len;
+}
+
+static bool socket_exec_http_blank_line(const QoreStringNode& line) {
+    return !socket_exec_http_line_payload_size(line);
+}
+
+static int socket_exec_run_http_recv_data_callback(const ResolvedCallReferenceNode* recv_callback,
+        const AbstractQoreNode& data, ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    arg->setKeyValue("data", data.realCopy(), xsink);
+    arg->setKeyValue("chunked", true, xsink);
+    args->push(arg.release(), nullptr);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(recv_callback->execValue(*args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static int socket_exec_run_http_recv_header_callback(QoreObject* self,
+        const ResolvedCallReferenceNode* recv_callback, const QoreHashNode* hdr, QoreHashNode* info,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreHashNode> arg(new QoreHashNode(autoTypeInfo), xsink);
+    arg->setKeyValue("hdr", hdr ? hdr->refSelf() : nullptr, xsink);
+    arg->setKeyValue("info", info, xsink);
+    arg->setKeyValue("obj", self->objectRefSelf(), xsink);
+    arg->setKeyValue("send_aborted", false, xsink);
+    args->push(arg.release(), nullptr);
+    if (*xsink) {
+        return -1;
+    }
+
+    ValueHolder rv(recv_callback->execValue(*args, xsink), xsink);
+    return *xsink ? -1 : 0;
+}
+
+static QoreStringNode* socket_exec_recv_http_line(QoreObject* self, QoreSocketObject* s, int timeout_ms,
+        const char* owner_name, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+    s->ref();
+    ValueHolder result(socket_exec_recv_poll(self, s,
+        new SocketRecvUntilBytesPollOperation(xsink, *pattern, s, true, true),
+        timeout_ms, owner_name, xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (result->getType() != NT_STRING) {
+        xsink->raiseException("SOCKET-RECV-ERROR", "expected string data from async receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<QoreStringNode>();
+}
+
+static int socket_exec_read_http_chunked_trailers(QoreObject* self, QoreSocketObject* s, QoreHashNode& output,
+        int timeout_ms, const char* owner_name, ExceptionSink* xsink, QoreHashNode* info = nullptr,
+        bool* has_trailers = nullptr) {
+    QoreString trailers(s->getEncoding());
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked trailer read")) {
+            return -1;
+        }
+
+        SimpleRefHolder<QoreStringNode> line(socket_exec_recv_http_line(self, s, timeout_ms, owner_name, xsink));
+        if (*xsink) {
+            return -1;
+        }
+        if (socket_exec_http_blank_line(**line)) {
+            break;
+        }
+        trailers.concat(line->c_str(), line->size());
+    }
+
+    if (has_trailers) {
+        *has_trailers = !trailers.empty();
+    }
+    if (!trailers.empty()) {
+        my_socket_priv* priv = my_socket_priv::getPriv(*s);
+        priv->convertHeaderToHash(output, trailers, info);
+        priv->doReadHttpHeaderEvent(QORE_EVENT_HTTP_FOOTERS_RECEIVED, output, QORE_SOURCE_SOCKET);
+    }
+    return 0;
+}
+
+static QoreHashNode* socket_exec_read_http_chunked_body(QoreObject* self, QoreSocketObject* s, int timeout_ms,
+        bool binary_body, bool read_once, const char* owner_name, ExceptionSink* xsink, OutputStream* os = nullptr,
+        const ResolvedCallReferenceNode* recv_callback = nullptr) {
+    assert(!os || (binary_body && !read_once && !recv_callback));
+    assert(!recv_callback || !read_once);
+
+    SocketSyncPoll::assertNotOnIoThread("Socket", owner_name, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    if (!os && !recv_callback) {
+        s->ref();
+        ValueHolder rv(socket_exec_recv_poll(self, s,
+            new SocketReadHttpChunkedBodyPollOperation(xsink, s, binary_body, read_once, QORE_SOURCE_SOCKET),
+            timeout_ms, owner_name, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv->getType() != NT_HASH) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR",
+                "expected hash output from async chunked body read operation, got '%s'", rv->getFullTypeName());
+            return nullptr;
+        }
+        return rv.release().get<QoreHashNode>();
+    }
+
+    my_socket_priv* priv = my_socket_priv::getPriv(*s);
+    SocketExecAsyncIoGuard async_guard(*priv, xsink, NB_RECV);
+    if (!async_guard) {
+        return nullptr;
+    }
+
+    priv->clearHttpExpectChunkedBody();
+
+    SimpleRefHolder<BinaryNode> body_bin(binary_body && !os && !recv_callback ? new BinaryNode : nullptr);
+    SimpleRefHolder<QoreStringNode> body_str(binary_body || recv_callback ? nullptr : new QoreStringNode(s->getEncoding()));
+
+    unsigned cancel_check = 0;
+    while (true) {
+        if (!(cancel_check++ % 100) && qore_check_cancel(xsink, "socket chunked body read")) {
+            return nullptr;
+        }
+
+        SimpleRefHolder<QoreStringNode> line(socket_exec_recv_http_line(self, s, timeout_ms, owner_name, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+
+        size_t line_len = socket_exec_http_line_payload_size(**line);
+        const char* line_str = line->c_str();
+        const char* semi = static_cast<const char*>(memchr(line_str, ';', line_len));
+        size_t hex_len = semi ? static_cast<size_t>(semi - line_str) : line_len;
+        std::string hex(line_str, hex_len);
+        long chunk_size = strtol(hex.c_str(), nullptr, 16);
+        if (chunk_size < 0) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)", chunk_size);
+            return nullptr;
+        }
+
+        priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNK_SIZE, static_cast<size_t>(chunk_size), line_len,
+            QORE_SOURCE_SOCKET);
+
+        if (!chunk_size) {
+            ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), xsink);
+            if (!os && !recv_callback) {
+                if (binary_body) {
+                    output->setKeyValue("body", body_bin.release(), xsink);
+                } else {
+                    output->setKeyValue("body", body_str.release(), xsink);
+                }
+            }
+            ReferenceHolder<QoreHashNode> info(recv_callback ? new QoreHashNode(autoTypeInfo) : nullptr, xsink);
+            bool has_trailers = false;
+            if (*xsink || socket_exec_read_http_chunked_trailers(self, s, **output, timeout_ms, owner_name, xsink,
+                    *info, &has_trailers)) {
+                return nullptr;
+            }
+            if (recv_callback) {
+                if (socket_exec_run_http_recv_header_callback(self, recv_callback,
+                        has_trailers ? *output : nullptr, info.release(), xsink)) {
+                    return nullptr;
+                }
+                return nullptr;
+            }
+            return output.release();
+        }
+
+        if (static_cast<unsigned long>(chunk_size) > static_cast<unsigned long>(std::numeric_limits<ssize_t>::max())) {
+            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk size %ld exceeds the maximum supported size",
+                chunk_size);
+            return nullptr;
+        }
+
+        SimpleRefHolder<BinaryNode> chunk(socket_exec_recv_bytes(self, s, static_cast<size_t>(chunk_size),
+            timeout_ms, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+
+        priv->doDataEvent(QORE_EVENT_HTTP_CHUNKED_DATA_READ, QORE_SOURCE_SOCKET, chunk->getPtr(), chunk->size());
+        if (os) {
+            int write_rc = socket_exec_write_output_stream_poll(self, s, os, **chunk, timeout_ms, xsink, true);
+            if (write_rc == -1 || *xsink) {
+                return nullptr;
+            }
+        } else if (!recv_callback && binary_body) {
+            body_bin->append(chunk->getPtr(), chunk->size());
+        } else if (!recv_callback) {
+            body_str->concat(static_cast<const char*>(chunk->getPtr()), chunk->size());
+        }
+
+        if (!os) {
+            int64 body_size = recv_callback
+                ? static_cast<int64>(chunk->size())
+                : binary_body ? static_cast<int64>(body_bin->size()) : static_cast<int64>(body_str->size());
+            int64 max_chunked_body_size = priv->getMaxChunkedBodySize();
+            if (max_chunked_body_size > 0 && body_size > max_chunked_body_size) {
+                xsink->raiseException("HTTP-BODY-TOO-LARGE", "chunked body size " QLLD " exceeds maximum " QLLD,
+                    body_size, max_chunked_body_size);
+                return nullptr;
+            }
+        }
+
+        SimpleRefHolder<BinaryNode> crlf(socket_exec_recv_bytes(self, s, 2, timeout_ms, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+        priv->doChunkedReadEvent(QORE_EVENT_HTTP_CHUNKED_DATA_RECEIVED, static_cast<size_t>(chunk_size),
+            static_cast<size_t>(chunk_size) + 2, QORE_SOURCE_SOCKET);
+
+        if (recv_callback) {
+            if (binary_body) {
+                if (socket_exec_run_http_recv_data_callback(recv_callback, **chunk, xsink)) {
+                    return nullptr;
+                }
+            } else {
+                SimpleRefHolder<QoreStringNode> chunk_str(new QoreStringNode(
+                    static_cast<const char*>(chunk->getPtr()), chunk->size(), s->getEncoding()));
+                if (socket_exec_run_http_recv_data_callback(recv_callback, **chunk_str, xsink)) {
+                    return nullptr;
+                }
+            }
+        }
+
+        if (read_once) {
+            ReferenceHolder<QoreHashNode> output(new QoreHashNode(autoTypeInfo), xsink);
+            assert(binary_body);
+            output->setKeyValue("body", body_bin.release(), xsink);
+            return *xsink ? nullptr : output.release();
+        }
+    }
+}
+
+static QoreHashNode* socket_exec_read_server_sent_event(QoreObject* self, QoreSocketObject* s, int timeout_ms,
+        ExceptionSink* xsink) {
+    s->ref();
+    ValueHolder rv(socket_exec_recv_poll(self, s,
+        new SocketReadServerSentEventPollOperation(xsink, s, true), timeout_ms, "readServerSentEvent", xsink),
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (rv->getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-SSE-ERROR",
+            "expected hash output from async SSE read operation, got '%s'", rv->getFullTypeName());
+        return nullptr;
+    }
+    return rv.release().get<QoreHashNode>();
+}
+
+static QoreHashNode* socket_exec_read_server_sent_event_encoded(QoreObject* self, QoreSocketObject* s,
+        const QoreStringNode* content_encoding, int timeout_ms, ExceptionSink* xsink) {
+    s->ref();
+    ValueHolder rv(socket_exec_recv_poll(self, s,
+        new SocketReadServerSentEventPollOperation(xsink, s, content_encoding, true), timeout_ms,
+        "readServerSentEvent", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (rv->getType() != NT_HASH) {
+        xsink->raiseException("SOCKET-SSE-ERROR",
+            "expected hash output from async SSE read operation, got '%s'", rv->getFullTypeName());
+        return nullptr;
+    }
+    return rv.release().get<QoreHashNode>();
 }
 
 static int check_response_code(int status_code, ExceptionSink* xsink) {
@@ -151,17 +1932,17 @@ hashdecl Qore::SocketPollInfo {
     Qore::AbstractPollableIoObject socket;
 
     //! Optional poll timeout hint in milliseconds for protocol-level timers (e.g., QUIC retransmission)
-    /** When set, the I/O controller should wake up no later than this many milliseconds from now,
-        even if no socket events occur, to allow protocol timer processing.
+    /** When set, @ref Qore::Socket::poll() "Socket::poll()" and the I/O controller should wake up no later than this
+        many milliseconds from now, even if no socket events occur, to allow protocol timer processing.
 
         @since %Qore 2.3
     */
     *int poll_timeout_ms;
 
     //! Optional extra file descriptors to monitor alongside the main socket
-    /** When set, the I/O controller registers these fds with its event loop.
-        When any extra fd becomes ready, the operation's continuePoll() is called.
-        Used for InputStream fds during streaming responses.
+    /** When set, @ref Qore::Socket::poll() "Socket::poll()" and the I/O controller monitor these fds alongside the
+        main pollable object.  When any extra fd becomes ready, the operation's continuePoll() is called.  Used for
+        InputStream and OutputStream fds during streaming operations.
 
         @since %Qore 2.3
     */
@@ -1643,6 +3424,12 @@ AbstractPollOperation Socket::startPollReadServerSentEvent() {
     The poll operation returned will upgrade a client connection to an SSL/TLS connection using any certificate and
     private key set for the socket.
 
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns a hash
+    with the following keys:
+    - \c secure: True if SSL/TLS is active on the socket
+    - \c is_http2: True if HTTP/2 was negotiated via ALPN
+    - \c negotiated_protocol: the negotiated ALPN protocol string, or @ref nothing if none was negotiated
+
     @since %Qore 1.12
 */
 AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
@@ -1665,6 +3452,12 @@ AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
 
     The poll operation returned will upgrade a server connection to an SSL/TLS connection using the certificate and
     private key set on the socket.
+
+    The @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns a hash
+    with the following keys:
+    - \c secure: True if SSL/TLS is active on the socket
+    - \c is_http2: True if HTTP/2 was negotiated via ALPN
+    - \c negotiated_protocol: the negotiated ALPN protocol string, or @ref nothing if none was negotiated
 
     @since %Qore 1.12
 */
@@ -1726,7 +3519,7 @@ sock.connect("/tmp/socket");@endcode
     Socket::connectUNIXSSL()
 */
 nothing Socket::connect(string target, timeout timeout_ms = -1) {
-    s->connect(target->c_str(), timeout_ms, xsink);
+    socket_exec_connect(self, s, target->c_str(), timeout_ms, false, xsink);
 }
 
 //! Connects to the given host and port with an optional timeout value with a millisecond resolution
@@ -1759,7 +3552,8 @@ sock.connectINET("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s);@endcode
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and Socket::connectUNIXSSL()
 */
 nothing Socket::connectINET(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->connectINET2(host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms, xsink);
+    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms,
+        false, xsink);
 }
 
 //! Connects to a UNIX domain socket file
@@ -1783,7 +3577,7 @@ sock.connectUNIX("/tmp/socket"); @endcode
     @note UNIX domain sockets are not available on native Windows ports
 */
 nothing Socket::connectUNIX(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->connectUNIX(path->c_str(), socktype, protocol, xsink);
+    socket_exec_connect_unix(self, s, path->c_str(), socktype, protocol, -1, false, xsink);
 }
 
 //! Connects to a remote socket and attempts to establish a TLS/SSL connection; accepts an optional timeout value with a millisecond resolution
@@ -1816,7 +3610,7 @@ sock.connectSSL("/tmp/socket"); @endcode
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectUNIXSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 */
 nothing Socket::connectSSL(string target, timeout timeout_ms = -1) {
-    s->connectSSL(xsink, target->c_str(), timeout_ms);
+    socket_exec_connect(self, s, target->c_str(), timeout_ms, true, xsink);
 }
 
 //! Connects to the given host and port and attempts to establish a TLS/SSL connection; accepts an optional timeout value with a millisecond resolution
@@ -1850,7 +3644,8 @@ sock.connectINETSSL("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s); @endcod
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINET(), and Socket::connectUNIXSSL()
 */
 nothing Socket::connectINETSSL(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->connectINET2SSL(xsink, host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms);
+    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms,
+        true, xsink);
 }
 
 //! Connects to the given UNIX domain socket file and attempts to establish a TLS/SSL connection
@@ -1875,7 +3670,7 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
     @note UNIX domain sockets are not available on native Windows ports
 */
 nothing Socket::connectUNIXSSL(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->connectUNIXSSL(xsink, path->c_str(), socktype, protocol);
+    socket_exec_connect_unix(self, s, path->c_str(), socktype, protocol, -1, true, xsink);
 }
 
 //! Opens and binds the socket to a port, interface and port (if the bind_to string has a format "host:port"), or UNIX domain socket file.
@@ -1885,7 +3680,7 @@ nothing Socket::connectUNIXSSL(string path, softint socktype = SOCK_STREAM, soft
 
     This method tries to automatically pick the appropriate address family from the arguments; note that a hostname or address in square brackets (ex: \c "[localhost]") will be looked up and bound as an IPv6 address; additionally, the method recognizes ipv6 addresses by embedded colons (:) in the address string and binds them as such.
 
-    Internally, the getaddrinfo() function is used to look up bind addresses; internal \c bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
+    Internally, bind addresses are resolved by the socket async I/O controller; internal \c bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
 
     @par Example:
     @code{.py} # bind to a UNIX socket on the local system and reuse the address, check return code
@@ -1946,7 +3741,7 @@ nothing Socket::bindUNIX(string path, softint socktype = SOCK_STREAM, softint pr
 //! Opens and binds the socket to the given IPv4 or IPv6 interface (or if no interface is given, then to all interfaces on the local system) and port (the port number will be derived from the service name if a numeric port number is not given)
 /** Opens and binds the socket to a port, interface and port (if the interface string has a format \c "host:port"), or UNIX domain socket file (if no port or service name appears in the bind string). If the second parameter is @ref True, then the socket will set the \c SO_REUSEADDR option, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state).
 
-    Internally, the getaddrinfo() function is used to look up bind addresses; internal bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
+    Internally, bind addresses are resolved by the socket async I/O controller; internal bind() operations are tried in sequence for each address returned; as soon as a bind operation is successful, the method returns. If none of the addresses can be bound, then an error code is returned.
 
     If any errors occur, an exception is thrown.
 
@@ -2001,22 +3796,7 @@ nothing Socket::bindINET(*string iface, *softstring service, softbool reuseaddr 
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
 Socket Socket::accept() {
-    QoreSocketObject *n = s->accept(-1, xsink);
-    if (!n) {
-        assert(*xsink);
-        return QoreValue();
-    }
-
-    assert(n);
-
-    // ensure that a socket object is returned (and not a subclass)
-    QoreObject *ns = new QoreObject(QC_SOCKET, getProgram(), n);
-
-    // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should
-    // be used in the future)
-    my_socket_priv::setAccept(*n, ns);
-
-    return ns;
+    return socket_exec_accept(self, s, -1, false, false, xsink);
 }
 
 //! Accepts connections on a listening socket (see Socket::listen()) accepting a timeout value with a millisecond resolution
@@ -2037,17 +3817,7 @@ Socket Socket::accept() {
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
 *Socket Socket::accept(timeout timeout_ms) {
-    QoreSocketObject *n = s->accept(timeout_ms, xsink);
-    if (!n)
-        return QoreValue();
-
-    // ensure that a socket object is returned (and not a subclass)
-    QoreObject* ns = new QoreObject(QC_SOCKET, getProgram(), n);
-
-    // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should be used in the future)
-    my_socket_priv::setAccept(*n, ns);
-
-    return ns;
+    return socket_exec_accept(self, s, timeout_ms, false, true, xsink);
 }
 
 //! Accepts connections on a listening socket and attempts to negotiate a TLS/SSL connection
@@ -2069,20 +3839,7 @@ Socket Socket::accept() {
     @see Socket::accept(), Socket::listen(), Socket::getPeerInfo()
 */
 Socket Socket::acceptSSL() {
-    QoreSocketObject *n = s->acceptSSL(xsink, -1);
-    if (!n) {
-        assert(*xsink);
-        return QoreValue();
-    }
-
-    // ensure that a socket object is returned (and not a subclass)
-    QoreObject *ns = new QoreObject(QC_SOCKET, getProgram(), n);
-
-    // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should be
-    // used in the future)
-    my_socket_priv::setAccept(*n, ns);
-
-    return ns;
+    return socket_exec_accept(self, s, -1, true, false, xsink);
 }
 
 //! Accepts connections on a listening socket and attempts to negotiate a TLS/SSL connection accepting a timeout value with a millisecond resolution
@@ -2103,17 +3860,7 @@ Socket Socket::acceptSSL() {
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
 *Socket Socket::acceptSSL(timeout timeout_ms) {
-    QoreSocketObject* n = s->acceptSSL(xsink, timeout_ms);
-    if (!n)
-        return QoreValue();
-
-    // ensure that a socket object is returned (and not a subclass)
-    QoreObject* ns = new QoreObject(QC_SOCKET, getProgram(), n);
-
-    // save backwards-compatible peer parameters as members in new object (deprecated: Socket::getPeerInfo() should be used in the future)
-    my_socket_priv::setAccept(*n, ns);
-
-    return ns;
+    return socket_exec_accept(self, s, timeout_ms, true, true, xsink);
 }
 
 //! Listens for connections on a bound socket; sets the socket in a listening state
@@ -2163,7 +3910,7 @@ sock.send(data, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::send(binary bin, timeout timeout_ms = -1) {
-    return s->send(bin, timeout_ms, xsink);
+    return socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends string data over the socket; string data is converted to the socket's encoding if necessary; if any errors occur, an exception is thrown
@@ -2196,7 +3943,7 @@ sock.send(str, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::send(string str, timeout timeout_ms = -1) {
-    return s->send(*str, timeout_ms, xsink);
+    return socket_exec_send_string(self, s, str, timeout_ms, true, xsink);
 }
 
 //! Sends string data over the socket without converting the string to the socket's encoding, but instead is sent exactly as-is; if any errors occur, an exception is thrown
@@ -2227,7 +3974,7 @@ sock.sendBinary(str);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendBinary(string str, timeout timeout_ms = -1) {
-    return s->send(str->c_str(), str->strlen(), timeout_ms, xsink);
+    return socket_exec_send_string_bytes(self, s, str, timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -2258,7 +4005,7 @@ sock.sendBinary2(data);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendBinary(binary bin, timeout timeout_ms = -1) {
-    return s->send(bin, timeout_ms, xsink);
+    return socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -2287,7 +4034,7 @@ sock.send2(data);
     @since %Qore 0.8.4
 */
 nothing Socket::send2(binary bin, timeout timeout_ms = -1) {
-    s->send(bin, timeout_ms, xsink);
+    socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends string data over the socket; string data is converted to the socket's encoding if necessary; if any errors occur, an exception is thrown
@@ -2317,7 +4064,7 @@ sock.send2(str);
     @since %Qore 0.8.4
 */
 nothing Socket::send2(string str, timeout timeout_ms = -1) {
-    s->send(*str, timeout_ms, xsink);
+    socket_exec_send_string(self, s, str, timeout_ms, true, xsink);
 }
 
 //! Sends string data over the socket without converting the string to the socket's encoding, but instead is sent exactly as-is; if any errors occur, an exception is thrown
@@ -2345,7 +4092,7 @@ sock.sendBinary2(str);
     @since %Qore 0.8.4
 */
 nothing Socket::sendBinary2(string str, timeout timeout_ms = -1) {
-    s->send(str->c_str(), str->strlen(), timeout_ms, xsink);
+    socket_exec_send_string_bytes(self, s, str, timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -2373,7 +4120,7 @@ sock.sendBinary2(data);
     @since %Qore 0.8.4
 */
 nothing Socket::sendBinary2(binary bin, timeout timeout_ms = -1) {
-    s->send(bin, timeout_ms, xsink);
+    socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Reads data from an @ref InputStream and sends the bytes over the socket
@@ -2387,20 +4134,21 @@ sock.sendFromInputStream(input_stream, -1); # write all data available
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param input_stream the @ref InputStream providing the data to send
+    @param input_stream the @ref InputStream providing the data to send; the stream must be I/O-thread-safe
     @param size the amount of data to send in bytes; to send all data available in the InputStream, use -1
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-TIMEOUT a single send() operation exceeded the given timeout period
-    @throw SOCKET-SEND-ERROR an error occurred sending the socket data
+    @throw SOCKET-SEND-ERROR an error occurred sending the socket data or the InputStream is not I/O-thread-safe
     @throw SOCKET-SSL-ERROR there was an SSL error while writing data to the socket
 
     @since %Qore 0.8.13
 */
 nothing Socket::sendFromInputStream(Qore::InputStream[InputStream] input_stream, softint size = -1,
         timeout timeout_ms = -1) {
-    s->sendFromInputStream(*input_stream, size, timeout_ms, xsink);
+    socket_exec_send_input_stream(self, s, *input_stream, const_cast<QoreObject*>(obj_input_stream), size,
+        timeout_ms, xsink);
 }
 
 //! Sends a 1-byte integer over the socket
@@ -2428,7 +4176,8 @@ sock.sendi1(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi1(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi1((char)i, timeout_ms, xsink);
+    char v = static_cast<char>(i);
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends a 2-byte (16-bit) integer in big-endian format (network byte order) over the socket
@@ -2456,7 +4205,8 @@ sock.sendi2(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi2(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi2((short)i, timeout_ms, xsink);
+    short v = htons(static_cast<short>(i));
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends a 4-byte (32-bit) integer in big-endian format (network byte order) over the socket
@@ -2484,7 +4234,8 @@ sock.sendi4(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi4(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi4((int)i, timeout_ms, xsink);
+    int v = htonl(static_cast<int>(i));
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends an 8-byte (64-bit) integer in big-endian format (network byte order) over the socket
@@ -2512,7 +4263,8 @@ sock.sendi8(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi8(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi8(i, timeout_ms, xsink);
+    int64 v = i8MSB(i);
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends a 2-byte (16-bit) integer in little-endian format over the socket
@@ -2540,7 +4292,8 @@ sock.sendi2LSB(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi2LSB(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi2LSB((short)i, timeout_ms, xsink);
+    short v = i2LSB(static_cast<short>(i));
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends a 4-byte (32-bit) integer in little-endian format over the socket
@@ -2568,7 +4321,8 @@ sock.sendi4LSB(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi4LSB(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi4LSB((int)i, timeout_ms, xsink);
+    int v = i4LSB(static_cast<int>(i));
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Sends an 8-byte (64-bit) integer in little-endian format over the socket
@@ -2596,7 +4350,8 @@ sock.sendi8LSB(val, 20s);
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
 int Socket::sendi8LSB(softint i = 0, timeout timeout_ms = -1) {
-    return s->sendi8LSB(i, timeout_ms, xsink);
+    int64 v = i8LSB(i);
+    return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
 //! Receives data from the socket and returns a string tagged with the Socket's character encoding
@@ -2626,11 +4381,7 @@ string data = sock.recv(-1); # read all data available
     - Socket::recvBinary()
 */
 string Socket::recv(softint size = 0, timeout timeout_ms = -1) {
-    if (size > 0)
-        return s->recv(size, timeout_ms, xsink);
-
-    QoreStringNode* str = s->recv(timeout_ms, xsink);
-    return !*xsink && !str ? new QoreStringNode : str;
+    return socket_exec_recv_string(self, s, size, timeout_ms, xsink);
 }
 
 //! Receives data from the socket and returns a binary object
@@ -2658,11 +4409,7 @@ binary data = sock.recvBinary(-1); # read all data available
     @see Socket::recv()
 */
 binary Socket::recvBinary(softint size = 0, timeout timeout_ms = -1) {
-    if (size > 0)
-        return s->recvBinary(size, timeout_ms, xsink);
-
-    BinaryNode* str = s->recvBinary(timeout_ms, xsink);
-    return !*xsink && !str ? new BinaryNode : str;
+    return socket_exec_recv_binary(self, s, size, timeout_ms, xsink);
 }
 
 //! Receives data from the socket and writes the bytes to an @ref OutputStream
@@ -2676,13 +4423,13 @@ sock.recvToOutputStream(os, -1); # read all data available
     @par Events:
     @ref EVENT_PACKET_READ
 
-    @param os The output stream to write the response body to
+    @param os The output stream to write the response body to; the stream must be I/O-thread-safe
     @param size the amount of data to read in bytes; to read until the remote closes the connection, use -1
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-CLOSED the remote end has closed the connection.
-    @throw SOCKET-RECV-ERROR there was an error receiving the data.
+    @throw SOCKET-RECV-ERROR there was an error receiving the data or the OutputStream is not I/O-thread-safe
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR there was an SSL error while reading data from the socket
 
@@ -2690,7 +4437,7 @@ sock.recvToOutputStream(os, -1); # read all data available
     @since %Qore 0.8.13
 */
 nothing Socket::recvToOutputStream(Qore::OutputStream[OutputStream] os, softint size = -1, timeout timeout_ms = -1) {
-    s->recvToOutputStream(*os, size, timeout_ms, xsink);
+    socket_exec_recv_to_output_stream(self, s, *os, size, timeout_ms, xsink);
 }
 
 //! Receives a 1-byte signed integer from the socket
@@ -2718,7 +4465,11 @@ int val = sock.recvi1();
 */
 int Socket::recvi1(timeout timeout_ms = -1) {
     char b = 0;
-    s->recvi1(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
     return b;
 }
 
@@ -2747,7 +4498,12 @@ int val = sock.recvi2();
 */
 int Socket::recvi2(timeout timeout_ms = -1) {
     short b = 0;
-    s->recvi2(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = ntohs(b);
     return b;
 }
 
@@ -2781,7 +4537,12 @@ int val = sock.recvi4();
 */
 int Socket::recvi4(timeout timeout_ms = -1) {
     int b = 0;
-    s->recvi4(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = ntohl(b);
     return b;
 }
 
@@ -2810,8 +4571,12 @@ int val = sock.recvi8();
 */
 int Socket::recvi8(timeout timeout_ms = -1) {
     int64 b = 0;
-    s->recvi8(timeout_ms, &b, xsink);
-    return b;
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    return MSBi8(b);
 }
 
 //! Receives a 2-byte (16-bit) signed integer in little-endian format from the socket
@@ -2839,7 +4604,12 @@ int val = sock.recvi2LSB();
 */
 int Socket::recvi2LSB(timeout timeout_ms = -1) {
     short b = 0;
-    s->recvi2LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi2(b);
     return b;
 }
 
@@ -2868,7 +4638,12 @@ int val = sock.recvi4LSB();
 */
 int Socket::recvi4LSB(timeout timeout_ms = -1) {
     int b = 0;
-    s->recvi4LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi4(b);
     return b;
 }
 
@@ -2897,7 +4672,12 @@ int val = sock.recvi8LSB();
 */
 int Socket::recvi8LSB(timeout timeout_ms = -1) {
     int64 b = 0;
-    s->recvi8LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi8(b);
     return b;
 }
 
@@ -2926,7 +4706,11 @@ int val = sock.recvu1();
 */
 int Socket::recvu1(timeout timeout_ms = -1) {
     unsigned char b = 0;
-    s->recvu1(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
     return b;
 }
 
@@ -2955,7 +4739,12 @@ int val = sock.recvu2();
 */
 int Socket::recvu2(timeout timeout_ms = -1) {
     unsigned short b = 0;
-    s->recvu2(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = ntohs(b);
     return b;
 }
 
@@ -2984,7 +4773,12 @@ int val = sock.recvu4();
 */
 int Socket::recvu4(timeout timeout_ms = -1) {
     unsigned int b = 0;
-    s->recvu4(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = ntohl(b);
     return b;
 }
 
@@ -3013,7 +4807,12 @@ int val = sock.recvi2LSB();
 */
 int Socket::recvu2LSB(timeout timeout_ms = -1) {
     unsigned short b = 0;
-    s->recvu2LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi2(b);
     return b;
 }
 
@@ -3042,7 +4841,12 @@ int val = sock.recvu4LSB();
 */
 int Socket::recvu4LSB(timeout timeout_ms = -1) {
     unsigned b = 0;
-    s->recvu4LSB(timeout_ms, &b, xsink);
+    SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
+    if (*xsink) {
+        return 0;
+    }
+    memcpy(&b, data->getPtr(), sizeof(b));
+    b = LSBi4(b);
     return b;
 }
 
@@ -3085,8 +4889,12 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, string body,
         *reference<hash> info, timeout timeout_ms = -1) {
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPMessage(xsink, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers, *body,
-        QORE_SOURCE_SOCKET, timeout_ms);
+    QoreStringNodeValueHelper tstr(body, s->getEncoding(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    socket_exec_send_http_message(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers,
+        tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP message with a method and user-defined headers given as a hash and an optional message body
@@ -3125,8 +4933,8 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, *binary body,
         *reference<hash<auto>> info, timeout timeout_ms = -1) {
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPMessage(xsink, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers,
-        body ? body->getPtr() : nullptr, body ? body->size() : 0, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_message(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers,
+        body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP message with a method and user-defined headers given as a hash and an optional message body
@@ -3161,8 +4969,8 @@ sock.sendHTTPMessageWithCallback(send_callback, "POST", "/RPC2", "1.1", ("Conten
 nothing Socket::sendHTTPMessageWithCallback(code scb, string method, string path, string http_version,
         hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) {
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPMessageWithCallback(xsink, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers, *scb,
-        QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_message_callback(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(),
+        headers, scb, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and an optional message body
@@ -3196,8 +5004,12 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
         return QoreValue();
     }
 
-    s->sendHTTPResponse(xsink, nullptr, status_code, status_desc->c_str(), http_version->c_str(), headers, *body,
-        QORE_SOURCE_SOCKET, timeout_ms);
+    QoreStringNodeValueHelper tstr(body, s->getEncoding(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    socket_exec_send_http_response(self, s, nullptr, status_code, status_desc->c_str(), http_version->c_str(),
+        headers, tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and an optional message body
@@ -3246,8 +5058,12 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPResponse(xsink, *ohrh, status_code, status_desc->c_str(), http_version->c_str(), headers, *body,
-        QORE_SOURCE_SOCKET, timeout_ms);
+    QoreStringNodeValueHelper tstr(body, s->getEncoding(), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    socket_exec_send_http_response(self, s, *ohrh, status_code, status_desc->c_str(), http_version->c_str(),
+        headers, tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body as literal binary data
@@ -3286,8 +5102,8 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
         return QoreValue();
     }
 
-    s->sendHTTPResponse(xsink, nullptr, status_code, status_desc->c_str(), http_version->c_str(), headers,
-        body ? body->getPtr() : nullptr, body ? body->size() : 0, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_response(self, s, nullptr, status_code, status_desc->c_str(), http_version->c_str(),
+        headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body as literal binary data
@@ -3332,8 +5148,8 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPResponse(xsink, *ohrh, status_code, status_desc->c_str(), http_version->c_str(), headers,
-        body ? body->getPtr() : nullptr, body ? body->size() : 0, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_response(self, s, *ohrh, status_code, status_desc->c_str(), http_version->c_str(),
+        headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers and a message body from an input stream in chunked transfer encoding
@@ -3352,7 +5168,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any string to be sent)
     @param headers a hash of additional headers to send (key-value pairs); note that the \c "Transfer-Encoding" header
     must be set to \c "chunked" manually with this call
-    @param input_stream The input stream to read data from
+    @param input_stream The input stream to read data from; the stream must be I/O-thread-safe
     @param max_chunk_size the maximum chunk size as the read block size for the @ref InputStream read block size; the
     actual size of the data read will determine the size of each HTTP chunk
     @param info An optional reference to an lvalue that can accept a hash that will be used as an output variable with
@@ -3372,7 +5188,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
 
     @throw SOCKET-NOT-OPEN the socket is not connected
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
-    @throw SOCKET-SEND-ERROR send failed
+    @throw SOCKET-SEND-ERROR send failed or the InputStream is not I/O-thread-safe
     @throw HTTP-CHUNK-ERROR the chunk size given is not greater than 0
     @throw HTTP-TRAILER-ERROR the trailer callback must return either @ref nothing or @ref hash_type "hash"; this
     exception is thrown is another type is returned
@@ -3391,8 +5207,9 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPResponse(xsink, *ohrh, status_code, status_desc->c_str(), http_version->c_str(), headers, *input_stream,
-        max_chunk_size, tcb, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_response_input_stream(self, s, *ohrh, status_code, status_desc->c_str(),
+        http_version->c_str(), headers, *input_stream, const_cast<QoreObject*>(obj_input_stream), max_chunk_size,
+        tcb, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body to send with chunked transfer encoding provided by a callback
@@ -3437,8 +5254,8 @@ nothing Socket::sendHTTPResponseWithCallback(code scb, softint status_code, stri
         return QoreValue();
     }
 
-    s->sendHTTPResponseWithCallback(xsink, nullptr, status_code, status_desc->c_str(), http_version->c_str(), headers,
-        *scb, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_response_callback(self, s, nullptr, status_code, status_desc->c_str(),
+        http_version->c_str(), headers, scb, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body to send with chunked transfer encoding provided by a callback
@@ -3487,8 +5304,8 @@ nothing Socket::sendHTTPResponseWithCallback(code scb, softint status_code, stri
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    s->sendHTTPResponseWithCallback(xsink, *ohrh, status_code, status_desc->c_str(), http_version->c_str(), headers,
-        *scb, QORE_SOURCE_SOCKET, timeout_ms);
+    socket_exec_send_http_response_callback(self, s, *ohrh, status_code, status_desc->c_str(),
+        http_version->c_str(), headers, scb, timeout_ms, xsink);
 }
 
 //! Sends an HTTP message body in chunked transfer encoding
@@ -3530,7 +5347,8 @@ nothing Socket::sendHTTPChunkedBodyFromInputStream(Qore::InputStream[InputStream
             max_chunk_size);
         return QoreValue();
     }
-    s->sendHTTPChunkedBodyFromInputStream(*input_stream, max_chunk_size, timeout_ms, tcb, xsink);
+    socket_exec_send_http_chunked_body_input_stream(self, s, *input_stream, const_cast<QoreObject*>(obj_input_stream),
+        max_chunk_size, tcb, timeout_ms, xsink);
 }
 
 //! Sends the trialer of an HTTP message body in chunked transfer encoding
@@ -3558,7 +5376,7 @@ sock.sendHTTPChunkedBodyTrailer({});
     @since %Qore 0.8.13
 */
 nothing Socket::sendHTTPChunkedBodyTrailer(*hash<auto> trailer, timeout timeout_ms = -1) {
-    s->sendHTTPChunkedBodyTrailer(trailer, timeout_ms, xsink);
+    socket_exec_send_http_chunked_body_trailer(self, s, trailer, timeout_ms, xsink);
 }
 
 //! Retuns a hash representing the data in the HTTP header read, or, if the data cannot be parsed as an HTTP header, then an exception is thrown, and the data read is returned as a string in the \c arg key of the exception hash
@@ -3611,7 +5429,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
 */
 hash<auto> Socket::readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>> info) {
     OptHashRefHelper ohrh(info, xsink);
-    return s->readHTTPHeader(xsink, *ohrh, timeout_ms);
+    return socket_exec_read_http_header(self, s, *ohrh, timeout_ms, xsink);
 }
 
 //! Retuns a string representing the data in the HTTP header read (reads until \c "\r\n\r\n")
@@ -3639,7 +5457,7 @@ string str = sock.readHTTPHeaderString(10s);
     @since %Qore 0.8.8
 */
 string Socket::readHTTPHeaderString(timeout timeout_ms = -1) {
-    return s->readHTTPHeaderString(xsink, timeout_ms);
+    return socket_exec_read_http_header_string(self, s, timeout_ms, xsink);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)
@@ -3665,8 +5483,7 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
 hash<auto> Socket::readHTTPChunkedBody(timeout timeout_ms = -1) {
-    // when rc = -3 it's a timeout, but rv will be NULL anyway, so we do nothing
-    return s->readHTTPChunkedBody(timeout_ms, xsink);
+    return socket_exec_read_http_chunked_body(self, s, timeout_ms, false, false, "readHTTPChunkedBody", xsink);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a binary object in the \c "body" key of a hash (including footers received)
@@ -3692,8 +5509,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
 hash<auto> Socket::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
-    // when rc = -3 it's a timeout, but rv will be NULL anyway, so we do nothing
-    return s->readHTTPChunkedBodyBinary(timeout_ms, xsink);
+    return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false, "readHTTPChunkedBodyBinary", xsink);
 }
 
 //! Reads in a single HTTP message chunk
@@ -3724,8 +5540,7 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
 hash<auto> Socket::readHTTPChunk(timeout timeout_ms = -1) {
-    // when rc = -3 it's a timeout, but rv will be NULL anyway, so we do nothing
-    return s->readHttpChunk(timeout_ms, xsink);
+    return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, true, "readHTTPChunk", xsink);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding, writes it in an @ref OutputStream and returns any footers received
@@ -3739,7 +5554,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @par Events:
     @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED
 
-    @param os The output stream to write the response body to
+    @param os The output stream to write the response body to; the stream must be I/O-thread-safe
     @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return a hash of any HTTP footers received (with footer keys converted to lower case)
@@ -3750,9 +5565,11 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw SOCKET-TIMEOUT The data requested was not received in the timeout period
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
+    @throw SOCKET-WRITE-ERROR the OutputStream is not I/O-thread-safe
 */
 hash<auto> Socket::readHTTPChunkedBodyToOutputStream(Qore::OutputStream[OutputStream] os, timeout timeout_ms = -1) {
-    return s->readHTTPChunkedBodyToOutputStream(*os, timeout_ms, xsink);
+    return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false,
+        "readHTTPChunkedBodyToOutputStream", xsink, *os);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)
@@ -3785,7 +5602,8 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @since %Qore 0.8.10
 */
 Socket::readHTTPChunkedBodyWithCallback(code rcb, timeout timeout_ms = -1) {
-    s->readHTTPChunkedBodyWithCallback(*rcb, self, timeout_ms, xsink);
+    ReferenceHolder<QoreHashNode> ignored(socket_exec_read_http_chunked_body(self, s, timeout_ms, false, false,
+        "readHTTPChunkedBodyWithCallback", xsink, nullptr, rcb), xsink);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)
@@ -3822,7 +5640,8 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @since %Qore 0.8.10
 */
 Socket::readHTTPChunkedBodyBinaryWithCallback(code rcb, timeout timeout_ms = -1) {
-    s->readHTTPChunkedBodyBinaryWithCallback(*rcb, self, timeout_ms, xsink);
+    ReferenceHolder<QoreHashNode> ignored(socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false,
+        "readHTTPChunkedBodyBinaryWithCallback", xsink, nullptr, rcb), xsink);
 }
 
 //! Read a server sent event message
@@ -3843,7 +5662,10 @@ Socket::readHTTPChunkedBodyBinaryWithCallback(code rcb, timeout timeout_ms = -1)
     @since %Qore 2.0
 */
 hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) {
-    return s->readServerSentEvent(xsink, content_encoding, timeout_ms);
+    if (!content_encoding || (*content_encoding == "identity")) {
+        return socket_exec_read_server_sent_event(self, s, timeout_ms, xsink);
+    }
+    return socket_exec_read_server_sent_event_encoded(self, s, content_encoding, timeout_ms, xsink);
 }
 
 //! Read a server sent event message
@@ -3863,7 +5685,7 @@ hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeo
     @since %Qore 2.0
 */
 hash<SseMessageInfo> Socket::readServerSentEvent(timeout timeout_ms = -1) {
-    return s->readServerSentEvent(xsink, nullptr, timeout_ms);
+    return socket_exec_read_server_sent_event(self, s, timeout_ms, xsink);
 }
 
 //! Closes an open socket
@@ -4047,7 +5869,7 @@ bool b = sock.isDataAvailable();
     @throw SOCKET-CLOSED The remote end closed the connection without sending any data
 */
 bool Socket::isDataAvailable(timeout timeout_ms = 0) {
-    return s->isDataAvailable(xsink, (int)timeout_ms);
+    return socket_exec_is_data_available(self, s, (int)timeout_ms, xsink);
 }
 
 //! Returns @ref True or @ref False depending on whether all the data has been written to the socket
@@ -4069,7 +5891,8 @@ bool b = sock.isWriteFinished();
     @throw SOCKET-CLOSED The remote end closed the connection without sending any data
 */
 bool Socket::isWriteFinished(timeout timeout_ms = 0) {
-    return s->isWriteFinished(xsink, (int)timeout_ms);
+    return socket_exec_wait_readiness(self, s, (int)timeout_ms, NB_SEND, SOCK_POLLOUT, "isWriteFinished",
+        "waiting-write", "write-ready", xsink);
 }
 
 //! Returns @ref True if the socket is open
@@ -4094,8 +5917,7 @@ bool Socket::isOpen() [flags=CONSTANT] {
     established
 */
 *string Socket::getSSLCipherName() [flags=CONSTANT] {
-    const char *str = s->getSSLCipherName();
-    return str ? new QoreStringNode(str) : 0;
+    return s->getSSLCipherNameString(xsink);
 }
 
 //! Returns the version string of the cipher for an encrypted connection or @ref nothing if a secure connection has not been established
@@ -4108,8 +5930,7 @@ bool Socket::isOpen() [flags=CONSTANT] {
     not been established
 */
 *string Socket::getSSLCipherVersion() [flags=CONSTANT] {
-    const char *str = s->getSSLCipherVersion();
-    return str ? new QoreStringNode(str) : 0;
+    return s->getSSLCipherVersionString(xsink);
 }
 
 //! Returns @ref True if the connection is a secure TLS/SSL connection
@@ -4121,7 +5942,7 @@ bool b = sock.isSecure();
     @return @ref True if the connection is encrypted, @ref False if not
 */
 bool Socket::isSecure() [flags=CONSTANT] {
-    return s->isSecure();
+    return s->isSecure(xsink);
 }
 
 //! Sets the ALPN (Application-Layer Protocol Negotiation) protocols to offer during TLS negotiation
@@ -4154,7 +5975,7 @@ if (proto == "h2") {
     @since %Qore 2.2
 */
 *string Socket::getAlpnProtocol() [flags=CONSTANT] {
-    return s->getAlpnProtocol();
+    return s->getAlpnProtocol(xsink);
 }
 
 //! Returns @ref True if the connection is using HTTP/2 (negotiated via ALPN)
@@ -4170,7 +5991,7 @@ if (sock.isHttp2()) {
     @since %Qore 2.2
 */
 bool Socket::isHttp2() [flags=CONSTANT] {
-    return s->isHttp2();
+    return s->isHttp2(xsink);
 }
 
 //! Returns a string code giving the result of verifying the remote certificate or @ref nothing if an encrypted connection is not currently established
@@ -4182,7 +6003,10 @@ bool Socket::isHttp2() [flags=CONSTANT] {
     @return A string code giving the result of verifying the peer's certificate. No value is returned if a secure connection has not been established.  The set of possible return values is made up of the keys of the @ref X509_VerificationReasons hash. This hash can also be used to generate a textual description of the verification result.
 */
 *string Socket::verifyPeerCertificate() [flags=CONSTANT] {
-    const char *c = getSSLCVCode(s->verifyPeerCertificate());
+    const char *c = getSSLCVCode(s->verifyPeerCertificate(xsink));
+    if (*xsink) {
+        return QoreValue();
+    }
     return c ? new QoreStringNode(c) : 0;
 }
 
@@ -4494,7 +6318,7 @@ sock.upgradeClientToSSL();
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
 nothing Socket::upgradeClientToSSL(timeout timeout_ms = -1) {
-    s->upgradeClientToSSL(xsink, timeout_ms);
+    socket_exec_upgrade_ssl(self, s, timeout_ms, false, xsink);
 }
 
 //! Upgrades a server socket connection to a TLS/SSL connection
@@ -4513,7 +6337,7 @@ sock.upgradeServerToSSL();
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
 nothing Socket::upgradeServerToSSL(timeout timeout_ms = -1) {
-    s->upgradeServerToSSL(xsink, timeout_ms);
+    socket_exec_upgrade_ssl(self, s, timeout_ms, true, xsink);
 }
 
 //! Removes any warning @ref Qore::Thread::Queue "Queue" object from the Socket
@@ -4734,7 +6558,7 @@ bool Socket::captureRemoteCertificates(bool set = True) {
     @since %Qore 0.9.3
 */
 *SSLCertificate Socket::getRemoteCertificate() {
-    return s->getRemoteCertificate();
+    return s->getRemoteCertificate(xsink);
 }
 
 //! Returns an integer connection ID that is incremented every time the socket is disconnected
@@ -4793,6 +6617,33 @@ Socket::setHttp2MaxRequestBodySize(int size) {
 */
 int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     return s->getHttp2MaxRequestBodySize();
+}
+
+//! Resolves address information through the async I/O controller
+/** This method delegates the address lookup to the global async I/O controller and blocks the caller until the
+    controller-backed operation completes.  It returns the same address fields used by the \c getaddrinfo() function:
+    \c "address", \c "address_desc", \c "family", \c "familystr", \c "socktype", \c "protocol", \c "addrlen", and,
+    when \a service is supplied, \c "port".
+
+    @param node the node name for the lookup
+    @param service the service name (from \c /etc/services, for example) or port number
+    @param family a hint for the address family, \c AF_UNSPEC means any family
+    @param flags hint flags as per the \c getaddrinfo() call: \c AI_ADDRCONFIG, \c AI_ALL, \c AI_CANONNAME,
+    \c AI_NUMERICHOST, \c AI_NUMERICSERV, \c AI_PASSIVE, \c AI_V4MAPPED
+    @param socktype a hint for the type of socket; 0 = any socket type
+    @param protocol a hint for the protocol number; 0 = the default protocol
+    @param timeout_ms the timeout for the controller-backed resolution operation; -1 = never timeout
+
+    @throw QOREADDRINFO-GETINFO-ERROR error looking up either nodename or servicename (or not known)
+    @throw ASYNC-IO-ERROR called from the async I/O thread or the global async I/O controller is unavailable
+
+    @since %Qore 2.3
+ */
+static list<hash<auto>> Socket::resolveAddrInfo(*string node, *softstring service,
+        softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0,
+        timeout timeout_ms = -1) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : nullptr,
+        service ? service->c_str() : nullptr, family, flags, socktype, protocol, timeout_ms);
 }
 
 //! Parse the given string as a Server Sent Event (SSE) string
@@ -5073,11 +6924,11 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
     return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
 }
 
-//! Submits an HTTP/2 response without creating a poll operation
-/** Queues the response in the nghttp2 session. The actual socket write is handled by
-    the active read poll operation's sendPendingData() calls. This is designed for
-    HTTP/2 multiplexing where the read operation stays on the I/O thread and responses
-    are submitted from handler threads.
+//! Submits an HTTP/2 response through the async I/O controller
+/** Copies caller-owned data, queues the response in the nghttp2 session on the
+    async I/O controller, and wakes the controller when this socket is registered
+    there. The actual socket write is handled by the active read poll operation's
+    sendPendingData() calls.
 
     @param stream_id the HTTP/2 stream ID from the request
     @param status_code the HTTP status code to send
@@ -5123,10 +6974,11 @@ nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
     s->setHttp2ConnectProtocolEnabled(enable);
 }
 
-//! Submits an HTTP/2 CONNECT response without creating a poll operation (RFC 8441)
-/** Queues the CONNECT response in the nghttp2 session without END_STREAM, keeping
-    the stream open for bidirectional data transfer (WebSocket over HTTP/2). The actual
-    socket write is handled by the active read poll operation's sendPendingData() calls.
+//! Submits an HTTP/2 CONNECT response through the async I/O controller (RFC 8441)
+/** Queues the CONNECT response in the nghttp2 session without END_STREAM on the
+    async I/O controller, keeping the stream open for bidirectional data transfer
+    (WebSocket over HTTP/2). The actual socket write is handled by the active
+    read poll operation's sendPendingData() calls.
 
     This is designed for HTTP/2 multiplexing where the read operation stays on the I/O
     thread and CONNECT responses are submitted from handler threads.
@@ -5236,19 +7088,22 @@ AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, i
     @since %Qore 2.3
 */
 int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
-    return s->waitForHttp2StreamDrain((int32_t)stream_id, (int)timeout_ms);
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForHttp2StreamDrain", xsink);
+    if (*xsink) {
+        return -1;
+    }
+    return s->waitForHttp2StreamDrain((int32_t)stream_id, (int)timeout_ms, xsink);
 }
 
 //! Submits HTTP/2 streaming response headers without body or END_STREAM
 /** Used by server-side HTTP/2 handlers driven by an async I/O controller.
-    The socket wrapper lock is acquired only briefly to copy the HTTP/2 session
-    shared pointer; the actual header submission runs under only the session's
-    internal recursive mutex.  This avoids handler-thread vs. I/O-thread
-    contention on the socket wrapper lock.
+    The call copies caller-owned data and delegates HTTP/2 session mutation to
+    the async I/O controller.
 
     Must be paired with @ref sendHttp2StreamData() and/or @ref sendHttp2Trailers();
     flushing to the wire is driven by the I/O thread's existing HTTP/2 flush poll
-    operation.  No explicit flush call is needed from the handler.
+    operation.  This method wakes the registered async I/O controller; no explicit
+    flush call is needed from the handler.
 
     @param stream_id the HTTP/2 stream ID
     @param status_code HTTP status code (e.g., 200)
@@ -5265,9 +7120,9 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
 }
 
 //! Sends HTTP/2 DATA frame payload on a server-side stream
-/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
-    shared pointer; the actual DATA enqueue runs under only the session's
-    internal recursive mutex.
+/** Copies caller-owned data and delegates HTTP/2 DATA enqueue to the async I/O
+    controller. After a successful enqueue, the registered async I/O controller
+    is woken to flush pending frames.
 
     @param stream_id the HTTP/2 stream ID
     @param data the binary data to send
@@ -5285,9 +7140,8 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 }
 
 //! Sends HTTP/2 trailer headers on a server-side stream
-/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
-    shared pointer; the actual trailer submission runs under only the session's
-    internal recursive mutex.
+/** Copies caller-owned data and delegates trailer submission to the async I/O
+    controller.
 
     Submits a trailing HEADERS frame with END_STREAM on the specified stream.
     The stream's data provider is configured to use NGHTTP2_DATA_FLAG_NO_END_STREAM
@@ -5309,9 +7163,7 @@ nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) 
 }
 
 //! Removes an HTTP/2 stream from the session
-/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
-    shared pointer; the stream bookkeeping removal runs under only the session's
-    internal recursive mutex.
+/** Delegates stream bookkeeping removal to the async I/O controller.
 
     @param stream_id the HTTP/2 stream ID to remove
 
@@ -5323,9 +7175,8 @@ nothing Socket::cleanupHttp2Stream(int stream_id) {
 }
 
 //! Send RST_STREAM to abort an HTTP/2 stream and clean up the stream state
-/** Acquires the socket wrapper lock only briefly to copy the HTTP/2 session
-    shared pointer; the RST_STREAM submission and stream cleanup run under
-    only the session's internal recursive mutex.
+/** Delegates RST_STREAM submission and stream cleanup to the async I/O
+    controller.
 
     @param stream_id the HTTP/2 stream ID to reset
 
@@ -5365,7 +7216,7 @@ int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_cod
     // If rv == 1 (not I/O-thread-safe), the SimpleRefHolder destructor will deref the body.
     int rv = s->submitHttp2StreamingResponseWithStream((int32_t)stream_id, status_code, headers,
         *body, xsink);
-    if (!rv) {
+    if (!rv && !*xsink) {
         body.release();
     }
     return rv;
@@ -5512,7 +7363,8 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = 
         }
     }
 
-    return s->submitHttp2Request(headers, body_ptr, body_len, xsink, streaming);
+    int stream_id = s->submitHttp2Request(headers, body_ptr, body_len, xsink, streaming);
+    return stream_id;
 }
 
 //! Cancels a pending HTTP/2 stream
@@ -5786,7 +7638,8 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
         return -1;
     }
-    return s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
+    int64_t stream_id = s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
+    return stream_id;
 }
 
 //! Submits a streaming HTTP/3 request (headers only, no END_STREAM) on the client QUIC session
@@ -5813,7 +7666,8 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
     @since %Qore 2.3
 */
 int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers) {
-    return s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
+    int64_t stream_id = s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
+    return stream_id;
 }
 
 //! Returns @ref True if the QUIC session on this socket is closed or absent
@@ -5867,7 +7721,8 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
     if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
         return -1;
     }
-    return s->sendQuicClientStreamData(stream_id, body_ptr, body_len, (bool)end_stream, xsink);
+    int rc = s->sendQuicClientStreamData(stream_id, body_ptr, body_len, (bool)end_stream, xsink);
+    return rc;
 }
 
 //! Waits for a client-side HTTP/3 streaming body buffer to drain
@@ -5891,6 +7746,10 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
     @since %Qore 2.3
 */
 int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicClientStreamDrain", xsink);
+    if (*xsink) {
+        return -1;
+    }
     if (stream_id < 0) {
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
             (long long)stream_id);
@@ -6199,8 +8058,8 @@ AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id,
     @endcode
 
     Submits the response headers with a deferred body. Data is provided incrementally
-    via @ref submitQuicStreamData(). The I/O thread must call writePackets() to flush
-    the data to the network.
+    via @ref submitQuicStreamData(). The registered async I/O controller is woken
+    after submission so the I/O thread can flush the data to the network.
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID to respond on
@@ -6240,7 +8099,8 @@ nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int s
     @endcode
 
     Appends data to the stream's buffer and resumes the nghttp3 deferred data reader
-    if it was waiting. The I/O thread must call writePackets() to flush.
+    if it was waiting. The registered async I/O controller is woken after a
+    successful enqueue so the I/O thread can flush pending packets.
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID
@@ -6269,8 +8129,9 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
     if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
         return -1;
     }
-    return s->submitQuicStreamData(session_id, stream_id, body_ptr, body_len,
+    int rc = s->submitQuicStreamData(session_id, stream_id, body_ptr, body_len,
         (bool)end_stream, xsink);
+    return rc;
 }
 
 //! Submit HTTP/3 streaming response with InputStream body (non-blocking)
@@ -6315,16 +8176,11 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
         return 1;
     }
 
-    // Submit response headers without closing the stream
-    s->submitQuicResponseStreaming(session_id, stream_id, status_code, headers, xsink);
-    if (*xsink) {
-        return -1;
+    int rv = s->submitQuicStreamingResponseWithStream(session_id, stream_id, status_code, headers, *body, xsink);
+    if (!rv && !*xsink) {
+        body.release();
     }
-
-    // Transfer InputStream ownership to the session for I/O thread reading
-    InputStream* body_ptr = body.release();
-    s->setQuicStreamInputStream(session_id, stream_id, body_ptr, xsink);
-    return *xsink ? -1 : 0;
+    return rv;
 }
 
 //! Waits for a streaming HTTP/3 body buffer to drain below the backpressure threshold
@@ -6360,6 +8216,10 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
 */
 int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
         timeout timeout_ms = 5s) {
+    SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicStreamDrain", xsink);
+    if (*xsink) {
+        return -1;
+    }
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return -1;

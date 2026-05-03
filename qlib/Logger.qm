@@ -1656,6 +1656,7 @@ public class LoggerWrapper inherits LoggerInterface {
         if (logger) {
             return logger.isEnabledFor(level);
         }
+        return False;
     }
 
     #! Checks whether this Logger is enabled for a given Level passed as parameter
@@ -1667,6 +1668,7 @@ public class LoggerWrapper inherits LoggerInterface {
         if (logger) {
             return logger.isEnabledFor(level);
         }
+        return False;
     }
 
     #! Checks whether this Logger is enabled for a given Level passed as parameter
@@ -1678,6 +1680,7 @@ public class LoggerWrapper inherits LoggerInterface {
         if (logger) {
             return logger.isEnabledFor(level);
         }
+        return False;
     }
 
     #! Checks whether this Logger is enabled for the TRACE Level

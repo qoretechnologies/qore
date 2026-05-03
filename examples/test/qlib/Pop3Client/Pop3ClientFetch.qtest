@@ -28,10 +28,13 @@ class MockPop3Server {
         Counter done(1);
         #! Error from server thread
         *string server_error;
+        #! If True, advertise and accept APOP authentication
+        bool apop;
     }
 
-    constructor(hash<string, string> messages) {
+    constructor(hash<string, string> messages, bool apop = False) {
         self.messages = messages;
+        self.apop = apop;
         listener.bind("localhost:0");
         listener.listen(1);
         port = listener.getSocketInfo().port;
@@ -85,7 +88,10 @@ class MockPop3Server {
 
     private serveClient(Socket client) {
         # Send greeting
-        client.send("+OK POP3 mock server ready\r\n");
+        string challenge = "<mock.12345@localhost>";
+        client.send(apop
+            ? sprintf("+OK POP3 mock server ready %s\r\n", challenge)
+            : "+OK POP3 mock server ready\r\n");
 
         int total_size = 0;
         map (total_size += $1.size()), messages.values();
@@ -99,6 +105,9 @@ class MockPop3Server {
                 client.send("+OK\r\n");
             } else if (line =~ /^PASS /i) {
                 client.send("+OK logged in\r\n");
+            } else if (line =~ /^APOP /i) {
+                string expected = sprintf("APOP testuser %s", (challenge + "testpass").toMD5());
+                client.send(line == expected ? "+OK logged in\r\n" : "-ERR invalid APOP digest\r\n");
             } else if (line =~ /^STAT$/i) {
                 client.send(sprintf("+OK %d %d\r\n", messages.size(), total_size));
             } else if (line =~ /^LIST$/i) {
@@ -107,6 +116,34 @@ class MockPop3Server {
                     client.send(sprintf("%s %d\r\n", id, messages{id}.size()));
                 }
                 client.send(".\r\n");
+            } else if (line =~ /^CAPA$/i) {
+                client.send("+OK capabilities follow\r\n");
+                client.send("UIDL\r\n");
+                client.send("TOP\r\n");
+                client.send("USER\r\n");
+                client.send(".\r\n");
+            } else if (line =~ /^UIDL$/i) {
+                client.send("+OK unique-id listing follows\r\n");
+                foreach string id in (keys messages) {
+                    client.send(sprintf("%s uid-%s\r\n", id, id));
+                }
+                client.send(".\r\n");
+            } else if (line =~ /^UIDL (\d+)$/i) {
+                *string id = (line =~ x/^UIDL (\d+)$/i)[0];
+                if (id && messages.hasKey(id)) {
+                    client.send(sprintf("+OK %s uid-%s\r\n", id, id));
+                } else {
+                    client.send(sprintf("-ERR no such message %s\r\n", id ?? "?"));
+                }
+            } else if (line =~ /^TOP (\d+) ([0-9]+)$/i) {
+                my (*string id, softint lines) = (line =~ x/^TOP (\d+) ([0-9]+)$/i);
+                if (id && messages.hasKey(id)) {
+                    client.send("+OK top of message follows\r\n");
+                    sendTopResponse(client, messages{id}, lines);
+                    client.send(".\r\n");
+                } else {
+                    client.send(sprintf("-ERR no such message %s\r\n", id ?? "?"));
+                }
             } else if (line =~ /^RETR (\d+)$/i) {
                 *string id = (line =~ x/^RETR (\d+)$/i)[0];
                 if (id && messages.hasKey(id)) {
@@ -129,6 +166,8 @@ class MockPop3Server {
                     deleted_ids += id;
                 }
                 client.send("+OK deleted\r\n");
+            } else if (line =~ /^RSET$/i) {
+                client.send("+OK reset\r\n");
             } else if (line =~ /^QUIT$/i) {
                 client.send("+OK bye\r\n");
                 break;
@@ -139,12 +178,37 @@ class MockPop3Server {
             }
         }
     }
+
+    private sendTopResponse(Socket client, string msg, int lines) {
+        bool in_body = False;
+        int body_lines = 0;
+        foreach string mline in (msg.split("\n")) {
+            if (in_body) {
+                if (body_lines >= lines) {
+                    break;
+                }
+                ++body_lines;
+            }
+
+            client.send(mline + "\n");
+            if (!in_body && (mline == "" || mline == "\r")) {
+                in_body = True;
+                if (!lines) {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 public class Pop3ClientFetchTest inherits QUnit::Test {
     constructor() : Test("Pop3ClientFetchTest", "1.0", \ARGV) {
         addTestCase("stat pipeline", \testStatPipeline());
+        addTestCase("blocking stat and list", \testBlockingStatAndList());
+        addTestCase("blocking command methods", \testBlockingCommandMethods());
+        addTestCase("blocking connect with APOP", \testBlockingConnectWithApop());
         addTestCase("fetch with single message", \testFetchSingleMessage());
+        addTestCase("blocking getMail", \testBlockingGetMail());
         addTestCase("fetch with multiple messages", \testFetchMultipleMessages());
         addTestCase("fetch empty mailbox", \testFetchEmptyMailbox());
         addTestCase("fetch with delete", \testFetchWithDelete());
@@ -186,6 +250,139 @@ public class Pop3ClientFetchTest inherits QUnit::Test {
         assertNothing(server.getServerError(), "no server errors");
     }
 
+    #! Test blocking Pop3Client::stat() and list() via AsyncIoController-backed stat operation
+    testBlockingStatAndList() {
+        hash<string, string> msgs = {
+            "1": "From: a@test.com\r\nSubject: msg1\r\n\r\nBody 1",
+            "2": "From: b@test.com\r\nSubject: msg2\r\n\r\nBody 2",
+        };
+
+        MockPop3Server stat_server(msgs);
+        stat_server.start();
+        on_exit stat_server.wait();
+
+        Pop3Client stat_pop3(sprintf("pop3://testuser:testpass@localhost:%d", stat_server.getPort()));
+        hash<auto> stat = stat_pop3.stat();
+        assertEq(2, stat.num, "stat message count");
+        assertEq(msgs{"1"}.size() + msgs{"2"}.size(), stat.size, "stat total size");
+        assertNothing(stat_server.getServerError(), "no stat server errors");
+
+        MockPop3Server list_server(msgs);
+        list_server.start();
+        on_exit list_server.wait();
+
+        Pop3Client list_pop3(sprintf("pop3://testuser:testpass@localhost:%d", list_server.getPort()));
+        *hash<auto> list = list_pop3.list();
+        assertTrue(list.val(), "list returned");
+        assertEq(msgs{"1"}.size(), list{"1"}.size, "list size for message 1");
+        assertEq(msgs{"2"}.size(), list{"2"}.size, "list size for message 2");
+        assertNothing(list_server.getServerError(), "no list server errors");
+    }
+
+    #! Test one-shot blocking POP3 command methods via AsyncIoController-backed command operations
+    testBlockingCommandMethods() {
+        hash<string, string> msgs = {
+            "1": "From: a@test.com\r\nSubject: msg1\r\n\r\nBody 1",
+            "2": "From: b@test.com\r\nSubject: msg2\r\n\r\nBody 2",
+        };
+
+        MockPop3Server noop_server(msgs);
+        noop_server.start();
+        on_exit noop_server.wait();
+        Pop3Client noop_pop3(sprintf("pop3://testuser:testpass@localhost:%d", noop_server.getPort()));
+        noop_pop3.noop();
+        noop_server.wait();
+        assertTrue(noop_server.getReceivedCommands().contains("NOOP"), "NOOP command sent");
+        assertTrue(noop_server.getReceivedCommands().contains("QUIT"), "NOOP session quit");
+        assertNothing(noop_server.getServerError(), "no noop server errors");
+
+        MockPop3Server reset_server(msgs);
+        reset_server.start();
+        on_exit reset_server.wait();
+        Pop3Client reset_pop3(sprintf("pop3://testuser:testpass@localhost:%d", reset_server.getPort()));
+        reset_pop3.reset();
+        reset_server.wait();
+        assertTrue(reset_server.getReceivedCommands().contains("RSET"), "RSET command sent");
+        assertTrue(reset_server.getReceivedCommands().contains("QUIT"), "RSET session quit");
+        assertNothing(reset_server.getServerError(), "no reset server errors");
+
+        MockPop3Server capa_server(msgs);
+        capa_server.start();
+        on_exit capa_server.wait();
+        Pop3Client capa_pop3(sprintf("pop3://testuser:testpass@localhost:%d", capa_server.getPort()));
+        *hash<string, bool> caps = capa_pop3.capa();
+        assertTrue(caps.UIDL, "CAPA parsed UIDL");
+        assertTrue(capa_pop3.hasCapability("TOP"), "hasCapability uses async CAPA result");
+        capa_server.wait();
+        assertNothing(capa_server.getServerError(), "no capa server errors");
+
+        MockPop3Server uidl_server(msgs);
+        uidl_server.start();
+        on_exit uidl_server.wait();
+        Pop3Client uidl_pop3(sprintf("pop3://testuser:testpass@localhost:%d", uidl_server.getPort()));
+        *hash<string, string> uidls = uidl_pop3.uidl();
+        assertEq("uid-1", uidls{"1"}, "UIDL list message 1");
+        assertEq("uid-2", uidls{"2"}, "UIDL list message 2");
+        uidl_server.wait();
+        assertNothing(uidl_server.getServerError(), "no uidl server errors");
+
+        MockPop3Server uidl_one_server(msgs);
+        uidl_one_server.start();
+        on_exit uidl_one_server.wait();
+        Pop3Client uidl_one_pop3(sprintf("pop3://testuser:testpass@localhost:%d", uidl_one_server.getPort()));
+        assertEq("uid-1", uidl_one_pop3.uidl("1"), "single UIDL result");
+        uidl_one_server.wait();
+        assertNothing(uidl_one_server.getServerError(), "no single uidl server errors");
+
+        MockPop3Server top_server(msgs);
+        top_server.start();
+        on_exit top_server.wait();
+        Pop3Client top_pop3(sprintf("pop3://testuser:testpass@localhost:%d", top_server.getPort()));
+        string top = top_pop3.top("1", 0);
+        assertTrue(top =~ /Subject: msg1/, "TOP returned headers");
+        assertTrue(top !~ /Body 1/, "TOP 0 skipped body");
+        top_server.wait();
+        assertNothing(top_server.getServerError(), "no top server errors");
+
+        MockPop3Server header_server(msgs);
+        header_server.start();
+        on_exit header_server.wait();
+        Pop3Client header_pop3(sprintf("pop3://testuser:testpass@localhost:%d", header_server.getPort()));
+        MailMessage::Message header_msg = header_pop3.getMessageHeaders("1");
+        assertEq("msg1", header_msg.getSubject(), "getMessageHeaders parsed subject");
+        header_server.wait();
+        assertNothing(header_server.getServerError(), "no header server errors");
+
+        MockPop3Server msg_server(msgs);
+        msg_server.start();
+        on_exit msg_server.wait();
+        Pop3Client msg_pop3(sprintf("pop3://testuser:testpass@localhost:%d", msg_server.getPort()));
+        MailMessage::Message msg = msg_pop3.getMessage("1");
+        assertEq("msg1", msg.getSubject(), "getMessage parsed subject");
+        msg_server.wait();
+        assertNothing(msg_server.getServerError(), "no getMessage server errors");
+    }
+
+    #! Test blocking Pop3Client::connect via AsyncIoController-backed APOP authentication
+    testBlockingConnectWithApop() {
+        MockPop3Server server({}, True);
+        server.start();
+        on_exit server.wait();
+
+        Pop3Client pop3(sprintf("pop3://testuser:testpass@localhost:%d", server.getPort()));
+        pop3.connect();
+        assertTrue(pop3.isConnected(), "client connected");
+        pop3.forceDisconnect();
+        server.wait();
+
+        list<string> cmds = server.getReceivedCommands();
+        assertTrue(cmds[0] =~ /^APOP testuser /i, "APOP command sent");
+        assertFalse(cmds.contains("USER testuser"), "USER command not sent");
+        assertFalse(cmds.contains("PASS testpass"), "PASS command not sent");
+        assertTrue(cmds.contains("QUIT"), "QUIT command sent");
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
     #! Test full fetch with a single message
     testFetchSingleMessage() {
         hash<string, string> msgs = {
@@ -220,6 +417,29 @@ public class Pop3ClientFetchTest inherits QUnit::Test {
         assertTrue(has_retr, "RETR 1 sent");
         assertTrue(has_quit, "QUIT sent");
 
+        assertNothing(server.getServerError(), "no server errors");
+    }
+
+    #! Test blocking Pop3Client::getMail via AsyncIoController-backed fetch operation
+    testBlockingGetMail() {
+        hash<string, string> msgs = {
+            "1": "From: sender@test.com\r\nSubject: Blocking Hello\r\n\r\nThis is the body",
+        };
+        MockPop3Server server(msgs);
+        server.start();
+        on_exit server.wait();
+
+        Pop3Client pop3(sprintf("pop3://testuser:testpass@localhost:%d", server.getPort()));
+        *hash<auto> mail = pop3.getMail();
+        assertTrue(mail.val(), "mail returned");
+        assertEq(msgs{"1"}.size(), mail{"1"}.size, "message size preserved");
+        assertEq("Blocking Hello", mail{"1"}.msg.getSubject(), "message parsed");
+
+        list<string> cmds = server.getReceivedCommands();
+        assertTrue(cmds.contains("STAT"), "STAT command sent");
+        assertTrue(cmds.contains("LIST"), "LIST command sent");
+        assertTrue(cmds.contains("RETR 1"), "RETR command sent");
+        assertTrue(cmds.contains("QUIT"), "QUIT command sent");
         assertNothing(server.getServerError(), "no server errors");
     }
 
@@ -324,19 +544,18 @@ public class Pop3ClientFetchTest inherits QUnit::Test {
         }
     }
 
-    #! Submit a poll operation to AsyncIoController and block until done
+    #! Execute a poll operation through AsyncIoController and block until done
     private runPollOp(Qore::AbstractPollOperation op, timeout to = 30s) {
         *hash<SocketPollInfo> pi = op.continuePoll();
         if (!pi) {
             return;
         }
-        Queue q = AsyncIoController::submit(<SocketPollOperationInfo>{
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
             "sock": pi.socket,
             "spop": op,
             "owner": "pop3-test",
             "to": to,
         });
-        hash<auto> result = q.get(to);
         if (result.ex) {
             throw result.ex.err, result.ex.desc;
         }

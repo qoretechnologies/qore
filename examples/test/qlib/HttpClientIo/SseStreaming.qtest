@@ -74,18 +74,35 @@ class CallbackSseResponseHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class ClosingSseHandler inherits ServerSentEventHandler {
+    constructor() : ServerSentEventHandler() {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{
+            "event": "done",
+            "data": "complete",
+        });
+
+        HttpServerAsyncIo::AbstractSseConnection sse_conn = conn.getAsyncSseConnection();
+        sse_conn.close();
+    }
+}
+
 class SseStreamingTest inherits Test {
     private {
         HttpServer server;
         int port;
         TestSseHandler handler();
         CallbackSseResponseHandler callback_handler();
+        ClosingSseHandler closing_handler();
     }
 
     constructor() : Test("SseStreamingTest", "1.0") {
         addTestCase("SSE streaming receives events", \testSseReceivesEvents());
         addTestCase("H1 SSE response has deterministic framing", \testH1SseResponseFraming());
         addTestCase("H1 SSE callback response is chunked", \testH1SseCallbackResponseIsChunked());
+        addTestCase("H1 SSE graceful close drains before disconnect", \testH1SseGracefulClose());
         addTestCase("SSE streaming multiple events", \testSseMultipleEvents());
         addTestCase("SSE streaming notifier wakes on events", \testSseNotifierEvents());
         set_return_value(main());
@@ -100,6 +117,7 @@ class SseStreamingTest inherits Test {
         server = new HttpServer(http_opts);
         server.setDefaultHandler("sse", handler);
         server.setHandler("callback-sse", "/callback-sse", NOTHING, callback_handler);
+        server.setHandler("close-sse", "/close-sse", NOTHING, closing_handler);
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
     }
 
@@ -180,6 +198,31 @@ class SseStreamingTest inherits Test {
         string body = chunked.body.typeCode() == NT_BINARY
             ? chunked.body.toString() : chunked.body;
         assertTrue(body =~ /data:\s*\[DONE\]/, "callback H1 SSE body includes DONE event");
+    }
+
+    testH1SseGracefulClose() {
+        string url = sprintf("http://localhost:%d/close-sse", port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            url, "GET", "/close-sse", {"Accept": "text/event-stream"});
+        on_exit {
+            try {
+                stream.cancel();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
+
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+
+        *hash<SseMessageInfo> evt = reader.readEvent(5s);
+        assertTrue(exists evt, "close SSE event received");
+        assertEq("done", evt.event);
+        assertEq("\"complete\"", evt.data);
+
+        *hash<SseMessageInfo> eof = reader.readEvent(5s);
+        assertEq(NOTHING, eof, "graceful SSE close returns EOF");
+        assertEq(True, reader.isDone(), "reader is done after graceful close");
     }
 
     testSseMultipleEvents() {

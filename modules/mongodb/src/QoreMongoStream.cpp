@@ -27,6 +27,7 @@
 
 #include "QoreMongoStream.h"
 
+#include <arpa/inet.h>
 #include <cerrno>
 #include <cstring>
 #include <cstdlib>
@@ -300,6 +301,60 @@ static mongoc_stream_t* qore_stream_new(mongoc_stream_t* base) {
     return (mongoc_stream_t*)stream;
 }
 
+static const QoreHashNode* qore_mongo_get_hash(const QoreValue& v) {
+    return v.getType() == NT_HASH ? v.get<const QoreHashNode>() : nullptr;
+}
+
+static const QoreStringNode* qore_mongo_get_hash_string_value(const QoreHashNode& h, const char* key) {
+    QoreValue v = h.getKeyValue(key);
+    return v.getType() == NT_STRING ? v.get<const QoreStringNode>() : nullptr;
+}
+
+static int qore_mongo_get_hash_int_value(const QoreHashNode& h, const char* key, int def = 0) {
+    QoreValue v = h.getKeyValue(key);
+    return v.isNullOrNothing() ? def : static_cast<int>(v.getAsBigInt());
+}
+
+static int qore_mongo_addrinfo_hash_to_sockaddr(const QoreHashNode& h, uint16_t default_port,
+        struct sockaddr_storage& addr, mongoc_socklen_t& addrlen) {
+    const QoreStringNode* address = qore_mongo_get_hash_string_value(h, "address");
+    if (!address) {
+        return -1;
+    }
+
+    int family = qore_mongo_get_hash_int_value(h, "family", AF_UNSPEC);
+    uint16_t port = static_cast<uint16_t>(qore_mongo_get_hash_int_value(h, "port", default_port));
+    memset(&addr, 0, sizeof(addr));
+
+    if (family == AF_INET) {
+        struct sockaddr_in* in = reinterpret_cast<struct sockaddr_in*>(&addr);
+        in->sin_family = AF_INET;
+        in->sin_port = htons(port);
+        if (inet_pton(AF_INET, address->c_str(), &in->sin_addr) != 1) {
+            return -1;
+        }
+        addrlen = sizeof(struct sockaddr_in);
+        return 0;
+    }
+    if (family == AF_INET6) {
+        struct sockaddr_in6* in6 = reinterpret_cast<struct sockaddr_in6*>(&addr);
+        in6->sin6_family = AF_INET6;
+        in6->sin6_port = htons(port);
+        if (inet_pton(AF_INET6, address->c_str(), &in6->sin6_addr) != 1) {
+            return -1;
+        }
+        addrlen = sizeof(struct sockaddr_in6);
+        return 0;
+    }
+
+    return -1;
+}
+
+static const char* qore_mongo_exception_desc(ExceptionSink& xsink, const char* fallback) {
+    QoreValue desc = xsink.getExceptionDesc();
+    return desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : fallback;
+}
+
 mongoc_stream_t* qore_mongo_stream_initiator(
     const mongoc_uri_t* uri,
     const mongoc_host_list_t* host,
@@ -316,32 +371,41 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     QoreSandboxManagerHelper smh;
 
     // Resolve the hostname
-    struct addrinfo hints;
-    struct addrinfo* result = nullptr;
-
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = host->family;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_protocol = IPPROTO_TCP;
-
     char port_str[8];
     snprintf(port_str, sizeof(port_str), "%u", host->port);
 
-    int rv = getaddrinfo(host->host, port_str, &hints, &result);
-    if (rv != 0) {
+    ExceptionSink resolve_xsink;
+    ReferenceHolder<QoreListNode> addrs(
+        q_getaddrinfo_to_list(&resolve_xsink, host->host, port_str, host->family, 0, SOCK_STREAM), &resolve_xsink);
+    if (resolve_xsink || !addrs || addrs->empty()) {
         bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_NAME_RESOLUTION,
-            "Failed to resolve '%s': %s", host->host, gai_strerror(rv));
+            "Failed to resolve '%s': %s", host->host,
+            resolve_xsink ? qore_mongo_exception_desc(resolve_xsink, "name resolution failed")
+                : "name resolution returned no addresses");
+        if (resolve_xsink) {
+            resolve_xsink.clear();
+        }
         return nullptr;
     }
 
     // Try each address until we successfully connect
     mongoc_socket_t* sock = nullptr;
-    struct addrinfo* rp;
+    ConstListIterator ai(*addrs);
 
-    for (rp = result; rp != nullptr; rp = rp->ai_next) {
+    while (ai.next()) {
+        const QoreHashNode* addr_info = qore_mongo_get_hash(ai.getValue());
+        if (!addr_info) {
+            continue;
+        }
+        struct sockaddr_storage addr;
+        mongoc_socklen_t addrlen = 0;
+        if (qore_mongo_addrinfo_hash_to_sockaddr(*addr_info, host->port, addr, addrlen)) {
+            continue;
+        }
+        struct sockaddr* sa = reinterpret_cast<struct sockaddr*>(&addr);
+
         // Check for interrupt/cancel before each connection attempt
         if (qore_check_cancel(nullptr, "MongoDB connection")) {
-            freeaddrinfo(result);
             bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                 "MongoDB connection interrupted");
             return nullptr;
@@ -350,10 +414,9 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         // Check network access if sandbox manager is present
         if (smh) {
             ExceptionSink xsink;
-            if (!smh->checkNetworkAccess(rp->ai_addr, rp->ai_addrlen, IPPROTO_TCP, &xsink)) {
+            if (!smh->checkNetworkAccess(sa, addrlen, IPPROTO_TCP, &xsink)) {
                 // Network access denied by sandbox
                 if (xsink) {
-                    freeaddrinfo(result);
                     bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,
                         "MongoDB connection denied by sandbox: network access restricted");
                     return nullptr;
@@ -363,7 +426,7 @@ mongoc_stream_t* qore_mongo_stream_initiator(
             }
         }
 
-        sock = mongoc_socket_new(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        sock = mongoc_socket_new(sa->sa_family, SOCK_STREAM, IPPROTO_TCP);
         if (!sock) {
             continue;
         }
@@ -372,15 +435,13 @@ mongoc_stream_t* qore_mongo_stream_initiator(
         int32_t connecttimeoutms = mongoc_uri_get_option_as_int32(uri, MONGOC_URI_CONNECTTIMEOUTMS, 10000);
         int64_t expire_at = bson_get_monotonic_time() + (connecttimeoutms * 1000);
 
-        if (mongoc_socket_connect(sock, rp->ai_addr, (mongoc_socklen_t)rp->ai_addrlen, expire_at) == 0) {
+        if (mongoc_socket_connect(sock, sa, addrlen, expire_at) == 0) {
             break;  // Success
         }
 
         mongoc_socket_destroy(sock);
         sock = nullptr;
     }
-
-    freeaddrinfo(result);
 
     if (!sock) {
         bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_CONNECT,

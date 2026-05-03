@@ -1490,10 +1490,11 @@ static void ut_http2_adopt_socket_construct(UnitTestCounters& c) {
     }
 
     // The adopt ctor calls initAdoptedMultiplex which installs the H2
-    // multiplex op.  Because ssl_required is implicitly true on the
-    // adopt path, fireReadyCallback runs synchronously — verify.
-    UT_ASSERT(c, conn->isReady(),
-        "adopt-socket Http2 connection is READY after construction");
+    // multiplex op.  READY is intentionally deferred until valid peer
+    // SETTINGS arrive; this fake server reads the client preface and closes
+    // without responding, so construction must not mark the connection ready.
+    UT_ASSERT(c, !conn->isReady(),
+        "adopt-socket Http2 connection waits for peer SETTINGS before READY");
 
     // Close the connection cleanly; no request is submitted because the
     // peer is not a real H2 server.
@@ -2089,202 +2090,575 @@ static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
-// ============================================================
-// SocketIoMode enforcement unit tests
-// ============================================================
-
-//! Test that a socket in Async mode rejects sync operations
-static void ut_socket_iomode_async_blocks_sync(UnitTestCounters& c) {
+#ifdef DEBUG
+static void ut_asyncio_exec_rejects_io_thread(UnitTestCounters& c) {
     ExceptionSink xsink;
-
-    // Create a socket object
-    QoreSocketObject* sock = new QoreSocketObject;
-    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
-    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
-
-    // Manually set I/O mode to Async (simulates what a poll op does)
-    {
-        AutoLocker al(sp->m);
-        sp->io_mode = SocketIoMode::Async;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
     }
 
-    // checkNonBlock (sync entry point) should raise SOCKET-ASYNC-MODE-ERROR
+    QoreHashNode* info = new QoreHashNode(hashdeclSocketPollOperationInfo, &xsink);
+    bool old = qore_set_async_io_thread_for_test(true);
+    ReferenceHolder<QoreHashNode> result(ctrl->exec(nullptr, info, false, &xsink), &xsink);
+    qore_set_async_io_thread_for_test(old);
+
+    UT_ASSERT(c, !result, "exec returns no result from async I/O thread");
+    UT_ASSERT(c, (bool)xsink, "exec raises from async I/O thread");
+    if (xsink) {
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "ASYNC-IO-ERROR", "exception is ASYNC-IO-ERROR");
+
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        UT_ASSERT(c, !strcmp(desc->c_str(), "exec() cannot be called from the async I/O thread"),
+            "exception describes async I/O thread rejection");
+        xsink.clear();
+    }
+
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_asyncio_wait_for_processing_rejects_io_thread(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
+    UT_ASSERT(c, !xsink, "construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    bool old = qore_set_async_io_thread_for_test(true);
+    bool processed = ctrl->waitForProcessing(0, &xsink);
+    qore_set_async_io_thread_for_test(old);
+
+    UT_ASSERT(c, !processed, "waitForProcessing returns false from async I/O thread");
+    UT_ASSERT(c, (bool)xsink, "waitForProcessing raises from async I/O thread");
+    if (xsink) {
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "ASYNC-IO-ERROR", "exception is ASYNC-IO-ERROR");
+
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        UT_ASSERT(c, !strcmp(desc->c_str(), "waitForProcessing() cannot be called from the async I/O thread"),
+            "exception describes async I/O thread rejection");
+        xsink.clear();
+    }
+
+    old = qore_set_async_io_thread_for_test(true);
+    processed = ctrl->waitForProcessing("test-key", 0, &xsink);
+    qore_set_async_io_thread_for_test(old);
+
+    UT_ASSERT(c, !processed, "keyed waitForProcessing returns false from async I/O thread");
+    UT_ASSERT(c, (bool)xsink, "keyed waitForProcessing raises from async I/O thread");
+    if (xsink) {
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "ASYNC-IO-ERROR", "keyed exception is ASYNC-IO-ERROR");
+        xsink.clear();
+    }
+
+    ctrl->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+#endif
+
+// ============================================================
+// Socket async ownership enforcement unit tests
+// ============================================================
+
+//! Test that async controller ownership rejects overlapping sync-style probes
+static void ut_socket_async_owner_blocks_sync(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
     {
         AutoLocker al(sp->m);
-        int rv = sp->checkNonBlock(&xsink);
-        UT_ASSERT(c, rv == -1, "checkNonBlock returns -1 when io_mode=Async");
-        UT_ASSERT(c, (bool)xsink, "checkNonBlock raises exception when io_mode=Async");
+        int rv = sp->startAsyncIo(&xsink);
+        UT_ASSERT(c, rv == 0, "startAsyncIo succeeds before async ownership check");
+        UT_ASSERT(c, !xsink, "no exception from startAsyncIo");
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "async ownership is active after startAsyncIo");
+
+        rv = sp->checkNonBlock(&xsink);
+        UT_ASSERT(c, rv == -1, "checkNonBlock returns -1 while async ownership is active");
+        UT_ASSERT(c, (bool)xsink, "checkNonBlock raises exception while async ownership is active");
         const QoreValue err_val = xsink.getExceptionErr();
         const QoreStringNode* err = err_val.get<const QoreStringNode>();
         UT_ASSERT(c, err && *err == "SOCKET-ASYNC-MODE-ERROR",
             "exception is SOCKET-ASYNC-MODE-ERROR");
         xsink.clear();
-    }
 
-    // Reset and verify directional checkNonBlock also checks
-    {
-        AutoLocker al(sp->m);
-        int rv = sp->checkNonBlock(&xsink, NB_SEND);
-        UT_ASSERT(c, rv == -1, "directional checkNonBlock returns -1 when io_mode=Async");
+        rv = sp->checkNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == -1, "directional checkNonBlock returns -1 while async ownership is active");
         UT_ASSERT(c, (bool)xsink, "directional checkNonBlock raises exception");
         xsink.clear();
+
+        sp->clearAsyncIo();
+        UT_ASSERT(c, !sp->hasAsyncIoOwner(), "async ownership clears after clearAsyncIo");
     }
 
-    // Reset io_mode before cleanup
-    {
-        AutoLocker al(sp->m);
-        sp->io_mode = SocketIoMode::Unclaimed;
-    }
-
-    sock_obj->deref(&xsink);
     xsink.clear();
 }
 
-//! Test that a socket in Sync mode rejects async operations
-static void ut_socket_iomode_sync_blocks_async(UnitTestCounters& c) {
+//! Test that an unowned socket allows sync probes and async claims
+static void ut_socket_async_owner_unowned_allows_both(UnitTestCounters& c) {
     ExceptionSink xsink;
 
     QoreSocketObject* sock = new QoreSocketObject;
-    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
     my_socket_priv* sp = my_socket_priv::getPriv(*sock);
 
-    // Manually set I/O mode to Sync
     {
         AutoLocker al(sp->m);
-        sp->io_mode = SocketIoMode::Sync;
-    }
+        UT_ASSERT(c, !sp->hasAsyncIoOwner(), "default socket has no async owner");
 
-    // setNonBlock (async entry point) should raise SOCKET-SYNC-MODE-ERROR
-    {
-        AutoLocker al(sp->m);
-        int rv = sp->setNonBlock(&xsink);
-        UT_ASSERT(c, rv == -1, "setNonBlock returns -1 when io_mode=Sync");
-        UT_ASSERT(c, (bool)xsink, "setNonBlock raises exception when io_mode=Sync");
-        const QoreValue err_val = xsink.getExceptionErr();
-        const QoreStringNode* err = err_val.get<const QoreStringNode>();
-        UT_ASSERT(c, err && *err == "SOCKET-SYNC-MODE-ERROR",
-            "exception is SOCKET-SYNC-MODE-ERROR");
-        xsink.clear();
-    }
-
-    // Also check directional setNonBlock
-    {
-        AutoLocker al(sp->m);
-        int rv = sp->setNonBlock(&xsink, NB_RECV);
-        UT_ASSERT(c, rv == -1, "directional setNonBlock returns -1 when io_mode=Sync");
-        UT_ASSERT(c, (bool)xsink, "directional setNonBlock raises exception");
-        xsink.clear();
-    }
-
-    // Also check setNonBlockAccept
-    {
-        AutoLocker al(sp->m);
-        int rv = sp->setNonBlockAccept(&xsink);
-        UT_ASSERT(c, rv == -1, "setNonBlockAccept returns -1 when io_mode=Sync");
-        UT_ASSERT(c, (bool)xsink, "setNonBlockAccept raises exception");
-        xsink.clear();
-    }
-
-    // Reset io_mode before cleanup
-    {
-        AutoLocker al(sp->m);
-        sp->io_mode = SocketIoMode::Unclaimed;
-    }
-
-    sock_obj->deref(&xsink);
-    xsink.clear();
-}
-
-//! Test that Unclaimed mode allows both sync and async
-static void ut_socket_iomode_unclaimed_allows_both(UnitTestCounters& c) {
-    ExceptionSink xsink;
-
-    QoreSocketObject* sock = new QoreSocketObject;
-    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
-    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
-
-    // Verify default is Unclaimed
-    {
-        AutoLocker al(sp->m);
-        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
-            "default io_mode is Unclaimed");
-
-        // checkSyncAllowed should pass
         int rv = sp->checkSyncAllowed(&xsink);
-        UT_ASSERT(c, rv == 0, "checkSyncAllowed passes when Unclaimed");
+        UT_ASSERT(c, rv == 0, "checkSyncAllowed passes when socket is unowned");
         UT_ASSERT(c, !xsink, "no exception from checkSyncAllowed");
 
-        // checkAsyncAllowed should pass
-        rv = sp->checkAsyncAllowed(&xsink);
-        UT_ASSERT(c, rv == 0, "checkAsyncAllowed passes when Unclaimed");
-        UT_ASSERT(c, !xsink, "no exception from checkAsyncAllowed");
+        rv = sp->startAsyncIo(&xsink);
+        UT_ASSERT(c, rv == 0, "startAsyncIo passes when socket is unowned");
+        UT_ASSERT(c, !xsink, "no exception from startAsyncIo");
+        sp->clearAsyncIo();
+        UT_ASSERT(c, !sp->hasAsyncIoOwner(), "socket has no async owner after clearAsyncIo");
     }
 
-    sock_obj->deref(&xsink);
     xsink.clear();
 }
 
-//! Test that setNonBlock claims Async mode and clearNonBlock resets to Unclaimed
-static void ut_socket_iomode_async_lifecycle(UnitTestCounters& c) {
+//! Test that setNonBlock contributes to async ownership and clearNonBlock removes it
+static void ut_socket_async_nonblock_lifecycle(UnitTestCounters& c) {
     ExceptionSink xsink;
 
     QoreSocketObject* sock = new QoreSocketObject;
-    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
     my_socket_priv* sp = my_socket_priv::getPriv(*sock);
 
-    // setNonBlock should claim Async mode
     {
         AutoLocker al(sp->m);
 
         int rv = sp->setNonBlock(&xsink, NB_SEND);
-        UT_ASSERT(c, rv == 0, "setNonBlock(NB_SEND) succeeds on Unclaimed socket");
+        UT_ASSERT(c, rv == 0, "setNonBlock(NB_SEND) succeeds on unowned socket");
         UT_ASSERT(c, !xsink, "no exception from setNonBlock");
-        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
-            "io_mode is Async after setNonBlock");
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "async ownership is active after setNonBlock");
 
-        // Sync operations should now be blocked
         rv = sp->checkSyncAllowed(&xsink);
-        UT_ASSERT(c, rv == -1, "checkSyncAllowed fails when Async");
+        UT_ASSERT(c, rv == -1, "checkSyncAllowed fails while non-blocking ownership is active");
         xsink.clear();
 
-        // clearNonBlock should reset to Unclaimed
         sp->clearNonBlock(NB_SEND);
-        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
-            "io_mode resets to Unclaimed after clearNonBlock");
+        UT_ASSERT(c, !sp->hasAsyncIoOwner(), "async ownership clears after clearNonBlock");
     }
 
-    // Test that clearing partial flags doesn't reset when other flags remain
     {
         AutoLocker al(sp->m);
 
-        // Set two directions
         sp->setNonBlock(NB_SEND);
         sp->setNonBlock(NB_RECV);
-        sp->io_mode = SocketIoMode::Async;
 
-        // Clear just one direction — should stay Async
         sp->clearNonBlock(NB_SEND);
-        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
-            "io_mode stays Async when non_block_flags still set");
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "async ownership remains while non_block_flags still set");
 
-        // Clear the last direction — should reset to Unclaimed
         sp->clearNonBlock(NB_RECV);
-        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
-            "io_mode resets to Unclaimed when all flags cleared");
+        UT_ASSERT(c, !sp->hasAsyncIoOwner(), "async ownership clears when all flags clear");
     }
 
-    sock_obj->deref(&xsink);
     xsink.clear();
 }
 
+//! Test that async controller ownership outlives transient non-blocking flags
+static void ut_socket_async_owner_lifecycle(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    {
+        AutoLocker al(sp->m);
+
+        int rv = sp->startAsyncIo(&xsink);
+        UT_ASSERT(c, rv == 0, "startAsyncIo succeeds on Unclaimed socket");
+        UT_ASSERT(c, !xsink, "no exception from startAsyncIo");
+        UT_ASSERT(c, sp->async_io_count == 1,
+            "async_io_count is incremented after startAsyncIo");
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "async ownership is active after startAsyncIo");
+
+        rv = sp->setNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "setNonBlock succeeds while async owner is active");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock with async owner");
+
+        sp->clearNonBlock(NB_SEND);
+        UT_ASSERT(c, sp->hasAsyncIoOwner(),
+            "async ownership remains after clearNonBlock while async owner is active");
+
+        rv = sp->checkSyncAllowed(&xsink);
+        UT_ASSERT(c, rv == -1, "checkSyncAllowed fails while async owner is active");
+        UT_ASSERT(c, (bool)xsink, "checkSyncAllowed raises while async owner is active");
+        xsink.clear();
+
+        rv = sp->startAsyncIo(&xsink);
+        UT_ASSERT(c, rv == 0, "nested startAsyncIo succeeds");
+        UT_ASSERT(c, sp->async_io_count == 2,
+            "async_io_count tracks nested async owners");
+
+        sp->clearAsyncIo();
+        UT_ASSERT(c, sp->async_io_count == 1,
+            "async_io_count decrements after first clearAsyncIo");
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "async ownership remains while nested async owner is active");
+
+        sp->clearAsyncIo();
+        UT_ASSERT(c, sp->async_io_count == 0,
+            "async_io_count is zero after final clearAsyncIo");
+        UT_ASSERT(c, !sp->hasAsyncIoOwner(), "async ownership clears after final async owner clears");
+    }
+
+    xsink.clear();
+}
+
+//! Test that multi-step async sequences reserve only their active directions
+static void ut_socket_async_sequence_lifecycle(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    {
+        AutoLocker al(sp->m);
+
+        int rv = sp->startAsyncSequenceIo(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "startAsyncSequenceIo(NB_SEND) succeeds on Unclaimed socket");
+        UT_ASSERT(c, !xsink, "no exception from startAsyncSequenceIo(NB_SEND)");
+        UT_ASSERT(c, sp->async_io_count == 1,
+            "async_io_count is incremented after startAsyncSequenceIo");
+        UT_ASSERT(c, sp->async_sequence_count[0] == 1,
+            "send async sequence count is incremented");
+        UT_ASSERT(c, sp->async_sequence_owner_tid[0] == q_gettid(),
+            "send async sequence owner is current TID");
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "async ownership is active after startAsyncSequenceIo");
+
+        rv = sp->setNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "same-thread send operation is allowed inside send sequence");
+        UT_ASSERT(c, !xsink, "no exception from same-thread send operation inside send sequence");
+        sp->clearNonBlock(NB_SEND);
+
+        rv = sp->setNonBlock(&xsink, NB_RECV);
+        UT_ASSERT(c, rv == 0, "receive operation is allowed while send sequence is active");
+        UT_ASSERT(c, !xsink, "no exception from receive operation while send sequence is active");
+        sp->clearNonBlock(NB_RECV);
+
+        rv = sp->startAsyncSequenceIo(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "nested startAsyncSequenceIo(NB_SEND) succeeds");
+        UT_ASSERT(c, sp->async_sequence_count[0] == 2,
+            "send async sequence count tracks nesting");
+        UT_ASSERT(c, sp->async_io_count == 2,
+            "async_io_count tracks nested async sequences");
+
+        sp->clearAsyncSequenceIo(NB_SEND);
+        UT_ASSERT(c, sp->async_sequence_count[0] == 1,
+            "send async sequence count decrements after nested clear");
+        UT_ASSERT(c, sp->async_io_count == 1,
+            "async_io_count decrements after nested sequence clear");
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "async ownership remains while outer async sequence is active");
+
+        sp->async_sequence_owner_tid[0] = q_gettid() + 1;
+        rv = sp->setNonBlock(&xsink, NB_RECV);
+        UT_ASSERT(c, rv == 0, "opposite-direction operation is allowed when another TID owns send sequence");
+        UT_ASSERT(c, !xsink, "no exception from opposite-direction operation with send sequence owner");
+        sp->clearNonBlock(NB_RECV);
+
+        rv = sp->setNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == -1, "same-direction operation is rejected when another TID owns send sequence");
+        UT_ASSERT(c, (bool)xsink, "same-direction sequence conflict raises exception");
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "SOCKET-ASYNC-MODE-ERROR",
+            "same-direction sequence conflict exception is SOCKET-ASYNC-MODE-ERROR");
+        xsink.clear();
+
+        sp->async_sequence_owner_tid[0] = q_gettid();
+        sp->clearAsyncSequenceIo(NB_SEND);
+        UT_ASSERT(c, sp->async_sequence_count[0] == 0,
+            "send async sequence count is zero after final clear");
+        UT_ASSERT(c, sp->async_sequence_owner_tid[0] == -1,
+            "send async sequence owner resets after final clear");
+        UT_ASSERT(c, sp->async_io_count == 0,
+            "async_io_count is zero after final async sequence clear");
+        UT_ASSERT(c, !sp->hasAsyncIoOwner(), "async ownership clears after final async sequence clears");
+    }
+
+    xsink.clear();
+}
+
+//! Test that no-ExceptionSink sync wrappers still honor async ownership
+static void ut_socket_async_owner_no_xsink_sync_wrappers(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_SOCKET, getProgram(), sock), &xsink);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->setNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "setNonBlock(NB_SEND) succeeds before no-xsink send test");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock(NB_SEND)");
+    }
+
+    int rv = sock->send("x", 1);
+    UT_ASSERT(c, rv == -1, "no-xsink send returns -1 while async send owns socket");
+
+    {
+        AutoLocker al(sp->m);
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "no-xsink send does not clear async ownership");
+        sp->clearNonBlock(NB_SEND);
+    }
+
+    {
+        AutoLocker al(sp->m);
+        rv = sp->setNonBlock(&xsink, NB_RECV);
+        UT_ASSERT(c, rv == 0, "setNonBlock(NB_RECV) succeeds before no-xsink recv test");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock(NB_RECV)");
+    }
+
+    rv = sock->recv(0, 1, 0);
+    UT_ASSERT(c, rv == -1, "no-xsink recv(fd) returns -1 while async recv owns socket");
+
+    {
+        AutoLocker al(sp->m);
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "no-xsink recv does not clear async ownership");
+        sp->clearNonBlock(NB_RECV);
+    }
+
+    {
+        AutoLocker al(sp->m);
+        rv = sp->setNonBlock(&xsink);
+        UT_ASSERT(c, rv == 0, "setNonBlock succeeds before no-xsink bind/listen test");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock before no-xsink bind/listen test");
+    }
+
+    rv = sock->bind(0);
+    UT_ASSERT(c, rv == -1, "no-xsink bind returns -1 while async I/O owns socket");
+
+    rv = sock->listen(1);
+    UT_ASSERT(c, rv == -1, "no-xsink listen returns -1 while async I/O owns socket");
+
+    {
+        AutoLocker al(sp->m);
+        UT_ASSERT(c, sp->hasAsyncIoOwner(), "no-xsink bind/listen do not clear async ownership");
+        sp->clearNonBlock();
+        UT_ASSERT(c, !sp->hasAsyncIoOwner(), "async ownership clears after no-xsink wrapper test cleanup");
+    }
+
+    xsink.clear();
+}
+
+static bool ut_write_all(int fd, const char* data, size_t size) {
+    size_t offset = 0;
+    while (offset < size) {
+        ssize_t rc = ::write(fd, data + offset, size - offset);
+        if (rc > 0) {
+            offset += static_cast<size_t>(rc);
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static bool ut_send_all(int fd, const char* data, size_t size) {
+    size_t offset = 0;
+    while (offset < size) {
+        ssize_t rc = ::send(fd, data + offset, size - offset, 0);
+        if (rc > 0) {
+            offset += static_cast<size_t>(rc);
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static bool ut_recv_exact(int fd, std::string& data, size_t size) {
+    data.clear();
+    while (data.size() < size) {
+        char buf[128];
+        size_t remaining = size - data.size();
+        ssize_t rc = ::recv(fd, buf, QORE_MIN(remaining, sizeof(buf)), 0);
+        if (rc > 0) {
+            data.append(buf, static_cast<size_t>(rc));
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static bool ut_read_all(int fd, std::string& data, size_t size) {
+    data.clear();
+    while (data.size() < size) {
+        char buf[128];
+        size_t remaining = size - data.size();
+        ssize_t rc = ::read(fd, buf, QORE_MIN(remaining, sizeof(buf)));
+        if (rc > 0) {
+            data.append(buf, static_cast<size_t>(rc));
+            continue;
+        }
+        if (rc < 0 && errno == EINTR) {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+static void ut_connect_loopback_and_close(int port) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        return;
+    }
+
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(port);
+    ::connect(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    ::close(fd);
+}
+
+static void ut_qoresocket_fd_transfer_uses_async_controller(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    const char send_payload[] = "qoresocket-send-fd-through-controller";
+    const size_t send_payload_size = sizeof(send_payload) - 1;
+
+    int send_pipe[2] = {-1, -1};
+    bool send_pipe_ok = pipe(send_pipe) == 0;
+    UT_ASSERT(c, send_pipe_ok, "QoreSocket fd-send source pipe opens");
+    if (!send_pipe_ok) {
+        xsink.clear();
+        return;
+    }
+    UT_ASSERT(c, ut_write_all(send_pipe[1], send_payload, send_payload_size),
+        "QoreSocket fd-send source pipe receives payload");
+    ::close(send_pipe[1]);
+
+    UtH1Server send_server;
+    bool send_server_started = send_server.start() == 0;
+    UT_ASSERT(c, send_server_started, "QoreSocket fd-send test server starts");
+    if (!send_server_started) {
+        ::close(send_pipe[0]);
+        xsink.clear();
+        return;
+    }
+    std::atomic<bool> send_server_ok{false};
+    send_server.serveOnce([&](int cfd) {
+        std::string received;
+        send_server_ok.store(
+            ut_recv_exact(cfd, received, send_payload_size) && received == send_payload,
+            std::memory_order_release);
+    });
+
+    QoreSocket send_sock;
+    int rc = send_sock.connectINET("127.0.0.1", send_server.port, 5000, &xsink);
+    UT_ASSERT(c, rc == 0 && !xsink, "QoreSocket fd-send connect succeeds");
+    if (rc || xsink) {
+        ut_connect_loopback_and_close(send_server.port);
+        ::close(send_pipe[0]);
+        if (send_server.thr.joinable()) {
+            send_server.thr.join();
+        }
+        xsink.clear();
+        return;
+    }
+    rc = send_sock.send(send_pipe[0], send_payload_size, 5000, &xsink);
+    UT_ASSERT(c, rc == 0 && !xsink, "QoreSocket::send(fd) succeeds through async controller");
+    ::close(send_pipe[0]);
+    send_sock.close();
+    if (send_server.thr.joinable()) {
+        send_server.thr.join();
+    }
+
+    const char recv_payload[] = "qoresocket-recv-fd-through-controller";
+    const size_t recv_payload_size = sizeof(recv_payload) - 1;
+
+    int recv_pipe[2] = {-1, -1};
+    bool recv_pipe_ok = pipe(recv_pipe) == 0;
+    UT_ASSERT(c, recv_pipe_ok, "QoreSocket fd-recv output pipe opens");
+    if (!recv_pipe_ok) {
+        xsink.clear();
+        return;
+    }
+
+    UtH1Server recv_server;
+    bool recv_server_started = recv_server.start() == 0;
+    UT_ASSERT(c, recv_server_started, "QoreSocket fd-recv test server starts");
+    if (!recv_server_started) {
+        ::close(recv_pipe[0]);
+        ::close(recv_pipe[1]);
+        xsink.clear();
+        return;
+    }
+    std::atomic<bool> recv_server_ok{false};
+    recv_server.serveOnce([&](int cfd) {
+        recv_server_ok.store(ut_send_all(cfd, recv_payload, recv_payload_size), std::memory_order_release);
+    });
+
+    QoreSocket recv_sock;
+    rc = recv_sock.connectINET("127.0.0.1", recv_server.port, 5000, &xsink);
+    UT_ASSERT(c, rc == 0 && !xsink, "QoreSocket fd-recv connect succeeds");
+    if (rc || xsink) {
+        ut_connect_loopback_and_close(recv_server.port);
+        ::close(recv_pipe[0]);
+        ::close(recv_pipe[1]);
+        if (recv_server.thr.joinable()) {
+            recv_server.thr.join();
+        }
+        xsink.clear();
+        return;
+    }
+    rc = recv_sock.recv(recv_pipe[1], recv_payload_size, 5000, &xsink);
+    UT_ASSERT(c, rc == 0 && !xsink, "QoreSocket::recv(fd) succeeds through async controller");
+    ::close(recv_pipe[1]);
+
+    std::string received;
+    UT_ASSERT(c, ut_read_all(recv_pipe[0], received, recv_payload_size) && received == recv_payload,
+        "QoreSocket::recv(fd) writes expected payload");
+    ::close(recv_pipe[0]);
+    recv_sock.close();
+    if (recv_server.thr.joinable()) {
+        recv_server.thr.join();
+    }
+
+    xsink.clear();
+    UT_ASSERT(c, send_server_ok.load(std::memory_order_acquire), "QoreSocket fd-send server received payload");
+    UT_ASSERT(c, recv_server_ok.load(std::memory_order_acquire), "QoreSocket fd-recv server sent payload");
+}
+
 #ifdef DEBUG
-//! Debug-only: arm a one-shot fd-swap simulation on the next lock-yielding wait of @a sock.
+//! Debug-only: arm a one-shot fd-swap simulation on the next controller wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
-    @ref SocketSyncPoll::waitReleasingLock() without racing an actual
-    close() across threads.  The next sync I/O helper on @a sock that
-    enters its lock-yielding wait phase bumps the socket's internal
-    fd_generation counter inside the wait window, so the re-acquire
-    detects the simulated swap and aborts with SOCKET-CLOSED.
+    controller-backed sync socket calls without racing an actual close()
+    across threads.  The next sync I/O operation on @a sock that enters its
+    controller wait phase bumps the socket's internal fd_generation counter
+    inside the wait window, so the controller detects the simulated swap and
+    aborts with SOCKET-CLOSED.
  */
 static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
@@ -2346,10 +2720,17 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
-    ut_socket_iomode_async_blocks_sync(c);
-    ut_socket_iomode_sync_blocks_async(c);
-    ut_socket_iomode_unclaimed_allows_both(c);
-    ut_socket_iomode_async_lifecycle(c);
+#ifdef DEBUG
+    ut_asyncio_exec_rejects_io_thread(c);
+    ut_asyncio_wait_for_processing_rejects_io_thread(c);
+#endif
+    ut_socket_async_owner_blocks_sync(c);
+    ut_socket_async_owner_unowned_allows_both(c);
+    ut_socket_async_nonblock_lifecycle(c);
+    ut_socket_async_owner_lifecycle(c);
+    ut_socket_async_sequence_lifecycle(c);
+    ut_socket_async_owner_no_xsink_sync_wrappers(c);
+    ut_qoresocket_fd_transfer_uses_async_controller(c);
     ut_manager_proxy_h1_connect(c);
     ut_manager_proxy_h3_rejected(c);
 

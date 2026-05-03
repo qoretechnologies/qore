@@ -45,6 +45,10 @@ public:
         return "TransformOutputStream";
     }
 
+    DLLLOCAL bool isIoThreadSafe() const override {
+        return os->isIoThreadSafe() && !os->supportsNonBlockingIo();
+    }
+
     DLLLOCAL bool isClosed() override {
         return closed;
     }

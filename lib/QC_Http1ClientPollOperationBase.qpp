@@ -86,7 +86,7 @@ void Http1ClientPollOperationPriv::initAdoptedReady(ExceptionSink* xsink) {
     // current_op (no-op here since adopt path leaves it nullptr), and
     // invokes fireReadyCallback() which broadcasts the connection READY
     // state to the connection priv.  Safe to call from the app thread
-    // before controller submission — the I/O thread will see READING
+    // before controller submission - the I/O thread will see READING
     // on its first continuePoll().
     startReady(xsink);
 }
@@ -99,7 +99,7 @@ Http1ClientPollOperationPriv::~Http1ClientPollOperationPriv() {
 }
 
 void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
-    // Clean up single stream action — reject pending Promise so Future::get() doesn't hang
+    // Clean up single stream action - reject pending Promise so Future::get() doesn't hang
     {
         AutoLocker al(stream_lock);
         if (stream_action) {
@@ -159,7 +159,7 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         protocol_switched_listener->deref(xsink);
         protocol_switched_listener = nullptr;
     }
-    connection_priv = nullptr;  // raw pointer — Qore data member (connection_ref) holds the ref
+    connection_priv = nullptr;  // raw pointer - Qore data member (connection_ref) holds the ref
     if (current_op) {
         current_op->deref(xsink);
         current_op = nullptr;
@@ -234,8 +234,8 @@ QoreHashNode* Http1ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
             case H1State::CLOSED: {
                 // If an error caused the close, raise it so the controller
                 // removes this op from its cache.  The pending stream was
-                // already notified by setError() → notifyPendingStreams().
-                // For clean closes (Connection: close), just return nullptr —
+                // already notified by setError() -> notifyPendingStreams().
+                // For clean closes (Connection: close), just return nullptr -
                 // the controller will keep the op but it's harmless since the
                 // connection manager evicts it on next use.
                 AutoLocker al(stream_lock);
@@ -313,7 +313,7 @@ void Http1ClientPollOperationPriv::startProxyConnect(ExceptionSink* xsink) {
     // SocketSendPollOperation takes ownership of the string ref
     current_op = new SocketSendPollOperation(xsink, connect_req, sock_obj);
     if (*xsink) {
-        // Must deref — the op was created but errored; it owns the sock ref
+        // Must deref - the op was created but errored; it owns the sock ref
         current_op->deref(xsink);
         current_op = nullptr;
         return;
@@ -450,7 +450,24 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
     }
 
     if (current_op->goalReached()) {
-        // No ALPN check for HTTP/1.1 — it is the default protocol
+        ValueHolder output_val(current_op->getOutput(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string alpn_id;
+        if (output_val->getType() == NT_HASH) {
+            QoreHashNode* output = output_val->get<QoreHashNode>();
+            QoreValue proto_val = output->getKeyValue("negotiated_protocol");
+            if (proto_val.getType() == NT_STRING) {
+                alpn_id = proto_val.get<const QoreStringNode>()->c_str();
+            }
+        }
+        {
+            AutoLocker al(stream_lock);
+            negotiated_protocol = std::move(alpn_id);
+        }
+
+        // No ALPN check for HTTP/1.1 - it is the default protocol
         printd(5, "Http1ClientPollOperationPriv::handleSslUpgrade() SSL done\n");
         startReady(xsink);
         if (*xsink) {
@@ -518,27 +535,27 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     }
 
     if (req_data) {
-        // Processing a request — reset the idle deadline so the next idle
+        // Processing a request - reset the idle deadline so the next idle
         // period starts fresh after the response completes.
         idle_deadline_us = 0;
 
         // Before sending on a keep-alive connection, do a non-blocking recv to
         // detect server-initiated close (EOF).  This avoids sending a request on
         // a stale connection and waiting for a response that will never arrive.
-        // Use checkIdleData() which is TLS-aware: for TLS connections it uses SSL_peek
+        // Use the async-poll idle-data helper, which is TLS-aware: for TLS connections it uses SSL_peek
         // to drain TLS post-handshake records (e.g., TLS 1.3 NewSessionTicket) instead
         // of raw recv(MSG_PEEK) which would see the TLS record header byte (0x17) and
         // never be able to consume it, causing a busy-loop.
         int fd = sock_obj->getSocket();
         if (fd >= 0) {
             ExceptionSink idle_xsink;
-            int idle_rc = sock_obj->checkIdleData(&idle_xsink);
+            int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
             if (idle_rc < 0 || idle_xsink) {
-                // EOF or SSL error — preserve the underlying error category
+                // EOF or SSL error - preserve the underlying error category
                 // (e.g. SOCKET-SSL-ERROR when the TLS handshake or an
                 // in-flight TLS record surfaced a validation failure).  The
                 // previous code always reported HTTP1-CONNECTION-CLOSED,
-                // swallowing the SSL error class — callers expecting the
+                // swallowing the SSL error class - callers expecting the
                 // typed SOCKET-SSL-ERROR (HTTPClient self-signed cert test)
                 // saw only the generic "server closed" message.
                 ASYNC_IO_TRACE("H1 handleIdle: checkIdleData rc=%d before send, server closed fd=%d\n",
@@ -566,7 +583,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
                 return nullptr;
             }
             if (idle_rc > 0) {
-                // Unexpected application data from server before we sent a request — the
+                // Unexpected application data from server before we sent a request - the
                 // connection is dirty (partial response from a prior cycle or protocol
                 // violation).  Put the request back and close so the caller retries on
                 // a fresh connection.
@@ -576,7 +593,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
                     pending_request_data = req_data;
                     streaming_active = is_streaming;
                 }
-                sock_obj->close();
+                sock_obj->closeIo(xsink);
                 setError("HTTP1-UNEXPECTED-DATA",
                     "server sent unexpected data on idle keep-alive connection before request", xsink);
                 return nullptr;
@@ -585,7 +602,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
             ASYNC_IO_TRACE("H1 handleIdle: checkIdleData ok (no data), proceeding with send fd=%d\n", fd);
         }
 
-        // Connection is alive — start sending the request
+        // Connection is alive - start sending the request
         ASYNC_IO_TRACE("H1 handleIdle: start send (%lu bytes) fd=%d streaming_send=%d\n",
             (unsigned long)req_data->size(), sock_obj ? sock_obj->getSocket() : -1,
             (int)is_streaming_send);
@@ -604,18 +621,18 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         return handleSending(xsink);
     }
 
-    // No pending request — wait for wake or socket events.
+    // No pending request - wait for wake or socket events.
     // If the event loop fires POLLIN on an idle connection (server FIN),
     // continuePoll() will be called and we'll reach this point again with
-    // no pending request.  Use checkIdleData() which is TLS-aware.
+    // no pending request.  Use the async-poll idle-data helper, which is TLS-aware.
     int fd = sock_obj->getSocket();
     if (fd >= 0) {
         ExceptionSink idle_xsink;
-        int idle_rc = sock_obj->checkIdleData(&idle_xsink);
+        int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
         if (idle_rc < 0 || idle_xsink) {
             ASYNC_IO_TRACE("H1 handleIdle: checkIdleData rc=%d, closing fd=%d (no pending req)\n",
                 idle_rc, fd);
-            sock_obj->close();
+            sock_obj->closeIo(xsink);
             if (idle_xsink) {
                 const QoreStringNode* err_str = idle_xsink.getExceptionErr()
                     .get<const QoreStringNode>();
@@ -634,9 +651,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
             return nullptr;
         }
         if (idle_rc > 0) {
-            // Unexpected application-layer data on an idle connection — close it.
+            // Unexpected application-layer data on an idle connection - close it.
             ASYNC_IO_TRACE("H1 handleIdle: unexpected app data on idle conn, closing fd=%d\n", fd);
-            sock_obj->close();
+            sock_obj->closeIo(xsink);
             setError("HTTP1-UNEXPECTED-DATA",
                 "server sent unexpected data on idle keep-alive connection", xsink);
             return nullptr;
@@ -651,7 +668,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     // elapsed.  Defense-in-depth for peers that never close idle connections.
     if (idle_timeout_us > 0 && idle_deadline_us > 0 && h1_epoch_us() >= idle_deadline_us) {
         ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached fd=%d\n", fd);
-        sock_obj->close();
+        sock_obj->closeIo(xsink);
         setError("HTTP1-IDLE-TIMEOUT",
             "closing idle HTTP/1.1 connection after idle_timeout expired", xsink);
         return nullptr;
@@ -709,13 +726,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         // If this was a streaming send and we just finished sending headers
         // (or a chunk), check if there's more body to send.
         if (streaming_send_io && req_state == ReqState::SEND_STREAMING_BODY) {
-            // A chunk was sent — check for more queued data
+            // A chunk was sent - check for more queued data
             releaseCurrentOp(xsink);
             return handleStreamingSendBody(xsink);
         }
 
         if (streaming_send_io && req_state == ReqState::SENDING) {
-            // Headers sent — transition to streaming body state
+            // Headers sent - transition to streaming body state
             printd(5, "Http1ClientPollOperationPriv::handleSending() headers sent, "
                 "waiting for streaming body data\n");
             releaseCurrentOp(xsink);
@@ -727,25 +744,37 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
 
         // Stale keep-alive detection (curl Curl_retry_request pattern):
         // On a REUSED connection (not the first request), check for EOF
-        // immediately after sending.  If the server closed the connection
-        // between requests, recv() returns 0.  Detecting this here avoids
-        // waiting the full response timeout on a dead connection.
+        // immediately after sending.  Use the async-poll idle-data helper
+        // instead of a raw recv(MSG_PEEK), so TLS post-handshake records are
+        // processed consistently with the pre-send idle checks above.
         if (next_stream_id > 1) {
             int fd = sock_obj->getSocket();
             if (fd >= 0) {
-                char peek_buf;
-                ssize_t rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
-                if (rc == 0) {
-                    // EOF — server closed the keep-alive connection before
-                    // our request could be processed
+                ExceptionSink idle_xsink;
+                int idle_rc = sock_obj->checkIdleDataForAsyncPoll(&idle_xsink);
+                if (idle_rc < 0 || idle_xsink) {
+                    // EOF or socket/TLS error before the response header.
                     ASYNC_IO_TRACE("H1 handleSending: stale connection detected "
-                        "(recv peek=0 EOF) fd=%d stream=%d\n", fd, next_stream_id);
-                    setError("HTTP1-CONNECTION-CLOSED",
-                        "server closed the keep-alive connection", xsink);
+                        "(checkIdleData rc=%d) fd=%d stream=%d\n", idle_rc, fd, next_stream_id);
+                    if (idle_xsink) {
+                        const QoreStringNode* err_str = idle_xsink.getExceptionErr()
+                            .get<const QoreStringNode>();
+                        const QoreStringNode* desc_str = idle_xsink.getExceptionDesc()
+                            .get<const QoreStringNode>();
+                        std::string err = err_str ? err_str->c_str()
+                            : "HTTP1-CONNECTION-CLOSED";
+                        std::string desc = desc_str ? desc_str->c_str()
+                            : "server closed the keep-alive connection";
+                        idle_xsink.clear();
+                        setError(err.c_str(), desc.c_str(), xsink);
+                    } else {
+                        setError("HTTP1-CONNECTION-CLOSED",
+                            "server closed the keep-alive connection", xsink);
+                    }
                     return nullptr;
                 }
-                // rc > 0: unexpected early response data (possible)
-                // rc < 0 + EAGAIN: normal — no data yet, connection alive
+                // idle_rc > 0: early response data is possible; read it below.
+                // idle_rc == 0: no data yet, connection alive.
             }
         }
 
@@ -804,14 +833,14 @@ QoreHashNode* Http1ClientPollOperationPriv::handleStreamingSendBody(ExceptionSin
     }
 
     if (!have_data) {
-        // No data queued yet — wait for wake from pushSendData()
+        // No data queued yet - wait for wake from pushSendData()
         ASYNC_IO_TRACE("H1 handleStreamingSendBody: no data queued, waiting for wake fd=%d\n",
             sock_obj ? sock_obj->getSocket() : -1);
         return getSocketPollInfoHash(xsink, SOCK_POLLIN);
     }
 
     if (!chunk) {
-        // End sentinel — send final chunk with optional trailers
+        // End sentinel - send final chunk with optional trailers
         ASYNC_IO_TRACE("H1 handleStreamingSendBody: end sentinel, sending final chunk fd=%d\n",
             sock_obj ? sock_obj->getSocket() : -1);
         SimpleRefHolder<BinaryNode> final_chunk(new BinaryNode());
@@ -869,7 +898,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleStreamingSendBody(ExceptionSin
         return nullptr;
     }
     current_op->setSelf(*self);
-    // Stay in SEND_STREAMING_BODY — handleSending knows to come back here
+    // Stay in SEND_STREAMING_BODY - handleSending knows to come back here
     return handleSending(xsink);
 }
 
@@ -1001,7 +1030,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         }
 
         // Extract original-case headers from the info hash produced by
-        // processHttpHeaderString → convertHeaderToHash
+        // processHttpHeaderString -> convertHeaderToHash
         QoreValue info_val = output->getKeyValue("info");
         if (info_val.getType() == NT_HASH) {
             QoreValue raw_val = info_val.get<const QoreHashNode>()->getKeyValue("headers-raw");
@@ -1019,7 +1048,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             response_body = nullptr;
         }
 
-        // Check transfer-encoding — handles both string and list (duplicate headers)
+        // Check transfer-encoding - handles both string and list (duplicate headers)
         QoreValue te_val = response_headers->getKeyValue("transfer-encoding");
         if (te_val.getType() == NT_STRING) {
             if (strcasestr(te_val.get<const QoreStringNode>()->c_str(), "chunked")) {
@@ -1051,7 +1080,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
         }
 
-        // Check connection header — handles both string and list
+        // Check connection header - handles both string and list
         QoreValue conn_val = response_headers->getKeyValue("connection");
         if (conn_val.getType() == NT_STRING) {
             if (!strcasecmp(conn_val.get<const QoreStringNode>()->c_str(), "close")) {
@@ -1101,12 +1130,12 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
                 // Non-streaming: dispatch as a normal response with no body
                 return dispatchResponse(xsink);
             }
-            // Enter PROTOCOL_SWITCHED state — continuePoll() will now
+            // Enter PROTOCOL_SWITCHED state - continuePoll() will now
             // use separate send/recv ops for full-duplex raw I/O.
             protocol_switched = true;
             req_state = ReqState::PROTOCOL_SWITCHED;
             h1_state.store(H1State::PROTOCOL_SWITCHED, std::memory_order_release);
-            ASYNC_IO_TRACE("H1 handleRecvHeader: 101 → PROTOCOL_SWITCHED\n");
+            ASYNC_IO_TRACE("H1 handleRecvHeader: 101 -> PROTOCOL_SWITCHED\n");
             releaseCurrentOp(xsink);
             return handleProtocolSwitched(xsink);
         }
@@ -1180,7 +1209,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         } else if (response_content_length == 0) {
             // Explicit zero-length body
             if (streaming_active_io) {
-                // See 204/HEAD note above — channel consumer needs status_code
+                // See 204/HEAD note above - channel consumer needs status_code
                 // before end_stream or it raises "no response received".
                 dispatchStreamingHeaders(xsink);
                 if (*xsink) {
@@ -1190,7 +1219,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
             return dispatchResponse(xsink);
         } else if (connection_close) {
-            // No Content-Length, not chunked, but Connection: close — read until EOF
+            // No Content-Length, not chunked, but Connection: close - read until EOF
             if (!streaming_active_io) {
                 response_body = new BinaryNode();
             }
@@ -1216,7 +1245,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
             return rv;
         } else if (streaming_active_io) {
-            // No Content-Length, not chunked, not Connection: close, but streaming —
+            // No Content-Length, not chunked, not Connection: close, but streaming -
             // treat as read-until-close (SSE servers, etc.)
             connection_close = true;
             releaseCurrentOp(xsink);
@@ -1236,7 +1265,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             }
             return rv;
         } else {
-            // No Content-Length, not chunked, not Connection: close — treat as no body
+            // No Content-Length, not chunked, not Connection: close - treat as no body
             return dispatchResponse(xsink);
         }
     }
@@ -1361,7 +1390,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkSize(ExceptionSink* x
             (long long)chunk_size);
 
         if (chunk_size == 0) {
-            // Last chunk — read trailing CRLF (or trailers followed by CRLF)
+            // Last chunk - read trailing CRLF (or trailers followed by CRLF)
             releaseCurrentOp(xsink);
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
@@ -1476,10 +1505,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkCrlf(ExceptionSink* x
         if (line_val->getType() == NT_STRING) {
             const QoreStringNode* line = line_val->get<const QoreStringNode>();
             if (line->size() == 2 && !strcmp(line->c_str(), "\r\n")) {
-                // Empty line — chunked transfer complete
+                // Empty line - chunked transfer complete
                 return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
             }
-            // Trailer line — read next line
+            // Trailer line - read next line
             printd(5, "Http1ClientPollOperationPriv::handleRecvChunkCrlf() trailer line\n");
             releaseCurrentOp(xsink);
             sock_obj->ref();
@@ -1494,7 +1523,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvChunkCrlf(ExceptionSink* x
             return handleRecvChunkCrlf(xsink);
         }
 
-        // Unexpected output type — treat as complete
+        // Unexpected output type - treat as complete
         return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
     }
 
@@ -1511,13 +1540,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
-        // Read error likely means EOF — treat as end of body
+        // Read error likely means EOF - treat as end of body
         poll_xsink.clear();
         return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
     }
 
     if (poll_info) {
-        // More I/O needed — return poll info to wait for data
+        // More I/O needed - return poll info to wait for data
         return poll_info;
     }
 
@@ -1562,10 +1591,9 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
             return handleRecvBodyClose(xsink);
         }
 
-        // Empty read — the read state machine reached its goal but produced
-        // no new bytes.  This only happens after the EOF close above, but
-        // that case is handled at the top of this block; reaching here is
-        // the safe fallback path.
+        // Empty read means EOF on a close-delimited body.  Non-ready
+        // sockets return poll_info above; a completed zero-byte recv must
+        // terminate the response rather than re-polling forever.
         return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
     }
 
@@ -1579,7 +1607,7 @@ QoreHashNode* Http1ClientPollOperationPriv::handleProtocolSwitched(ExceptionSink
     // After 101 Switching Protocols, the H1 poll op's job is done.
     // The socket will be extracted by the WebSocket client and used with
     // WebSocketClientPollOperationBase (the existing C++ WS frame codec).
-    // Return nullptr to signal goal reached — the controller will deliver
+    // Return nullptr to signal goal reached - the controller will deliver
     // the result and the caller can extract the socket.
     ASYNC_IO_TRACE("H1 PROTOCOL_SWITCHED: goal reached, socket ready for extraction\n");
     return nullptr;
@@ -1676,7 +1704,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         return nullptr;
     }
 
-    // Return to idle — arm the proactive idle deadline so the controller
+    // Return to idle - arm the proactive idle deadline so the controller
     // wakes us up at the timeout (nginx upstream keepalive_timeout pattern).
     idle_deadline_us = 0;  // fresh idle period after completing a request
     h1_state.store(H1State::WAIT_READ, std::memory_order_release);
@@ -1797,7 +1825,7 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         return nullptr;
     }
 
-    // Return to idle — arm the proactive idle deadline for nginx-style
+    // Return to idle - arm the proactive idle deadline for nginx-style
     // upstream keepalive_timeout behavior.
     idle_deadline_us = 0;  // fresh idle period after completing a streaming request
     h1_state.store(H1State::WAIT_READ, std::memory_order_release);
@@ -1843,7 +1871,7 @@ QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink
         return response_body->refSelf();
     }
 
-    // Don't charset-convert compressed bodies — caller handles decompression first
+    // Don't charset-convert compressed bodies - caller handles decompression first
     QoreValue ce_val = response_headers->getKeyValue("content-encoding");
     if (ce_val.getType() == NT_STRING) {
         const char* ce = ce_val.get<const QoreStringNode>()->c_str();
@@ -1948,7 +1976,7 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
     // and degrade I/O controller performance.  The epoll cleanup handles EBADF
     // gracefully when the controller unregisters the fd after this returns.
     if (sock_obj && sock_obj->getSocket() >= 0) {
-        sock_obj->close();
+        sock_obj->closeIo(xsink);
     }
     notifyPendingStreams(err, desc, xsink);
     {
@@ -1994,7 +2022,7 @@ void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const c
 
 void Http1ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
     // Read connection_priv under stream_lock to race-free disarm against
-    // closeConnection's disarmConnectionPriv — matches the pattern used
+    // closeConnection's disarmConnectionPriv - matches the pattern used
     // by abort() / setError() above and by the H2 / H3 equivalents.
     AutoLocker al(stream_lock);
     if (connection_priv) {
@@ -2023,19 +2051,42 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
     // Compute host header value
     int default_port = ssl_required ? 443 : 80;
     std::string host_str;
-    if (target_port == default_port) {
+    if (target_port == 0 && !target_host.empty() && target_host[0] == '/') {
+        QoreString tmp_path(target_host.c_str());
+        QoreString encoded_path;
+        encoded_path.concatEncodeUrl(xsink, tmp_path, true);
+        if (*xsink) {
+            action->deref(xsink);
+            return -1;
+        }
+        host_str = encoded_path.c_str();
+    } else if (target_port == default_port) {
         host_str = target_host;
     } else {
         host_str = target_host + ":" + std::to_string(target_port);
     }
 
+    bool has_host_header = false;
+    if (user_headers) {
+        ConstHashIterator hi(user_headers);
+        while (hi.next()) {
+            if (!strcasecmp(hi.getKey(), "host") && !hi.get().isNothing()) {
+                has_host_header = true;
+                break;
+            }
+        }
+    }
+
     // For plain HTTP through a proxy, use absolute URL in request line
     if (is_proxy_plain) {
-        req->sprintf("%s http://%s%s HTTP/1.1\r\nHost: %s\r\n",
-            method, host_str.c_str(), (path && *path) ? path : "/", host_str.c_str());
+        req->sprintf("%s http://%s%s HTTP/1.1\r\n",
+            method, host_str.c_str(), (path && *path) ? path : "/");
     } else {
-        req->sprintf("%s %s HTTP/1.1\r\nHost: %s\r\n",
-            method, (path && *path) ? path : "/", host_str.c_str());
+        req->sprintf("%s %s HTTP/1.1\r\n",
+            method, (path && *path) ? path : "/");
+    }
+    if (!has_host_header) {
+        req->sprintf("Host: %s\r\n", host_str.c_str());
     }
 
     // Add request headers (skip HTTP/2 pseudo-headers)
@@ -2048,7 +2099,7 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
                 continue;
             }
             // When streaming-send adds its own "Transfer-Encoding: chunked"
-            // below, skip any user-supplied TE header — otherwise the peer
+            // below, skip any user-supplied TE header - otherwise the peer
             // sees it twice ("chunked, chunked"), which folds to a list and
             // causes the request body not to be read as chunked.
             if (streaming_send_flag && !strcasecmp(key, "transfer-encoding")) {
@@ -2083,7 +2134,7 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     // Add Content-Length or Transfer-Encoding: chunked
     if (streaming_send_flag) {
-        // Streaming send: use chunked TE — body will be pushed via pushSendData()
+        // Streaming send: use chunked TE - body will be pushed via pushSendData()
         req->concat("Transfer-Encoding: chunked\r\n");
     } else if (body_len > 0 && !has_content_length) {
         req->sprintf("Content-Length: %lu\r\n", (unsigned long)body_len);
@@ -2106,9 +2157,9 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
     // CLOSED state, so a window exists where this thread sees the OK state,
     // proceeds to build the request, and then arrives here only after the
     // I/O thread has already drained stream_action via notifyPendingStreams.
-    // Without this re-check, our action would attach AFTER the drain — the
+    // Without this re-check, our action would attach AFTER the drain - the
     // future would never resolve, manifesting as a FUTURE-TIMEOUT in the
-    // caller (mgr.request → q_future_get_blocking).  Surface the closure
+    // caller (mgr.request -> q_future_get_blocking).  Surface the closure
     // error eagerly instead.
     if (h1_state.load(std::memory_order_acquire) == H1State::CLOSED) {
         bin->deref(xsink);
@@ -2179,7 +2230,7 @@ bool Http1ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
         --active_stream_count;
 
         if (req_state == ReqState::IDLE) {
-            // Request hasn't started sending yet — safe to cancel
+            // Request hasn't started sending yet - safe to cancel
             active_sid = 0;
             active_method.clear();
             if (pending_request_data) {
@@ -2187,7 +2238,7 @@ bool Http1ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
                 pending_request_data = nullptr;
             }
         } else {
-            // Request is in flight — must close connection to avoid
+            // Request is in flight - must close connection to avoid
             // corrupting protocol state
             in_flight = true;
         }
@@ -2199,7 +2250,7 @@ bool Http1ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
     }
 
     if (in_flight) {
-        printd(5, "Http1ClientPollOperationPriv::cancelStream() in-flight — closing connection\n");
+        printd(5, "Http1ClientPollOperationPriv::cancelStream() in-flight - closing connection\n");
         setError("HTTP1-CANCELLED", "connection closed due to in-flight cancellation", xsink);
     }
 
@@ -2252,7 +2303,7 @@ void Http1ClientPollOperationPriv::installSseState(int64_t stream_id, Queue* que
     (connecting, ssl_upgrade, proxy_connect_send/recv, reading, wait_read,
     closed) entirely in C++.
 
-    HTTP/1.1 is a serial protocol — only one request can be in flight at a
+    HTTP/1.1 is a serial protocol - only one request can be in flight at a
     time. The connection manager creates multiple connections for concurrent
     requests.
 
@@ -2287,7 +2338,7 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string 
     // Create initial TCP connect operation
     sock_ptr->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, false, connect_target->c_str(), sock_ptr),
+        new SocketConnectPollOperation(xsink, false, connect_target->c_str(), sock_ptr, true),
         xsink);
     if (*xsink) {
         return;
@@ -2308,7 +2359,7 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string 
     SocketConnectPollOperation* connect_ptr = connect_op.release();
     connect_ptr->setSelf(self);
 
-    // Create the private data — ref sock for private data ownership
+    // Create the private data - ref sock for private data ownership
     // Extract the raw C++ priv pointer for direct I/O-thread calls;
     // the Qore-level connection_ref member holds the only strong QoreObject ref
     AbstractHttpPollConnectionPriv* conn_priv = *connection;
@@ -2366,7 +2417,7 @@ nothing Http1ClientPollOperationBase::abort() {
 /** When the connection has been idle (no pending request, no active stream)
     for this many milliseconds, handleIdle() will close it proactively with
     an \c HTTP1-IDLE-TIMEOUT error.  Mirrors nginx's upstream
-    \c keepalive_timeout — defense-in-depth against peers that never close
+    \c keepalive_timeout - defense-in-depth against peers that never close
     idle keep-alive connections.
 
     @param idle_timeout_ms timeout in milliseconds; <= 0 disables the proactive timeout
@@ -2477,7 +2528,7 @@ int Http1ClientPollOperationBase::submitRequest(string method, string path,
     QoreObject* promise_obj = const_cast<QoreObject*>(
         get_param_value(args, 4).get<const QoreObject>());
 
-    // Create PromiseAction — caller creates with refcount 1,
+    // Create PromiseAction - caller creates with refcount 1,
     // priv->submitRequest takes ownership (stores or derefs on failure)
     PromiseAction* action = new PromiseAction(*promise, promise_obj);
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
@@ -2487,7 +2538,7 @@ int Http1ClientPollOperationBase::submitRequest(string method, string path,
 //! Submits an HTTP/1.1 request with Promise + EventNotifier for poll-based delivery
 /** Like submitRequest() but additionally signals @a notifier when the response
     arrives so that a continuePoll() state machine can call Future::get()
-    non-blockingly — eliminating the need for a background thread.
+    non-blockingly - eliminating the need for a background thread.
 
     @param method HTTP method (GET, POST, etc.)
     @param path request path
@@ -2534,7 +2585,7 @@ int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, strin
         get_param_value(args, 5).get<const QoreObject>());
 
     // Create CompositeAction: PromiseAction resolves Future, then EventNotifierAction
-    // signals the notifier fd — both are pure C++, safe on the I/O thread
+    // signals the notifier fd - both are pure C++, safe on the I/O thread
     AbstractAsyncAction* action = createPromiseWithNotifierAction(
         promise_obj, notifier_obj, xsink);
     if (!action) {
@@ -2615,7 +2666,7 @@ int Http1ClientPollOperationBase::submitRequestStreaming(string method, string p
         notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
     }
 
-    // Create ChannelAction — priv takes ownership
+    // Create ChannelAction - priv takes ownership
     ChannelAction* action = new ChannelAction(ch, notifier_ptr, notifier_obj_ptr);
     if (sse_install_eligible) {
         action->setSseInstallEligible();
@@ -2726,7 +2777,7 @@ int Http1ClientPollOperationBase::submitRequestSse(string method, string path,
         notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
     }
 
-    // Create SseAction — priv takes ownership; release from QPP holder
+    // Create SseAction - priv takes ownership; release from QPP holder
     Queue* queue_ptr = queue.release();
     SseAction* action = new SseAction(queue_ptr, notifier_ptr, notifier_obj_ptr);
     queue_ptr->deref(xsink);  // SseAction refs the queue itself

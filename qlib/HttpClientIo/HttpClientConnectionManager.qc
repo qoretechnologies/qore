@@ -28,7 +28,8 @@ public namespace HttpClientIo {
 #! Unified connection pool manager with protocol auto-selection
 /** This class manages a pool of HTTP/1.1, HTTP/2, and HTTP/3 connections, providing:
 
-    - **Protocol auto-selection**: Start with HTTP/2, upgrade to HTTP/3 via Alt-Svc discovery
+    - **Protocol auto-selection**: race HTTP/3 and HTTP/2 with happy eyeballs for HTTPS,
+      preferring HTTP/3 when available
     - **Connection pooling**: Reuse connections across requests
     - **Load balancing**: Distribute streams across connections
     - **Automatic connection creation**: Create new connections as needed
@@ -132,6 +133,21 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         #! Shutdown flag
         bool shutdown = False;
 
+        #! Stable AsyncIoController owner id for this manager instance.
+        /** Do not use self.uniqueHash() directly for controller ownership:
+            object identity strings can be reused after destruction, while the
+            controller intentionally retains recent cancel tombstones for a
+            short race window.  A monotonic suffix makes owner reuse impossible
+            inside the process.
+        */
+        string owner_id;
+
+        #! Process-local manager id counter used in @ref owner_id.
+        static int next_manager_id = 0;
+
+        #! Lock for manager id allocation.
+        static Mutex manager_id_lock();
+
         #! Timestamp of the last idle-connection cleanup, used by @ref maybeCleanupIdle().
         /** Without periodic cleanup, idle connections accumulate in the pool indefinitely;
             each entry keeps a socket / TLS / HTTP2 / HTTP3 session graph alive, causing
@@ -203,8 +219,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (self.opts.max_request_retries < 0) {
             throw "HTTPCLIENT-OPTION-ERROR",
                 sprintf("max_request_retries must be >= 0 (0 = disabled), got %d",
-                    self.opts.max_request_retries);
+                self.opts.max_request_retries);
         }
+        {
+            AutoLock al(manager_id_lock);
+            owner_id = sprintf("HttpClientConnectionManager:%d:%s",
+                ++next_manager_id, self.uniqueHash());
+        }
+
         # Parse proxy URL if provided
         if (self.opts.proxy_url.val()) {
             hash<auto> purl;
@@ -950,7 +972,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             shutdown = True;
         }
 
-        string owner_id = self.uniqueHash();
         try {
             controller.cancelByOwner(owner_id);
         } catch (hash<ExceptionInfo> ex) {
@@ -1032,11 +1053,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
         }
         foreach HttpClientConnection conn in (to_close) {
-            # Cancel from the I/O controller BEFORE closing to release the
-            # controller's strong references to the socket and poll operation.
-            # Without this, the PollInfo entry keeps the objects alive and the
-            # socket fd leaks until the controller is destroyed.
-            try { controller.cancel(conn.getSocket()); } catch () {}
             try {
                 conn.close();
             } catch () {
@@ -1085,15 +1101,15 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Internal: resolves the protocol to use for a given URL
-    /** In auto mode: HTTPS starts with HTTP/2 and upgrades to HTTP/3 only when
-        an @c Alt-Svc response header advertises H3 support (RFC 7838).  Plain
-        HTTP uses HTTP/2 prior knowledge (h2c) first with HTTP/1.1 fallback.
+    /** In auto mode: HTTPS with no proxy uses a happy-eyeballs race between
+        HTTP/3 and HTTP/2, giving HTTP/3 a head start.  Plain HTTP uses
+        HTTP/1.1 unless HTTP/2 is explicitly requested.
         The protocol cache persists negotiation results to avoid repeated probes.
 
         @param url_info parsed URL info
         @param key the pool key "host:port"
 
-        @return "h1", "h2", or "h3"
+        @return "h1", "h2", "h3", or "happy-eyeballs"
     */
     private string resolveProtocol(hash<auto> url_info, string key) {
         if (opts.protocol == "h1") {
@@ -1205,8 +1221,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # Without this, N threads all finding no reusable connection would each create
             # their own, flooding the server with N handshakes when 1 suffices.
             # The wait is bounded by connect_timeout; on timeout, the waiting thread
-            # takes over creation to prevent indefinite blocking when the creator stalls
-            # (e.g., stuck in blocking DNS/getaddrinfo).
+            # takes over creation to prevent indefinite blocking when the creator stalls.
             {
                 AutoLock al(create_mutex);
                 if (creating{key}) {
@@ -1229,8 +1244,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
             # We are the designated creator for this key.
             # Resolve protocol and check capacity under the write lock, then release
-            # it before creating the connection (constructor may call getaddrinfo()
-            # which can block)
+            # it before creating the connection.
             string protocol;
             {
                 AutoWriteLock al(pool_lock);
@@ -1305,9 +1319,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
             }
 
-            # Create connection outside the write lock — constructor may do DNS
-            # resolution (getaddrinfo) which can block and would stall all pool
-            # operations if done under the lock
+            # Create connection outside the write lock so constructor-side setup cannot
+            # stall unrelated pool operations.
             HttpClientConnection conn;
             if (protocol == "happy-eyeballs") {
                 conn = createConnectionHappyEyeballs(url_info, key);
@@ -1333,9 +1346,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 }
                 if (!h2c_ok) {
                     log(LoggerLevel::DEBUG, "h2c probe failed for %s, falling back to HTTP/1.1", key);
-                    # Cancel the probe connection from the controller BEFORE closing
-                    # the socket to prevent the I/O thread from reading a closed fd
-                    try { controller.cancel(conn.getSocket()); } catch () {}
                     try { conn.close(); } catch () {}
                     {
                         AutoWriteLock al(pool_lock);
@@ -1544,7 +1554,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         if (!h3_pending || !h2_pending) {
             if (h3conn.isReady()) {
                 log(LoggerLevel::DEBUG, "happy eyeballs: H3 already ready for %s", key);
-                try { controller.cancel(h2conn.getSocket()); } catch () {}
                 try { h2conn.close(); } catch () {}
                 {
                     AutoWriteLock al(pool_lock);
@@ -1554,7 +1563,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             }
             if (h2conn.isReady()) {
                 log(LoggerLevel::DEBUG, "happy eyeballs: H2 already ready for %s", key);
-                try { controller.cancel(h3conn.getSocket()); } catch () {}
                 try { h3conn.close(); } catch () {}
                 {
                     AutoWriteLock al(pool_lock);
@@ -1575,7 +1583,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     log(LoggerLevel::DEBUG,
                         "happy eyeballs: H2 failed fast with SOCKET-CONNECT-ERROR for %s,"
                         " aborting H3", key);
-                    try { controller.cancel(h3conn.getSocket()); } catch () {}
                     try { h3conn.close(); } catch () {}
                     try { h2conn.close(); } catch () {}
                     string desc_fast = sprintf("could not connect to %s: %s", key,
@@ -1607,7 +1614,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Determine winner
         if (h3conn.isReady()) {
             log(LoggerLevel::DEBUG, "happy eyeballs: H3 won for %s", key);
-            try { controller.cancel(h2conn.getSocket()); } catch () {}
             try { h2conn.close(); } catch () {}
             {
                 AutoWriteLock al(pool_lock);
@@ -1617,7 +1623,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
         if (h2conn.isReady()) {
             log(LoggerLevel::DEBUG, "happy eyeballs: H2 won for %s", key);
-            try { controller.cancel(h3conn.getSocket()); } catch () {}
             try { h3conn.close(); } catch () {}
             {
                 AutoWriteLock al(pool_lock);
@@ -1629,9 +1634,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # Neither connected — collect error details and clean up both
         *hash<auto> h3_err = h3conn.getPollOperation().getError();
         *hash<auto> h2_err = h2conn.getPollOperation().getError();
-        try { controller.cancel(h3conn.getSocket()); } catch () {}
         try { h3conn.close(); } catch () {}
-        try { controller.cancel(h2conn.getSocket()); } catch () {}
         try { h2conn.close(); } catch () {}
 
         # Build a user-friendly error message with the underlying failure reasons
@@ -1666,7 +1669,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             bool initial = True) {
         HttpClientPollOperation op = conn.getPollOperation();
         Socket sock = conn.getSocket();
-        string owner = self.uniqueHash();
+        string controller_key = sprintf("%s:conn:%d", owner_id, conn.getConnectionId());
 
         if (initial) {
             log(LoggerLevel::DEBUG, "submitting %s connection %d to controller for %s",
@@ -1710,7 +1713,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         controller.submit(<SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
-            "owner": owner,
+            "key": controller_key,
+            "owner": owner_id,
             "to": -1,
             "has_on_complete": True,
         });
@@ -1861,6 +1865,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             || err == "HTTP3-ABORT"
             || err == "HTTP3-EMPTY-READ"
             || err == "HTTP2-EMPTY-READ"
+            || err == "HTTP2-CONNECTION-CLOSED"
             || err == "HTTP2-CONNECT-ERROR"
             || err == "HTTP2-ALPN-ERROR"
             || err == "HTTP2-ABORT"
@@ -1892,6 +1897,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     */
     private bool isH2cIncompatible(string err) {
         return err == "HTTP2-EMPTY-READ"
+            || err == "HTTP2-CONNECTION-CLOSED"
             || err == "HTTP2-CONNECT-ERROR"
             || err == "HTTP2-ALPN-ERROR"
             || err == "HTTP2-ABORT"
@@ -2098,8 +2104,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Internal: checks if a connection is alive at the transport level
-    /** Verifies that the underlying socket is open, the poll operation hasn't
-        detected any errors, and the idle window has not expired.
+    /** Verifies that the poll operation hasn't detected any errors, the
+        underlying socket is open once the connection has left CONNECTING, and
+        the idle window has not expired.
 
         Liveness detection is owned by the async I/O thread.  When a server
         sends FIN/RST, the I/O thread sees the POLLIN/POLLHUP via its
@@ -2120,6 +2127,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             log(LoggerLevel::DEBUG, "connection %d poll operation is %s",
                 conn.getConnectionId(), op.isClosed() ? "closed" : "errored");
             return False;
+        }
+        if (conn.getConnectionState() == HttpClientConnectionState::Connecting) {
+            return True;
         }
         if (!conn.getSocket().isOpen()) {
             log(LoggerLevel::DEBUG, "connection %d socket is closed",
@@ -2257,7 +2267,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         foreach HttpClientConnection conn in (to_close) {
             log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
-            try { controller.cancel(conn.getSocket()); } catch () {}
             try { conn.close(); } catch () {}
         }
     }

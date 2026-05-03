@@ -251,9 +251,8 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     @subsection wsc_v2_4 v2.4
     - added async I/O support using the global @ref AsyncSocketIo::AsyncSocketIoController for scalable,
       non-blocking WebSocket client connections; enabled by default for HTTP/1.1 connections
-      - added the \c async_io constructor option (default @ref True); set to @ref False to use the legacy
-        50ms poll loop; automatically falls back to sync mode for HTTP/2 and HTTP/3 connections where
-        the multiplexed transport is not compatible with socket-level polling
+      - added the \c async_io constructor option (default @ref True); the option is retained for compatibility,
+        but all socket I/O is now controller-backed async I/O
       - added @ref WebSocketClient::WebSocketClient::isAsyncIo() "WebSocketClient::isAsyncIo()" to check if
         async I/O mode is enabled
       - added @ref WebSocketClient::WebSocketClient::connectAsync() "WebSocketClient::connectAsync()" for
@@ -510,13 +509,12 @@ public const MESSAGE_WS_PONG = "pong";
     @ref WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
 
     @par Async I/O Mode
-    By default, HTTP/1.1 WebSocket connections use async I/O via the global
+    HTTP/1.1 WebSocket connections use async I/O via the global
     @ref AsyncSocketIo::AsyncSocketIoController, providing scalable non-blocking I/O without a polling loop.
     Use @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" for fully non-blocking connect
     and event loop startup. HTTP/2 and HTTP/3 connections use their multiplexed transports for async I/O
-    automatically. Set the \c async_io constructor option to @ref False to use the legacy 50ms poll loop for
-    HTTP/1.1 connections. Use @ref WebSocketClient::WebSocketClient::isAsyncIo() "isAsyncIo()" to check if
-    async I/O mode is active.
+    automatically. The \c async_io constructor option is retained for compatibility only; @ref False is ignored.
+    Use @ref WebSocketClient::WebSocketClient::isAsyncIo() "isAsyncIo()" to check if async I/O mode is active.
 
     The @ref WebSocketClient::WebSocketClient "WebSocketClient" class includes support for running in sandboxed
     Program objects with the following parse options set:
@@ -672,18 +670,6 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! Buffer for HTTP/3 WebSocket frames spanning multiple QUIC stream data
         *binary h3_frame_buf;
 
-        #! True if async I/O mode is enabled for the current connection
-        /** May be temporarily set to False for HTTP/2/HTTP/3 connections.
-            Reset from \c async_io_requested on each new connection.
-            @since WebSocketClient 2.4
-        */
-        bool async_io = True;
-
-        #! Original user preference for async I/O mode
-        /** @since WebSocketClient 2.4
-        */
-        bool async_io_requested = True;
-
         #! The poll operation for async I/O mode
         /** @since WebSocketClient 2.4
         */
@@ -802,10 +788,8 @@ WebSocketClient ws(\event(), {
         - \c raw_callback: an optional @ref closure "closure" or @ref call_reference "call reference" for
           receiving raw WebSocket messages before processing; takes a single <tt>hash&lt;WsMsgInfo&gt;</tt>
           argument and must return one of the following values: @ref WSClientRawCallbackReturnCodes
-        - \c async_io: if @ref True, use async I/O with the global @ref AsyncSocketIo::AsyncSocketIoController
-          instead of the traditional 50ms poll loop; this provides better scalability for multiple concurrent
-          WebSocket connections; automatically falls back to sync mode for HTTP/2 and HTTP/3 connections
-          (default @ref True)
+        - \c async_io: compatibility option; socket I/O always uses the global
+          @ref AsyncSocketIo::AsyncSocketIoController, and @ref False is ignored (default @ref True)
         - \c reconnect: try to reconnect when the connection is closed or lost (default @ref False)
         - \c validator: an @ref AsyncApi::AsyncApi3Schema "AsyncApi3Schema" object for message validation;
           overrides \a asyncapi
@@ -1066,9 +1050,6 @@ ws.connect();
             disconnectUnlocked();
         }
 
-        # Async I/O is the only path
-        async_io = True;
-
         # Do the full HCIO connect (blocking — the caller drives the poll loop
         # but the actual I/O is controller-driven via HCIO)
         hash<auto> result = connectUnlocked(opts.hdr);
@@ -1082,22 +1063,15 @@ ws.connect();
         by the controller. When the handshake completes, the async event loop is automatically
         started.
 
-        Requires the \c async_io option to be set to @ref True in the constructor.
-
         @param opts optional connection options; the \c hdr key can provide additional headers
         @param ready_queue optional Queue that receives the connect result hash when the
             connection is ready, or an exception hash on failure
-
-        @throw WEBSOCKET-ERROR async_io is not enabled
 
         @note Only supports HTTP/1.1 WebSocket connections
 
         @since WebSocketClient 2.4
     */
     connectAsync(*hash<auto> opts, *Queue ready_queue) {
-        if (!async_io) {
-            throw "WEBSOCKET-ERROR", "connectAsync() requires async_io to be enabled";
-        }
         if (!opts.hdr.Accept) {
             opts.hdr.Accept = getAcceptHeader();
         }
@@ -1109,8 +1083,6 @@ ws.connect();
             disconnectUnlocked();
         }
 
-        # Async I/O is the only path
-        async_io = True;
         async_owner = "wsc-" + get_random_string(12);
         async_close_sent = False;
         # Reset close-cause state so each connection lifecycle sees only its
@@ -1287,7 +1259,7 @@ ws.connect();
             do_reconnect = True;
             # wake up any sleeping threads
             sleep_cond.broadcast();
-            if (async_io && poll_op) {
+            if (poll_op) {
                 # Send close frame for async mode
                 if (!async_close_sent && !poll_op.goalReached()) {
                     async_close_sent = True;
@@ -1323,10 +1295,10 @@ ws.connect();
         - \c http2: @ref True if using HTTP/2 WebSocket (RFC 8441)
         - \c http3: @ref True if using HTTP/3 WebSocket (RFC 9220)
         - \c num_connects: how many times has the client connected to the server
-        - \c peer: information about the connected server socket (see
-          @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-        - \c socket: information about the connected local socket (see
-          @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
+        - \c peer: numeric information about the connected server socket (see
+          @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo(False)")
+        - \c socket: numeric information about the connected local socket (see
+          @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo(False)")
 
         @since WebSocketClient 2.4
     */
@@ -1342,8 +1314,8 @@ ws.connect();
             *Socket sock = getActiveSocket();
             if (sock) {
                 rv += {
-                    "peer": sock.getPeerInfo(),
-                    "socket": sock.getSocketInfo(),
+                    "peer": sock.getPeerInfo(False),
+                    "socket": sock.getSocketInfo(False),
                 };
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -1395,9 +1367,6 @@ ws.connect();
             disconnectUnlocked();
         }
 
-        # Async I/O is the only path — no sync eventLoop()
-        async_io = True;
-
         hash<auto> h = connectUnlocked(opts.hdr, \info, reconnect);
         on_error {
             clearTid();
@@ -1426,7 +1395,7 @@ ws.connect();
             if (tid == -1 && async_shutdown_tid == gettid()) {
                 return;
             }
-            if (async_io && tid == -1) {
+            if (tid == -1) {
                 # Async mode: handle cleanup directly instead of calling waitTidCleared().
                 # The delivery threads that normally call clearTid() via handleAsyncShutdown()
                 # may be blocked in cancelByOwner() waiting for the I/O thread — and this
@@ -1896,8 +1865,8 @@ ws.setEventQueue();
 
         # process async I/O option
         if (http_opts.hasKey("async_io")) {
-            async_io = remove http_opts.async_io ? True : False;
-            async_io_requested = async_io;
+            # compatibility no-op: WebSocket socket I/O is always async
+            remove http_opts.async_io;
         }
 
         # HTTPClient hc member removed — all paths use HCIO
@@ -1923,7 +1892,7 @@ ws.setEventQueue();
             stop = cmd;
             # wake up any sleeping threads
             sleep_cond.broadcast();
-            if (async_io && tid == -1) {
+            if (tid == -1) {
                 # Async mode: handle cleanup atomically. We cannot rely on the delivery
                 # pipeline to call handleAsyncShutdown() → clearTid() because the I/O
                 # controller may have already been stopped (e.g., by server shutdown),
@@ -1956,7 +1925,7 @@ ws.setEventQueue();
                 m.lock();
                 return;
             }
-            # Non-async mode: wait for the event thread to terminate
+            # Reconnect thread: wait for the event thread to terminate
             waitTidCleared(tid);
             cid = -1;
         }
@@ -2527,11 +2496,11 @@ ws.setEventQueue();
         @since WebSocketClient 2.4
     */
     bool isAsyncIo() {
-        return async_io;
+        return True;
     }
 
     #! Returns the poll operation for advanced async I/O usage
-    /** @return the WebSocketClientPollOperation or NOTHING if not in async mode
+    /** @return the WebSocketClientPollOperation or NOTHING if not connected
 
         @since WebSocketClient 2.4
     */
@@ -3857,10 +3826,10 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
                 },
                 "async_io": <ConnectionOptionInfo>{
                     "display_name": "Async I/O",
-                    "short_desc": "Use async I/O for scalable WebSocket connections",
+                    "short_desc": "Compatibility option; WebSocket socket I/O is always async",
                     "type": "bool",
-                    "desc": "Use async I/O with the global AsyncSocketIoController instead of the "
-                        "traditional 50ms poll loop for better scalability",
+                    "desc": "Compatibility option; WebSocket socket I/O always uses the global "
+                        "AsyncSocketIoController, and False is ignored",
                     "default_value": True,
                 },
             },
@@ -4109,15 +4078,14 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "HTTP Version",
                 "short_desc": "HTTP version to use",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The HTTP version to use: `auto` (default, prefers H2/H3 for TLS), "
+                "desc": "The HTTP version to use: `auto` (HTTP/3-first happy eyeballs for HTTPS, default), "
                     "`1.1`, `1.0`, `2.0`, or `3.0`. HTTP/2 (RFC 8441) requires TLS and "
                     "is negotiated via ALPN. HTTP/3 (RFC 9220) requires TLS and uses QUIC",
                 "default_value": "auto",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "auto",
-                        "desc": "Use HTTP/2 if available via ALPN, fall back to HTTP/1.1; upgrade to "
-                            "HTTP/3 if advertised via Alt-Svc",
+                        "desc": "Use HTTP/3-first happy eyeballs for HTTPS; fall back to HTTP/2 if needed",
                     },
                     <AllowedValueInfo>{
                         "value": "1.0",
@@ -4216,10 +4184,10 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
             },
             "async_io": <DataProviderOptionInfo>{
                 "display_name": "Async I/O",
-                "short_desc": "Use async I/O for scalable WebSocket connections",
+                "short_desc": "Compatibility option; WebSocket socket I/O is always async",
                 "type": AbstractDataProviderTypeMap."bool",
-                "desc": "Use async I/O with the global AsyncSocketIoController instead of the "
-                    "traditional 50ms poll loop for better scalability",
+                "desc": "Compatibility option; WebSocket socket I/O always uses the global "
+                    "AsyncSocketIoController, and False is ignored",
                 "default_value": True,
             },
         };

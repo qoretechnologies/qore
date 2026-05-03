@@ -36,6 +36,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
+#include "qore/intern/AsyncIoControllerPriv.h"
 
 /** @cond INTERNAL */
 
@@ -627,32 +628,22 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
     // Phase 2: begin submit
     beginSubmit();
 
-    // Build strcase_str_map_t from QoreHashNode
-    strcase_str_map_t hdr_map;
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            const char* key = hi.getKey();
-            if (key[0] == ':') {
-                continue;  // skip pseudo-headers
-            }
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                hdr_map[key] = val.get<const QoreStringNode>()->c_str();
-            }
-        }
-    }
-    // NOTE: Host/:authority is handled by the QUIC/nghttp3 layer based on
-    // connection target — no explicit Host header needed here.
-
-    // Submit to QUIC layer
+    // Submit to the QUIC layer through the socket object's controller-backed
+    // path.  This keeps ngtcp2/nghttp3 session mutation on the async I/O thread.
     int64_t stream_id;
     if (streaming) {
-        stream_id = inner_op->submitRequestStreaming(method, path, hdr_map, xsink);
+        stream_id = sock_obj->submitQuicRequestStreamingNoWake(method, path, headers, xsink);
     } else {
-        stream_id = inner_op->submitRequest(method, path, hdr_map, body, body_len, xsink);
+        stream_id = sock_obj->submitQuicRequestNoWake(method, path, headers, body, body_len, xsink);
     }
     if (*xsink || stream_id < 0) {
+        endSubmitFail();
+        action->deref(xsink);
+        return -1;
+    }
+
+    if (action->isStreaming()
+            && sock_obj->setQuicClientStreamStreaming(stream_id, xsink)) {
         endSubmitFail();
         action->deref(xsink);
         return -1;
@@ -705,20 +696,17 @@ int64_t Http3ClientPollOperationPriv::submitRequest(const char* method, const ch
         for (size_t i = 0; i < buffered->size(); ++i) {
             QoreValue v = buffered->retrieveEntry(i);
             if (v.getType() == NT_HASH) {
-                action->execute(v, xsink);
+                // retrieveEntry() returns the list-owned value without
+                // taking a reference.  PromiseAction takes ownership of the
+                // QoreValue passed to execute(), while buffered->deref()
+                // below releases the list-owned reference.
+                action->execute(v.refSelf(), xsink);
             }
         }
         buffered->deref(xsink);
     }
 
     return stream_id;
-}
-
-int Http3ClientPollOperationPriv::flushPendingWrites(ExceptionSink* xsink) {
-    if (!inner_op) {
-        return 0;
-    }
-    return inner_op->flushPendingWrites(xsink);
 }
 
 QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
@@ -762,18 +750,6 @@ QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
     stream_actions[sid] = action;
     ++active_stream_count;
 
-    // If the action is a streaming consumer (ChannelAction), mark the QUIC
-    // stream for incremental response body delivery.  This enables
-    // h3RecvDataCallback to push each DATA chunk to completed_streams_
-    // (like CONNECT tunnels) so the ChannelAction receives data as it
-    // arrives, instead of waiting for END_STREAM (which never comes for SSE).
-    if (action->isStreaming() && inner_op) {
-        auto session = inner_op->getSession();
-        if (session) {
-            session->setStreamStreaming(stream_id);
-        }
-    }
-
     // Check for buffered responses
     auto pr_it = pending_responses.find(sid);
     if (pr_it != pending_responses.end() && !pr_it->second.empty()) {
@@ -787,10 +763,23 @@ QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
     return buffered;
 }
 
+int Http3ClientPollOperationPriv::setStreamStreaming(int64_t stream_id,
+        ExceptionSink* xsink) {
+    if (!sock_obj) {
+        xsink->raiseException("HTTP3-STATE-ERROR",
+            "cannot mark stream %lld for streaming: socket is not available",
+            (long long)stream_id);
+        return -1;
+    }
+    return sock_obj->setQuicClientStreamStreaming(stream_id, xsink);
+}
+
 bool Http3ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink* xsink) {
     std::string sid = std::to_string(stream_id);
 
     AutoLocker al(stream_lock);
+    pending_stream_ids.erase(sid);
+
     // Clean up buffered responses
     auto pr_it = pending_responses.find(sid);
     if (pr_it != pending_responses.end()) {
@@ -844,7 +833,7 @@ void Http3ClientPollOperationPriv::installFrameState(int64_t stream_id, Queue* m
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendQuicClientStreamData(stream_id,
+            int rv = sock_ptr->sendQuicClientStreamDataForAsyncPoll(stream_id,
                 (*holder)->getPtr(), (*holder)->size(), false, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path
@@ -1145,19 +1134,29 @@ bool Http3ClientPollOperationBase::isGoawayReceived() [flags=RET_VALUE_ONLY] {
     return priv->isGoawayReceived();
 }
 
-//! Synchronously flushes pending QUIC writes to the network
-/** Produces any queued QUIC packets (HTTP/3 request frames, ACKs, etc.)
-    and sends them via UDP. Safe to call from any thread.
-
-    Use this after submitting async requests to guarantee the request frames
-    are on the wire before closing the connection.
-
-    @throw QUIC-SEND-ERROR if the UDP send fails
+//! Wakes the async I/O controller to flush pending QUIC writes
+/** Queued QUIC packets are produced and sent by the controller's I/O
+    thread; this method only wakes the controller.
 
     @since %Qore 2.3
 */
 nothing Http3ClientPollOperationBase::flushPendingWrites() {
-    priv->flushPendingWrites(xsink);
+    ReferenceHolder<QoreObject> sock_obj(priv->getReferencedSocket(), xsink);
+    if (*xsink || !sock_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !ctl_obj) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctl_priv) {
+        return QoreValue();
+    }
+    ctl_priv->wakeSocketByObject(*sock_obj, xsink);
+    return QoreValue();
 }
 
 //! Requests connection migration (consumed by I/O thread on next continuePoll)
@@ -1193,6 +1192,20 @@ nothing Http3ClientPollOperationBase::endSubmitOk(int stream_id) {
 */
 nothing Http3ClientPollOperationBase::endSubmitFail() {
     priv->endSubmitFail();
+}
+
+//! Marks an HTTP/3 client stream as streaming.
+/** Compatibility hook for Qore-level Http3ClientPollOperation implementations
+    that mark a streaming stream before registering the completion action.
+
+    Newer code paths call this internally from registerStreamWithChannel() and
+    registerStreamWithQueue(); calling it more than once for the same stream is
+    harmless.
+
+    @param stream_id the QUIC stream ID
+*/
+nothing Http3ClientPollOperationBase::setStreamStreaming(int stream_id) {
+    priv->setStreamStreaming(static_cast<int64_t>(stream_id), xsink);
 }
 
 //! Phase 3: register stream with a Promise for result delivery
@@ -1314,6 +1327,12 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
     if (sse_install_eligible) {
         action->setSseInstallEligible();
     }
+    if (priv->setStreamStreaming(static_cast<int64_t>(stream_id), xsink)) {
+        ExceptionSink clean_xsink;
+        priv->cancelStream(static_cast<int64_t>(stream_id), &clean_xsink);
+        clean_xsink.clear();
+        return QoreValue();
+    }
     // Ownership: priv->registerStream takes the ref on success; see
     // registerStreamWithPromise for the rationale.
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
@@ -1356,6 +1375,12 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
     queue_ptr->deref(xsink);  // SseAction refs the queue itself
     if (notifier_ptr) {
         notifier_ptr->deref(xsink);  // SseAction refs the notifier itself
+    }
+    if (priv->setStreamStreaming(static_cast<int64_t>(stream_id), xsink)) {
+        ExceptionSink clean_xsink;
+        priv->cancelStream(static_cast<int64_t>(stream_id), &clean_xsink);
+        clean_xsink.clear();
+        return QoreValue();
     }
     // Ownership: priv->registerStream takes the ref on success; see
     // registerStreamWithPromise for the rationale.

@@ -158,6 +158,21 @@ public:
         return false;
     }
 
+    //! Handles controller completion directly
+    /** Called on the async I/O thread after the operation completes or is
+        canceled.  Implementations must not run Qore code or block.
+
+        @param canceled true if the operation was canceled
+        @param ex_hash exception hash when the operation failed, otherwise null
+        @param xsink exception sink
+        @return true if the completion was handled and default queue/onComplete
+            delivery can be skipped when no explicit queue or callback exists
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual bool handleCompletion(bool canceled, const QoreHashNode* ex_hash, ExceptionSink* xsink) {
+        return false;
+    }
+
     //! Returns the number of items pushed to output queues in the last continuePoll() cycle
     /** Override this in subclasses that push data to queues during continuePoll()
         (e.g., WebSocket frame I/O, pipeline PUSH_QUEUE steps). The controller calls this
@@ -171,6 +186,19 @@ public:
     */
     DLLEXPORT virtual int getAndClearItemsPushed() {
         return 0;
+    }
+
+    //! Provides the socket events that caused the controller to continue the operation
+    /** The async I/O controller calls this immediately before continuePoll() when
+        the operation was woken by event-loop readiness.  The event mask uses
+        SOCK_POLLIN, SOCK_POLLOUT, and SOCK_POLLERR bits.  The default
+        implementation ignores the information; operations that need exact
+        revents, such as Socket::poll(), can override it.
+
+        @param events socket poll event mask
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual void setReadyEvents(int events) {
     }
 
     //! Returns the fd generation counter

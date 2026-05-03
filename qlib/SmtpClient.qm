@@ -347,7 +347,6 @@ public class SmtpClient {
         # HELO/EHLO reply
         hash<auto> hello_reply;
 
-        const MaxDebugLine = 2048;
     }
     #! @endcond
 
@@ -588,7 +587,7 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
     */
     connect() {
         AutoLock am(mutex);
-        connectIntern();
+        connectAsyncIntern();
     }
 
     #! return connection status
@@ -649,40 +648,32 @@ SmtpClient smtp("smtptls://user@gmail.com:password@smtp.gmail.com", \log(), \log
         @throw MESSAGE-ERROR the message is incomplete and cannot be sent
     */
     hash<auto> sendMessage(MailMessage::Message message) {
-        # throws a MESSAGE-ERROR exception if the message cannot be sent
-        string mstr = message.serialize();
-
         if (log_debug)
             logDbg("message: %s", message.toLine());
 
         # lock for sending
         AutoLock am(mutex);
+        if (nosend) {
+            return {};
+        }
 
-        hash<auto> reply;
+        SmtpSendPollOperation op = sock.isOpen()
+            ? new SmtpSendPollOperation(self, sock, message, hello_reply, !logged_in && user)
+            : new SmtpSendPollOperation(self, message);
+
         try {
-            # send SMTP info for message
-            reply = sendMessageInfoIntern(message);
-
-            # send message
-            sendData(mstr);
-
-            # end of data
-            hash<SmtpResponseInfo> rh = sendCommand(".");
-            reply.MSGID = rh;
-
-            # quit
-            rh = sendCommand("QUIT");
+            execPollOperation(op, sprintf("smtp-send:%s", connect));
             logged_in = False;
-            reply.QUIT = rh;
+            hash<auto> reply = op.getReply();
+            if (sock.isOpen()) {
+                forceDisconnectIntern();
+            }
+            return reply;
         } catch(hash<ExceptionInfo> ex) {
             logDbg("send error: %s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
             forceDisconnectIntern();
             rethrow;
         }
-        # close connection
-        forceDisconnectIntern();
-
-        return reply;
     }
 
     #! force disconnect of socket without error
@@ -831,7 +822,49 @@ smtp.setEventQueue();
     final private disconnectIntern() {
         if (isConnected()) {
             sock.close();
-            sock.shutdown();
+        }
+    }
+
+    # Execute a polling operation synchronously through the global AsyncIoController
+    private execPollOperation(Qore::AbstractPollOperation op, string owner) {
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (!pi) {
+            if (!op.goalReached()) {
+                throw "ASYNC-IO-ERROR", sprintf("%s operation ended before reaching goal: %s", owner, op.getState());
+            }
+            return;
+        }
+
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": pi.socket,
+            "spop": op,
+            "owner": owner,
+            "to": readTimeout,
+        });
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc;
+        }
+        if (result.canceled) {
+            throw "ASYNC-IO-CANCELED", sprintf("%s operation was canceled", owner);
+        }
+        if (!op.goalReached()) {
+            throw "ASYNC-IO-ERROR", sprintf("%s operation ended before reaching goal: %s", owner, op.getState());
+        }
+    }
+
+    private connectAsyncIntern() {
+        try {
+            SmtpPingPollOperation op(self, sock);
+            execPollOperation(op, sprintf("smtp-connect:%s", connect));
+            esmtp = op.isEsmtp();
+            hello_reply = op.getHelloReply();
+            if (op.didTls()) {
+                tls = True;
+            }
+            logged_in = op.didAuth();
+        } catch (hash<ExceptionInfo> ex) {
+            sock.close();
+            rethrow;
         }
     }
 
@@ -843,197 +876,6 @@ smtp.setEventQueue();
     private logDbg(string msg) {
         if (log_debug.val())
             call_function(log_debug, "SmtpClient: " + trim(vsprintf(msg, argv)));
-    }
-
-    private connectIntern() {
-        try {
-            sock.connect(connect, connectTimeout);
-            if (ssl)
-                sock.upgradeClientToSSL(connectTimeout);
-
-            string rep = readLine(readTimeout);
-            logDbg("connect reply: %y", trim(rep));
-            esmtp = (rep =~ /ESMTP/);
-
-            # send HELO/EHLO string
-            string hello = esmtp ? "EHLO" : "HELO";
-            hash<SmtpResponseInfo> rh = sendCommand(hello + "  %s", gethostname());
-            if (rh.code >= 500)
-                throw "SMTP-DATA-EXCEPTION", sprintf("error sending %s command: %y", hello, rh);
-
-            hello_reply{hello} = rh;
-
-            # try to automatically set the tls flag if it's not already set and we are talking to an ESMTP server and
-            # we are not already in a secure connection
-            if (!tls && esmtp && !ssl && rh.desc =~ /STARTTLS/) {
-                logDbg("server supports STARTTLS; automatically setting STARTTLS flag");
-                tls = True;
-            }
-
-            # issue STARTTLS and upgrade to a TLS connection if the tls flag is set and we are not already secure
-            if (tls && !sock.isSecure()) {
-                rh = sendCommand("STARTTLS");
-                if (rh.code >= 500)
-                    throw "SMTP-DATA-EXCEPTION", sprintf("error sending STARTTLS command: %y", rh);
-
-                sock.upgradeClientToSSL(connectTimeout);
-                logDbg("upgrade to TLS/SSL connection %s %s", sock.getSSLCipherName(), sock.getSSLCipherVersion());
-            }
-
-            # issue login if credentials supplied and we have not already logged in
-            if (!logged_in && user)
-                loginIntern();
-        } catch (hash<ExceptionInfo> ex) {
-            sock.close();
-            sock.shutdown();
-            rethrow;
-        }
-    }
-
-    private loginIntern() {
-        hash<SmtpResponseInfo> rh = sendCommand("AUTH PLAIN %s",
-            make_base64_string(binary(user) + <00> + binary(user) + <00> + binary(pass)));
-        if (rh.code != 235)
-            throw "SMTP-DATA-EXCEPTION", sprintf("login failed: %y", rh);
-        logged_in = True;
-    }
-
-    # send data over the socket
-    private sendDataIntern(data str) {
-        if (!isConnected()) {
-            logDbg("send: not connected; not sending");
-            throw "NOT-CONNECTED", "not connected in sendDataIntern()";
-        }
-
-        # send
-        sock.send(str);
-    }
-
-    # send data and log in the debug log if set
-    private sendData(string str) {
-        # format additional arguments if necessary
-        if (!argv.empty())
-            str = vsprintf(str, argv);
-
-        if (log_debug.val()) {
-            string lstr = trim(str);
-            if (lstr.size() > MaxDebugLine) {
-                splice lstr, MaxDebugLine;
-                lstr += "...";
-            }
-            logDbg("data: %y", lstr);
-        }
-
-        sendDataIntern(str);
-    }
-
-    # send data and log in the debug log if set
-    private sendData(binary b) {
-        logDbg("binary data: %d bytes", b.size());
-        sendDataIntern(b);
-    }
-
-    # send a command over the socket and return the response as a hash
-    # don't reimplement this method; fix/enhance it in the module
-    final private hash<SmtpResponseInfo> sendCommand(string str) {
-        # format additional arguments if necessary
-        if (!argv.empty())
-            str = vsprintf(str, argv);
-
-        trim str;
-        logDbg("send %y", str);
-
-        # send data
-        sendDataIntern(str + "\r\n");
-
-        # read data
-        softint code;
-        string desc;
-
-        # process multi-line responses
-        while (True) {
-            string l = readLine(readTimeout);
-            trim l;
-            logDbg("reply: %y", l);
-
-            # if a continuation is signaled from the server, then keep reading
-            if (l =~ /^[0-9]{3}-/) {
-                if (!code)
-                    code = int(l);
-                # assume it's the same code every time
-                if (!desc.empty())
-                    desc += "\n";
-                desc += extract l, 4;
-                continue;
-            }  else {
-                if (l !~ /^[0-9]{3} /) {
-                    log("cannot parse reply: %s\n", l);
-                    desc += l;
-                    code = -1;
-                    break;
-                }
-                if (!code)
-                    code = int(l);
-                # assume it's the same code every time
-                if (!desc.empty())
-                    desc += "\n";
-                desc += extract l, 4;
-                break;
-            }
-        }
-
-        return <SmtpResponseInfo>{"code": code, "desc": desc};
-    }
-
-    # read a line from the socket (terminated with \n)
-    private string readLine(timeout to) {
-        string str;
-        int c = 0;
-        do {
-            c = sock.recvu1(to);
-            str += chr(c);
-        } while (c != 10);
-
-        return str;
-    }
-
-    # sends the message header (without body & attachments) to the SMTP server
-    # don't reimplement this method; fix/enhance it in the module
-    final private hash<auto> sendMessageInfoIntern(MailMessage::Message message) {
-        # open connection to server
-        if (!isConnected()) {
-            connectIntern();
-        }
-
-        # issue login if credentials supplied and we have not already logged in
-        if (!logged_in && user) {
-            loginIntern();
-        }
-
-        hash<SmtpResponseInfo> rh;
-        hash<auto> reply = hello_reply;
-
-        rh = sendCommand("MAIL FROM: <%s>", message.getFrom());
-        if (rh."code" >= 500) {
-            throw "SMTP-DATA-EXCEPTION", sprintf("error sending FROM command: %y", rh);
-        }
-
-        # send recipient
-        foreach string rcpt in (message.getRecipients()) {
-            rh = sendCommand("RCPT TO: <%s>", rcpt);
-            reply.RCPT{rcpt} = rh;
-            if (rh."code" >= 500) {
-                throw "SMTP-DATA-EXCEPTION", sprintf("error sending RCPT command: %y", rh);
-            }
-        }
-
-        # send data
-        rh = sendCommand("DATA");
-        if (rh."code" != 354) {
-            throw "SMTP-DATA-EXCEPTION", sprintf("error sending DATA command (expected code 354): %y", rh);
-        }
-
-        return reply;
     }
 
     private forceDisconnectIntern() {
@@ -1086,9 +928,9 @@ public enum SmtpPingState : string {
     - Step 10: read multi-line EHLO/HELO reply
     - Step 11: detect STARTTLS capability in reply
     - Step 12: compute effective TLS decision (config OR server capability)
-    - Step 13: branch — TLS path (step 14) or auth check (step 17)
+    - Step 13: branch - TLS path (step 14) or auth check (step 17)
     - Steps 14-16: STARTTLS handshake (send, read reply, SSL upgrade)
-    - Step 17: branch — auth path (step 18) or done (step 20)
+    - Step 17: branch - auth path (step 18) or done (step 20)
     - Steps 18-19: AUTH PLAIN (send, read reply)
     - Step 20 (past end): pipeline complete
 
@@ -1103,6 +945,23 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
         @throw SMTP-POLL-ERROR if the SMTP server returns an error response
     */
     constructor(SmtpClient smtp) : PollPipeline(new Socket()) {
+        setup(smtp);
+    }
+
+    #! Creates the object based on the SmtpClient and an existing socket
+    /** Builds the complete SMTP ping pipeline from connection configuration
+        and runs it on the provided socket.
+
+        @param smtp the SmtpClient whose connection info drives the pipeline
+        @param sock the socket to connect and leave open after the pipeline completes
+
+        @throw SMTP-POLL-ERROR if the SMTP server returns an error response
+    */
+    constructor(SmtpClient smtp, Socket sock) : PollPipeline(sock) {
+        setup(smtp);
+    }
+
+    private setup(SmtpClient smtp) {
         hash<auto> info = smtp.getInfo();
         goal = "ping";
 
@@ -1202,14 +1061,62 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
         }
         return PollPipeline::getState();
     }
+
+    #! Returns True if the server greeting selected ESMTP/EHLO
+    bool isEsmtp() {
+        hash<auto> result = getResult();
+        hash<auto> extra = result.extra ?? {};
+        return extra.esmtp ? True : False;
+    }
+
+    #! Returns True if AUTH PLAIN was run
+    bool didAuth() {
+        hash<auto> result = getResult();
+        hash<auto> extra = result.extra ?? {};
+        return extra.do_auth ? True : False;
+    }
+
+    #! Returns True if STARTTLS was run
+    bool didTls() {
+        hash<auto> result = getResult();
+        hash<auto> extra = result.extra ?? {};
+        return extra.do_tls ? True : False;
+    }
+
+    #! Returns a legacy SmtpClient hello_reply-compatible hash
+    hash<auto> getHelloReply() {
+        hash<auto> result = getResult();
+        hash<auto> extra = result.extra ?? {};
+
+        hash<auto> reply;
+        string hello = extra.esmtp ? "EHLO" : "HELO";
+        reply{hello} = SmtpPingPollOperation::makeResponse(extra.hello_code, extra.hello_text);
+        return reply;
+    }
+
+    private static hash<SmtpResponseInfo> makeResponse(auto code_value, *string text) {
+        int code = code_value.typeCode() == NT_INT ? code_value : -1;
+        string desc;
+        if (text.val()) {
+            foreach string line in (text.split("\n")) {
+                trim line;
+                *string part = (line =~ x/^[0-9]{3}[ -](.*)$/)[0];
+                if (desc.size()) {
+                    desc += "\n";
+                }
+                desc += part.val() ? part : line;
+            }
+        }
+        return <SmtpResponseInfo>{"code": code, "desc": desc};
+    }
 }
 
-#! SMTP send poll operation — sends an email asynchronously via PollPipeline
+#! SMTP send poll operation - sends an email asynchronously via PollPipeline
 /** Builds on the same connect + auth sequence as @ref SmtpPingPollOperation,
     then appends MAIL FROM, RCPT TO (unrolled per recipient), DATA, message
     body (serialized + dot-terminated), and QUIT steps.
 
-    The recipient list is statically unrolled at construction time — each
+    The recipient list is statically unrolled at construction time - each
     recipient gets its own SEND + RECV step pair. This avoids needing loop
     primitives in the pipeline.
 
@@ -1228,6 +1135,12 @@ public class SmtpPingPollOperation inherits Qore::PollPipeline {
     @since SmtpClient 2.2
 */
 public class SmtpSendPollOperation inherits Qore::PollPipeline {
+    private {
+        list<string> recipients = ();
+        hash<auto> initial_reply;
+        bool has_initial_reply = False;
+    }
+
     #! Creates the object for sending an email message
     /** Builds the complete SMTP send pipeline from connection configuration
         and a pre-built MailMessage::Message.
@@ -1247,7 +1160,7 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         if (!sender.val()) {
             throw "MESSAGE-ERROR", "message has no sender address";
         }
-        list<string> recipients = message.getRecipients();
+        recipients = message.getRecipients();
         if (!recipients) {
             throw "MESSAGE-ERROR", "message has no recipients";
         }
@@ -1321,9 +1234,11 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         addRecvLineResponse("mailfrom_code", "mailfrom_text", "SMTP-SEND-ERROR");
 
         # --- Steps 22+: unrolled RCPT TO per recipient ---
+        int i = 0;
         foreach string rcpt in (recipients) {
             addSend(sprintf("RCPT TO: <%s>\r\n", rcpt));
-            addRecvLineResponse("rcpt_code", "rcpt_text", "SMTP-SEND-ERROR");
+            addRecvLineResponse(sprintf("rcpt_code_%d", i), sprintf("rcpt_text_%d", i), "SMTP-SEND-ERROR");
+            ++i;
         }
 
         # --- DATA command ---
@@ -1337,6 +1252,62 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
         addRecvLineResponse("msgid_code", "msgid_text", "SMTP-SEND-ERROR");
 
         # --- QUIT ---
+        addSend("QUIT\r\n");
+        addRecvLineResponse("quit_code", "quit_text", "SMTP-SEND-ERROR");
+    }
+
+    #! Creates the object for sending an email message on an existing connected socket
+    /** Builds only the SMTP send sequence, assuming the socket has already
+        completed the greeting/authentication handshake.
+
+        @param smtp the SmtpClient whose authentication info may be used
+        @param sock the already-connected socket to use for I/O
+        @param message the email message to send
+        @param hello_reply the legacy HELO/EHLO reply hash to preserve
+        @param do_auth if True, run AUTH PLAIN before MAIL FROM
+
+        @throw SMTP-SEND-ERROR if the SMTP server returns an error response
+        @throw MESSAGE-ERROR if the message cannot be serialized (no sender, no recipients)
+    */
+    constructor(SmtpClient smtp, Socket sock, MailMessage::Message message, hash<auto> hello_reply, bool do_auth)
+            : PollPipeline(sock) {
+        hash<auto> info = smtp.getInfo();
+        goal = "send";
+        initial_reply = hello_reply;
+        has_initial_reply = True;
+
+        *string sender = message.getFrom();
+        if (!sender.val()) {
+            throw "MESSAGE-ERROR", "message has no sender address";
+        }
+        recipients = message.getRecipients();
+        if (!recipients) {
+            throw "MESSAGE-ERROR", "message has no recipients";
+        }
+
+        string mstr = message.serialize();
+
+        if (do_auth) {
+            string auth_cmd = sprintf("AUTH PLAIN %s\r\n", make_base64_string(
+                binary(info.user) + <00> + binary(info.user) + <00> + binary(info.pass)));
+            addSend(auth_cmd);
+            addRecvLineResponse("login_code", "login_text", "SMTP-SEND-ERROR");
+        }
+
+        addSend(sprintf("MAIL FROM: <%s>\r\n", sender));
+        addRecvLineResponse("mailfrom_code", "mailfrom_text", "SMTP-SEND-ERROR");
+
+        int i = 0;
+        foreach string rcpt in (recipients) {
+            addSend(sprintf("RCPT TO: <%s>\r\n", rcpt));
+            addRecvLineResponse(sprintf("rcpt_code_%d", i), sprintf("rcpt_text_%d", i), "SMTP-SEND-ERROR");
+            ++i;
+        }
+
+        addSend("DATA\r\n");
+        addRecvLineResponse("data_code", "data_text", "SMTP-SEND-ERROR");
+        addSend(binary(mstr + "\r\n.\r\n"));
+        addRecvLineResponse("msgid_code", "msgid_text", "SMTP-SEND-ERROR");
         addSend("QUIT\r\n");
         addRecvLineResponse("quit_code", "quit_text", "SMTP-SEND-ERROR");
     }
@@ -1357,6 +1328,47 @@ public class SmtpSendPollOperation inherits Qore::PollPipeline {
             return "error";
         }
         return PollPipeline::getState();
+    }
+
+    #! Returns a legacy SmtpClient::sendMessage()-compatible response hash
+    hash<auto> getReply() {
+        hash<auto> result = getResult();
+        hash<auto> extra = result.extra ?? {};
+
+        hash<auto> reply;
+        if (has_initial_reply) {
+            reply = initial_reply;
+        } else {
+            string hello = extra.esmtp ? "EHLO" : "HELO";
+            reply{hello} = SmtpSendPollOperation::makeResponse(extra.hello_code, extra.hello_text);
+        }
+
+        int i = 0;
+        foreach string rcpt in (recipients) {
+            reply.RCPT{rcpt} = SmtpSendPollOperation::makeResponse(
+                extra{sprintf("rcpt_code_%d", i)}, extra{sprintf("rcpt_text_%d", i)});
+            ++i;
+        }
+
+        reply.MSGID = SmtpSendPollOperation::makeResponse(extra.msgid_code, extra.msgid_text);
+        reply.QUIT = SmtpSendPollOperation::makeResponse(extra.quit_code, extra.quit_text);
+        return reply;
+    }
+
+    private static hash<SmtpResponseInfo> makeResponse(auto code_value, *string text) {
+        int code = code_value.typeCode() == NT_INT ? code_value : -1;
+        string desc;
+        if (text.val()) {
+            foreach string line in (text.split("\n")) {
+                trim line;
+                *string part = (line =~ x/^[0-9]{3}[ -](.*)$/)[0];
+                if (desc.size()) {
+                    desc += "\n";
+                }
+                desc += part.val() ? part : line;
+            }
+        }
+        return <SmtpResponseInfo>{"code": code, "desc": desc};
     }
 }
 
@@ -1530,6 +1542,17 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
         return new SmtpSendPollOperation(getImpl(False), message);
     }
 
+    #! Performs a blocking ping operation on the SMTP server via the async I/O controller
+    /** This method connects to the server, performs the SMTP greeting/authentication handshake, and waits for the
+        PollPipeline operation to complete through AsyncIoController::exec().
+
+        @since SmtpClient 2.2
+    */
+    private pingImpl() {
+        SmtpPingPollOperation op(getImpl(False));
+        execPollOperation(op, sprintf("smtp-ping:%s", name));
+    }
+
     #! Sets child data provider capabilities
     private setChildCapabilities() {
         children_can_support_apis = True;
@@ -1561,6 +1584,33 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
             sc.connect();
         }
         return sc;
+    }
+
+    #! Execute a polling operation synchronously through the global AsyncIoController
+    private static execPollOperation(Qore::AbstractPollOperation op, string owner, timeout to = 30s) {
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (!pi) {
+            if (!op.goalReached()) {
+                throw "ASYNC-IO-ERROR", sprintf("%s operation ended before reaching goal: %s", owner, op.getState());
+            }
+            return;
+        }
+
+        hash<SocketPollResultInfo> result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": pi.socket,
+            "spop": op,
+            "owner": owner,
+            "to": to,
+        });
+        if (result.ex) {
+            throw result.ex.err, result.ex.desc;
+        }
+        if (result.canceled) {
+            throw "ASYNC-IO-CANCELED", sprintf("%s operation was canceled", owner);
+        }
+        if (!op.goalReached()) {
+            throw "ASYNC-IO-ERROR", sprintf("%s operation ended before reaching goal: %s", owner, op.getState());
+        }
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
