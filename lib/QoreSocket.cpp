@@ -78,6 +78,26 @@ extern QoreClass* QC_EVENTNOTIFIER;
 
 static int qore_socket_close_private_from_controller(qore_socket_private* priv);
 
+static QoreSandboxManager* qore_socket_ref_current_sandbox_manager() {
+    QoreSandboxManagerHelper smh;
+    if (!smh) {
+        return nullptr;
+    }
+
+    QoreSandboxManager* sm = smh.get();
+    sm->ref();
+    return sm;
+}
+
+static QoreSandboxManager* qore_socket_ref_sandbox_manager(QoreSandboxManager* sm) {
+    if (!sm) {
+        return qore_socket_ref_current_sandbox_manager();
+    }
+
+    sm->ref();
+    return sm;
+}
+
 #ifdef _Q_WINDOWS
 static int qore_windows_set_errno(int rc);
 #endif
@@ -261,19 +281,22 @@ static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, Exce
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    QoreStringValueHelper err_str(err);
+    QoreStringValueHelper desc_str(desc);
     xsink->raiseException(
-        err.getType() == NT_STRING
-            ? err.get<const QoreStringNode>()->stringRefSelf()
+        err.getType() == NT_STRING && err_str
+            ? new QoreStringNode(**err_str)
             : new QoreStringNode("ASYNC-IO-ERROR"),
-        desc.getType() == NT_STRING
-            ? desc.get<const QoreStringNode>()->stringRefSelf()
+        desc.getType() == NT_STRING && desc_str
+            ? new QoreStringNode(**desc_str)
             : new QoreStringNode("async socket operation failed"),
         arg.refSelf());
 }
 
 static bool qore_socket_exec_exception_is(const QoreHashNode& ex, const char* err) {
     QoreValue ex_err = ex.getKeyValue("err");
-    return ex_err.getType() == NT_STRING && !strcmp(ex_err.get<const QoreStringNode>()->c_str(), err);
+    QoreStringValueHelper ex_err_str(ex_err);
+    return ex_err.getType() == NT_STRING && ex_err_str && !strcmp(ex_err_str->c_str(), err);
 }
 
 static int qore_socket_private_check_async_sequence_allowed_intern(const qore_socket_private& priv,
@@ -1869,7 +1892,8 @@ public:
     DLLLOCAL QoreSocketControllerConnectPollOperation(QoreSocket* sock, const char* target, bool ssl = false,
             QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr)
             : sock(sock), target(target), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
-            pkey(pkey ? pkey->pkRefSelf() : nullptr) {
+            pkey(pkey ? pkey->pkRefSelf() : nullptr),
+            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
     }
 
     DLLLOCAL QoreSocketControllerConnectPollOperation(QoreSocket* sock, const char* host, const char* service,
@@ -1877,14 +1901,16 @@ public:
             QoreSSLPrivateKey* pkey = nullptr)
             : sock(sock), target(host), service(service), connect_target(ConnectTarget::Inet), family(family),
             socktype(socktype), protocol(protocol), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
-            pkey(pkey ? pkey->pkRefSelf() : nullptr) {
+            pkey(pkey ? pkey->pkRefSelf() : nullptr),
+            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
     }
 
     DLLLOCAL QoreSocketControllerConnectPollOperation(QoreSocket* sock, const char* path, int socktype,
             int protocol, bool ssl = false, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr)
             : sock(sock), target(path), connect_target(ConnectTarget::Unix), socktype(socktype),
             protocol(protocol), ssl(ssl), cert(cert ? cert->certRefSelf() : nullptr),
-            pkey(pkey ? pkey->pkRefSelf() : nullptr) {
+            pkey(pkey ? pkey->pkRefSelf() : nullptr),
+            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
     }
 
     DLLLOCAL virtual bool goalReached() const override {
@@ -1981,11 +2007,35 @@ private:
     DLLLOCAL AbstractPollState* startConnect(ExceptionSink* xsink) {
         switch (connect_target) {
             case ConnectTarget::Auto:
-                return sock->startConnect(xsink, target.c_str());
+                if (const char* p = strrchr(target.c_str(), ':')) {
+                    QoreString host(target.c_str(), p - target.c_str());
+                    QoreString service(p + 1);
+                    if (host.strlen() > 2 && host[0] == '[' && host[host.strlen() - 1] == ']') {
+                        host.terminate(host.strlen() - 1);
+                        return new SocketConnectInetHappyEyeballsPollState(xsink, qore_socket_private::get(*sock),
+                            host.c_str() + 1, service.c_str(), AF_INET6, SOCK_STREAM, 0, *sandbox_manager);
+                    }
+                    return new SocketConnectInetHappyEyeballsPollState(xsink, qore_socket_private::get(*sock),
+                        host.c_str(), service.c_str(), AF_UNSPEC, SOCK_STREAM, 0, *sandbox_manager);
+                }
+#ifndef _Q_WINDOWS
+                return new SocketConnectUnixPollState(xsink, qore_socket_private::get(*sock), target.c_str(),
+                    SOCK_STREAM, 0, *sandbox_manager);
+#else
+                missing_function_error("Socket::startConnect(<UNIX socket file>)", "UNIX_FILEMGT", xsink);
+                return nullptr;
+#endif
             case ConnectTarget::Inet:
-                return sock->startConnectINET(xsink, target.c_str(), service.c_str(), family, socktype, protocol);
+                return new SocketConnectInetHappyEyeballsPollState(xsink, qore_socket_private::get(*sock),
+                    target.c_str(), service.c_str(), family, socktype, protocol, *sandbox_manager);
             case ConnectTarget::Unix:
-                return sock->startConnectUNIX(xsink, target.c_str(), socktype, protocol);
+#ifndef _Q_WINDOWS
+                return new SocketConnectUnixPollState(xsink, qore_socket_private::get(*sock), target.c_str(),
+                    socktype, protocol, *sandbox_manager);
+#else
+                missing_function_error("Socket::startConnect(<UNIX socket file>)", "UNIX_FILEMGT", xsink);
+                return nullptr;
+#endif
             default:
                 assert(false);
         }
@@ -2008,6 +2058,7 @@ private:
     bool ssl = false;
     SimpleRefHolder<QoreSSLCertificate> cert;
     SimpleRefHolder<QoreSSLPrivateKey> pkey;
+    SimpleRefHolder<QoreSandboxManager> sandbox_manager;
     bool done = false;
 };
 
@@ -7339,8 +7390,10 @@ void QoreCaresNameInfoResolver::complete(int new_status, char* node) {
 // --- Happy Eyeballs (RFC 8305) async poll state ---
 
 SocketConnectInetHappyEyeballsPollState::SocketConnectInetHappyEyeballsPollState(ExceptionSink* xsink,
-        qore_socket_private* sock, const char* host, const char* service, int family, int type, int protocol)
-        : sock(sock), host(host), service(service) {
+        qore_socket_private* sock, const char* host, const char* service, int family, int type, int protocol,
+        QoreSandboxManager* sandbox_manager)
+        : sock(sock), sandbox_manager(qore_socket_ref_sandbox_manager(sandbox_manager)), host(host),
+            service(service) {
     assert(xsink);
 
     this->family = q_get_af(family);
@@ -7565,12 +7618,11 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         SocketResolvedAddrInfo& p = addrs[sorted_addrs[next_addr_idx]];
 
         // Check sandbox network security restrictions
-        QoreSandboxManagerHelper smh;
-        if (smh) {
+        if (sandbox_manager) {
             int proto = (p.socktype == SOCK_STREAM) ? QSEC_NET_TCP :
                         (p.socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
-            if (!smh->checkNetworkAccess(reinterpret_cast<const struct sockaddr*>(&p.addr), p.addrlen, proto,
-                    xsink)) {
+            if (!sandbox_manager->checkNetworkAccess(reinterpret_cast<const struct sockaddr*>(&p.addr), p.addrlen,
+                    proto, xsink)) {
                 return -1;
             }
         }
@@ -7686,7 +7738,7 @@ void SocketConnectInetHappyEyeballsPollState::closeAllFds() {
 
 #ifndef _Q_WINDOWS
 SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qore_socket_private* sock,
-        const char* name, int sock_type, int protocol)
+        const char* name, int sock_type, int protocol, QoreSandboxManager* sandbox_manager)
         : sock(sock), name(name) {
     assert(xsink);
 
@@ -7700,7 +7752,7 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
     addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
     // Check sandbox network security restrictions for UNIX sockets
-    QoreSandboxManagerHelper smh;
+    SimpleRefHolder<QoreSandboxManager> smh(qore_socket_ref_sandbox_manager(sandbox_manager));
     if (smh) {
         if (!smh->checkNetworkAccess((const struct sockaddr*)&addr, sizeof(struct sockaddr_un),
                 QSEC_NET_UNIX, xsink)) {
@@ -11884,40 +11936,44 @@ AbstractAsyncAction* createPromiseWithNotifierAction(QoreObject* promise_obj,
 // --- End of out-of-line implementations ---
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
-        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock), target(target) {
+        QoreSocketObject* sock) : SocketPollSocketOperationBase(sock), target(target),
+            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
     init(xsink, ssl);
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
-        QoreSocketObject* sock, bool defer_init) : SocketPollSocketOperationBase(sock), target(target) {
+        QoreSocketObject* sock, bool defer_init) : SocketPollSocketOperationBase(sock), target(target),
+            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
     init(xsink, ssl, defer_init);
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* host,
         const char* service, int family, int socktype, int protocol, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock), target(host), service(service), connect_target(ConnectTarget::Inet),
-            family(family), socktype(socktype), protocol(protocol) {
+            family(family), socktype(socktype), protocol(protocol),
+            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
     init(xsink, ssl);
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* host,
         const char* service, int family, int socktype, int protocol, QoreSocketObject* sock, bool defer_init)
         : SocketPollSocketOperationBase(sock), target(host), service(service), connect_target(ConnectTarget::Inet),
-            family(family), socktype(socktype), protocol(protocol) {
+            family(family), socktype(socktype), protocol(protocol),
+            sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
     init(xsink, ssl, defer_init);
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* path,
         int socktype, int protocol, QoreSocketObject* sock)
         : SocketPollSocketOperationBase(sock), target(path), connect_target(ConnectTarget::Unix),
-            socktype(socktype), protocol(protocol) {
+            socktype(socktype), protocol(protocol), sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
     init(xsink, ssl);
 }
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* path,
         int socktype, int protocol, QoreSocketObject* sock, bool defer_init)
         : SocketPollSocketOperationBase(sock), target(path), connect_target(ConnectTarget::Unix),
-            socktype(socktype), protocol(protocol) {
+            socktype(socktype), protocol(protocol), sandbox_manager(qore_socket_ref_current_sandbox_manager()) {
     init(xsink, ssl, defer_init);
 }
 
@@ -11988,14 +12044,39 @@ void SocketConnectPollOperation::initLocked(ExceptionSink* xsink) {
 }
 
 AbstractPollState* SocketConnectPollOperation::startConnect(ExceptionSink* xsink) {
+    qore_socket_private* socket_priv = qore_socket_private::get(*sock->priv->socket);
+
     switch (connect_target) {
         case ConnectTarget::Auto:
-            return sock->priv->socket->startConnect(xsink, target.c_str());
+            if (const char* p = strrchr(target.c_str(), ':')) {
+                QoreString host(target.c_str(), p - target.c_str());
+                QoreString service(p + 1);
+                if (host.strlen() > 2 && host[0] == '[' && host[host.strlen() - 1] == ']') {
+                    host.terminate(host.strlen() - 1);
+                    return new SocketConnectInetHappyEyeballsPollState(xsink, socket_priv, host.c_str() + 1,
+                        service.c_str(), AF_INET6, SOCK_STREAM, 0, *sandbox_manager);
+                }
+                return new SocketConnectInetHappyEyeballsPollState(xsink, socket_priv, host.c_str(),
+                    service.c_str(), AF_UNSPEC, SOCK_STREAM, 0, *sandbox_manager);
+            }
+#ifndef _Q_WINDOWS
+            return new SocketConnectUnixPollState(xsink, socket_priv, target.c_str(), SOCK_STREAM, 0,
+                *sandbox_manager);
+#else
+            missing_function_error("Socket::startConnect(<UNIX socket file>)", "UNIX_FILEMGT", xsink);
+            return nullptr;
+#endif
         case ConnectTarget::Inet:
-            return sock->priv->socket->startConnectINET(xsink, target.c_str(), service.c_str(), family, socktype,
-                protocol);
+            return new SocketConnectInetHappyEyeballsPollState(xsink, socket_priv, target.c_str(), service.c_str(),
+                family, socktype, protocol, *sandbox_manager);
         case ConnectTarget::Unix:
-            return sock->priv->socket->startConnectUNIX(xsink, target.c_str(), socktype, protocol);
+#ifndef _Q_WINDOWS
+            return new SocketConnectUnixPollState(xsink, socket_priv, target.c_str(), socktype, protocol,
+                *sandbox_manager);
+#else
+            missing_function_error("Socket::startConnect(<UNIX socket file>)", "UNIX_FILEMGT", xsink);
+            return nullptr;
+#endif
         default:
             assert(false);
     }

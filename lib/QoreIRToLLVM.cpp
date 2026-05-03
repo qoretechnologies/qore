@@ -9542,7 +9542,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* call_result;
 
             // Check for optimizable pseudo-methods (no arguments, known fast paths)
-            if (direct_inst->pseudo && nargs == 0) {
+            if (direct_inst->pseudo && nargs == 0 && direct_inst->method) {
                 const char* method_name = direct_inst->method->getName();
 
                 if (!strcmp(method_name, "typeCode")) {
@@ -9702,7 +9702,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* call_result;
 
             // Check for optimizable pseudo-methods (no arguments, known fast paths)
-            if (invoke_inst->pseudo && nargs == 0) {
+            if (invoke_inst->pseudo && nargs == 0 && invoke_inst->method) {
                 const char* method_name = invoke_inst->method->getName();
 
                 if (!strcmp(method_name, "typeCode")) {
@@ -9797,7 +9797,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                          base_boxed, args_array,
                          llvm::ConstantInt::get(i32_type, nargs), xsink_arg},
                         module, llvm_func, inst);
-            } else {
+            } else if (invoke_inst->method && invoke_inst->qc) {
                 llvm::Value* method_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(invoke_inst->method)), ptr_type);
@@ -9817,6 +9817,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
                         variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
                         xsink_arg});
+            } else {
+                // Unresolved method (abstract/dynamic): use name-based dispatch with
+                // pre-evaluated args via the stored method name.
+                const char* method_name = invoke_inst->fallback_method_name
+                    ? invoke_inst->fallback_method_name : "";
+                llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
+                auto helper = module.getOrInsertFunction(
+                        "qore_rt_dot_eval_method_by_name",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed, name_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             }
 
             // Qore's scoping allows callees to access the caller's non-IR-only

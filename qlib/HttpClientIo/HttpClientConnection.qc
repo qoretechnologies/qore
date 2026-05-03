@@ -275,6 +275,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
 
     #! Sets the controller reference for wake notifications
     setControllerRef(object controller) {
+        AutoLock al(lock);
         controller_ref = controller;
     }
 

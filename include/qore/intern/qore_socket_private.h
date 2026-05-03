@@ -440,7 +440,8 @@ private:
 class SocketConnectInetHappyEyeballsPollState : public AbstractPollState {
 public:
     DLLLOCAL SocketConnectInetHappyEyeballsPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* host,
-            const char* service, int family = AF_UNSPEC, int type = SOCK_STREAM, int protocol = 0);
+            const char* service, int family = AF_UNSPEC, int type = SOCK_STREAM, int protocol = 0,
+            QoreSandboxManager* sandbox_manager = nullptr);
 
     DLLLOCAL ~SocketConnectInetHappyEyeballsPollState();
 
@@ -479,6 +480,7 @@ private:
 
     std::unique_ptr<QoreCaresAddrInfoResolver> resolver;
     qore_socket_private* sock;
+    SimpleRefHolder<QoreSandboxManager> sandbox_manager;
     std::string host, service;
     std::vector<SocketResolvedAddrInfo> addrs;
     std::vector<size_t> sorted_addrs;
@@ -518,7 +520,7 @@ private:
 class SocketConnectUnixPollState : public AbstractPollState {
 public:
     DLLLOCAL SocketConnectUnixPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* name,
-            int type = SOCK_STREAM, int protocol = 0);
+            int type = SOCK_STREAM, int protocol = 0, QoreSandboxManager* sandbox_manager = nullptr);
 
     /** returns:
         - SOCK_POLLIN = wait for read and call this again

@@ -1518,8 +1518,11 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // I/O thread and one processing barrier.
     v = info->getKeyValue("thread_key");
     std::string thread_key = uh;
-    if (v.getType() == NT_STRING && v.get<const QoreStringNode>()->size()) {
-        thread_key = v.get<const QoreStringNode>()->c_str();
+    if (v.getType() == NT_STRING) {
+        QoreStringValueHelper str(v);
+        if (str->size()) {
+            thread_key = str->c_str();
+        }
     }
 
     // Get timeout
