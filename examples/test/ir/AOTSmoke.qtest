@@ -20,7 +20,13 @@ class AOTSmokeTest inherits QUnit::Test {
 
     constructor() : QUnit::Test("AOTSmokeTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
-        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? dirname(qore_bin) + "/qcc";
+        # Determine the directory containing libqore (for compile/link)
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? libqore_dir + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = dirname(qore_bin) + "/qcc";
+        }
         if (!is_file(qcc_bin)) {
             qcc_bin = "qcc";
         }
@@ -30,8 +36,6 @@ class AOTSmokeTest inherits QUnit::Test {
         if (!timeout_cmd.val()) {
             timeout_cmd = "timeout";
         }
-        # Determine the directory containing libqore (for compile/link)
-        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("AOT hello world", \testHelloWorld());
         addTestCase("AOT arithmetic", \testArithmetic());
         addTestCase("AOT number literal arithmetic", \testNumberLiteralArithmetic());
