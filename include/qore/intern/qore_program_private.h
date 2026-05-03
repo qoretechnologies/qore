@@ -2497,7 +2497,7 @@ public:
         AutoLocker al(tlock);
         for (auto& i : pgm_data_map) {
             if (i.first->gettid() == tid) {
-                if (!i.first->canRunDebugCallbacks()) {
+                if (!i.first->canRunDebugCallbacks() || !i.first->isActiveProgram(pgm)) {
                     return -1;
                 }
                 i.second->dbgBreak();
@@ -2507,15 +2507,18 @@ public:
         return -1;
     }
 
-    DLLLOCAL void breakProgram() {
+    DLLLOCAL bool breakProgram() {
         printd(5, "qore_program_private::breakProgram(), this: %p\n", this);
         AutoLocker al(tlock);
+        bool rv = false;
         for (auto& i : pgm_data_map) {
-            if (!i.first->canRunDebugCallbacks()) {
+            if (!i.first->canRunDebugCallbacks() || !i.first->isActiveProgram(pgm)) {
                 continue;
             }
             i.second->dbgBreak();
+            rv = true;
         }
+        return rv;
     }
 
     DLLLOCAL void assignBreakpoint(QoreBreakpoint* bkpt, ExceptionSink *xsink) {
@@ -3080,10 +3083,10 @@ public:
         qore_program_map_t::iterator i = qore_program_map.find(pgm);
         printd(5, "qore_debug_program_private::breakProgram(), this: %p, pgm: %p, i: %p, end: %p\n", this, pgm, i,
             qore_program_map.end());
-        if (i == qore_program_map.end())
+        if (i == qore_program_map.end()) {
             return -2;
-        i->second->breakProgram();
-        return 0;
+        }
+        return i->second->breakProgram() ? 0 : -3;
     }
 
     DLLLOCAL void waitForTerminationAndClear(ExceptionSink* xsink) {

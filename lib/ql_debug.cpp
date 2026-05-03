@@ -37,6 +37,7 @@
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_Counter.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
@@ -290,22 +291,49 @@ public:
     }
 };
 
-static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c) {
+static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c, QoreProgram* parent) {
     ExceptionSink xsink;
-    QoreProgram* pgm = new QoreProgram();
-    pgm->parse("%modern\nint sub foreign_debug_target() { int i = 0; ++i; return i; }\n",
+    QoreProgram* pgm = parent
+        ? new QoreProgram(parent, PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER)
+        : new QoreProgram(PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER);
+    pgm->parse("%modern\n"
+        "our Counter ready;\n"
+        "our Counter release;\n"
+        "int sub foreign_debug_target() {\n"
+        "    ready.dec();\n"
+        "    release.waitForZero();\n"
+        "    int i = 0;\n"
+        "    ++i;\n"
+        "    return i;\n"
+        "}\n"
+        "hash<auto> sub wait_foreign_debug_target() {\n"
+        "    ready.waitForZero();\n"
+        "    return {};\n"
+        "}\n"
+        "hash<auto> sub release_foreign_debug_target() {\n"
+        "    release.dec();\n"
+        "    return {};\n"
+        "}\n",
         "foreign-debug-test", &xsink, nullptr, 0);
     UT_ASSERT(c, !xsink, "foreign debug target program parses");
     if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+        pgm->waitForTerminationAndDeref(&xsink);
+        return;
+    }
+    pgm->setGlobalVarValue("ready", new QoreObject(QC_COUNTER, pgm, new Counter(1)), &xsink);
+    UT_ASSERT(c, !xsink, "foreign debug target ready counter initializes");
+    pgm->setGlobalVarValue("release", new QoreObject(QC_COUNTER, pgm, new Counter(1)), &xsink);
+    UT_ASSERT(c, !xsink, "foreign debug target release counter initializes");
+    if (xsink) {
+        xsink.handleExceptions();
         xsink.clear();
         pgm->waitForTerminationAndDeref(&xsink);
         return;
     }
 
     ForeignThreadDebugProgram dbg;
-    dbg.addProgram(pgm, &xsink);
-    UT_ASSERT(c, !xsink, "debugger attaches to target program");
-
     std::atomic<bool> thread_error{false};
     std::atomic<int64_t> thread_result{0};
     std::thread th([&]() {
@@ -318,6 +346,7 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c) {
         ExceptionSink txsink;
         QoreValue rv = pgm->callFunction("foreign_debug_target", nullptr, &txsink);
         if (txsink) {
+            txsink.handleExceptions();
             thread_error.store(true, std::memory_order_release);
             txsink.clear();
         } else {
@@ -325,6 +354,32 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c) {
         }
         rv.discard(&txsink);
     });
+
+    QoreValue wait_rv = pgm->callFunction("wait_foreign_debug_target", nullptr, &xsink);
+    wait_rv.discard(&xsink);
+    UT_ASSERT(c, !xsink, "foreign thread enters Qore target");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+    }
+
+    dbg.addProgram(pgm, &xsink);
+    UT_ASSERT(c, !xsink, "debugger attaches to active foreign target program");
+    int break_rc = dbg.breakProgram(pgm);
+    UT_ASSERT_EQ(c, -3, break_rc,
+        "breakProgram reports no interruptible active target program threads");
+
+    dbg.removeProgram(pgm);
+    dbg.waitForTerminationAndClear(&xsink);
+    UT_ASSERT(c, !xsink, "debugger cleanup succeeds");
+
+    QoreValue release_rv = pgm->callFunction("release_foreign_debug_target", nullptr, &xsink);
+    release_rv.discard(&xsink);
+    UT_ASSERT(c, !xsink, "foreign debug target release succeeds");
+    if (xsink) {
+        xsink.handleExceptions();
+        xsink.clear();
+    }
     th.join();
 
     UT_ASSERT(c, !thread_error.load(std::memory_order_acquire), "foreign thread executes Qore target");
@@ -334,9 +389,6 @@ static void ut_debug_skips_foreign_thread_callbacks(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 0, dbg.step_count.load(std::memory_order_acquire),
         "foreign thread does not run debugger step callback");
 
-    dbg.removeProgram(pgm);
-    dbg.waitForTerminationAndClear(&xsink);
-    UT_ASSERT(c, !xsink, "debugger cleanup succeeds");
     pgm->waitForTerminationAndDeref(&xsink);
     UT_ASSERT(c, !xsink, "foreign debug target program cleanup succeeds");
 }
@@ -2761,14 +2813,14 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
-    ut_debug_skips_foreign_thread_callbacks(c);
+    ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
 }
 
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
 
-    ut_debug_skips_foreign_thread_callbacks(c);
+    ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_asyncio_construction(c);
     ut_asyncio_autostop(c);
     ut_asyncio_start_stop(c);

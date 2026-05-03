@@ -1382,10 +1382,17 @@ public:
         if (!armed->load(std::memory_order_acquire)) {
             return getPollInfo(xsink);
         }
+        if (!ready_events) {
+            return getPollInfo(xsink);
+        }
+        int matched_events = ready_events & (events | SOCK_POLLERR);
+        if (!matched_events) {
+            return getPollInfo(xsink);
+        }
         ready = true;
-        output_events = ((ready_events & SOCK_POLLERR) || isPollableClosed())
+        output_events = ((matched_events & SOCK_POLLERR) || isPollableClosed())
             ? SOCK_POLLERR
-            : (ready_events ? (ready_events & events) : events);
+            : (matched_events & events);
         return nullptr;
     }
 

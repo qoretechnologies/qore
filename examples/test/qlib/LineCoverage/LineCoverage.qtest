@@ -17,6 +17,7 @@ class LineCoverageTest inherits QUnit::Test {
     private {
         const TargetFile = "line-coverage-target.q";
         const MultiLineTargetFile = "line-coverage-multiline-target.q";
+        const FunctionEntryTargetFile = "line-coverage-function-entry-target.q";
     }
 
     constructor() : QUnit::Test("LineCoverage", "1.0", \ARGV) {
@@ -28,6 +29,12 @@ class LineCoverageTest inherits QUnit::Test {
             \testRecorderReportsLineCoverage());
         addTestCase("Recorder expands multi-line statements",
             \testRecorderReportsMultilineStatements());
+        addTestCase("Recorder counts function entry lines once",
+            \testRecorderDoesNotDoubleCountFunctionEntry());
+        addTestCase("Recorder counts exception lines once",
+            \testRecorderDoesNotDoubleCountException());
+        addTestCase("Recorder preserves function-entry-only lines",
+            \testRecorderPreservesFunctionEntryOnlyLines());
         addTestCase("Recorder identifies statements across programs",
             \testRecorderStatementReferencesIncludeProgramIds());
         addTestCase("Recorder reset and clear state",
@@ -121,6 +128,55 @@ class LineCoverageTest inherits QUnit::Test {
         }
     }
 
+    testRecorderDoesNotDoubleCountFunctionEntry() {
+        ProgramControl pc = ProgramControl::getProgram();
+        LineCoverage::Recorder recorder();
+        int target_line = 0;
+
+        recorder.start(pc);
+        assertEq(42, currentProgramFunctionEntryTarget(\target_line),
+            "current-program target function returns its value");
+        recorder.stop(pc);
+
+        hash<auto> entry = getCurrentProgramLine(recorder.snapshot(),
+            target_line);
+        assertEq(1, entry.hit_count,
+            "function entry source line is counted once");
+    }
+
+    testRecorderDoesNotDoubleCountException() {
+        ProgramControl pc = ProgramControl::getProgram();
+        LineCoverage::Recorder recorder();
+        int target_line = 0;
+
+        recorder.start(pc);
+        assertEq("DIVISION-BY-ZERO",
+            currentProgramExceptionTarget(\target_line),
+            "current-program target catches the expected exception");
+        recorder.stop(pc);
+
+        hash<auto> throwing = getCurrentProgramLine(recorder.snapshot(),
+            target_line);
+        assertEq(1, throwing.hit_count,
+            "throwing source line is counted once");
+    }
+
+    testRecorderPreservesFunctionEntryOnlyLines() {
+        Program pgm = makeFunctionEntryTargetProgram();
+        ProgramControl pc = pgm.getProgram();
+        LineCoverage::Recorder recorder();
+
+        recorder.start(pc);
+        assertEq(42, pgm.callFunction("entry"),
+            "target function returns its value");
+        recorder.stop(pc);
+
+        hash<auto> entry = getLine(recorder.snapshot(),
+            FunctionEntryTargetFile, 3);
+        assertEq(1, entry.hit_count,
+            "function-entry-only source line is still counted");
+    }
+
     testRecorderStatementReferencesIncludeProgramIds() {
         Program pgm1 = makeTargetProgram();
         Program pgm2 = makeTargetProgram();
@@ -200,6 +256,39 @@ class LineCoverageTest inherits QUnit::Test {
             "        + 2;",
             "}").join("\n") + "\n", MultiLineTargetFile);
         return pgm;
+    }
+
+    private Program makeFunctionEntryTargetProgram() {
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER);
+        pgm.parse(("# target program",
+            "int sub entry() {",
+            "    return 42;",
+            "}").join("\n") + "\n", FunctionEntryTargetFile);
+        return pgm;
+    }
+
+    private int currentProgramFunctionEntryTarget(reference<int> target_line) {
+        target_line = get_all_thread_call_stacks(){gettid()}[0].line;
+        return 42;
+    }
+
+    private string currentProgramExceptionTarget(reference<int> target_line) {
+        int tid = gettid();
+        try {
+            target_line = get_all_thread_call_stacks(){gettid()}[0].line + 1;
+            tid = tid / (tid - tid);
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+        return "NO-EXCEPTION";
+    }
+
+    private hash<auto> getCurrentProgramLine(hash<auto> report, int line) {
+        ProgramControl pc = ProgramControl::getProgram();
+        hash<auto> info = pc.getStatementIdInfo(pc.findStatementId("",
+            line));
+        string file = info.source.val() ? info.source : info.file;
+        return getLine(report, file, line);
     }
 
     private hash<auto> getLine(hash<auto> report, string file, int line) {

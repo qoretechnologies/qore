@@ -159,6 +159,13 @@ public:
     DLLLOCAL QoreListNode* registerStream(int64_t stream_id, AbstractAsyncAction* action,
         bool& need_cancel, ExceptionSink* xsink);
 
+    //! Dispatches responses that arrived before the completion action was registered
+    DLLLOCAL void dispatchBufferedResponses(int64_t stream_id, AbstractAsyncAction* action,
+        QoreListNode* buffered, ExceptionSink* xsink);
+
+    //! Complete a stream normally: removes and derefs the action without signaling an error
+    DLLLOCAL bool completeStream(int64_t stream_id, ExceptionSink* xsink);
+
     //! Mark a client-side HTTP/3 response stream for incremental body delivery
     DLLLOCAL int setStreamStreaming(int64_t stream_id, ExceptionSink* xsink);
 

@@ -1109,6 +1109,7 @@ public:
    DLLLOCAL bool saveProgram(bool runtime, ExceptionSink* xsink);
    DLLLOCAL void del(ExceptionSink* xsink);
    DLLLOCAL bool canRunDebugCallbacks() const;
+   DLLLOCAL bool isActiveProgram(QoreProgram* pgm) const;
 
    //! Clears thread-local data in all referenced programs without unregistering the thread
    /** Clears the thread-local hash (tld) for each program this thread has data in.

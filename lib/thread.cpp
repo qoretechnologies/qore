@@ -750,6 +750,10 @@ bool ThreadProgramData::canRunDebugCallbacks() const {
     return !td->foreign;
 }
 
+bool ThreadProgramData::isActiveProgram(QoreProgram* pgm) const {
+    return td->current_pgm == pgm;
+}
+
 void ThreadProgramData::del(ExceptionSink* xsink) {
     // first purge all data
     {

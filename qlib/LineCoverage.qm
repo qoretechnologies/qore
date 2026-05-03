@@ -95,6 +95,8 @@ public namespace LineCoverage {
             hash<auto> attached_programs = {};
             hash<auto> statement_locations = {};
             hash<auto> statement_hits = {};
+            hash<auto> pending_function_entries = {};
+            hash<auto> last_callbacks = {};
         }
 
         #! Creates a recorder
@@ -228,7 +230,13 @@ public namespace LineCoverage {
                 *int breakpointId, reference flow, reference rs,
                 reference runToStatementId) {
             if (statementId) {
+                flushPendingFunctionEntry(
+                    statementLocationKey(pgm, statementId));
                 recordStatement(pgm, statementId);
+                setLastCallback("step", statementLocationKey(pgm,
+                    statementId));
+            } else {
+                setLastCallback("block", NOTHING);
             }
             rs = DebugStep;
         }
@@ -236,26 +244,45 @@ public namespace LineCoverage {
         onFunctionEnter(ProgramControl pgm, int statementId, reference rs,
                 reference runToStatementId) {
             if (statementId) {
-                recordStatement(pgm, statementId);
+                pushPendingFunctionEntry(pgm, statementId);
+                setLastCallback("function-enter", statementLocationKey(pgm,
+                    statementId));
             }
             rs = DebugStep;
         }
 
         onFunctionExit(ProgramControl pgm, int statementId, reference result,
                 reference rs, reference runToStatementId) {
+            if (statementId) {
+                flushPendingFunctionEntry(NOTHING,
+                    statementLocationKey(pgm, statementId));
+                setLastCallback("function-exit", statementLocationKey(pgm,
+                    statementId));
+            }
             rs = DebugStep;
         }
 
         onException(ProgramControl pgm, int statementId, hash<auto> ex,
                 reference dismiss, reference rs, reference runToStatementId) {
             if (statementId) {
-                recordStatement(pgm, statementId);
+                string loc_key = statementLocationKey(pgm, statementId);
+                flushPendingFunctionEntry(loc_key);
+                if (!isLastCallback("step", loc_key)) {
+                    recordStatement(pgm, statementId);
+                }
+                setLastCallback("exception", loc_key);
             }
             rs = DebugStep;
         }
 
         onExit(ProgramControl pgm, int statementId, reference result,
                 reference rs, reference runToStatementId) {
+            if (statementId) {
+                flushPendingFunctionEntry(NOTHING,
+                    statementLocationKey(pgm, statementId));
+                setLastCallback("exit", statementLocationKey(pgm,
+                    statementId));
+            }
             rs = DebugStep;
         }
 
@@ -280,6 +307,63 @@ public namespace LineCoverage {
             string key = statementKey(pgm.getProgramId(), statement_id);
             AutoLock al(m);
             statement_hits{key} = (statement_hits{key} ?? 0) + 1;
+        }
+
+        private pushPendingFunctionEntry(ProgramControl pgm,
+                int statement_id) {
+            ensureStatementInfo(pgm, statement_id);
+            string tid = gettid().toString();
+            hash<auto> pending = {
+                "pgm": pgm,
+                "statement_id": statement_id,
+                "location_key": statementLocationKey(pgm, statement_id),
+            };
+            AutoLock al(m);
+            list<auto> stack = pending_function_entries{tid} ?? ();
+            push stack, pending;
+            pending_function_entries{tid} = stack;
+        }
+
+        private flushPendingFunctionEntry(*string duplicate_location_key,
+                *string matching_location_key) {
+            string tid = gettid().toString();
+            *hash<auto> pending;
+            {
+                AutoLock al(m);
+                list<auto> stack = pending_function_entries{tid} ?? ();
+                if (!stack) {
+                    return;
+                }
+                pending = pop stack;
+                if (matching_location_key
+                        && pending.location_key != matching_location_key) {
+                    push stack, pending;
+                    pending = NOTHING;
+                }
+                if (stack) {
+                    pending_function_entries{tid} = stack;
+                } else {
+                    delete pending_function_entries{tid};
+                }
+            }
+            if (pending && pending.location_key != duplicate_location_key) {
+                recordStatement(pending.pgm, pending.statement_id);
+            }
+        }
+
+        private setLastCallback(string kind, *string location_key) {
+            AutoLock al(m);
+            last_callbacks{gettid().toString()} = {
+                "kind": kind,
+                "location_key": location_key,
+            };
+        }
+
+        private bool isLastCallback(string kind, string location_key) {
+            AutoLock al(m);
+            *hash<auto> last = last_callbacks{gettid().toString()};
+            return last && last.kind == kind
+                && last.location_key == location_key;
         }
 
         private hash<auto> normalizeStatementInfo(ProgramControl pgm,
@@ -390,6 +474,13 @@ public namespace LineCoverage {
 
         private string statementKey(int program_id, int statement_id) {
             return sprintf("%d:%d", program_id, statement_id);
+        }
+
+        private string statementLocationKey(ProgramControl pgm,
+                int statement_id) {
+            hash<auto> loc = normalizeStatementInfo(pgm, statement_id);
+            return sprintf("%d:%s:%d:%d", loc.program_id, loc.file, loc.line,
+                loc.end_line);
         }
 
         private string lineKey(string file, int line) {
