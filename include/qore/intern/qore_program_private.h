@@ -472,6 +472,18 @@ public:
     // modules loadded with parse commands
     strset_t parse_modules;
 
+    struct ModuleParseCommand {
+        std::string module;
+        std::string command;
+    };
+
+    //! `%module-cmd(<module>) <command>` directives executed while parsing this Program.
+    /** Source-stripped AOT artifacts must replay these commands because they can
+        mutate parser/runtime state outside the serialized namespace tree (for
+        example JNI classpath/import commands that create dynamic classes).
+    */
+    std::vector<ModuleParseCommand> module_parse_commands;
+
     //! per-Program module search-path lists populated by %prepend-module-path and %append-module-path
     /** Stored in insertion order (most-recently-prepended path sits at index 0 for prepended_module_paths).
         Consulted by QoreModuleManager::loadModuleIntern's path search: prepended paths first,
@@ -749,6 +761,10 @@ public:
 
     DLLLOCAL void addParseModule(const char* mod) {
         parse_modules.insert(mod);
+    }
+
+    DLLLOCAL void addModuleParseCommand(const char* mod, const QoreString& cmd) {
+        module_parse_commands.push_back(ModuleParseCommand{mod ? mod : "", cmd.c_str()});
     }
 
     //! Applies a %prepend-module-path / %append-module-path directive argument to this Program.

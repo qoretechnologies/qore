@@ -10579,6 +10579,79 @@ void serializeModulePathLists(QoreAOTBinaryWriter& writer,
     }
 }
 
+void serializeModuleCommands(QoreAOTBinaryWriter& writer,
+        const std::vector<AOTModuleCommand>& commands,
+        uint64_t& feature_flags) {
+    if (commands.empty()) {
+        return;
+    }
+    feature_flags |= QORE_AOT_FEAT_MODULE_COMMANDS;
+
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::MODULE_COMMANDS);
+    writer.writeU32(static_cast<uint32_t>(commands.size()));
+    for (const AOTModuleCommand& cmd : commands) {
+        writer.writeStringRef(cmd.module.c_str());
+        writer.writeStringRef(cmd.command.c_str());
+    }
+    writer.endSection(sec_idx);
+}
+
+bool readModuleCommands(const QoreAOTBinaryReader& reader,
+        std::vector<AOTModuleCommand>& commands,
+        std::string& error) {
+    commands.clear();
+
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::MODULE_COMMANDS);
+    if (!sec) {
+        return true;
+    }
+    const uint8_t* sec_data = reader.getSectionData(*sec);
+    if (!sec_data) {
+        error = "invalid module-command section data";
+        return false;
+    }
+    if (sec->size < 4) {
+        error = "module-command section too small for count";
+        return false;
+    }
+
+    const uint8_t* ptr = sec_data;
+    const uint8_t* end = sec_data + sec->size;
+    uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    uint32_t max_entries = (sec->size - 4) / 8;
+    if (count > max_entries) {
+        error = "module-command count " + std::to_string(count) + " exceeds section capacity";
+        return false;
+    }
+    commands.reserve(count);
+    for (uint32_t i = 0; i < count; ++i) {
+        const char* module = reader.readStringRef(ptr);
+        const char* command = reader.readStringRef(ptr);
+        if (!module || !command) {
+            error = "invalid module-command entry at index " + std::to_string(i);
+            return false;
+        }
+        commands.push_back(AOTModuleCommand{module, command});
+    }
+    if (ptr != end) {
+        error = "module-command section has " + std::to_string(end - ptr) + " trailing byte(s)";
+        return false;
+    }
+
+    return true;
+}
+
+bool readModuleCommands(const uint8_t* data, uint32_t size,
+        std::vector<AOTModuleCommand>& commands,
+        std::string& error) {
+    commands.clear();
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+    return readModuleCommands(reader, commands, error);
+}
+
 bool readModulePathLists(const uint8_t* data, uint32_t size,
         std::vector<std::string>& prepended,
         std::vector<std::string>& appended,

@@ -7577,6 +7577,65 @@ static std::string makeAOTRegistrationFailureMessage(const char* label,
     return rv;
 }
 
+static bool applyAOTModuleCommandsToProgram(QoreProgram* pgm,
+        const uint8_t* metadata, uint32_t metadata_len,
+        const char* label, std::string& error) {
+    std::vector<AOTModuleCommand> commands;
+    std::string read_error;
+    if (!readModuleCommands(metadata, metadata_len, commands, read_error)) {
+        error = "AOT module-command metadata read error";
+        if (!read_error.empty()) {
+            error += ": " + read_error;
+        }
+        return false;
+    }
+    if (commands.empty()) {
+        return true;
+    }
+
+    for (const AOTModuleCommand& command : commands) {
+        if (command.module.empty() || command.command.empty()) {
+            error = "AOT module-command metadata contains an empty module or command";
+            if (label && *label) {
+                error += " in ";
+                error += label;
+            }
+            return false;
+        }
+
+        ExceptionSink xsink;
+        QoreString qcmd(command.command.c_str());
+        int rc = MM.issueRuntimeCmd(command.module.c_str(), pgm, qcmd, &xsink);
+        if (rc < 0 || xsink.isException()) {
+            error = "AOT module command failed";
+            if (label && *label) {
+                error += " in ";
+                error += label;
+            }
+            error += ": %module-cmd(";
+            error += command.module;
+            error += ") ";
+            error += command.command;
+
+            QoreValue ex_desc = xsink.getExceptionDesc();
+            if (ex_desc.getType() == NT_STRING) {
+                QoreStringValueHelper desc_str(ex_desc);
+                if (desc_str->c_str() && *desc_str->c_str()) {
+                    error += ": ";
+                    error += desc_str->c_str();
+                }
+            }
+            xsink.clear();
+            return false;
+        }
+    }
+
+    printd(2, "AOT: replayed %d module command%s for '%s'\n",
+        (int)commands.size(), commands.size() == 1 ? "" : "s",
+        label ? label : "<aot>");
+    return true;
+}
+
 extern "C" DLLEXPORT int qore_aot_run_v2(
     int argc, char** argv,
     const uint8_t* metadata, int metadata_len,
@@ -7625,6 +7684,10 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
         // Set JIT execution mode
         qpgm->setExecMode(QEM_JIT);
 
+        if (label) {
+            qpgm->setScriptPath(label);
+        }
+
         printd(2, "AOT v2: parse_options=0x%llx, PO_MODERN=0x%llx, has_modern=%d\n",
             (long long)parse_options, (long long)PO_MODERN,
             (int)((parse_options & PO_MODERN) == PO_MODERN));
@@ -7636,6 +7699,16 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             if (readModulePathLists(metadata, static_cast<uint32_t>(metadata_len),
                     prepended, appended, mp_error)) {
                 applyModulePathListsToProgram(*qpgm, prepended, appended);
+            }
+        }
+
+        {
+            std::string cmd_error;
+            if (!applyAOTModuleCommandsToProgram(*qpgm, metadata,
+                    static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+                printd(0, "AOT v2: %s\n", cmd_error.c_str());
+                rc = 2;
+                break;
             }
         }
 
@@ -8269,6 +8342,16 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         printd(2, "AOT v3: parse_options=0x%llx|0x%llx, PO_MODERN=0x%llx, has_modern=%d\n",
             (long long)parse_options_lo, (long long)parse_options_hi, (long long)PO_MODERN,
             (int)((parse_options & PO_MODERN) == PO_MODERN));
+
+        {
+            std::string cmd_error;
+            if (!applyAOTModuleCommandsToProgram(*qpgm, metadata,
+                    static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+                printd(0, "AOT v3: %s\n", cmd_error.c_str());
+                rc = 2;
+                break;
+            }
+        }
 
         // Load module dependencies before deserialization so that module classes,
         // functions, etc. are available when resolving base classes and types.
@@ -9080,6 +9163,17 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         }
     }
 
+    {
+        std::string cmd_error;
+        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata,
+                static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+            QoreStringNode* err = new QoreStringNode("AOT module-command replay error: ");
+            err->concat(cmd_error.c_str());
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
+        }
+    }
+
     // Load dependencies from serialized metadata BEFORE deserializing namespace tree.
     // Dependencies must be loaded first because deserialization may need to resolve
     // base classes, types, and other references from dependency modules.
@@ -9853,6 +9947,17 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
             inheritAOTModulePathLists(local_pgm, parent_pgm, prepended, appended);
         } else {
             inheritAOTModulePathLists(local_pgm, parent_pgm);
+        }
+    }
+
+    {
+        std::string cmd_error;
+        if (!applyAOTModuleCommandsToProgram(local_pgm, metadata,
+                static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+            QoreStringNode* err = new QoreStringNode("AOT module-command replay error: ");
+            err->concat(cmd_error.c_str());
+            local_pgm->waitForTerminationAndDeref(nullptr);
+            return err;
         }
     }
 

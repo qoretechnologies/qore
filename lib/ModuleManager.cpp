@@ -2403,6 +2403,7 @@ void QoreModuleManager::issueParseCmd(const QoreProgramLocation* loc, const char
     }
 
     mi->issueModuleCmd(loc, cmd, pgm->getParseExceptionSink());
+    qore_program_private::get(*pgm)->addModuleParseCommand(mname, cmd);
 }
 
 #define QORE_MAX_MODULE_ERROR_DESC 200

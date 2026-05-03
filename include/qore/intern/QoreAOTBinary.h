@@ -126,8 +126,9 @@ constexpr uint64_t QORE_AOT_FEAT_CONTAINER_TYPEINFO = 1ULL << 32; //!< MakeList/
 constexpr uint64_t QORE_AOT_FEAT_CLASS_HASH = 1ULL << 33; //!< CLASSES records carry parser-produced class signature hashes
 constexpr uint64_t QORE_AOT_FEAT_METHOD_SYNC = 1ULL << 34; //!< FUNCTIONS/METHODS variant flags preserve synchronized gates
 constexpr uint64_t QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS = 1ULL << 35; //!< Serialized list/hash values preserve complex/hashdecl runtime typeInfo
+constexpr uint64_t QORE_AOT_FEAT_MODULE_COMMANDS = 1ULL << 36; //!< `%module-cmd` directives replayed from source-stripped AOT metadata
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -152,6 +153,7 @@ enum class QoreAOTSectionType : uint16_t {
     MODULE_PATH_PREPEND = 19,  //!< Per-Program %prepend-module-path expanded path list (count u32 + count × StringRef)
     MODULE_PATH_APPEND  = 20,  //!< Per-Program %append-module-path expanded path list (count u32 + count × StringRef)
     BUILD_INFO      = 21,  //!< Producer/build metadata as key-value string pairs
+    MODULE_COMMANDS = 22,  //!< `%module-cmd` directives (count u32 + count × module StringRef + command StringRef)
 };
 
 //! Value type tags for serialized constant values
@@ -776,6 +778,30 @@ void serializeModulePathLists(QoreAOTBinaryWriter& writer,
         const std::vector<std::string>& prepended,
         const std::vector<std::string>& appended,
         uint64_t& feature_flags);
+
+//! Serialized `%module-cmd(<module>) <command>` directive.
+struct AOTModuleCommand {
+    std::string module;
+    std::string command;
+};
+
+//! Serialize `%module-cmd` directives into the MODULE_COMMANDS section.
+/** Wire format: `u32 count`, then `count × (module StringRef, command StringRef)`.
+    `feature_flags` is ORed with `QORE_AOT_FEAT_MODULE_COMMANDS` when commands are emitted.
+*/
+void serializeModuleCommands(QoreAOTBinaryWriter& writer,
+        const std::vector<AOTModuleCommand>& commands,
+        uint64_t& feature_flags);
+
+//! Read serialized `%module-cmd` directives from MODULE_COMMANDS.
+bool readModuleCommands(const QoreAOTBinaryReader& reader,
+        std::vector<AOTModuleCommand>& commands,
+        std::string& error);
+
+//! Read serialized `%module-cmd` directives from a raw metadata blob.
+bool readModuleCommands(const uint8_t* data, uint32_t size,
+        std::vector<AOTModuleCommand>& commands,
+        std::string& error);
 
 //! Read the MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections (if present).
 /** Populates `prepended` and `appended` from the blob.  Returns true on success

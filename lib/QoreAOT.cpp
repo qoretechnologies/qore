@@ -663,10 +663,11 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     return flags;
 }
 
-//! Emit MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections (if non-empty) for `pgm`
-//! and OR the feature flag bit into `feature_flags`.  Used by every AOT-binary
-//! emitter (script + module paths) so %prepend-module-path / %append-module-path
-//! lists survive into the `.qo` / `.qmod` artifact and get re-applied at load.
+//! Emit Program-level parse side-effect sections (if non-empty) for `pgm`.
+/** Used by every AOT-binary emitter so source-stripped artifacts preserve
+    program state that is not represented by the namespace tree: module search
+    path directives and `%module-cmd` directives such as JNI classpath/imports.
+*/
 static void appendModulePathListSections(QoreAOTBinaryWriter& writer,
         QoreProgram* pgm, uint64_t& feature_flags) {
     if (!pgm) {
@@ -678,6 +679,13 @@ static void appendModulePathListSections(QoreAOTBinaryWriter& writer,
     }
     serializeModulePathLists(writer, pp->prepended_module_paths,
         pp->appended_module_paths, feature_flags);
+    std::vector<AOTModuleCommand> commands;
+    commands.reserve(pp->module_parse_commands.size());
+    for (const auto& cmd : pp->module_parse_commands) {
+        commands.push_back(AOTModuleCommand{cmd.module, cmd.command});
+    }
+    serializeModuleCommands(writer, commands, feature_flags);
+    writer.feature_flags = feature_flags;
 }
 
 //! Append producer/build diagnostics to the AOT metadata blob.  This section is

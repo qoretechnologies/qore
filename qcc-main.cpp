@@ -801,6 +801,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::MODULE_PATH_PREPEND: return "MODULE_PATH_PREPEND";
         case QoreAOTSectionType::MODULE_PATH_APPEND: return "MODULE_PATH_APPEND";
         case QoreAOTSectionType::BUILD_INFO: return "BUILD_INFO";
+        case QoreAOTSectionType::MODULE_COMMANDS: return "MODULE_COMMANDS";
     }
     return "UNKNOWN";
 }
@@ -1021,6 +1022,17 @@ static void print_string_list(const char* label, const std::vector<std::string>&
     }
 }
 
+static void print_module_commands(const std::vector<AOTModuleCommand>& commands) {
+    if (commands.empty()) {
+        printf("    module commands: (none)\n");
+        return;
+    }
+    printf("    module commands:\n");
+    for (const AOTModuleCommand& command : commands) {
+        printf("      %%module-cmd(%s) %s\n", command.module.c_str(), command.command.c_str());
+    }
+}
+
 static void print_aot_feature_flags(uint64_t flags) {
     static const struct {
         uint64_t bit;
@@ -1062,6 +1074,7 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_CLASS_HASH, "class-hash"},
         {QORE_AOT_FEAT_METHOD_SYNC, "method-sync"},
         {QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS, "typed-value-containers"},
+        {QORE_AOT_FEAT_MODULE_COMMANDS, "module-commands"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -2413,6 +2426,14 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
         print_string_list("append module paths", appended);
     } else {
         printf("    module paths: error: %s\n", error.c_str());
+        error.clear();
+    }
+
+    std::vector<AOTModuleCommand> module_commands;
+    if (readModuleCommands(reader, module_commands, error)) {
+        print_module_commands(module_commands);
+    } else {
+        printf("    module commands: error: %s\n", error.c_str());
         error.clear();
     }
 
