@@ -746,6 +746,10 @@ bool ThreadProgramData::saveProgram(bool runtime, ExceptionSink* xsink) {
     return true;
 }
 
+bool ThreadProgramData::canRunDebugCallbacks() const {
+    return !td->foreign;
+}
+
 void ThreadProgramData::del(ExceptionSink* xsink) {
     // first purge all data
     {
@@ -2294,7 +2298,7 @@ void ProgramThreadCountContextHelper::set(ExceptionSink* xsink, QoreProgram* pgm
         "init_tlpd:%d\n", this, td->tlpd, save_frameCount, old_frameCount, init_tlpd
     );
 
-    if (!td->tlpd->dbgIsAttached()) {
+    if (td->tpd->canRunDebugCallbacks() && !td->tlpd->dbgIsAttached()) {
         // find if tlpd is in lower context and if not then notify dbgAttach()
         if (isFirstThreadLocalProgramData(td->tlpd)) {
             td->tlpd->dbgAttach(xsink);

@@ -57,6 +57,7 @@ extern QoreHashNode* ENV;
 class QoreSandboxManager;
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cstdarg>
 #include <map>
@@ -245,21 +246,21 @@ public:
     */
     DLLLOCAL void dbgBreak() {
         printd(5, "ThreadLocalProgramData::dbgBreak(), this: %p\n", this);
-        breakFlag = true;
+        breakFlag.store(true, std::memory_order_release);
     }
     /**
         Executed from any thread to set pending attach flag
     */
     DLLLOCAL void dbgPendingAttach() {
         printd(5, "ThreadLocalProgramData::dbgPendingAttach(), this: %p\n", this);
-        attachFlag = 1;
+        attachFlag.store(1, std::memory_order_release);
     }
     /**
         Executed from any thread to set pending detach flag
     */
     DLLLOCAL void dbgPendingDetach() {
         printd(5, "ThreadLocalProgramData::dbgPendingDetach(), this: %p\n", this);
-        attachFlag = -1;
+        attachFlag.store(-1, std::memory_order_release);
     }
 
     /**
@@ -270,7 +271,9 @@ public:
     }
 
     DLLLOCAL bool runtimeCheck() const {
-        return runState != DBG_RS_DETACH || attachFlag || breakFlag;
+        return runState != DBG_RS_DETACH
+            || attachFlag.load(std::memory_order_acquire)
+            || breakFlag.load(std::memory_order_acquire);
     }
 
 private:
@@ -294,11 +297,10 @@ private:
         runToStatement = rts;
     }
     // set to true by any process do break running program asap
-    volatile bool breakFlag = false;
+    std::atomic<bool> breakFlag{false};
     // called from running thread
     DLLLOCAL inline void checkBreakFlag() {
-        if (breakFlag && runState != DBG_RS_DETACH) {
-            breakFlag = false;
+        if (runState != DBG_RS_DETACH && breakFlag.exchange(false, std::memory_order_acq_rel)) {
             if (runState != DBG_RS_STOPPED) {
                 runState = DBG_RS_STEP;
             }
@@ -306,18 +308,16 @@ private:
         }
     }
     // to call onAttach when debug is attached or detached, -1 .. detach, 1 .. attach
-    int attachFlag = 0;
+    std::atomic<int> attachFlag{0};
     DLLLOCAL inline void checkAttach(ExceptionSink* xsink) {
-        if (attachFlag && runState != DBG_RS_STOPPED) {
-            if (attachFlag > 0) {
+        int flag = attachFlag.load(std::memory_order_acquire);
+        if (flag && runState != DBG_RS_STOPPED) {
+            if (flag > 0) {
                 dbgAttach(xsink);
-                //if (rs != DBG_RS_DETACH) {   // TODO: why this exception ?
-                attachFlag = 0;
-                //}
-            } else if (attachFlag < 0) {
+            } else if (flag < 0) {
                 dbgDetach(xsink);
-                attachFlag = 0;
             }
+            attachFlag.compare_exchange_strong(flag, 0, std::memory_order_acq_rel);
         }
     }
 };
@@ -2456,6 +2456,9 @@ public:
         printd(5, "qore_program_private::attachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n", dpgm,
             pgm_data_map.size(), pgm_data_map.begin(), pgm_data_map.end());
         for (auto& i : pgm_data_map) {
+            if (!i.first->canRunDebugCallbacks()) {
+                continue;
+            }
             i.second->dbgPendingAttach();
             i.second->dbgBreak();
         }
@@ -2472,6 +2475,9 @@ public:
         printd(5, "qore_program_private::detachDebug, dpgm: %p, pgm_data_map: size:%d, begin: %p, end: %p\n", dpgm,
             pgm_data_map.size(), pgm_data_map.begin(), pgm_data_map.end());
         for (auto& i : pgm_data_map) {
+            if (!i.first->canRunDebugCallbacks()) {
+                continue;
+            }
             i.second->dbgPendingDetach();
         }
         // debug_program_counter may be non zero to finish pending calls. Just this instance cannot be deleted, it's
@@ -2491,6 +2497,9 @@ public:
         AutoLocker al(tlock);
         for (auto& i : pgm_data_map) {
             if (i.first->gettid() == tid) {
+                if (!i.first->canRunDebugCallbacks()) {
+                    return -1;
+                }
                 i.second->dbgBreak();
                 return 0;
             }
@@ -2502,6 +2511,9 @@ public:
         printd(5, "qore_program_private::breakProgram(), this: %p\n", this);
         AutoLocker al(tlock);
         for (auto& i : pgm_data_map) {
+            if (!i.first->canRunDebugCallbacks()) {
+                continue;
+            }
             i.second->dbgBreak();
         }
     }
