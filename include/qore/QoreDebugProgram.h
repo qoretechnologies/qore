@@ -6,7 +6,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -86,6 +86,9 @@ public:
    //! creates the object
    DLLEXPORT QoreDebugProgram();
 
+   DLLLOCAL virtual void refForCallback();
+
+   DLLLOCAL virtual void derefForCallback(ExceptionSink* xsink);
 
    DLLEXPORT void addProgram(QoreProgram *pgm, ExceptionSink* xsink);
    DLLEXPORT void removeProgram(QoreProgram *pgm);
@@ -153,5 +156,3 @@ public:
 };
 
 #endif /* INCLUDE_QORE_QOREDEBUGPROGRAM_H_ */
-
-

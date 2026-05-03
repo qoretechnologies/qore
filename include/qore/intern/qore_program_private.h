@@ -2911,6 +2911,23 @@ typedef std::map<QoreProgram*, qore_program_private*> qore_program_map_t;
 class QoreDebugProgram;
 
 class qore_debug_program_private {
+private:
+    class CallbackRef {
+    public:
+        DLLLOCAL CallbackRef(QoreDebugProgram* n_dpgm, ExceptionSink* n_xsink)
+                : dpgm(n_dpgm), xsink(n_xsink) {
+            dpgm->refForCallback();
+        }
+
+        DLLLOCAL ~CallbackRef() {
+            dpgm->derefForCallback(xsink);
+        }
+
+    private:
+        QoreDebugProgram* dpgm;
+        ExceptionSink* xsink;
+    };
+
 public:
     DLLLOCAL qore_debug_program_private(QoreDebugProgram* n_dpgm) : dpgm(n_dpgm) {}
 
@@ -2975,12 +2992,14 @@ public:
 
     DLLLOCAL void onAttach(QoreProgram* pgm, DebugRunStateEnum& rs, const AbstractStatement*& rts,
             ExceptionSink* xsink) {
+        CallbackRef cr(dpgm, xsink);
         AutoQoreCounterDec ad(&debug_program_counter);
         dpgm->onAttach(pgm, rs, rts, xsink);
     }
 
     DLLLOCAL void onDetach(QoreProgram* pgm, DebugRunStateEnum& rs, const AbstractStatement*& rts,
             ExceptionSink* xsink) {
+        CallbackRef cr(dpgm, xsink);
         AutoQoreCounterDec ad(&debug_program_counter);
         dpgm->onDetach(pgm, rs, rts, xsink);
     }
@@ -2994,12 +3013,14 @@ public:
     */
     DLLLOCAL void onStep(QoreProgram* pgm, const StatementBlock* blockStatement, const AbstractStatement* statement,
             unsigned bkptId, int& flow, DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink) {
+        CallbackRef cr(dpgm, xsink);
         AutoQoreCounterDec ad(&debug_program_counter);
         dpgm->onStep(pgm, blockStatement, statement, bkptId, flow, rs, rts, xsink);
     }
 
     DLLLOCAL void onFunctionEnter(QoreProgram* pgm, const StatementBlock* statement, DebugRunStateEnum& rs,
             const AbstractStatement*& rts, ExceptionSink* xsink) {
+        CallbackRef cr(dpgm, xsink);
         AutoQoreCounterDec ad(&debug_program_counter);
         dpgm->onFunctionEnter(pgm, statement, rs, rts, xsink);
     }
@@ -3009,6 +3030,7 @@ public:
     */
     DLLLOCAL void onFunctionExit(QoreProgram* pgm, const StatementBlock* statement, QoreValue& returnValue,
             DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink) {
+        CallbackRef cr(dpgm, xsink);
         AutoQoreCounterDec ad(&debug_program_counter);
         dpgm->onFunctionExit(pgm, statement, returnValue, rs, rts, xsink);
     }
@@ -3017,6 +3039,7 @@ public:
     */
     DLLLOCAL void onException(QoreProgram* pgm, const AbstractStatement* statement, DebugRunStateEnum& rs,
             const AbstractStatement*& rts, ExceptionSink* xsink) {
+        CallbackRef cr(dpgm, xsink);
         AutoQoreCounterDec ad(&debug_program_counter);
         dpgm->onException(pgm, statement, rs, rts, xsink);
     }
@@ -3025,6 +3048,7 @@ public:
     */
     DLLLOCAL void onExit(QoreProgram* pgm, const StatementBlock* statement, QoreValue& returnValue,
             DebugRunStateEnum& rs, const AbstractStatement*& rts, ExceptionSink* xsink) {
+        CallbackRef cr(dpgm, xsink);
         AutoQoreCounterDec ad(&debug_program_counter);
         dpgm->onExit(pgm, statement, returnValue, rs, rts, xsink);
     }
