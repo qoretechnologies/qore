@@ -253,6 +253,7 @@ private:
     std::unordered_set<std::string> shutting_down_owners;      //!< Owners being torn down — skip callbacks
     std::unordered_map<std::string, int> active_per_owner;     //!< Per-owner in-flight callback count
     QoreCondition owner_idle_cond;              //!< Signaled when an owner's active count reaches zero
+    QoreThreadLock qore_continue_poll_lock;     //!< Serializes Qore-level continuePoll() dispatch
 
     //! Enqueue a work item, starting a worker if needed
     DLLLOCAL void enqueue(AsyncWorkItem&& item);
@@ -320,12 +321,31 @@ public:
     /** @param self the QoreObject wrapping this controller
         @param info the SocketPollOperationInfo hash
         @param replace if true, cancel any existing operation with the same key
+        @param xsink for exception handling
+        @return the SocketPollResultInfo hash
+    */
+    DLLLOCAL QoreHashNode* exec(QoreObject* self, QoreHashNode* info, bool replace, ExceptionSink* xsink);
+
     //! Cancel an operation by socket
     /** @param sock the socket to cancel
         @param xsink for exception handling
         @return true if an operation was found and canceled
     */
     DLLLOCAL bool cancel(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink);
+
+    //! Cancel all operations for a socket and close it on the controller thread
+    /** @param sock the socket to cancel and close
+        @param xsink for exception handling
+        @return true if at least one operation was found and canceled
+    */
+    DLLLOCAL bool cancelAndClose(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink);
+
+    //! Close a socket on the controller thread after canceling controller work for it
+    /** @param sock the socket to close
+        @param xsink for exception handling
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int close(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink);
 
     //! Cancel an operation by key
     /** @param key the operation key
@@ -408,6 +428,7 @@ public:
         @return true if all submitted operations have been processed
     */
     DLLLOCAL bool waitForProcessing(int timeout_ms, ExceptionSink* xsink);
+    DLLLOCAL bool waitForProcessing(const std::string& key, int timeout_ms, ExceptionSink* xsink);
 
     //! Returns true if the I/O thread is running
     DLLLOCAL bool running() const;
@@ -495,6 +516,8 @@ private:
     enum class IoCommand {
         SubmitOp,            //!< Submit a new operation (carries PollInfo data)
         Cancel,
+        CancelSocket,        //!< Cancel all operations associated with a socket hash
+        CloseSocket,         //!< Close an I/O object on an I/O thread
         CancelOwner,
         CancelByProgram,     //!< Cancel all operations belonging to a QoreProgram
         Quit,
@@ -572,7 +595,8 @@ private:
         QoreHashNode* continue_poll_result = nullptr;  //!< For ContinuePollResult: new poll info (or nullptr)
         QoreHashNode* continue_poll_ex = nullptr;      //!< For ContinuePollResult: exception (or nullptr)
         bool continue_poll_completed = false;           //!< For ContinuePollResult: true if completed
-        std::string sock_hash;          //!< For WakeSocket: socket hash to re-poll
+        std::string sock_hash;          //!< For WakeSocket/CancelSocket/CloseSocket: socket hash
+        AbstractPollableIoObjectBase* close_sock = nullptr; //!< For CloseSocket: referenced I/O object
         bool submit_replace = false;    //!< For SubmitOp: replace existing operation with same key
 
         // --- SubmitOp data (ownership transferred to I/O thread) ---
@@ -586,6 +610,7 @@ private:
         int64 submit_timeout_us = 0;                     //!< Timeout in microseconds
         bool submit_has_qore_abort = false;              //!< True if abort() is overridden in Qore
         bool submit_has_qore_on_complete = false;        //!< True if onComplete() is overridden in Qore
+        bool submit_socket_async_io = false;             //!< True if SubmitOp owns a Socket async I/O claim
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -603,10 +628,14 @@ private:
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         bool continue_poll_in_flight;   //!< True when continuePoll() dispatched to worker
+        bool socket_async_io;           //!< True if this operation owns a Socket async I/O claim
         int64 poll_timeout_deadline_us; //!< Absolute deadline for protocol-level poll timeout (QUIC)
         std::string cached_sock_hash;   //!< Cached socket hash for O(1) Phase 1 readiness check
         int cached_events = 0;          //!< Cached poll events for Phase 3 fast path
         uint32_t cached_fd_gen = 0;     //!< Cached fd generation for QUIC migration detection
+        uint32_t socket_wait_fd_generation = 0; //!< Socket fd generation snapshot for current wait
+        int socket_wait_fd = -1;        //!< Socket fd snapshot for current wait
+        bool socket_wait_generation_valid = false; //!< True when socket wait snapshot is usable
         //! Cached socket QoreObject* used as a cheap pointer-compare in Phase 3
         /** Set whenever updateEventLoopRegistration is called.  Used in the fast
             path to detect when a poll op transitions to polling a different
@@ -632,7 +661,7 @@ private:
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),
             other(nullptr), queue(nullptr),
             spop_base(nullptr), has_qore_abort(false), has_qore_on_complete(false),
-            continue_poll_in_flight(false), poll_timeout_deadline_us(0) {
+            continue_poll_in_flight(false), socket_async_io(false), poll_timeout_deadline_us(0) {
         }
 
         DLLLOCAL ~PollInfo() {
@@ -825,6 +854,8 @@ private:
         std::unordered_map<std::string, std::unordered_set<std::string>> sock_hash_to_keys;
         std::unordered_map<int, std::string> fd_to_sock_hash;
         std::unordered_map<std::string, std::unordered_set<int>> key_extra_fds;
+        //! Extra fd readiness is key-scoped; primary socket event masks can be zero.
+        std::unordered_map<int, std::unordered_map<std::string, int>> extra_fd_to_key_events;
 
         //! Recently-cancelled operation keys — prevents re-submission of stale ops
         /** I/O-thread-only. Value is a TTL counter decremented each processCommands()
@@ -858,6 +889,22 @@ private:
             cleanup is still pending.
          */
         std::unordered_map<std::string, PollInfo> pending_aborts;
+
+        //! Socket-level cancel completions waiting on deferred aborts
+        /** When @ref IoCommand::CancelSocket removes an operation whose
+            worker-side @c continuePoll() is still in flight, the command's
+            completion cannot be signaled until the worker returns and the
+            deferred abort is delivered.  This map tracks those socket-scoped
+            barriers by socket hash.
+         */
+        struct PendingSocketCancel {
+            int pending_count = 0;
+            std::vector<AsyncOpCompletion*> completions;
+        };
+        std::unordered_map<std::string, PendingSocketCancel> pending_socket_cancels;
+
+        //! Maps pending-abort operation keys back to their socket-cancel barrier
+        std::unordered_map<std::string, std::string> pending_abort_cancel_hash;
     };
 
     //! Get the I/O thread index for a given operation key (hash-based affinity)
@@ -982,6 +1029,31 @@ private:
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
 
+    //! Cancel all operations in one I/O-thread context matching a socket hash
+    DLLLOCAL int cancelSocketInContext(IoThreadContext& t, const std::string& sock_hash,
+        AsyncOpCompletion*& completion, ExceptionSink* xsink);
+
+    //! Complete any socket-level cancel waiting on a deferred abort key
+    DLLLOCAL void completePendingSocketCancel(IoThreadContext& t, const std::string& key,
+        ExceptionSink* xsink);
+
+    //! Cancel all operations associated with a socket hash
+    DLLLOCAL int cancelBySocketHash(const std::string& sock_hash, ExceptionSink* xsink);
+
+    //! Submit a controller-side close command after socket operations are canceled
+    DLLLOCAL int closeSocketOnController(AbstractPollableIoObjectBase* sock,
+        const std::string& sock_hash, ExceptionSink* xsink);
+
+    //! True if a PollInfo belongs to the socket hash currently being targeted
+    DLLLOCAL static bool pollInfoMatchesSocketHash(const PollInfo& pinfo,
+        const std::string& sock_hash);
+
+    //! Snapshot the Socket fd generation for the next controller wait
+    DLLLOCAL static void snapshotSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info);
+
+    //! Returns SOCKET-CLOSED if a Socket fd changed during the controller wait
+    DLLLOCAL static QoreHashNode* makeSocketWaitGenerationException(PollInfo& pinfo, ExceptionSink* xsink);
+
     //! Update EventLoop registration for an operation
     DLLLOCAL void updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
         QoreObject* socket, const std::string& sock_hash, int events, ExceptionSink* xsink);
@@ -1000,6 +1072,16 @@ private:
     /** @since %Qore 2.3
     */
     DLLLOCAL void unregisterExtraFds(IoThreadContext& t, const std::string& key, ExceptionSink* xsink);
+
+    //! Compute the event union for an extra fd, preserving primary socket events if the fd is also a socket fd
+    DLLLOCAL int computeExtraFdEventUnion(const IoThreadContext& t, int fd) const;
+
+    //! Remove one key from an extra fd and return the remaining event union
+    DLLLOCAL int removeExtraFdKey(IoThreadContext& t, int fd, const std::string& key) const;
+
+    //! Remove one key from an extra fd registration and either modify or release the fd
+    DLLLOCAL void removeExtraFdKeyRegistration(IoThreadContext& t, int fd, const std::string& key,
+        const std::string& expected_hash, ExceptionSink* xsink);
 
     //! Release an old fd from event loop tracking, if still owned by expected_hash
     /** Safely removes \c old_fd from the kqueue/epoll registration and erases

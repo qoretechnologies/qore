@@ -295,8 +295,8 @@ public:
     DLLLOCAL int takeSocket(QoreObject*& sock_obj_out,
         QoreSocketObject*& sock_priv_out, ExceptionSink* xsink);
 
-    //! Returns the raw socket priv pointer (for ALPN inspection after READY).
-    DLLLOCAL QoreSocketObject* getSocketPriv() const { return sock_priv; }
+    //! Returns the ALPN protocol captured from the async SSL upgrade output.
+    DLLLOCAL std::string getNegotiatedProtocol() const;
 
     //! Returns the raw poll-op priv pointer (for setIdleTimeout from the
     //! connection manager, etc.).  Null until @ref buildAndSubmit completes.

@@ -402,6 +402,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Wait for the slow handler to start processing (body has been fully read by the
         # framework, and resume_body_streaming() has been called)
         int rc = slow_handler.waitForProcessing(10s);
+        if (slow_error) {
+            fail(sprintf("%s slow POST failed before processing: %s: %s", proto, slow_error.err, slow_error.desc));
+        }
         assertEq(0, rc, proto + " slow handler should start processing within timeout");
 
         # Now send a fast GET on the same connection — this exercises the fix:

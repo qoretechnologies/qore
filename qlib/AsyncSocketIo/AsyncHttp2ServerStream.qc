@@ -32,9 +32,8 @@ public namespace AsyncSocketIo {
     through headers → DATA* → trailers and must not acquire the socket wrapper lock
     (@c my_socket_priv::m) from the handler thread while the I/O controller is
     driving the same socket.  All write methods route through the @c *Async
-    variants on @ref Qore::Socket, which acquire the wrapper lock only briefly to
-    copy the HTTP/2 session shared pointer — the actual nghttp2 / session-state
-    work runs under only the session's internal recursive mutex.
+    variants on @ref Qore::Socket, which delegate nghttp2 / session-state work
+    to the async I/O controller.
 
     Construction requires:
     - the HTTP/2 Socket that carries the stream,

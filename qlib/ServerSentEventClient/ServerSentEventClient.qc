@@ -333,10 +333,10 @@ sse.connect();
     /** @returns a hash with the following keys:
         - \c cid: the ServerSentEvent client connection ID
         - \c num_connects: how many times has the client connected to the server
-        - \c peer: information about the connected server socket (see
-          @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()")
-        - \c socket: information about the connected local socket (see
-          @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo()")
+        - \c peer: numeric information about the connected server socket (see
+          @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo(False)")
+        - \c socket: numeric information about the connected local socket (see
+          @ref Qore::Socket::getSocketInfo() "Socket::getSocketInfo(False)")
     */
     *hash<auto> getConnectionInfo() {
         # use += to keep "hash<auto>"
@@ -346,8 +346,8 @@ sse.connect();
         };
         try {
             rv += {
-                "peer": hc.getPeerInfo(),
-                "socket": hc.getSocketInfo(),
+                "peer": hc.getPeerInfo(False),
+                "socket": hc.getSocketInfo(False),
             };
         } catch (hash<ExceptionInfo> ex) {
             # ignore exceptions when not connected and return NOTHING

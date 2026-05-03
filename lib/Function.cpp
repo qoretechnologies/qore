@@ -56,6 +56,7 @@
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/FunctionCallNode.h"
+#include "qore/intern/QoreClosureNode.h"
 
 #include <algorithm>
 #include <atomic>
@@ -3674,6 +3675,28 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
     return evalIntern(name, uveh.getArgv(), self, xsink);
 }
 
+QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreClosureBase& closure_base,
+        QoreObject* self, ExceptionSink* xsink) const {
+    QORE_TRACE("UserClosureVariant::evalClosure()");
+
+    assert(!self || ceh.getClass());
+
+    UserVariantExecHelper uveh(this, &ceh, xsink);
+    if (!uveh) {
+        return QoreValue();
+    }
+
+    CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass());
+
+    // UserVariantExecHelper above selects the final program/TLPD used by evalIntern().
+    // Captured CVVs must be installed after that point so VT_LOCAL_TS reference/lvalue
+    // lookups search the same cvstack that the closure body uses.
+    CVecInstantiator cvi(closure_base.getCvec(), xsink);
+    ThreadSafeLocalVarRuntimeEnvironmentHelper ch(&closure_base);
+
+    return evalIntern("<anonymous closure>", uveh.getArgv(), self, xsink);
+}
+
 void UserVariantBase::parseCommit() {
     if (statements) {
         statements->parseCommit(getProgram());
@@ -4034,10 +4057,8 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
         return QoreValue();
     }
 
-    ThreadSafeLocalVarRuntimeEnvironmentHelper ch(&closure_base);
-
     //printd(5, "UserClosureFunction::evalClosure() this: %p (%s) variant: %p args: %p self: %p\n", this, getName(), variant, args, self);
-    return UCLOV_const(variant)->evalClosure(ceh, self, xsink);
+    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink);
 }
 
 int UserFunctionVariant::parseInit(QoreFunction* f) {

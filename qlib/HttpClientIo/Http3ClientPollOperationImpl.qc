@@ -195,12 +195,10 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
         # Phase 2: submit to QUIC layer with STREAM_ID_BLOCKED retry.
         #
-        # IMPORTANT: sock.submitQuicRequest() acquires sock->priv->m internally.
-        # The I/O thread holds sock->priv->m (via C++ continuePoll()) and then
-        # acquires stream_lock (in handleReading()).  Holding stream_lock here
-        # while calling submitQuicRequest() would therefore create a lock-order
-        # inversion and risk deadlock.  submitQuicRequest() is intentionally
-        # called outside stream_lock.
+        # IMPORTANT: sock.submitQuicRequest() blocks through the async I/O
+        # controller.  Holding stream_lock while waiting for controller-backed
+        # submission would risk a lock-order inversion with handleReading(), so
+        # submitQuicRequest() is intentionally called outside stream_lock.
         self.beginSubmit();
 
         Socket sock = self.getSocket();
@@ -655,28 +653,20 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             sock.setPrivateKey(client_pk);
         }
 
-        int family = Http3ClientPollOperation::resolveAddressFamily(url_info.host);
+        int family = Http3ClientPollOperation::selectLocalBindFamily(url_info.host);
         string bind_addr = family == AF_INET6 ? "::" : "0.0.0.0";
         sock.bindINET(bind_addr, "0", True, family, SOCK_DGRAM);
 
         return sock;
     }
 
-    #! Internal: resolves the address family for a hostname
-    private static int resolveAddressFamily(string host) {
+    #! Internal: selects the local bind family without performing DNS
+    private static int selectLocalBindFamily(string host) {
         if (host =~ /^\[.*\]$/) {
             return AF_INET6;
         }
         if (host =~ /:/) {
             return AF_INET6;
-        }
-        try {
-            list<hash<auto>> addrs = getaddrinfo(host, NOTHING, AF_UNSPEC, AI_ADDRCONFIG);
-            if (addrs) {
-                return addrs[0].family;
-            }
-        } catch () {
-            # Fall back to IPv4 if resolution fails
         }
         return AF_INET;
     }

@@ -587,7 +587,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             Socket c();
             c.connect("127.0.0.1:" + port, 2s);
             c.send("GET / HTTP/1.0\r\nHost: localhost\r\n\r\n");
-            *string resp = c.recv(4096, 2s);
+            *string resp = c.recv(0, 2s);
             c.close();
             return resp;
         } catch (hash<ExceptionInfo> ex) {
@@ -932,7 +932,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         usleep(50ms);
         c.send(body);
         # Drain the response so the handler can finish cleanly
-        c.recv(4096, 2s);
+        c.recv(0, 2s);
         c.close();
 
         # Deterministic sync: wait for the handler to run, no polling

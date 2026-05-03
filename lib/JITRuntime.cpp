@@ -2229,7 +2229,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, 
     // and finds the callee's own CVV (which holds this very reference), producing
     // a self-referential cycle detected by thread_ref_set() as
     // CIRCULAR-REFERENCE-ERROR.
-    VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(lv->getName()), lv, false);
+    VarRefNode* vrn = new VarRefNode(&loc_builtin, lv->getName(), lv, false);
     vrn->setThreadSafe();
     SimpleRefHolder<ParseReferenceNode> prn(new ParseReferenceNode(&loc_builtin, QoreValue(vrn), ref_ti));
     ReferenceNode* ref = prn->evalToRef(xsink);
@@ -6053,12 +6053,6 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     // module-init flow, which depends on lvstack continuity across closure invocations.
     ClosureTlpdEnsureHelper tlpd_helper(xsink, uvb->pgm);
 
-    // Push captured vars onto cvstack
-    CVecInstantiator cvi(cb->getCvec(), xsink);
-
-    // Set closure runtime environment so closure-captured vars are findable
-    ThreadSafeLocalVarRuntimeEnvironmentHelper ch(cb);
-
     // Capture caller's program before ptcch switches to uvb->pgm.
     QoreProgram* caller_pgm = getProgram();
 
@@ -6067,6 +6061,12 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     if (*xsink) {
         return toBits(QoreValue());
     }
+
+    // Push captured vars onto the cvstack selected by the closure's program context.
+    CVecInstantiator cvi(cb->getCvec(), xsink);
+
+    // Set closure runtime environment so closure-captured vars are findable.
+    ThreadSafeLocalVarRuntimeEnvironmentHelper ch(cb);
 
     // Frame boundary for debugger/stack introspection
     ThreadFrameBoundaryHelper tfbh(true);

@@ -61,6 +61,7 @@ class BarewordNode;
 class QoreFunction;
 class qore_class_private;
 class qore_ns_private;
+class QoreClosureBase;
 
 typedef std::vector<QoreParseTypeInfo*> ptype_vec_t;
 typedef std::vector<LocalVar*> lvar_vec_t;
@@ -1707,9 +1708,8 @@ public:
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);
 
-    DLLLOCAL QoreValue evalClosure(CodeEvaluationHelper& ceh, QoreObject* self, ExceptionSink* xsink) const {
-        return eval("<anonymous closure>", &ceh, self, xsink);
-    }
+    DLLLOCAL QoreValue evalClosure(CodeEvaluationHelper& ceh, const QoreClosureBase& closure_base,
+            QoreObject* self, ExceptionSink* xsink) const;
 };
 
 #define UCLOV(f) (reinterpret_cast<UserClosureVariant*>(f))

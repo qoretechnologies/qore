@@ -146,7 +146,7 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     //    already-ref'd QoreSocketObject pointer and adopts it.
     sock_priv_raw->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw), xsink);
+        new SocketConnectPollOperation(xsink, false, target_str, sock_priv_raw, true), xsink);
     if (*xsink) {
         return -1;
     }
@@ -400,22 +400,7 @@ QoreHashNode* Http2ClientConnection::submitRequest(const char* method, const cha
     releaseStreamReservation();
 
     // Wake the I/O controller so it processes the queued request.
-    if (sock_obj) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
-    }
+    wakeController();
 
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     result->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
@@ -459,22 +444,7 @@ int64_t Http2ClientConnection::submitRequestWithAction(const char* method, const
     releaseStreamReservation();
 
     // Wake the I/O controller so it processes the queued request.
-    if (sock_obj) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
-    }
+    wakeController();
 
     return stream_id;
 }
@@ -524,22 +494,7 @@ int64_t Http2ClientConnection::submitRequestStreaming(const char* method, const 
     releaseStreamReservation();
 
     // Wake the I/O controller
-    if (sock_obj) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
-    }
+    wakeController();
 
     // Output the channel to the caller (ref'd; caller must deref)
     ch->ref();
@@ -604,22 +559,7 @@ QoreHashNode* Http2ClientConnection::submitRequestStreamingSend(const char* meth
     releaseStreamReservation();
 
     // Wake the I/O controller
-    if (sock_obj) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
-    }
+    wakeController();
 
     // Build result
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
@@ -671,23 +611,8 @@ void Http2ClientConnection::pushSendData(const void* data, size_t len, Exception
         poll_op_priv->sendStreamData(streaming_send_stream_id, *bin, false, xsink);
     }
 
-    // Wake the I/O controller so it processes the queued data
-    if (sock_obj) {
-        ExceptionSink wake_xsink;
-        ReferenceHolder<QoreObject> ctl_obj_holder(
-            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
-        if (ctl_obj_holder) {
-            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
-                static_cast<AsyncIoControllerPriv*>(
-                    ctl_obj_holder->getReferencedPrivateData(
-                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
-                &wake_xsink);
-            if (ctl_priv_holder) {
-                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
-            }
-        }
-        wake_xsink.clear();
-    }
+    // sendStreamData() delegates to the socket-level enqueue operation, which
+    // wakes the controller after the DATA frame is queued.
 }
 
 void Http2ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink) {
@@ -709,6 +634,9 @@ void Http2ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
     }
 
     sock_priv->sendHttp2Trailers(streaming_send_stream_id, trailers, xsink);
+
+    // sendHttp2Trailers() delegates to the socket-level enqueue operation,
+    // which wakes the controller after the trailers are queued.
 }
 
 void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
@@ -729,8 +657,9 @@ void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
     // returns (the H2 cancel-abort race — see project_h2_cancel_race.md).
     poll_op_priv->disarmConnectionPriv();
 
-    // Cancel the op in the global AsyncIoController — this synchronously
-    // waits until the I/O thread stops processing the operation.  The I/O
+    // Cancel and close the op in the global AsyncIoController — this
+    // synchronously waits until the I/O thread stops processing the
+    // operation, then closes the socket on the controller thread.  The I/O
     // thread's cancel processing calls abort() on the poll op via
     // doCancelIntern → callAbort, so we must NOT call abort() again here.
     //
@@ -751,7 +680,7 @@ void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
                         CID_ASYNCIOCONTROLLER, &cancel_xsink)),
                 &cancel_xsink);
             if (ctl_priv_holder) {
-                ctl_priv_holder->cancel(sock_priv, &cancel_xsink);
+                ctl_priv_holder->cancelAndClose(sock_priv, &cancel_xsink);
             }
         }
         cancel_xsink.clear();
@@ -762,6 +691,27 @@ void Http2ClientConnection::closeConnection(ExceptionSink* xsink) {
     }
 
     setClosed();
+}
+
+void Http2ClientConnection::wakeController() const {
+    if (!sock_obj) {
+        return;
+    }
+
+    ExceptionSink wake_xsink;
+    ReferenceHolder<QoreObject> ctl_obj_holder(
+        qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+    if (ctl_obj_holder) {
+        ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+            static_cast<AsyncIoControllerPriv*>(
+                ctl_obj_holder->getReferencedPrivateData(
+                    CID_ASYNCIOCONTROLLER, &wake_xsink)),
+            &wake_xsink);
+        if (ctl_priv_holder) {
+            ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+        }
+    }
+    wake_xsink.clear();
 }
 
 QoreHashNode* Http2ClientConnection::getReferencedErrorInfo() {

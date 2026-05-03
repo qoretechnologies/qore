@@ -49,6 +49,7 @@ DLLLOCAL TypedHashDecl* init_hashdecl_QuicGoawayStateInfo(QoreNamespace& ns);
 #include <qore/AbstractPrivateData.h>
 #include <qore/QoreThreadLock.h>
 #include <qore/QoreSocketObject.h>
+#include <qore/qore_thread.h>
 #include "qore/intern/QC_SSLCertificate.h"
 #include "qore/intern/QC_SSLPrivateKey.h"
 
@@ -58,10 +59,14 @@ public:
     QoreSSLCertificate* cert = nullptr;
     QoreSSLPrivateKey* pk = nullptr;
     mutable QoreThreadLock m;
+    std::string ssl_cipher_name_cache;
+    std::string ssl_cipher_version_cache;
     unsigned non_block_flags = 0;
     int non_block_accept_count = 0;
+    int async_io_count = 0;
+    int async_sequence_owner_tid[3] = {-1, -1, -1};
+    int async_sequence_count[3] = {0, 0, 0};
     bool valid = true;
-    SocketIoMode io_mode = SocketIoMode::Unclaimed;
 
     DLLLOCAL my_socket_priv(QoreSocket* s, QoreSSLCertificate* c = nullptr, QoreSSLPrivateKey* p = nullptr);
 
@@ -101,7 +106,15 @@ public:
         return 0;
     }
 
-    //! Throws an exception if the socket is in Async mode and a sync operation is attempted
+    //! Returns true if the async controller or a controller-backed sequence currently owns this socket
+    DLLLOCAL bool hasAsyncIoOwner() const {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        return async_io_count > 0 || non_block_flags || non_block_accept_count > 0;
+    }
+
+    //! Throws an exception if the socket is owned by async controller execution
     /** @return 0 if sync I/O is allowed, -1 if not (exception raised on @a xsink)
         @since %Qore 2.3
     */
@@ -109,7 +122,7 @@ public:
         // must be called with the lock held
         assert(m.trylock());
 
-        if (io_mode == SocketIoMode::Async) {
+        if (hasAsyncIoOwner()) {
             xsink->raiseException("SOCKET-ASYNC-MODE-ERROR",
                 "cannot perform synchronous I/O on a socket managed by "
                 "the async I/O controller");
@@ -118,39 +131,59 @@ public:
         return 0;
     }
 
-    //! Throws an exception if the socket is in Sync mode and an async operation is attempted
-    /** @return 0 if async I/O is allowed, -1 if not (exception raised on @a xsink)
-        @since %Qore 2.3
-    */
-    DLLLOCAL int checkAsyncAllowed(ExceptionSink* xsink) {
+    //! Returns a printable operation direction name for diagnostics
+    DLLLOCAL static const char* getNonBlockDirectionName(unsigned direction) {
+        switch (direction) {
+            case NB_SEND:
+                return "send";
+            case NB_RECV:
+                return "receive";
+            case NB_CONNECT:
+                return "connect";
+            default:
+                return "I/O";
+        }
+    }
+
+    //! Returns the async sequence array index for a single non-blocking direction bit
+    DLLLOCAL static int getAsyncSequenceIndex(unsigned direction) {
+        switch (direction) {
+            case NB_SEND:
+                return 0;
+            case NB_RECV:
+                return 1;
+            case NB_CONNECT:
+                return 2;
+            default:
+                assert(false);
+                return 0;
+        }
+    }
+
+    //! Throws an exception if another thread owns a multi-step async sequence for @a direction
+    DLLLOCAL int checkAsyncSequenceAllowed(ExceptionSink* xsink, unsigned direction) const {
         // must be called with the lock held
         assert(m.trylock());
 
-        if (io_mode == SocketIoMode::Sync) {
-            xsink->raiseException("SOCKET-SYNC-MODE-ERROR",
-                "cannot perform async I/O on a socket with active "
-                "synchronous operations");
+        return checkAsyncSequenceAllowedForTid(xsink, direction, q_gettid());
+    }
+
+    //! Throws an exception if another thread owns a multi-step async sequence for @a direction
+    DLLLOCAL int checkAsyncSequenceAllowedForTid(ExceptionSink* xsink, unsigned direction, int tid) const {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        unsigned flags = direction & NB_ALL;
+        if ((flags & NB_SEND) && checkAsyncSequenceAllowedIntern(xsink, NB_SEND, tid)) {
+            return -1;
+        }
+        if ((flags & NB_RECV) && checkAsyncSequenceAllowedIntern(xsink, NB_RECV, tid)) {
+            return -1;
+        }
+        if ((flags & NB_CONNECT) && checkAsyncSequenceAllowedIntern(xsink, NB_CONNECT, tid)) {
             return -1;
         }
         return 0;
-    }
-
-    //! Sets the I/O mode of the socket
-    /** @since %Qore 2.3
-    */
-    DLLLOCAL void setIoMode(SocketIoMode mode) {
-        // must be called with the lock held
-        assert(m.trylock());
-        io_mode = mode;
-    }
-
-    //! Returns the current I/O mode of the socket
-    /** @since %Qore 2.3
-    */
-    DLLLOCAL SocketIoMode getIoMode() const {
-        // must be called with the lock held
-        assert(m.trylock());
-        return io_mode;
     }
 
     //! Throws an exception if any non-blocking operation is in progress or is not valid
@@ -184,7 +217,7 @@ public:
         if ((non_block_flags & direction) || non_block_accept_count > 0) {
             xsink->raiseException("SOCKET-NON-BLOCK-ERROR",
                 "a non-blocking %s operation is currently in progress",
-                direction == NB_SEND ? "send" : direction == NB_RECV ? "receive" : "connect");
+                getNonBlockDirectionName(direction));
             return -1;
         }
 
@@ -193,6 +226,75 @@ public:
 
     //! Throws a \c SOCKET-NOT-OPEN exception if the socket is not open or valid
     DLLLOCAL int checkOpen(ExceptionSink* xsink);
+
+    //! Starts an async controller operation and claims async ownership until clearAsyncIo() is called
+    DLLLOCAL int startAsyncIo(ExceptionSink* xsink) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (checkValid(xsink)) {
+            return -1;
+        }
+        ++async_io_count;
+        return 0;
+    }
+
+    //! Starts a multi-step async controller sequence and claims async ownership until clearAsyncSequenceIo() is called
+    DLLLOCAL int startAsyncSequenceIo(ExceptionSink* xsink, unsigned direction) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (checkAsyncSequenceAllowed(xsink, direction)) {
+            return -1;
+        }
+        if (checkValid(xsink)) {
+            return -1;
+        }
+
+        int tid = q_gettid();
+        unsigned flags = direction & NB_ALL;
+        if (flags & NB_SEND) {
+            startAsyncSequenceIoIntern(NB_SEND, tid);
+        }
+        if (flags & NB_RECV) {
+            startAsyncSequenceIoIntern(NB_RECV, tid);
+        }
+        if (flags & NB_CONNECT) {
+            startAsyncSequenceIoIntern(NB_CONNECT, tid);
+        }
+        ++async_io_count;
+        return 0;
+    }
+
+    //! Clears an async controller operation claim
+    DLLLOCAL void clearAsyncIo() {
+        // must be called with the lock held
+        assert(m.trylock());
+        assert(async_io_count > 0);
+
+        --async_io_count;
+    }
+
+    //! Clears a multi-step async controller sequence claim
+    DLLLOCAL void clearAsyncSequenceIo(unsigned direction) {
+        // must be called with the lock held
+        assert(m.trylock());
+        assert(async_io_count > 0);
+
+        int tid = q_gettid();
+        unsigned flags = direction & NB_ALL;
+        if (flags & NB_SEND) {
+            clearAsyncSequenceIoIntern(NB_SEND, tid);
+        }
+        if (flags & NB_RECV) {
+            clearAsyncSequenceIoIntern(NB_RECV, tid);
+        }
+        if (flags & NB_CONNECT) {
+            clearAsyncSequenceIoIntern(NB_CONNECT, tid);
+        }
+
+        --async_io_count;
+    }
 
     //! Throws an exception if the socket is not open or valid or if SSL is already connected
     DLLLOCAL int checkOpenAndNotSsl(ExceptionSink* xsink);
@@ -215,12 +317,12 @@ public:
         non_block_flags |= direction;
     }
 
-    //! Checks and sets all non-block flags; also claims async I/O mode
+    //! Checks and sets all non-block flags; also claims async ownership
     DLLLOCAL int setNonBlock(ExceptionSink* xsink) {
         // must be called with the lock held
         assert(m.trylock());
 
-        if (checkAsyncAllowed(xsink)) {
+        if (checkAsyncSequenceAllowed(xsink, NB_ALL)) {
             return -1;
         }
         if (checkValid(xsink)) {
@@ -231,16 +333,15 @@ public:
             return -1;
         }
         setNonBlock();
-        io_mode = SocketIoMode::Async;
         return 0;
     }
 
-    //! Checks and sets specific direction non-block flags; also claims async I/O mode
+    //! Checks and sets specific direction non-block flags; also claims async ownership
     DLLLOCAL int setNonBlock(ExceptionSink* xsink, unsigned direction) {
         // must be called with the lock held
         assert(m.trylock());
 
-        if (checkAsyncAllowed(xsink)) {
+        if (checkAsyncSequenceAllowed(xsink, direction)) {
             return -1;
         }
         if (checkValid(xsink)) {
@@ -249,40 +350,59 @@ public:
         if ((non_block_flags & direction) || non_block_accept_count > 0) {
             xsink->raiseException("SOCKET-NON-BLOCK-ERROR",
                 "a non-blocking %s operation is currently in progress",
-                direction == NB_SEND ? "send" : direction == NB_RECV ? "receive" : "connect");
+                getNonBlockDirectionName(direction));
             return -1;
         }
         setNonBlock(direction);
-        io_mode = SocketIoMode::Async;
         return 0;
     }
 
-    //! Clears all non-block flags and resets I/O mode to Unclaimed
+    //! Sets specific direction non-block flags for an async-controller operation already authorized by a sync guard
+    DLLLOCAL int setNonBlockFromAsyncController(ExceptionSink* xsink, unsigned direction) {
+        return setNonBlockFromAsyncController(xsink, direction, q_gettid());
+    }
+
+    //! Sets specific direction non-block flags for an async-controller operation authorized by @a tid
+    DLLLOCAL int setNonBlockFromAsyncController(ExceptionSink* xsink, unsigned direction, int tid) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (checkAsyncSequenceAllowedForTid(xsink, direction, tid)) {
+            return -1;
+        }
+        if (checkValid(xsink)) {
+            return -1;
+        }
+        if ((non_block_flags & direction) || non_block_accept_count > 0) {
+            xsink->raiseException("SOCKET-NON-BLOCK-ERROR",
+                "a non-blocking %s operation is currently in progress",
+                getNonBlockDirectionName(direction));
+            return -1;
+        }
+        setNonBlock(direction);
+        return 0;
+    }
+
+    //! Clears all non-block flags
     DLLLOCAL void clearNonBlock() {
         // must be called with the lock held
         assert(m.trylock());
         non_block_flags = 0;
-        if (non_block_accept_count == 0) {
-            io_mode = SocketIoMode::Unclaimed;
-        }
     }
 
-    //! Clears specific direction non-block flags; resets I/O mode when all flags clear
+    //! Clears specific direction non-block flags
     DLLLOCAL void clearNonBlock(unsigned direction) {
         // must be called with the lock held
         assert(m.trylock());
         non_block_flags &= ~direction;
-        if (!non_block_flags && non_block_accept_count == 0) {
-            io_mode = SocketIoMode::Unclaimed;
-        }
     }
 
-    //! Increments accept refcount (concurrent accept ops allowed); claims async I/O mode
+    //! Increments accept refcount (concurrent accept ops allowed); claims async ownership
     DLLLOCAL int setNonBlockAccept(ExceptionSink* xsink) {
         // must be called with the lock held
         assert(m.trylock());
 
-        if (checkAsyncAllowed(xsink)) {
+        if (checkAsyncSequenceAllowed(xsink, NB_ALL)) {
             return -1;
         }
         if (non_block_flags) {
@@ -293,19 +413,34 @@ public:
             return -1;
         }
         ++non_block_accept_count;
-        io_mode = SocketIoMode::Async;
         return 0;
     }
 
-    //! Decrements accept refcount; resets I/O mode when no async ops remain
+    //! Increments accept refcount for an async-controller operation authorized by @a tid
+    DLLLOCAL int setNonBlockAcceptFromAsyncController(ExceptionSink* xsink, int tid) {
+        // must be called with the lock held
+        assert(m.trylock());
+
+        if (checkAsyncSequenceAllowedForTid(xsink, NB_ALL, tid)) {
+            return -1;
+        }
+        if (non_block_flags) {
+            xsink->raiseException("SOCKET-NON-BLOCK-ERROR", "a non-blocking operation is currently in progress");
+            return -1;
+        }
+        if (checkValid(xsink)) {
+            return -1;
+        }
+        ++non_block_accept_count;
+        return 0;
+    }
+
+    //! Decrements accept refcount
     DLLLOCAL void clearNonBlockAccept() {
         // must be called with the lock held
         assert(m.trylock());
         assert(non_block_accept_count > 0);
         --non_block_accept_count;
-        if (!non_block_flags && non_block_accept_count == 0) {
-            io_mode = SocketIoMode::Unclaimed;
-        }
     }
 
     //! Check if the socket has an active QUIC session
@@ -316,15 +451,132 @@ public:
         socket->setAccept(o);
     }
 
-    DLLLOCAL static void setAccept(QoreSocketObject& sock, QoreObject* o) {
-        sock.priv->setAccept(o);
-    }
+    DLLLOCAL static void setAccept(QoreSocketObject& sock, QoreObject* o);
 
     //! Returns the my_socket_priv pointer for a QoreSocketObject (for internal use)
     /** @since %Qore 2.3
     */
     DLLLOCAL static my_socket_priv* getPriv(QoreSocketObject& sock) {
         return sock.priv;
+    }
+
+    //! Posts a socket data event through the underlying socket private implementation
+    DLLLOCAL void doDataEvent(int event, int source, const QoreStringNode& str) const;
+
+    //! Posts a socket data event with raw bytes through the underlying socket private implementation
+    DLLLOCAL void doDataEvent(int event, int source, const void* data, size_t size) const;
+
+    //! Posts a socket header event through the underlying socket private implementation
+    DLLLOCAL void doHeaderEvent(int event, int source, const QoreHashNode& hdr) const;
+
+    //! Posts a socket HTTP chunked read event through the underlying socket private implementation
+    DLLLOCAL void doChunkedReadEvent(int event, size_t bytes, size_t total_read, int source) const;
+
+    //! Posts a socket HTTP header read event through the underlying socket private implementation
+    DLLLOCAL void doReadHttpHeaderEvent(int event, const QoreHashNode& hdr, int source) const;
+
+    //! Parses HTTP header lines into a hash using the underlying socket private implementation
+    DLLLOCAL void convertHeaderToHash(QoreHashNode& h, QoreString& hdr, QoreHashNode* info = nullptr) const;
+
+    //! Clears the pending chunked body expectation flag on the underlying socket private implementation
+    DLLLOCAL void clearHttpExpectChunkedBody() const;
+
+    //! Returns the configured maximum chunked body size, or 0 if unlimited
+    DLLLOCAL int64 getMaxChunkedBodySize() const;
+
+    //! Returns and clears the persisted SSE CR state
+    DLLLOCAL bool takeSseGotCr() const;
+
+    //! Sets the persisted SSE CR state
+    DLLLOCAL void setSseGotCr(bool got_cr) const;
+
+    //! Builds HTTP request headers and emits the legacy HTTP send-message event
+    DLLLOCAL int getSendHttpMessageHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
+            const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+            size_t size, int source) const;
+
+    //! Builds HTTP chunked request headers and emits the legacy HTTP send-message event
+    DLLLOCAL int getSendHttpMessageChunkedHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info,
+            const char* method, const char* path, const char* http_version, const QoreHashNode* headers,
+            int source) const;
+
+    //! Returns the active HTTP/2 server stream ID for this thread, or <= 0 if no HTTP/2 response is active
+    DLLLOCAL int32_t getH2ActiveServerStreamId() const;
+
+    //! Returns the thread-local HTTP/2 stream ID without inspecting the HTTP/2 session
+    DLLLOCAL int32_t getH2ActiveThreadStreamId() const;
+
+    //! Returns true if an HTTP/2 session is active; must be called on the async I/O controller path
+    DLLLOCAL bool hasH2SessionForAsyncPoll() const;
+
+    //! Returns true if an HTTP/2 server session is active; must be called on the async I/O controller path
+    DLLLOCAL bool isH2ServerSessionForAsyncPoll() const;
+
+    //! Parses ALPN protocol names into caller-owned storage.
+    DLLLOCAL static int parseAlpnProtocols(const QoreListNode* protocols, std::vector<std::string>& proto_list,
+            ExceptionSink* xsink) {
+        if (!protocols || !protocols->size()) {
+            xsink->raiseException("SOCKET-ALPN-ERROR", "protocol list is empty");
+            return -1;
+        }
+
+        ConstListIterator li(protocols);
+        while (li.next()) {
+            QoreStringValueHelper str(li.getValue());
+            if (!str->empty()) {
+                proto_list.push_back(str->c_str());
+            }
+        }
+
+        if (proto_list.empty()) {
+            xsink->raiseException("SOCKET-ALPN-ERROR", "no valid protocols in list");
+            return -1;
+        }
+        return 0;
+    }
+
+    //! Builds the HTTP response status line and sets the legacy response-uri info key
+    DLLLOCAL void getSendHttpResponseStatusLine(QoreString& hdr, QoreHashNode* info, int code, const char* desc,
+            const char* http_version) const;
+
+    //! Builds HTTP/1 response headers and emits the legacy HTTP send-message event
+    DLLLOCAL int getSendHttpResponseHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info, int code,
+            const char* desc, const char* http_version, const QoreHashNode* headers, size_t size, int source) const;
+
+    //! Builds HTTP/1 chunked response headers and emits the legacy HTTP send-message event
+    DLLLOCAL int getSendHttpResponseChunkedHeaders(ExceptionSink* xsink, QoreString& hdr, QoreHashNode* info, int code,
+            const char* desc, const char* http_version, const QoreHashNode* headers, int source) const;
+
+private:
+    DLLLOCAL int checkAsyncSequenceAllowedIntern(ExceptionSink* xsink, unsigned direction, int tid) const {
+        int index = getAsyncSequenceIndex(direction);
+        if (async_sequence_count[index] && async_sequence_owner_tid[index] != tid) {
+            xsink->raiseException("SOCKET-ASYNC-MODE-ERROR",
+                "cannot start an async %s operation while TID %d owns a multi-step async %s operation on the socket",
+                getNonBlockDirectionName(direction), async_sequence_owner_tid[index],
+                getNonBlockDirectionName(direction));
+            return -1;
+        }
+        return 0;
+    }
+
+    DLLLOCAL void startAsyncSequenceIoIntern(unsigned direction, int tid) {
+        int index = getAsyncSequenceIndex(direction);
+        assert(!async_sequence_count[index] || async_sequence_owner_tid[index] == tid);
+        if (!async_sequence_count[index]) {
+            async_sequence_owner_tid[index] = tid;
+        }
+        ++async_sequence_count[index];
+    }
+
+    DLLLOCAL void clearAsyncSequenceIoIntern(unsigned direction, int tid) {
+        int index = getAsyncSequenceIndex(direction);
+        assert(async_sequence_count[index] > 0);
+        assert(async_sequence_owner_tid[index] == tid);
+        --async_sequence_count[index];
+        if (!async_sequence_count[index]) {
+            async_sequence_owner_tid[index] = -1;
+        }
     }
 };
 

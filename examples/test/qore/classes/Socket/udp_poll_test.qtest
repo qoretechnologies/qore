@@ -12,8 +12,10 @@
 class UdpPollTest inherits QUnit::Test {
     constructor() : Test("UdpPollTest", "1.0") {
         addTestCase("basic sendto/recvfrom", \testBasicSendRecv());
+        addTestCase("hostname sendto/recvfrom", \testHostnameSendRecv());
         addTestCase("sendto/recvfrom via EventLoop", \testEventLoopIntegration());
         addTestCase("sendto/recvfrom via AsyncIoController", \testAsyncIoControllerIntegration());
+        addTestCase("sendto/recvfrom via AsyncIoController exec", \testAsyncIoControllerExec());
         addTestCase("multiple datagrams", \testMultipleDatagrams());
         addTestCase("large datagram", \testLargeDatagram());
         addTestCase("recvfrom timeout", \testRecvFromTimeout());
@@ -83,6 +85,30 @@ class UdpPollTest inherits QUnit::Test {
         assertEq(AF_INET, output.family);
     }
 
+    #! Test sendto resolves hostnames asynchronously in the poll operation
+    testHostnameSendRecv() {
+        hash<auto> recv_info = createBoundUdpSocket();
+        Socket recv_sock = recv_info.sock;
+        int recv_port = recv_info.port;
+
+        hash<auto> send_info = createBoundUdpSocket();
+        Socket send_sock = send_info.sock;
+
+        binary msg = binary("Hello localhost UDP!");
+        AbstractPollOperation send_op = send_sock.startPollSendTo("localhost", recv_port, msg, AF_INET);
+        drivePollOp(send_op);
+        assertTrue(send_op.goalReached());
+        assertEq("sent", send_op.getState());
+
+        AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
+        drivePollOp(recv_op);
+
+        auto output = recv_op.getOutput();
+        assertEq(Type::Hash, output.type());
+        assertEq(msg, output.data);
+        assertEq("127.0.0.1", output.address);
+    }
+
     #! Test UDP with EventLoop for raw socket polling
     testEventLoopIntegration() {
         hash<auto> recv_info = createBoundUdpSocket();
@@ -148,6 +174,41 @@ class UdpPollTest inherits QUnit::Test {
         assertNothing(recv_result.ex);
 
         # Verify recv got the data
+        auto output = recv_op.getOutput();
+        assertEq(msg, output.data);
+        assertEq("127.0.0.1", output.address);
+    }
+
+    #! Test UDP with blocking AsyncIoController exec API
+    testAsyncIoControllerExec() {
+        hash<auto> recv_info = createBoundUdpSocket();
+        Socket recv_sock = recv_info.sock;
+        int recv_port = recv_info.port;
+
+        hash<auto> send_info = createBoundUdpSocket();
+        Socket send_sock = send_info.sock;
+
+        binary msg = binary("AsyncIoController exec UDP test");
+        AbstractPollOperation send_op = send_sock.startPollSendTo("127.0.0.1", recv_port, msg);
+        hash<SocketPollResultInfo> send_result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": send_sock,
+            "spop": send_op,
+            "owner": "test-exec-send",
+            "to": 10s,
+        });
+        assertNothing(send_result.ex);
+        assertTrue(send_op.goalReached());
+
+        AbstractPollOperation recv_op = recv_sock.startPollRecvFrom();
+        hash<SocketPollResultInfo> recv_result = AsyncIoController::exec(<SocketPollOperationInfo>{
+            "sock": recv_sock,
+            "spop": recv_op,
+            "owner": "test-exec-recv",
+            "to": 10s,
+        });
+        assertNothing(recv_result.ex);
+        assertTrue(recv_op.goalReached());
+
         auto output = recv_op.getOutput();
         assertEq(msg, output.data);
         assertEq("127.0.0.1", output.address);

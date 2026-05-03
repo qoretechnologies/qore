@@ -159,6 +159,9 @@ public:
     DLLLOCAL QoreListNode* registerStream(int64_t stream_id, AbstractAsyncAction* action,
         bool& need_cancel, ExceptionSink* xsink);
 
+    //! Mark a client-side HTTP/3 response stream for incremental body delivery
+    DLLLOCAL int setStreamStreaming(int64_t stream_id, ExceptionSink* xsink);
+
     //! Cancel a stream: removes and derefs the action
     /** @param stream_id the QUIC stream ID
         @param xsink for exception handling
@@ -212,15 +215,6 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         bool streaming, AbstractAsyncAction* action, int max_streams,
         ExceptionSink* xsink);
-
-    //! Synchronously flush pending QUIC writes to the network
-    /** Delegates to the inner SocketQuicClientPollOperation::flushPendingWrites().
-        Safe to call from any thread.
-
-        @param xsink exception sink
-        @return 0 on success, -1 on error
-    */
-    DLLLOCAL int flushPendingWrites(ExceptionSink* xsink);
 
     // --- Accessors ---
 
@@ -279,11 +273,6 @@ public:
     //! Returns the raw connection priv pointer (for I/O-thread calls)
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
-    }
-
-    //! Returns the inner QUIC client poll operation (for stream data send)
-    DLLLOCAL SocketQuicClientPollOperation* getInnerOp() const {
-        return inner_op;
     }
 
     //! Get the socket object (returns a referenced QoreObject*)

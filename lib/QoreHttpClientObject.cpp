@@ -53,6 +53,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QoreHttpClientObjectIntern.h"
+#include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/ql_crypto.h"
 
 #include <openssl/evp.h>
@@ -66,7 +67,6 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QuicSession.h"
 
-#include <poll.h>
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -75,13 +75,15 @@
 #include <cassert>
 #include <cctype>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include <fcntl.h>
-#include <poll.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -92,494 +94,6 @@ static const int ABORTED_TIMEOUT_MS = 5000;
 
 method_map_t method_map;
 strcase_set_t header_ignore;
-
-constexpr int SPS_SENDING = 4;
-constexpr int SPS_RECEIVING_HEADER = 5;
-constexpr int SPS_RECEIVING_BODY = 6;
-constexpr int SPS_CONNECTING_PROXY_SSL = 7;
-constexpr int SPS_RECEIVED = 8;
-constexpr int SPS_H2_ACTIVE = 9;  // HTTP/2 bidirectional send/receive
-constexpr int SPS_H3_ACTIVE = 10;  // HTTP/3 bidirectional send/receive via QUIC
-
-//! Poll state for HTTP/2 client operations
-/** Handles bidirectional send/receive for HTTP/2 using Http2Session.
-    This state manages:
-    - Connection preface sending (on first call)
-    - Request submission
-    - Bidirectional data flow (sending pending data + receiving frames)
-    - Response completion detection
-*/
-class Http2ClientPollState : public AbstractPollState {
-public:
-    //! Constructor - creates HTTP/2 session and submits request
-    /** @param xsink Exception sink
-        @param sock Socket private data
-        @param method HTTP method
-        @param path Request path
-        @param headers Request headers
-        @param body Request body (can be nullptr)
-        @param body_len Length of body
-        @param scheme URL scheme ("https" or "http")
-    */
-    DLLLOCAL Http2ClientPollState(ExceptionSink* xsink, qore_socket_private* sock,
-            const char* method, const char* path,
-            const std::vector<std::pair<std::string, std::string>>& headers,
-            const void* body, size_t body_len, const char* scheme = "https")
-            : sock(sock) {
-        // Create HTTP/2 session
-        h2_session = Http2Session::createClient(sock, xsink, scheme);
-        if (*xsink || !h2_session) {
-            return;
-        }
-
-        // Send connection preface
-        if (h2_session->sendConnectionPreface(xsink)) {
-            return;
-        }
-
-        // Submit the request
-        stream_id = h2_session->submitRequest(method, path, headers, body, body_len, xsink);
-        if (*xsink || stream_id < 0) {
-            return;
-        }
-
-        // Try initial non-blocking send of pending data
-        h2_session->sendPendingData(0, xsink);
-    }
-
-    DLLLOCAL virtual ~Http2ClientPollState() = default;
-
-    //! Returns the HTTP/2 session
-    DLLLOCAL Http2Session* getSession() const { return h2_session.get(); }
-
-    //! Takes ownership of the HTTP/2 session
-    DLLLOCAL Http2SessionPtr takeSession() { return std::move(h2_session); }
-
-    //! Returns the stream ID
-    DLLLOCAL int32_t getStreamId() const { return stream_id; }
-
-    //! Returns true if the response is complete
-    DLLLOCAL bool isResponseComplete() const {
-        if (!h2_session) {
-            return false;
-        }
-        if (cached_stream) {
-            return cached_stream->headers_complete && cached_stream->body_complete;
-        }
-        Http2StreamInfo* stream = h2_session->getStream(stream_id);
-        return stream && stream->headers_complete && stream->body_complete;
-    }
-
-    //! Returns response headers if available
-    DLLLOCAL QoreHashNode* getResponseHeaders() const {
-        if (!h2_session) {
-            return nullptr;
-        }
-        if (cached_stream) {
-            if (cached_stream->headers.empty()) {
-                return nullptr;
-            }
-            return httpMultiHeadersToQoreHash(cached_stream->headers);
-        }
-        Http2StreamInfo* stream = h2_session->getStream(stream_id);
-        if (!stream || stream->headers.empty()) {
-            return nullptr;
-        }
-        return httpMultiHeadersToQoreHash(stream->headers);
-    }
-
-    //! Returns the HTTP status code
-    DLLLOCAL int getStatusCode() const {
-        if (!h2_session) {
-            return -1;
-        }
-        if (cached_stream) {
-            return cached_stream->status_code;
-        }
-        Http2StreamInfo* stream = h2_session->getStream(stream_id);
-        return stream ? stream->status_code : -1;
-    }
-
-    //! Returns the response body
-    DLLLOCAL BinaryNode* getResponseBody(ExceptionSink* xsink) const {
-        if (!h2_session) {
-            return nullptr;
-        }
-        if (cached_stream) {
-            if (cached_stream->body.empty()) {
-                return nullptr;
-            }
-            BinaryNode* rv = new BinaryNode();
-            rv->append(cached_stream->body.data(), cached_stream->body.size());
-            cached_stream->body.clear();
-            return rv;
-        }
-        // Take all available stream data
-        return h2_session->takeStreamData(stream_id, 0, xsink);
-    }
-
-    /** @return:
-        - SOCK_POLLIN = wait for read and call this again
-        - SOCK_POLLOUT = wait for write and call this again
-        - SOCK_POLLIN | SOCK_POLLOUT = wait for read or write
-        - 0 = done (response complete)
-        - < 0 = error (exception raised)
-    */
-    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) override {
-        if (!h2_session) {
-            xsink->raiseException("HTTP2-ERROR", "no HTTP/2 session available");
-            return -1;
-        }
-
-        // Check if we're done
-        if (checkComplete()) {
-            return 0;  // Done
-        }
-
-        // Try to send any pending data (e.g., WINDOW_UPDATE frames)
-        if (h2_session->hasPendingData() || h2_session->wantWrite()) {
-            int rc = h2_session->sendPendingData(0, xsink);
-            if (*xsink) {
-                return -1;
-            }
-            // If send returned -1, we need to wait for POLLOUT
-            if (rc < 0) {
-                // Determine poll flags
-                int flags = SOCK_POLLOUT;
-                if (h2_session->wantRead()) {
-                    flags |= SOCK_POLLIN;
-                }
-                return flags;
-            }
-        }
-
-        // Try to receive data
-        if (h2_session->wantRead()) {
-            int rv = h2_session->receiveData(0, xsink);
-            if (*xsink) {
-                return -1;
-            }
-            if (rv == 1) {
-                // EOF - connection closed by peer
-                if (!checkComplete()) {
-                    xsink->raiseException("HTTP2-ERROR", "connection closed before response was complete");
-                    return -1;
-                }
-                return 0;  // Done
-            }
-        }
-
-        // Check again if we're done after receiving
-        if (checkComplete()) {
-            return 0;  // Done
-        }
-
-        // Determine what we need to poll for
-        int flags = 0;
-        if (h2_session->wantRead()) {
-            flags |= SOCK_POLLIN;
-        }
-        if (h2_session->hasPendingData() || h2_session->wantWrite()) {
-            flags |= SOCK_POLLOUT;
-        }
-
-        // If no flags, default to waiting for input
-        return flags ? flags : SOCK_POLLIN;
-    }
-
-private:
-    //! Check if the response is complete, checking cached_stream or the session
-    DLLLOCAL bool checkComplete() {
-        if (cached_stream) {
-            return cached_stream->headers_complete && cached_stream->body_complete;
-        }
-        Http2StreamInfo* stream = h2_session->getStream(stream_id);
-        if (stream && stream->headers_complete && stream->body_complete) {
-            return true;
-        }
-        // Stream may have been moved to completed_streams by markStreamComplete()
-        if (h2_session->hasCompletedStreams()) {
-            cached_stream = h2_session->takeCompletedStream();
-            if (cached_stream && cached_stream->stream_id == stream_id) {
-                return cached_stream->headers_complete && cached_stream->body_complete;
-            }
-        }
-        return false;
-    }
-
-    qore_socket_private* sock;
-    Http2SessionPtr h2_session;
-    int32_t stream_id = -1;
-    std::unique_ptr<Http2StreamInfo> cached_stream;  //!< Locally cached stream after completion
-};
-
-//! Poll state for HTTP/3 client operations
-/** Handles bidirectional send/receive for HTTP/3 using a QUIC session.
-    This state manages:
-    - Request submission via QuicSession::submitRequest()
-    - Non-blocking QUIC I/O (send/recv UDP datagrams)
-    - QUIC timer expiry handling
-    - Response completion detection via completed streams
-*/
-class Http3ClientPollState : public AbstractPollState {
-public:
-    //! Constructor - submits HTTP/3 request and starts QUIC I/O
-    DLLLOCAL Http3ClientPollState(ExceptionSink* xsink, std::shared_ptr<QuicSession> session,
-            int fd, const struct sockaddr_storage& local_addr, socklen_t local_addrlen,
-            const char* method, const char* path,
-            const strcase_str_map_t& headers,
-            const void* body, size_t body_len)
-            : quic_session(std::move(session)), quic_fd(fd) {
-        assert(quic_session);
-        assert(quic_fd >= 0);
-
-        // Save local address for ngtcp2 path construction
-        memcpy(&local_addr_, &local_addr, local_addrlen);
-        local_addrlen_ = local_addrlen;
-
-        // Set fd to non-blocking mode — required for poll-based I/O
-        int flags = fcntl(quic_fd, F_GETFL, 0);
-        if (flags < 0) {
-            xsink->raiseErrnoException("HTTP3-POLL-ERROR", errno,
-                "error in fcntl() getting socket descriptor status flag");
-            return;
-        }
-        if (!(flags & O_NONBLOCK)) {
-            if (fcntl(quic_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-                xsink->raiseErrnoException("HTTP3-POLL-ERROR", errno,
-                    "error in fcntl() setting socket descriptor to non-blocking");
-                return;
-            }
-            fd_was_blocking = true;
-        }
-
-        // Submit the request
-        stream_id = quic_session->submitRequest(method, path, headers, body, body_len, xsink);
-        if (*xsink || stream_id < 0) {
-            return;
-        }
-
-        // Initial send of pending packets (request frames)
-        ngtcp2_tstamp dummy_expiry;
-        sendPendingPackets(dummy_expiry, xsink);
-    }
-
-    DLLLOCAL virtual ~Http3ClientPollState() {
-        // Restore blocking mode on quic_fd if we changed it
-        if (fd_was_blocking && quic_fd >= 0) {
-            int flags = fcntl(quic_fd, F_GETFL, 0);
-            if (flags >= 0) {
-                fcntl(quic_fd, F_SETFL, flags & ~O_NONBLOCK);
-            }
-            fd_was_blocking = false;
-        }
-    }
-
-    //! Returns the HTTP status code from the completed stream
-    DLLLOCAL int getStatusCode() const {
-        return completed_stream ? completed_stream->status_code : -1;
-    }
-
-    //! Returns response headers as a QoreHashNode
-    DLLLOCAL QoreHashNode* getResponseHeaders() const {
-        if (!completed_stream || completed_stream->headers.empty()) {
-            return nullptr;
-        }
-        return httpMultiHeadersToQoreHash(completed_stream->headers);
-    }
-
-    //! Returns the response body as a BinaryNode
-    DLLLOCAL BinaryNode* getResponseBody() const {
-        if (!completed_stream || completed_stream->body.empty()) {
-            return nullptr;
-        }
-        return new BinaryNode(completed_stream->body.data(), completed_stream->body.size());
-    }
-
-    /** @return:
-        - SOCK_POLLIN = wait for read and call this again
-        - SOCK_POLLOUT = wait for write and call this again
-        - SOCK_POLLIN | SOCK_POLLOUT = wait for read or write
-        - 0 = done (response complete)
-        - < 0 = error (exception raised)
-    */
-    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) override {
-        if (!quic_session) {
-            xsink->raiseException("HTTP3-POLL-ERROR", "no QUIC session available");
-            return -1;
-        }
-
-        // Check for already-completed streams matching our stream_id
-        if (checkCompleted()) {
-            return 0;
-        }
-
-        // Drain all available packets from the socket buffer
-        while (true) {
-            int rv = recvAndProcessPacket(xsink);
-            if (*xsink) {
-                return -1;
-            }
-            if (rv == SOCK_POLLIN) {
-                break;  // EAGAIN — no more data
-            }
-            // Check for completed stream after each datagram
-            if (checkCompleted()) {
-                return 0;
-            }
-        }
-
-        // Check if connection closed
-        if (quic_session->isClosed()) {
-            if (!completed_stream) {
-                xsink->raiseException("HTTP3-ERROR", "QUIC connection closed before response was complete");
-                return -1;
-            }
-            return 0;
-        }
-
-        // Send pending packets (ACKs, etc.) — coalesced timer + write
-        ngtcp2_tstamp next_expiry;
-        int srv = sendPendingPackets(next_expiry, xsink);
-        if (*xsink) {
-            return -1;
-        }
-
-        // Check again for completed stream after sending
-        if (checkCompleted()) {
-            return 0;
-        }
-
-        // After sending, try one more non-blocking recv before yielding to poll().
-        // On low-latency paths, the server response may already be in the kernel buffer.
-        while (true) {
-            int rrv = recvAndProcessPacket(xsink);
-            if (*xsink) {
-                return -1;
-            }
-            if (rrv == SOCK_POLLIN) {
-                break;  // EAGAIN
-            }
-            if (checkCompleted()) {
-                return 0;
-            }
-        }
-
-        // Save expiry for QUIC-aware poll timeout
-        last_expiry_ = next_expiry;
-
-        // Return poll events: always POLLIN, add POLLOUT if pending writes
-        int events = SOCK_POLLIN;
-        if (srv == SOCK_POLLOUT || quic_session->hasPendingWrite()) {
-            events |= SOCK_POLLOUT;
-        }
-        return events;
-    }
-
-    //! Returns the last QUIC timer expiry for poll timeout calculation
-    DLLLOCAL ngtcp2_tstamp getLastExpiry() const { return last_expiry_; }
-
-private:
-    //! Check for and take a completed stream matching our stream_id
-    DLLLOCAL bool checkCompleted() {
-        if (quic_session->hasCompletedStreams()) {
-            // Drain completed streams until we find ours
-            while (quic_session->hasCompletedStreams()) {
-                auto stream = quic_session->takeCompletedStream();
-                if (stream && stream->stream_id == stream_id) {
-                    completed_stream = std::move(stream);
-                    return true;
-                }
-                // Discard streams that don't match (stale from previous requests)
-            }
-        }
-        return false;
-    }
-
-    //! Send pending QUIC packets (coalesced timer + write)
-    DLLLOCAL int sendPendingPackets(ngtcp2_tstamp& next_expiry, ExceptionSink* xsink) {
-        auto result = quic_session->processTimerAndWrite(pkt_batch_, xsink);
-        if (result.error) {
-            pkt_batch_.clear();
-            return -1;
-        }
-        next_expiry = result.next_expiry;
-
-        if (pkt_batch_.empty()) {
-            return 0;
-        }
-
-        int sent = sendQuicPacketsBatch(quic_fd, pkt_batch_, nullptr, 0);
-        if (sent < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                return SOCK_POLLOUT;
-            }
-            pkt_batch_.clear();
-            xsink->raiseErrnoException("HTTP3-SEND-ERROR", errno, "sendto/sendmmsg() failed");
-            return -1;
-        }
-        if (sent > 0 && sent < pkt_batch_.size()) {
-            pkt_batch_.removeFront(sent);
-            return SOCK_POLLOUT;
-        }
-
-        pkt_batch_.clear();
-        return 0;
-    }
-
-    //! Receive and process one QUIC packet
-    DLLLOCAL int recvAndProcessPacket(ExceptionSink* xsink) {
-        static thread_local struct sockaddr_storage src_addr;
-        static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
-        socklen_t src_addrlen = sizeof(src_addr);
-
-        size_t cmsg_len = sizeof(cmsg_buf);
-        ssize_t nread = recvQuicPacket(quic_fd, recv_buf_, sizeof(recv_buf_), 0,
-                                        reinterpret_cast<struct sockaddr*>(&src_addr), &src_addrlen,
-                                        cmsg_buf, &cmsg_len);
-        if (nread < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                return SOCK_POLLIN;
-            }
-            if (errno == EMSGSIZE) {
-                return 0;  // truncated datagram discarded; continue
-            }
-            xsink->raiseErrnoException("HTTP3-RECV-ERROR", errno, "recvmsg() failed");
-            return -1;
-        }
-
-        if (nread == 0) {
-            return 0;
-        }
-
-        // Use cached getsockname() address — the client socket is connect()ed,
-        // so the local address is always local_addr_.
-        ngtcp2_path path;
-        path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&local_addr_);
-        path.local.addrlen = local_addrlen_;
-        path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&src_addr);
-        path.remote.addrlen = src_addrlen;
-
-        quic_session->readPacket(recv_buf_, static_cast<size_t>(nread), path, xsink);
-        if (*xsink) {
-            return -1;
-        }
-
-        return 0;
-    }
-
-    std::shared_ptr<QuicSession> quic_session;
-    int quic_fd;
-    struct sockaddr_storage local_addr_{};
-    socklen_t local_addrlen_ = 0;
-    int64_t stream_id = -1;
-    std::unique_ptr<QuicStreamInfo> completed_stream;
-    QuicPacketBatch pkt_batch_;
-    uint8_t recv_buf_[QUIC_RECV_BUF_SIZE]{};
-    ngtcp2_tstamp last_expiry_ = UINT64_MAX;
-    bool fd_was_blocking = false;
-};
-
 
 static const QoreStringNode* get_string_header_node(ExceptionSink* xsink, QoreHashNode& h, const char* header,
         bool allow_multiple = false) {
@@ -1219,34 +733,6 @@ static void setConnMgrResponseUri(QoreHashNode* info, const QoreHashNode* src,
     info->setKeyValue("response-uri", rv, xsink);
 }
 
-void do_content_length_event(Queue* event_queue, qore_socket_private* priv, size_t len) {
-    if (event_queue) {
-        QoreHashNode* h = priv->getEvent(QORE_EVENT_HTTP_CONTENT_LENGTH, QORE_SOURCE_HTTPCLIENT);
-        qore_hash_private* hh = qore_hash_private::get(*h);
-        hh->setKeyValueIntern("len", len);
-        event_queue->pushAndTakeRef(h);
-    }
-}
-
-void do_redirect_event(Queue* event_queue, qore_socket_private* priv, const QoreStringNode* loc,
-        const QoreStringNode* msg) {
-    if (event_queue) {
-        QoreHashNode* h = priv->getEvent(QORE_EVENT_HTTP_REDIRECT, QORE_SOURCE_HTTPCLIENT);
-        qore_hash_private* hh = qore_hash_private::get(*h);
-        hh->setKeyValueIntern("location", loc->refSelf());
-        if (msg)
-            hh->setKeyValueIntern("status_message", msg->refSelf());
-        event_queue->pushAndTakeRef(h);
-    }
-}
-
-void do_event(Queue* event_queue, qore_socket_private* priv, int event) {
-    if (event_queue) {
-        QoreHashNode* h = priv->getEvent(event, QORE_SOURCE_HTTPCLIENT);
-        event_queue->pushAndTakeRef(h);
-    }
-}
-
 struct qore_httpclient_priv {
     my_socket_priv* msock;
 
@@ -1306,12 +792,6 @@ struct qore_httpclient_priv {
     // Thread safety: protected by msock->m (held on all access paths)
     std::unordered_map<std::string, AltSvcEntry> alt_svc_cache;
 
-    // QUIC connection state
-    std::shared_ptr<QuicSession> quic_session;
-    int quic_fd = -1;  // UDP socket fd for QUIC
-    struct sockaddr_storage quic_local_addr{};
-    socklen_t quic_local_addrlen = 0;
-
     // Current HTTP/2 stream ID (for WebSocket over HTTP/2)
     int32_t h2_stream_id = 0;
 
@@ -1354,18 +834,8 @@ struct qore_httpclient_priv {
         (retry, Alt-Svc, cookies); this one is the minimal C++ base for
         the sync HTTPClient conversion.
     */
-    std::unique_ptr<HttpClientConnectionManagerBase> conn_mgr;
-
-    //! When true, send_internal delegates to the C++ conn_mgr for
-    //! non-streaming request/response flows (all protocols, including proxy).
-    //! Disabled when poll APIs are used (poll_apis_used flag) to preserve
-    //! legacy msock state for startPollConnect/startPollSendRecv.
-    bool use_conn_mgr = true;
-
-    //! Set when poll APIs (startPollConnect, startPollSendRecv) are used on
-    //! this HTTPClient.  Once set, send_internal falls back to the legacy
-    //! msock dispatch so that poll APIs (which use msock) find it connected.
-    bool poll_apis_used = false;
+    std::shared_ptr<HttpClientConnectionManagerBase> conn_mgr;
+    mutable std::mutex conn_mgr_lock;
 
     //! Set during user-initiated disconnect() to map HTTP1-ABORT errors
     //! on pending poll ops to SOCKET-NOT-OPEN (matching legacy semantics).
@@ -1378,118 +848,179 @@ struct qore_httpclient_priv {
     */
     QoreChannel* streaming_recv_channel = nullptr;
 
+    //! Active conn_mgr-backed HTTP/2 extended CONNECT stream state.
+    HttpClientConnectionBase* h2_connect_conn = nullptr;
+    QoreChannel* h2_connect_channel = nullptr;
+    int32_t h2_connect_stream_id = 0;
+    bool h2_connect_stream_closed = false;
+
+    //! Active conn_mgr-backed HTTP/3 extended CONNECT stream state.
+    HttpClientConnectionBase* h3_connect_conn = nullptr;
+    QoreChannel* h3_connect_channel = nullptr;
+    int64_t h3_connect_stream_id = 0;
+    bool h3_connect_stream_closed = false;
+
     //! Buffer for accumulating partial SSE event text across channel messages
     std::string sse_recv_buffer;
 
-    //! Returns the connection manager, creating it lazily if needed.
-    DLLLOCAL HttpClientConnectionManagerBase& getConnMgr(ExceptionSink* xsink) {
-        // Check if SSL settings or the effective protocol changed since
-        // the conn_mgr was created.  If so, reset so a fresh connection
-        // is established with the new settings.  The global H2 mode can
-        // change at runtime via set_global_http2_mode(); re-evaluate it.
-        if (conn_mgr) {
-            const auto& opts = conn_mgr->getOptions();
-            // Recompute the effective protocol
-            int gm = qore_global_http2_mode.load(std::memory_order_relaxed);
-            bool ld = qore_check_option(QLO_DISABLE_HTTP2);
-            // H2C_DIRECT is also an H2 protocol (over plain TCP, client
-            // sends the HTTP/2 preface on connect).  REQUIRED with SSL
-            // negotiates h2 via ALPN; REQUIRED without SSL is equivalent
-            // to H2C_DIRECT.  AUTO over SSL uses NEGOTIATE (per-connect
-            // ALPN via NegotiatingHttpClientConnection).
-            bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
-                    || http2_mode == HTTP2_MODE_H2C_DIRECT)
-                && gm != HTTP2_MODE_DISABLED && !ld;
-            bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
-                && gm != HTTP2_MODE_DISABLED && !ld;
-            HttpClientProtocol want_proto;
-            if (http3_mode.load(std::memory_order_relaxed)
-                    == HTTP3_MODE_REQUIRED
-                    || (http3_active && connection.ssl)) {
-                want_proto = HttpClientProtocol::H3;
-            } else if (h2_hard) {
-                want_proto = HttpClientProtocol::H2;
-            } else if (h2_auto_ssl) {
-                want_proto = HttpClientProtocol::NEGOTIATE;
-            } else {
-                want_proto = HttpClientProtocol::H1;
-            }
-            if (opts.protocol != want_proto
-                    || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
-                    || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
-                    || opts.client_cert != msock->cert
-                    || opts.client_key != msock->pk) {
-                conn_mgr.reset();
-            }
+    DLLLOCAL std::string getConnMgrProxyUrl() const {
+        if (!proxy_connection.has_url()) {
+            return std::string();
         }
-        if (!conn_mgr) {
-            HttpClientConnectionManagerBase::Options opts;
-            // Derive protocol from the HTTPClient's mode settings.
-            // HTTP2_MODE_AUTO over SSL maps to HttpClientProtocol::
-            // NEGOTIATE — the conn_mgr's NegotiatingHttpClientConnection
-            // path does per-connect ALPN over TLS and adopts the result
-            // into a concrete H1/H2 connection (see
-            // design/conn-mgr-alpn-negotiation.md).  REQUIRED and
-            // H2C_DIRECT map to H2, REQUIRED H3 maps to H3, and
-            // everything else maps to H1.  The global mode override
-            // must be checked here so that set_global_http2_mode("disabled")
-            // prevents H2 connections even for REQUIRED-mode clients
-            // (matches legacy connect).
-            {
-                int global_mode = qore_global_http2_mode.load(
-                    std::memory_order_relaxed);
-                bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+
+        std::string rv(proxy_connection.ssl ? "https://" : "http://");
+        rv += proxy_connection.host;
+        rv += ':';
+        rv += std::to_string(proxy_connection.port);
+        return rv;
+    }
+
+    //! Returns the connection manager, creating it lazily if needed.
+    DLLLOCAL std::shared_ptr<HttpClientConnectionManagerBase> getConnMgrIfPresent() const {
+        std::lock_guard<std::mutex> lk(conn_mgr_lock);
+        return conn_mgr;
+    }
+
+    DLLLOCAL void dropConnMgr(bool close_old) {
+        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
+        {
+            std::lock_guard<std::mutex> lk(conn_mgr_lock);
+            old_mgr = std::move(conn_mgr);
+            conn_mgr.reset();
+        }
+        if (close_old && old_mgr) {
+            ExceptionSink xsink;
+            old_mgr->closeAll(&xsink);
+            xsink.clear();
+        }
+    }
+
+    DLLLOCAL std::shared_ptr<HttpClientConnectionManagerBase> getConnMgr(ExceptionSink* xsink) {
+        std::shared_ptr<HttpClientConnectionManagerBase> old_mgr;
+        std::shared_ptr<HttpClientConnectionManagerBase> rv;
+        {
+            // Check if SSL settings or the effective protocol changed since
+            // the conn_mgr was created.  If so, reset so a fresh connection
+            // is established with the new settings.  The global H2 mode can
+            // change at runtime via set_global_http2_mode(); re-evaluate it.
+            std::lock_guard<std::mutex> lk(conn_mgr_lock);
+            if (conn_mgr) {
+                const auto& opts = conn_mgr->getOptions();
+                // Recompute the effective protocol
+                int gm = qore_global_http2_mode.load(std::memory_order_relaxed);
+                bool ld = qore_check_option(QLO_DISABLE_HTTP2);
+                // H2C_DIRECT is also an H2 protocol (over plain TCP, client
+                // sends the HTTP/2 preface on connect).  REQUIRED with SSL
+                // negotiates h2 via ALPN; REQUIRED without SSL is equivalent
+                // to H2C_DIRECT.  AUTO over SSL uses NEGOTIATE (per-connect
+                // ALPN via NegotiatingHttpClientConnection).
                 bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
                         || http2_mode == HTTP2_MODE_H2C_DIRECT)
-                    && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-                bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO
-                    && connection.ssl
-                    && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-
-                if (http3_mode.load(std::memory_order_relaxed)
+                    && gm != HTTP2_MODE_DISABLED && !ld;
+                bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO && connection.ssl
+                    && gm != HTTP2_MODE_DISABLED && !ld;
+                HttpClientProtocol want_proto;
+                if (connection.is_unix) {
+                    want_proto = HttpClientProtocol::H1;
+                } else if (http3_mode.load(std::memory_order_relaxed)
                         == HTTP3_MODE_REQUIRED
                         || (http3_active && connection.ssl)) {
-                    opts.protocol = HttpClientProtocol::H3;
+                    want_proto = HttpClientProtocol::H3;
                 } else if (h2_hard) {
-                    opts.protocol = HttpClientProtocol::H2;
+                    want_proto = HttpClientProtocol::H2;
                 } else if (h2_auto_ssl) {
-                    opts.protocol = HttpClientProtocol::NEGOTIATE;
+                    want_proto = HttpClientProtocol::NEGOTIATE;
                 } else {
-                    opts.protocol = HttpClientProtocol::H1;
+                    want_proto = HttpClientProtocol::H1;
+                }
+                std::string proxy_url = getConnMgrProxyUrl();
+                if (opts.protocol != want_proto
+                        || opts.proxy_url != proxy_url
+                        || opts.connect_timeout_ms != connect_timeout_ms
+                        || opts.request_timeout_ms != timeout
+                        || opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
+                        || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
+                        || opts.client_cert != msock->cert
+                        || opts.client_key != msock->pk) {
+                    old_mgr = std::move(conn_mgr);
+                    conn_mgr.reset();
                 }
             }
-            opts.connect_timeout_ms = connect_timeout_ms;
-            opts.request_timeout_ms = timeout;
-            opts.idle_timeout_ms = 60000;
-            // SSL settings from the HTTPClient
-            opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
-            opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
-            opts.client_cert = msock->cert;
-            opts.client_key = msock->pk;
-            // Proxy URL from the existing connection info
-            if (proxy_connection.has_url()) {
-                char buf[512];
-                snprintf(buf, sizeof(buf), "%s://%s:%d",
-                    proxy_connection.ssl ? "https" : "http",
-                    proxy_connection.host.c_str(),
-                    proxy_connection.port);
-                opts.proxy_url = buf;
+            if (!conn_mgr) {
+                HttpClientConnectionManagerBase::Options opts;
+                // Derive protocol from the HTTPClient's mode settings.
+                // HTTP2_MODE_AUTO over SSL maps to HttpClientProtocol::
+                // NEGOTIATE — the conn_mgr's NegotiatingHttpClientConnection
+                // path does per-connect ALPN over TLS and adopts the result
+                // into a concrete H1/H2 connection (see
+                // design/conn-mgr-alpn-negotiation.md).  REQUIRED and
+                // H2C_DIRECT map to H2, REQUIRED H3 maps to H3, and
+                // everything else maps to H1.  The global mode override
+                // must be checked here so that set_global_http2_mode("disabled")
+                // prevents H2 connections even for REQUIRED-mode clients
+                // (matches legacy connect).
+                {
+                    int global_mode = qore_global_http2_mode.load(
+                        std::memory_order_relaxed);
+                    bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
+                    bool h2_hard = (http2_mode == HTTP2_MODE_REQUIRED
+                            || http2_mode == HTTP2_MODE_H2C_DIRECT)
+                        && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+                    bool h2_auto_ssl = http2_mode == HTTP2_MODE_AUTO
+                        && connection.ssl
+                        && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
+
+                    if (connection.is_unix) {
+                        opts.protocol = HttpClientProtocol::H1;
+                    } else if (http3_mode.load(std::memory_order_relaxed)
+                            == HTTP3_MODE_REQUIRED
+                            || (http3_active && connection.ssl)) {
+                        opts.protocol = HttpClientProtocol::H3;
+                    } else if (h2_hard) {
+                        opts.protocol = HttpClientProtocol::H2;
+                    } else if (h2_auto_ssl) {
+                        opts.protocol = HttpClientProtocol::NEGOTIATE;
+                    } else {
+                        opts.protocol = HttpClientProtocol::H1;
+                    }
+                }
+                opts.connect_timeout_ms = connect_timeout_ms;
+                opts.request_timeout_ms = timeout;
+                opts.idle_timeout_ms = 60000;
+                // SSL settings from the HTTPClient
+                opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
+                opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
+                opts.client_cert = msock->cert;
+                opts.client_key = msock->pk;
+                // Proxy URL from the existing connection info
+                opts.proxy_url = getConnMgrProxyUrl();
+                std::shared_ptr<HttpClientConnectionManagerBase> new_mgr(
+                    new HttpClientConnectionManagerBase(opts, xsink));
+                if (*xsink) {
+                    return nullptr;
+                }
+                conn_mgr = std::move(new_mgr);
+                // New manager: clear user-disconnect flag (which may have been
+                // left set by a prior resetConnMgr — see resetConnMgr comments)
+                user_disconnect_in_progress.store(false, std::memory_order_release);
+                // Mirror the manager's effective protocol to the
+                // legacy-style @c http2_active / @c http3_active flags so
+                // @c isHttp2Active() / @c isHttp3Active() report correctly
+                // for conn_mgr-routed clients (issue 1.5a).  The manager's
+                // fixed-protocol model guarantees every connection it creates
+                // uses @c opts.protocol — no per-connection variance on a
+                // given HTTPClient instance.
+                http2_active = (opts.protocol == HttpClientProtocol::H2);
+                http3_active = (opts.protocol == HttpClientProtocol::H3);
             }
-            conn_mgr.reset(new HttpClientConnectionManagerBase(opts, xsink));
-            // New manager: clear user-disconnect flag (which may have been
-            // left set by a prior resetConnMgr — see resetConnMgr comments)
-            user_disconnect_in_progress.store(false, std::memory_order_release);
-            // Mirror the manager's effective protocol to the
-            // legacy-style @c http2_active / @c http3_active flags so
-            // @c isHttp2Active() / @c isHttp3Active() report correctly
-            // for conn_mgr-routed clients (issue 1.5a).  The manager's
-            // fixed-protocol model guarantees every connection it creates
-            // uses @c opts.protocol — no per-connection variance on a
-            // given HTTPClient instance.
-            http2_active = (opts.protocol == HttpClientProtocol::H2);
-            http3_active = (opts.protocol == HttpClientProtocol::H3);
+            rv = conn_mgr;
         }
-        return *conn_mgr;
+        if (old_mgr) {
+            ExceptionSink close_xsink;
+            old_mgr->closeAll(&close_xsink);
+            close_xsink.clear();
+        }
+        return rv;
     }
 
     // persistent count
@@ -1500,7 +1031,6 @@ struct qore_httpclient_priv {
 
     std::string default_path;
     int timeout = HTTPCLIENT_DEFAULT_TIMEOUT;
-    std::string socketpath;
     header_map_t default_headers;
     static header_map_t static_default_headers;
     int connect_timeout_ms = HTTPCLIENT_DEFAULT_CONNECT_TIMEOUT;
@@ -1683,26 +1213,6 @@ struct qore_httpclient_priv {
         return rv.release();
     }
 
-    DLLLOCAL void setSocketPathIntern(const con_info& con) {
-        if (con.path.empty() || !con.host.empty()) {
-            socketpath = con.host;
-            if (!con.is_unix) {
-                socketpath += ":";
-                char buff[20];
-                sprintf(buff, "%d", con.port);
-                socketpath += buff;
-            }
-            return;
-        }
-
-        socketpath = con.path;
-    }
-
-    DLLLOCAL void setSocketPath(const con_info& connection) {
-        setSocketPathIntern(proxy_connection.has_url() ? proxy_connection : connection);
-        //printd(5, "setSocketPath() '%s'\n", socketpath.c_str());
-    }
-
     DLLLOCAL void lock() { msock->m.lock(); }
     DLLLOCAL void unlock() { msock->m.unlock(); }
 
@@ -1756,141 +1266,6 @@ struct qore_httpclient_priv {
         return startPollConnectConnMgr(xsink, self, client);
     }
 
-    // returns -1 if an exception was thrown, 0 for OK
-    DLLLOCAL int connect_unlocked(ExceptionSink* xsink, const con_info& connection) {
-        assert(!msock->socket->isOpen());
-        bool connect_ssl = proxy_connection.has_url()
-            ? proxy_connection.ssl
-            : connection.ssl;
-
-        // Set up ALPN protocols based on current HTTP/2 mode and global settings
-        // Always re-evaluate to handle mode changes on reused connections
-        if (connect_ssl) {
-            // Check global HTTP/2 mode
-            int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
-            bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-            bool http2_enabled = (http2_mode == HTTP2_MODE_AUTO || http2_mode == HTTP2_MODE_REQUIRED)
-                && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-
-            if (http2_enabled) {
-                // Set ALPN protocols for HTTP/2
-                ReferenceHolder<QoreListNode> protocols(new QoreListNode(autoTypeInfo), xsink);
-                if (http2_mode == HTTP2_MODE_REQUIRED) {
-                    // HTTP/2 only
-                    protocols->push(new QoreStringNode("h2"), xsink);
-                    if (*xsink) {
-                        return -1;
-                    }
-                } else {
-                    // Auto mode: prefer h2, fall back to http/1.1
-                    protocols->push(new QoreStringNode("h2"), xsink);
-                    if (*xsink) {
-                        return -1;
-                    }
-                    protocols->push(new QoreStringNode("http/1.1"), xsink);
-                    if (*xsink) {
-                        return -1;
-                    }
-                }
-                msock->socket->setAlpnProtocols(*protocols, xsink);
-                if (*xsink) {
-                    return -1;
-                }
-            } else {
-                // HTTP/2 is disabled - clear any previously set ALPN protocols
-                msock->socket->clearAlpnProtocols();
-            }
-        }
-
-        int rc;
-        if (connect_ssl) {
-            rc = msock->socket->connectSSL(xsink, socketpath.c_str(), connect_timeout_ms, msock->cert, msock->pk);
-        } else {
-            rc = msock->socket->connect(socketpath.c_str(), connect_timeout_ms, xsink);
-        }
-
-        if (!rc) {
-            setNoDelay();
-            // Determine effective HTTP/2 mode based on global setting and object setting
-            // Check both the new global mode and the legacy QLO_DISABLE_HTTP2 library option
-            int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
-            bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-            int effective_http2_mode;
-            if (global_mode == HTTP2_MODE_DISABLED || lib_disabled) {
-                // Global disabled or library option overrides object setting
-                effective_http2_mode = HTTP2_MODE_DISABLED;
-            } else if (global_mode == HTTP2_MODE_REQUIRED) {
-                // Global required overrides object setting (unless object explicitly uses h2c modes)
-                effective_http2_mode = (http2_mode == HTTP2_MODE_H2C_DIRECT || http2_mode == HTTP2_MODE_H2C_UPGRADE)
-                    ? http2_mode.load(std::memory_order_relaxed) : HTTP2_MODE_REQUIRED;
-            } else {
-                // Global auto: use object's setting
-                effective_http2_mode = http2_mode.load(std::memory_order_relaxed);
-            }
-            // Handle h2c (HTTP/2 cleartext) modes
-            if (effective_http2_mode == HTTP2_MODE_H2C_DIRECT && !connect_ssl) {
-                // Direct h2c: start HTTP/2 immediately with prior knowledge
-                http2_active = true;
-                // HTTP/2 sends many small frames as separate writes; enable TCP_NODELAY
-                // to prevent Nagle + delayed ACK interaction causing ~40ms per-request delays
-                msock->socket->setNoDelay(1);
-                setH2Session(Http2Session::createClient(msock->socket->priv, xsink, "http"));
-                if (*xsink) {
-                    msock->socket->close();
-                    http2_active = false;
-                    return -1;
-                }
-                // Send connection preface
-                if (getH2Session()->sendConnectionPreface(xsink)) {
-                    clearH2Session();
-                    msock->socket->close();
-                    http2_active = false;
-                    return -1;
-                }
-            } else if (effective_http2_mode == HTTP2_MODE_H2C_UPGRADE && !connect_ssl) {
-                // h2c upgrade via HTTP/1.1 Upgrade header is deprecated by RFC 9113 §3.2
-                // RFC 9113 removed the HTTP/1.1 Upgrade mechanism for HTTP/2.
-                // Use h2c (h2c-direct / prior knowledge) mode instead.
-                xsink->raiseException("HTTP2-ERROR", "h2c-upgrade mode is not supported "
-                    "(deprecated by RFC 9113); use h2c (h2c-direct) mode for HTTP/2 cleartext "
-                    "with prior knowledge");
-                msock->socket->close();
-                return -1;
-            } else
-            // Check if HTTP/2 was negotiated via ALPN (for TLS connections)
-            if (effective_http2_mode != HTTP2_MODE_DISABLED && connect_ssl) {
-                http2_active = msock->socket->isHttp2();
-                // If HTTP/2 is required but not available, raise an exception
-                if (effective_http2_mode == HTTP2_MODE_REQUIRED && !http2_active) {
-                    xsink->raiseException("HTTP2-REQUIRED-ERROR", "HTTP/2 is required but the server does not "
-                        "support HTTP/2 via ALPN");
-                    msock->socket->close();
-                    return -1;
-                }
-                // Create HTTP/2 session if HTTP/2 is active
-                if (http2_active) {
-                    // HTTP/2 sends many small frames as separate writes; enable TCP_NODELAY
-                    // to prevent Nagle + delayed ACK interaction causing ~40ms per-request delays
-                    msock->socket->setNoDelay(1);
-                    setH2Session(Http2Session::createClient(msock->socket->priv, xsink));
-                    if (*xsink) {
-                        msock->socket->close();
-                        http2_active = false;
-                        return -1;
-                    }
-                    // Send connection preface
-                    if (getH2Session()->sendConnectionPreface(xsink)) {
-                        clearH2Session();
-                        msock->socket->close();
-                        http2_active = false;
-                        return -1;
-                    }
-                }
-            }
-        }
-        return rc;
-    }
-
     DLLLOCAL void setNoDelay() {
         if (nodelay) {
             if (msock->socket->setNoDelay(1)) {
@@ -1899,16 +1274,33 @@ struct qore_httpclient_priv {
         }
     }
 
-    DLLLOCAL void disconnect_unlocked() {
-        if (msock->socket->isOpen()) {
-            msock->socket->close();
-            proxy_connected = false;
-            persistent = false;
-            persistent_count = 0;
-            clearH2Session();
+    DLLLOCAL static void closeReferencedSocket(qore_socket_private* close_priv) {
+        if (!close_priv) {
+            return;
         }
-        disconnectQuic();
+        qore_socket_exec_close_private(close_priv);
+        close_priv->deref();
+    }
+
+    DLLLOCAL qore_socket_private* disconnect_unlocked_prepare_close() {
+        qore_socket_private* close_priv = msock->socket->priv;
+        if (close_priv->isOpen()) {
+            close_priv->ref();
+        } else {
+            close_priv = nullptr;
+        }
+        proxy_connected = false;
+        persistent = false;
+        persistent_count = 0;
+        clearH2Session();
+        clearH2ConnectStream();
+        clearH3ConnectStream();
         clearStreamingChannel();
+        return close_priv;
+    }
+
+    DLLLOCAL void disconnect_unlocked() {
+        closeReferencedSocket(disconnect_unlocked_prepare_close());
     }
 
     //! User-initiated conn_mgr reset.  Drains the pool so pending poll ops
@@ -1917,34 +1309,91 @@ struct qore_httpclient_priv {
     //! to distinguish user disconnect from other errors.  The flag stays
     //! set until the next new conn_mgr is created (see getConnMgr).
     DLLLOCAL void resetConnMgr() {
-        if (conn_mgr) {
-            user_disconnect_in_progress.store(true, std::memory_order_release);
-            ExceptionSink xsink;
-            conn_mgr->closeAll(&xsink);
-            conn_mgr.reset();
-            // Flag stays set — cleared on next getConnMgr() that creates
-            // a new manager.  This ensures poll ops whose futures are
-            // rejected asynchronously (after resetConnMgr returns) still
-            // see the flag and map HTTP1-ABORT → SOCKET-NOT-OPEN.
-            // Clear the protocol-active flags — the next getConnMgr will
-            // set them again for the new manager's protocol.
-            http2_active = false;
-            http3_active = false;
-        }
+        user_disconnect_in_progress.store(true, std::memory_order_release);
+        dropConnMgr(true);
+        // Flag stays set — cleared on next getConnMgr() that creates
+        // a new manager.  This ensures poll ops whose futures are
+        // rejected asynchronously (after resetConnMgr returns) still
+        // see the flag and map HTTP1-ABORT → SOCKET-NOT-OPEN.
+        // Clear the protocol-active flags — the next getConnMgr will
+        // set them again for the new manager's protocol.
+        http2_active = false;
+        http3_active = false;
     }
 
-    //! Pre-populate the conn_mgr pool for HTTPClient::connect().
+    DLLLOCAL int adoptH1SocketIntoMsock(Http1ClientConnection* h1, bool detach_manager,
+            ExceptionSink* xsink) {
+        QoreObject* adopted_obj = nullptr;
+        QoreSocketObject* adopted_priv = nullptr;
+        if (detach_manager) {
+            h1->setManager(nullptr);
+        }
+        if (h1->takeSocket(adopted_obj, adopted_priv, xsink)) {
+            return -1;
+        }
+
+        if (!adopted_obj || !adopted_priv) {
+            if (adopted_obj) {
+                adopted_obj->deref(xsink);
+            }
+            xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
+                "HTTP/1 connection completed but no socket was extracted");
+            return -1;
+        }
+
+        my_socket_priv* adopted_msock = my_socket_priv::getPriv(*adopted_priv);
+        qore_socket_private* close_priv = nullptr;
+        {
+            AutoLocker al(msock->m);
+            AutoLocker bl(adopted_msock->m);
+
+            close_priv = msock->socket->priv;
+            if (close_priv->isOpen()) {
+                close_priv->ref();
+            } else {
+                close_priv = nullptr;
+            }
+
+            QoreSocket* old_socket = msock->socket;
+            msock->socket = adopted_msock->socket;
+            adopted_msock->socket = old_socket;
+
+            msock->socket->priv->outer_lock = &msock->m;
+            adopted_msock->socket->priv->outer_lock = &adopted_msock->m;
+
+            qore_socket_private* active = msock->socket->priv;
+            qore_socket_private* old = adopted_msock->socket->priv;
+            active->swapEventQueueState(*old);
+            active->swapWarningQueueState(*old);
+            std::swap(active->assume_http_encoding, old->assume_http_encoding);
+            std::swap(active->utf8_content_type_set, old->utf8_content_type_set);
+            active->enc = old->enc;
+
+            proxy_connected = false;
+            persistent = false;
+            persistent_count = 0;
+            clearH2Session();
+            clearH2ConnectStream();
+            clearH3ConnectStream();
+            clearStreamingChannel();
+        }
+
+        closeReferencedSocket(close_priv);
+        adopted_obj->deref(xsink);
+        return *xsink ? -1 : 0;
+    }
+
+    //! Connect via the conn_mgr for HTTPClient::connect() / persistent warm-up.
     /** Returns 0 on success, -1 on error (with xsink set).  Called from
-        QoreHttpClientObject::connect() when use_conn_mgr is active so
-        the legacy HTTPClient::connect() API still does what callers
-        expect (fail fast on unreachable server, warm up the socket) but
-        uses the conn_mgr pool instead of the legacy msock — so the
-        first subsequent send() reuses the same TCP connection.
+        QoreHttpClientObject::connect() so the legacy HTTPClient::connect()
+        API still does what callers expect for HTTP traffic: fail fast on an
+        unreachable server and leave a ready connection for subsequent sends.
+        The ready connection stays in the manager pool because all HTTP send
+        paths now route through the manager as well.
 
         Acquires a connection with the configured connect timeout,
-        then releases its stream reservation so the next request can
-        take it.  @a proxy_connection is checked first so the correct
-        scheme/host/port is used for proxied setups.
+        then releases its stream reservation.  @a proxy_connection is checked
+        first so the correct scheme/host/port is used for proxied setups.
     */
     DLLLOCAL int connectViaConnMgr(ExceptionSink* xsink) {
         if (!connection.has_url()) {
@@ -1957,15 +1406,17 @@ struct qore_httpclient_priv {
         // the origin that conn_mgr handles internally from the
         // proxy_info it was configured with in getConnMgr().
         const char* scheme = connection.ssl ? "https" : "http";
-        HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
-        if (*xsink) {
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = getConnMgr(xsink);
+        if (*xsink || !mgr_holder) {
             return -1;
         }
+        HttpClientConnectionManagerBase& mgr = *mgr_holder;
         HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
             connection.host.c_str(), connection.port, xsink);
         if (!conn || *xsink) {
             return -1;
         }
+
         // Release the stream reservation taken by acquireConnection.  The
         // connection stays in the pool; the next send() finds it ready and
         // reserves a stream of its own.
@@ -1984,37 +1435,42 @@ struct qore_httpclient_priv {
         sse_recv_buffer.clear();
     }
 
-    // Disconnect QUIC session and clean up state
-    // Always invalidates Alt-Svc cache (even on normal idle disconnects) so we
-    // fall back to HTTP/1.x or HTTP/2 on the next request; the server will
-    // re-advertise h3 support via Alt-Svc if it's still available.  This is
-    // conservative but correct — stale cache entries for a down server would
-    // cause repeated connection failures.
-    // Thread safety: caller must hold priv->m (same as msock->m), or be in the
-    // destructor where concurrent access is impossible.
-    DLLLOCAL void disconnectQuic() {
-        if (!connection.host.empty() && connection.port) {
-            std::string origin = std::string(connection.host) + ":" + std::to_string(connection.port);
-            alt_svc_cache.erase(origin);
-        }
-        // Send CONNECTION_CLOSE for graceful shutdown (best-effort, non-blocking).
-        // The UDP socket is connect()-ed, so send() works without specifying the peer.
-        if (quic_session && quic_fd >= 0) {
-            static thread_local uint8_t close_buf[1280];
-            ssize_t nwrite = quic_session->writeConnectionClose(close_buf, sizeof(close_buf));
-            if (nwrite > 0) {
-                // Best-effort: ignore send errors (fd may already be invalid)
-                // MSG_DONTWAIT: non-blocking (available on Linux + macOS)
-                // SIGPIPE already ignored process-wide (QoreSignalManager::init)
-                ::send(quic_fd, close_buf, static_cast<size_t>(nwrite), MSG_DONTWAIT);
+    //! Clears the conn_mgr-backed HTTP/2 extended CONNECT stream state.
+    DLLLOCAL void clearH2ConnectStream(bool close_channel = true) {
+        ExceptionSink xsink;
+        if (h2_connect_channel) {
+            if (close_channel) {
+                h2_connect_channel->close();
             }
+            h2_connect_channel->deref(&xsink);
+            h2_connect_channel = nullptr;
         }
-        quic_session.reset();
-        if (quic_fd >= 0) {
-            ::close(quic_fd);
-            quic_fd = -1;
+        if (h2_connect_conn) {
+            h2_connect_conn->deref(&xsink);
+            h2_connect_conn = nullptr;
         }
-        http3_active = false;
+        xsink.clear();
+        h2_connect_stream_id = 0;
+        h2_connect_stream_closed = false;
+    }
+
+    //! Clears the conn_mgr-backed HTTP/3 extended CONNECT stream state.
+    DLLLOCAL void clearH3ConnectStream(bool close_channel = true) {
+        ExceptionSink xsink;
+        if (h3_connect_channel) {
+            if (close_channel) {
+                h3_connect_channel->close();
+            }
+            h3_connect_channel->deref(&xsink);
+            h3_connect_channel = nullptr;
+        }
+        if (h3_connect_conn) {
+            h3_connect_conn->deref(&xsink);
+            h3_connect_conn = nullptr;
+        }
+        xsink.clear();
+        h3_connect_stream_id = 0;
+        h3_connect_stream_closed = false;
     }
 
     DLLLOCAL int setNoDelay(bool nd) {
@@ -2044,31 +1500,30 @@ struct qore_httpclient_priv {
     DLLLOCAL void setPersistent(ExceptionSink* xsink) {
         AutoLocker al(msock->m);
 
-        if (!msock->socket->isOpen()) {
-            // setPersistent() is a legacy feature that sticks a single
-            // msock connection across repeated send() calls.  It has no
-            // meaning for the conn_mgr pool (which already keeps
-            // connections alive across requests).  If the caller asks
-            // for persistence on a client whose connect() went through
-            // conn_mgr, drop back to the legacy path: disable conn_mgr
-            // for this instance and open an msock connection now.
-            // Subsequent send()s route through send_internal's legacy
-            // branch, which is what setPersistent() callers expect.
-            if (use_conn_mgr) {
-                use_conn_mgr = false;
-                // Tear down any conn_mgr state so stale pooled
-                // connections don't linger for this client.
-                resetConnMgr();
-            }
-            if (connect_unlocked(xsink, connection)) {
-                return;
-            }
+        // Persistence pins the current logical HTTPClient session to an
+        // already-open manager connection.  Warm the pool here so later
+        // sends can fail with PERSISTENCE-ERROR instead of silently
+        // creating a replacement connection.
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr = getConnMgrIfPresent();
+        if ((!mgr || !mgr->getConnectionCount(connection.host.c_str(), connection.port))
+                && connectViaConnMgr(xsink)) {
+            return;
         }
 
         if (!persistent) {
             persistent = true;
         }
         ++persistent_count;
+    }
+
+    DLLLOCAL bool checkPersistentConnMgrConnection(const con_info& c, ExceptionSink* xsink) const {
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr = getConnMgrIfPresent();
+        if (persistent && (!mgr || !mgr->getConnectionCount(c.host.c_str(), c.port))) {
+            xsink->raiseException("PERSISTENCE-ERROR", "the current connection has been temporarily marked as "
+                "persistent, but has been disconnected");
+            return false;
+        }
+        return true;
     }
 
     DLLLOCAL void clearPersistent() {
@@ -2127,10 +1582,6 @@ struct qore_httpclient_priv {
             }
         }
 
-        if (!proxy_connection.has_url()) {
-            setSocketPath(connection);
-        }
-
         return 0;
     }
 
@@ -2168,10 +1619,6 @@ struct qore_httpclient_priv {
             if (!port_set && !connection.is_unix) {
                 connection.port = default_port;
             }
-        }
-
-        if (!proxy_connection.has_url()) {
-            setSocketPath(connection);
         }
 
         return 0;
@@ -2212,7 +1659,6 @@ struct qore_httpclient_priv {
                 proxy_connection.port = default_port;
         }
 
-        setSocketPath(connection);
         return 0;
     }
 
@@ -2402,16 +1848,9 @@ struct qore_httpclient_priv {
         return str.release();
     }
 
-    DLLLOCAL QoreHashNode* sendMessageAndGetResponse(con_info& connection, const char* mname,
-            const char* meth, const char* mpath,
-            const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
-            const ResolvedCallReferenceNode* send_callback, InputStream* is, size_t max_chunk_size,
-            const ResolvedCallReferenceNode* trailer_callback, QoreHashNode* info, bool with_connect, int timeout_ms,
-            int& code, bool& aborted, bool path_already_encoded, ExceptionSink* xsink);
-
     // called locked
     DLLLOCAL const char* getMsgPath(ExceptionSink* xsink, const con_info& connection, const char* mpath,
-            QoreString& pstr, bool already_encoded = false) {
+            QoreString& pstr, bool already_encoded = false, bool include_proxy_prefix = true) {
         pstr.clear();
 
         // use default path if no path is set
@@ -2421,7 +1860,7 @@ struct qore_httpclient_priv {
                 : (const char*)connection.path.c_str();
         }
 
-        if (proxy_connection.has_url() && !proxy_connected) {
+        if (include_proxy_prefix && proxy_connection.has_url() && !proxy_connected) {
             // create URL string for path for proxy
             pstr.concat("http");
             if (connection.ssl) {
@@ -2781,13 +2220,19 @@ struct qore_httpclient_priv {
         OutputStream* os = nullptr, InputStream* is = nullptr, size_t max_chunk_size = 0,
         const ResolvedCallReferenceNode* trailer_callback = nullptr, bool streaming = false);
 
-    //! Conn_mgr dispatch path for simple H1 request/response (no streaming, no proxy)
+    //! Conn_mgr dispatch path for synchronous request/response and streaming operations
     DLLLOCAL QoreHashNode* send_internal_conn_mgr(ExceptionSink* xsink, const char* mname, const char* meth,
         const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,
         int timeout_ms, const ResolvedCallReferenceNode* recv_callback, QoreObject* obj, OutputStream* os,
         InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback,
         bool streaming = false);
+
+    //! Conn_mgr dispatch path for HTTP/1 WebSocket Upgrade handshakes
+    DLLLOCAL QoreHashNode* send_websocket_upgrade_conn_mgr(ExceptionSink* xsink, const char* mname,
+        const char* meth, const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body,
+        const void* data, unsigned size, QoreHashNode* info, int timeout_ms,
+        const ResolvedCallReferenceNode* recv_callback = nullptr, QoreObject* obj = nullptr);
 
     // Parse Alt-Svc header value and update the cache
     DLLLOCAL void parseAltSvc(const char* value, const char* host, int port);
@@ -2814,25 +2259,13 @@ struct qore_httpclient_priv {
             // 5-minute backoff before retrying QUIC for this origin
             it->second.retry_after_epoch = q_epoch() + 300;
         } else {
-            // Cache entry may have been erased by disconnectQuic() during
-            // the failed connect attempt.  Insert a backoff-only placeholder
-            // with port=0 so parseAltSvc() preserves the backoff (it keeps
-            // retry_after_epoch when updating existing entries) even if the
-            // next response re-advertises Alt-Svc.  Without this, every
-            // H2/HTTPS request to a server advertising a broken h3 endpoint
-            // would retry QUIC with the 3s timeout — see:
-            // * disconnectQuic() erases cache on any failed connect
-            // * parseAltSvc() re-adds from next response header
-            // * markAltSvcFailed() previously only set backoff if entry present
-            // Result: infinite 3s-per-request loop on H2 keep-alive.
+            // Insert a backoff-only placeholder with port=0 so parseAltSvc()
+            // preserves the backoff (it keeps retry_after_epoch when updating
+            // existing entries) even if the next response re-advertises Alt-Svc.
             alt_svc_cache[origin] = AltSvcEntry{0, q_epoch() + 3600,
                 q_epoch() + 300};
         }
     }
-
-    // Establish a QUIC/HTTP3 connection to the given server
-    // timeout_override_ms: -1 = use connect_timeout_ms; > 0 = use this timeout
-    DLLLOCAL int connectQuic(ExceptionSink* xsink, con_info& connection, int timeout_override_ms = -1);
 
     DLLLOCAL void addProxyAuthorization(const QoreHashNode* headers, QoreHashNode& h, ExceptionSink* xsink) const {
         if (proxy_connection.username.empty())
@@ -3102,48 +2535,6 @@ struct qore_httpclient_priv {
         return !*xsink;
     }
 
-    int getDiscardMessageBody(ExceptionSink* xsink, QoreHashNode& ans, int timeout_ms) {
-        const char* te = get_string_header(xsink, ans, "transfer-encoding");
-        if (*xsink) {
-            return -1;
-        }
-
-        // get response body, if any
-        const char* cl = get_string_header(xsink, ans, "content-length");
-        if (*xsink) {
-            return -1;
-        }
-
-        int len = cl ? atoi(cl) : 0;
-        Queue* event_queue = msock->socket->getQueue();
-        // do not try to get a body in any case if Content-Length: 0 is sent
-        if (cl && event_queue) {
-            do_content_length_event(event_queue, msock->socket->priv, len);
-        }
-
-        if (te && !strcasecmp(te, "chunked")) { // check for chunked response body
-            do_event(event_queue, msock->socket->priv, QORE_EVENT_HTTP_CHUNKED_START);
-            ReferenceHolder<QoreHashNode> nah(msock->socket->priv->readHttpChunkedBodyBinary(timeout_ms, xsink,
-                "HTTPClient", QORE_SOURCE_HTTPCLIENT), xsink);
-            do_event(event_queue, msock->socket->priv, QORE_EVENT_HTTP_CHUNKED_END);
-            if (*xsink) {
-                return -1;
-            }
-            return 0;
-        }
-
-        if (len) {
-            qore_offset_t rc;
-            QoreStringNodeHolder bstr(msock->socket->priv->recv(xsink, len, timeout_ms, rc,
-                    QORE_SOURCE_HTTPCLIENT));
-            if (*xsink) {
-                return -1;
-            }
-        }
-
-        return 0;
-    }
-
     // Set additional characters to encode in the URI path
     DLLLOCAL void setEncodeChar(const char c) {
         pct_encoding_map_t::iterator i = pct_encoding_map.find(c);
@@ -3197,509 +2588,12 @@ qore_httpclient_priv::pct_encoding_map_t qore_httpclient_priv::pct_encoding_map 
     {'`', "%60"},
 };
 
-constexpr int HS_NONE = 0;
-constexpr int HS_R = 1;
-constexpr int HS_RN = 2;
-constexpr int HS_RNR = 3;
-
-class HttpClientRecvHeaderPollState : public AbstractPollState {
-public:
-    DLLLOCAL HttpClientRecvHeaderPollState(ExceptionSink* xsink, qore_httpclient_priv* http,
-            bool exit_early = false) : http(http), hdr(
-                new QoreStringNode(http->msock->socket->priv->enc ? http->msock->socket->priv->enc : http->enc)
-            ), exit_early(exit_early) {
-        assert(http->msock->m.trylock());
-    }
-
-    /** returns:
-        - SOCK_POLLIN = wait for read and call this again
-        - SOCK_POLLOUT = wait for write and call this again
-        - 0 = done
-        - < 0 = error (exception raised)
-    */
-    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) {
-#ifdef DEBUG
-        qore_socket_private* spriv = http->msock->socket->priv;
-        assert(http->msock->m.trylock());
-        assert(spriv->isOpen());
-#endif
-
-        return readHeaderIntern(xsink);
-    }
-
-    //! Returns the data read
-    DLLLOCAL virtual QoreValue takeOutput() {
-        return hdr.release();
-    }
-
-protected:
-    qore_httpclient_priv* http;
-    QoreStringNodeHolder hdr;
-    int state = HS_NONE;
-    bool exit_early;
-
-    // returns -1 = err, 0 = data available in buffer, 1 = wait read, 2 = wait write
-    DLLLOCAL int doRecv(ExceptionSink* xsink) {
-        qore_socket_private* spriv = http->msock->socket->priv;
-        OptionalNonBlockingHelper nbh(*spriv, true, xsink);
-        if (*xsink) {
-            return -1;
-        }
-
-        while (true) {
-            ssize_t rc;
-            if (spriv->ssl) {
-                size_t real_io = 0;
-                rc = spriv->ssl->doNonBlockingIo(xsink, "read", spriv->rbuf, DEFAULT_SOCKET_BUFSIZE, SslAction::READ,
-                    real_io);
-                if (*xsink) {
-                    return -1;
-                }
-                if (!rc) {
-                    assert(!spriv->bufoffset);
-                    spriv->buflen = real_io;
-                }
-                assert(!rc || rc == 1 || rc == 2 || rc == 3 || rc == -1);
-                return rc;
-            } else {
-                rc = ::recv(spriv->sock, spriv->rbuf, DEFAULT_SOCKET_BUFSIZE, 0);
-                if (!rc) {
-                    return 0;
-                }
-                if (rc > 0) {
-                    assert(!spriv->bufoffset);
-                    spriv->buflen = rc;
-                    break;
-                }
-                sock_get_error();
-                if (errno == EINTR) {
-                    continue;
-                }
-                if (errno == EAGAIN
-#ifdef EWOULDBLOCK
-                    || errno == EWOULDBLOCK
-#endif
-                ) {
-                    return SOCK_POLLIN;
-                }
-                xsink->raiseErrnoException("SOCKET-RECV-ERROR", errno, "error while executing Socket::recv()");
-                return -1;
-            }
-        }
-        return 0;
-    }
-
-    DLLLOCAL int readHeaderIntern(ExceptionSink* xsink) {
-        qore_socket_private* spriv = http->msock->socket->priv;
-        while (true) {
-            char c;
-            if (spriv->readByteFromBuffer(c)) {
-                int rc = doRecv(xsink);
-                if (!rc) {
-                    if (!spriv->buflen) {
-                        xsink->raiseException("SOCKET-HTTP-ERROR", "remote end closed connection while reading "
-                            "header (read %zu byte%s; '%s')", hdr->size(), hdr->size() == 1 ? "" : "s", hdr->c_str());
-                        return -1;
-                    }
-                    continue;
-                }
-                if (*xsink) {
-                    return -1;
-                }
-                return rc;
-            }
-
-            // check if we can progress to the next state
-            if (c == '\n') {
-                if (state == HS_R) {
-                    if (exit_early && hdr->empty()) {
-                        return 0;
-                    }
-                    state = HS_RN;
-                    continue;
-                }
-                if (state == HS_RNR) {
-                    break;
-                }
-            } else if (c == '\r') {
-                if (state == HS_NONE) {
-                    state = HS_R;
-                    continue;
-                }
-                if (state == HS_RN) {
-                    state = HS_RNR;
-                    continue;
-                }
-            }
-
-            if (state != HS_NONE) {
-                switch (state) {
-                    case HS_R: hdr->concat("\r"); break;
-                    case HS_RN: hdr->concat("\r\n"); break;
-                    case HS_RNR: hdr->concat("\r\n\r"); break;
-                }
-                state = HS_NONE;
-            }
-            hdr->concat(c);
-            if (hdr->size() >= QORE_MAX_HEADER_SIZE) {
-                xsink->raiseException("SOCKET-HTTP-ERROR", "header size cannot exceed %zu bytes", hdr->size());
-                return -1;
-            }
-        }
-        hdr->concat('\n');
-
-        //printd(5, "HttpClientRecvHeaderPollState::readHeaderIntern() read hdr: '%s'\n", hdr->c_str());
-
-        return 0;
-    }
-};
-
-constexpr int PSC_READING_SIZE = 0;
-constexpr int PSC_READING_CHUNK = 1;
-constexpr int PSC_READING_CHUNK_EOR = 2;
-constexpr int PSC_READING_TRAILERS = 3;
-
-class HttpClientRecvChunkedPollState : public HttpClientRecvHeaderPollState {
-public:
-    DLLLOCAL HttpClientRecvChunkedPollState(ExceptionSink* xsink, qore_httpclient_priv* http)
-            : HttpClientRecvHeaderPollState(xsink, http, true), chunked_body(new BinaryNode) {
-    }
-
-    /** returns:
-        - SOCK_POLLIN = wait for read and call this again
-        - SOCK_POLLOUT = wait for write and call this again
-        - 0 = done
-        - < 0 = error (exception raised)
-    */
-    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) {
-#ifdef DEBUG
-        qore_socket_private* spriv = http->msock->socket->priv;
-        assert(http->msock->m.trylock());
-        assert(spriv->isOpen());
-#endif
-
-        int rc;
-        while (true) {
-            //printd(5, "HttpClientRecvChunkedPollState::continuePoll() pstate: %d\n", pstate);
-            if (pstate == PSC_READING_SIZE) {
-                rc = readSizeIntern(xsink);
-                //printd(5, "rc: %d *xsink: %d chunk size: %ld\n", rc, (bool)*xsink, chunk_size);
-            } else if (pstate == PSC_READING_CHUNK) {
-                rc = readChunkIntern(xsink);
-            } else if (pstate == PSC_READING_CHUNK_EOR) {
-                rc = readChunkEorIntern(xsink);
-            } else if (pstate == PSC_READING_TRAILERS) {
-                hdr->clear();
-                rc = readHeaderIntern(xsink);
-                //printd(5, "rc: %d (*xsink: %d) trailer: '%s' last chunk size: %ld\n", rc, (bool)*xsink,
-                //    hdr->c_str(), chunk_size);
-                if (!rc) {
-                    if (chunk_size || !hdr->empty()) {
-                        pstate = PSC_READING_SIZE;
-                        hdr->clear();
-                    } else {
-                        break;
-                    }
-                }
-            } else {
-                assert(false);
-            }
-            if (rc) {
-                break;
-            }
-        }
-
-        return rc;
-    }
-
-    //! Returns the data read
-    DLLLOCAL virtual QoreValue takeOutput() {
-        return chunked_body.release();
-    }
-
-private:
-    int pstate = PSC_READING_SIZE;
-    SimpleRefHolder<BinaryNode> chunked_body;
-    size_t chunk_size = 0;
-    size_t chunk_received = 0;
-    // read \r while reading size
-    bool got_r = false;
-
-    DLLLOCAL int readSizeIntern(ExceptionSink* xsink) {
-        qore_socket_private* spriv = http->msock->socket->priv;
-
-        while (true) {
-            char c;
-            if (spriv->readByteFromBuffer(c)) {
-                int rc = doRecv(xsink);
-                if (!rc) {
-                    if (!spriv->buflen) {
-                        xsink->raiseException("SOCKET-HTTP-ERROR", "remote end closed connection while reading "
-                            "chunk");
-                        return -1;
-                    }
-                    continue;
-                }
-                if (*xsink) {
-                    //printd(5, "HttpClientRecvChunkedPollState::readSizeIntern() doRecv() return -1\n");
-                    return -1;
-                }
-                return rc;
-            }
-
-            if (c == '\r') {
-                if (got_r) {
-                    xsink->raiseException("READ-HTTP-CHUNK-ERROR", "unexpected \\r character found in chunked input "
-                        "while reading chunk size");
-                    return -1;
-                }
-                got_r = true;
-                continue;
-            }
-            if (c == '\n') {
-                if (got_r) {
-                    if (!hdr) {
-                        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "chunk has no size");
-                        return -1;
-                    }
-
-                    //printd(5, "HttpClientRecvChunkedPollState::readSizeIntern() hdr: '%s'\n", hdr->c_str());
-
-                    // terminate string at ';' char if present
-                    ssize_t i = hdr->find(';');
-                    if (i >= 0) {
-                        hdr->terminate(i);
-                    }
-                    chunk_size = strtoll(hdr->c_str(), nullptr, 16);
-                    spriv->do_chunked_read(QORE_EVENT_HTTP_CHUNK_SIZE, chunk_size, hdr->size(),
-                        QORE_SOURCE_HTTPCLIENT);
-                    hdr->clear();
-                    if (!chunk_size) {
-                        pstate = PSC_READING_TRAILERS;
-                    } else if (chunk_size < 0) {
-                        xsink->raiseException("READ-HTTP-CHUNK-ERROR", "negative value given for chunk size (%ld)",
-                            chunk_size);
-                        return -1;
-                    } else {
-                        chunk_received = 0;
-                        pstate = PSC_READING_CHUNK;
-                    }
-                    break;
-                }
-            }
-            if (got_r) {
-                xsink->raiseException("READ-HTTP-CHUNK-ERROR", "unexpected character (ASCII %d) found in chunked "
-                    "input after \\r character while reading chunk size", (int)c);
-                return -1;
-            }
-            hdr->concat(c);
-        }
-        return 0;
-    }
-
-    DLLLOCAL int readChunkIntern(ExceptionSink* xsink) {
-        qore_socket_private* spriv = http->msock->socket->priv;
-
-        int rc;
-        while (true) {
-            size_t chunk_needed = chunk_size - chunk_received;
-
-            // first take any data in the socket buffer
-            if (spriv->buflen) {
-                if (spriv->buflen <= chunk_needed) {
-                    chunked_body->append(spriv->rbuf + spriv->bufoffset, spriv->buflen);
-                    chunk_received += spriv->buflen;
-                    chunk_needed -= spriv->buflen;
-                    spriv->buflen = 0;
-                    spriv->bufoffset = 0;
-                } else {
-                    chunked_body->append(spriv->rbuf + spriv->bufoffset, chunk_needed);
-                    chunk_received += chunk_needed;
-                    spriv->buflen -= chunk_needed;
-                    spriv->bufoffset += chunk_needed;
-                }
-
-                if (chunk_received == chunk_size) {
-                    pstate = PSC_READING_CHUNK_EOR;
-                    got_r = false;
-                    //printd(5, "HttpClientRecvChunkedPollState::readChunkIntern() chunk: %ld received: %ld "
-                    //    "needed: %ld total read: %ld\n", chunk_size, chunk_received, chunk_needed,
-                    //    chunked_body->size());
-                    return 0;
-                }
-            }
-
-            rc = doRecv(xsink);
-            if (!rc) {
-                if (!spriv->buflen) {
-                    xsink->raiseException("SOCKET-HTTP-ERROR", "remote end closed connection while reading "
-                        "chunk data");
-                    return -1;
-                }
-                continue;
-            }
-            if (*xsink) {
-                return -1;
-            }
-            break;
-        }
-
-        return rc;
-    }
-
-    DLLLOCAL int readChunkEorIntern(ExceptionSink* xsink) {
-        qore_socket_private* spriv = http->msock->socket->priv;
-
-        while (true) {
-            char c;
-            if (spriv->readByteFromBuffer(c)) {
-                int rc = doRecv(xsink);
-                if (!rc) {
-                    if (!spriv->buflen) {
-                        xsink->raiseException("SOCKET-HTTP-ERROR", "remote end closed connection while reading "
-                            "chunk data trailing bytes");
-                        return -1;
-                    }
-                    continue;
-                }
-                if (*xsink) {
-                    //printd(5, "HttpClientRecvChunkedPollState::readSizeIntern() doRecv() return -1\n");
-                    return -1;
-                }
-                return rc;
-            }
-
-            if (c == '\r' && !got_r) {
-                got_r = true;
-                continue;
-            } else if (c == '\n' && got_r) {
-                got_r = false;
-                pstate = PSC_READING_SIZE;
-                break;
-            }
-
-            xsink->raiseException("READ-HTTP-CHUNK-ERROR", "unexpected character with ASCII %d found in chunked "
-                "input while end of chunk data", (int)c);
-            return -1;
-        }
-        return 0;
-    }
-};
-
-class HttpClientRecvUntilClosePollState : public AbstractPollState {
-public:
-    DLLLOCAL HttpClientRecvUntilClosePollState(ExceptionSink* xsink, qore_httpclient_priv* http) : http(http),
-            body(new BinaryNode) {
-        assert(http->msock->m.trylock());
-    }
-
-    /** returns:
-        - SOCK_POLLIN = wait for read and call this again
-        - SOCK_POLLOUT = wait for write and call this again
-        - 0 = done
-        - < 0 = error (exception raised)
-    */
-    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink) {
-        qore_socket_private* spriv = http->msock->socket->priv;
-        assert(http->msock->m.trylock());
-
-        assert(spriv->isOpen());
-
-        OptionalNonBlockingHelper nbh(*spriv, true, xsink);
-        if (*xsink) {
-            return -1;
-        }
-
-        // first take any data in the socket buffer
-        if (spriv->buflen) {
-            body->append(spriv->rbuf + spriv->bufoffset, spriv->buflen);
-            spriv->buflen = 0;
-            spriv->bufoffset = 0;
-        }
-        // socket buffer must be empty
-        assert(!spriv->buflen);
-        assert(!spriv->bufoffset);
-
-        while (true) {
-            ssize_t rc;
-            if (spriv->ssl) {
-                size_t real_io = 0;
-                rc = spriv->ssl->doNonBlockingIo(xsink, "read", spriv->rbuf, DEFAULT_SOCKET_BUFSIZE, SslAction::READ,
-                    real_io);
-                if (*xsink) {
-                    return -1;
-                }
-                if (!rc) {
-                    if (!real_io) {
-                        break;
-                    }
-                    body->append(spriv->rbuf, real_io);
-                    continue;
-                }
-                assert(!rc || rc == 1 || rc == 2 || rc == 3 || rc == -1);
-                return rc;
-            } else {
-                rc = ::recv(spriv->sock, spriv->rbuf, DEFAULT_SOCKET_BUFSIZE, 0);
-                assert(rc);
-                if (rc > 0) {
-                    body->append(spriv->rbuf, rc);
-                    continue;
-                }
-                if (!rc) {
-                    break;
-                }
-                sock_get_error();
-                if (errno == EINTR) {
-                    continue;
-                }
-                if (errno == EAGAIN
-#ifdef EWOULDBLOCK
-                    || errno == EWOULDBLOCK
-#endif
-                ) {
-                    return SOCK_POLLIN;
-                }
-                xsink->raiseErrnoException("SOCKET-RECV-ERROR", errno, "error while executing Socket::recv()");
-                return -1;
-            }
-        }
-        return 0;
-    }
-
-    //! Returns the data read
-    DLLLOCAL virtual QoreValue takeOutput() {
-        return body.release();
-    }
-
-protected:
-    qore_httpclient_priv* http;
-    SimpleRefHolder<BinaryNode> body;
-};
-
-// states: none [-> connecting [-> connecting-ssl]] -> sending -> receiving-header [-> receiving-body] [-> connecting-proxy-ssl] -> [received | connected]
-/**
-    state transitions:
-    - none
-      -> connecting
-         -> connecting-ssl
-            -> sending...
-      -> sending
-         -> receiving-header
-            -> receiving->body
-               -> received
-            -> connecting...
-            -> sending...
-            -> connecting->proxy-ssl
-               -> sending...
-*/
-
 // static initialization
 void QoreHttpClientObject::static_init() {
     // setup static members of QoreHttpClientObject class
     method_map.insert(method_map_t::value_type("OPTIONS", true));
-    // FIXME: GET should not take a message body; this should be false
-    // but it cannot be changed or it would break backwards compatibility
-    // appropriate notes have been added to the API docs
+    // Historical compatibility: GET accepts a message body even though it
+    // should not; changing this would break existing callers.
     method_map.insert(method_map_t::value_type("GET", true));
     method_map.insert(method_map_t::value_type("HEAD", false));
     method_map.insert(method_map_t::value_type("POST", true));
@@ -3714,7 +2608,6 @@ void QoreHttpClientObject::static_init() {
 }
 
 QoreHttpClientObject::QoreHttpClientObject() : http_priv(new qore_httpclient_priv(priv)) {
-    http_priv->setSocketPath(http_priv->connection);
 }
 
 QoreHttpClientObject::~QoreHttpClientObject() {
@@ -4166,20 +3059,29 @@ int QoreHttpClientObject::getConnectTimeout() const {
     return http_priv->connect_timeout_ms;
 }
 
-void QoreHttpClientObject::setUseConnectionManager(bool enable) {
-    http_priv->use_conn_mgr = enable;
+void QoreHttpClientObject::setUseConnectionManager(bool) {
+    // Retained for source compatibility. Synchronous HTTPClient I/O now
+    // delegates through the async connection manager wherever the API
+    // contract allows it, so disabling the manager is no longer supported.
 }
 
 bool QoreHttpClientObject::getUseConnectionManager() const {
-    return http_priv->use_conn_mgr;
+    return true;
 }
 
 int QoreHttpClientObject::setURL(const char* str, ExceptionSink* xsink) {
-    SafeLocker sl(priv->m);
-    // disconnect immediately if not using a proxy
-    if (!http_priv->proxy_connection.has_url())
-        http_priv->disconnect_unlocked();
-    return http_priv->setUrlUnlocked(str, xsink);
+    qore_socket_private* close_priv = nullptr;
+    int rc;
+    {
+        SafeLocker sl(priv->m);
+        // disconnect immediately if not using a proxy
+        if (!http_priv->proxy_connection.has_url()) {
+            close_priv = http_priv->disconnect_unlocked_prepare_close();
+        }
+        rc = http_priv->setUrlUnlocked(str, xsink);
+    }
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
+    return rc;
 }
 
 QoreStringNode* QoreHttpClientObject::getUrl(int64 code) {
@@ -4292,9 +3194,6 @@ bool QoreHttpClientObject::isHttp3Active() const {
 }
 
 int QoreHttpClientObject::getPollableDescriptor() const {
-    if (http_priv->http3_active.load() && http_priv->quic_fd >= 0) {
-        return http_priv->quic_fd;
-    }
     return QoreSocketObject::getPollableDescriptor();
 }
 
@@ -4314,11 +3213,11 @@ bool QoreHttpClientObject::isHttp2Active() const {
     // @c isHttp2Active() check.  @c hasEverObservedProtocol() is sticky
     // — it answers "did this manager ever pool an H2 connection?",
     // which is what callers actually mean by "is HTTP/2 active?"
-    if (http_priv->conn_mgr) {
-        const auto& opts = http_priv->conn_mgr->getOptions();
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr = http_priv->getConnMgrIfPresent();
+    if (mgr) {
+        const auto& opts = mgr->getOptions();
         if (opts.protocol == HttpClientProtocol::NEGOTIATE) {
-            return http_priv->conn_mgr->hasEverObservedProtocol(
-                HttpClientProtocol::H2);
+            return mgr->hasEverObservedProtocol(HttpClientProtocol::H2);
         }
     }
     return false;
@@ -4358,6 +3257,9 @@ void QoreHttpClientObject::setHttp2StreamPriority(int32_t stream_id, int32_t wei
 }
 
 QoreStringNode* QoreHttpClientObject::getHttpVersion() const {
+    if (http_priv->http3_active) {
+        return new QoreStringNode("HTTP/3");
+    }
     if (http_priv->http2_active) {
         return new QoreStringNode("HTTP/2");
     }
@@ -4366,465 +3268,557 @@ QoreStringNode* QoreHttpClientObject::getHttpVersion() const {
 
 QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const QoreHashNode* headers,
         const char* protocol, QoreHashNode* info, ExceptionSink* xsink) {
-    SafeLocker sl(priv->m);
-
-    // Ensure we're connected with HTTP/2
-    if (!http_priv->http2_active || !http_priv->getH2Session()) {
-        // Try to connect first
-        if (http_priv->connect_unlocked(xsink, http_priv->connection)) {
-            return nullptr;
-        }
-        if (!http_priv->http2_active || !http_priv->getH2Session()) {
-            xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection required for extended CONNECT");
-            return nullptr;
-        }
-    }
-
-    // RFC 8441: Check if server supports extended CONNECT before sending.
-    // Some nghttp2 versions silently drop :protocol when ENABLE_CONNECT_PROTOCOL
-    // is not advertised, causing the CONNECT to be processed as a bare tunnel
-    // request with no response sent to the client.
-    if (http_priv->getH2Session()->isExtendedConnectRejected()) {
-        xsink->raiseException("HTTP2-CONNECT-ERROR",
-            "server does not support extended CONNECT "
-            "(ENABLE_CONNECT_PROTOCOL not advertised in SETTINGS)");
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "sendHttp2Connect", xsink);
+    if (*xsink) {
         return nullptr;
     }
 
-    // Build headers map with :protocol for extended CONNECT (RFC 8441)
-    strcase_str_map_t h2_headers;
-    h2_headers[":protocol"] = protocol;
+    con_info this_connection = http_priv->connection;
+    const char* scheme = this_connection.ssl ? "https" : "http";
+    int timeout_ms = http_priv->timeout;
 
-    // Add Host header with port when needed (used to derive :authority)
-    SimpleRefHolder<QoreStringNode> host_header(http_priv->getHostHeaderValueUnlocked(http_priv->connection));
-    if (host_header) {
-        h2_headers["host"] = host_header->c_str();
+    if (this_connection.is_unix) {
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 extended CONNECT is not supported over UNIX sockets");
+        return nullptr;
     }
 
-    // Copy custom headers
+    QoreString pathstr(http_priv->enc ? http_priv->enc : QCS_UTF8);
+    bool path_already_encoded = false;
+    const char* msgpath = http_priv->getMsgPath(xsink, this_connection, path, pathstr, path_already_encoded, false);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> h2_headers(new QoreHashNode(autoTypeInfo), xsink);
+    h2_headers->setKeyValue(":protocol", new QoreStringNode(protocol), xsink);
+    h2_headers->setKeyValue("host", http_priv->getHostHeaderValueUnlocked(this_connection), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
-            const char* key = hi.getKey();
             QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                QoreStringValueHelper str(val);
-                h2_headers[key] = str->c_str();
+            if (val.getType() == NT_STRING || val.getType() == NT_LIST) {
+                h2_headers->setKeyValue(hi.getKey(), val.refSelf(), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
             }
         }
     }
 
-    // Submit CONNECT request
-    int32_t stream_id = http_priv->getH2Session()->submitRequest("CONNECT", path, h2_headers,
-        nullptr, 0, xsink);
-    if (stream_id < 0) {
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = http_priv->getConnMgr(xsink);
+    if (*xsink || !mgr_holder) {
+        return nullptr;
+    }
+    HttpClientConnectionManagerBase& mgr = *mgr_holder;
+
+    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme, this_connection.host.c_str(),
+        this_connection.port, xsink);
+    if (!conn || *xsink) {
         return nullptr;
     }
 
-    // Send the request (use blocking version for client-side operations)
-    if (http_priv->getH2Session()->sendPendingDataBlocking(http_priv->timeout, xsink) < 0) {
+    conn->ref();
+    ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+    conn->waitForReadyOrError(timeout_ms, xsink);
+    if (*xsink || conn->isClosed()) {
+        if (!*xsink) {
+            xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
+                "connection closed before HTTP/2 CONNECT request");
+        }
+        mgr.closeAndEvict(conn, xsink);
         return nullptr;
     }
 
-    // Read the response with overall timeout
-    int64 deadline_ms = http_priv->timeout < 0 ? -1 : q_clock_getmillis() + http_priv->timeout;
+    if (conn->getProtocol() != HttpClientProtocol::H2) {
+        mgr.releaseConnection(conn);
+        xsink->raiseException("HTTP2-ERROR", "HTTP/2 connection required for extended CONNECT");
+        return nullptr;
+    }
+
+    QoreChannel* channel_raw = nullptr;
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequestStreamingSend("CONNECT", msgpath, *h2_headers, true, channel_raw, xsink), xsink);
+    if (*xsink || !submit_result || !channel_raw) {
+        mgr.releaseConnection(conn);
+        if (channel_raw) {
+            channel_raw->deref(xsink);
+        }
+        return nullptr;
+    }
+
+    int64_t submitted_stream_id = submit_result->getKeyValue("stream_id").getAsBigInt();
+    if (submitted_stream_id <= 0 || submitted_stream_id > INT32_MAX) {
+        channel_raw->close();
+        channel_raw->deref(xsink);
+        xsink->raiseException("HTTP2-CONNECT-ERROR", "invalid HTTP/2 CONNECT stream id " QLLD,
+            submitted_stream_id);
+        return nullptr;
+    }
+    int32_t stream_id = static_cast<int32_t>(submitted_stream_id);
+
     while (true) {
-        int recv_timeout = http_priv->timeout;
-        if (deadline_ms >= 0) {
-            int64 now_ms = q_clock_getmillis();
-            if (now_ms >= deadline_ms) {
-                xsink->raiseException("HTTP2-CONNECT-ERROR",
-                    "timeout waiting for HTTP/2 CONNECT response (timeout: %d ms)",
-                    (int)http_priv->timeout);
-                return nullptr;
-            }
-            recv_timeout = static_cast<int>(deadline_ms - now_ms);
-        }
-        int rv = http_priv->getH2Session()->receiveData(recv_timeout, xsink);
-        if (rv < 0) {
+        bool timed_out = false;
+        bool has_value = false;
+        ValueHolder rv(channel_raw->recv(timeout_ms, xsink, timed_out, has_value), xsink);
+        if (*xsink) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
             return nullptr;
         }
-        // Flush pending output (SETTINGS_ACK, etc.) after processing received frames.
-        // Following nginx pattern: always send pending data after recv processing.
-        // Recompute timeout from deadline since receiveData() may have consumed time.
-        // NOTE: unlike the loop entry deadline check above, we use zero-timeout (non-blocking)
-        // rather than raising an error when the deadline has passed, because this flush is a
-        // necessary consequence of processing inbound frames — the pending data (typically small
-        // control frames like SETTINGS_ACK) must be sent for the protocol to proceed, and a
-        // non-blocking send will almost always succeed for small frames in the kernel buffer.
-        int flush_timeout = recv_timeout;
-        if (deadline_ms >= 0) {
-            int64 now_ms = q_clock_getmillis();
-            flush_timeout = now_ms >= deadline_ms ? 0 : static_cast<int>(deadline_ms - now_ms);
-        }
-        if (http_priv->getH2Session()->sendPendingDataBlocking(flush_timeout, xsink) < 0) {
-            return nullptr;
-        }
-        if (rv == 1) {
-            // Connection was closed by peer - check if we got a response first
-            Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
-            if (stream && stream->headers_complete) {
-                // Process the response we received before connection close
-                // Fall through to normal processing
-            } else {
-                // Connection closed without receiving a complete response
-                xsink->raiseException("HTTP2-CONNECT-ERROR",
-                    "HTTP/2 connection closed by peer before CONNECT response was received");
-                return nullptr;
-            }
-        }
-
-        // Check if SETTINGS revealed that server doesn't support extended CONNECT.
-        // This catches the case where SETTINGS are received after the CONNECT was sent;
-        // some nghttp2 versions silently drop :protocol, so no RST_STREAM will arrive.
-        if (http_priv->getH2Session()->isExtendedConnectRejected()) {
-            // Cancel the submitted stream to prevent leaking it in the session map
-            // and notify the server to stop processing the bare CONNECT.
-            // sendPendingDataBlocking() triggers onStreamCloseCallback which removes
-            // the stream from the session map.
-            http_priv->getH2Session()->submitRstStream(stream_id, NGHTTP2_CANCEL, xsink);
-            if (!*xsink) {
-                http_priv->getH2Session()->sendPendingDataBlocking(0, xsink);
-            }
-            // Clear cleanup errors — the real error is missing ENABLE_CONNECT_PROTOCOL
-            xsink->clear();
+        if (timed_out) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
             xsink->raiseException("HTTP2-CONNECT-ERROR",
-                "server does not support extended CONNECT "
-                "(ENABLE_CONNECT_PROTOCOL not advertised in SETTINGS)");
+                "timeout waiting for HTTP/2 CONNECT response (timeout: %d ms)", timeout_ms);
+            return nullptr;
+        }
+        if (!has_value) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            xsink->raiseException("HTTP2-CONNECT-ERROR",
+                "HTTP/2 connection closed before CONNECT response was received");
+            return nullptr;
+        }
+        if (rv->getType() != NT_HASH) {
+            continue;
+        }
+
+        QoreHashNode* h = rv->get<QoreHashNode>();
+        QoreValue err_val = h->getKeyValue("err");
+        if (err_val.getType() == NT_STRING) {
+            const char* err_str = err_val.get<const QoreStringNode>()->c_str();
+            QoreValue desc_val = h->getKeyValue("desc");
+            const char* desc_str = desc_val.getType() == NT_STRING
+                ? desc_val.get<const QoreStringNode>()->c_str()
+                : "HTTP/2 CONNECT request failed";
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            xsink->raiseException(err_str, "%s", desc_str);
             return nullptr;
         }
 
-        // Check if the stream was reset (e.g., RST_STREAM from server)
+        QoreValue sc_val = h->getKeyValue("status_code");
+        if (sc_val.isNullOrNothing()) {
+            continue;
+        }
+
+        int status_code = (int)sc_val.getAsBigInt();
+        ReferenceHolder<QoreHashNode> out(new QoreHashNode(autoTypeInfo), xsink);
+        out->setKeyValue("status_code", status_code, xsink);
+        out->setKeyValue("stream_id", stream_id, xsink);
+        QoreValue hdr_val = h->getKeyValue("headers");
+        if (hdr_val.getType() == NT_HASH) {
+            out->setKeyValue("headers", hdr_val.refSelf(), xsink);
+        }
+        if (*xsink) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            return nullptr;
+        }
+
+        if (info) {
+            info->setKeyValue("http2", true, xsink);
+            info->setKeyValue("stream_id", stream_id, xsink);
+            info->setKeyValue("status_code", status_code, xsink);
+            if (hdr_val.getType() == NT_HASH) {
+                info->setKeyValue("response-headers", hdr_val.refSelf(), xsink);
+            }
+        }
+
+        if (status_code != 200) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            xsink->raiseException("HTTP2-CONNECT-ERROR",
+                "HTTP/2 CONNECT request failed with status %d", status_code);
+            return nullptr;
+        }
+
         {
-            Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
-            if (stream && stream->reset) {
-                xsink->raiseException("HTTP2-CONNECT-ERROR",
-                    "HTTP/2 CONNECT request was rejected by the server "
-                    "(stream reset with error code %d)", (int)stream->error_code);
-                return nullptr;
-            }
-        }
-
-        // Check if we have a response
-        Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
-        if (stream && stream->headers_complete) {
-            // Build response hash
-            ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-            rv->setKeyValue("status_code", stream->status_code, xsink);
-            rv->setKeyValue("stream_id", stream_id, xsink);
-
-            // Add response headers (handle duplicate headers per RFC 7540)
-            rv->setKeyValue("headers", httpMultiHeadersToQoreHash(stream->headers), xsink);
-
-            // Store stream ID on both HTTPClient and socket for isDataAvailable()
+            SafeLocker sl(priv->m);
+            http_priv->clearH2ConnectStream();
+            http_priv->clearH3ConnectStream();
+            conn->ref();
+            http_priv->h2_connect_conn = conn;
+            http_priv->h2_connect_channel = channel_raw;
+            http_priv->h2_connect_stream_id = stream_id;
+            http_priv->h2_connect_stream_closed = false;
+            http_priv->http2_active = true;
             http_priv->setActiveH2StreamId(stream_id);
-
-            // Add info if requested
-            if (info) {
-                info->setKeyValue("http2", true, xsink);
-                info->setKeyValue("stream_id", stream_id, xsink);
-                info->setKeyValue("status_code", stream->status_code, xsink);
-            }
-
-            // RFC 8441: 200 OK means CONNECT succeeded
-            if (stream->status_code != 200) {
-                xsink->raiseException("HTTP2-CONNECT-ERROR",
-                    "HTTP/2 CONNECT request failed with status %d", stream->status_code);
-                return nullptr;
-            }
-
-            return rv.release();
         }
+        return out.release();
     }
 }
-
-// Forward declaration — defined later in the file
-static int driveQuicIo(QuicSession* session, int fd,
-        const struct sockaddr_storage& local_addr, socklen_t local_addrlen,
-        int poll_timeout_ms, ExceptionSink* xsink);
 
 QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const QoreHashNode* headers,
         const char* protocol, QoreHashNode* info, ExceptionSink* xsink) {
-    SafeLocker sl(priv->m);
-
-    // Ensure we're connected with HTTP/3 (QUIC)
-    if (!http_priv->http3_active || !http_priv->quic_session) {
-        // Establish QUIC connection directly (not TCP+TLS)
-        if (http_priv->connectQuic(xsink, http_priv->connection)) {
-            return nullptr;
-        }
-        if (!http_priv->http3_active || !http_priv->quic_session) {
-            xsink->raiseException("HTTP3-ERROR", "HTTP/3 connection required for extended CONNECT");
-            return nullptr;
-        }
-    }
-
-    // RFC 9220: Check if server supports extended CONNECT before sending
-    if (http_priv->quic_session->isExtendedConnectRejected()) {
-        xsink->raiseException("HTTP3-CONNECT-ERROR",
-            "server does not support extended CONNECT "
-            "(enable_connect_protocol not advertised in SETTINGS)");
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "sendHttp3Connect", xsink);
+    if (*xsink) {
         return nullptr;
     }
 
-    // Build headers map
-    strcase_str_map_t h3_headers;
+    con_info this_connection = http_priv->connection;
+    int timeout_ms = http_priv->timeout;
 
-    // Add Host header with port when needed (used to derive :authority)
-    SimpleRefHolder<QoreStringNode> host_header(http_priv->getHostHeaderValueUnlocked(http_priv->connection));
-    if (host_header) {
-        h3_headers["host"] = host_header->c_str();
+    if (this_connection.is_unix) {
+        xsink->raiseException("HTTP3-ERROR", "HTTP/3 extended CONNECT is not supported over UNIX sockets");
+        return nullptr;
+    }
+    if (!this_connection.ssl) {
+        xsink->raiseException("HTTP3-ERROR", "HTTP/3 extended CONNECT requires an HTTPS URL");
+        return nullptr;
     }
 
-    // Copy custom headers
+    QoreString pathstr(http_priv->enc ? http_priv->enc : QCS_UTF8);
+    bool path_already_encoded = false;
+    const char* msgpath = http_priv->getMsgPath(xsink, this_connection, path, pathstr, path_already_encoded, false);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> h3_headers(new QoreHashNode(autoTypeInfo), xsink);
+    h3_headers->setKeyValue(":protocol", new QoreStringNode(protocol), xsink);
+    h3_headers->setKeyValue("host", http_priv->getHostHeaderValueUnlocked(this_connection), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
-            const char* key = hi.getKey();
             QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                QoreStringValueHelper str(val);
-                h3_headers[key] = str->c_str();
+            if (val.getType() == NT_STRING || val.getType() == NT_LIST) {
+                h3_headers->setKeyValue(hi.getKey(), val.refSelf(), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
             }
         }
     }
 
-    // Submit CONNECT request with :protocol pseudo-header
-    int64_t stream_id = http_priv->quic_session->submitConnectRequest(path, h3_headers,
-        protocol, xsink);
-    if (stream_id < 0) {
-        return nullptr;
+    bool forced_h3 = !http_priv->http3_active.load(std::memory_order_acquire);
+    std::shared_ptr<HttpClientConnectionManagerBase> existing_mgr = http_priv->getConnMgrIfPresent();
+    if (forced_h3 || (existing_mgr
+            && existing_mgr->getOptions().protocol != HttpClientProtocol::H3)) {
+        http_priv->dropConnMgr(true);
+        http_priv->http3_active = true;
+        http_priv->http2_active = false;
     }
 
-    // Helper to cancel the CONNECT stream on error paths — cleans up streaming_body_data_
-    // and connect_tunnel_active entries that would otherwise leak until connection close
-    auto cancel_stream = [&]() {
-        if (http_priv->quic_session && !http_priv->quic_session->isClosed()) {
-            ExceptionSink tmp_xsink;
-            http_priv->quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED, &tmp_xsink);
-            // ignore cancelStream errors — we're already on an error path
+    auto restore_forced_h3 = [&]() {
+        if (forced_h3) {
+            http_priv->http3_active = false;
+            http_priv->dropConnMgr(true);
         }
     };
 
-    // Drive I/O to send the request and wait for response
-    int64 deadline_ms = http_priv->timeout < 0 ? -1 : q_clock_getmillis() + http_priv->timeout;
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = http_priv->getConnMgr(xsink);
+    if (*xsink || !mgr_holder) {
+        restore_forced_h3();
+        return nullptr;
+    }
+    HttpClientConnectionManagerBase& mgr = *mgr_holder;
+
+    HttpClientConnectionBase* conn = mgr.acquireConnection("https", this_connection.host.c_str(),
+        this_connection.port, xsink);
+    if (!conn || *xsink) {
+        restore_forced_h3();
+        return nullptr;
+    }
+
+    conn->ref();
+    ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+    conn->waitForReadyOrError(timeout_ms, xsink);
+    if (*xsink || conn->isClosed()) {
+        if (!*xsink) {
+            xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
+                "connection closed before HTTP/3 CONNECT request");
+        }
+        mgr.closeAndEvict(conn, xsink);
+        restore_forced_h3();
+        return nullptr;
+    }
+
+    if (conn->getProtocol() != HttpClientProtocol::H3) {
+        mgr.releaseConnection(conn);
+        restore_forced_h3();
+        xsink->raiseException("HTTP3-ERROR", "HTTP/3 connection required for extended CONNECT");
+        return nullptr;
+    }
+
+    QoreChannel* channel_raw = nullptr;
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequestStreamingSend("CONNECT", msgpath, *h3_headers, true, channel_raw, xsink), xsink);
+    if (*xsink || !submit_result || !channel_raw) {
+        mgr.releaseConnection(conn);
+        if (channel_raw) {
+            channel_raw->deref(xsink);
+        }
+        restore_forced_h3();
+        return nullptr;
+    }
+
+    int64_t stream_id = submit_result->getKeyValue("stream_id").getAsBigInt();
+    if (stream_id < 0) {
+        channel_raw->close();
+        channel_raw->deref(xsink);
+        restore_forced_h3();
+        xsink->raiseException("HTTP3-CONNECT-ERROR", "invalid HTTP/3 CONNECT stream id " QLLD,
+            stream_id);
+        return nullptr;
+    }
 
     while (true) {
-        if (http_priv->quic_session->isClosed()) {
+        bool timed_out = false;
+        bool has_value = false;
+        ValueHolder rv(channel_raw->recv(timeout_ms, xsink, timed_out, has_value), xsink);
+        if (*xsink) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            restore_forced_h3();
+            return nullptr;
+        }
+        if (timed_out) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            restore_forced_h3();
             xsink->raiseException("HTTP3-CONNECT-ERROR",
-                "QUIC connection closed while waiting for CONNECT response");
-            http_priv->disconnectQuic();
+                "timeout waiting for HTTP/3 CONNECT response (timeout: %d ms)", timeout_ms);
+            return nullptr;
+        }
+        if (!has_value) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            restore_forced_h3();
+            xsink->raiseException("HTTP3-CONNECT-ERROR",
+                "HTTP/3 connection closed before CONNECT response was received");
+            return nullptr;
+        }
+        if (rv->getType() != NT_HASH) {
+            continue;
+        }
+
+        QoreHashNode* h = rv->get<QoreHashNode>();
+        QoreValue err_val = h->getKeyValue("err");
+        if (err_val.getType() == NT_STRING) {
+            const char* err_str = err_val.get<const QoreStringNode>()->c_str();
+            QoreValue desc_val = h->getKeyValue("desc");
+            const char* desc_str = desc_val.getType() == NT_STRING
+                ? desc_val.get<const QoreStringNode>()->c_str()
+                : "HTTP/3 CONNECT request failed";
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            restore_forced_h3();
+            xsink->raiseException(err_str, "%s", desc_str);
             return nullptr;
         }
 
-        int remaining_ms = 100;
-        if (deadline_ms >= 0) {
-            int64 now_ms = q_clock_getmillis();
-            if (now_ms >= deadline_ms) {
-                cancel_stream();
-                xsink->raiseException("HTTP3-CONNECT-ERROR",
-                    "timeout waiting for HTTP/3 CONNECT response (timeout: %d ms)",
-                    (int)http_priv->timeout);
+        QoreValue sc_val = h->getKeyValue("status_code");
+        if (sc_val.isNullOrNothing()) {
+            continue;
+        }
+
+        int status_code = (int)sc_val.getAsBigInt();
+        ReferenceHolder<QoreHashNode> out(new QoreHashNode(autoTypeInfo), xsink);
+        out->setKeyValue("status_code", status_code, xsink);
+        out->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
+        out->setKeyValue("http_version", new QoreStringNode("3"), xsink);
+        QoreValue hdr_val = h->getKeyValue("headers");
+        if (hdr_val.getType() == NT_HASH) {
+            out->setKeyValue("headers", hdr_val.refSelf(), xsink);
+        }
+        if (*xsink) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            restore_forced_h3();
+            return nullptr;
+        }
+
+        if (info) {
+            info->setKeyValue("http3", true, xsink);
+            info->setKeyValue("stream_id", QoreValue((int64)stream_id), xsink);
+            info->setKeyValue("status_code", status_code, xsink);
+            if (hdr_val.getType() == NT_HASH) {
+                info->setKeyValue("response-headers", hdr_val.refSelf(), xsink);
+            }
+            if (*xsink) {
+                channel_raw->close();
+                channel_raw->deref(xsink);
+                restore_forced_h3();
                 return nullptr;
             }
-            remaining_ms = std::min(100, static_cast<int>(deadline_ms - now_ms));
         }
 
-        if (driveQuicIo(http_priv->quic_session.get(), http_priv->quic_fd,
-                http_priv->quic_local_addr, http_priv->quic_local_addrlen,
-                remaining_ms, xsink)) {
-            http_priv->disconnectQuic();
-            return nullptr;
-        }
-
-        // Check if SETTINGS revealed that server doesn't support extended CONNECT
-        if (http_priv->quic_session->isExtendedConnectRejected()) {
-            cancel_stream();
+        if (status_code != 200) {
+            channel_raw->close();
+            channel_raw->deref(xsink);
+            restore_forced_h3();
             xsink->raiseException("HTTP3-CONNECT-ERROR",
-                "server does not support extended CONNECT "
-                "(enable_connect_protocol not advertised in SETTINGS)");
+                "HTTP/3 CONNECT request failed with status %d", status_code);
             return nullptr;
         }
 
-        // Check if we have a completed stream (CONNECT response headers received)
-        if (http_priv->quic_session->hasCompletedStreams()) {
-            break;
+        {
+            SafeLocker sl(priv->m);
+            http_priv->clearH2ConnectStream();
+            http_priv->clearH3ConnectStream();
+            conn->ref();
+            http_priv->h3_connect_conn = conn;
+            http_priv->h3_connect_channel = channel_raw;
+            http_priv->h3_connect_stream_id = stream_id;
+            http_priv->h3_connect_stream_closed = false;
+            http_priv->http3_active = true;
+            http_priv->http2_active = false;
         }
+        return out.release();
     }
-
-    // Get the completed stream
-    std::unique_ptr<QuicStreamInfo> stream = http_priv->quic_session->takeCompletedStream();
-    if (!stream) {
-        cancel_stream();
-        xsink->raiseException("HTTP3-CONNECT-ERROR",
-            "no response received for CONNECT stream %" PRId64, stream_id);
-        return nullptr;
-    }
-
-    // Verify we got the right stream
-    if (stream->stream_id != stream_id) {
-        cancel_stream();
-        xsink->raiseException("HTTP3-CONNECT-ERROR",
-            "unexpected stream %" PRId64 " in CONNECT response (expected %" PRId64 ")",
-            stream->stream_id, stream_id);
-        return nullptr;
-    }
-
-    // Build response hash
-    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-    rv->setKeyValue("status_code", stream->status_code, xsink);
-    rv->setKeyValue("stream_id", stream_id, xsink);
-    rv->setKeyValue("http_version", new QoreStringNode("3"), xsink);
-
-    // Add response headers
-    rv->setKeyValue("headers", httpMultiHeadersToQoreHash(stream->headers), xsink);
-
-    // Add info if requested
-    if (info) {
-        info->setKeyValue("http3", true, xsink);
-        info->setKeyValue("stream_id", stream_id, xsink);
-        info->setKeyValue("status_code", stream->status_code, xsink);
-    }
-
-    // RFC 9220: 200 OK means CONNECT succeeded
-    if (stream->status_code != 200) {
-        cancel_stream();
-        xsink->raiseException("HTTP3-CONNECT-ERROR",
-            "HTTP/3 CONNECT request failed with status %d", stream->status_code);
-        return nullptr;
-    }
-
-    return rv.release();
 }
 
-// Thread safety: all operations here are serialized under priv->m (SafeLocker).
-// Http2Session methods (sendStreamData, sendPendingDataBlocking, receiveData,
-// wantWrite) acquire their own Http2Session::m internally, but priv->m is
-// always acquired first, maintaining a consistent lock order: priv->m → h2::m.
-// SSL_read (receiveData) and SSL_write (sendPendingDataBlocking) are therefore
-// serialized and cannot run concurrently for the same connection.
 int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
         bool end_stream, int timeout_ms, ExceptionSink* xsink) {
-    SafeLocker sl(priv->m);
-
-    if (!http_priv->http2_active || !http_priv->getH2Session()) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 is not active");
-        return -1;
-    }
-
-    const void* ptr = data ? data->getPtr() : nullptr;
-    size_t len = data ? data->size() : 0;
-
-    int h2rv = http_priv->getH2Session()->sendStreamData(stream_id, ptr, len, end_stream, xsink);
-    if (h2rv < 0) {
-        return -1;
-    }
-    if (h2rv > 0) {
-        xsink->raiseException("HTTP2-FLOW-CONTROL",
-            "stream %d buffer full: data dropped", stream_id);
-        return -1;
-    }
-
-    // Send pending data (use blocking version for client-side operations)
-    int rv = http_priv->getH2Session()->sendPendingDataBlocking(timeout_ms, xsink);
-    if (*xsink) {
-        return rv;
-    }
-
-    // Process any incoming frames (non-blocking) to handle RST_STREAM,
-    // WINDOW_UPDATE, etc. Without this, the client can deadlock when
-    // the server resets a stream while the client is still sending body
-    // data — the client never discovers the reset because it never reads.
+    HttpClientConnectionBase* conn = nullptr;
     {
-        ExceptionSink recv_xsink;
-        http_priv->getH2Session()->receiveData(0, &recv_xsink);
-        if (recv_xsink) {
-            // Advisory receive probe failed — log but don't propagate, since
-            // the primary send operation already succeeded
-            QoreStringValueHelper err_str(recv_xsink.getExceptionErr());
-            QoreStringValueHelper desc_str(recv_xsink.getExceptionDesc());
-            printd(2, "sendHttp2StreamData() recv probe exception: %s: %s\n",
-                *err_str ? err_str->c_str() : "?",
-                *desc_str ? desc_str->c_str() : "?");
-        }
-        // Flush any frames generated by receive processing (e.g., ACKs,
-        // WINDOW_UPDATEs) — only if receiveData actually generated frames
-        if (!recv_xsink && http_priv->getH2Session()->wantWrite()) {
-            http_priv->getH2Session()->sendPendingDataBlocking(100, &recv_xsink);
+        SafeLocker sl(priv->m);
+        if (http_priv->h2_connect_conn) {
+            if (stream_id != http_priv->h2_connect_stream_id) {
+                xsink->raiseException("HTTP2-ERROR",
+                    "HTTP/2 stream id %d is not active on this HTTPClient", stream_id);
+                return -1;
+            }
+            conn = http_priv->h2_connect_conn;
+            conn->ref();
         }
     }
+    if (conn) {
+        ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+        const void* ptr = data ? data->getPtr() : nullptr;
+        size_t len = data ? data->size() : 0;
+        if (len) {
+            conn->pushSendData(ptr, len, xsink);
+        }
+        if (!*xsink && end_stream) {
+            conn->pushSendData(nullptr, 0, xsink);
+        }
+        return *xsink ? -1 : 0;
+    }
 
-    return rv;
+    xsink->raiseException("HTTP2-ERROR", "no active HTTP/2 CONNECT stream on this HTTPClient");
+    return -1;
 }
 
 BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
-    SafeLocker sl(priv->m);
-
-    if (!http_priv->http2_active || !http_priv->getH2Session()) {
-        xsink->raiseException("HTTP2-ERROR", "HTTP/2 is not active");
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHttp2StreamData", xsink);
+    if (*xsink) {
         return nullptr;
     }
 
-    // First check if data is already in the buffer (from isHttp2DataAvailable)
-    Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
-    if (stream && !stream->body.empty()) {
-        // Copy data to a new BinaryNode (append copies data internally)
-        SimpleRefHolder<BinaryNode> rv(new BinaryNode());
-        rv->append(stream->body.data(), stream->body.size());
-        stream->body.clear();
-        return rv.release();
-    }
-
-    // No data in buffer, try to receive data
-    int recv_rv = http_priv->getH2Session()->receiveData(timeout_ms, xsink);
-    if (recv_rv < 0) {
-        return nullptr;
-    }
-
-    // Flush pending output (WINDOW_UPDATE frames generated by receiveData).
-    // With no_auto_window_update, WINDOW_UPDATE is only sent when sendPendingData is called.
+    QoreChannel* ch = nullptr;
     {
-        Http2Session* h2 = http_priv->getH2Session();
-        if (h2) {
-            ExceptionSink flush_xsink;
-            h2->sendPendingDataBlocking(100, &flush_xsink);
-            // Ignore flush errors — they don't affect the read path
+        SafeLocker sl(priv->m);
+        if (http_priv->h2_connect_channel) {
+            if (stream_id != http_priv->h2_connect_stream_id) {
+                xsink->raiseException("HTTP2-ERROR",
+                    "HTTP/2 stream id %d is not active on this HTTPClient", stream_id);
+                return nullptr;
+            }
+            if (http_priv->h2_connect_stream_closed) {
+                return nullptr;
+            }
+            ch = http_priv->h2_connect_channel;
+            ch->ref();
+        }
+    }
+    if (ch) {
+        ReferenceHolder<QoreChannel> channel(ch, xsink);
+        while (true) {
+            bool timed_out = false;
+            bool has_value = false;
+            ValueHolder rv(channel->recv(timeout_ms, xsink, timed_out, has_value), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (timed_out) {
+                return nullptr;
+            }
+            if (!has_value) {
+                SafeLocker sl(priv->m);
+                if (stream_id == http_priv->h2_connect_stream_id) {
+                    http_priv->h2_connect_stream_closed = true;
+                }
+                return nullptr;
+            }
+            if (rv->getType() != NT_HASH) {
+                continue;
+            }
+
+            QoreHashNode* h = rv->get<QoreHashNode>();
+            QoreValue err_val = h->getKeyValue("err");
+            if (err_val.getType() == NT_STRING) {
+                const char* err_str = err_val.get<const QoreStringNode>()->c_str();
+                QoreValue desc_val = h->getKeyValue("desc");
+                const char* desc_str = desc_val.getType() == NT_STRING
+                    ? desc_val.get<const QoreStringNode>()->c_str()
+                    : "HTTP/2 stream read failed";
+                xsink->raiseException(err_str, "%s", desc_str);
+                return nullptr;
+            }
+            QoreValue legacy_error = h->getKeyValue("error");
+            if (legacy_error.getAsBool()) {
+                SafeLocker sl(priv->m);
+                if (stream_id == http_priv->h2_connect_stream_id) {
+                    http_priv->h2_connect_stream_closed = true;
+                }
+                return nullptr;
+            }
+
+            bool end_stream = h->getKeyValue("end_stream").getAsBool();
+            QoreValue body_val = h->getKeyValue("body");
+            if (!body_val.isNullOrNothing()) {
+                if (end_stream) {
+                    SafeLocker sl(priv->m);
+                    if (stream_id == http_priv->h2_connect_stream_id) {
+                        http_priv->h2_connect_stream_closed = true;
+                    }
+                }
+                if (body_val.getType() == NT_BINARY) {
+                    return static_cast<BinaryNode*>(body_val.get<const BinaryNode>()->refSelf());
+                }
+                if (body_val.getType() == NT_STRING) {
+                    const QoreStringNode* str = body_val.get<const QoreStringNode>();
+                    SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+                    bin->append(str->c_str(), str->size());
+                    return bin.release();
+                }
+            }
+            if (end_stream) {
+                SafeLocker sl(priv->m);
+                if (stream_id == http_priv->h2_connect_stream_id) {
+                    http_priv->h2_connect_stream_closed = true;
+                }
+                return nullptr;
+            }
         }
     }
 
-    // Get stream data again
-    Http2Session* h2_check = http_priv->getH2Session();
-    stream = h2_check ? h2_check->getStream(stream_id) : nullptr;
-
-    if (recv_rv == 1) {
-        // Connection closed by peer (EOF) — return buffered data if any,
-        // otherwise raise an exception so the caller knows the connection was lost
-        if (stream && !stream->body.empty()) {
-            SimpleRefHolder<BinaryNode> rv(new BinaryNode());
-            rv->append(stream->body.data(), stream->body.size());
-            stream->body.clear();
-            return rv.release();
-        }
-        xsink->raiseException("HTTP2-EOF", "HTTP/2 connection closed by peer");
-        return nullptr;
-    }
-    if (!stream || stream->body.empty()) {
-        return nullptr;
-    }
-
-    // Copy data to a new BinaryNode (append copies data internally)
-    SimpleRefHolder<BinaryNode> rv(new BinaryNode());
-    rv->append(stream->body.data(), stream->body.size());
-    stream->body.clear();
-    return rv.release();
+    xsink->raiseException("HTTP2-ERROR", "no active HTTP/2 CONNECT stream on this HTTPClient");
+    return nullptr;
 }
 
 int32_t QoreHttpClientObject::getHttp2StreamId() const {
+    if (http_priv->h2_connect_stream_id) {
+        return http_priv->h2_connect_stream_id;
+    }
     return http_priv->h2_stream_id;
 }
 
 bool QoreHttpClientObject::hasHttp2StreamData(int32_t stream_id) const {
     SafeLocker sl(priv->m);
+    if (http_priv->h2_connect_channel && stream_id == http_priv->h2_connect_stream_id) {
+        return !http_priv->h2_connect_channel->empty();
+    }
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         return false;
     }
@@ -4834,6 +3828,9 @@ bool QoreHttpClientObject::hasHttp2StreamData(int32_t stream_id) const {
 
 bool QoreHttpClientObject::isHttp2StreamClosed(int32_t stream_id) const {
     SafeLocker sl(priv->m);
+    if (http_priv->h2_connect_channel && stream_id == http_priv->h2_connect_stream_id) {
+        return http_priv->h2_connect_stream_closed;
+    }
     if (!http_priv->http2_active || !http_priv->getH2Session()) {
         return true;
     }
@@ -4842,244 +3839,200 @@ bool QoreHttpClientObject::isHttp2StreamClosed(int32_t stream_id) const {
 
 bool QoreHttpClientObject::isHttp3StreamClosed(int64_t stream_id) const {
     SafeLocker sl(priv->m);
-    if (!http_priv->http3_active || !http_priv->quic_session) {
-        return true;
+    if (http_priv->h3_connect_channel && stream_id == http_priv->h3_connect_stream_id) {
+        return http_priv->h3_connect_stream_closed;
     }
-    return http_priv->quic_session->isStreamComplete(stream_id);
+    return true;
 }
 
 bool QoreHttpClientObject::isHttp2DataAvailable(int32_t stream_id, int timeout_ms, ExceptionSink* xsink) {
-    // Threading design:
-    // - SSL objects are not thread-safe: SSL_peek/SSL_read and SSL_write must not run concurrently
-    // - The sender thread (sendHttp2StreamData) holds priv->m when doing SSL_write
-    // - Therefore ALL SSL operations here must be under priv->m
-    // - The raw fd poll (asyncIoWait) uses poll()/select() only — no SSL — safe without locks
-    //
-    // Flow:
-    // 1. Under lock: check HTTP/2 stream buffer and SSL/socket buffered data
-    // 2. Without lock: raw fd poll (thread-safe, no SSL involvement)
-    // 3. Under lock: process received HTTP/2 frames via SSL_read
-
-    SafeLocker sl(priv->m);
-
-    if (!http_priv->http2_active || !http_priv->getH2Session()) {
-        // Fall back to socket-level check if not in HTTP/2 mode
-        return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "isHttp2DataAvailable", xsink);
+    if (*xsink) {
+        return false;
     }
 
-    // Step 1a: Check HTTP/2 stream buffer for already-decoded data
-    Http2StreamInfo* stream = http_priv->getH2Session()->getStream(stream_id);
-    if (stream && !stream->body.empty()) {
-        return true;
-    }
-
-    // Step 1b: Check if socket read buffer or SSL layer has already-decrypted data
-    // These checks are safe under priv->m (no concurrent SSL operations possible)
-    Http2Session* h2_buffered = http_priv->getH2Session();
-    if (h2_buffered && h2_buffered->hasSocketBufferedData()) {
-        // Buffered data exists — process HTTP/2 frames immediately under lock
-        Http2Session* h2 = h2_buffered;
-        if (h2) {
-            int rv = h2->receiveData(100, xsink);
-            if (rv < 0 && *xsink) {
+    QoreChannel* ch = nullptr;
+    bool h2_active = false;
+    {
+        SafeLocker sl(priv->m);
+        if (http_priv->h2_connect_channel && stream_id == http_priv->h2_connect_stream_id) {
+            if (http_priv->h2_connect_stream_closed) {
                 return false;
             }
-            if (rv == 1) {
-                // EOF: connection closed by peer
-                xsink->raiseException("HTTP2-EOF", "HTTP/2 connection closed by peer");
-                return false;
-            }
-            // Flush pending output (WINDOW_UPDATE frames generated by receiveData)
-            // With no_auto_window_update, WINDOW_UPDATE is queued by onDataChunkRecvCallback
-            // but only sent when sendPendingData is called
-            h2 = http_priv->getH2Session();
-            if (h2) {
-                h2->sendPendingDataBlocking(100, xsink);
-                if (*xsink) {
-                    xsink->clear();
-                }
-            }
-            h2 = http_priv->getH2Session();
-            if (h2) {
-                stream = h2->getStream(stream_id);
-                if (stream && !stream->body.empty()) {
-                    return true;
-                }
-            }
+            ch = http_priv->h2_connect_channel;
+            ch->ref();
         }
-        return false;
+        h2_active = http_priv->http2_active && http_priv->getH2Session();
+    }
+    if (ch) {
+        ReferenceHolder<QoreChannel> channel(ch, xsink);
+        return channel->waitReadable(timeout_ms, xsink);
     }
 
-    // Step 2: No buffered data — poll the raw file descriptor for new data
-    // asyncIoWait() uses poll()/select()/kqueue() on the raw fd only — no SSL operations
-    // Safe to call without locks; the sender can freely do SSL_write() concurrently
-    QoreSocket* sock = http_priv->msock->socket;
-    sl.unlock();
-
-    int rc = sock->asyncIoWait(timeout_ms, true, false);
-
-    sl.lock();
-
-    // Step 3: Re-check state after re-acquiring lock
-    if (!http_priv->http2_active || !http_priv->getH2Session()) {
-        return false;
+    // Fall back to the Socket method if not in HTTP/2 mode; it executes
+    // readiness through the async I/O controller. This preserves the
+    // historical HTTP/1 WebSocket-upgrade behavior of this method.
+    if (!h2_active) {
+        return QoreSocketObject::isDataAvailable(xsink, timeout_ms);
     }
 
-    // Step 3a: Always check SSL pending/socket buffer after re-acquiring lock.
-    // While the lock was released, the sender's SSL_write() may have read incoming
-    // TLS records into the SSL buffer (TLS renegotiation, key update, etc.).
-    // Also covers the case where asyncIoWait() timed out but data is now available.
-    if (rc <= 0) {
-        // Poll timed out or errored — check if SSL/socket has buffered data
-        Http2Session* h2_recheck = http_priv->getH2Session();
-        if (h2_recheck && h2_recheck->hasSocketBufferedData()) {
-            Http2Session* h2 = h2_recheck;
-            if (h2) {
-                int rv = h2->receiveData(100, xsink);
-                if (rv < 0 && *xsink) {
-                    return false;
-                }
-                if (rv == 1) {
-                    // EOF: connection closed by peer
-                    xsink->raiseException("HTTP2-EOF", "HTTP/2 connection closed by peer");
-                    return false;
-                }
-                // Flush pending WINDOW_UPDATE
-                h2 = http_priv->getH2Session();
-                if (h2) {
-                    h2->sendPendingDataBlocking(100, xsink);
-                    if (*xsink) {
-                        xsink->clear();
-                    }
-                }
-                h2 = http_priv->getH2Session();
-                if (h2) {
-                    stream = h2->getStream(stream_id);
-                    if (stream && !stream->body.empty()) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    // Step 3b: Raw data detected — process HTTP/2 frames under lock
-    Http2Session* h2_session = http_priv->getH2Session();
-    int rv = h2_session->receiveData(100, xsink);
-
-    if (rv < 0 && *xsink) {
-        return false;
-    }
-    if (rv == 1) {
-        // EOF: connection closed by peer
-        xsink->raiseException("HTTP2-EOF", "HTTP/2 connection closed by peer");
-        return false;
-    }
-
-    // Flush pending output (WINDOW_UPDATE frames generated by receiveData).
-    // With no_auto_window_update, WINDOW_UPDATE is only sent when sendPendingData is called.
-    // Without this flush, the server's flow control window stays at 0 and it cannot send data.
-    h2_session = http_priv->getH2Session();
-    if (h2_session) {
-        h2_session->sendPendingDataBlocking(100, xsink);
-        if (*xsink) {
-            xsink->clear();
-        }
-    }
-
-    // Re-check session after receiveData + sendPendingData
-    h2_session = http_priv->getH2Session();
-    if (!h2_session) {
-        return false;
-    }
-
-    stream = h2_session->getStream(stream_id);
-    return stream && !stream->body.empty();
+    xsink->raiseException("HTTP2-ERROR", "no active HTTP/2 CONNECT stream on this HTTPClient");
+    return false;
 }
 
-// NOTE: Unlike sendHttp2StreamData(), this method does NOT need a separate
-// non-blocking receive call to handle stream resets.  driveQuicIo() is
-// inherently bidirectional — it reads incoming UDP packets (which may carry
-// RESET_STREAM / STOP_SENDING) and writes outgoing ones in a single call.
-// Therefore the HTTP/2 flow-control deadlock cannot occur over HTTP/3.
 int QoreHttpClientObject::sendHttp3StreamData(int64_t stream_id, const BinaryNode* data,
         bool end_stream, int timeout_ms, ExceptionSink* xsink) {
-    SafeLocker sl(priv->m);
-
-    if (!http_priv->http3_active || !http_priv->quic_session) {
-        xsink->raiseException("HTTP3-ERROR", "HTTP/3 is not active");
-        return -1;
+    HttpClientConnectionBase* conn = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        if (http_priv->h3_connect_conn) {
+            if (stream_id != http_priv->h3_connect_stream_id) {
+                xsink->raiseException("HTTP3-ERROR",
+                    "HTTP/3 stream id " QLLD " is not active on this HTTPClient",
+                    stream_id);
+                return -1;
+            }
+            conn = http_priv->h3_connect_conn;
+            conn->ref();
+        }
+    }
+    if (conn) {
+        ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+        const void* ptr = data ? data->getPtr() : nullptr;
+        size_t len = data ? data->size() : 0;
+        if (len) {
+            conn->pushSendData(ptr, len, xsink);
+        }
+        if (!*xsink && end_stream) {
+            conn->pushSendData(nullptr, 0, xsink);
+        }
+        return *xsink ? -1 : 0;
     }
 
-    const void* ptr = data ? data->getPtr() : nullptr;
-    size_t len = data ? data->size() : 0;
-
-    int rv = http_priv->quic_session->sendStreamData(stream_id, ptr, len, end_stream, xsink);
-    if (*xsink || rv < 0) {
-        return -1;
-    }
-
-    // Drive I/O to flush the data — also processes incoming frames (bidirectional)
-    if (driveQuicIo(http_priv->quic_session.get(), http_priv->quic_fd,
-            http_priv->quic_local_addr, http_priv->quic_local_addrlen,
-            timeout_ms, xsink)) {
-        return -1;
-    }
-    return 0;
+    xsink->raiseException("HTTP3-ERROR", "no active HTTP/3 CONNECT stream on this HTTPClient");
+    return -1;
 }
 
 BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int timeout_ms, ExceptionSink* xsink) {
-    SafeLocker sl(priv->m);
-
-    if (!http_priv->http3_active || !http_priv->quic_session) {
-        xsink->raiseException("HTTP3-ERROR", "HTTP/3 is not active");
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHttp3StreamData", xsink);
+    if (*xsink) {
         return nullptr;
     }
 
-    // First check if data is already in the connect stream buffer
+    QoreChannel* ch = nullptr;
     {
-        QoreValue val = http_priv->quic_session->readConnectStreamData(stream_id, xsink);
-        if (*xsink) {
-            return nullptr;
+        SafeLocker sl(priv->m);
+        if (http_priv->h3_connect_channel) {
+            if (stream_id != http_priv->h3_connect_stream_id) {
+                xsink->raiseException("HTTP3-ERROR",
+                    "HTTP/3 stream id " QLLD " is not active on this HTTPClient",
+                    stream_id);
+                return nullptr;
+            }
+            if (http_priv->h3_connect_stream_closed) {
+                return nullptr;
+            }
+            ch = http_priv->h3_connect_channel;
+            ch->ref();
         }
-        if (val.getType() == NT_BINARY) {
-            return static_cast<BinaryNode*>(val.takeIfNode());
+    }
+    if (ch) {
+        ReferenceHolder<QoreChannel> channel(ch, xsink);
+        while (true) {
+            bool timed_out = false;
+            bool has_value = false;
+            ValueHolder rv(channel->recv(timeout_ms, xsink, timed_out, has_value), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (timed_out) {
+                return nullptr;
+            }
+            if (!has_value) {
+                SafeLocker sl(priv->m);
+                if (stream_id == http_priv->h3_connect_stream_id) {
+                    http_priv->h3_connect_stream_closed = true;
+                }
+                return nullptr;
+            }
+            if (rv->getType() != NT_HASH) {
+                continue;
+            }
+
+            QoreHashNode* h = rv->get<QoreHashNode>();
+            QoreValue err_val = h->getKeyValue("err");
+            if (err_val.getType() == NT_STRING) {
+                const char* err_str = err_val.get<const QoreStringNode>()->c_str();
+                QoreValue desc_val = h->getKeyValue("desc");
+                const char* desc_str = desc_val.getType() == NT_STRING
+                    ? desc_val.get<const QoreStringNode>()->c_str()
+                    : "HTTP/3 stream read failed";
+                xsink->raiseException(err_str, "%s", desc_str);
+                return nullptr;
+            }
+            QoreValue legacy_error = h->getKeyValue("error");
+            if (legacy_error.getAsBool()) {
+                SafeLocker sl(priv->m);
+                if (stream_id == http_priv->h3_connect_stream_id) {
+                    http_priv->h3_connect_stream_closed = true;
+                }
+                return nullptr;
+            }
+
+            bool end_stream = h->getKeyValue("end_stream").getAsBool();
+            QoreValue body_val = h->getKeyValue("body");
+            if (!body_val.isNullOrNothing()) {
+                if (end_stream) {
+                    SafeLocker sl(priv->m);
+                    if (stream_id == http_priv->h3_connect_stream_id) {
+                        http_priv->h3_connect_stream_closed = true;
+                    }
+                }
+                if (body_val.getType() == NT_BINARY) {
+                    return static_cast<BinaryNode*>(body_val.get<const BinaryNode>()->refSelf());
+                }
+                if (body_val.getType() == NT_STRING) {
+                    const QoreStringNode* str = body_val.get<const QoreStringNode>();
+                    SimpleRefHolder<BinaryNode> bin(new BinaryNode);
+                    bin->append(str->c_str(), str->size());
+                    return bin.release();
+                }
+            }
+            if (end_stream) {
+                SafeLocker sl(priv->m);
+                if (stream_id == http_priv->h3_connect_stream_id) {
+                    http_priv->h3_connect_stream_closed = true;
+                }
+                return nullptr;
+            }
         }
     }
 
-    // No data available — drive I/O and try again
-    if (driveQuicIo(http_priv->quic_session.get(), http_priv->quic_fd,
-            http_priv->quic_local_addr, http_priv->quic_local_addrlen,
-            timeout_ms, xsink)) {
-        return nullptr;
-    }
-
-    {
-        QoreValue val = http_priv->quic_session->readConnectStreamData(stream_id, xsink);
-        if (*xsink) {
-            return nullptr;
-        }
-        if (val.getType() == NT_BINARY) {
-            return static_cast<BinaryNode*>(val.takeIfNode());
-        }
-    }
+    xsink->raiseException("HTTP3-ERROR", "no active HTTP/3 CONNECT stream on this HTTPClient");
     return nullptr;
 }
 
 int QoreHttpClientObject::setProxyURL(const char* proxy, ExceptionSink* xsink)  {
-    SafeLocker sl(priv->m);
+    qore_socket_private* close_priv = nullptr;
+    int rc;
 
-    if (priv->checkNonBlock(xsink)) {
-        return -1;
-    }
+    {
+        SafeLocker sl(priv->m);
 
-    http_priv->disconnect_unlocked();
-    if (!proxy || !proxy[0]) {
-        http_priv->proxy_connection.clear();
-        return 0;
+        if (priv->checkNonBlock(xsink)) {
+            return -1;
+        }
+
+        close_priv = http_priv->disconnect_unlocked_prepare_close();
+        if (!proxy || !proxy[0]) {
+            http_priv->proxy_connection.clear();
+            rc = 0;
+        } else {
+            rc = http_priv->setProxyUrlUnlocked(proxy, xsink);
+        }
     }
-    return http_priv->setProxyUrlUnlocked(proxy, xsink);
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
+    return rc;
 }
 
 QoreStringNode* QoreHttpClientObject::getProxyURL()  {
@@ -5104,7 +4057,6 @@ QoreStringNode* QoreHttpClientObject::getSafeProxyURL()  {
 void QoreHttpClientObject::clearProxyURL() {
     SafeLocker sl(priv->m);
     http_priv->proxy_connection.clear();
-    http_priv->setSocketPath(http_priv->connection);
 }
 
 QoreStringNode* QoreHttpClientObject::getUsername() const {
@@ -5161,169 +4113,33 @@ bool QoreHttpClientObject::isProxySecure() const {
 
 int QoreHttpClientObject::connect(ExceptionSink* xsink) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", "connect", xsink);
+    qore_socket_private* close_priv = nullptr;
     SafeLocker sl(priv->m);
 
     if (priv->checkNonBlock(xsink)) {
         return -1;
     }
 
-    if (http_priv->use_conn_mgr && !http_priv->poll_apis_used
-            && http_priv->connection.has_url()
-            && !http_priv->connection.is_unix) {
-        int global_mode = qore_global_http2_mode.load(std::memory_order_relaxed);
-        bool lib_disabled = qore_check_option(QLO_DISABLE_HTTP2);
-        bool h2_hard = (http_priv->http2_mode == HTTP2_MODE_REQUIRED
-                || http_priv->http2_mode == HTTP2_MODE_H2C_DIRECT)
-            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-        bool h2_auto_ssl = http_priv->http2_mode == HTTP2_MODE_AUTO
-            && http_priv->connection.ssl
-            && global_mode != HTTP2_MODE_DISABLED && !lib_disabled;
-        bool h3 = http_priv->http3_mode.load(std::memory_order_relaxed)
-                == HTTP3_MODE_REQUIRED
-            || (http_priv->http3_active && http_priv->connection.ssl);
-
-        if (h2_hard || h2_auto_ssl || h3) {
-            // Protocols negotiated or driven by the connection manager must
-            // stay on that path; the legacy msock send path only handles
-            // HTTP/1.x request/response dispatch correctly.
-            http_priv->disconnect_unlocked();
-            return http_priv->connectViaConnMgr(xsink);
-        }
-
-        // HTTPClient inherits Socket, and H1 connect() has always promised
-        // to leave that inherited socket open for direct Socket APIs such
-        // as sendHTTPMessage().  The connection-manager path keeps its
-        // sockets in a private pool, so explicit H1 connect() switches this
-        // client instance back to the legacy msock path for the lifetime of
-        // the current config.
-        http_priv->use_conn_mgr = false;
-        http_priv->resetConnMgr();
-    }
-
-    http_priv->disconnect_unlocked();
-    return http_priv->connect_unlocked(xsink, http_priv->connection);
+    // Connect through the conn_mgr and keep the ready connection in the pool.
+    // Regular HTTP sends also use the conn_mgr, so extracting the socket here
+    // would strand constructor-time eager connects on a connection that the
+    // subsequent request path cannot reuse.
+    close_priv = http_priv->disconnect_unlocked_prepare_close();
+    sl.unlock();
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
+    return http_priv->connectViaConnMgr(xsink);
 }
 
 void QoreHttpClientObject::disconnect() {
-    SafeLocker sl(priv->m);
-    http_priv->disconnect_unlocked();
-    // User-initiated disconnect: reset conn_mgr so pending poll ops fail
-    // with SOCKET-NOT-OPEN and new connections are created on next request
-    http_priv->resetConnMgr();
-}
-
-QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connection, const char* mname,
-        const char* meth, const char* mpath,
-        const QoreHashNode& nh, const QoreStringNode* body, const void* data, unsigned size,
-        const ResolvedCallReferenceNode* send_callback, InputStream* is, size_t max_chunk_size,
-        const ResolvedCallReferenceNode* trailer_callback, QoreHashNode* info, bool with_connect, int timeout_ms,
-        int& code, bool& aborted, bool path_already_encoded, ExceptionSink* xsink) {
-    // issue #3978: make sure and reset output encoding if any is set
-    if (enc) {
-        msock->socket->setEncoding(enc);
+    qore_socket_private* close_priv = nullptr;
+    {
+        SafeLocker sl(priv->m);
+        close_priv = http_priv->disconnect_unlocked_prepare_close();
+        // User-initiated disconnect: reset conn_mgr so pending poll ops fail
+        // with SOCKET-NOT-OPEN and new connections are created on next request
+        http_priv->resetConnMgr();
     }
-
-    QoreString pathstr(msock->socket->getEncoding());
-    const char* msgpath = with_connect ? mpath : getMsgPath(xsink, connection, mpath, pathstr, path_already_encoded);
-    if (*xsink) {
-        return nullptr;
-    }
-
-    if (!msock->socket->isOpen()) {
-        if (persistent) {
-            xsink->raiseException("PERSISTENCE-ERROR", "the current connection has been temporarily marked as "
-                "persistent, but has been disconnected");
-            return nullptr;
-        }
-
-        if (connect_unlocked(xsink, connection)) {
-            // if we have an info hash then write the request-uri key for reporting/logging purposes
-            if (info) {
-                info->setKeyValue("request-uri", new QoreStringNodeMaker("%s %s HTTP/%s", meth,
-                    msgpath && msgpath[0] ? msgpath : "/", http11 ? "1.1" : "1.0"), 0);
-            }
-            return nullptr;
-        }
-    }
-
-    // H2/H3 dispatch was here — removed in Phase 5.  This method is now
-    // only reachable from the WebSocket upgrade path (is_ws_upgrade in
-    // send_internal), which is always HTTP/1.1.  H2/H3 traffic routes
-    // through the conn_mgr (send_internal_conn_mgr).
-
-    // send the message (HTTP/1.x path)
-    int rc = msock->socket->priv->sendHttpMessage(xsink, info, "HTTPClient", mname, meth, msgpath,
-        http11 ? "1.1" : "1.0", &nh, body, data, size, send_callback, is, max_chunk_size, trailer_callback,
-        QORE_SOURCE_HTTPCLIENT, timeout_ms, &msock->m, &aborted);
-
-    //printd(5, "qore_httpclient_priv::sendMessageAndGetResponse() '%s' path: '%s' data: %p size: %d "
-    //    "send_callback: %p is: %p aborted: %d rc: %d\n", meth, msgpath, data, (int)size, send_callback, is,
-    //    aborted, rc);
-
-    // do not exit immediately if the transfer was aborted with a streaming send unless the socket was already closed
-    if (rc && (!send_callback || !aborted || !msock->socket->isOpen())) {
-        assert(*xsink);
-        if (rc == QSE_NOT_OPEN) {
-            disconnect_unlocked();
-        }
-        return nullptr;
-    }
-
-    // issue #3564 in case an outbound chunked transfer was aborted and we have incoming data,
-    // change the timeout to 5 seconds to avoid stalling I/O in case of a slow or incomplete response,
-    // because anyway the connection must be aborted; we just try to quickly read any possible incoming
-    // HTTP response for error reporting
-    if (aborted && (timeout < 0 || timeout > ABORTED_TIMEOUT_MS)) {
-        timeout = ABORTED_TIMEOUT_MS;
-        //printd(5, "qore_httpclient_priv::sendMessageAndGetResponse() aborted: %d timeout: %d open: %d\n", aborted,
-        //    timeout, msock->socket->isOpen());
-    }
-
-    // if the transfer was aborted with a streaming send, but the socket is still open, then try to read a response
-    ReferenceHolder<QoreHashNode> response_hash(xsink);
-    while (true) {
-        qore_offset_t rc;
-        response_hash = msock->socket->priv->readHTTPHeader(xsink, info, timeout, rc, QORE_SOURCE_HTTPCLIENT,
-            "response-headers-raw");
-        if (!(*response_hash)) {
-            disconnect_unlocked();
-            assert(*xsink);
-            return nullptr;
-        }
-
-        // check HTTP status code
-        QoreValue v = response_hash->getKeyValue("status_code");
-        if (v.isNothing()) {
-            xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR", "no HTTP status code received in response");
-            return nullptr;
-        }
-
-        code = (int)v.getAsBigInt();
-        // continue processing if "100 Continue" response received (ignore this response)
-        if (code == 100) {
-            continue;
-        }
-
-        break;
-    }
-
-    // only clear exceptions if a streaming (ie chunked) send was aborted and we really got a response from the remote
-    if (*xsink) {
-        assert(aborted);
-        xsink->clear();
-    }
-
-    // Parse Alt-Svc header from HTTP/1.x response for future HTTP/3 upgrades
-    if (http3_mode != HTTP3_MODE_DISABLED && *response_hash) {
-        QoreValue alt_svc_val = response_hash->getKeyValue("alt-svc");
-        if (alt_svc_val.getType() == NT_STRING) {
-            QoreStringValueHelper alt_svc(alt_svc_val);
-            parseAltSvc(alt_svc->c_str(),
-                connection.host.c_str(), connection.port);
-        }
-    }
-
-    return response_hash.release();
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
 }
 
 void qore_httpclient_priv::parseAltSvc(const char* value, const char* host, int port) {
@@ -5487,462 +4303,6 @@ std::optional<qore_httpclient_priv::AltSvcEntry> qore_httpclient_priv::lookupAlt
 // This is analogous to TCP connect + TLS handshake: it blocks under msock->m
 // until the handshake completes or times out.  The asynchronous (poll-based)
 // path uses SocketQuicClientPollOperation instead.
-int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection, int timeout_override_ms) {
-    // Resolve server address
-    struct addrinfo hints{};
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_protocol = IPPROTO_UDP;
-
-    std::string port_str = std::to_string(connection.port);
-    // Check Alt-Svc cache for the QUIC port
-    auto alt = lookupAltSvc(connection.host.c_str(), connection.port);
-    if (alt.has_value()) {
-        port_str = std::to_string(alt->port);
-    }
-
-    struct addrinfo* res = nullptr;
-    int rv = getaddrinfo(connection.host.c_str(), port_str.c_str(), &hints, &res);
-    if (rv != 0) {
-        xsink->raiseException("HTTP3-CONNECT-ERROR", "failed to resolve host '%s': %s",
-            connection.host.c_str(), gai_strerror(rv));
-        return -1;
-    }
-    ON_BLOCK_EXIT(freeaddrinfo, res);
-
-    // Create UDP socket; set close-on-exec to prevent FD leak on fork/exec
-#ifdef SOCK_CLOEXEC
-    int fd = socket(res->ai_family, SOCK_DGRAM | SOCK_CLOEXEC, IPPROTO_UDP);
-#else
-    int fd = socket(res->ai_family, SOCK_DGRAM, IPPROTO_UDP);
-#endif
-    if (fd < 0) {
-        xsink->raiseException("HTTP3-CONNECT-ERROR", "failed to create UDP socket: %s", strerror(errno));
-        return -1;
-    }
-#ifndef SOCK_CLOEXEC
-    fcntl(fd, F_SETFD, FD_CLOEXEC);
-#endif
-
-    // Bind to ephemeral port
-    struct sockaddr_storage local_addr{};
-    socklen_t local_addrlen;
-    if (res->ai_family == AF_INET6) {
-        auto* addr = reinterpret_cast<struct sockaddr_in6*>(&local_addr);
-        addr->sin6_family = AF_INET6;
-        addr->sin6_addr = in6addr_any;
-        addr->sin6_port = 0;
-        local_addrlen = sizeof(struct sockaddr_in6);
-    } else {
-        auto* addr = reinterpret_cast<struct sockaddr_in*>(&local_addr);
-        addr->sin_family = AF_INET;
-        addr->sin_addr.s_addr = INADDR_ANY;
-        addr->sin_port = 0;
-        local_addrlen = sizeof(struct sockaddr_in);
-    }
-
-    if (::bind(fd, reinterpret_cast<struct sockaddr*>(&local_addr), local_addrlen) < 0) {
-        xsink->raiseException("HTTP3-CONNECT-ERROR", "failed to bind UDP socket: %s", strerror(errno));
-        ::close(fd);
-        return -1;
-    }
-
-    // Connect to the remote server so the kernel selects the correct local
-    // interface and getsockname() returns a specific address (not wildcard).
-    // This is standard for QUIC clients (see ngtcp2 examples).
-    // Also filters incoming packets to only those from the connected peer.
-    if (::connect(fd, res->ai_addr, res->ai_addrlen) < 0) {
-        xsink->raiseException("HTTP3-CONNECT-ERROR", "UDP connect() failed: %s", strerror(errno));
-        ::close(fd);
-        return -1;
-    }
-
-    // Get actual local address after connect
-    if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr), &local_addrlen) < 0) {
-        xsink->raiseException("HTTP3-CONNECT-ERROR", "getsockname() failed: %s", strerror(errno));
-        ::close(fd);
-        return -1;
-    }
-    // Enable per-packet destination address reporting for multi-homed host support
-    // Non-fatal: falls back to cached getsockname address if not available
-    if (enableQuicPktinfo(fd, local_addr.ss_family) < 0) {
-        printd(2, "enableQuicPktinfo() failed for fd %d family %d: %s\n",
-            fd, local_addr.ss_family, strerror(errno));
-    }
-
-    // Store remote address
-    uint16_t quic_port = alt ? static_cast<uint16_t>(alt->port)
-        : static_cast<uint16_t>(connection.port);
-
-    // Create QUIC client session
-    // QuicSession::createClient() needs a qore_socket_private for TLS context;
-    // use a temporary one with the fd set so crypto can access it.
-    // RAII guard detaches fd from tmp_sock (preventing ~QoreSocket double-close)
-    // AND closes fd on any exit path that doesn't call release().  This covers
-    // both Qore-level errors (xsink) and C++ exceptions (e.g. std::bad_alloc
-    // from std::make_shared inside createClient).
-    QoreSocket tmp_sock;
-    tmp_sock.priv->sock = fd;
-    struct FdGuard {
-        int fd;
-        int& sock_ref;
-        ~FdGuard() { sock_ref = -1; if (fd >= 0) ::close(fd); }
-        void release() { fd = -1; }
-    } fd_guard{fd, tmp_sock.priv->sock};
-    quic_session = QuicSession::createClient(
-        tmp_sock.priv, xsink,
-        connection.host.c_str(), quic_port,
-        reinterpret_cast<struct sockaddr*>(&local_addr), local_addrlen,
-        res->ai_addr, res->ai_addrlen,
-        msock->socket->priv->ssl_verify_mode,
-        /*enable_0rtt=*/true,
-        msock->cert, msock->pk);
-
-    if (!quic_session || *xsink) {
-        quic_session.reset();
-        return -1;  // fd_guard destructor closes fd
-    }
-    fd_guard.release();  // success: fd ownership transferred to quic_session
-
-    // Store the fd and local address for I/O
-    quic_fd = fd;
-    memcpy(&quic_local_addr, &local_addr, local_addrlen);
-    quic_local_addrlen = local_addrlen;
-
-    // Drive QUIC handshake
-    int effective_timeout = timeout_override_ms > 0 ? timeout_override_ms : connect_timeout_ms;
-    int64 deadline_ms = effective_timeout < 0 ? -1 : q_clock_getmillis() + effective_timeout;
-
-    while (!quic_session->isHandshakeComplete()) {
-        if (quic_session->isClosed()) {
-            xsink->raiseException("HTTP3-CONNECT-ERROR", "QUIC connection closed during handshake");
-            disconnectQuic();
-            return -1;
-        }
-
-        // Write pending packets
-        QuicPacketBatch pkt_batch;
-        int nw = quic_session->writePackets(pkt_batch, xsink);
-        if (nw < 0 || *xsink) {
-            disconnectQuic();
-            return -1;
-        }
-
-        // Send packets via connected UDP socket (nullptr dest → kernel uses connected peer)
-        if (!pkt_batch.empty()) {
-            int sent = sendQuicPacketsBatch(quic_fd, pkt_batch, nullptr, 0);
-            if (sent < 0) {
-                xsink->raiseException("HTTP3-CONNECT-ERROR", "failed to send QUIC packets: %s",
-                    strerror(errno));
-                disconnectQuic();
-                return -1;
-            }
-        }
-
-        // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
-        // This allows HTTP/3 control + QPACK streams to be sent as 0-RTT data
-        if (quic_session->isEarlyDataReady() && !quic_session->isHttp3Ready()) {
-            rv = quic_session->setupHttp3(xsink);
-            if (rv < 0 || *xsink) {
-                disconnectQuic();
-                return -1;
-            }
-            // Flush HTTP/3 setup frames as 0-RTT packets
-            QuicPacketBatch h3_pkt_batch;
-            quic_session->writePackets(h3_pkt_batch, xsink);
-            if (*xsink) {
-                disconnectQuic();
-                return -1;
-            }
-            if (!h3_pkt_batch.empty()) {
-                int sent = sendQuicPacketsBatch(quic_fd, h3_pkt_batch, nullptr, 0);
-                if (sent < 0) {
-                    xsink->raiseException("HTTP3-CONNECT-ERROR",
-                        "failed to send 0-RTT HTTP/3 setup frames: %s", strerror(errno));
-                    disconnectQuic();
-                    return -1;
-                }
-            }
-        }
-
-        // Check timeout
-        int poll_timeout_ms = 100;
-        if (deadline_ms >= 0) {
-            int64 now_ms = q_clock_getmillis();
-            if (now_ms >= deadline_ms) {
-                xsink->raiseException("HTTP3-CONNECT-ERROR", "QUIC handshake timed out after %d ms",
-                    connect_timeout_ms);
-                disconnectQuic();
-                return -1;
-            }
-            poll_timeout_ms = std::min(100, static_cast<int>(deadline_ms - now_ms));
-        }
-
-        // Handle timer expiry
-        ngtcp2_tstamp expiry = quic_session->getExpiry();
-        if (expiry != UINT64_MAX) {
-            ngtcp2_tstamp now = QuicSession::timestamp();
-            if (expiry <= now) {
-                quic_session->handleExpiry(xsink);
-                if (*xsink) {
-                    disconnectQuic();
-                    return -1;
-                }
-                continue;
-            }
-            int timer_ms = static_cast<int>((expiry - now) / 1000000);
-            if (timer_ms < poll_timeout_ms) {
-                poll_timeout_ms = timer_ms > 0 ? timer_ms : 1;
-            }
-        }
-
-        // Poll for incoming data
-        struct pollfd pfd;
-        pfd.fd = quic_fd;
-        pfd.events = POLLIN;
-        pfd.revents = 0;
-        int pr = poll(&pfd, 1, poll_timeout_ms);
-        if (pr < 0) {
-            if (errno == EINTR) {
-                if (qore_check_cancel(xsink, "QUIC handshake")) {
-                    disconnectQuic();
-                    return -1;
-                }
-                continue;
-            }
-            xsink->raiseException("HTTP3-CONNECT-ERROR", "poll error: %s", strerror(errno));
-            disconnectQuic();
-            return -1;
-        }
-
-        if (pr > 0 && (pfd.revents & POLLIN)) {
-            // Drain all available packets (not just one), matching driveQuicIo pattern
-            // Thread-local to avoid ~2.3KB stack pressure that triggers stack
-            // protector failures under GCC 15+ on ARM64
-            static thread_local uint8_t buf[QUIC_RECV_BUF_SIZE];
-            static thread_local struct sockaddr_storage peer_addr;
-            static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
-            while (true) {
-                socklen_t peer_addrlen = sizeof(peer_addr);
-                size_t cmsg_len = sizeof(cmsg_buf);
-                ssize_t nread = recvQuicPacket(quic_fd, buf, sizeof(buf), MSG_DONTWAIT,
-                    reinterpret_cast<struct sockaddr*>(&peer_addr), &peer_addrlen,
-                    cmsg_buf, &cmsg_len);
-                if (nread < 0) {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        break;  // no more data
-                    }
-                    xsink->raiseException("HTTP3-CONNECT-ERROR", "recvmsg error: %s", strerror(errno));
-                    disconnectQuic();
-                    return -1;
-                }
-                if (nread == 0) {
-                    break;
-                }
-
-                // Use the cached getsockname() address directly — the client socket
-                // is connect()ed, so the local address is always quic_local_addr.
-                // Do NOT call extractPktinfoAddr(): on macOS, IP_RECVDSTADDR on
-                // connected UDP sockets returns 0.0.0.0, causing ngtcp2 path
-                // validation failures.
-                assert(quic_fd >= 0);
-                ngtcp2_path path;
-                path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(&quic_local_addr);
-                path.local.addrlen = quic_local_addrlen;
-                path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&peer_addr);
-                path.remote.addrlen = peer_addrlen;
-
-                quic_session->readPacket(buf, static_cast<size_t>(nread), path, xsink);
-                if (*xsink) {
-                    disconnectQuic();
-                    return -1;
-                }
-            }
-        }
-    }
-
-    // Handle 0-RTT rejection: if HTTP/3 was set up during 0-RTT handshake but
-    // early data was rejected, ngtcp2 discards all 0-RTT streams (including HTTP/3
-    // control and QPACK streams). Re-initialize the HTTP/3 layer with new streams.
-    if (quic_session->isEarlyDataRejected() && quic_session->isHttp3Ready()) {
-        printd(2, "connectQuic(): 0-RTT rejected, re-initializing HTTP/3 layer\n");
-        rv = quic_session->resetHttp3(xsink);
-        if (rv < 0 || *xsink) {
-            disconnectQuic();
-            return -1;
-        }
-    }
-
-    // Setup HTTP/3 (no-op if already set up during 0-RTT)
-    rv = quic_session->setupHttp3(xsink);
-    if (rv < 0 || *xsink) {
-        disconnectQuic();
-        return -1;
-    }
-
-    // Flush any HTTP/3 setup frames
-    {
-        QuicPacketBatch pkt_batch;
-        quic_session->writePackets(pkt_batch, xsink);
-        if (*xsink) {
-            disconnectQuic();
-            return -1;
-        }
-        if (!pkt_batch.empty()) {
-            int sent = sendQuicPacketsBatch(quic_fd, pkt_batch, nullptr, 0);
-            if (sent < 0) {
-                xsink->raiseException("HTTP3-SETUP-ERROR",
-                    "failed to send HTTP/3 setup frames: %s", strerror(errno));
-                disconnectQuic();
-                return -1;
-            }
-        }
-    }
-
-    http3_active = true;
-
-    // Close the TCP connection — no longer needed after successful QUIC upgrade.
-    // The HTTP client will automatically reconnect over TCP if QUIC is later
-    // disconnected (e.g. on error fallback in HTTP3_MODE_AUTO).  Keeping the
-    // TCP socket open would waste an fd + kernel buffers for the lifetime of
-    // the QUIC connection.
-    msock->socket->close();
-
-    return 0;
-}
-
-// Helper: drive QUIC I/O (send and receive packets) for the given session/fd
-// Returns 0 on success, -1 on error; caller must call disconnectQuic() on error
-static int driveQuicIo(QuicSession* session, int fd,
-        const struct sockaddr_storage& local_addr, socklen_t local_addrlen,
-        int poll_timeout_ms, ExceptionSink* xsink) {
-    // Write pending packets
-    QuicPacketBatch pkt_batch;
-    int nw = session->writePackets(pkt_batch, xsink);
-    if (nw < 0 || *xsink) {
-        return -1;
-    }
-
-    // Send packets via connected UDP socket (nullptr dest → kernel uses connected peer)
-    if (!pkt_batch.empty()) {
-        int sent = sendQuicPacketsBatch(fd, pkt_batch, nullptr, 0);
-        if (sent < 0) {
-            xsink->raiseException("HTTP3-IO-ERROR", "failed to send QUIC packets: %s",
-                strerror(errno));
-            return -1;
-        }
-    }
-
-    // Handle timer expiry
-    ngtcp2_tstamp expiry = session->getExpiry();
-    if (expiry != UINT64_MAX) {
-        ngtcp2_tstamp now = QuicSession::timestamp();
-        if (expiry <= now) {
-            session->handleExpiry(xsink);
-            if (*xsink) {
-                return -1;
-            }
-
-            // handleExpiry() sets pending_write_ for retransmission/PTO probes;
-            // send them immediately so the server receives probes promptly instead
-            // of waiting until the next driveQuicIo() iteration (up to 100ms delay)
-            pkt_batch.clear();
-            nw = session->writePackets(pkt_batch, xsink);
-            if (nw < 0 || *xsink) {
-                return -1;
-            }
-            if (!pkt_batch.empty()) {
-                int sent = sendQuicPacketsBatch(fd, pkt_batch, nullptr, 0);
-                if (sent < 0) {
-                    xsink->raiseException("HTTP3-IO-ERROR",
-                        "failed to send QUIC packets after expiry: %s",
-                        strerror(errno));
-                    return -1;
-                }
-            }
-        }
-    }
-
-    // Poll for incoming data — clamp poll timeout to the next QUIC timer expiry
-    // so retransmission/PTO timers fire promptly even if the caller passes a long timeout
-    int actual_timeout_ms = poll_timeout_ms;
-    {
-        ngtcp2_tstamp next_expiry = session->getExpiry();
-        if (next_expiry != UINT64_MAX) {
-            ngtcp2_tstamp now = QuicSession::timestamp();
-            if (next_expiry <= now) {
-                actual_timeout_ms = 0;
-            } else {
-                int64_t timer_ms = static_cast<int64_t>((next_expiry - now) / 1000000);
-                if (timer_ms < actual_timeout_ms) {
-                    actual_timeout_ms = static_cast<int>(timer_ms);
-                }
-            }
-        }
-    }
-    struct pollfd pfd;
-    pfd.fd = fd;
-    pfd.events = POLLIN;
-    pfd.revents = 0;
-    int pr = poll(&pfd, 1, actual_timeout_ms);
-    if (pr < 0) {
-        if (errno == EINTR) {
-            if (qore_check_cancel(xsink, "QUIC I/O")) {
-                return -1;
-            }
-            return 0;
-        }
-        xsink->raiseException("HTTP3-IO-ERROR", "poll error: %s", strerror(errno));
-        return -1;
-    }
-
-    if (pr > 0 && (pfd.revents & POLLIN)) {
-        // Drain all available packets (not just one)
-        // Thread-local to avoid ~2.3KB stack pressure that triggers stack
-        // protector failures under GCC 15+ on ARM64
-        static thread_local uint8_t buf[QUIC_RECV_BUF_SIZE];
-        static thread_local struct sockaddr_storage peer_addr;
-        static thread_local uint8_t cmsg_buf[QUIC_CMSG_BUF_SIZE];
-        while (true) {
-            socklen_t peer_addrlen = sizeof(peer_addr);
-            size_t cmsg_len = sizeof(cmsg_buf);
-            ssize_t nread = recvQuicPacket(fd, buf, sizeof(buf), MSG_DONTWAIT,
-                reinterpret_cast<struct sockaddr*>(&peer_addr), &peer_addrlen,
-                cmsg_buf, &cmsg_len);
-            if (nread < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    break;  // no more data
-                }
-                xsink->raiseException("HTTP3-IO-ERROR", "recvmsg error: %s", strerror(errno));
-                return -1;
-            }
-            if (nread == 0) {
-                break;
-            }
-
-            // Use the cached getsockname() address directly — the client
-            // socket is connect()ed, so the local address is always local_addr.
-            // Do NOT call extractPktinfoAddr(): on macOS, IP_RECVDSTADDR on
-            // connected UDP sockets returns 0.0.0.0, causing ngtcp2 path
-            // validation failures.
-            assert(fd >= 0);
-            ngtcp2_path path;
-            path.local.addr = reinterpret_cast<ngtcp2_sockaddr*>(
-                const_cast<struct sockaddr_storage*>(&local_addr));
-            path.local.addrlen = local_addrlen;
-            path.remote.addr = reinterpret_cast<ngtcp2_sockaddr*>(&peer_addr);
-            path.remote.addrlen = peer_addrlen;
-
-            session->readPacket(buf, static_cast<size_t>(nread), path, xsink);
-            if (*xsink) {
-                return -1;
-            }
-        }
-    }
-
-    return 0;
-}
-
 void check_headers(const char* str, int len, bool &multipart, QoreHashNode& ans, const QoreEncoding *enc,
         ExceptionSink* xsink) {
     // see if the string starts with "multipart/"
@@ -6012,7 +4372,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     int code = 0;
 
     while (true) {
-        const char* msgpath = getMsgPath(xsink, this_connection, mpath, pathstr, path_already_encoded);
+        const char* msgpath = getMsgPath(xsink, this_connection, mpath, pathstr, path_already_encoded, false);
         if (*xsink) {
             return nullptr;
         }
@@ -6052,14 +4412,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // minute backoff in mgr.request's error handling so repeated
         // requests don't keep retrying H3.
         bool attempted_h3_upgrade = false;
-        if (!http3_active && http3_mode != HTTP3_MODE_DISABLED
+        if (!persistent && !this_connection.is_unix && !http3_active && http3_mode != HTTP3_MODE_DISABLED
                 && this_connection.ssl) {
             auto alt = lookupAltSvc(this_connection.host.c_str(),
                 this_connection.port);
             if (alt.has_value()) {
                 // Drop the existing (H1/H2/NEG) conn_mgr so getConnMgr()
                 // below allocates a fresh H3 conn_mgr.
-                conn_mgr.reset();
+                dropConnMgr(true);
                 http3_active = true;
                 http2_active = false;
                 attempted_h3_upgrade = true;
@@ -6067,8 +4427,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         }
 
         // Submit request via conn_mgr
-        HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
-        if (*xsink) {
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = getConnMgr(xsink);
+        if (*xsink || !mgr_holder) {
+            return nullptr;
+        }
+        HttpClientConnectionManagerBase& mgr = *mgr_holder;
+        if (!checkPersistentConnMgrConnection(this_connection, xsink)) {
             return nullptr;
         }
 
@@ -7034,14 +5398,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             if (!raw_resp || *xsink) {
                 // If this was an Alt-Svc-driven H3 upgrade attempt,
                 // mark the Alt-Svc entry with a backoff and retry
-                // over H1/H2.  The legacy sync path does the same on
-                // connectQuic failure (sendMessageAndGetResponse).
+                // over H1/H2.
                 if (attempted_h3_upgrade
                         && http3_mode != HTTP3_MODE_REQUIRED) {
                     markAltSvcFailed(this_connection.host.c_str(),
                         this_connection.port);
                     http3_active = false;
-                    conn_mgr.reset();
+                    dropConnMgr(true);
                     xsink->clear();
                     continue;
                 }
@@ -7138,16 +5501,13 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // send_internal behavior).  The conn_mgr path uses its own sockets
         // for I/O, but events are fired on msock's queue for user visibility.
         {
-            Queue* event_queue = msock->socket->getQueue();
-            if (event_queue) {
-                const char* cl = get_string_header(xsink, **ans, "content-length");
-                if (!*xsink && cl) {
-                    ssize_t len = strtoll(cl, nullptr, 10);
-                    do_content_length_event(event_queue, msock->socket->priv, len);
-                }
-                if (*xsink) {
-                    return nullptr;
-                }
+            const char* cl = get_string_header(xsink, **ans, "content-length");
+            if (!*xsink && cl) {
+                ssize_t len = strtoll(cl, nullptr, 10);
+                msock->socket->priv->do_content_length_event(len, QORE_SOURCE_HTTPCLIENT);
+            }
+            if (*xsink) {
+                return nullptr;
             }
         }
 
@@ -7186,13 +5546,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
 
             // Fire redirect event on the HTTPClient's event queue
-            {
-                Queue* event_queue = msock->socket->getQueue();
-                if (event_queue) {
-                    do_redirect_event(event_queue, msock->socket->priv,
-                        loc, mess_node);
-                }
-            }
+            msock->socket->priv->do_redirect_event(loc, mess_node, QORE_SOURCE_HTTPCLIENT);
 
             if (redirectUrlUnlocked(location, this_connection, xsink)) {
                 const char* msg = mess_node ? mess_node->c_str() : "<no message>";
@@ -7257,11 +5611,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         }
     }
 
-    // Parse Alt-Svc for future HTTP/3 upgrades (mirrors the legacy
-    // sendMessageAndGetResponse parseAltSvc call).  Without this, the
-    // conn_mgr dispatch path never populates the alt_svc_cache and
-    // subsequent requests do not auto-upgrade to HTTP/3, even when the
-    // server advertises h3 support.
+    // Parse Alt-Svc for future HTTP/3 upgrades.  Without this, the conn_mgr
+    // dispatch path never populates the alt_svc_cache and subsequent requests
+    // do not auto-upgrade to HTTP/3, even when the server advertises h3
+    // support.
     if (http3_mode != HTTP3_MODE_DISABLED) {
         QoreValue alt_svc_val = ans->getKeyValue("alt-svc");
         if (alt_svc_val.getType() == NT_STRING) {
@@ -7338,6 +5691,231 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     return *xsink || recv_callback || os ? nullptr : ans.release();
 }
 
+QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSink* xsink, const char* mname,
+        const char* meth, const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body,
+        const void* data, unsigned size, QoreHashNode* info, int timeout_ms,
+        const ResolvedCallReferenceNode* recv_callback, QoreObject* obj) {
+    con_info this_connection = connection;
+    if (!this_connection.has_url()) {
+        xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
+            "no URL set - cannot make WebSocket Upgrade request");
+        return nullptr;
+    }
+
+    bool keep_alive = true;
+    bool host_override = false;
+    ReferenceHolder<QoreHashNode> nh(getRequestHeaders(xsink, headers,
+        msg_body ? msg_body->getEncoding() : nullptr, (data && size), false,
+        keep_alive, host_override), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (msg_body && msg_body->size()) {
+        body_ptr = msg_body->c_str();
+        body_len = msg_body->size();
+    } else if (data && size) {
+        body_ptr = data;
+        body_len = size;
+    }
+
+    QoreString pathstr(enc ? enc : QCS_UTF8);
+    const char* msgpath = getMsgPath(xsink, this_connection, mpath, pathstr, false, false);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    if (info) {
+        info->setKeyValue("request-uri", new QoreStringNodeMaker("%s %s HTTP/%s", meth,
+            msgpath && msgpath[0] ? msgpath : "/", http11 ? "1.1" : "1.0"), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        ReferenceHolder<QoreHashNode> info_headers(nh->copy(), xsink);
+        if (!host_override) {
+            info_headers->setKeyValue("Host",
+                getHostHeaderValueUnlocked(this_connection), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+        info->setKeyValue("headers", info_headers.release(), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H1;
+    opts.connect_timeout_ms = connect_timeout_ms;
+    opts.request_timeout_ms = timeout;
+    opts.idle_timeout_ms = 60000;
+    opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
+    opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
+    opts.client_cert = msock->cert;
+    opts.client_key = msock->pk;
+    opts.proxy_url = getConnMgrProxyUrl();
+
+    HttpClientConnectionManagerBase mgr(opts, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    const char* scheme = this_connection.ssl ? "https" : "http";
+    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+        this_connection.host.c_str(), this_connection.port, xsink);
+    if (!conn || *xsink) {
+        return nullptr;
+    }
+    conn->ref();
+    ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+
+    conn->waitForReadyOrError(timeout_ms, xsink);
+    if (*xsink || conn->isClosed()) {
+        if (!*xsink) {
+            xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
+                "connection closed before WebSocket Upgrade request");
+        }
+        mgr.closeAndEvict(conn, xsink);
+        return nullptr;
+    }
+
+    Http1ClientConnection* h1 = dynamic_cast<Http1ClientConnection*>(conn);
+    if (!h1) {
+        mgr.closeAndEvict(conn, xsink);
+        xsink->raiseException("HTTP-CLIENT-UPGRADE-ERROR",
+            "WebSocket Upgrade requires an HTTP/1.1 connection");
+        return nullptr;
+    }
+
+    QoreChannel* channel_raw = nullptr;
+    int64_t stream_id = conn->submitRequestStreaming(meth, msgpath, *nh,
+        body_ptr, body_len, channel_raw, xsink);
+    if (*xsink || stream_id < 0) {
+        mgr.releaseConnection(conn);
+        return nullptr;
+    }
+    ReferenceHolder<QoreChannel> channel(channel_raw, xsink);
+
+    ReferenceHolder<QoreHashNode> ans(xsink);
+    int code = 0;
+    while (true) {
+        bool timed_out = false;
+        bool has_value = false;
+        ValueHolder rv(channel->recv(timeout_ms, xsink, timed_out, has_value), xsink);
+        if (*xsink) {
+            channel->close();
+            return nullptr;
+        }
+        if (timed_out) {
+            channel->close();
+            xsink->raiseException("HTTP-CLIENT-TIMEOUT",
+                "timed out after %dms waiting for WebSocket Upgrade response", timeout_ms);
+            return nullptr;
+        }
+        if (!has_value) {
+            xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
+                "connection closed before WebSocket Upgrade response received");
+            return nullptr;
+        }
+        if (rv->getType() != NT_HASH) {
+            continue;
+        }
+
+        QoreHashNode* h = rv->get<QoreHashNode>();
+        QoreValue err_val = h->getKeyValue("err");
+        if (!err_val.isNullOrNothing()) {
+            channel->close();
+            const char* err_str = err_val.getType() == NT_STRING
+                ? err_val.get<const QoreStringNode>()->c_str()
+                : "HTTP-CLIENT-RECEIVE-ERROR";
+            QoreValue desc_val = h->getKeyValue("desc");
+            const char* desc_str = desc_val.getType() == NT_STRING
+                ? desc_val.get<const QoreStringNode>()->c_str()
+                : "WebSocket Upgrade request failed";
+            xsink->raiseException(err_str, desc_str);
+            return nullptr;
+        }
+
+        QoreValue sc_val = h->getKeyValue("status_code");
+        if (sc_val.isNullOrNothing()) {
+            continue;
+        }
+
+        ans = transformConnMgrResponse(h, xsink);
+        if (*xsink) {
+            channel->close();
+            return nullptr;
+        }
+        code = static_cast<int>(sc_val.getAsBigInt());
+
+        if (info) {
+            set_body_content_type_info(xsink, **ans, *info);
+            if (*xsink) {
+                channel->close();
+                return nullptr;
+            }
+            info->setKeyValue("response-headers", ans->refSelf(), xsink);
+            if (*xsink) {
+                channel->close();
+                return nullptr;
+            }
+            QoreValue raw_hdrs = h->getKeyValue("headers_raw");
+            if (raw_hdrs.getType() == NT_HASH) {
+                info->setKeyValue("response-headers-raw", raw_hdrs.refSelf(), xsink);
+                if (*xsink) {
+                    channel->close();
+                    return nullptr;
+                }
+            }
+            setConnMgrResponseUri(info, h, xsink);
+            if (*xsink) {
+                channel->close();
+                return nullptr;
+            }
+        }
+        break;
+    }
+
+    channel->close();
+
+    if (!ans) {
+        xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
+            "no WebSocket Upgrade response received");
+        return nullptr;
+    }
+
+    if (code == 101) {
+        if (adoptH1SocketIntoMsock(h1, true, xsink)) {
+            return nullptr;
+        }
+    }
+
+    if (recv_callback) {
+        if (msock->socket->priv->runHeaderCallback(xsink, "HTTPClient", mname,
+                *recv_callback, nullptr, *ans, info ? info->copy() : nullptr,
+                false, obj)) {
+            return nullptr;
+        }
+        return nullptr;
+    }
+
+    if (!error_passthru && !*xsink && (code < 100 || code >= 300)) {
+        const char* mess = get_string_header(xsink, **ans, "status_message");
+        if (!mess) {
+            mess = "<no message>";
+        }
+        assert(!*xsink);
+        xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", ans.release(),
+            "HTTP status code %d received: message: %s", code, mess);
+        return nullptr;
+    }
+
+    return ans.release();
+}
+
 QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const char* mname, const char* meth,
         const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,
@@ -7376,20 +5954,14 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             return nullptr;
         }
     }
-    // Delegate to conn_mgr when enabled.  The only remaining bypass is
-    // WebSocket upgrade requests (Connection: Upgrade + Upgrade:
-    // websocket header): after the 101 Switching Protocols response,
-    // the same TCP socket carries the upgraded WebSocket protocol, and
-    // conn_mgr returns pooled connections to the pool after each
-    // response — breaking the WS upgrade contract.  The legacy path
-    // leaves msock connected so the caller can drive the WS frames
-    // over it.  AUTO+SSL used to bypass to the legacy path as well;
-    // the conn_mgr now handles it via NEGOTIATE (see getConnMgr and
-    // design/conn-mgr-alpn-negotiation.md).
+    // Delegate to conn_mgr.  HTTP/1 WebSocket Upgrade is also routed
+    // through an H1 conn_mgr connection; after the 101 response, the
+    // switched socket is extracted from the H1 connection and adopted by
+    // this HTTPClient's inherited Socket state for raw WebSocket frames.
     {
         bool is_ws_upgrade = false;
         if (headers) {
-            // HTTP headers are case-insensitive — scan the hash looking for
+            // HTTP headers are case-insensitive - scan the hash looking for
             // "Connection: upgrade" + "Upgrade: websocket" irrespective of
             // the caller's header-key case.
             bool has_conn_upgrade = false;
@@ -7413,585 +5985,20 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
             }
             is_ws_upgrade = has_conn_upgrade && has_upgrade_ws;
         }
-        // UNIX-socket URLs cannot use the conn_mgr path: it is TCP-only
-        // and resolves the host via getaddrinfo, which fails for a bare
-        // socket path.  Fall through to the legacy msock path which
-        // honours connection.is_unix end-to-end.
-        if (use_conn_mgr && !is_ws_upgrade && !connection.is_unix) {
+        if (!is_ws_upgrade) {
             return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
                 msg_body, data, size, send_callback, getbody, info, timeout_ms,
                 recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
         }
-    }
-
-    SafeLocker sl(msock->m);
-
-    if (msock->checkNonBlock(xsink)) {
-        return nullptr;
-    }
-
-    Queue* event_queue = msock->socket->getQueue();
-
-    bool keep_alive = true;
-    bool host_override = false;
-    ReferenceHolder<QoreHashNode> nh(getRequestHeaders(xsink, headers,
-        msg_body ? msg_body->getEncoding() : nullptr, (data || is || send_callback), (send_callback || is),
-        keep_alive, host_override), xsink);
-
-    // save original HTTP method in case we have to issue a CONNECT request to a proxy for an HTTPS connection
-    const char* meth_orig = meth;
-
-    bool use_proxy_connect = false;
-    const char* proxy_path = nullptr;
-    ReferenceHolder<QoreHashNode> proxy_headers(xsink);
-    if (!proxy_connected && proxy_connection.has_url()) {
-        proxy_headers = setProxyHeaders(xsink, this_connection, *nh, use_proxy_connect, proxy_path);
-        if (*xsink) {
+        if (send_callback || is || os || trailer_callback || streaming) {
+            xsink->raiseException("HTTP-CLIENT-UPGRADE-ERROR",
+                "WebSocket Upgrade requests with streaming send/receive callbacks are not supported");
             return nullptr;
         }
-        if (proxy_headers) {
-            meth = "CONNECT";
-            assert(use_proxy_connect);
-            assert(proxy_path);
-        } else {
-            assert(!use_proxy_connect);
-            assert(!proxy_path);
-        }
+        return send_websocket_upgrade_conn_mgr(xsink, mname, meth, mpath, headers,
+            msg_body, data, size, info, timeout_ms, recv_callback, obj);
     }
 
-    int code;
-    ReferenceHolder<QoreHashNode> ans(xsink);
-    int redirect_count = 0;
-    const char* location = nullptr;
-
-    // flag for aborted chunked sends
-    bool send_aborted = false;
-
-    ReferenceHolder<QoreHashNode> callback_info(xsink);
-    if (recv_callback && !info) {
-        callback_info = new QoreHashNode(autoTypeInfo);
-        info = *callback_info;
-    }
-
-    bool path_already_encoded = false;
-    // only reconnect if we already have an open connection
-    unsigned retries = msock->socket->isOpen() ? 0 : 1;
-    while (true) {
-        // set host field automatically if not overridden
-        if (!host_override) {
-            nh->setKeyValue("Host", getHostHeaderValueUnlocked(this_connection), xsink);
-        }
-
-        if (info) {
-            info->setKeyValue("headers", nh->copy(), xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-        }
-
-        //printd(5, "qore_httpclient_priv::send_internal() meth: %s proxy_path: %s mpath: %s upc: %d\n", meth,
-        //    proxy_path ? proxy_path : "n/a", mpath, use_proxy_connect);
-        // send HTTP message and get response header
-        if (use_proxy_connect) {
-            ans = sendMessageAndGetResponse(this_connection, mname, meth, proxy_path,
-                *(*proxy_headers), nullptr, nullptr, 0, nullptr, nullptr, 0, nullptr, info, true, timeout_ms, code,
-                send_aborted, false, xsink);
-        } else {
-            ans = sendMessageAndGetResponse(this_connection, mname, meth, mpath, *(*nh),
-                msg_body, data, size, send_callback, is, max_chunk_size, trailer_callback, info, false, timeout_ms,
-                code, send_aborted, path_already_encoded, xsink);
-        }
-
-        if (!ans) {
-            assert(*xsink);
-            // issue# 4879: reconnect immediately and try again if the socket was closed the first time
-            if (!msock->socket->isOpen() && !retries) {
-                ++retries;
-                xsink->clear();
-                continue;
-            }
-            return nullptr;
-        }
-
-        if (info) {
-            info->setKeyValue("response-headers", ans->refSelf(), xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-        }
-
-        if (!ans->is_unique()) {
-            ans = ans->copy();
-        }
-
-        // issue #3116: pass a 304 Not Modified message back to the caller without processing
-        if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
-            // only disconnect if we have no proxy or we need to use proxy_connect
-            if (!proxy_connection.has_url()) {
-                //printd(5, "qore_httpclient_priv::send_internal() disconnecting; no proxy\n");
-                disconnect_unlocked();
-            } else if (proxy_connected) {
-                proxy_connected = false;
-            }
-
-            host_override = false;
-            QoreValue mess_val = ans->getKeyValue("status_message");
-            QoreStringNodeValueHelper mess(mess_val);
-            const QoreStringNode* mess_node = mess_val.getType() == NT_STRING ? *mess : nullptr;
-
-            const QoreStringNode* loc = get_string_header_node(xsink, **ans, "location");
-            if (*xsink) {
-                return nullptr;
-            }
-            const char* location = loc && !loc->empty() ? loc->c_str() : 0;
-            if (!location) {
-                sl.unlock();
-                const char* msg = mess_node ? mess_node->c_str() : "<no message>";
-                xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "no redirect location given for status code %d: "
-                    "message: '%s'", code, msg);
-                return nullptr;
-            }
-
-            if (event_queue) {
-                do_redirect_event(event_queue, msock->socket->priv, loc, mess_node);
-            }
-
-            // issue #4601: get and ignore any message body
-            if (msock->socket->priv->isOpen() && strcmp(mname, "HEAD") && code != 204 && code != 304
-                && getDiscardMessageBody(xsink, **ans, timeout_ms)) {
-                assert(*xsink);
-                disconnect_unlocked();
-                return nullptr;
-            }
-
-            if (++redirect_count > max_redirects) {
-                break;
-            }
-
-            if (redirectUrlUnlocked(location, this_connection, xsink)) {
-                sl.unlock();
-                const char* msg = mess_node ? mess_node->c_str() : "<no message>";
-                xsink->appendLastDescription(": while setting URL for redirect location '%s' (code %d: "
-                    "message: '%s')", location, code, msg);
-                return nullptr;
-            }
-            if (!path_already_encoded) {
-                path_already_encoded = true;
-            }
-
-            if (proxy_connection.has_url()) {
-                proxy_headers = setProxyHeaders(xsink, this_connection, *nh, use_proxy_connect, proxy_path);
-                if (*xsink) {
-                    return nullptr;
-                }
-                if (proxy_headers) {
-                    meth = "CONNECT";
-                    assert(use_proxy_connect);
-                    assert(proxy_path);
-                } else {
-                    assert(!use_proxy_connect);
-                    assert(!proxy_path);
-                }
-            }
-
-            // set redirect info in info hash if present
-            if (info) {
-                QoreString tmp;
-                tmp.sprintf("redirect-%d", redirect_count);
-                info->setKeyValue(tmp.c_str(), loc->refSelf(), xsink);
-                if (*xsink)
-                    return nullptr;
-
-                tmp.clear();
-                tmp.sprintf("redirect-message-%d", redirect_count);
-                info->setKeyValue(tmp.c_str(), mess_node ? mess_node->refSelf() : QoreValue(), xsink);
-            }
-
-            // NOTE: Per RFC 7231, 301/302/303 redirects should change POST/PUT to GET (dropping the body),
-            // while 307/308 should preserve the method and body. Currently we always resend with the same
-            // method and body, which is incorrect for 301/302/303. The send_callback and body parameters
-            // should be cleared for those redirect codes.
-
-            // set mpath to NULL so that the new path will be taken
-            mpath = nullptr;
-            continue;
-        } else if (use_proxy_connect) {
-            meth = meth_orig;
-            use_proxy_connect = false;
-            proxy_path = nullptr;
-
-            // set client target for SNI
-            msock->socket->priv->client_target = this_connection.host;
-
-            if (msock->socket->upgradeClientToSSL(xsink, -1, msock->cert, msock->pk)) {
-                disconnect_unlocked();
-                return nullptr;
-            }
-            proxy_connected = true;
-
-            // remove "Proxy-Authorization" header
-            nh->removeKey("Proxy-Authorization", xsink);
-            if (*xsink) {
-                return nullptr;
-            }
-
-            // try again as if we are talking directly to the client
-            continue;
-        }
-
-        break;
-    }
-
-    if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
-        sl.unlock();
-        const char* mess = get_string_header(xsink, **ans, "status_message");
-        if (!mess) {
-            mess = "<no message>";
-        }
-        if (!location) {
-            location = "<no location>";
-        }
-        xsink->raiseException("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirections (%d) exceeded; "
-            "redirect code %d to '%s' ignored (message: '%s')", max_redirects, code, location, mess);
-        return nullptr;
-    }
-
-    // process content-type
-    if (processContentType(xsink, **ans)) {
-        disconnect_unlocked();
-        return nullptr;
-    }
-
-    // send headers to recv_callback
-    // cannot reference info here; must copy it
-    if (recv_callback
-        && msock->socket->priv->runHeaderCallback(xsink, "HTTPClient", mname, *recv_callback, &msock->m, *ans,
-            info ? info->copy() : nullptr, send_aborted, obj)) {
-        return nullptr;
-    }
-
-    // ensure ans is unique after the recv_callback may have stored a reference to the headers hash
-    if (!ans->is_unique()) {
-        ans = ans->copy();
-    }
-
-    ValueHolder body(xsink);
-    const char* content_encoding = nullptr;
-
-    // do not read any message body for messages that cannot have one
-    // rfc 2616 4.4 p1 (http://tools.ietf.org/html/rfc2616#section-4.4)
-    /*
-        1.Any response message which "MUST NOT" include a message-body (such
-        as the 1xx, 204, and 304 responses and any response to a HEAD
-        request) is always terminated by the first empty line after the
-        header fields, regardless of the entity-header fields present in
-        the message.
-    */
-    //printd(5, "qore_httpclient_priv::send_internal() this: %p bodyp: %d code: %d\n", this, bodyp, code);
-
-    qore_uncompress_to_string_t dec = nullptr;
-
-    const char* conn = get_string_header(xsink, **ans, "connection", true);
-    if (*xsink) {
-        disconnect_unlocked();
-        return nullptr;
-    }
-
-    // code >= 300 && < 400 is already handled above
-
-    // For HTTP/2 and HTTP/3, the body is already in the response hash (as binary).
-    // Skip the HTTP/1.x body reading logic.
-    // NOTE: HTTP/3 currently returns early from sendHttp3MessageAndGetResponse()
-    // and never reaches this point; this guard is defensive against future refactoring.
-    if (http2_active || http3_active) {
-        QoreValue h2_body = ans->getKeyValue("body");
-        if (h2_body.getType() == NT_BINARY) {
-            const BinaryNode* bin = h2_body.get<const BinaryNode>();
-            if (bin && bin->size()) {
-                if (os) {
-                    // Write body to OutputStream
-                    sl.unlock();
-                    os->write(bin->getPtr(), bin->size(), xsink);
-                    // OutputStream callers (sendChunked) return void; let ans auto-free
-                    return nullptr;
-                }
-                const QoreEncoding* body_enc = msock->socket->getEncoding();
-                if (!*xsink && !recv_callback) {
-                    // Only process body encoding/conversion when no recv_callback
-                    // Check content-encoding for compression
-                    qore_uncompress_to_string_t h2_dec = nullptr;
-                    content_encoding = normalizeContentEncoding(xsink, **ans, recv_callback, h2_dec);
-                    if (!*xsink) {
-                        QoreValue body_val = process_binary_body(bin, body_enc, content_encoding, h2_dec,
-                            encoding_passthru, xsink);
-                        if (!*xsink && body_val) {
-                            ans->setKeyValue("body", body_val.getInternalNode(), xsink);
-                        }
-                    }
-                } else if (!*xsink && recv_callback) {
-                    // For recv_callback with HTTP/2: match HTTP/1.x behavior where
-                    // readHttpChunkedBody delivers string data (no content-encoding)
-                    // and readHttpChunkedBodyBinary delivers binary data (with content-encoding).
-                    // Exception: Connect protocol (application/connect+*) uses binary frames
-                    // with arbitrary bytes in the frame header that cannot survive string conversion.
-                    qore_uncompress_to_string_t h2_dec = nullptr;
-                    content_encoding = normalizeContentEncoding(xsink, **ans, recv_callback, h2_dec);
-                    if (!*xsink && !content_encoding) {
-                        // No content-encoding: check if Connect protocol (must stay binary)
-                        const char* ct = get_string_header(xsink, **ans, "content-type", true);
-                        bool is_connect = ct && !strncasecmp(ct, "application/connect+", 20);
-                        if (!*xsink && !is_connect) {
-                            // Convert binary to string (matches HTTP/1.x readHttpChunkedBody behavior)
-                            QoreValue body_val = process_binary_body(bin, body_enc, nullptr, nullptr,
-                                encoding_passthru, xsink);
-                            if (!*xsink && body_val) {
-                                ans->setKeyValue("body", body_val.getInternalNode(), xsink);
-                            }
-                        }
-                    }
-                    // With content-encoding: keep as binary (matches HTTP/1.x
-                    // readHttpChunkedBodyBinary behavior)
-                }
-                if (*xsink) {
-                    disconnect_unlocked();
-                    return nullptr;
-                }
-            }
-        }
-        // For HTTP/2 with OutputStream but no/empty body; let ans auto-free
-        if (os) {
-            return nullptr;
-        }
-        // For HTTP/2, set response-body in info if needed
-        if (info && !recv_callback) {
-            QoreValue body_val = ans->getKeyValue("body");
-            if (body_val) {
-                info->setKeyValue("response-body", body_val.refSelf(), xsink);
-            }
-        }
-        // For recv_callback, call it with the body data and then signal completion
-        if (recv_callback) {
-            QoreValue body_val = ans->getKeyValue("body");
-            sl.unlock();
-            // Call data callback with body
-            if (body_val) {
-                if (msock->socket->priv->runDataCallback(xsink, "HTTPClient", mname, *recv_callback, nullptr,
-                        body_val.getInternalNode(), false)) {
-                    return nullptr;
-                }
-            }
-            // Call header callback with no argument to signal completion
-            if (msock->socket->priv->runHeaderCallback(xsink, "HTTPClient", mname, *recv_callback, nullptr,
-                    nullptr, nullptr, send_aborted, obj)) {
-                return nullptr;
-            }
-            // For recv_callback, return nullptr (data was sent to callback)
-            return nullptr;
-        }
-        // Skip the HTTP/1.x body reading logic
-        goto http2_body_done;
-    }
-
-    if (bodyp && (code < 100 || code >= 200) && code != 204) {
-        // see if we should do a binary or string read
-        if (!os) {
-            content_encoding = normalizeContentEncoding(xsink, **ans, recv_callback, dec);
-            if (*xsink) {
-                disconnect_unlocked();
-                return nullptr;
-            }
-        } else {
-            content_encoding = get_string_header(xsink, **ans, "content-encoding");
-            if (*xsink) {
-                disconnect_unlocked();
-                return nullptr;
-            }
-        }
-
-        const char* te = get_string_header(xsink, **ans, "transfer-encoding");
-        if (*xsink) {
-            disconnect_unlocked();
-            return nullptr;
-        }
-
-        // get content type, if any
-        const char* ct = get_string_header(xsink, **ans, "content-type", true);
-        if (*xsink) {
-            disconnect_unlocked();
-            return nullptr;
-        }
-
-        // get response body, if any
-        const char* cl = get_string_header(xsink, **ans, "content-length");
-        if (*xsink) {
-            disconnect_unlocked();
-            return nullptr;
-        }
-        int len = cl ? atoi(cl) : 0;
-        // do not try to get a body in any case if Content-Length: 0 is sent
-        if (cl) {
-            if (!len) {
-                getbody = false;
-            }
-        } else {
-            // issue #3691: ready the body if we have Connection: close and a content-type and a potential response
-            if (!te && conn && !strcasecmp("close", conn) && strcmp(mname, "HEAD") && code != 204 && code != 304) {
-                len = -1;
-            }
-        }
-
-        if (cl && event_queue) {
-            do_content_length_event(event_queue, msock->socket->priv, len);
-        }
-
-        // do *not* read a chunked body if streaming mode is enabled or the content-type is "text/event-stream"
-        if (te && !strcasecmp(te, "chunked") && !streaming && (!ct || strcmp(ct, "text/event-stream"))) {
-            // check for chunked response body
-            do_event(event_queue, msock->socket->priv, QORE_EVENT_HTTP_CHUNKED_START);
-            ReferenceHolder<QoreHashNode> nah(xsink);
-            if (os) {
-                msock->socket->priv->readHttpChunkedBodyBinary(timeout_ms, xsink, "HTTPClient",
-                    QORE_SOURCE_HTTPCLIENT, recv_callback, &msock->m, obj, os);
-            } else if (recv_callback) {
-                if (content_encoding) {
-                    msock->socket->priv->readHttpChunkedBodyBinary(timeout_ms, xsink, "HTTPClient",
-                        QORE_SOURCE_HTTPCLIENT, recv_callback, &msock->m, obj);
-                } else {
-                    msock->socket->priv->readHttpChunkedBody(timeout_ms, xsink, "HTTPClient", QORE_SOURCE_HTTPCLIENT,
-                        recv_callback, &msock->m, obj);
-                }
-            } else {
-                if (content_encoding) {
-                    nah = msock->socket->priv->readHttpChunkedBodyBinary(timeout_ms, xsink, "HTTPClient",
-                        QORE_SOURCE_HTTPCLIENT);
-                } else {
-                    nah = msock->socket->priv->readHttpChunkedBody(timeout_ms, xsink, "HTTPClient",
-                        QORE_SOURCE_HTTPCLIENT);
-                }
-            }
-            do_event(event_queue, msock->socket->priv, QORE_EVENT_HTTP_CHUNKED_END);
-
-            if (!nah && !recv_callback) {
-                if (!msock->socket->isOpen()) {
-                    disconnect_unlocked();
-                }
-                return nullptr;
-            }
-
-            if (info) {
-                info->setKeyValue("chunked", true, xsink);
-            }
-
-            if (*xsink) {
-                return nullptr;
-            }
-
-            if (!recv_callback && !os) {
-                // merge all keys except the "body" key into ans
-                ConstHashIterator hi(*nah);
-                while (hi.next()) {
-                if (!strcmp(hi.getKey(), "body")) {
-                    assert(!body);
-                    body = hi.getReferenced();
-                    continue;
-                }
-                ans->setKeyValue(hi.getKey(), hi.getReferenced(), xsink);
-                if (*xsink)
-                    return nullptr;
-                }
-            }
-        } else if (!streaming && (getbody || len)) {
-            if (os) {
-                msock->socket->priv->recvToOutputStream(os, len, timeout_ms, xsink, &msock->m,
-                    QORE_SOURCE_HTTPCLIENT);
-            } else if (content_encoding) {
-                qore_offset_t rc;
-                SimpleRefHolder<BinaryNode> bobj(msock->socket->priv->recvBinary(xsink, len, timeout_ms, rc,
-                    QORE_SOURCE_HTTPCLIENT));
-                if (!(*xsink) && bobj) {
-                    body = bobj.release();
-                }
-            } else {
-                qore_offset_t rc;
-                QoreStringNodeHolder bstr(msock->socket->priv->recv(xsink, len, timeout_ms, rc,
-                    QORE_SOURCE_HTTPCLIENT));
-                if (!(*xsink) && bstr) {
-                    body = bstr.release();
-                }
-            }
-
-            if (*xsink && !msock->socket->isOpen()) {
-                disconnect_unlocked();
-            }
-            //printf("body: %p\n", body->getInternalNode());
-        }
-    }
-
-http2_body_done:
-    if (*xsink) {
-        disconnect_unlocked();
-        return nullptr;
-    }
-
-    // check for connection: close header
-    if (!keep_alive) {
-        disconnect_unlocked();
-    } else {
-        if (conn && !strcasecmp(conn, "close")) {
-            disconnect_unlocked();
-        }
-    }
-
-    sl.unlock();
-
-    // for content-encoding processing we can run unlocked
-
-    // add body to result hash and process content encoding if necessary
-    if (body) {
-        if (body->getType() == NT_BINARY) {
-            const BinaryNode* bin = body->get<BinaryNode>();
-            QoreValue processed = process_binary_body(bin, msock->socket->getEncoding(), content_encoding, dec,
-                encoding_passthru, xsink);
-            if (*xsink) {
-                ans = nullptr;
-            } else if (processed) {
-                body = processed.getInternalNode();
-            }
-        }
-
-        if (body) {
-            if (info) {
-                info->setKeyValue("response-body", body.getReferencedValue(), xsink);
-            }
-
-            // send data to recv_callback (already unlocked)
-            if (recv_callback) {
-                // call body callbback and then header callback with no argument
-                if (msock->socket->priv->runDataCallback(xsink, "HTTPClient", mname, *recv_callback, nullptr,
-                        body->getInternalNode(), false)
-                    || msock->socket->priv->runHeaderCallback(xsink, "HTTPClient", mname, *recv_callback, nullptr,
-                        nullptr, nullptr, send_aborted, obj))
-                    return nullptr;
-            } else {
-                ans->setKeyValue("body", body.release(), xsink);
-            }
-        }
-    }
-
-    // do not throw an exception if a receive callback is used
-    if (!error_passthru && !recv_callback && !*xsink && (code < 100 || code >= 300)) {
-        const char* mess = get_string_header(xsink, **ans, "status_message");
-        if (!mess) {
-            mess = "<no message>";
-        }
-        assert(!*xsink);
-
-        xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", ans.release(), "HTTP status code %d received: message: "
-            "%s", code, mess);
-        return nullptr;
-    }
-
-    return *xsink || recv_callback || os ? nullptr : ans.release();
 }
 
 QoreHashNode* QoreHttpClientObject::send(const char* meth, const char* new_path, const QoreHashNode* headers,
@@ -8078,7 +6085,7 @@ public:
         @param client_obj HTTPClient QoreObject — poll op takes its own ref
     */
     HttpClientConnMgrPollOp(HttpClientConnectionBase* pending_conn,
-            HttpClientConnectionManagerBase* pending_mgr,
+            std::shared_ptr<HttpClientConnectionManagerBase> pending_mgr,
             std::string method, std::string path,
             QoreHashNode* pending_headers,
             BinaryNode* pending_body,
@@ -8091,7 +6098,7 @@ public:
           client_obj(client_obj),
           phase(Phase::WAITING_CONNECT),
           pending_conn(pending_conn),
-          pending_mgr(pending_mgr),
+          pending_mgr(std::move(pending_mgr)),
           pending_method(std::move(method)),
           pending_path(std::move(path)),
           pending_headers(pending_headers),
@@ -8100,7 +6107,7 @@ public:
           pending_streaming_response(pending_streaming_response) {
         assert(notifier);
         assert(pending_conn);
-        assert(pending_mgr);
+        assert(this->pending_mgr);
         assert(pending_promise);
         assert(future);
         future->ref();
@@ -8136,10 +6143,29 @@ public:
         if (notifier) {
             notifier->ref();
             notifier->notify();  // signal immediately so first continuePoll completes
+            connect_mode_pre_notified = true;
         }
         if (client_obj) {
             client_obj->ref();
         }
+    }
+
+    //! Constructor for connect mode (connection still CONNECTING)
+    HttpClientConnMgrPollOp(HttpClientConnectionBase* pending_conn,
+            QoreEventNotifier* notifier,
+            qore_httpclient_priv* priv_ref = nullptr,
+            QoreObject* client_obj = nullptr)
+        : notifier(notifier), priv_ref(priv_ref),
+          connect_mode(true), client_obj(client_obj),
+          pending_conn(pending_conn) {
+        assert(pending_conn);
+        if (notifier) {
+            notifier->ref();
+        }
+        if (client_obj) {
+            client_obj->ref();
+        }
+        pending_conn->ref();
     }
 
     //! Constructor for deferred error mode
@@ -8352,19 +6378,20 @@ public:
             return nullptr;
         }
         // Check if notifier has been signaled (for connect mode where
-        // there's no future to check)
+        // there's no future to check).  The async controller already calls
+        // continuePoll() when the notifier fd is readable; avoid a nested
+        // zero-timeout poll here.
         if (!future && notifier) {
-            // Non-blocking check: try to peek the notifier fd
-            int fd = notifier->fd();
-            if (fd >= 0) {
-                struct pollfd pfd = {fd, POLLIN, 0};
-                int rc = ::poll(&pfd, 1, 0);
-                if (rc > 0 && (pfd.revents & POLLIN)) {
-                    notifier->acknowledge(xsink);
-                    done = true;
-                    return nullptr;
-                }
+            if (connect_mode && pending_conn) {
+                return continueConnectMode(xsink);
             }
+            if (!connect_mode_pre_notified && !connect_mode_wait_armed) {
+                connect_mode_wait_armed = true;
+                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+            }
+            notifier->acknowledge(xsink);
+            done = true;
+            return nullptr;
         }
 
         // Return poll info pointing to the notifier fd (retrieved from
@@ -8373,20 +6400,93 @@ public:
         return getSocketPollInfoHash(xsink, SOCK_POLLIN);
     }
 
-    //! Handles WAITING_CONNECT phase.  Peeks the notifier fd; on signal,
+    //! Handles connect-only mode while the conn_mgr connection is still CONNECTING.
+    DLLLOCAL QoreHashNode* continueConnectMode(ExceptionSink* xsink) {
+        bool decided = pending_conn->isClosed() || pending_conn->isReady() || pending_conn->wasReady();
+        if (!decided) {
+            if (connect_mode_wait_armed) {
+                notifier->acknowledge(xsink);
+                if (*xsink) {
+                    done = true;
+                    phase = Phase::DONE;
+                    clearPendingUnlocked(xsink);
+                    return nullptr;
+                }
+            } else {
+                connect_mode_wait_armed = true;
+            }
+            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        }
+
+        notifier->acknowledge(xsink);
+        if (*xsink) {
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+        connect_mode_wait_armed = false;
+
+        if (pending_conn->isClosed() && !pending_conn->wasReady()) {
+            ReferenceHolder<QoreHashNode> err_info(
+                pending_conn->getReferencedErrorInfo(), xsink);
+            const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
+            const char* desc_str = "connection failed during poll connect";
+            if (err_info) {
+                QoreValue ev = err_info->getKeyValue("err");
+                QoreValue dv = err_info->getKeyValue("desc");
+                if (ev.getType() == NT_STRING) {
+                    err_str = ev.get<const QoreStringNode>()->c_str();
+                }
+                if (dv.getType() == NT_STRING) {
+                    desc_str = dv.get<const QoreStringNode>()->c_str();
+                }
+            }
+            xsink->raiseException(err_str, "%s", desc_str);
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+
+        done = true;
+        phase = Phase::DONE;
+        clearPendingUnlocked(xsink);
+        return nullptr;
+    }
+
+    //! Handles WAITING_CONNECT phase.  Waits for notifier readiness, then
     //! submits the request and transitions to WAITING_RESPONSE.
     DLLLOCAL QoreHashNode* continueWaitingConnect(ExceptionSink* xsink) {
-        // Non-blocking peek on the notifier fd.  If not yet signaled, stay
-        // in WAITING_CONNECT.
-        int fd = notifier->fd();
-        if (fd >= 0) {
-            struct pollfd pfd = {fd, POLLIN, 0};
-            int rc = ::poll(&pfd, 1, 0);
-            if (!(rc > 0 && (pfd.revents & POLLIN))) {
-                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        // The first controller pass arms the notifier fd; later passes are
+        // driven by the async controller when the notifier becomes readable.
+        // Public poll-operation users may also call continuePoll() manually
+        // before the notifier is readable; in that case keep returning the
+        // same poll info instead of treating the early call as an internal
+        // connection-state error.
+        bool decided = pending_conn->isClosed() || pending_conn->isReady();
+        if (!decided) {
+            if (waiting_connect_armed) {
+                notifier->acknowledge(xsink);
+                if (*xsink) {
+                    done = true;
+                    phase = Phase::DONE;
+                    clearPendingUnlocked(xsink);
+                    return nullptr;
+                }
+            } else {
+                waiting_connect_armed = true;
             }
+            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
         }
         notifier->acknowledge(xsink);
+        if (*xsink) {
+            done = true;
+            phase = Phase::DONE;
+            clearPendingUnlocked(xsink);
+            return nullptr;
+        }
+        waiting_connect_armed = false;
 
         // Connection reached a decided state (READY or CLOSED).
         if (pending_conn->isClosed()) {
@@ -8408,19 +6508,6 @@ public:
                 }
             }
             xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
-            done = true;
-            phase = Phase::DONE;
-            clearPendingUnlocked(xsink);
-            return nullptr;
-        }
-
-        if (!pending_conn->isReady()) {
-            // Spurious wake (state still CONNECTING) — extremely unlikely
-            // because onConnectionReady signals only on transition.  Treat
-            // as an internal error rather than spinning.
-            xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
-                "connection-ready notifier signaled but connection is not "
-                "in a decided state");
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
@@ -8570,6 +6657,8 @@ private:
     qore_httpclient_priv* priv_ref = nullptr;  // back-ref for user-disconnect detection
     mutable bool done = false;
     bool connect_mode = false;
+    bool connect_mode_pre_notified = false;
+    bool connect_mode_wait_armed = false;
     //! HTTPClient QoreObject (ref'd) — used to detect OBJECT-ALREADY-DELETED
     //! when the client is destroyed while the poll op is still active.
     QoreObject* client_obj = nullptr;
@@ -8579,6 +6668,7 @@ private:
     //! Phase tracks sendRecv mode progress (WAITING_CONNECT →
     //! WAITING_RESPONSE → DONE).  Unused for @ref connect_mode.
     Phase phase = Phase::WAITING_RESPONSE;
+    bool waiting_connect_armed = false;
 
     //! Fields valid only while @ref phase == WAITING_CONNECT.  Cleared by
     //! @ref clearPending when the request is submitted (or the op aborts).
@@ -8586,7 +6676,7 @@ private:
     //! the back-reference used to release the stream reservation if the
     //! request is never submitted.  headers/body/promise hold their own refs.
     HttpClientConnectionBase* pending_conn = nullptr;
-    HttpClientConnectionManagerBase* pending_mgr = nullptr;
+    std::shared_ptr<HttpClientConnectionManagerBase> pending_mgr;
     std::string pending_method;
     std::string pending_path;
     QoreHashNode* pending_headers = nullptr;
@@ -8631,7 +6721,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     const char* scheme = this_connection.ssl ? "https" : "http";
     QoreString pathstr(enc ? enc : QCS_UTF8);
     bool path_already_encoded = false;
-    const char* msgpath = getMsgPath(xsink, this_connection, path, pathstr, path_already_encoded);
+    const char* msgpath = getMsgPath(xsink, this_connection, path, pathstr, path_already_encoded, false);
     if (*xsink) {
         return nullptr;
     }
@@ -8639,10 +6729,11 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     // Acquire connection without waiting — a fresh connection is returned
     // in CONNECTING state so the poll op can report "connecting" until the
     // I/O thread finishes TCP/SSL setup.
-    HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
-    if (*xsink) {
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = getConnMgr(xsink);
+    if (*xsink || !mgr_holder) {
         return nullptr;
     }
+    HttpClientConnectionManagerBase& mgr = *mgr_holder;
     HttpClientConnectionBase* conn = mgr.acquireConnectionAsync(scheme,
         this_connection.host.c_str(), this_connection.port, xsink);
     if (!conn || *xsink) {
@@ -8853,7 +6944,7 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             QoreHashNode* headers_raw = nh.release();  // ref consumed
             BinaryNode* body_raw = body_holder.release();  // nullable, ref consumed
             QorePromise* promise_raw_consumed = promise_holder.release();
-            poller = new HttpClientConnMgrPollOp(conn, &mgr,
+            poller = new HttpClientConnMgrPollOp(conn, mgr_holder,
                 std::string(method), std::string(msgpath),
                 headers_raw, body_raw, promise_raw_consumed,
                 future_raw, notifier_for_op, this, self, streaming_response);
@@ -8886,16 +6977,20 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
     con_info this_connection = connection;
     const char* scheme = this_connection.ssl ? "https" : "http";
 
-    // Acquire connection (may still be CONNECTING)
-    HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
-    if (*xsink) {
+    // Acquire connection without waiting.  A fresh connection is returned
+    // in CONNECTING state so the returned poll op can report "connecting"
+    // until the async I/O controller finishes TCP/SSL setup.
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr_holder = getConnMgr(xsink);
+    if (*xsink || !mgr_holder) {
         return nullptr;
     }
-    // acquireConnection may fail synchronously if TCP connect is refused
-    // immediately; capture error and return a poll op that defers it to
-    // the continuePoll loop (matching legacy startPollConnect behavior)
+    HttpClientConnectionManagerBase& mgr = *mgr_holder;
+    // acquireConnectionAsync can still fail synchronously before a controller
+    // operation is submitted, for example on invalid setup.  Capture the error
+    // and return a poll op that defers it to the continuePoll loop, matching
+    // legacy startPollConnect behavior.
     ExceptionSink connect_xsink;
-    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+    HttpClientConnectionBase* conn = mgr.acquireConnectionAsync(scheme,
         this_connection.host.c_str(), this_connection.port, &connect_xsink);
     if (!conn || connect_xsink) {
         // Extract error info for deferred raising
@@ -9045,13 +7140,19 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
         return nullptr;
     }
 
+    // Keep the connection alive until the connect-mode poll op observes the
+    // final READY/CLOSED state.  The manager slot is released immediately; the
+    // poll op only holds a private ref for state/error inspection.
+    conn->ref();
     mgr.releaseConnection(conn);
 
     // Create poll op — no future for connect, just notifier signaling
     QoreEventNotifier* notifier_for_op = *notifier_holder;
     ReferenceHolder<HttpClientConnMgrPollOp> poller(
-        new HttpClientConnMgrPollOp(nullptr, notifier_for_op, this, self), xsink);
-    (*poller)->setConnectMode();
+        new HttpClientConnMgrPollOp(conn, notifier_for_op, this, self), xsink);
+    ExceptionSink deref_xsink;
+    conn->deref(&deref_xsink);
+    deref_xsink.clear();
 
     SocketPollOperationBase* p = *poller;
     ReferenceHolder<QoreObject> rv(
@@ -9065,6 +7166,11 @@ QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, 
 }
 
 QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHTTPChunk", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (!http_priv->streaming_recv_channel) {
         // No channel — not in conn_mgr streaming mode
         return nullptr;
@@ -9136,6 +7242,11 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, Excepti
 
 QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringNode* content_encoding,
         int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readServerSentEvent", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (!http_priv->streaming_recv_channel) {
         return nullptr;
     }
@@ -9187,6 +7298,11 @@ QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringN
 }
 
 QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHTTPChunkedBody", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (!http_priv->streaming_recv_channel) {
         return nullptr;
     }
@@ -9221,6 +7337,11 @@ QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, E
 }
 
 QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout_ms, ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "readHTTPChunkedBodyBinary", xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     if (!http_priv->streaming_recv_channel) {
         return nullptr;
     }
@@ -9267,6 +7388,11 @@ bool QoreHttpClientObject::hasStreamingChannel() const {
 }
 
 bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink) const {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "isDataAvailable", xsink);
+    if (*xsink) {
+        return false;
+    }
+
     if (http_priv->streaming_recv_channel) {
         // Consider buffered SSE text as immediately-pending — matches
         // readServerSentEventConnMgr which drains this buffer first.
@@ -9282,8 +7408,9 @@ bool QoreHttpClientObject::isDataAvailable(int timeout_ms, ExceptionSink* xsink)
         // legacy msock path did.
         return http_priv->streaming_recv_channel->waitReadable(timeout_ms, xsink);
     }
-    // No streaming channel — legacy msock path
-    return http_priv->msock->socket->isDataAvailable(xsink, timeout_ms);
+    // No streaming channel: delegate to the Socket method, which executes its
+    // readiness poll through the async I/O controller.
+    return const_cast<QoreHttpClientObject*>(this)->QoreSocketObject::isDataAvailable(xsink, timeout_ms);
 }
 
 QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* new_path, const QoreHashNode* headers,
@@ -9471,10 +7598,14 @@ void QoreHttpClientObject::setEventQueue(ExceptionSink* xsink, Queue* q, QoreVal
 }
 
 void QoreHttpClientObject::cleanup(ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    priv->socket->close();
-    http_priv->disconnectQuic();
-    priv->invalidate();
+    qore_socket_private* close_priv = nullptr;
+    {
+        AutoLocker al(priv->m);
+        close_priv = http_priv->disconnect_unlocked_prepare_close();
+        http_priv->resetConnMgr();
+        priv->invalidate();
+    }
+    qore_httpclient_priv::closeReferencedSocket(close_priv);
     priv->socket->cleanup(xsink);
 }
 
@@ -9498,7 +7629,11 @@ bool QoreHttpClientObject::isConnected() const {
     if (http_priv->streaming_recv_channel) {
         return !http_priv->streaming_recv_channel->isClosed();
     }
-    return http_priv->msock->socket->isOpen();
+    if (http_priv->msock->socket->isOpen()) {
+        return true;
+    }
+    std::shared_ptr<HttpClientConnectionManagerBase> mgr = http_priv->getConnMgrIfPresent();
+    return mgr && mgr->getPoolSize() > 0;
 }
 
 bool QoreHttpClientObject::isOpen() const {

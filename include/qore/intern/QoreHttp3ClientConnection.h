@@ -306,6 +306,9 @@ private:
     //! @return 0 on success, -1 on error (sets @c submitted on success).
     DLLLOCAL int submitAttempt(Attempt& a, ExceptionSink* xsink);
 
+    //! Wake the async I/O controller so pending QUIC writes are driven on the I/O thread.
+    DLLLOCAL void wakeController() const;
+
     //! @name Happy-eyeballs racing state
     /** During handshake, up to N attempts (one per interleaved v6/v4
         candidate) race concurrently.  The first to report

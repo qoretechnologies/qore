@@ -68,6 +68,18 @@ static constexpr int64_t QUIC_NO_TIMER_POLL_MS = 1000;
 */
 static constexpr int QUIC_CLIENT_RECV_BUDGET = 32;
 
+static int quic_input_stream_pollable_descriptor(InputStream* is, const char* err, ExceptionSink* xsink) {
+    if (!is->supportsNonBlockingIo()) {
+        return -1;
+    }
+
+    int fd = is->getPollableDescriptor();
+    if (fd < 0) {
+        xsink->raiseException(err, "InputStream reports non-blocking I/O support but returned no pollable descriptor");
+    }
+    return fd;
+}
+
 //! Set the "poll_timeout_ms" key on a poll info hash based on the next QUIC timer expiry.
 /** Translates the ngtcp2 timer expiry into a poll timeout hint so the I/O
     thread's poll() wakes when the QUIC retransmission/PTO timer fires.
@@ -370,7 +382,8 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     const char* host, uint16_t port, int family,
     int64_t handshake_timeout_ns,
     int64_t not_before_ns_abs)
-    : SocketPollSocketOperationBase(sock),
+    : SocketPollSocketOperationBase(sock), host(host), service(std::to_string(port)),
+      handshake_timeout_ns_(handshake_timeout_ns), port_(port), family_(q_get_af(family)),
       not_before_ns_(not_before_ns_abs) {
     AutoLocker al(sock->priv->m);
 
@@ -383,33 +396,72 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
             sock->priv->socket->priv->stype);
         return;
     }
+}
 
-    // Resolve the remote address
-    QoreAddrInfo ai;
-    QoreString service_str;
-    service_str.sprintf("%d", (int)port);
-    if (ai.getInfo(xsink, host, service_str.c_str(), family, 0, SOCK_DGRAM, 0)) {
-        return;
+SocketQuicClientPollOperation::~SocketQuicClientPollOperation() = default;
+
+QoreHashNode* SocketQuicClientPollOperation::getResolverPollInfo(ExceptionSink* xsink) const {
+    std::vector<std::pair<int, int>> extra_fds;
+    resolver->getExtraFds(extra_fds);
+    QoreHashNode* rv = getSocketPollInfoHash(xsink, 0, extra_fds);
+    if (*xsink) {
+        return nullptr;
+    }
+    int poll_timeout_ms = resolver->getPollTimeoutMs();
+    rv->setKeyValue("poll_timeout_ms", poll_timeout_ms >= 0 ? poll_timeout_ms : 1, xsink);
+    return rv;
+}
+
+QoreHashNode* SocketQuicClientPollOperation::continueResolve(ExceptionSink* xsink) {
+    if (!resolver) {
+        resolver = std::make_unique<QoreCaresAddrInfoResolver>(host, service, family_, SOCK_DGRAM, 0);
     }
 
-    struct addrinfo* aip = ai.getAddrInfo();
-    if (!aip) {
-        xsink->raiseException("QUIC-ERROR", "could not resolve remote address '%s:%d'", host, (int)port);
-        return;
+    int rc = resolver->continuePoll(xsink);
+    if (*xsink || rc < 0) {
+        return nullptr;
+    }
+    if (rc) {
+        return getResolverPollInfo(xsink);
     }
 
-    // Store remote address
-    memcpy(&remote_addr_, aip->ai_addr, aip->ai_addrlen);
-    remote_addrlen_ = aip->ai_addrlen;
+    if (initializeResolved(xsink)) {
+        return nullptr;
+    }
+    return nullptr;
+}
+
+int SocketQuicClientPollOperation::initializeResolved(ExceptionSink* xsink) {
+    const std::vector<SocketResolvedAddrInfo>& addrs = resolver->getAddresses();
+    if (addrs.empty()) {
+        xsink->raiseException("QUIC-ERROR", "could not resolve remote address '%s:%s'",
+            host.c_str(), service.c_str());
+        return -1;
+    }
+
+    const SocketResolvedAddrInfo& ai = addrs.front();
+    memcpy(&remote_addr_, &ai.addr, ai.addrlen);
+    remote_addrlen_ = ai.addrlen;
+    resolver.reset();
+
+    AutoLocker al(sock->priv->m);
+    if (sock->priv->checkOpen(xsink)) {
+        return -1;
+    }
+    if (sock->priv->socket->priv->stype != SOCK_DGRAM) {
+        xsink->raiseException("QUIC-ERROR", "QUIC requires a UDP (SOCK_DGRAM) socket; this socket has type %d",
+            sock->priv->socket->priv->stype);
+        return -1;
+    }
 
     // Connect UDP socket to remote so getsockname() returns the specific
     // local interface address (not wildcard). Required for correct ngtcp2
     // path validation. Connected sockets also filter incoming packets to
     // only those from the peer, which is desirable for QUIC clients.
     int fd = sock->priv->socket->getSocket();
-    if (::connect(fd, aip->ai_addr, aip->ai_addrlen) < 0) {
+    if (::connect(fd, reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "UDP connect() failed");
-        return;
+        return -1;
     }
 
     // Enlarge UDP receive buffer to prevent packet drops under burst traffic.
@@ -433,7 +485,7 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     local_addrlen_ = sizeof(local_addr_);
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "getsockname() failed on QUIC client socket");
-        return;
+        return -1;
     }
     if (enableQuicPktinfo(fd, local_addr_.ss_family) < 0) {
         printd(0, "SocketQuicClientPollOperation: enableQuicPktinfo() failed: errno=%d (%s)\n",
@@ -442,7 +494,7 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
 
     // Set non-blocking guard flag on QoreSocketObject
     if (sock->priv->setNonBlock(xsink)) {
-        return;
+        return -1;
     }
     set_non_block = true;
 
@@ -452,14 +504,14 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     if (sock->priv->socket->priv->set_non_blocking(true, xsink)) {
         sock->priv->clearNonBlock();
         set_non_block = false;
-        return;
+        return -1;
     }
 
     // Create QUIC session with actual socket addresses; pass through the
     // socket's ssl_verify_mode so SSL_CTX_set_verify() enforces verification;
     // enable 0-RTT for reconnections with cached session tickets.
     // Pass client cert/pk for mTLS if configured on the socket.
-    quic_session = QuicSession::createClient(sock->priv->socket->priv, xsink, host, port,
+    quic_session = QuicSession::createClient(sock->priv->socket->priv, xsink, host.c_str(), port_,
         reinterpret_cast<const struct sockaddr*>(&local_addr_), local_addrlen_,
         reinterpret_cast<const struct sockaddr*>(&remote_addr_), remote_addrlen_,
         sock->priv->socket->priv->ssl_verify_mode,
@@ -468,7 +520,7 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     if (*xsink || !quic_session) {
         sock->priv->clearNonBlock();
         set_non_block = false;
-        return;
+        return -1;
     }
 
     // Store the session on qore_socket_private for access via Socket QPP methods
@@ -478,16 +530,17 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     // Without this, a stalled QUIC handshake over UDP has no transport-level
     // deadline (unlike TCP where the OS eventually returns ETIMEDOUT) — only
     // the outer request_timeout would bound it.
-    if (handshake_timeout_ns > 0) {
-        handshake_deadline_ns_ = QuicSession::timestamp() + handshake_timeout_ns;
+    if (handshake_timeout_ns_ > 0) {
+        handshake_deadline_ns_ = QuicSession::timestamp() + handshake_timeout_ns_;
     }
 
     qcs_state = QCS::HANDSHAKE_SEND;
+    return 0;
 }
 
 const char* SocketQuicClientPollOperation::getStateImpl() const {
     switch (qcs_state) {
-        case QCS::NONE: return "initializing";
+        case QCS::NONE: return resolver ? "resolving" : "initializing";
         case QCS::HANDSHAKE_SEND: return "handshake-send";
         case QCS::HANDSHAKE_RECV: return "handshake-recv";
         case QCS::SETUP_HTTP3: return "setup-http3";
@@ -602,7 +655,7 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     int sent = sendQuicPacketsBatch(fd, pkt_batch_, nullptr, 0);
     if (sent < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EAGAIN fd=%d batch=%zu\n",
+            ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets EAGAIN fd=%d batch=%d\n",
                 fd, pkt_batch_.size());
             return SOCK_POLLOUT;
         }
@@ -610,7 +663,7 @@ int SocketQuicClientPollOperation::sendPendingPackets(
         xsink->raiseErrnoException("QUIC-SEND-ERROR", errno, "sendto/sendmmsg() failed");
         return -1;
     }
-    ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets SENT fd=%d sent=%d/%zu\n",
+    ASYNC_IO_TRACE("SocketQuicClientPollOperation::sendPendingPackets SENT fd=%d sent=%d/%d\n",
         fd, sent, pkt_batch_.size());
     if (sent > 0 && sent < pkt_batch_.size()) {
         printd(1, "SocketQuicClientPollOperation::sendPendingPackets(): partial QUIC send: %d/%d packets\n",
@@ -623,50 +676,6 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     }
 
     pkt_batch_.clear();
-    return 0;
-}
-
-int SocketQuicClientPollOperation::flushPendingWrites(ExceptionSink* xsink) {
-    if (!quic_session || !quic_session->hasPendingWrite()) {
-        ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites NO_PENDING\n");
-        return 0;
-    }
-    // Honor the happy-eyeballs stagger gate; see sendPendingPackets for
-    // rationale.  flushPendingWrites is normally invoked after the
-    // handshake has completed (request submission path), but a caller
-    // that wakes us during the stagger window must not cause packet
-    // emission before the preferred family has had its head start.
-    if (not_before_ns_ && QuicSession::timestamp() < not_before_ns_) {
-        ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites "
-                       "HE_STAGGER_SKIP\n");
-        return 0;
-    }
-    // Use a local batch — NOT the member pkt_batch_ — because this method
-    // can be called from any thread (app thread) while the I/O thread is
-    // concurrently using pkt_batch_ in sendPendingPackets() via continuePoll().
-    // Sharing pkt_batch_ without synchronization causes a data race where
-    // the I/O thread captures batch.size(), then this thread clears/refills
-    // pkt_batch_, and the I/O thread's packetData() hits an out-of-bounds
-    // assert (QuicCommon.h:95).
-    QuicPacketBatch flush_batch;
-    auto result = quic_session->processTimerAndWrite(flush_batch, xsink);
-    if (result.error || flush_batch.empty()) {
-        ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites EMPTY error=%d batch_empty=%d\n",
-            (int)result.error, (int)flush_batch.empty());
-        return 0;
-    }
-    int fd = sock->priv->socket->getSocket();
-    int sent = sendQuicPacketsBatch(fd, flush_batch, nullptr, 0);
-    ASYNC_IO_TRACE("SocketQuicClientPollOperation::flushPendingWrites SENT fd=%d sent=%d/%zu\n",
-        fd, sent, flush_batch.size());
-    if (sent < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-            xsink->raiseErrnoException("QUIC-SEND-ERROR", errno,
-                "sendto/sendmmsg() failed in flushPendingWrites");
-            return -1;
-        }
-    }
-    // Partial or EAGAIN acceptable — the I/O thread will pick up the remainder
     return 0;
 }
 
@@ -802,6 +811,13 @@ QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSin
 }
 
 QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) {
+    if (qcs_state == QCS::NONE) {
+        QoreHashNode* poll_info = continueResolve(xsink);
+        if (*xsink || poll_info || qcs_state != QCS::HANDSHAKE_SEND) {
+            return poll_info;
+        }
+    }
+
     AutoLocker al(sock->priv->m);
 
     if (!sock->priv->socket->priv->isOpen()) {
@@ -1173,29 +1189,6 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 return nullptr;
         }
     }
-}
-
-int64_t SocketQuicClientPollOperation::submitRequest(
-    const char* method, const char* path,
-    const strcase_str_map_t& headers,
-    const void* body, size_t body_len,
-    ExceptionSink* xsink) {
-    if (!quic_session) {
-        xsink->raiseException("QUIC-ERROR", "QUIC session not initialized");
-        return -1;
-    }
-    return quic_session->submitRequest(method, path, headers, body, body_len, xsink);
-}
-
-int64_t SocketQuicClientPollOperation::submitRequestStreaming(
-    const char* method, const char* path,
-    const strcase_str_map_t& headers,
-    ExceptionSink* xsink) {
-    if (!quic_session) {
-        xsink->raiseException("QUIC-ERROR", "QUIC session not initialized");
-        return -1;
-    }
-    return quic_session->submitRequestStreaming(method, path, headers, xsink);
 }
 
 int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
@@ -2121,7 +2114,7 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
     int64_t session_id, int64_t stream_id, int status_code,
     const QoreHashNode* headers,
     const AbstractQoreNode* body)
-    : SocketPollSocketOperationBase(sock) {
+    : SocketPollSocketOperationBase(sock), stream_id_(stream_id), status_code_(status_code) {
     AutoLocker al(sock->priv->m);
 
     // Validate socket
@@ -2138,28 +2131,29 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
     }
 
     // Convert headers hash to std::map
-    strcase_str_map_t hdr_map;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
             QoreStringValueHelper val(hi.get());
-            hdr_map[hi.getKey()] = val->c_str();
+            header_map_[hi.getKey()] = val->c_str();
         }
     }
 
-    // Get body data
-    const void* body_ptr = nullptr;
-    size_t body_len = 0;
+    // Copy body data so session mutation can be deferred to continuePoll().
     if (body) {
         qore_type_t body_type = body->getType();
         if (body_type == NT_BINARY) {
             const BinaryNode* b = static_cast<const BinaryNode*>(body);
-            body_ptr = b->getPtr();
-            body_len = b->size();
+            if (b->size()) {
+                body_ = new BinaryNode;
+                body_->append(b->getPtr(), b->size());
+            }
         } else if (body_type == NT_STRING) {
             const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            body_ptr = str->c_str();
-            body_len = str->size();
+            if (str->size()) {
+                body_ = new BinaryNode;
+                body_->append(str->c_str(), str->size());
+            }
         }
     }
 
@@ -2198,22 +2192,7 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
             errno, strerror(errno));
     }
 
-    // Save stream_id for ACK tracking in FLUSHING state
-    stream_id_ = stream_id;
-
-    // Snapshot migration generation before sending — used in FLUSHING to detect
-    // whether a path migration occurred during this response.
-    send_migration_gen_ = quic_session->getMigrationGen();
-
-    // Submit the response to the HTTP/3 layer
-    int rv = quic_session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
-    if (*xsink) {
-        sock->priv->clearNonBlock();
-        set_non_block = false;
-        return;
-    }
-
-    qcs_state = QCS::SENDING;
+    qcs_state = QCS::NONE;
 }
 
 const char* SocketQuicSendResponsePollOperation::getStateImpl() const {
@@ -2320,6 +2299,26 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
 
     while (true) {
         switch (qcs_state) {
+            case QCS::NONE: {
+                const void* body_ptr = body_ ? body_->getPtr() : nullptr;
+                size_t body_len = body_ ? body_->size() : 0;
+
+                // Submit the response to the HTTP/3 layer on the controller thread.
+                int rv = quic_session->submitResponse(stream_id_, status_code_, header_map_, body_ptr, body_len,
+                    xsink);
+                if (rv && !*xsink) {
+                    xsink->raiseException("QUIC-ERROR", "failed to submit HTTP/3 response: rv=%d", rv);
+                }
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                // Snapshot migration generation when SENDING state begins.
+                send_migration_gen_ = quic_session->getMigrationGen();
+                qcs_state = QCS::SENDING;
+                continue;
+            }
+
             case QCS::SENDING: {
                 // Read any incoming ACKs to update flow control windows
                 recvAndProcessPackets(xsink);
@@ -2452,10 +2451,22 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     int64_t session_id, int64_t stream_id, int status_code,
     const QoreHashNode* headers,
     InputStream* input_stream, QoreObject* input_stream_obj, int64 chunk_size)
-    : SocketPollSocketOperationBase(sock), stream_id(stream_id),
+    : SocketPollSocketOperationBase(sock), session_id(session_id), stream_id(stream_id),
+      status_code(status_code),
       input_stream(input_stream), input_stream_obj(input_stream_obj),
       chunk_size(chunk_size > 0 ? chunk_size : 16384),
-      is_pollable(input_stream->supportsNonBlockingIo()) {
+      is_pollable(false) {
+    if (!input_stream->isIoThreadSafe()) {
+        xsink->raiseException("QUIC-ERROR", "InputStream is not I/O thread safe");
+        return;
+    }
+
+    stream_fd = quic_input_stream_pollable_descriptor(input_stream, "QUIC-ERROR", xsink);
+    if (*xsink) {
+        return;
+    }
+    is_pollable = stream_fd >= 0;
+
     AutoLocker al(sock->priv->m);
 
     // Validate socket
@@ -2472,12 +2483,11 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     }
 
     // Convert headers hash to std::map
-    strcase_str_map_t hdr_map;
     if (headers) {
         ConstHashIterator hi(headers);
         while (hi.next()) {
             QoreStringValueHelper val(hi.get());
-            hdr_map[hi.getKey()] = val->c_str();
+            header_map[hi.getKey()] = val->c_str();
         }
     }
 
@@ -2516,29 +2526,12 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
             "errno=%d (%s)\n", errno, strerror(errno));
     }
 
-    // Submit the streaming response (headers only, deferred data reader)
-    int rv = quic_session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
-    if (*xsink) {
-        sock->priv->clearNonBlock();
-        set_non_block = false;
-        return;
-    }
-
-    // Cache the pollable file descriptor for non-blocking reads
-    if (is_pollable) {
-        stream_fd = input_stream->getPollableDescriptor();
-        if (stream_fd < 0) {
-            is_pollable = false;
-        }
-    }
-
     // Thread affinity: QPP wrapper calls unassignThread() after construction
-    printd(5, "SocketQuicSendStreamingResponsePollOperation() headers submitted stream_id=%" PRId64 "\n",
-        stream_id);
 }
 
 const char* SocketQuicSendStreamingResponsePollOperation::getStateImpl() const {
     switch (ss_state) {
+        case QCS_SS::SUBMIT_HEADERS: return "submitting-headers";
         case QCS_SS::READ_CHUNK: return "reading-chunk";
         case QCS_SS::SEND_CHUNK: return "sending-chunk";
         case QCS_SS::FLUSH: return "flushing";
@@ -2638,8 +2631,32 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
         return nullptr;
     }
 
+    auto cancel_stream = [&]() {
+        sock->priv->m.unlock();
+        ExceptionSink cancel_xsink;
+        sock->cancelQuicStreamAsync(session_id, stream_id, &cancel_xsink);
+        cancel_xsink.clear();
+        sock->priv->m.lock();
+    };
+
     while (true) {
         switch (ss_state) {
+            case QCS_SS::SUBMIT_HEADERS: {
+                // Submit the streaming response (headers only, deferred data reader)
+                int rv = quic_session->submitResponseStreaming(stream_id, status_code, header_map, xsink);
+                if (rv && !*xsink) {
+                    xsink->raiseException("QUIC-ERROR", "failed to submit HTTP/3 streaming response: rv=%d", rv);
+                }
+                if (*xsink) {
+                    return nullptr;
+                }
+
+                printd(5, "SocketQuicSendStreamingResponsePollOperation() headers submitted stream_id=%" PRId64
+                    "\n", stream_id);
+                ss_state = QCS_SS::READ_CHUNK;
+                continue;
+            }
+
             case QCS_SS::READ_CHUNK: {
                 if (eof) {
                     // Send end-of-stream marker
@@ -2667,14 +2684,14 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                     if (poll_rv < 0) {
                         xsink->raiseException("QUIC-ERROR", "poll() on stream fd failed: %s",
                             strerror(errno));
-                        ExceptionSink cancel_xsink;
-                        quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
-                            &cancel_xsink);
+                        cancel_stream();
                         return nullptr;
                     }
                     if (poll_rv == 0) {
-                        // Stream not ready — yield to event loop for socket I/O
-                        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                        // Stream not ready: register fd with event loop and
+                        // retry reading on next continuePoll() call.
+                        std::vector<std::pair<int, int>> extra_fds{{stream_fd, SOCK_POLLIN}};
+                        QoreHashNode* poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN, extra_fds);
                         if (poll_info) {
                             setPollTimeoutFromExpiry(poll_info, quic_session->getExpiry(), xsink);
                         }
@@ -2687,9 +2704,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                     int64 count = input_stream->readNonBlock(
                         const_cast<void*>(chunk->getPtr()), chunk_size, xsink);
                     if (*xsink) {
-                        ExceptionSink cancel_xsink;
-                        quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
-                            &cancel_xsink);
+                        cancel_stream();
                         return nullptr;
                     }
                     if (count == 0) {
@@ -2716,9 +2731,7 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                         return nullptr;
                     }
                     if (*xsink) {
-                        ExceptionSink cancel_xsink;
-                        quic_session->cancelStream(stream_id, NGHTTP3_H3_REQUEST_CANCELLED,
-                            &cancel_xsink);
+                        cancel_stream();
                         return nullptr;
                     }
                     if (!current_chunk) {

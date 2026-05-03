@@ -95,7 +95,10 @@ void Http2ClientPollOperationPriv::initAdoptedMultiplex(ExceptionSink* xsink) {
     // workloads.  The adopted socket inherits from the NEGOTIATE H1
     // connection, which did not set NODELAY, so set it here.
     if (sock_obj) {
-        sock_obj->setNoDelay(1);
+        sock_obj->setNoDelayForAsyncPoll(1, xsink);
+        if (*xsink) {
+            return;
+        }
     }
     startMultiplex(xsink);
 }
@@ -281,7 +284,10 @@ QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
         // TCP_NODELAY, Nagle + delayed-ACK interaction adds ~40ms per
         // request on sequential workloads (see legacy setNoDelay at
         // QoreHttpClientObject::connect_unlocked for context).
-        sock_obj->setNoDelay(1);
+        sock_obj->setNoDelayForAsyncPoll(1, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
         if (proxy_tunnel) {
             startProxyConnect(xsink);
         } else if (ssl_required) {
@@ -449,7 +455,7 @@ QoreHashNode* Http2ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
 
     if (current_op->goalReached()) {
         // Check ALPN negotiated protocol
-        SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocol());
+        SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocolForAsyncPoll());
         if (!alpn || strcmp(alpn->c_str(), "h2") != 0) {
             SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
             desc->sprintf("HTTP/2 not negotiated via ALPN: got %s",
@@ -482,13 +488,10 @@ void Http2ClientPollOperationPriv::startMultiplex(ExceptionSink* xsink) {
     current_op->setSelf(*self);
     h2_state.store(H2State::READING, std::memory_order_release);
 
-    if (ssl_required) {
-        // HTTPS: ALPN already confirmed H2 during TLS handshake
-        h2_confirmed.store(true, std::memory_order_release);
-        fireReadyCallback(xsink);
-    }
-    // Plain HTTP (h2c): defer readyCallback until we see valid H2 output
-    // from the server, confirming it supports HTTP/2 prior knowledge
+    // Defer readyCallback until we see valid H2 output from the server.  ALPN
+    // proves protocol selection for HTTPS, but the connection is not useful for
+    // multiplexed requests until the client preface has been sent and the
+    // peer's SETTINGS frame has been processed.
 }
 
 QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
@@ -496,6 +499,16 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         setError("HTTP2-READ-ERROR", "read operation not initialized", xsink);
         return nullptr;
     }
+
+    // submitRequest() waits for controller-backed nghttp2 submission, then
+    // registers the returned stream id.  If that handoff is active, do not
+    // let the multiplex reader drain a fast response with no action; also do
+    // not block the I/O thread, since it may need to run the submit exec.
+    if (submission_lock.trylock() != 0) {
+        h2_state.store(H2State::WAIT_READ, std::memory_order_release);
+        return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+    }
+    AutoLocker submission_al(submission_lock, true);
 
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
@@ -658,6 +671,19 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         return applyIdleTimeout(poll_info, xsink);
     }
 
+    if (current_op->goalReached()) {
+        // The inner multiplex operation reached its terminal state without
+        // producing another response.  Surface the peer close immediately so
+        // pending streams are failed deterministically instead of spinning
+        // until HTTP2-EMPTY-READ hides the real state transition.
+        setError("HTTP2-CONNECTION-CLOSED",
+            active_stream_count > 0
+                ? "HTTP/2 connection closed while requests were active"
+                : "HTTP/2 connection closed by peer",
+            xsink);
+        return nullptr;
+    }
+
     ++empty_read_count;
     // Use a much shorter limit during h2c probing — if the server
     // doesn't respond with valid H2 frames quickly, it likely doesn't
@@ -726,7 +752,7 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
         if (last_ping_sent_us == 0 || (now_us - last_ping_sent_us) >= ping_interval_us) {
             if (sock_obj) {
                 ExceptionSink ping_xsink;
-                sock_obj->submitHttp2Ping(&ping_xsink);
+                sock_obj->submitHttp2PingForAsyncPoll(&ping_xsink);
                 ping_xsink.clear();
             }
             last_ping_sent_us = now_us;
@@ -755,6 +781,14 @@ QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_
 }
 
 void Http2ClientPollOperationPriv::abort(ExceptionSink* xsink) {
+    {
+        AutoLocker al(stream_lock);
+        if (!error_info) {
+            error_info = new QoreHashNode(autoTypeInfo);
+            error_info->setKeyValue("err", new QoreStringNode("HTTP2-ABORT"), xsink);
+            error_info->setKeyValue("desc", new QoreStringNode("connection aborted"), xsink);
+        }
+    }
     h2_state.store(H2State::CLOSED, std::memory_order_release);
     if (current_op) {
         current_op->abort(xsink);
@@ -789,7 +823,7 @@ void Http2ClientPollOperationPriv::setError(const char* err, const char* desc,
     // Close the socket to release the fd and prevent CLOSE-WAIT accumulation.
     // Safe here: setError() is called from continuePoll() on the I/O thread.
     if (sock_obj && sock_obj->getSocket() >= 0) {
-        sock_obj->close();
+        sock_obj->closeIo(xsink);
     }
     notifyPendingStreams(err, desc, xsink);
     {
@@ -845,11 +879,11 @@ void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue*
 
     // Drain any data already buffered in the H2 session for this stream.
     // DATA frames may arrive in the same TCP segment as the CONNECT response.
-    // queue->push() wakes the consumer directly; readHttp2StreamData() and
-    // Queue::push() are thread-safe — no lock needed.
+    // queue->push() wakes the consumer directly; readHttp2StreamDataForAsyncPoll()
+    // and Queue::push() are thread-safe — no lock needed.
     ExceptionSink xsink;
     while (true) {
-        BinaryNode* data = sock_obj->readHttp2StreamData(stream_id, 0, &xsink);
+        BinaryNode* data = sock_obj->readHttp2StreamDataForAsyncPoll(stream_id, 0, &xsink);
         if (xsink) {
             xsink.clear();
             break;
@@ -910,7 +944,7 @@ void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
     for (auto& [stream_id, info] : stream_queues) {
         int drain_count = 0;
         while (true) {
-            BinaryNode* data = sock_obj->readHttp2StreamData(stream_id, 0, xsink);
+            BinaryNode* data = sock_obj->readHttp2StreamDataForAsyncPoll(stream_id, 0, xsink);
             if (*xsink) {
                 return;
             }
@@ -934,8 +968,8 @@ void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         }
 
         // Check stream closure (remote END_STREAM or RST_STREAM/GOAWAY)
-        if (sock_obj->isHttp2StreamRemoteClosed(stream_id)
-                || sock_obj->isHttp2StreamClosed(stream_id)) {
+        if (sock_obj->isHttp2StreamRemoteClosedForAsyncPoll(stream_id)
+                || sock_obj->isHttp2StreamClosedForAsyncPoll(stream_id)) {
             // Push NOTHING sentinel so the handler thread knows the stream is done
             info.queue->push(xsink, QoreValue());
             if (*xsink) {
@@ -1035,14 +1069,31 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
             new QoreStringNode(ssl_required ? "https" : "http"), xsink);
     }
     if (req_headers->getKeyValue(":authority").isNullOrNothing()) {
-        int default_port = ssl_required ? 443 : 80;
-        if (target_port == default_port) {
-            req_headers->setKeyValue(":authority",
-                new QoreStringNode(target_host.c_str()), xsink);
-        } else {
-            QoreStringNode* authority = new QoreStringNode();
-            authority->sprintf("%s:%d", target_host.c_str(), target_port);
-            req_headers->setKeyValue(":authority", authority, xsink);
+        bool authority_set = false;
+        if (user_headers) {
+            ConstHashIterator hi(user_headers);
+            while (hi.next()) {
+                if (!strcasecmp(hi.getKey(), "host") && !hi.get().isNothing()) {
+                    QoreStringValueHelper sv(hi.get());
+                    if (!sv->empty()) {
+                        req_headers->setKeyValue(":authority", new QoreStringNode(sv->c_str()), xsink);
+                        authority_set = true;
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (!authority_set) {
+            int default_port = ssl_required ? 443 : 80;
+            if (target_port == default_port) {
+                req_headers->setKeyValue(":authority",
+                    new QoreStringNode(target_host.c_str()), xsink);
+            } else {
+                QoreStringNode* authority = new QoreStringNode();
+                authority->sprintf("%s:%d", target_host.c_str(), target_port);
+                req_headers->setKeyValue(":authority", authority, xsink);
+            }
         }
     }
 
@@ -1066,49 +1117,70 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         return -1;
     }
 
-    AutoLocker al(stream_lock);
+    AutoLocker submission_al(submission_lock);
 
-    // Re-check state under stream_lock — see Http1ClientPollOperationPriv
-    // ::submitRequest for the full race description.  In short: setError()
-    // releases stream_lock between writing error_info and storing CLOSED,
-    // so the lock-free state check at the top of this function can see the
-    // OK state, then proceed past the build phase and arrive here only
-    // after the I/O thread has already drained stream_actions via
-    // notifyPendingStreams.  The future would never resolve.  Surface the
-    // closure error eagerly instead.
-    if (h2_state.load(std::memory_order_acquire) == H2State::CLOSED) {
-        std::string err_str = "HTTP2-CONNECTION-CLOSED";
-        std::string desc_str = "connection closed before request could be submitted";
-        if (error_info) {
-            QoreValue ev = error_info->getKeyValue("err");
-            QoreValue dv = error_info->getKeyValue("desc");
-            if (ev.getType() == NT_STRING) {
-                QoreStringValueHelper ev_str(ev);
-                err_str = ev_str->c_str();
+    bool reserved_stream_slot = false;
+    auto release_reserved_stream_slot = [&]() {
+        if (reserved_stream_slot) {
+            AutoLocker al(stream_lock);
+            if (active_stream_count > 0) {
+                --active_stream_count;
             }
-            if (dv.getType() == NT_STRING) {
-                QoreStringValueHelper dv_str(dv);
-                desc_str = dv_str->c_str();
-            }
+            reserved_stream_slot = false;
         }
-        action->deref(xsink);
-        xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
-        return -1;
+    };
+
+    {
+        AutoLocker al(stream_lock);
+
+        // Re-check state under stream_lock — see Http1ClientPollOperationPriv
+        // ::submitRequest for the full race description.  In short: setError()
+        // releases stream_lock between writing error_info and storing CLOSED,
+        // so the lock-free state check at the top of this function can see the
+        // OK state, then proceed past the build phase and arrive here only
+        // after the I/O thread has already drained stream_actions via
+        // notifyPendingStreams.  The future would never resolve.  Surface the
+        // closure error eagerly instead.
+        if (h2_state.load(std::memory_order_acquire) == H2State::CLOSED) {
+            std::string err_str = "HTTP2-CONNECTION-CLOSED";
+            std::string desc_str = "connection closed before request could be submitted";
+            if (error_info) {
+                QoreValue ev = error_info->getKeyValue("err");
+                QoreValue dv = error_info->getKeyValue("desc");
+                if (ev.getType() == NT_STRING) {
+                    QoreStringValueHelper ev_str(ev);
+                    err_str = ev_str->c_str();
+                }
+                if (dv.getType() == NT_STRING) {
+                    QoreStringValueHelper dv_str(dv);
+                    desc_str = dv_str->c_str();
+                }
+            }
+            action->deref(xsink);
+            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+            return -1;
+        }
+
+        // Capacity check
+        if (max_streams && active_stream_count >= max_streams) {
+            action->deref(xsink);
+            xsink->raiseException("HTTP2-CAPACITY-ERROR",
+                "connection at capacity: %d/%d streams",
+                active_stream_count, max_streams);
+            return -1;
+        }
+
+        ++active_stream_count;
+        reserved_stream_slot = true;
     }
 
-    // Capacity check
-    if (max_streams && active_stream_count >= max_streams) {
-        action->deref(xsink);
-        xsink->raiseException("HTTP2-CAPACITY-ERROR",
-            "connection at capacity: %d/%d streams",
-            active_stream_count, max_streams);
-        return -1;
-    }
-
-    // Submit to socket (acquires socket internal lock)
-    int32_t stream_id = sock_obj->submitHttp2Request(*req_headers, body, body_len, xsink,
+    // Submit through the controller, but defer waking the multiplex reader until
+    // the action is registered below. Otherwise a fast response can arrive on
+    // the I/O thread before stream_actions contains the stream ID.
+    int32_t stream_id = sock_obj->submitHttp2RequestNoWake(*req_headers, body, body_len, xsink,
         streaming);
     if (*xsink || stream_id < 0) {
+        release_reserved_stream_slot();
         action->deref(xsink);
         return -1;
     }
@@ -1118,14 +1190,66 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
     // hasStreamingData()/takeStreamData() mechanism in continuePoll() to
     // deliver DATA chunks to the Channel as they arrive, instead of waiting
     // for END_STREAM (which never comes for SSE streams).
-    if (action->isStreaming()) {
-        sock_obj->setHttp2StreamStreaming(stream_id);
+    if (action->isStreaming()
+            && sock_obj->setHttp2StreamStreaming(stream_id, xsink)) {
+        release_reserved_stream_slot();
+        action->deref(xsink);
+        return -1;
     }
 
     // Register action (take ownership — action was created with refcount 1 by caller)
     std::string sid = std::to_string(stream_id);
-    stream_actions[sid] = action;
-    ++active_stream_count;
+    {
+        AutoLocker al(stream_lock);
+        if (h2_state.load(std::memory_order_acquire) == H2State::CLOSED) {
+            reserved_stream_slot = false;
+            if (active_stream_count > 0) {
+                --active_stream_count;
+            }
+            std::string err_str = "HTTP2-CONNECTION-CLOSED";
+            std::string desc_str = "connection closed before request could be registered";
+            if (error_info) {
+                QoreValue ev = error_info->getKeyValue("err");
+                QoreValue dv = error_info->getKeyValue("desc");
+                if (ev.getType() == NT_STRING) {
+                    QoreStringValueHelper ev_str(ev);
+                    err_str = ev_str->c_str();
+                }
+                if (dv.getType() == NT_STRING) {
+                    QoreStringValueHelper dv_str(dv);
+                    desc_str = dv_str->c_str();
+                }
+            }
+            action->executeError(err_str.c_str(), desc_str.c_str(), xsink);
+            action->deref(xsink);
+            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+            return -1;
+        }
+        stream_actions[sid] = action;
+        reserved_stream_slot = false;
+    }
+
+    wakeIoThread(xsink);
+    if (*xsink) {
+        AbstractAsyncAction* registered_action = nullptr;
+        {
+            AutoLocker al(stream_lock);
+            auto it = stream_actions.find(sid);
+            if (it != stream_actions.end()) {
+                registered_action = it->second;
+                stream_actions.erase(it);
+                if (active_stream_count > 0) {
+                    --active_stream_count;
+                }
+            }
+        }
+        if (registered_action) {
+            registered_action->executeError("HTTP2-WAKE-ERROR",
+                "failed to wake HTTP/2 client poll operation after request submission", xsink);
+            registered_action->deref(xsink);
+        }
+        return -1;
+    }
 
     return stream_id;
 }
@@ -1178,7 +1302,7 @@ void Http2ClientPollOperationPriv::installFrameState(int32_t stream_id, Queue* m
             }
             SimpleRefHolder<BinaryNode> holder(frame_bytes);
             ExceptionSink cxsink;
-            int rv = sock_ptr->sendHttp2StreamData(stream_id, *holder, false, &cxsink);
+            int rv = sock_ptr->sendHttp2StreamDataForAsyncPoll(stream_id, *holder, false, &cxsink);
             if (cxsink || rv < 0) {
                 // Non-fatal: transport teardown handles the close path
                 cxsink.clear();
@@ -1306,7 +1430,7 @@ Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string 
     // Create initial TCP connect operation
     sock_ptr->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, false, connect_target->c_str(), sock_ptr),
+        new SocketConnectPollOperation(xsink, false, connect_target->c_str(), sock_ptr, true),
         xsink);
     if (*xsink) {
         return;

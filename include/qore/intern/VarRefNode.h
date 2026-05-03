@@ -69,6 +69,16 @@ public:
         }
     }
 
+    DLLLOCAL VarRefNode(const QoreProgramLocation* loc, const char* n, LocalVar* n_id, bool in_closure)
+            : ParseNode(loc, NT_VARREF, true, false), name(n), new_decl(false), explicit_scope(false) {
+        ref.id = n_id;
+        if (in_closure) {
+            setClosureIntern();
+        } else {
+            type = VT_LOCAL;
+        }
+    }
+
     //! returns true if the two variable references refer to the same variable
     /** can be called only at parse time with the parse lock held
     */

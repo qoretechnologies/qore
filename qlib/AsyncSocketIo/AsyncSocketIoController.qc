@@ -166,6 +166,8 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     #! Waits until the I/O thread has processed all currently submitted operations
     /** @param to an optional timeout; if not given, waits indefinitely
         @return @ref True "True" if all operations were processed within the timeout
+
+        @throw ASYNC-IO-ERROR if called from an async I/O controller I/O thread
     */
     bool waitForProcessing(*timeout to) {
         return Qore::AsyncIoController::waitForProcessing(to);

@@ -38,11 +38,12 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     public {
         #! State constants
         const STATE_STREAMING = "streaming";
-        #! Producer signalled end-of-stream; drain queued events, then close
+        #! Producer signalled end-of-stream; drain queued events, then complete
         /** Set by @ref close().  In this state @ref continuePoll() keeps
             flushing the @ref event_channel and any partially-written
-            @ref pending_data; once both are empty, the operation closes the
-            socket and transitions to @ref STATE_DISCONNECTED.  This avoids
+            @ref pending_data; once both are empty, the operation transitions
+            to @ref STATE_DISCONNECTED and the controller closes the socket
+            from the disconnect handler.  This avoids
             a race in the H1 response-header dispatch path where calling
             @ref abort() before the I/O controller has issued
             @c startPollSendHttpResponse would race ahead and leave the
@@ -53,11 +54,12 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         const STATE_DISCONNECTED = "disconnected";
         const STATE_ERROR = "error";
 
-        #! Default socket send timeout
-        const DefaultSocketSendTimeout = 30s;
     }
 
     private {
+        #! Protects poll-operation state shared by producer threads and controller workers
+        Mutex m();
+
         #! The SSE socket
         Socket sock;
 
@@ -76,11 +78,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         #! Current data being written (partial write support)
         *string pending_data;
 
-        #! Bytes already written from pending_data
-        /** @note Currently unused because \c send2() guarantees full delivery; retained for
-            future partial-write support if non-blocking sends are introduced.
-        */
-        int pending_offset = 0;
+        #! Active non-blocking send operation for pending_data
+        *AbstractPollOperation send_op;
 
         #! Heartbeat interval in milliseconds; 0 disables the heartbeat
         int heartbeat_ms = DefaultSseHeartbeatIntervalMs;
@@ -97,6 +96,9 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             callers can keep wiring it without changing behavior.
         */
         *code<nothing()> wake_callback;
+
+        #! Maximum time producer/control threads may wait for the stream state lock
+        const StateLockTimeoutMs = 5000;
     }
 
     #! Creates the poll operation
@@ -117,6 +119,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param msg raw bytes to send (must already be SSE-framed, e.g. \c ":hb\\n\\n")
     */
     setHeartbeat(int interval_ms, string msg = DefaultSseHeartbeatMsg) {
+        lockState("setHeartbeat");
+        on_exit m.unlock();
         heartbeat_ms = interval_ms;
         heartbeat_msg = msg;
     }
@@ -129,6 +133,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @param cb the wake callback
     */
     setWakeCallback(*code<nothing()> cb) {
+        lockState("setWakeCallback");
+        on_exit m.unlock();
         wake_callback = cb;
     }
 
@@ -139,6 +145,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns the current state
     string getState() {
+        lockState("getState");
+        on_exit m.unlock();
         return state;
     }
 
@@ -149,6 +157,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         before we drain the queued events.
     */
     bool goalReached() {
+        lockState("goalReached");
+        on_exit m.unlock();
         return state == STATE_DISCONNECTED || state == STATE_ERROR;
     }
 
@@ -156,6 +166,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
     /** @return poll info for the next poll() call, or NOTHING if complete
     */
     *hash<SocketPollInfo> continuePoll() {
+        AutoLock al(m);
+
         # @ref STATE_DRAINING is also live: the producer has signalled
         # end-of-stream but we still need to flush queued events.
         if (state != STATE_STREAMING && state != STATE_DRAINING) {
@@ -173,22 +185,19 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         # Do not register the client socket for read readiness while an H1 SSE
         # stream is idle.  A closed peer makes the fd permanently readable, and
         # this Qore poll operation does not consume from it.  EventNotifier
-        # wakeups are enough to flush queued events; send2() reports a disconnect
-        # when the next event is written.
+        # wakeups are enough to flush queued events; a non-blocking send detects
+        # disconnects when the next event is written.
 
-        # Send queued data using send2(), which guarantees full delivery. Since
-        # send2() blocks with a bounded timeout, flush data in this worker call
-        # instead of depending on a follow-up POLLOUT wake to make progress.
+        # Send queued data through Socket::startPollSend(), keeping all socket
+        # I/O in the async poll state machine.
         while (True) {
             if (pending_data) {
-                try {
-                    sock.send2(pending_data, DefaultSocketSendTimeout);
-                    remove pending_data;
-                    pending_offset = 0;
-                    last_send_us = clock_getmicros();
-                } catch (hash<ExceptionInfo> ex) {
-                    state = STATE_DISCONNECTED;
+                *hash<SocketPollInfo> info = continueSend();
+                if (state != STATE_STREAMING) {
                     return NOTHING;
+                }
+                if (info) {
+                    return info;
                 }
                 continue;
             }
@@ -202,20 +211,15 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             pending_data = result.value.typeCode() == NT_STRING
                 ? result.value
                 : formatSseEvent(result.value);
-            pending_offset = 0;
         }
 
         # Graceful end-of-stream: producer signalled close() and we have
-        # now flushed the queue and any partial pending_data.  Close the
-        # socket here (the framework's handleSseDisconnect path does not
-        # close it) and transition to DISCONNECTED so the controller
-        # tears the connection down on the next poll.
+        # now flushed the queue and any partial pending_data.  Do not call
+        # Socket::close() here: continuePoll() is still in-flight in the
+        # async controller, and sync close/cancel would wait for this same
+        # worker to return.  The controller closes the socket from
+        # handleSseDisconnect() after this result is delivered.
         if (state == STATE_DRAINING) {
-            try {
-                sock.close();
-            } catch () {
-                # Ignore close errors
-            }
             state = STATE_DISCONNECTED;
             return NOTHING;
         }
@@ -228,12 +232,13 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         if (heartbeat_ms > 0) {
             int elapsed_ms = (clock_getmicros() - last_send_us) / 1000;
             if (elapsed_ms >= heartbeat_ms) {
-                try {
-                    sock.send2(heartbeat_msg, DefaultSocketSendTimeout);
-                    last_send_us = clock_getmicros();
-                } catch (hash<ExceptionInfo> ex) {
-                    state = STATE_DISCONNECTED;
+                pending_data = heartbeat_msg;
+                *hash<SocketPollInfo> info = continueSend();
+                if (state != STATE_STREAMING) {
                     return NOTHING;
+                }
+                if (info) {
+                    return info;
                 }
                 return <SocketPollInfo>{
                     "events": SOCK_POLLIN,
@@ -251,6 +256,37 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
             "events": SOCK_POLLIN,
             "socket": notifier,
         };
+    }
+
+    #! Continues the active non-blocking send operation
+    /** @return poll info when the socket must wait for writability, or NOTHING
+        when pending_data was fully sent or the stream was disconnected
+    */
+    private *hash<SocketPollInfo> continueSend() {
+        try {
+            if (!send_op) {
+                send_op = sock.startPollSend(pending_data);
+            }
+
+            *hash<SocketPollInfo> info = send_op.continuePoll();
+            if (info) {
+                return info;
+            }
+            if (!send_op.goalReached()) {
+                state = STATE_DISCONNECTED;
+                remove send_op;
+                return NOTHING;
+            }
+
+            remove send_op;
+            remove pending_data;
+            last_send_us = clock_getmicros();
+            return NOTHING;
+        } catch (hash<ExceptionInfo> ex) {
+            state = STATE_DISCONNECTED;
+            remove send_op;
+            return NOTHING;
+        }
     }
 
     #! Queues an SSE event for sending
@@ -316,6 +352,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns the output of the operation
     auto getOutput() {
+        lockState("getOutput");
+        on_exit m.unlock();
         return {
             "sock": sock,
             "state": state,
@@ -327,20 +365,25 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Returns True if the client disconnected
     bool isDisconnected() {
+        lockState("isDisconnected");
+        on_exit m.unlock();
         return state == STATE_DISCONNECTED;
     }
 
     #! Returns the number of queued events
     int getQueueSize() {
+        lockState("getQueueSize");
+        on_exit m.unlock();
         return event_channel.size();
     }
 
-    #! Initiates a graceful end-of-stream: drain queued events, then close
+    #! Initiates a graceful end-of-stream: drain queued events, then finish
     /** Use this when the SSE producer has finished emitting events and
         wants the stream to end cleanly.  Sets @ref state to
         @ref STATE_DRAINING and notifies @ref continuePoll(); the next
         poll cycle flushes any queued or partially-written data and
-        only then closes the socket.
+        only then finishes the poll operation so the controller can close the
+        socket after the in-flight poll worker has returned.
 
         Why a separate method from @ref abort(): the H1 SSE handoff
         spawns a producer thread (see
@@ -365,6 +408,8 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         @since %Qore 2.4
     */
     close() {
+        lockState("close");
+        on_exit m.unlock();
         if (state == STATE_STREAMING) {
             state = STATE_DRAINING;
             notifier.notify();
@@ -373,12 +418,25 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
 
     #! Aborts the operation and closes the connection
     abort() {
-        state = STATE_DISCONNECTED;
-        notifier.notify();
+        {
+            lockState("abort");
+            on_exit m.unlock();
+            state = STATE_DISCONNECTED;
+            notifier.notify();
+        }
         try {
             sock.close();
         } catch () {
             # Ignore close errors
+        }
+    }
+
+    private lockState(string caller) {
+        if (m.lock(StateLockTimeoutMs)) {
+            throw "SSE-STREAM-LOCK-TIMEOUT", sprintf(
+                "timed out after %d ms waiting for SSE stream state lock in %s(); "
+                "the async I/O controller worker may be blocked in continuePoll()",
+                StateLockTimeoutMs, caller);
         }
     }
 }

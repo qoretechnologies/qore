@@ -24,8 +24,8 @@
 
 %modern
 
-%requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/ServerSentEventHandler
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/ConnectionProvider

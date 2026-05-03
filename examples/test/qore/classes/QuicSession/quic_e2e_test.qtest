@@ -162,9 +162,10 @@ class QuicE2ETest inherits QUnit::Test {
         client_sock.bindINET("127.0.0.1", "0", True, AF_INET, SOCK_DGRAM);
 
         AbstractPollOperation client_op = client_sock.startPollQuicConnect("127.0.0.1", server_port);
-        # Client starts by sending the initial handshake packet
+        # The client starts in initializing until continuePoll() resolves the
+        # peer address and emits the first handshake packet.
         string state = client_op.getState();
-        assertTrue(state == "handshake-send" || state == "handshake-recv",
+        assertTrue(state == "initializing" || state == "handshake-send" || state == "handshake-recv",
                    "client starts in handshake state: " + state);
     }
 

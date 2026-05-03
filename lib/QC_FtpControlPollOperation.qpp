@@ -36,6 +36,7 @@
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/SocketSyncPoll.h"
 
 /** @cond INTERNAL */
 
@@ -147,6 +148,9 @@ void FtpControlPollOperationPriv::abort(ExceptionSink* xsink) {
         current_op->abort(xsink);
         current_op->deref(xsink);
         current_op = nullptr;
+    }
+    if (ctrl_sock) {
+        ctrl_sock->closeIo(xsink);
     }
     ctrl_state = FtpCtrlState::CLOSED;
 }
@@ -551,7 +555,8 @@ QoreHashNode* FtpControlPollOperationPriv::startUserLogin(ExceptionSink* xsink) 
     return handleSending(xsink);
 }
 
-int FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink, const char* owner) {
+QoreObject* FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink, const char* owner,
+        int timeout_ms, bool replace) {
     assert(self);
 
     // Get global async I/O controller singleton
@@ -560,7 +565,7 @@ int FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink, const 
         if (!*xsink) {
             xsink->raiseException("FTP-CONNECT-ERROR", "failed to get AsyncIoController singleton");
         }
-        return -1;
+        return nullptr;
     }
     ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
         static_cast<AsyncIoControllerPriv*>(
@@ -570,7 +575,7 @@ int FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink, const 
         if (!*xsink) {
             xsink->raiseException("FTP-CONNECT-ERROR", "failed to get AsyncIoController private data");
         }
-        return -1;
+        return nullptr;
     }
 
     // Build SocketPollOperationInfo hash
@@ -578,25 +583,64 @@ int FtpControlPollOperationPriv::submitToController(ExceptionSink* xsink, const 
     // Get sock from our QoreObject members
     ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
     if (*xsink) {
-        return -1;
+        return nullptr;
     }
     info->setKeyValue("sock", sock_val.release(), xsink);
     (*self)->ref();
     info->setKeyValue("spop", *self, xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
-    info->setKeyValue("to", -1, xsink);  // no controller timeout; we manage our own
+    info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
-        return -1;
+        return nullptr;
     }
 
-    // Submit with replace=true — the control op is re-submitted for each command,
-    // and the controller must replace the old entry to avoid ref leaks.
-    // submit() takes ownership of `info`; transfer our ref explicitly.
-    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), true, xsink), xsink);
+    // The control op is re-submitted for each command, so callers normally
+    // use replace=true to avoid leaving an old cache entry on the same socket.
+    return ctl_priv->submit(*ctl_obj, info.release(), replace, xsink);
+}
+
+QoreHashNode* FtpControlPollOperationPriv::execOnController(ExceptionSink* xsink, const char* owner,
+        int timeout_ms, bool replace) {
+    assert(self);
+
+    SocketSyncPoll::assertNotOnIoThread("FtpControlPollOperation", owner ? owner : "execOnController", xsink);
     if (*xsink) {
-        return -1;
+        return nullptr;
     }
-    return 0;
+
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (*xsink || !*ctl_obj) {
+        if (!*xsink) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "failed to get AsyncIoController singleton");
+        }
+        return nullptr;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
+        xsink);
+    if (*xsink || !*ctl_priv) {
+        if (!*xsink) {
+            xsink->raiseException("FTP-CONNECT-ERROR", "failed to get AsyncIoController private data");
+        }
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
+    ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    info->setKeyValue("sock", sock_val.release(), xsink);
+    (*self)->ref();
+    info->setKeyValue("spop", *self, xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("to", timeout_ms, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    return ctl_priv->exec(*ctl_obj, info.release(), replace, xsink);
 }
 
 /** @endcond */
@@ -658,7 +702,7 @@ FtpControlPollOperation::constructor(string host, int port = 21, bool secure = F
     // Ref for the SocketConnectPollOperation (caller must ref; op stores raw pointer, derefs on destroy)
     sock_priv->ref();
     SocketConnectPollOperation* connect_op = new SocketConnectPollOperation(xsink,
-        false, target.c_str(), sock_priv);
+        false, target.c_str(), sock_priv, true);
     if (*xsink) {
         connect_op->deref(xsink);
         sock_priv->deref(xsink);
@@ -811,14 +855,6 @@ bool FtpControlPollOperation::isSecureData() [flags=CONSTANT] {
     return priv->continuePoll(xsink);
 }
 
-//! Called by the async controller when the operation completes
-/** Signals any sync thread blocking in waitForCompletion().
-    @param result the poll result info
-*/
-nothing FtpControlPollOperation::onComplete(hash<SocketPollResultInfo> result) {
-    priv->signalCompletion();
-}
-
 // ============================================================
 // FtpPortAcceptPollOperationPriv implementation
 // ============================================================
@@ -886,7 +922,7 @@ void FtpPortAcceptPollOperationPriv::abort(ExceptionSink* xsink) {
         current_op = nullptr;
     }
     if (client_sock) {
-        client_sock->close();
+        client_sock->closeIo(xsink);
     }
     state = AcceptState::COMPLETE;
 }
@@ -991,7 +1027,8 @@ QoreHashNode* FtpPortAcceptPollOperationPriv::handleSslComplete(ExceptionSink* x
     return nullptr;
 }
 
-int FtpPortAcceptPollOperationPriv::submitToController(ExceptionSink* xsink, const char* owner) {
+QoreObject* FtpPortAcceptPollOperationPriv::submitToController(ExceptionSink* xsink, const char* owner,
+        int timeout_ms, bool replace) {
     assert(self);
 
     ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
@@ -999,33 +1036,31 @@ int FtpPortAcceptPollOperationPriv::submitToController(ExceptionSink* xsink, con
         if (!*xsink) {
             xsink->raiseException("FTP-CONNECT-ERROR", "failed to get AsyncIoController");
         }
-        return -1;
+        return nullptr;
     }
     ReferenceHolder<AsyncIoControllerPriv> ctl_priv(
         static_cast<AsyncIoControllerPriv*>(
             (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)),
         xsink);
     if (*xsink || !*ctl_priv) {
-        return -1;
+        return nullptr;
     }
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
     ValueHolder sock_val((*self)->getReferencedMemberNoMethod("sock", xsink), xsink);
     if (*xsink) {
-        return -1;
+        return nullptr;
     }
     info->setKeyValue("sock", sock_val.release(), xsink);
     (*self)->ref();
     info->setKeyValue("spop", *self, xsink);
     info->setKeyValue("owner", new QoreStringNode(owner), xsink);
-    info->setKeyValue("to", -1, xsink);
+    info->setKeyValue("to", timeout_ms, xsink);
     if (*xsink) {
-        return -1;
+        return nullptr;
     }
 
-    // submit() takes ownership of `info`; transfer our ref explicitly.
-    ReferenceHolder<QoreObject> rv(ctl_priv->submit(*ctl_obj, info.release(), false, xsink), xsink);
-    return *xsink ? -1 : 0;
+    return ctl_priv->submit(*ctl_obj, info.release(), replace, xsink);
 }
 
 /** @endcond */
@@ -1055,6 +1090,12 @@ FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_sock, 
         if (!*xsink) {
             xsink->raiseException("FTP-CONNECT-ERROR", "invalid accept operation");
         }
+        return;
+    }
+    if (accept_base->needsWorkerDispatch()) {
+        accept_base->deref(xsink);
+        xsink->raiseException("FTP-CONNECT-ERROR",
+            "accept operation requires worker dispatch and cannot be used by FtpPortAcceptPollOperation");
         return;
     }
 
@@ -1126,11 +1167,4 @@ auto FtpPortAcceptPollOperation::getOutput() {
 */
 *hash<SocketPollInfo> FtpPortAcceptPollOperation::continuePoll() {
     return priv->continuePoll(xsink);
-}
-
-//! Called by the async controller when the operation completes
-/** @param result the poll result info
-*/
-nothing FtpPortAcceptPollOperation::onComplete(hash<SocketPollResultInfo> result) {
-    priv->signalCompletion();
 }

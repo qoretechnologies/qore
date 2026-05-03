@@ -35,6 +35,8 @@
 
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/QoreSocketObject.h"
+#include "qore/InputStream.h"
+#include "qore/OutputStream.h"
 
 #include <string>
 
@@ -88,6 +90,28 @@ public:
         SocketPollOperationBase* connect_op, bool secure_data,
         BinaryNode* send_data);
 
+    //! Creates a receive-to-stream data poll operation
+    /** @param self the QoreObject wrapping this private data
+        @param data_sock the data socket (ref'd by caller, ownership transferred)
+        @param connect_op the in-progress connect operation (ref'd by caller, ownership transferred)
+        @param secure_data true to upgrade data channel to TLS after connect
+        @param recv_output_stream the output stream to receive into (ref'd by caller, ownership transferred)
+    */
+    DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
+        SocketPollOperationBase* connect_op, bool secure_data,
+        OutputStream* recv_output_stream);
+
+    //! Creates a send-from-stream data poll operation
+    /** @param self the QoreObject wrapping this private data
+        @param data_sock the data socket (ref'd by caller, ownership transferred)
+        @param connect_op the in-progress connect operation (ref'd by caller, ownership transferred)
+        @param secure_data true to upgrade data channel to TLS after connect
+        @param send_input_stream the input stream to send (ref'd by caller, ownership transferred)
+    */
+    DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
+        SocketPollOperationBase* connect_op, bool secure_data,
+        InputStream* send_input_stream);
+
     //! Creates a receive data poll operation on an already-connected socket (adopt-socket)
     /** Used for PORT mode where the socket comes from SocketAcceptPollOperation.
         Starts directly in RECEIVING state (no CONNECTING phase).
@@ -107,6 +131,24 @@ public:
     DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
         bool secure_data, BinaryNode* send_data);
 
+    //! Creates a receive-to-stream data poll operation on an already-connected socket (adopt-socket)
+    /** @param self the QoreObject wrapping this private data
+        @param data_sock the already-connected data socket (not ref'd — raw pointer)
+        @param secure_data true to upgrade to TLS before transfer
+        @param recv_output_stream the output stream to receive into (ref'd by caller, ownership transferred)
+    */
+    DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
+        bool secure_data, OutputStream* recv_output_stream);
+
+    //! Creates a send-from-stream data poll operation on an already-connected socket (adopt-socket)
+    /** @param self the QoreObject wrapping this private data
+        @param data_sock the already-connected data socket (not ref'd — raw pointer)
+        @param secure_data true to upgrade to TLS before transfer
+        @param send_input_stream the input stream to send (ref'd by caller, ownership transferred)
+    */
+    DLLLOCAL FtpDataPollOperationPriv(QoreObject* self, QoreSocketObject* data_sock,
+        bool secure_data, InputStream* send_input_stream);
+
     DLLLOCAL virtual ~FtpDataPollOperationPriv();
 
     //! Releases inner op, data socket, and any accumulated data on last ref
@@ -121,6 +163,9 @@ public:
     //! Returns true when the transfer is complete
     DLLLOCAL bool isDone() const { return data_state == FtpDataState::DONE; }
 
+    //! Returns the data socket (not ref'd; caller must not deref)
+    DLLLOCAL QoreSocketObject* getDataSocket() const { return data_sock; }
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 
@@ -134,44 +179,23 @@ private:
 
     // Receive buffer (RETR/LIST)
     SimpleRefHolder<BinaryNode> recv_data;
+    SimpleRefHolder<OutputStream> recv_output_stream;
 
     // Send buffer (STOR)
     SimpleRefHolder<BinaryNode> send_data;
+    SimpleRefHolder<InputStream> send_input_stream;
     size_t send_offset = 0;
 
-    // Sync-blocking infrastructure
-    QoreThreadLock sync_lock;
-    QoreCondition sync_cond;
-    bool sync_done = false;
-
 public:
-    //! Signal sync caller that the operation has completed
-    DLLLOCAL void signalCompletion() {
-        AutoLocker al(sync_lock);
-        sync_done = true;
-        sync_cond.signal();
-    }
-
-    //! Block until the operation signals completion or timeout
-    DLLLOCAL int waitForCompletion(int timeout_ms, ExceptionSink* xsink) {
-        AutoLocker al(sync_lock);
-        while (!sync_done) {
-            int rc = sync_cond.wait(sync_lock, timeout_ms);
-            if (rc == ETIMEDOUT) {
-                xsink->raiseException("SOCKET-TIMEOUT", "FTP data operation timed out after %d ms", timeout_ms);
-                return -1;
-            }
-        }
-        sync_done = false;
-        return 0;
-    }
-
     //! Submit this operation to the global async I/O controller
-    DLLLOCAL int submitToController(ExceptionSink* xsink, const char* owner = "ftp-data");
+    DLLLOCAL QoreObject* submitToController(ExceptionSink* xsink, const char* owner = "ftp-data",
+        int timeout_ms = -1, bool replace = false);
 
 private:
     // --- Helper methods ---
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
+    DLLLOCAL void closeDataSocket(ExceptionSink* xsink);
+    DLLLOCAL void closeAndSetClosed(ExceptionSink* xsink);
     DLLLOCAL void setClosed();
 
     // --- State handlers ---

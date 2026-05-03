@@ -635,7 +635,7 @@ static QoreValue read_expr_local_varref(AOTExprReadCtx& ctx) {
     // internally checks closure_use and uses the correct lookup (local stack vs closure stack).
     // VT_CLOSURE uses thread_get_runtime_closure_var() (pointer-based runtime closure env lookup)
     // which returns null outside a closure execution context.
-    VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(lv->getName()), lv, false);
+    VarRefNode* vrn = new VarRefNode(&loc_builtin, lv->getName(), lv, false);
     return QoreValue(vrn);
 }
 

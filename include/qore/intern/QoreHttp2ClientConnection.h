@@ -312,6 +312,9 @@ private:
         QoreSocketObject* sock_priv_raw,
         const char* owner_prefix,
         ExceptionSink* xsink);
+
+    //! Wake the async I/O controller so pending HTTP/2 writes are driven on the I/O thread.
+    DLLLOCAL void wakeController() const;
 };
 
 #endif // _QORE_INTERN_QOREHTTP2CLIENTCONNECTION_H

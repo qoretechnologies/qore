@@ -380,9 +380,16 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("serialization", \serializationTest());
         addTestCase("timeouts", \timeoutTest());
         addTestCase("pre-encoded-urls", \preEncodedUrlsTest());
-        addTestCase("connect opens inherited socket", \connectOpensInheritedSocketTest());
+        addTestCase("connect primes connection manager", \connectPrimesConnectionManagerTest());
         addTestCase("poll proxy test", \pollProxyTest());
         addTestCase("poll test", \pollTest());
+        addTestCase("UNIX socket conn_mgr test", \unixSocketConnMgrTest());
+        addTestCase("UNIX socket proxy conn_mgr test", \unixSocketProxyConnMgrTest());
+        addTestCase("UNIX socket setURL reset test", \unixSocketSetURLResetTest());
+        addTestCase("proxy URL conn_mgr reset test", \proxyUrlConnMgrResetTest());
+        addTestCase("conn_mgr Host override test", \connMgrHostOverrideTest());
+        addTestCase("conn_mgr isConnected test", \connMgrIsConnectedTest());
+        addTestCase("upgrade isDataAvailable test", \upgradeIsDataAvailableTest());
         addTestCase("chunked HEAD test", \chunkedHeadTest());
         addTestCase("assume encoding", \assumedEncoding());
         addTestCase("chunked disconnect test", \chunkedDisconnectTest());
@@ -458,7 +465,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         assertEq("hello%5B%5D", hc.send(NOTHING, "PUT", "?hello%5B%5D").body);
     }
 
-    connectOpensInheritedSocketTest() {
+    connectPrimesConnectionManagerTest() {
         Socket server();
         if (server.bind("127.0.0.1:0", True)) {
             throw "SOCKET-BIND-ERROR", strerror();
@@ -501,17 +508,16 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         on_exit hc.disconnect();
 
         hc.connect();
-        assertTrue(hc.isOpen(), "HTTPClient::connect() must leave inherited Socket open");
+        assertTrue(hc.isOpen(), "HTTPClient::connect() must leave a manager-backed connection open");
 
-        hash<auto> send_info;
-        hc.sendHTTPMessage("GET", "/", "1.1", {
-            "Host": sprintf("127.0.0.1:%d", port),
+        hash<auto> resp = hc.send(NOTHING, "GET", "/", {
             "Connection": "close",
-        }, NOTHING, \send_info);
+        });
+        assertEq(204, resp.status_code);
 
-        assertEq(0, done.waitForZero(5s), "server received inherited Socket request");
+        assertEq(0, done.waitForZero(5s), "server received request on manager-backed connection");
         if (server_ex) {
-            fail(sprintf("server failed while reading inherited Socket request: %s: %s",
+            fail(sprintf("server failed while reading manager-backed request: %s: %s",
                 server_ex.err, server_ex.desc));
         }
         assertEq("GET", req.method);
@@ -809,6 +815,350 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
                 testSkip("HTTP/3 not active (server did not advertise Alt-Svc)");
             }
         }
+    }
+
+    unixSocketConnMgrTest() {
+%ifdef Windows
+        testSkip("skipping because UNIX sockets are not available on Windows");
+%endif
+
+        string path = sprintf("%s%sqore-httpclient-%d-%s.sock", tmp_location(), DirSep, getpid(),
+            get_random_string(12));
+        on_exit unlink(path);
+
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bindUNIX(path);
+                server.listen();
+                q.push(True);
+
+                Socket peer = server.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\nok");
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        auto ready = q.get();
+        if (ready.typeCode() == NT_HASH) {
+            fail(sprintf("%s: %s", ready.err, ready.desc));
+        }
+
+        HTTPClient hc({"url": "http://socket=" + encode_url(path, True), "timeout": 5s});
+        hash<auto> info;
+        *string body = hc.get("/unix-test?x=1", NOTHING, \info);
+        assertEq("ok", body);
+
+        auto hdr = q.get();
+        if (hdr.typeCode() == NT_HASH && hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", hdr.err, hdr.desc));
+        }
+        assertEq("GET", hdr.method);
+        assertEq("/unix-test?x=1", hdr.path);
+        assertEq(encode_url(path, True), hdr.host);
+    }
+
+    unixSocketProxyConnMgrTest() {
+%ifdef Windows
+        testSkip("skipping because UNIX socket URLs are not available on Windows");
+%endif
+
+        string path = sprintf("%s%sqore-httpclient-proxy-%d-%s.sock", tmp_location(), DirSep, getpid(),
+            get_random_string(12));
+        string encoded_path = encode_url(path, True);
+
+        Queue q();
+        background sub () {
+            try {
+                Socket proxy();
+                proxy.bind(0);
+                proxy.listen();
+                q.push(proxy.getSocketInfo().port);
+
+                Socket peer = proxy.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\nok");
+                peer.close();
+                proxy.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int proxy_port = q.get();
+        HTTPClient hc({
+            "url": "http://socket=" + encoded_path,
+            "proxy": "http://localhost:" + proxy_port,
+            "timeout": 5s,
+        });
+        hash<auto> info;
+        *string body = hc.get("/unix-proxy?x=1", NOTHING, \info);
+        assertEq("ok", body);
+
+        auto hdr = q.get();
+        if (hdr.typeCode() == NT_HASH && hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", hdr.err, hdr.desc));
+        }
+        assertEq("GET", hdr.method);
+        assertEq("http://" + encoded_path + "/unix-proxy?x=1", hdr.path);
+        assertEq(encoded_path, hdr.host);
+    }
+
+    unixSocketSetURLResetTest() {
+%ifdef Windows
+        testSkip("skipping because UNIX socket URLs are not available on Windows");
+%endif
+
+        string path = sprintf("%s%sqore-httpclient-reset-%d-%s.sock", tmp_location(), DirSep, getpid(),
+            get_random_string(12));
+        string encoded_path = encode_url(path, True);
+
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\nok");
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int port = q.get();
+        HTTPClient hc({"url": "http://socket=" + encoded_path, "timeout": 5s});
+        hc.setURL("http://localhost:" + port);
+
+        hash<auto> info;
+        *string body = hc.get("/tcp-after-unix", NOTHING, \info);
+        assertEq("ok", body);
+
+        auto hdr = q.get();
+        if (hdr.typeCode() == NT_HASH && hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", hdr.err, hdr.desc));
+        }
+        assertEq("GET", hdr.method);
+        assertEq("/tcp-after-unix", hdr.path);
+        assertEq(sprintf("localhost:%d", port), hdr.host);
+    }
+
+    proxyUrlConnMgrResetTest() {
+        Queue origin_q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                origin_q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                origin_q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\ndr");
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                origin_q.push(ex);
+            }
+        }();
+
+        Queue proxy_q();
+        background sub () {
+            try {
+                Socket proxy();
+                proxy.bind(0);
+                proxy.listen();
+                proxy_q.push(proxy.getSocketInfo().port);
+
+                Socket peer = proxy.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                proxy_q.push(hdr);
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\npx");
+                peer.close();
+                proxy.close();
+            } catch (hash<ExceptionInfo> ex) {
+                proxy_q.push(ex);
+            }
+        }();
+
+        int origin_port = origin_q.get();
+        int proxy_port = proxy_q.get();
+        HTTPClient hc({
+            "url": "http://localhost:" + origin_port,
+            "proxy": "http://localhost:" + proxy_port,
+            "timeout": 5s,
+        });
+
+        *string body = hc.get("/via-proxy");
+        assertEq("px", body);
+
+        auto proxy_hdr = proxy_q.get();
+        if (proxy_hdr.typeCode() == NT_HASH && proxy_hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", proxy_hdr.err, proxy_hdr.desc));
+        }
+        assertEq("GET", proxy_hdr.method);
+        assertEq(sprintf("http://localhost:%d/via-proxy", origin_port), proxy_hdr.path);
+
+        hc.clearProxyURL();
+        body = hc.get("/direct");
+        assertEq("dr", body);
+
+        auto origin_hdr = origin_q.get();
+        if (origin_hdr.typeCode() == NT_HASH && origin_hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", origin_hdr.err, origin_hdr.desc));
+        }
+        assertEq("GET", origin_hdr.method);
+        assertEq("/direct", origin_hdr.path);
+        assertEq(sprintf("localhost:%d", origin_port), origin_hdr.host);
+    }
+
+    connMgrHostOverrideTest() {
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                string raw;
+                while (!(raw =~ /\r\n\r\n/)) {
+                    raw += peer.recv(1, 5s);
+                }
+
+                int host_count = 0;
+                foreach string line in (raw.split("\r\n")) {
+                    if (line =~ /^Host:/i) {
+                        ++host_count;
+                    }
+                }
+                q.push(("raw": raw, "host_count": host_count));
+                peer.send("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n"
+                    "Connection: close\r\n\r\nok");
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int port = q.get();
+        HTTPClient hc({"url": "http://localhost:" + port, "timeout": 5s});
+        *string body = hc.get("/", {"Host": "override.example", "Connection": "close"});
+        assertEq("ok", body);
+
+        auto request = q.get();
+        if (request.typeCode() == NT_HASH && request.hasKey("err")) {
+            fail(sprintf("%s: %s", request.err, request.desc));
+        }
+        assertEq(1, request.host_count);
+        assertTrue(request.raw =~ /\r\nHost: override\.example\r\n/);
+        assertFalse(request.raw =~ /\r\nHost: localhost:/);
+    }
+
+    connMgrIsConnectedTest() {
+        Queue q();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                q.push(True);
+                peer.recv(1, 15s);
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int port = q.get();
+        HTTPClient hc({"url": "http://localhost:" + port, "timeout": 5s});
+        hc.setUseConnectionManager(False);
+        assertTrue(hc.getUseConnectionManager(), "conn_mgr disabling should be ignored");
+        hc.connect();
+
+        auto accepted = q.get();
+        if (accepted.typeCode() == NT_HASH) {
+            fail(sprintf("%s: %s", accepted.err, accepted.desc));
+        }
+        assertTrue(hc.isConnected(), "conn_mgr-backed connect() should report connected");
+        hc.setPersistent();
+        assertTrue(hc.getUseConnectionManager(), "setPersistent() should keep conn_mgr enabled");
+        assertTrue(hc.isPersistent(), "setPersistent() should mark the conn_mgr session persistent");
+        hc.disconnect();
+        assertFalse(hc.isConnected(), "disconnect() should clear conn_mgr connection state");
+    }
+
+    upgradeIsDataAvailableTest() {
+        Queue q();
+        Queue send_data();
+        Queue done();
+        background sub () {
+            try {
+                Socket server();
+                server.bind(0);
+                server.listen();
+                q.push(server.getSocketInfo().port);
+
+                Socket peer = server.accept(15s);
+                hash<auto> hdr = peer.readHTTPHeader(15s);
+                q.push(hdr);
+                peer.send("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                    "Connection: Upgrade\r\n\r\n");
+                send_data.get(15s);
+                peer.send("abc");
+                done.get(15s);
+                peer.close();
+                server.close();
+            } catch (hash<ExceptionInfo> ex) {
+                q.push(ex);
+            }
+        }();
+
+        int port = q.get();
+        HTTPClient hc({
+            "url": "http://localhost:" + port,
+            "timeout": 5s,
+        });
+        hash<auto> resp = hc.send(NOTHING, "GET", "/", {
+            "Upgrade": "websocket",
+            "Connection": "Upgrade",
+        });
+        assertEq(101, resp.status_code);
+
+        auto hdr = q.get();
+        if (hdr.typeCode() == NT_HASH && hdr.hasKey("err")) {
+            fail(sprintf("%s: %s", hdr.err, hdr.desc));
+        }
+        assertEq("GET", hdr.method);
+        send_data.push(True);
+        assertTrue(hc.isDataAvailable(5s));
+        assertTrue(hc.isHttp2DataAvailable(1, 5s));
+        done.push(True);
     }
 
     assumedEncoding() {

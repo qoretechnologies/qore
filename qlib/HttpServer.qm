@@ -193,7 +193,8 @@ log("started listener on %s", lh.desc);
       - response paths (regular, send_callback, InputStream, SSE setup)
         all use \c sendHttp2StreamData() /
         \c submitHttp2StreamingResponseHeaders() /
-        \c sendHttp2Trailers() followed by \c io_wake()
+        \c sendHttp2Trailers(), which delegate enqueue/wake handling to
+        the async I/O controller
       - the \c Socket::setHttp2ActiveStream() bridge that redirected
         \c Socket::send() / \c Socket::recv() to HTTP/2 DATA frames was
         removed from \c handleRequest(); every H2 response site already
@@ -212,9 +213,14 @@ log("started listener on %s", lh.desc);
       - requires Qore built with Brotli and/or Zstd support
     - return HTTP 204 when a handler returns code 200 with no response body
     - fixed I/O thread blocking on \c Socket::getPeerInfo() calls that could cause the server to become unresponsive
-      - disabled DNS hostname lookups in \c getPeerInfo() calls to prevent blocking the I/O thread
-      - moved \c getPeerInfo() calls to after SSL handshake completion when socket is stable
-      - peer info now shows IP addresses instead of hostnames in logs
+      - async server request contexts now get numeric \c "peer-info" immediately without reverse DNS
+      - reverse DNS is dispatched in parallel and exposed as optional \c "peer-info-future" for handlers that need it
+      - moved peer info refresh to after SSL handshake completion when socket is stable
+    - added @ref HttpServer::HttpServer::addListenerAsync() "addListenerAsync()" and
+      @ref HttpServer::HttpServer::addListenersAsync() "addListenersAsync()" methods for Future-based listener setup
+      and routed synchronous listener methods through the same async setup path
+    - HTTP/1.x persistent handlers now keep handler-thread affinity while subsequent request reads are driven by
+      the async I/O controller and routed through a persistent queue
     - removed high-frequency INFO log messages from async I/O hot paths to reduce log spam
     - fixed async I/O cache leak when clients disconnect during SSL handshake
     - fixed a shutdown crash when HttpServer instances created with the deprecated logger callback constructor were
@@ -1032,27 +1038,46 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     */
     list<hash<auto>> addListeners(string bind, hash<HttpListenerOptionInfo> info,
             *reference<hash<string, string>> errmap) {
-        list<hash<auto>> rv;
-        if (bind !~ /:\w+/) {
-            if (bind =~ /^\//) {
-                info.node = bind;
-                remove info.service;
-                rv = list(addListenerIntern(info).getInfo());
-            } else {
-                # assume service only
-                remove info.node;
-                info.service = bind;
-                rv = addINETListenersIntern(info, \errmap);
-            }
-        } else {
-            # add node and service
-            (info.node, info.service) = (bind =~ x/(.+):(\w+)/);
-            rv = addINETListenersIntern(info, \errmap);
-        }
+        list<hash<auto>> rv = addListenersAsync(bind, info, \errmap).get();
         if (info.sync) {
             waitForAsyncIo();
         }
         return rv;
+    }
+
+    #! asynchronously adds one or more dedicated listeners to the server with the given bind address
+    /** @param bind the bind address for the dedicated listener; this can be a port number or an address (or
+        hostname) and a port number separated by a colon (ex: \c "192.168.20.4:8021"); the bind address will overwrite
+        any \a node and \a service addresses in the \a info hash; all possible addresses will be bound to new
+        listeners
+        @param info a listener information hash
+        @param errmap an optional reference to a hash of error information keyed by bind address
+
+        @return a @ref Qore::Thread::Future "Future" resolving to a list of listener info hashes; see the return value
+        of HttpServer::getListenerInfo() for the description of each hash element in the list returned by this method
+
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+
+        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
+        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        to accept connections.
+
+        @par Example
+        @code{.py}
+        hash<string, string> errmap;
+        Future setup = server.addListenersAsync("127.0.0.1:8080",
+            <HttpListenerOptionInfo>{"sync": False}, \errmap);
+        list<hash<auto>> listeners = setup.get();
+        server.waitForAsyncIo();
+        @endcode
+
+        @since HttpServer 1.6
+    */
+    Future addListenersAsync(string bind, hash<HttpListenerOptionInfo> info,
+            *reference<hash<string, string>> errmap) {
+        return addListenersInternAsync(bind, info, \errmap);
     }
 
     #! adds one or more dedicated listeners to the server with the given bind address
@@ -1076,17 +1101,43 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @since HttpServer 0.3.13.1
     */
     list<hash<auto>> addListeners(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
-        list<hash<auto>> rv;
-        if (exists info.node && !exists info.service) {
-            # try to bind without a service, can be a UNIX domain socket
-            rv = list(addListenerIntern(info).getInfo());
-        } else {
-            rv = addINETListenersIntern(info, \errmap);
-        }
+        list<hash<auto>> rv = addListenersAsync(info, \errmap).get();
         if (info.sync) {
             waitForAsyncIo();
         }
         return rv;
+    }
+
+    #! asynchronously adds one or more dedicated listeners to the server with the given bind address
+    /** @param info a listener information hash
+        @param errmap an optional reference to a hash of error information keyed by bind address
+
+        @return a @ref Qore::Thread::Future "Future" resolving to a list of listener info hashes; see the return value
+        of HttpServer::getListenerInfo() for the description of each hash element in the list returned by this method
+
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+
+        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
+        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        to accept connections.
+
+        @par Example
+        @code{.py}
+        hash<string, string> errmap;
+        Future setup = server.addListenersAsync(<HttpListenerOptionInfo>{
+            "service": 8080,
+            "sync": False,
+        }, \errmap);
+        list<hash<auto>> listeners = setup.get();
+        server.waitForAsyncIo();
+        @endcode
+
+        @since HttpServer 1.6
+    */
+    Future addListenersAsync(hash<HttpListenerOptionInfo> info, *reference<hash<string, string>> errmap) {
+        return addListenersInternAsync(info, \errmap);
     }
 
     #! adds a single global listener to the server
@@ -1103,12 +1154,39 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         Use @ref HttpServer::HttpServer::addListener "addListener(hash<HttpListenerOptionInfo>)" with \c sync: \c False to add listeners without blocking.
      */
     hash<auto> addListener(int port) {
-        hash<auto> rv = addListenerIntern(<HttpListenerOptionInfo>{
-            "service": port,
-        }).getInfo();
+        hash<auto> rv = addListenerAsync(port).get();
         # sync defaults to True, so wait for async I/O to be ready
         waitForAsyncIo();
         return rv;
+    }
+
+    #! asynchronously adds a single global listener to the server
+    /** @param port the port number
+
+        @return a @ref Qore::Thread::Future "Future" resolving to a listener info hash; see the return value of
+        HttpServer::HttpServer::getListenerInfo() for the description of the hash returned by this method
+
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+
+        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
+        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        to accept connections.
+
+        @par Example
+        @code{.py}
+        Future setup = server.addListenerAsync(8080);
+        hash<auto> listener = setup.get();
+        server.waitForAsyncIo();
+        @endcode
+
+        @since HttpServer 1.6
+     */
+    Future addListenerAsync(int port) {
+        return addListenerInternAsync(<HttpListenerOptionInfo>{
+            "service": port,
+        });
     }
 
     #! adds a single global listener to the server
@@ -1129,11 +1207,41 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @ref waitForAsyncIo() manually.
      */
     hash<auto> addListener(hash<HttpListenerOptionInfo> opts) {
-        hash<auto> rv = addListenerIntern(opts).getInfo();
+        hash<auto> rv = addListenerAsync(opts).get();
         if (opts.sync) {
             waitForAsyncIo();
         }
         return rv;
+    }
+
+    #! asynchronously adds a single global listener to the server
+    /** @param opts the listener options
+
+        @return a @ref Qore::Thread::Future "Future" resolving to a listener info hash; see the return value of
+        HttpServer::HttpServer::getListenerInfo() for the description of the hash returned by this method
+
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
+
+        @note This method returns immediately after submitting setup work. Call @ref Qore::Thread::Future::get()
+        "Future::get()" to wait for listener registration, and @ref waitForAsyncIo() to wait until async I/O is ready
+        to accept connections.
+
+        @par Example
+        @code{.py}
+        Future setup = server.addListenerAsync(<HttpListenerOptionInfo>{
+            "service": 0,
+            "sync": False,
+        });
+        hash<auto> listener = setup.get();
+        server.waitForAsyncIo();
+        @endcode
+
+        @since HttpServer 1.6
+     */
+    Future addListenerAsync(hash<HttpListenerOptionInfo> opts) {
+        return addListenerInternAsync(opts);
     }
 
     #! Adds an HTTP/3 QUIC listener on the given UDP port
@@ -1174,7 +1282,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         udp_sock.bindINET(bind_addr, bind_port, True, family, SOCK_DGRAM);
 
         # Get the actual port that was bound
-        hash<auto> sock_info = udp_sock.getSocketInfo();
+        hash<auto> sock_info = udp_sock.getSocketInfo(False);
         int actual_port = sock_info.port;
 
         # Set up SSL certificate and key for QUIC
@@ -1384,7 +1492,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
     #! stops all listeners; does not wait for all connections on the listeners to close
     stopNoWait() {
-        # Wake dedicated persistent-handler threads (see HttpListener::handleMultiplexedPersistentSync)
+        # Wake dedicated persistent-handler threads (see HttpListener::handleQueuedPersistentConnection)
         # so they return immediately instead of waiting up to their idle TTL in
         # Queue::get().  Without this, HttpListener::stop()'s cThreads.wait()
         # below blocks for the full TTL even though all I/O is already async.
@@ -2215,7 +2323,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     */
     returnConnectionToAsyncIo(Socket sock, hash<auto> cx, HttpListener listener) {
         if (asyncIo && asyncTarget) {
-            asyncIo.addIdleConnection(sock, listener, cx, asyncTarget, ttl);
+            hash<auto> async_cx = exists cx.peer ? cx : cast<hash<auto>>({
+                "peer": cx."peer-info",
+                "socket": cx."socket-info",
+            });
+            if (exists cx{"peer-info-future"}) {
+                async_cx{"peer-info-future"} = cx{"peer-info-future"};
+            }
+            asyncIo.addIdleConnection(sock, listener, async_cx, asyncTarget, ttl);
         }
     }
 
@@ -2631,10 +2746,73 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             sprintf("internal error: retry loop exhausted without a decision");
     }
 
-    private list<hash<auto>> addINETListenersIntern(hash<HttpListenerOptionInfo> info,
-            *reference<hash<string, string>> errmap) {
-        list<auto> al = getaddrinfo(info.node, info.service, info.family, AIFlags);
+    private Future addListenerInternAsync(hash<HttpListenerOptionInfo> info) {
+        Promise p();
+        Future f = p.getFuture();
+        try {
+            getGlobalAsyncCtrl().submitTask(sub () {
+                try {
+                    p.set(addListenerIntern(info).getInfo());
+                } catch (hash<ExceptionInfo> ex) {
+                    p.setError(ex.err, ex.desc, ex.arg);
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+        return f;
+    }
 
+    private Future resolveINETListenerAddressesAsync(hash<HttpListenerOptionInfo> info) {
+        if (info.node || info.family != AF_UNSPEC) {
+            return getaddrinfo_async(info.node, info.service, info.family, AIFlags);
+        }
+
+        Future inet6_f = getaddrinfo_async(NOTHING, info.service, AF_INET6, AIFlags);
+        Future inet_f = getaddrinfo_async(NOTHING, info.service, AF_INET, AIFlags);
+        Promise p();
+        Future f = p.getFuture();
+
+        try {
+            getGlobalAsyncCtrl().submitTask(sub () {
+                try {
+                    list<auto> al;
+                    *hash<ExceptionInfo> first_ex;
+                    try {
+                        al += inet6_f.get();
+                    } catch (hash<ExceptionInfo> ex) {
+                        first_ex = ex;
+                    }
+                    try {
+                        al += inet_f.get();
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (!first_ex) {
+                            first_ex = ex;
+                        }
+                    }
+                    if (!al.size()) {
+                        if (!first_ex) {
+                            throw "QOREADDRINFO-GETINFO-ERROR",
+                                sprintf("async address resolution for wildcard service %y returned no addresses",
+                                    info.service);
+                        }
+                        throw first_ex.err, first_ex.desc, first_ex.arg;
+                    }
+
+                    p.set(al);
+                } catch (hash<ExceptionInfo> ex) {
+                    p.setError(ex.err, ex.desc, ex.arg);
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+
+        return f;
+    }
+
+    private list<hash<auto>> addINETListenersInternResolved(hash<HttpListenerOptionInfo> info, list<auto> al,
+            *reference<hash<string, string>> errmap) {
         # sort ipv6 addresses first in list
         al = sort(al, int sub (hash<auto> l, hash<auto> r) {
             return l.family === AF_INET6 ? -1 : 0;
@@ -2682,6 +2860,72 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         return rv;
+    }
+
+    private Future addINETListenersInternAsync(hash<HttpListenerOptionInfo> info,
+            *reference<hash<string, string>> errmap) {
+        Promise p();
+        Future f = p.getFuture();
+        try {
+            Future addr_f = resolveINETListenerAddressesAsync(info);
+            getGlobalAsyncCtrl().submitTask(sub () {
+                try {
+                    p.set(addINETListenersInternResolved(info, addr_f.get(), \errmap));
+                } catch (hash<ExceptionInfo> ex) {
+                    p.setError(ex.err, ex.desc, ex.arg);
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+        return f;
+    }
+
+    private Future addListenerInfoListAsync(hash<HttpListenerOptionInfo> info) {
+        Promise p();
+        Future f = p.getFuture();
+        try {
+            getGlobalAsyncCtrl().submitTask(sub () {
+                try {
+                    p.set(list(addListenerIntern(info).getInfo()));
+                } catch (hash<ExceptionInfo> ex) {
+                    p.setError(ex.err, ex.desc, ex.arg);
+                }
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            p.setError(ex.err, ex.desc, ex.arg);
+        }
+        return f;
+    }
+
+    private Future addListenersInternAsync(string bind, hash<HttpListenerOptionInfo> info,
+            *reference<hash<string, string>> errmap) {
+        if (bind !~ /:\w+/) {
+            if (bind =~ /^\//) {
+                info.node = bind;
+                remove info.service;
+                return addListenerInfoListAsync(info);
+            }
+
+            # assume service only
+            remove info.node;
+            info.service = bind;
+            return addINETListenersInternAsync(info, \errmap);
+        }
+
+        # add node and service
+        (info.node, info.service) = (bind =~ x/(.+):(\w+)/);
+        return addINETListenersInternAsync(info, \errmap);
+    }
+
+    private Future addListenersInternAsync(hash<HttpListenerOptionInfo> info,
+            *reference<hash<string, string>> errmap) {
+        if (exists info.node && !exists info.service) {
+            # try to bind without a service, can be a UNIX domain socket
+            return addListenerInfoListAsync(info);
+        }
+
+        return addINETListenersInternAsync(info, \errmap);
     }
 
     private hash<HttpResponseInfo> noHandlerError(hash<auto> cx, hash<auto> hdr, auto body) {
@@ -3841,27 +4085,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             *reference<hash<HttpAsyncResponseInfo>> async_response_out) {
         # Handle send_callback responses (e.g. DataStream protocol)
         if (rv.send_callback) {
-            if (cx."header-info".http2) {
-                # HTTP/2: wrap send_callback in a CallbackInputStream and send via HTTP/2
-                # DATA frames; this handles Connect protocol streaming correctly
-                hash<auto> hdr = rv.hdr ?? {};
-                remove hdr."Transfer-Encoding";
-                # Create a dummy owner object to prevent premature GC of the callback
-                auto cb = rv.send_callback;
-                InputStream is = new CallbackInputStream(
-                    auto sub() { return cb(); }, cx.socketobject);
-                is.unassignThread();
-                async_response_out = <HttpAsyncResponseInfo>{
-                    "code": rv."code",
-                    "hdr": hdr,
-                    "input_stream": is,
-                    "close": cx.close ?? False,
-                    "cx": cx,
-                    "listener": listener,
-                };
-                listener.logResponse(cx, rv);
-                return;
-            }
             # Capture callback for the response-sending code
             async_response_out = <HttpAsyncResponseInfo>{
                 "code": rv."code",
@@ -4148,7 +4371,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
 
             # save socket port/path
-            socket_info = getSocketInfo() + {
+            socket_info = getSocketInfo(False) + {
                 "ssl": ssl,
                 "name": name,
                 "id": id,
@@ -4298,7 +4521,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     #! Lightweight inline request processing — no context setup, logging, auth
-    /** This method processes a request inline in the I/O thread, bypassing
+    /** This method processes a request on the async callback dispatcher worker, bypassing
         the full processNativeRequest() path. It is only called when the handler's
         canHandleInline() returns True.
 
@@ -5051,8 +5274,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # closure keeps the request alive past the re-check, the destructor's
             # handler.setPersistent(False) call hasn't fired yet, and the loop entry
             # below would erroneously dedicate this thread for the full TTL.
-            delete async_response.send_callback;
-            delete async_response.input_stream;
+            remove async_response.send_callback;
+            remove async_response.input_stream;
+            if (header_info.body_streaming) {
+                cleanupMultiplexedBodyStream(s, header_info);
+            }
             # Re-check persistence AFTER the response (incl. any inline streaming)
             # has been fully sent: a handler's persistence condition may become
             # false while the response was being produced.  Persistence is a
@@ -5060,35 +5286,60 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # thread only for the duration of some context (an open SQL
             # statement, an in-flight bidi message exchange, a transient lock,
             # etc.) will report persistent at dispatch time but release as
-            # soon as that context ends.  Skip the persistent sync loop
+            # soon as that context ends.  Skip the persistent queue loop
             # entirely in that case so the handler thread is freed
             # immediately instead of idling for the full TTL.
             if (!phi.handler.isPersistent()) {
                 log("cid %d: persistence released during initial response, "
                     "skipping dedicated mode", cx.id);
+                deregister_fn(sock_key);
+                drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
+                    getContextTemplate(info), phi, info);
                 return <HttpServerAsyncIo::HttpRequestResultInfo>{};
             }
             # Enter dedicated persistent loop
-            handleMultiplexedPersistentSync(request_helper, pq, s, \cx, phi, info,
+            handleQueuedPersistentConnection(request_helper, pq, s, \cx, phi, info,
                 deregister_fn, sock_key);
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         } else if (!is_multiplexed && phi.handler && phi.handler.isPersistent()
                 && !request_helper.isDedicated()) {
-            # For HTTP/1.x, switch to synchronous mode for thread affinity
-            log("cid %d: handler opted into persistence for %s %s, switching to sync mode",
+            # For HTTP/1.x, keep this handler thread dedicated for thread
+            # affinity, but hand subsequent socket reads back to async I/O.  The
+            # controller routes matching requests to the Queue below.
+            log("cid %d: handler opted into persistence for %s %s, entering queued persistent mode",
                 cx.id, hdr.method, cx.masked_path);
-            # Handler requires thread affinity - send current response synchronously first
             if (async_response.code) {
                 sendResponseSync(s, async_response);
             }
             # See multiplexed branch above: drop response refs so the underlying
             # framework objects (e.g. RestStreamRequest) can run their destructors
-            # before the persistent sync loop is entered, releasing handler
+            # before the persistent queue loop is entered, releasing handler
             # persistence whose only condition was the in-flight stream.
-            delete async_response.send_callback;
-            delete async_response.input_stream;
-            # Continue handling requests on this thread until persistence ends
-            handlePersistentConnectionSync(request_helper, s, \cx, phi, info);
+            remove async_response.send_callback;
+            remove async_response.input_stream;
+            if (!phi.handler.isPersistent()) {
+                log("cid %d: persistence released during initial response, "
+                    "skipping queued persistent mode", cx.id);
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+            }
+            if (cx.close || !s.isOpen()) {
+                return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+            }
+
+            Queue pq();
+            code<nothing(string, Queue)> register_fn =
+                header_info.register_persistent_queue;
+            code<nothing(string)> deregister_fn =
+                header_info.deregister_persistent_queue;
+            sock_key = s.uniqueHash();
+            register_fn(sock_key, pq);
+            on_exit deregister_fn(sock_key);
+            if (!cx.close && s.isOpen()) {
+                serv.returnConnectionToAsyncIo(s, cx, self);
+            }
+            # Continue handling queued requests on this thread until persistence ends
+            handleQueuedPersistentConnection(request_helper, pq, s, \cx, phi, info,
+                deregister_fn, sock_key);
             # Persistent handler managed the socket lifecycle; return empty result
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         }
@@ -5101,6 +5352,24 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 return <HttpServerAsyncIo::HttpRequestResultInfo>{"dedicated": True};
             }
             # Response was sent directly by the handler
+            return <HttpServerAsyncIo::HttpRequestResultInfo>{};
+        }
+
+        if (is_multiplexed && async_response.code
+                && (async_response.send_callback
+                    || (async_response.input_stream
+                        && async_response.input_stream instanceof CallbackInputStream))
+                && !request_helper.isDedicated()) {
+            # send_callback / CallbackInputStream is Qore handler code and
+            # may close over thread-local iterators or reservations.  Drive
+            # it on the request thread; plain InputStream responses still use
+            # StreamResponseProducer below unless the handler is persistent.
+            sendMultiplexedStreamingResponseInline(s, header_info, async_response);
+            remove async_response.send_callback;
+            remove async_response.input_stream;
+            if (header_info.body_streaming) {
+                cleanupMultiplexedBodyStream(s, header_info);
+            }
             return <HttpServerAsyncIo::HttpRequestResultInfo>{};
         }
 
@@ -5291,226 +5560,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         logResponse(response.cx, response);
     }
 
-    #! Handles a persistent connection synchronously after the async I/O controller detected persistence
-    /** This method is called when a handler opts into persistence via setPersistent(True).
-        It handles all subsequent requests on the current thread until:
-        - The handler releases persistence (isPersistent() returns False)
-        - The connection is closed
-        - An error occurs
-
-        @param request_helper the request helper for parsing HTTP requests
-        @param s the socket for the connection
-        @param cx the connection context
-        @param phi the persistent handler info
-        @param info peer info for logging
-    */
-    private handlePersistentConnectionSync(RequestHelper request_helper, Socket s, reference<hash<auto>> cx,
-            HttpPersistentHandlerInfo phi, hash<auto> info) {
-        @assert(phi.handler, "phi.handler must be set when entering persistent sync mode");
-        @assert(phi.handler.isPersistent(), "handler must be persistent when entering persistent sync mode");
-        log("cid %d: switching to synchronous mode for persistent handler", cx.id);
-
-        # Static listener context template
-        hash<auto> cx_listener = getContextTemplate(info);
-
-        # Clean up persistent handler state and thread-local data when this function
-        # exits for any reason.  This is critical because this runs on a handler pool
-        # thread that will be reused - stale thread-local data from a persistent
-        # session (e.g., from an abnormal disconnect) would corrupt subsequent requests.
-        on_exit {
-            phi.clear();
-            removeUserThreadContext();
-            remove_thread_data("svc_listener");
-        }
-
-        try {
-            while (!exit && s.isOpen()) {
-                # NOTE: persistence may have ended between requests (e.g., between
-                # DataStream SELECT and ROLLBACK), but we continue processing on this
-                # thread to preserve thread affinity for thread-bound resources (e.g.,
-                # database transactions).  The idle timeout in the wait loop below
-                # handles the case where no more requests arrive after persistence ends.
-
-                # Wait for next request with idle timeout
-                date poll_interval = HttpServer::PollTimeout;
-                date ttl = serv.getTtl();
-                if (poll_interval > ttl) {
-                    poll_interval = ttl;
-                }
-
-                date start = now_us();
-                while (!exit && s.isOpen() && !s.isDataAvailable(poll_interval)) {
-                    # Check for idle timeout only if persistence has been released
-                    # (persistent connections have no idle timeout while active)
-                    if (!phi.handler || !phi.handler.isPersistent()) {
-                        if ((now_us() - start) > ttl) {
-                            log("cid %d: persistent sync idle timeout, returning to async I/O",
-                                cx.id);
-                            if (!cx.close && s.isOpen()) {
-                                serv.returnConnectionToAsyncIo(s, cx, self);
-                            }
-                            return;
-                        }
-                    }
-                }
-                # Check if we exited due to shutdown
-                if (exit) {
-                    return;
-                }
-
-                # Reset context for new request
-                cx = cx_listener;
-
-                # Read HTTP header
-                hash<auto> header_info;
-                hash<auto> hdr;
-                try {
-                    hdr = s.readHTTPHeader(HttpServer::ReadTimeout, \header_info);
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "SOCKET-CLOSED") {
-                        # Connection closed by peer
-                        return;
-                    } else if (ex.err == "SOCKET-TIMEOUT") {
-                        string err = sprintf("timed out reading HTTP header after %d ms", HttpServer::ReadTimeout);
-                        logError("cid %d: %s", cx.id, err);
-                        cx.close = True;
-                        serv.sendHttpError(self, cx, s, 400, err, NOTHING, NOTHING, NOTHING, False);
-                        return;
-                    }
-                    string etxt = sprintf("ERROR reading HTTP header: %s: %s", ex.err, ex.desc);
-                    logError("cid %d: %s", cx.id, etxt);
-                    cx.close = True;
-                    serv.sendHttpError(self, cx, s, 400, etxt, NOTHING, NOTHING, NOTHING, False);
-                    return;
-                }
-
-                # Process path
-                cx.raw_path = hdr.path;
-                hdr.path = decode_url(hdr.path);
-                cx += {
-                    "orig_path": hdr.path,
-                    "masked_path": serv.maskData(hdr.path),
-                };
-
-                if (hdr.path =~ /^\//) {
-                    splice hdr.path, 0, 1;
-                }
-
-                if (hdr.authorization) {
-                    cx.auth = hdr.authorization;
-                }
-
-                # Process content-type
-                if (hdr."content-type") {
-                    hdr."_qore_orig_content_type" = hdr."content-type";
-                }
-                # only overwrite content-type if body-content-type is set (HTTP/2 may not set it)
-                if (header_info."body-content-type".val()) {
-                    hdr."content-type" = header_info."body-content-type";
-                    if (hdr."content-type".typeCode() == NT_LIST) {
-                        hdr."content-type" = hdr."content-type"[0];
-                    }
-                }
-
-                cx.hdr = hdr;
-                cx.char_encoding = s.getEncoding();
-                cx."response-encoding" = header_info."accept-charset";
-                cx.close = header_info.close;
-
-                # Check for end-persistent signal — client is explicitly ending
-                # the persistent session.  Send a 200 OK response and clear
-                # persistence so the connection can be reused.  The loop
-                # continues to handle any subsequent requests on the same
-                # keep-alive connection (e.g., a new streaming session);
-                # if no more requests arrive, the idle timeout will return
-                # the connection to async I/O.
-                if (hdr."qorus-connection" =~ /^end-persistent$/i) {
-                    log("cid %d: received end-persistent signal, terminating "
-                        "persistent session", cx.id);
-                    s.sendHTTPResponse(200, "OK", "1.1", {"Content-Type": "text/plain"},
-                        "OK");
-                    # Clear persistence so the idle timeout can fire and the
-                    # connection can be returned to async I/O if no more
-                    # requests arrive.  Also remove user thread context so
-                    # subsequent requests on the same thread do not see stale
-                    # persistent session data (e.g. persistent_data from a
-                    # prior aborted streaming request).
-                    phi.clear();
-                    removeUserThreadContext();
-                    continue;
-                }
-
-                # Log the request
-                {
-                    string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
-                    string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
-                        cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
-                    if (hdr."transfer-encoding" == "chunked") {
-                        lstr += " body: chunked";
-                    }
-                    if (hdr."_qore_orig_content_type") {
-                        lstr += sprintf(" Content-Type: %y", hdr."_qore_orig_content_type");
-                    }
-                    if (ssl) {
-                        lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
-                    }
-                    lstr += " [persistent-sync]";
-                    lstr += ")";
-                    log("%s", lstr);
-                }
-
-                cx.uctx = get_thread_data("uctx");
-                cx."header-info" = header_info;
-
-                if (get_remote_certs) {
-                    cx."client-cert" = s.getRemoteCertificate();
-                }
-
-                # Process request
-                hash<HttpAsyncResponseInfo> async_response = <HttpAsyncResponseInfo>{};
-                handleRequest(request_helper, self, s, \cx, hdr, hdr.method == "HEAD", phi, info,
-                    \async_response);
-
-                # If handler took over the socket (dedicated), we're done
-                # Note: isDedicatedExternal() implies isDedicated(), so checking isDedicated() covers both
-                if (request_helper.isDedicated()) {
-                    return;
-                }
-
-                # Send response synchronously
-                if (async_response && async_response.code) {
-                    sendResponseSync(s, async_response);
-                }
-
-                # Check if connection should be closed
-                if (cx.close) {
-                    break;
-                }
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            string etxt = serv.getDebug()
-                ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
-                : get_exception_string(ex);
-            logError("cid %d: persistent handler error: %s", cx.id, etxt);
-            cx.close = True;
-            try {
-                serv.sendHttpError(self, cx, s, 500, etxt, NOTHING, NOTHING, cx."response-encoding", False);
-            } catch () {
-                # Ignore errors sending error response
-            }
-        }
-
-        # Close connection
-        if (s.isOpen()) {
-            try {
-                s.shutdown();
-                s.close();
-            } catch () {
-                # Ignore close errors
-            }
-        }
-    }
-
     #! Sends a multiplexed response from a handler pool thread using the protocol-appropriate submit API
     /** Uses the thread-safe submit APIs that queue data for the I/O thread, avoiding conflicts
         with the I/O thread's poll operation.  Supports both HTTP/2 and HTTP/3 (QUIC).
@@ -5590,7 +5639,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     }
 
     #! Sends a streaming response inline on the current thread
-    /** Used by \c handleMultiplexedPersistentSync() to drive \c send_callback
+    /** Used by \c handleQueuedPersistentConnection() to drive \c send_callback
         or \c input_stream responses on the dedicated handler thread, preserving
         thread affinity for thread-local resources (e.g. DatasourcePool
         reservations).
@@ -5616,6 +5665,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         # Build the data-producing callback: either from send_callback
         # directly, or by wrapping an InputStream
         code<*binary()> producer;
+        *InputStream reassigned_stream;
+        on_exit if (reassigned_stream) {
+            try {
+                reassigned_stream.unassignThread();
+            } catch () {
+            }
+        }
         if (response.send_callback) {
             auto cb = response.send_callback;
             producer = *binary sub () {
@@ -5627,6 +5683,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             };
         } else {
             InputStream is = response.input_stream;
+            is.reassignThread();
+            reassigned_stream = is;
             producer = *binary sub () {
                 return is.read(65536);
             };
@@ -5723,10 +5781,22 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
-    #! Handles persistent multiplexed connections via a dedicated handler pool thread
-    /** This method is called when a handler opts into persistence for an HTTP/2 or HTTP/3
-        multiplexed connection.  It enters a loop reading subsequent requests from a Queue
-        (populated by the I/O controller) and processes them on the current thread, ensuring
+    #! Cleans up a multiplexed request body stream after handler dispatch
+    private cleanupMultiplexedBodyStream(Socket s, hash<auto> header_info) {
+        on_exit if (header_info.io_wake) {
+            header_info.io_wake();
+        }
+        if (header_info.http3) {
+            s.cleanupQuicStream(header_info.session_id, header_info.stream_id);
+        } else {
+            s.cleanupHttp2Stream(header_info.stream_id);
+        }
+    }
+
+    #! Handles persistent connections via a dedicated handler pool thread
+    /** This method is called when a handler opts into persistence.  It enters a loop reading
+        subsequent requests from a Queue (populated by the I/O controller) and processes them
+        on the current thread, ensuring
         thread affinity for thread-local resources like database transactions.
 
         @param request_helper the request lifecycle helper
@@ -5738,13 +5808,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @param deregister_fn callback to deregister the persistent queue
         @param sock_key the socket unique hash identifying the connection
     */
-    private handleMultiplexedPersistentSync(RequestHelper request_helper, Queue pq, Socket s,
+    private handleQueuedPersistentConnection(RequestHelper request_helper, Queue pq, Socket s,
             reference<hash<auto>> cx, HttpPersistentHandlerInfo phi, hash<auto> info,
             code<nothing(string)> deregister_fn, string sock_key) {
-        @assert(phi.handler, "phi.handler must be set when entering multiplexed persistent mode");
+        @assert(phi.handler, "phi.handler must be set when entering queued persistent mode");
         @assert(phi.handler.isPersistent(), "handler must be persistent when entering "
-            "multiplexed persistent mode");
-        log("cid %d: entering multiplexed persistent sync loop", cx.id);
+            "queued persistent mode");
+        log("cid %d: entering queued persistent loop", cx.id);
 
         # Static listener context template
         hash<auto> cx_listener = getContextTemplate(info);
@@ -5791,7 +5861,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                             # End-Persistent header, or TCP connection close
                             # triggers cleanup via
                             # signalPersistentQueuesForConnection().
-                            log("cid %d: multiplexed persistent idle timeout, "
+                            log("cid %d: queued persistent idle timeout, "
                                 "exiting dedicated mode", cx.id);
                             deregister_fn(sock_key);
                             drainOrphanedPersistentRequests(request_helper, pq,
@@ -5805,13 +5875,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
                 # Check for close signal or empty entry
                 if (!entry || entry.type == "close") {
-                    log("cid %d: multiplexed persistent connection closed", cx.id);
+                    log("cid %d: queued persistent connection closed", cx.id);
                     return;
                 }
 
                 # Extract request data from queue entry
                 hash<auto> conn_info = entry.conn_info;
                 hash<auto> req_hdr = conn_info.hdr;
+                bool is_multiplexed = (conn_info.header_info.http2 ?? False)
+                    || (conn_info.header_info.http3 ?? False);
 
                 # Check for end-persistent signal — the client is explicitly
                 # ending the persistent session (e.g., before clearing its
@@ -5821,13 +5893,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 if (req_hdr."qorus-connection" =~ /^end-persistent$/i) {
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
-                    sendMultiplexedResponse(s, conn_info.header_info,
-                        <HttpAsyncResponseInfo>{
-                            "code": 200,
-                            "hdr": {"content-type": "text/plain"},
-                            "body": "OK",
-                            "cx": cx,
-                        });
+                    hash<auto> end_cx = cx_listener;
+                    end_cx."header-info" = conn_info.header_info;
+                    end_cx.close = conn_info.header_info.close;
+                    hash<HttpAsyncResponseInfo> end_response = <HttpAsyncResponseInfo>{
+                        "code": 200,
+                        "hdr": {"content-type": "text/plain"},
+                        "body": "OK",
+                        "cx": end_cx,
+                    };
+                    if (is_multiplexed) {
+                        sendMultiplexedResponse(s, conn_info.header_info, end_response);
+                    } else {
+                        sendResponseSync(s, end_response);
+                    }
                     if (entry.resume_reading) {
                         try {
                             entry.resume_reading();
@@ -5838,6 +5917,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
                         \cx, cx_listener, phi, info);
+                    if (!is_multiplexed && !end_cx.close && s.isOpen()) {
+                        serv.returnConnectionToAsyncIo(s, end_cx, self);
+                    }
                     return;
                 }
 
@@ -5884,7 +5966,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     if (ssl) {
                         lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
                     }
-                    lstr += " [persistent-mux-sync]";
+                    lstr += is_multiplexed ? " [persistent-mux]" : " [persistent-h1]";
                     lstr += ")";
                     log("%s", lstr);
                 }
@@ -5925,17 +6007,21 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     return;
                 }
 
-                # Send response via HTTP/2 submit.  For send_callback
+                # Send response.  For send_callback
                 # responses, drive the callback inline on the current
                 # (dedicated) thread to preserve thread affinity for
                 # thread-local resources (e.g. DSP reservations).
                 if (async_response && async_response.code) {
-                    if (async_response.send_callback || async_response.input_stream) {
-                        sendMultiplexedStreamingResponseInline(s,
-                            conn_info.header_info, async_response);
+                    if (is_multiplexed) {
+                        if (async_response.send_callback || async_response.input_stream) {
+                            sendMultiplexedStreamingResponseInline(s,
+                                conn_info.header_info, async_response);
+                        } else {
+                            sendMultiplexedResponse(s, conn_info.header_info,
+                                async_response);
+                        }
                     } else {
-                        sendMultiplexedResponse(s, conn_info.header_info,
-                            async_response);
+                        sendResponseSync(s, async_response);
                     }
                 }
                 # Drop response refs so any framework objects captured by the
@@ -5943,8 +6029,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # their destructors before the persistence re-check below.  See
                 # the matching block in the initial-response path for rationale.
                 if (async_response) {
-                    delete async_response.send_callback;
-                    delete async_response.input_stream;
+                    remove async_response.send_callback;
+                    remove async_response.input_stream;
                 }
 
                 # For body_streaming requests where the handler returned early
@@ -5952,18 +6038,23 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # dispatched stream now that the handler is done.  The response
                 # has already been queued via sendMultiplexedResponse() which
                 # uses nghttp2's internal state, not our streams map.
-                if (conn_info.header_info.body_streaming) {
-                    s.cleanupHttp2Stream(conn_info.header_info.stream_id);
-                    conn_info.header_info.io_wake();
+                if (is_multiplexed && conn_info.header_info.body_streaming) {
+                    cleanupMultiplexedBodyStream(s, conn_info.header_info);
+                }
+
+                if (!is_multiplexed && (cx.close || !s.isOpen())) {
+                    return;
                 }
 
                 # Check if persistence was cleared by this request (e.g. commit/rollback).
-                # We check both the handler's internal flag and the user thread context,
-                # since persistenceThreadTerminate() clears the uctx but not the handler's
-                # internal persistence flag.
+                # Multiplexed requests also check user thread context, since
+                # persistenceThreadTerminate() clears the uctx but not the handler's
+                # internal persistence flag.  Plain H1 persistent handlers may not
+                # use uctx at all, so their handler flag remains authoritative.
                 *hash<auto> uctx = get_thread_data("uctx");
+                bool persistence_data_cleared = is_multiplexed && !uctx.persistent_data;
                 if (!phi.handler || !phi.handler.isPersistent()
-                        || !uctx.persistent_data) {
+                        || persistence_data_cleared) {
                     log("cid %d: persistence cleared after request, exiting "
                         "dedicated mode", cx.id);
                     # Deregister the persistent queue BEFORE returning to prevent
@@ -5976,14 +6067,21 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     # brief window between the last pq.get() and the deregistration
                     drainOrphanedPersistentRequests(request_helper, pq, s, \cx,
                         cx_listener, phi, info);
+                    if (!is_multiplexed && !cx.close && s.isOpen()) {
+                        serv.returnConnectionToAsyncIo(s, cx, self);
+                    }
                     return;
+                }
+
+                if (!is_multiplexed && s.isOpen()) {
+                    serv.returnConnectionToAsyncIo(s, cx, self);
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
             string etxt = serv.getDebug()
                 ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
                 : get_exception_string(ex);
-            logError("cid %d: multiplexed persistent handler error: %s", cx.id, etxt);
+            logError("cid %d: queued persistent handler error: %s", cx.id, etxt);
             # Drain any requests routed onto the persistent queue between
             # the last pq.get() and this error.  Without this drain, a
             # request queued while we were processing the failing request
@@ -6121,12 +6219,29 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     return;
                 }
 
+                bool is_multiplexed = (conn_info.header_info.http2 ?? False)
+                    || (conn_info.header_info.http3 ?? False);
                 if (async_response && async_response.code) {
-                    sendMultiplexedResponse(s, conn_info.header_info, async_response);
+                    if (is_multiplexed) {
+                        if (async_response.send_callback
+                                || async_response.input_stream) {
+                            sendMultiplexedStreamingResponseInline(s,
+                                conn_info.header_info, async_response);
+                        } else {
+                            sendMultiplexedResponse(s, conn_info.header_info,
+                                async_response);
+                        }
+                    } else {
+                        sendResponseSync(s, async_response);
+                    }
+                }
+                if (async_response) {
+                    remove async_response.send_callback;
+                    remove async_response.input_stream;
                 }
 
-                if (conn_info.header_info.body_streaming) {
-                    conn_info.header_info.io_wake();
+                if (is_multiplexed && conn_info.header_info.body_streaming) {
+                    cleanupMultiplexedBodyStream(s, conn_info.header_info);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 string etxt = serv.getDebug()
@@ -6482,7 +6597,7 @@ class HttpServerCallbackAppender inherits LoggerAppenderWithLayout {
 
 #! Native async target implementing HttpAsyncTarget for the callback-based HttpAsyncSocketIoController
 /** Request dispatch uses a two-path model:
-    -# @ref tryInlineRequest() runs on the I/O callback thread for lightweight requests
+    -# @ref tryInlineRequest() runs on an async callback dispatcher worker for lightweight requests
        (HTTP/1.x only, no body, handler opts in via @ref AbstractHttpRequestHandler::canHandleInline()
        "canHandleInline()"); returns the response immediately without a thread hop
     -# If @ref tryInlineRequest() returns @ref nothing, the request is dispatched to the
@@ -6506,7 +6621,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         self.logger = logger;
     }
 
-    #! Attempts to handle a request inline in the I/O thread
+    #! Attempts to handle a request on the async callback dispatcher worker
     /** Looks up the handler and, if it supports inline processing and the request
         has no body, processes it directly without thread pool dispatch.
 
@@ -6553,6 +6668,9 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         # getContextTemplate() builds the full context with "peer-info", "id",
         # "ssl", "listener-id", "listener-name", "async_ctrl"
         hash<auto> cx = listener.getContextTemplate(info.cx.peer);
+        if (exists info.cx{"peer-info-future"}) {
+            cx{"peer-info-future"} = info.cx{"peer-info-future"};
+        }
         return listener.processNativeRequest(info.sock, cx, info.hdr, info.header_info);
     }
 
@@ -6797,7 +6915,7 @@ class RequestHelper {
         cThreads.wait() and dThreads.wait().
 
         @note We check isOpen() to avoid double-close if the socket was already closed
-        (e.g., by handlePersistentConnectionSync())
+        (e.g., by the async I/O controller)
     */
     destructor() {
         if (s && !dedicated_external && s.isOpen()) {

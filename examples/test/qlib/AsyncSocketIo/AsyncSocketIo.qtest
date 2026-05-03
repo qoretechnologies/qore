@@ -20,6 +20,57 @@
 
 %exec-class AsyncSocketIoTest
 
+class BlockingAbortPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        EventNotifier notifier;
+        Counter abort_started;
+        Counter release_abort;
+        bool started = False;
+        bool canceled = False;
+    }
+
+    constructor(EventNotifier notifier, Counter abort_started, Counter release_abort) {
+        self.notifier = notifier;
+        self.abort_started = abort_started;
+        self.release_abort = release_abort;
+    }
+
+    string getGoal() {
+        return "blocking-abort";
+    }
+
+    string getState() {
+        return canceled ? "canceled" : (started ? "waiting" : "pending");
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (canceled) {
+            return NOTHING;
+        }
+        if (!started) {
+            started = True;
+            return <SocketPollInfo>{
+                "events": SOCK_POLLIN,
+                "socket": notifier,
+            };
+        }
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+
+    abort() {
+        canceled = True;
+        abort_started.dec();
+        release_abort.waitForZero();
+    }
+}
+
 public class AsyncSocketIoTest inherits QUnit::Test {
     public {
         const VALUE_TEXT = {
@@ -55,6 +106,10 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("main", \mainTest());
         addTestCase("owner required", \ownerRequiredTest());
         addTestCase("cancel by owner", \cancelByOwnerTest());
+        addTestCase("delegated abort worker dispatch", \delegatedAbortWorkerDispatchTest());
+        addTestCase("ping wrapper abort worker dispatch", \pingWrapperAbortWorkerDispatchTest());
+        addTestCase("poll pipeline rejects worker delegate", \pollPipelineRejectsWorkerDelegateTest());
+        addTestCase("poll pipeline recv frame no sync probe", \pollPipelineRecvFrameNoSyncProbeTest());
         addTestCase("wait ready", \waitReadyTest());
         addTestCase("wait for processing", \waitForProcessingTest());
         addTestCase("cancelEx", \cancelExTest());
@@ -62,6 +117,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("stop clear", \stopClearTest());
         addTestCase("stop", \stopTest());
         addTestCase("shared result queue", \sharedResultQueueTest());
+        addTestCase("result queue with onComplete", \resultQueueWithOnCompleteTest());
         addTestCase("no timeout", \noTimeoutTest());
         addTestCase("timeout timing", \timeoutTimingTest());
         addTestCase("immediate timeout", \immediateTimeoutTest());
@@ -70,6 +126,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("concurrent submit", \concurrentSubmitTest());
         addTestCase("submit racing stop", \submitRacingStopTest());
         addTestCase("cancel by key", \cancelByKeyTest());
+        addTestCase("cancel and close by socket", \cancelAndCloseBySocketTest());
         addTestCase("concurrent cancel by key UAF", \concurrentCancelByKeyUafTest());
         addTestCase("callback mode concurrent", \callbackConcurrentTest());
         addTestCase("shared socket custom keys", \sharedSocketCustomKeysTest());
@@ -248,6 +305,153 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertEq(0, canceled, "canceling non-existent owner should return 0");
     }
 
+    delegatedAbortWorkerDispatchTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        EventNotifier notifier();
+        Counter abort_started(1);
+        Counter release_abort(1);
+        Counter cancel_done(1);
+        Queue cancel_result();
+        string owner = "delegated-abort-worker-owner";
+
+        on_exit {
+            if (release_abort.getCount()) {
+                release_abort.dec();
+            }
+            cancel_done.waitForZero(5s);
+        }
+
+        BlockingAbortPollOperation inner(notifier, abort_started, release_abort);
+        DelegatingPollOperation wrapped(inner);
+        io_controller.submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": wrapped,
+            "owner": owner,
+            "to": 30s,
+        });
+
+        assertTrue(io_controller.waitForProcessing(2s), "operation should be registered before cancel");
+
+        background sub () {
+            on_exit cancel_done.dec();
+            try {
+                cancel_result.push({"canceled": io_controller.cancelByOwner(owner)});
+            } catch (hash<ExceptionInfo> ex) {
+                cancel_result.push({"ex": ex});
+            }
+        }();
+
+        assertEq(0, abort_started.waitForZero(5s), "delegated abort should start on a worker thread");
+        assertEq(0, cancel_done.waitForZero(1s), "cancelByOwner should not wait for delegated Qore abort");
+
+        hash<auto> cancel_info = cancel_result.get(1s);
+        assertFalse(exists cancel_info.ex, "cancelByOwner should not throw: " + (cancel_info.ex.err ?? ""));
+        assertEq(1, cancel_info.canceled, "cancelByOwner should cancel the delegated operation");
+
+        if (release_abort.getCount()) {
+            release_abort.dec();
+        }
+    }
+
+    pingWrapperAbortWorkerDispatchTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        EventNotifier notifier();
+        Counter abort_started(1);
+        Counter release_abort(1);
+        Counter cancel_done(1);
+        Queue cancel_result();
+        string owner = "ping-wrapper-abort-worker-owner";
+
+        on_exit {
+            if (release_abort.getCount()) {
+                release_abort.dec();
+            }
+            cancel_done.waitForZero(5s);
+        }
+
+        BlockingAbortPollOperation inner(notifier, abort_started, release_abort);
+        DelegatingPollOperation wrapped(inner);
+        HttpClientPingPollOperationBase ping(wrapped, 200, 299, "PING-WRAPPER-ERROR");
+        io_controller.submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": ping,
+            "owner": owner,
+            "to": 30s,
+        });
+
+        assertTrue(io_controller.waitForProcessing(2s), "wrapped ping operation should be registered before cancel");
+
+        background sub () {
+            on_exit cancel_done.dec();
+            try {
+                cancel_result.push({"canceled": io_controller.cancelByOwner(owner)});
+            } catch (hash<ExceptionInfo> ex) {
+                cancel_result.push({"ex": ex});
+            }
+        }();
+
+        assertEq(0, abort_started.waitForZero(5s), "wrapped ping abort should start on a worker thread");
+        assertEq(0, cancel_done.waitForZero(1s), "cancelByOwner should not wait for wrapped ping Qore abort");
+
+        hash<auto> cancel_info = cancel_result.get(1s);
+        assertFalse(exists cancel_info.ex, "cancelByOwner should not throw: " + (cancel_info.ex.err ?? ""));
+        assertEq(1, cancel_info.canceled, "cancelByOwner should cancel the wrapped ping operation");
+
+        if (release_abort.getCount()) {
+            release_abort.dec();
+        }
+    }
+
+    pollPipelineRejectsWorkerDelegateTest() {
+        EventNotifier notifier();
+        Counter abort_started(1);
+        Counter release_abort(0);
+
+        BlockingAbortPollOperation inner(notifier, abort_started, release_abort);
+        DelegatingPollOperation wrapped(inner);
+        PollPipeline pipeline("reject-worker-delegate");
+
+        assertThrows("POLL-PIPELINE-ERROR", \pipeline.addDelegate(), (wrapped,));
+    }
+
+    pollPipelineRecvFrameNoSyncProbeTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+
+        Socket client();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port, 2s);
+        on_exit client.close();
+
+        Socket accepted = listener.accept(2s);
+        on_exit accepted.close();
+
+        PollPipeline pipeline(accepted);
+        pipeline.addRecvWsFrame();
+        pipeline.addBranchOnHasFrame(2, 2);
+        pipeline.addDeliverResult();
+
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": accepted,
+            "spop": pipeline,
+            "owner": "poll-pipeline-recv-frame-no-sync-probe",
+            "to": 2s,
+        });
+
+        hash<SocketPollResultInfo> info = q.get(2s);
+        assertFalse(exists info.ex, "PollPipeline recv frame probe should not use sync socket I/O");
+        assertTrue(pipeline.goalReached(), "pipeline should complete without input");
+        assertEq("completed", pipeline.getState(), "pipeline should report completed state");
+    }
+
     waitReadyTest() {
         AsyncSocketIoController io_controller(logger);
         on_exit delete io_controller;
@@ -409,6 +613,36 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             || (r1.other.goal == "shared-2" && r2.other.goal == "shared-1"));
     }
 
+    resultQueueWithOnCompleteTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        RestClient rest({"url": "http://127.0.0.1:" + port});
+        Queue shared = new Queue();
+        Counter callback_done(1);
+        hash<SocketPollResultInfo> callback_result;
+
+        AbstractPollOperation inner = rest.startPollSendRecv("GET", "/api_text");
+        DelegatingPollOperation wrapped(inner, sub (hash<SocketPollResultInfo> result) {
+            callback_result = cast<hash<SocketPollResultInfo>>(result);
+            callback_done.dec();
+        });
+
+        Queue returned = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": wrapped,
+            "owner": "queue-with-on-complete-owner",
+            "resultQueue": shared,
+        });
+        assertTrue(returned === shared, "submit should return the provided shared result Queue");
+
+        hash<SocketPollResultInfo> queued = shared.get(5s);
+        assertFalse(exists queued.ex, "shared queue result should succeed");
+        assertEq(0, callback_done.waitForZero(5s), "onComplete should also run");
+        assertFalse(exists callback_result.ex, "onComplete result should succeed");
+        assertEq(queued.canceled, callback_result.canceled, "queue and callback results should match");
+    }
+
     noTimeoutTest() {
         AsyncSocketIoController io_controller(logger);
         on_exit delete io_controller;
@@ -510,6 +744,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         LoggerAppenderStream la("test", layout, sw);
         la.setQueue(new LoggerAppenderQueue());
         la.open();
+        on_exit try { la.close(); } catch () {}
         debug_logger.addAppender(la);
 
         AsyncSocketIoController io_controller(debug_logger);
@@ -679,16 +914,16 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "owner": "custom-key-owner",
         });
 
-        # cancel(sock) should NOT find it (different key)
+        # cancel(sock) is socket-scoped and should find custom-keyed operations
         bool found = io_controller.cancel(rest);
-        assertFalse(found, "cancel(sock) should not find custom-keyed operation");
+        assertTrue(found, "cancel(sock) should find custom-keyed operation");
 
-        # cancelByKey should find it
+        # cancelByKey should not find it after socket-scoped cancellation
         found = io_controller.cancelByKey(custom_key);
-        assertTrue(found, "cancelByKey should find the operation");
+        assertFalse(found, "cancelByKey should not find the operation after cancel(sock)");
 
         hash<SocketPollResultInfo> info = q.get(2s);
-        assertTrue(info.canceled, "operation should be canceled via cancelByKey");
+        assertTrue(info.canceled, "operation should be canceled via cancel(sock)");
 
         # cancelByKey on non-existent key
         found = io_controller.cancelByKey("non-existent-key");
@@ -696,6 +931,44 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         spop.abort();
         SimpleStringHandler::interruptSleep(False);
+    }
+
+    #! Tests socket-scoped cancelAndClose for custom-keyed operations
+    cancelAndCloseBySocketTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+
+        Socket client();
+        client.connect("127.0.0.1:" + listener.getSocketInfo().port, 2s);
+        on_exit client.close();
+
+        Socket accepted = listener.accept(2s);
+        on_exit {
+            try { accepted.close(); } catch () {}
+        }
+
+        AbstractPollOperation op = accepted.startPollRecvData();
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": accepted,
+            "spop": op,
+            "key": "cancel-and-close-custom-key",
+            "owner": "cancel-and-close-owner",
+            "to": 30s,
+        });
+
+        assertTrue(io_controller.waitForProcessing(2s),
+            "receive operation should be registered before cancelAndClose");
+        assertTrue(io_controller.cancelAndClose(accepted),
+            "cancelAndClose(sock) should find a custom-keyed operation");
+
+        hash<SocketPollResultInfo> info = q.get(2s);
+        assertTrue(info.canceled, "operation should be canceled by cancelAndClose(sock)");
+        assertFalse(accepted.isOpen(), "socket should be closed by the controller");
     }
 
     #! Stresses concurrent cancelByKey on the same key interleaved with submits.
@@ -838,12 +1111,12 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             "to": -1s,
         });
 
-        # cancel(sock) should NOT find either — they have custom keys
-        assertFalse(io_controller.cancel(rest1), "cancel(sock) should miss custom-keyed op");
+        # cancel(sock) is socket-scoped, so it should find the first custom-keyed op
+        assertTrue(io_controller.cancel(rest1), "cancel(sock) should cancel custom-keyed op on rest1");
 
-        # cancelByOwner should cancel both
+        # cancelByOwner should cancel the remaining operation
         int canceled = io_controller.cancelByOwner(owner);
-        assertEq(2, canceled, "cancelByOwner should cancel both custom-keyed ops");
+        assertEq(1, canceled, "cancelByOwner should cancel the remaining custom-keyed op");
 
         hash<SocketPollResultInfo> r1 = q1.get(5s);
         hash<SocketPollResultInfo> r2 = q2.get(5s);

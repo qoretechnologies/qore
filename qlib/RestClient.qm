@@ -933,7 +933,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           caller like any other response
         - \c headers: an optional hash of headers to send with every request, these can also be overridden in
           request method calls
-        - \c http_version: HTTP version to use: \c "auto" (HTTP/2 if available, default), \c "1.0", \c "1.1",
+        - \c http_version: HTTP version to use: \c "auto" (HTTP/3-first happy eyeballs for HTTPS, default),
+          \c "1.0", \c "1.1",
           \c "2.0" (require HTTP/2, fail if unavailable), or \c "3.0" (require HTTP/3 / QUIC, fail if
           unavailable)
         - \c logger: any logger to use for the object

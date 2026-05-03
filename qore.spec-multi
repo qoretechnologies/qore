@@ -54,6 +54,7 @@ BuildRequires: mpfr-devel
 BuildRequires: doxygen
 BuildRequires: gcc-c++
 BuildRequires: pkgconfig(libnghttp2)
+BuildRequires: pkgconfig(libcares)
 BuildRequires: pkgconfig(libbrotlienc)
 BuildRequires: pkgconfig(libbrotlidec)
 BuildRequires: pkgconfig(libzstd)

@@ -113,6 +113,7 @@ module HttpServerUtil {
     |\c masked_path|string|the URI path after URL decoding and masking for sensitive information
     |\c orig_path|string|the URI path in the request after URL decoding
     |\c peer-info|hash|information about the remote socket as returned by @ref Qore::Socket::getPeerInfo() "Socket::getPeerInfo()"
+    |\c peer-info-future|@ref Qore::Thread::Future "Future"|optional Future resolving to peer information with reverse DNS hostname fields; handlers may wait on it if hostname resolution is required
     |\c raw_path|string|the raw URI request path in the request
     |\c response-encoding|*string|any value given by any \c "Accept-Charset" in the request
     |\c root_path|*string|the root URL path matched if the request was matched by a URL prefix
@@ -137,8 +138,8 @@ module HttpServerUtil {
       no longer used.
     - @ref HttpServer::StreamResponseProducer "StreamResponseProducer"
       now uses \c sendHttp2StreamData() and
-      \c resetHttp2Stream() for HTTP/2 outbound DATA + RST_STREAM,
-      followed by \c io_wake() to nudge the I/O thread.
+      \c resetHttp2Stream() for HTTP/2 outbound DATA + RST_STREAM through
+      async-safe Socket methods that wake the owning controller.
     - the streaming-handler example in
       @ref HttpServer::AbstractHttpRequestHandler::wantsBodyStreaming()
       "AbstractHttpRequestHandler::wantsBodyStreaming()" was rewritten
@@ -2691,14 +2692,14 @@ public class AbstractHttpRequestHandler {
         };
     }
 
-    #! Returns True if this handler can be executed inline in the I/O thread
+    #! Returns True if this handler can be executed on the callback dispatcher worker
     /** Override to return True for fast, non-blocking handlers (health checks,
-        static responses). WARNING: long-running handlers will stall all
-        connections on the I/O thread.
+        static responses). WARNING: long-running handlers will stall the
+        async callback dispatcher worker handling completed HTTP requests.
 
         @param cx connection context with peer info
         @param hdr parsed HTTP headers
-        @return True to handle inline, False (default) to use thread pool
+        @return True to handle on the callback dispatcher worker, False (default) to use thread pool
 
         @since HttpServerUtil 1.4
     */
@@ -2706,7 +2707,7 @@ public class AbstractHttpRequestHandler {
         return False;
     }
 
-    #! Handles a request inline (called only when canHandleInline returns True)
+    #! Handles a request inline on the callback dispatcher worker
     /** This is a lightweight alternative to the full handleRequest() path.
         No context setup, logging, auth, or RequestHelper is involved.
         The handler receives minimal context and returns a response hash.

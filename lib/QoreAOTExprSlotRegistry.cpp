@@ -89,7 +89,13 @@
 #include "qore/intern/CallReferenceCallNode.h"
 
 class UserClosureVariant;
+class UserSignature;
+class LVarSet;
 QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant);
+bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vlist,
+    const QoreIRFunction* closure_ir, const std::vector<AOTLocalSlotId>& parent_locals);
+void qoreAOTPruneClosureIRBodyLocals(QoreIRFunction* closure_ir, const UserSignature* sig,
+    const LVarSet* vlist);
 
 // ============================================================================
 // Expression Slot Metadata Handlers (Phase 3.3)

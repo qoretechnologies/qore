@@ -236,7 +236,7 @@ static QoreValue read_node_EN_LOCAL_VAR(AOTExprNodeReadCtx& ctx) {
     readU16(ctx.ptr, ctx.end);
     if (ctx.aot_ctx && slot < ctx.aot_ctx->num_locals && ctx.aot_ctx->locals[slot]) {
         LocalVar* lv = ctx.aot_ctx->locals[slot];
-        return QoreValue(new VarRefNode(&loc_builtin, strdup(lv->getName()), lv, false));
+        return QoreValue(new VarRefNode(&loc_builtin, lv->getName(), lv, false));
     }
     printd(0, "AOT EXPR_TREE: invalid local slot %d\n", slot);
     ctx.failed = true;

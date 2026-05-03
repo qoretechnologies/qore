@@ -57,9 +57,9 @@
     dispatch, connection readiness, and error handling.
 
     Thread safety: continuePoll() runs on the I/O thread. submitRequest() runs
-    on application threads. Shared state is protected by stream_lock. Lock
-    ordering: stream_lock -> sock->priv->m (socket internal lock, acquired by
-    submitHttp2Request).
+    on application threads. Shared state is protected by stream_lock, but the
+    lock is never held while submitRequest() waits for controller-backed socket
+    work to finish.
 
     @since %Qore 2.3
 */
@@ -158,8 +158,9 @@ public:
     // --- Stream management (called from Qore app thread) ---
 
     //! Submits an HTTP/2 request with headers and optional body
-    /** Builds pseudo-headers, checks capacity, submits via socket, registers
-        the completion action, all under stream_lock for atomicity.
+    /** Builds pseudo-headers, reserves capacity under stream_lock, submits via
+        the controller-backed socket path, registers the completion action, and
+        then wakes the I/O thread.
 
         @param method HTTP method (GET, POST, etc.)
         @param path request path (empty defaults to "/")
@@ -239,6 +240,7 @@ public:
     }
 
     DLLLOCAL QoreHashNode* getErrorInfo() const {
+        AutoLocker al(stream_lock);
         if (error_info) {
             error_info->ref();
         }
@@ -246,6 +248,7 @@ public:
     }
 
     DLLLOCAL int getActiveStreamCount() const {
+        AutoLocker al(stream_lock);
         return active_stream_count;
     }
 
@@ -398,6 +401,9 @@ private:
     // --- Shared data (under stream_lock) ---
 
     mutable QoreThreadLock stream_lock;
+
+    //! Serializes multiplex reads against submitRequest's stream-id registration window
+    mutable QoreThreadLock submission_lock;
 
     //! Stream completion actions: stream_id string -> ref'd action
     /** Actions are pure C++ (no Qore interpreter) — execute/executeError

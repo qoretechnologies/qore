@@ -41,7 +41,6 @@
 
 #include <cctype>
 #include <functional>
-#include <condition_variable>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -196,8 +195,14 @@ public:
     //! Returns the maximum request body size
     DLLLOCAL int64 getMaxRequestBodySize() const { return max_request_body_size; }
 
-    //! Send the connection preface (client) or SETTINGS (server)
-    DLLLOCAL int sendConnectionPreface(ExceptionSink* xsink);
+    //! Queue and flush the connection preface using non-blocking I/O
+    /** Idempotently queues the initial SETTINGS frame and then flushes pending
+        output with @ref sendPendingData().
+
+        @return 0 on success, @ref SOCK_POLLIN or @ref SOCK_POLLOUT when the
+        caller must poll and retry, -1 on error
+    */
+    DLLLOCAL int sendConnectionPrefaceNonBlocking(ExceptionSink* xsink);
 
     //! Submit a SETTINGS frame
     DLLLOCAL int submitSettings(const Http2Settings& settings, ExceptionSink* xsink);
@@ -371,7 +376,7 @@ public:
     }
 
     //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in SETTINGS
-    /** Must be called before sendConnectionPreface() to take effect.
+    /** Must be called before sendConnectionPrefaceNonBlocking() to take effect.
     */
     DLLLOCAL void setEnableConnectProtocol(bool enable) {
         local_settings.enable_connect_protocol = enable ? 1 : 0;
@@ -383,13 +388,6 @@ public:
         @return 0 on success, -1 if need to poll for POLLOUT
     */
     DLLLOCAL int sendPendingData(int timeout_ms, ExceptionSink* xsink);
-
-    //! Send all pending data (blocking with timeout to ensure flush)
-    /** @param timeout_ms Timeout in milliseconds
-        @param xsink Exception sink for error reporting
-        @return 0 on success, -1 if still have data to send
-    */
-    DLLLOCAL int sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink);
 
     //! Receive and process data
     /** @param timeout_ms Timeout in milliseconds (-1 for infinite)
@@ -456,9 +454,9 @@ public:
     /** Idempotent, one-shot: flips @ref session_closed_ from false to true.
         Subsequent calls are no-ops.  Called by @c qore_socket_private's
         pre-close interruption path BEFORE any outer mutex is taken, so
-        that a thread currently inside @ref sendPendingDataBlocking or
-        @ref receiveData (holding @ref m) observes the flag on its next
-        check and returns promptly, releasing @ref m.  The thread calling
+        that a thread currently inside @ref receiveData (holding @ref m)
+        observes the flag on its next check and returns promptly,
+        releasing @ref m.  The thread calling
         @c Socket::close() can then acquire @c priv->m and perform the
         actual teardown without waiting on the stuck sync consumer.
 
@@ -737,6 +735,7 @@ private:
     Http2Settings local_settings;
     Http2Settings remote_settings;
     bool remote_settings_received = false;  //!< True after first SETTINGS frame from peer
+    bool connection_preface_submitted = false;
 
     //! Maximum request body size in bytes (0 = unlimited), propagated to new streams
     int64 max_request_body_size = 0;
@@ -820,7 +819,7 @@ private:
 
         StreamInputStreamInfo() = default;
         StreamInputStreamInfo(InputStream* is)
-            : input_stream(is), stream_fd(is->getPollableDescriptor()),
+            : input_stream(is), stream_fd(is->supportsNonBlockingIo() ? is->getPollableDescriptor() : -1),
               is_pollable(stream_fd >= 0) {
             if (is_pollable) {
                 // Regular files are always readable and cannot be monitored by
@@ -847,8 +846,7 @@ private:
     std::atomic<bool> has_active_input_streams_{false};
 
     //! Sticky atomic flag: true once the owning socket begins shutting down.
-    /** Set by @ref markClosed, observed by the blocking H2 loops
-        (@ref sendPendingDataBlocking, @ref receiveData) and by
+    /** Set by @ref markClosed, observed by @ref receiveData and by
         @ref isStreamComplete's lookup so concurrent sync readers on a
         socket whose @c QoreSocketObject::close() is in flight see
         "complete" / "closed" and drop @ref m / @c priv->m promptly —
@@ -858,27 +856,11 @@ private:
     */
     std::atomic<bool> session_closed_{false};
 
-    //! Condition variable for flow-control drain notifications
-    /** Signaled by dataProviderReadCallback when it consumes data from a streaming
-        buffer, and by onStreamCloseCallback when a stream is closed.
+    //! Socket objects to wake when stream drain notifications fire
+    std::mutex drain_waiters_mtx_;
+    std::unordered_map<QoreObject*, size_t> drain_waiters_;
 
-        Uses a separate non-recursive drain_mtx_ + drain_cv_ pair with an atomic
-        generation counter to avoid POSIX UB with recursive mutexes and
-        std::condition_variable.
-
-        The generation counter prevents lost wakeups: signal sites increment
-        drain_gen_ and briefly lock drain_mtx_ before notify; the waiter checks
-        drain_gen_ under drain_mtx_ then re-checks the actual predicate under m.
-
-        Lock ordering: signal sites hold m then briefly acquire drain_mtx_;
-        the waiter holds drain_mtx_ (for CV wait) then separately acquires m
-        (never simultaneously), so no deadlock is possible.
-
-        @since %Qore 2.3
-    */
-    std::mutex drain_mtx_;
-    std::condition_variable drain_cv_;
-    std::atomic<unsigned> drain_gen_{0};
+    DLLLOCAL void wakeStreamDrainWaiters();
 
 #if defined(__linux__) && defined(HAVE_IO_URING)
     //! Non-owning pointer to io_uring instance (owned by QoreEventLoop)
@@ -909,25 +891,37 @@ public:
     */
     DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const;
 
-    //! Wait for a stream's send buffer to drain below the backpressure threshold
-    /** Blocks the calling thread until the stream's pending_body_data drops below
-        MAX_STREAM_BUFFER, the stream is closed, or the timeout expires.
+    //! Check whether a stream's send buffer has drained below the backpressure threshold
+    /** This method is intentionally nonblocking.  Synchronous public APIs use
+        an async-controller poll operation that calls this as its readiness
+        predicate and blocks in @ref AsyncIoController::exec(), not in the
+        HTTP/2 session.
 
         @param stream_id the HTTP/2 stream ID
-        @param timeout_ms maximum wait time in milliseconds (0 = no wait, -1 = infinite)
-        @return 0 if buffer drained, 1 if timed out, -1 if stream not found or closed
+        @param timeout_ms ignored; retained for internal call-site compatibility
+        @return 0 if buffer drained, 1 if it is still full, -1 if stream not found or closed
 
         @since %Qore 2.3
     */
     DLLLOCAL int waitForStreamDrain(int32_t stream_id, int timeout_ms);
 
-    //! Signal drain_cv_ that buffer space has been freed
+    //! Wake controller poll operations waiting for stream drain
     /** Called by dataProviderReadCallback and onStreamCloseCallback.
         Must be called while holding the session mutex m.
 
         @since %Qore 2.3
     */
     DLLLOCAL void notifyStreamDrain();
+
+    //! Register a controller socket operation waiting for stream drain notifications
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void registerStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
+
+    //! Unregister a controller socket operation waiting for stream drain notifications
+    /** @since %Qore 2.3
+    */
+    DLLLOCAL void unregisterStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
 
 #if defined(__linux__) && defined(HAVE_IO_URING)
     //! Set the io_uring instance for async file reads

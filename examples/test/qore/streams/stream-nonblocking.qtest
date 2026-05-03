@@ -17,6 +17,7 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         addTestCase("FileInputStream non-blocking overrides", \testFileInputStreamNonBlocking());
         addTestCase("FileOutputStream non-blocking overrides", \testFileOutputStreamNonBlocking());
         addTestCase("OutputStream base defaults", \testOutputStreamDefaults());
+        addTestCase("Transform stream I/O-thread-safe delegation", \testTransformStreamIoThreadSafe());
         addTestCase("thread affinity with non-blocking methods", \testThreadAffinityNonBlocking());
         addTestCase("readWithTimeout on non-pollable stream", \testReadWithTimeoutNonPollable());
         addTestCase("POLLHUP drains buffered data from pipe", \testPollHupDrainsData());
@@ -46,7 +47,7 @@ public class StreamNonBlockingTest inherits QUnit::Test {
     testStringInputStreamDefaults() {
         StringInputStream sis("hello");
         assertFalse(sis.supportsNonBlockingIo(), "StringInputStream not pollable");
-        assertFalse(sis.isIoThreadSafe(), "StringInputStream not I/O-thread-safe");
+        assertTrue(sis.isIoThreadSafe(), "StringInputStream is I/O-thread-safe");
         assertEq(-1, sis.getPollableDescriptor(), "StringInputStream descriptor is -1");
 
         *binary data = sis.readNonBlock(3);
@@ -117,13 +118,51 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         assertTrue(fos.supportsNonBlockingIo(), "FileOutputStream supports non-blocking I/O");
         assertTrue(fos.isIoThreadSafe(), "FileOutputStream is I/O-thread-safe");
         assertTrue(fos.getPollableDescriptor() > 0, "FileOutputStream has valid fd");
+        fos.close();
+        assertEq(-1, fos.getPollableDescriptor(), "closed FileOutputStream descriptor is -1");
     }
 
     testOutputStreamDefaults() {
         StringOutputStream sos();
         assertFalse(sos.supportsNonBlockingIo(), "StringOutputStream not pollable");
-        assertFalse(sos.isIoThreadSafe(), "StringOutputStream not I/O-thread-safe");
+        assertTrue(sos.isIoThreadSafe(), "StringOutputStream is I/O-thread-safe");
         assertEq(-1, sos.getPollableDescriptor(), "StringOutputStream descriptor is -1");
+
+        BinaryOutputStream bos();
+        assertFalse(bos.supportsNonBlockingIo(), "BinaryOutputStream not pollable");
+        assertTrue(bos.isIoThreadSafe(), "BinaryOutputStream is I/O-thread-safe");
+        assertEq(-1, bos.getPollableDescriptor(), "BinaryOutputStream descriptor is -1");
+    }
+
+    testTransformStreamIoThreadSafe() {
+        EncodingConversionInputStream mem_in(new BinaryInputStream(binary("abc")), "UTF-8", "ISO8859-2");
+        assertFalse(mem_in.supportsNonBlockingIo(), "memory-backed transform input not pollable");
+        assertTrue(mem_in.isIoThreadSafe(), "memory-backed transform input is I/O-thread-safe");
+
+        BinaryOutputStream bos();
+        EncodingConversionOutputStream mem_out(bos, "UTF-8", "ISO8859-2");
+        assertFalse(mem_out.supportsNonBlockingIo(), "memory-backed transform output not pollable");
+        assertTrue(mem_out.isIoThreadSafe(), "memory-backed transform output is I/O-thread-safe");
+
+        string in_file = tmp_location() + "/stream-nb-transform-in-" + getpid() + ".dat";
+        string out_file = tmp_location() + "/stream-nb-transform-out-" + getpid() + ".dat";
+        on_exit unlink(in_file);
+        on_exit unlink(out_file);
+        {
+            FileOutputStream fos(in_file);
+            fos.write(binary("abc"));
+            fos.close();
+        }
+
+        FileInputStream fis(in_file);
+        EncodingConversionInputStream file_in(fis, "UTF-8", "ISO8859-2");
+        assertFalse(file_in.supportsNonBlockingIo(), "fd-backed transform input not pollable");
+        assertFalse(file_in.isIoThreadSafe(), "fd-backed transform input is not I/O-thread-safe");
+
+        FileOutputStream fos(out_file);
+        EncodingConversionOutputStream file_out(fos, "UTF-8", "ISO8859-2");
+        assertFalse(file_out.supportsNonBlockingIo(), "fd-backed transform output not pollable");
+        assertFalse(file_out.isIoThreadSafe(), "fd-backed transform output is not I/O-thread-safe");
     }
 
     testThreadAffinityNonBlocking() {

@@ -28,7 +28,7 @@ public namespace HttpServerAsyncIo {
 #! SSE connection over HTTP/3 stream
 /** This class manages a Server-Sent Events stream over an HTTP/3/QUIC connection.
     Uses the QUIC streaming API (submitQuicResponseStreaming / submitQuicStreamData)
-    to send SSE events as DATA frames on an HTTP/3 stream.
+    to enqueue SSE DATA through the async I/O controller on an HTTP/3 stream.
 
     The stream is kept open (no END_STREAM flag) until explicitly closed,
     allowing the server to send events incrementally.

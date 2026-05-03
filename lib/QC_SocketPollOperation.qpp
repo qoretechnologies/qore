@@ -52,7 +52,7 @@ static SocketConnectPollOperation* get_connect_poll_operation(ExceptionSink* xsi
         return nullptr;
     }
     QoreStringValueHelper url_str(url);
-    return new SocketConnectPollOperation(xsink, ssl, url_str->c_str(), holder.release());
+    return new SocketConnectPollOperation(xsink, ssl, url_str->c_str(), holder.release(), true);
 }
 
 //! Socket poll operation object returned by Socket polling methods

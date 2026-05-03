@@ -136,6 +136,8 @@ class QoreSocket {
     friend class HttpClientRecvChunkedPollState;
     friend class HttpClientRecvUntilClosePollState;
     friend class HttpClientConnectSendRecvPollOperation;
+    friend class QoreSocketControllerAcceptPollOperation;
+    friend class QoreSocketControllerAcceptReplacePollOperation;
     friend class SocketAcceptPollOperation;
     friend class SocketReadHttpHeaderPollOperation;
     friend class SocketSendAndReadHeaderPollOperation;
@@ -171,6 +173,34 @@ public:
         @since %Qore 1.12
     */
     DLLEXPORT AbstractPollState* startConnect(ExceptionSink* xsink, const char* name);
+
+    //! Starts a non-blocking INET connection and returns a poll state object
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param host the name or address of the host
+        @param service the port number or service name of the remote socket
+        @param family address family
+        @param socktype socket type
+        @param protocol protocol number
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate connection
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startConnectINET(ExceptionSink* xsink, const char* host, const char* service,
+            int family = Q_AF_UNSPEC, int socktype = Q_SOCK_STREAM, int protocol = 0);
+
+    //! Starts a non-blocking UNIX-domain connection and returns a poll state object
+    /** @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param path UNIX-domain socket path
+        @param socktype socket type
+        @param protocol protocol number
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate connection
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startConnectUNIX(ExceptionSink* xsink, const char* path,
+            int socktype = Q_SOCK_STREAM, int protocol = 0);
 
     //! Starts a non-blocking upgrade to an SSL connection on a connected client connection
     /**
@@ -231,6 +261,17 @@ public:
         @since %Qore 1.12
     */
     DLLEXPORT AbstractPollState* startRecv(ExceptionSink* xsink, size_t size);
+
+    //! Starts a non-blocking receive operation for up to a given number of bytes on a connected socket
+    /**
+        @param xsink if an error occurs, the Qore-language exception information will be added here
+        @param size the maximum number of bytes to read, must be > 0
+
+        @return a socket poll state object or nullptr in case of an exception or an immediate receive
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT AbstractPollState* startRecvSome(ExceptionSink* xsink, size_t size);
 
     //! Starts a non-blocking receive operation on a connected socket
     /**
@@ -412,7 +453,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
@@ -436,7 +478,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connect() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
@@ -458,7 +501,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectUNIX()
@@ -481,7 +525,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connectINET() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectUNIX()
@@ -506,6 +551,9 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
+        @note equivalent to calling QoreSocket::connectINET2() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
+
         @see QoreSocket::connect()
         @see QoreSocket::connectUNIX()
         @see QoreSocket::connectSSL()
@@ -525,7 +573,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connectUNIX() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connectUNIX() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
@@ -548,7 +597,8 @@ public:
 
         @return 0 for OK, -1 means that an error occured and a Qore-language exception was raised
 
-        @note the same as calling QoreSocket::connectUNIX() and then QoreSocket::upgradeClientToSSL()
+        @note equivalent to calling QoreSocket::connectUNIX() and then QoreSocket::upgradeClientToSSL();
+        internally delegated as one async-controller operation
 
         @see QoreSocket::connect()
         @see QoreSocket::connectINET()
@@ -677,7 +727,8 @@ public:
 
         @return a new QoreSocket object for the new connection (or 0 if an error occured)
 
-        @note the same as calling QoreSocket::accept() and then QoreSocket::upgradeServerToSSL() on the new socket
+        @note equivalent to calling QoreSocket::accept() and then QoreSocket::upgradeServerToSSL() on the new socket;
+        internally delegated as one async-controller operation
 
         @see
         - QoreSocket::listen()
@@ -727,7 +778,8 @@ public:
 
         @return a new QoreSocket object for the new connection (or 0 if an error or timeout occured)
 
-        @note the same as calling QoreSocket::accept() and then QoreSocket::upgradeServerToSSL() on the new socket
+        @note equivalent to calling QoreSocket::accept() and then QoreSocket::upgradeServerToSSL() on the new socket;
+        internally delegated as one async-controller operation
 
         @see
         - QoreSocket::accept(int timeout_ms, ExceptionSink* xsink)
@@ -1923,10 +1975,11 @@ public:
     DLLEXPORT int32_t submitHttp2PushPromise(int32_t stream_id, const char* path,
             const QoreHashNode* headers, ExceptionSink* xsink);
 
-    //! Submits an HTTP/2 response to the nghttp2 session without creating a poll operation
-    /** The response headers and body are queued in the nghttp2 session.  The actual
-        socket write is handled by the active read poll operation's sendPendingData() calls.
-        This is thread-safe and can be called from any thread.
+    //! Submits an HTTP/2 response through the async I/O controller
+    /** The response headers and body are copied on the caller thread and queued
+        in the nghttp2 session by the async I/O controller.  The actual socket
+        write is handled by the active read poll operation's sendPendingData()
+        calls.
 
         @param stream_id the HTTP/2 stream ID from the request
         @param status_code the HTTP status code
@@ -1942,10 +1995,11 @@ public:
             const QoreHashNode* headers, const void* body, size_t body_len,
             ExceptionSink* xsink);
 
-    //! Submits an HTTP/2 CONNECT response without creating a poll operation (RFC 8441)
-    /** Queues the CONNECT response in the nghttp2 session without END_STREAM, keeping
-        the stream open for bidirectional data transfer. The actual socket write is handled
-        by the active read poll operation's sendPendingData() calls.
+    //! Submits an HTTP/2 CONNECT response through the async I/O controller (RFC 8441)
+    /** Queues the CONNECT response in the nghttp2 session without END_STREAM,
+        keeping the stream open for bidirectional data transfer. The actual
+        socket write is handled by the active read poll operation's
+        sendPendingData() calls.
 
         This is designed for HTTP/2 multiplexing where the read operation stays on the I/O
         thread and CONNECT responses are submitted from handler threads.
@@ -2042,6 +2096,7 @@ public:
         @since %Qore 2.3
     */
     DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms);
+    DLLEXPORT int waitForHttp2StreamDrain(int32_t stream_id, int timeout_ms, ExceptionSink* xsink);
 
     //! returns the peer certificate verification code if an SSL connection is in progress
     DLLEXPORT long verifyPeerCertificate() const;
@@ -2320,6 +2375,9 @@ private:
 
     //! private constructor, not exported in the library's public interface
     DLLLOCAL QoreSocket(int n_sock, int n_sfamily, int n_stype, int s_prot, const QoreEncoding* csid);
+
+    //! Creates a new accepted socket with listener SSL and protocol parameters copied
+    DLLLOCAL QoreSocket* createAcceptedSocket(int descriptor);
 
     DLLLOCAL static void convertHeaderToHash(QoreHashNode* h, char* p);
 

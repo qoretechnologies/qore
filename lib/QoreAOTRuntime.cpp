@@ -3491,8 +3491,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // NOTE: always use false for in_closure — VT_LOCAL type calls ref.id->eval() which
                 // internally checks closure_use and uses the correct lookup.
                 LocalVar* lv = ctx->locals[local_slot];
-                VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(lv->getName()),
-                    lv, false);
+                VarRefNode* vrn = new VarRefNode(&loc_builtin, lv->getName(), lv, false);
                 ctx->exprs[i] = toBitsNB(QoreValue(vrn));
                 continue;
             } else {

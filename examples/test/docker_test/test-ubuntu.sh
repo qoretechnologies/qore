@@ -54,9 +54,9 @@ fi
 
 cd ${QORE_SRC_DIR}
 
-if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi; then
-    echo && echo "-- installing Kerberos 5 development headers --"
-    apt-get update -qq && apt-get install -y -qq libkrb5-dev
+if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi libcares; then
+    echo && echo "-- installing Kerberos 5 and c-ares development headers --"
+    apt-get update -qq && apt-get install -y -qq libkrb5-dev libcares-dev
 fi
 
 if [ ! -f /usr/share/eigen3/cmake/Eigen3Config.cmake ] \

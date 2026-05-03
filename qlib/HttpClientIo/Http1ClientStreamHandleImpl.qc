@@ -294,6 +294,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         @throw HTTPCLIENT-STREAM-CLOSED if the stream has been closed
     */
     auto readData(*timeout timeout_ms) {
+        timeout wait_timeout = timeout_ms ?? -1;
         if (!streaming || !data_channel) {
             throw "HTTPCLIENT-STATE-ERROR", "stream is not in streaming mode";
         }
@@ -320,7 +321,6 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         # if no data is pending"); route through tryRecv() in that case so
         # drain loops (e.g. DataStreamClientIo.sendDSv1Stream) don't hang.
         try {
-            timeout wait_timeout = timeout_ms ?? -1;
             auto rv;
             if (wait_timeout == 0ms) {
                 *hash<auto> tr = data_channel.tryRecv();

@@ -35,19 +35,27 @@
 #include <qore/QoreAbstractLoggerInterface.h>
 
 #include "qore/intern/Http2Session.h"
+#include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QoreIoUring.h"
 #include "qore/intern/QuicCommon.h"
+#include "qore/intern/SocketSyncPoll.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cinttypes>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <unordered_set>
+
+extern qore_classid_t CID_ASYNCIOCONTROLLER;
+
+static std::atomic<uint64_t> http2_session_sync_exec_seq{0};
 
 static bool http2DebugEnabled() {
     static std::once_flag flag;
@@ -65,6 +73,303 @@ static bool http2DebugEnabled() {
 #define QORE_USE_NGHTTP2_MEM_SEND2 1
 #endif
 
+static void http2_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {
+    QoreValue err = ex->getKeyValue("err");
+    QoreValue desc = ex->getKeyValue("desc");
+    QoreValue arg = ex->getKeyValue("arg");
+    xsink->raiseException(
+        err.getType() == NT_STRING
+            ? err.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("ASYNC-IO-ERROR"),
+        desc.getType() == NT_STRING
+            ? desc.get<const QoreStringNode>()->stringRefSelf()
+            : new QoreStringNode("async HTTP/2 socket operation failed"),
+        arg.refSelf());
+}
+
+static bool http2_poll_exception_is(const QoreHashNode& ex, const char* err) {
+    QoreValue ex_err = ex.getKeyValue("err");
+    return ex_err.getType() == NT_STRING && !strcmp(ex_err.get<const QoreStringNode>()->c_str(), err);
+}
+
+class Http2SocketControllerPollable : public AbstractPollableIoObjectBase {
+public:
+    DLLLOCAL Http2SocketControllerPollable(qore_socket_private* sock)
+            : sock(sock), close_lock(sock->outer_lock) {
+        sock->ref();
+        QoreString tmp;
+        qore_get_ptr_hash(tmp, sock);
+        identity_hash = tmp.c_str();
+    }
+
+    DLLLOCAL ~Http2SocketControllerPollable() {
+        sock->deref();
+    }
+
+    DLLLOCAL virtual int getPollableDescriptor() const override {
+        return sock->sock;
+    }
+
+    DLLLOCAL virtual const std::string& getIoIdentityHash() const override {
+        return identity_hash;
+    }
+
+    DLLLOCAL virtual void closeIo(ExceptionSink*) override {
+        sock->prepareForClose();
+        if (close_lock) {
+            AutoLocker al(*close_lock);
+            closeIoLocked();
+        } else {
+            closeIoLocked();
+        }
+    }
+
+private:
+    DLLLOCAL void closeIoLocked() {
+        if (sock->isOpen()) {
+            sock->shutdown_direct();
+            sock->close();
+        }
+    }
+
+#ifdef DARWIN
+    DLLLOCAL virtual void setPollNotifyFd(int fd) override {
+        sock->poll_notify_fd.store(fd, std::memory_order_release);
+    }
+#endif
+
+    DLLLOCAL virtual bool hasPendingData() const override {
+        if (sock->buflen) {
+            return true;
+        }
+        return sock->ssl && sock->ssl->pending() > 0;
+    }
+
+    qore_socket_private* sock;
+    QoreThreadLock* close_lock;
+    std::string identity_hash;
+};
+
+class Http2SocketControllerPollOperation : public SocketPollOperationBase {
+public:
+    DLLLOCAL Http2SocketControllerPollOperation(AbstractPollState* poll_state, SocketSendPollState* send_state)
+            : poll_state(poll_state), send_state(send_state) {
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return done;
+    }
+
+    DLLLOCAL virtual void abort(ExceptionSink*) override {
+        poll_state.reset();
+        done = true;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (!poll_state) {
+            done = true;
+            return nullptr;
+        }
+
+        int rc = poll_state->continuePoll(xsink);
+        if (send_state) {
+            bytes_sent = send_state->getBytesSent();
+        }
+        if (!rc && !send_state) {
+            data = poll_state->takeOutput().get<BinaryNode>();
+        }
+        if (*xsink || rc <= 0) {
+            poll_state.reset();
+            if (!*xsink) {
+                done = true;
+            }
+            return nullptr;
+        }
+        return getSocketPollInfoHash(xsink, rc);
+    }
+
+    DLLLOCAL virtual QoreValue getOutput() const override {
+        if (send_state) {
+            return static_cast<int64>(bytes_sent);
+        }
+        return data ? data->refSelf() : QoreValue();
+    }
+
+    DLLLOCAL virtual const char* getStateImpl() const override {
+        if (done) {
+            return send_state ? "sent" : "received";
+        }
+        return send_state ? "sending" : "receiving";
+    }
+
+    DLLLOCAL size_t getBytesSent() const {
+        return bytes_sent;
+    }
+
+private:
+    std::unique_ptr<AbstractPollState> poll_state;
+    SocketSendPollState* send_state = nullptr;
+    size_t bytes_sent = 0;
+    bool done = false;
+    SimpleRefHolder<BinaryNode> data;
+};
+
+static QoreHashNode* http2_exec_poll_operation(qore_socket_private* sock, QoreObject* sock_obj,
+        Http2SocketControllerPollable* pollable, QoreObject* op_obj, int timeout_ms, const char* owner_name,
+        ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
+    SocketSyncPoll::assertNotOnIoThread("Http2Session", owner_name, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+    if (!ctl_obj) {
+        return nullptr;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        static_cast<AsyncIoControllerPriv*>(
+            (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+    if (*xsink || !ctrl) {
+        return nullptr;
+    }
+
+    std::string owner("Http2Session::sync:");
+    owner += owner_name;
+    owner += ':';
+    owner += pollable->getUniqueHash();
+
+    std::string key("Http2Session::sync:");
+    key += owner_name;
+    key += ':';
+    key += pollable->getUniqueHash();
+    // Multiple blocking session helpers can target the same socket affinity;
+    // keep the cache key unique while thread_key preserves controller routing.
+    key += ':';
+    key += std::to_string(++http2_session_sync_exec_seq);
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollOperationInfo, xsink), xsink);
+    info->setKeyValue("sock", sock_obj->objectRefSelf(), xsink);
+    info->setKeyValue("spop", op_obj->objectRefSelf(), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner), xsink);
+    info->setKeyValue("key", new QoreStringNode(key), xsink);
+    info->setKeyValue("thread_key", new QoreStringNode(pollable->getIoIdentityHash()), xsink);
+    info->setKeyValue("to", timeout_ms, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> result(ctrl->exec(*ctl_obj, info.release(), false, xsink), xsink);
+    if (*xsink || !result) {
+        return nullptr;
+    }
+
+    QoreValue ex = result->getKeyValue("ex");
+    if (ex.getType() == NT_HASH) {
+        if (ex_out) {
+            *ex_out = ex.get<const QoreHashNode>()->hashRefSelf();
+            return result.release();
+        }
+        http2_raise_poll_result_exception(ex.get<const QoreHashNode>(), xsink);
+        return nullptr;
+    }
+    return result.release();
+}
+
+static QoreValue http2_exec_poll(qore_socket_private* sock, SocketPollOperationBase* poller, int timeout_ms,
+        const char* owner_name, const char* goal, ExceptionSink* xsink, QoreHashNode** ex_out = nullptr) {
+    ReferenceHolder<SocketPollOperationBase> poller_holder(poller, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    Http2SocketControllerPollable* pollable = new Http2SocketControllerPollable(sock);
+    ReferenceHolder<QoreObject> sock_obj(new QoreObject(QC_ABSTRACTPOLLABLEIOOBJECTBASE, getProgram(), pollable),
+        xsink);
+    ReferenceHolder<QoreObject> op_obj(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller_holder),
+        xsink);
+    poller_holder->setSelf(*op_obj);
+    poller_holder.release();
+
+    if (!*xsink) {
+        op_obj->setValue("sock", (*sock_obj)->objectRefSelf(), xsink);
+        op_obj->setValue("goal", new QoreStringNode(goal), xsink);
+    }
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreHashNode> result(http2_exec_poll_operation(sock, *sock_obj, pollable, *op_obj, timeout_ms,
+        owner_name, xsink, ex_out), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return poller->getOutput();
+}
+
+static BinaryNode* http2_socket_exec_recv_some(qore_socket_private* sock, size_t size, int timeout_ms,
+        bool& timed_out, ExceptionSink* xsink) {
+    timed_out = false;
+
+    SocketRecvSomePollState* state = new SocketRecvSomePollState(xsink, sock, size);
+    if (*xsink) {
+        delete state;
+        return nullptr;
+    }
+    QoreHashNode* ex = nullptr;
+    ValueHolder result(http2_exec_poll(sock,
+        new Http2SocketControllerPollOperation(state, nullptr),
+        timeout_ms, "receiveData", "received", xsink, &ex), xsink);
+    ReferenceHolder<QoreHashNode> ex_holder(ex, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (ex_holder) {
+        if (http2_poll_exception_is(**ex_holder, "SOCKET-TIMEOUT")) {
+            timed_out = true;
+            return new BinaryNode;
+        }
+        http2_raise_poll_result_exception(*ex_holder, xsink);
+        return nullptr;
+    }
+    if (result->isNothing()) {
+        return new BinaryNode;
+    }
+    if (result->getType() != NT_BINARY) {
+        xsink->raiseException("HTTP2-ERROR", "expected binary data from async HTTP/2 receive operation, got '%s'",
+            result->getFullTypeName());
+        return nullptr;
+    }
+    return result.release().get<BinaryNode>();
+}
+
+static BinaryNode* http2_socket_recv_some_on_io_thread(qore_socket_private* sock, size_t size, bool& timed_out,
+        ExceptionSink* xsink) {
+    timed_out = false;
+
+    SocketRecvSomePollState state(xsink, sock, size);
+    if (*xsink) {
+        return nullptr;
+    }
+    int rc = state.continuePoll(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (rc > 0) {
+        timed_out = true;
+        return new BinaryNode;
+    }
+    if (rc < 0) {
+        return nullptr;
+    }
+    ValueHolder v(state.takeOutput(), xsink);
+    if (v->getType() != NT_BINARY) {
+        xsink->raiseException("HTTP2-ERROR", "expected binary data from HTTP/2 receive poll state, got '%s'",
+            v->getFullTypeName());
+        return nullptr;
+    }
+    return v.release().get<BinaryNode>();
+}
+
 Http2Session::Http2Session(qore_socket_private* sock, bool is_server, const char* scheme)
     : sock(sock), is_server(is_server), scheme(scheme ? scheme : "https") {
 }
@@ -75,6 +380,21 @@ Http2Session::~Http2Session() {
     // skip delivery for expired sessions.
     // InputStream cleanup (unassignThread) is handled by the I/O thread via
     // processStreamInputStreams() during normal operation.
+    {
+        ExceptionSink xsink;
+        std::unordered_map<QoreObject*, size_t> waiters;
+        {
+            std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
+            waiters.swap(drain_waiters_);
+        }
+        for (auto& [obj, count] : waiters) {
+            (void)count;
+            obj->deref(&xsink);
+        }
+        if (xsink) {
+            xsink.clear();
+        }
+    }
     if (session) {
         nghttp2_session_del(session);
     }
@@ -167,40 +487,37 @@ int Http2Session::init(ExceptionSink* xsink) {
     return 0;
 }
 
-int Http2Session::sendConnectionPreface(ExceptionSink* xsink) {
+int Http2Session::sendConnectionPrefaceNonBlocking(ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
-    // Both client and server must send SETTINGS frame as part of the connection preface
-    // For client: magic string + SETTINGS
-    // For server: SETTINGS (sent in response to client preface)
-    //
-    // Note: SETTINGS_ENABLE_PUSH MUST NOT be sent by servers with value 1
-    // (RFC 7540 Section 6.5.2: "An endpoint MUST NOT send a SETTINGS frame with
-    // SETTINGS_ENABLE_PUSH set to 1 when it is not a client.")
-    // So we only include it for client sessions.
 
-    std::vector<nghttp2_settings_entry> iv;
-    iv.push_back({NGHTTP2_SETTINGS_HEADER_TABLE_SIZE, local_settings.header_table_size});
-    if (!is_server) {
-        // Only clients can send ENABLE_PUSH setting
-        iv.push_back({NGHTTP2_SETTINGS_ENABLE_PUSH, local_settings.enable_push});
-    }
-    iv.push_back({NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, local_settings.max_concurrent_streams});
-    iv.push_back({NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, local_settings.initial_window_size});
-    iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, local_settings.max_frame_size});
-    iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, local_settings.max_header_list_size});
-    // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
-    if (local_settings.enable_connect_protocol) {
-        iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, local_settings.enable_connect_protocol});
+    if (!connection_preface_submitted) {
+        // Both client and server must send SETTINGS as part of the connection preface.
+        // SETTINGS_ENABLE_PUSH MUST NOT be sent by servers with value 1
+        // (RFC 7540 Section 6.5.2), so only client sessions include it.
+        std::vector<nghttp2_settings_entry> iv;
+        iv.push_back({NGHTTP2_SETTINGS_HEADER_TABLE_SIZE, local_settings.header_table_size});
+        if (!is_server) {
+            iv.push_back({NGHTTP2_SETTINGS_ENABLE_PUSH, local_settings.enable_push});
+        }
+        iv.push_back({NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, local_settings.max_concurrent_streams});
+        iv.push_back({NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE, local_settings.initial_window_size});
+        iv.push_back({NGHTTP2_SETTINGS_MAX_FRAME_SIZE, local_settings.max_frame_size});
+        iv.push_back({NGHTTP2_SETTINGS_MAX_HEADER_LIST_SIZE, local_settings.max_header_list_size});
+        // RFC 8441: Enable extended CONNECT protocol for WebSocket over HTTP/2
+        if (local_settings.enable_connect_protocol) {
+            iv.push_back({NGHTTP2_SETTINGS_ENABLE_CONNECT_PROTOCOL, local_settings.enable_connect_protocol});
+        }
+
+        int rv = nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, iv.data(), iv.size());
+        if (rv != 0) {
+            xsink->raiseException("HTTP2-ERROR", "failed to submit SETTINGS: %s",
+                nghttp2_strerror(rv));
+            return -1;
+        }
+        connection_preface_submitted = true;
     }
 
-    int rv = nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, iv.data(), iv.size());
-    if (rv != 0) {
-        xsink->raiseException("HTTP2-ERROR", "failed to submit SETTINGS: %s",
-            nghttp2_strerror(rv));
-        return -1;
-    }
-    // Use blocking version to ensure preface is sent completely
-    return sendPendingDataBlocking(-1, xsink);
+    return sendPendingData(0, xsink);
 }
 
 int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* xsink) {
@@ -916,165 +1233,40 @@ int Http2Session::sendPendingData(int timeout_ms, ExceptionSink* xsink) {
     return 0;
 }
 
-int Http2Session::sendPendingDataBlocking(int timeout_ms, ExceptionSink* xsink) {
-    // Close-vs-poll guard: if the owning socket has begun shutting down,
-    // bail out before taking @c m and before attempting any I/O.  A
-    // thread blocked here while holding @c m was the direct cause of
-    // the Socket::close() deadlock in grpc-shutdown-deadlock.md: close
-    // couldn't acquire @c priv->m because another sync-consumer thread
-    // was waiting for @c m in @c isStreamComplete.  Making the send
-    // path a fast failure when the session is closed lets @c close()
-    // reach its teardown step.
-    if (session_closed_.load(std::memory_order_acquire)) {
-        return -1;
-    }
-    std::lock_guard<std::recursive_mutex> lg(m);
-    // Re-check under the lock: the flag may have flipped while we
-    // waited to acquire m.
-    if (session_closed_.load(std::memory_order_acquire)) {
-        return -1;
-    }
-    size_t pending = send_buffer.size() - send_offset;
-    printd(5, "sendPendingDataBlocking() want_write=%d pending=%zu timeout_ms=%d\n",
-        nghttp2_session_want_write(session), pending, timeout_ms);
-
-    // First, collect any additional data from nghttp2
-    while (true) {
-        const uint8_t* data;
-#ifdef QORE_USE_NGHTTP2_MEM_SEND2
-        nghttp2_ssize len = nghttp2_session_mem_send2(session, &data);
-#else
-        ssize_t len = nghttp2_session_mem_send(session, &data);
-#endif
-        printd(5, "sendPendingDataBlocking() nghttp2_session_mem_send len=%zd\n", (ssize_t)len);
-        if (len < 0) {
-#ifdef QORE_USE_NGHTTP2_MEM_SEND2
-            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send2 failed: %s",
-#else
-            xsink->raiseException("HTTP2-ERROR", "nghttp2_session_mem_send failed: %s",
-#endif
-                nghttp2_strerror(static_cast<int>(len)));
-            return -1;
-        }
-        if (len == 0) {
-            break;
-        }
-        send_buffer.insert(send_buffer.end(), data, data + len);
-    }
-
-    // Compact send buffer when consumed prefix exceeds threshold
-    if (send_offset > SEND_BUFFER_COMPACTION_THRESHOLD) {
-        send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send_offset);
-        send_offset = 0;
-    }
-
-    // Send buffered data using blocking I/O with timeout
-    pending = send_buffer.size() - send_offset;
-    if (send_offset < send_buffer.size()) {
-        printd(5, "sendPendingDataBlocking() sending %zu bytes with blocking timeout=%d\n",
-            pending, timeout_ms);
-        {
-            size_t off = send_offset;
-            int count = 0;
-            while (off + 9 <= send_buffer.size() && count < 32) {
-                const uint8_t* hdr = reinterpret_cast<const uint8_t*>(&send_buffer[off]);
-                uint32_t length = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
-                uint8_t type = hdr[3];
-                uint8_t flags = hdr[4];
-                uint32_t stream_id = ((uint32_t(hdr[5]) & 0x7f) << 24) | (uint32_t(hdr[6]) << 16)
-                    | (uint32_t(hdr[7]) << 8) | uint32_t(hdr[8]);
-                printd(5, "sendPendingDataBlocking() frame[%d] len=%u type=%u flags=0x%x stream_id=%u\n",
-                    count, length, type, flags, stream_id);
-                size_t frame_size = 9 + length;
-                if (off + frame_size > send_buffer.size()) {
-                    printd(5, "sendPendingDataBlocking() frame[%d] truncated: off=%zu frame_size=%zu buf=%zu\n",
-                        count, off, frame_size, send_buffer.size());
-                    break;
-                }
-                off += frame_size;
-                ++count;
-            }
-        }
-
-        int64 total_sent = 0;
-        ssize_t rc = sock->sendIntern(xsink, "Http2Session", "sendPendingDataBlocking",
-            reinterpret_cast<const char*>(send_buffer.data() + send_offset), pending,
-            timeout_ms, total_sent);
-
-        printd(5, "sendPendingDataBlocking() sendIntern returned rc=%zd total_sent=%" PRId64 "\n", rc, total_sent);
-
-        if (total_sent > 0) {
-            send_offset += total_sent;
-        }
-        pending = send_buffer.size() - send_offset;
-        printd(5, "sendPendingDataBlocking() remaining pending=%zu\n", pending);
-
-        if (send_offset < send_buffer.size()) {
-            printd(5, "sendPendingDataBlocking() buffer not empty, remaining=%zu\n", pending);
-            return -1;  // Still have data to send
-        }
-
-        if (*xsink) {
-            return -1;
-        }
-    }
-
-    // Release memory when fully drained to prevent long-lived idle connections
-    // from holding onto large send buffer allocations
-    if (send_offset == send_buffer.size()) {
-        send_buffer.clear();
-        send_offset = 0;
-    }
-
-    printd(5, "sendPendingDataBlocking() complete, want_write=%d pending=%zu\n",
-        nghttp2_session_want_write(session), send_buffer.size() - send_offset);
-    return 0;
-}
-
 int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
     // Fast-path bail-out when the owning socket is closing (or has
     // closed).  Without this check a caller racing Socket::close() can
-    // enter brecv and block for the full timeout_ms waiting on an fd
-    // that's about to be shut down, even though the pre-close fd
+    // enter the controller receive path and wait for the full timeout_ms
+    // on an fd that's about to be shut down, even though the pre-close fd
     // shutdown in qore_socket_private::prepareForClose() would make the
-    // wait return errno=EPIPE almost immediately — we just skip the
-    // pointless round-trip.
+    // wait return errno=EPIPE almost immediately; skip the pointless
+    // round-trip.
     if (session_closed_.load(std::memory_order_acquire)) {
         return 1;  // connection closed — matches the EOF return value
     }
 
-    // Do NOT hold Http2Session::m during the blocking brecv call.
+    // Do NOT hold Http2Session::m during the blocking controller receive.
     //
     // Lock-order deadlock rationale (macOS Http2.qtest hang seen on
     // job 170360): two worker-path/IO-path contention points take the
     // two mutexes in opposite orders:
-    //   - IO thread (this function):   Http2Session::m  →  socket->priv->m (via brecv)
+    //   - IO thread (this function):   Http2Session::m  ->  socket->priv->m (via receive)
     //   - worker (submitHttp2Request): socket->priv->m  →  Http2Session::m
-    // With brecv holding session->m across its internal waitReleasingLock
-    // poll wait, a concurrent submitHttp2Request from a worker thread can
-    // hold the socket outer mutex while waiting for session->m, while
-    // the IO thread holds session->m and needs the socket outer mutex to
-    // resume its brecv — classic deadlock.
+    // With socket I/O holding session->m across a readiness wait, a
+    // concurrent submitHttp2Request from a worker thread can hold the
+    // socket outer mutex while waiting for session->m, while the IO thread
+    // holds session->m and needs the socket outer mutex to resume.
     //
-    // brecv does not touch nghttp2_session state; only
+    // Socket receive does not touch nghttp2_session state; only
     // nghttp2_session_mem_recv below does, and we reacquire m for that.
-    char* buf;
     printd(5, "receiveData() ENTRY fd=%d isServer=%d timeout_ms=%d\n", sock->sock, is_server, timeout_ms);
-    // Use suppress_exception=true to avoid exception on timeout
-    ssize_t len = sock->brecv(xsink, "receiveData", buf, 16384, 0, timeout_ms, false, true);
-    printd(5, "receiveData() brecv len=%zd fd=%d isServer=%d xsink=%d\n", len, sock->sock, is_server, (int)*xsink);
-    if (len < 0) {
-        // Check for timeout (QSE_TIMEOUT = -3)
-        if (len == QSE_TIMEOUT) {
-            printd(5, "receiveData() timeout (no data)\n");
-            if (http2DebugEnabled()) {
-                fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (timeout)\n",
-                    this, q_gettid());
-                fflush(stderr);
-            }
-            return 0;  // Not an error, just no data available
-        }
-        printd(5, "receiveData() error len=%zd\n", len);
+
+    bool timed_out = false;
+    SimpleRefHolder<BinaryNode> data(qore_on_async_io_thread()
+        ? http2_socket_recv_some_on_io_thread(sock, 16384, timed_out, xsink)
+        : http2_socket_exec_recv_some(sock, 16384, timeout_ms, timed_out, xsink));
+    if (*xsink) {
+        printd(5, "receiveData() error xsink=%d\n", (int)*xsink);
         if (http2DebugEnabled()) {
             fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (recv error)\n",
                 this, q_gettid());
@@ -1082,6 +1274,18 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         }
         return -1;
     }
+    if (timed_out) {
+        printd(5, "receiveData() timeout (no data)\n");
+        if (http2DebugEnabled()) {
+            fprintf(stderr, "HTTP2 DEBUG: receiveData() session=%p tid=%d releasing lock (timeout)\n",
+                this, q_gettid());
+            fflush(stderr);
+        }
+        return 0;  // Not an error, just no data available
+    }
+
+    ssize_t len = static_cast<ssize_t>(data->size());
+    printd(5, "receiveData() recv len=%zd fd=%d isServer=%d xsink=%d\n", len, sock->sock, is_server, (int)*xsink);
     if (len == 0) {
         // EOF received - connection was closed by peer
         printd(5, "receiveData() len=0 (connection closed by peer)\n");
@@ -1093,7 +1297,7 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         return 1;  // Connection closed - distinct from timeout (0)
     }
     if (len >= 9) {
-        uint8_t* hdr = reinterpret_cast<uint8_t*>(buf);
+        uint8_t* hdr = reinterpret_cast<uint8_t*>(const_cast<void*>(data->getPtr()));
         uint32_t flen = (uint32_t(hdr[0]) << 16) | (uint32_t(hdr[1]) << 8) | uint32_t(hdr[2]);
         uint8_t ftype = hdr[3];
         uint8_t fflags = hdr[4];
@@ -1105,12 +1309,13 @@ int Http2Session::receiveData(int timeout_ms, ExceptionSink* xsink) {
         }
     }
 
-    // Now acquire m for the stateful nghttp2 call; brecv above did I/O
+    // Now acquire m for the stateful nghttp2 call; socket I/O above ran
     // without holding it to avoid the lock-order deadlock with worker-
     // thread submitHttp2Request (see the comment at entry of this
     // function).
     std::lock_guard<std::recursive_mutex> lg(m);
-    ssize_t rv = nghttp2_session_mem_recv(session, reinterpret_cast<uint8_t*>(buf), len);
+    ssize_t rv = nghttp2_session_mem_recv(session,
+        reinterpret_cast<uint8_t*>(const_cast<void*>(data->getPtr())), len);
     printd(5, "receiveData() nghttp2_session_mem_recv rv=%zd (input len=%zd)\n", rv, len);
     if (rv < 0) {
         printd(1, "receiveData() nghttp2_session_mem_recv error: %s (rv=%zd)\n",
@@ -1812,7 +2017,7 @@ int Http2Session::onStreamCloseCallback(nghttp2_session* session, int32_t stream
     }
     h2->pending_body_data.erase(stream_id);
     h2->pending_data_providers.erase(stream_id);
-    // Wake any handler threads blocked in waitForStreamDrain() for this stream
+    // Wake controller-backed waitForStreamDrain() poll operations for this stream.
     h2->notifyStreamDrain();
     // If an InputStream is active for this stream, mark it EOF so
     // processStreamInputStreams() will not attempt to call sendStreamData()
@@ -2406,6 +2611,15 @@ int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
 void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, ExceptionSink* xsink,
         int64_t content_length) {
     std::lock_guard<std::recursive_mutex> lg(m);
+    if (!is->isIoThreadSafe()) {
+        xsink->raiseException("HTTP2-ERROR", "InputStream is not I/O thread safe");
+        return;
+    }
+    if (is->supportsNonBlockingIo() && is->getPollableDescriptor() < 0) {
+        xsink->raiseException("HTTP2-ERROR",
+            "InputStream reports non-blocking I/O support but returned no pollable descriptor");
+        return;
+    }
     auto [it, inserted] = stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
     it->second.content_length = content_length;
     has_active_input_streams_.store(true, std::memory_order_release);
@@ -2415,70 +2629,94 @@ void Http2Session::setStreamInputStream(int32_t stream_id, InputStream* is, Exce
 }
 
 int Http2Session::waitForStreamDrain(int32_t stream_id, int timeout_ms) {
+    (void)timeout_ms;
     constexpr size_t MAX_STREAM_BUFFER = 1024 * 1024;
 
-    // Phase 1: check predicate under m
-    {
-        std::lock_guard<std::recursive_mutex> lg(m);
-        auto it = pending_body_data.find(stream_id);
-        if (it == pending_body_data.end()) {
-            return -1;  // stream not found
-        }
-        size_t pending = it->second.data.size() - it->second.offset;
-        if (pending <= MAX_STREAM_BUFFER) {
-            return 0;  // buffer already below threshold
-        }
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = pending_body_data.find(stream_id);
+    if (it == pending_body_data.end()) {
+        return -1;  // stream not found
     }
-
-    if (timeout_ms == 0) {
-        return 1;  // no wait requested, buffer is full
-    }
-
-    // Phase 2: wait on drain_cv_ with generation-based wakeup
-    unsigned gen = drain_gen_.load(std::memory_order_acquire);
-    auto deadline = (timeout_ms > 0)
-        ? std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms)
-        : std::chrono::steady_clock::time_point::max();
-
-    while (true) {
-        {
-            std::unique_lock<std::mutex> dlock(drain_mtx_);
-            auto gen_changed = [this, gen]() {
-                return drain_gen_.load(std::memory_order_acquire) != gen;
-            };
-            if (timeout_ms < 0) {
-                drain_cv_.wait(dlock, gen_changed);
-            } else {
-                if (!drain_cv_.wait_until(dlock, deadline, gen_changed)) {
-                    return 1;  // timed out
-                }
-            }
-        }
-
-        // Re-check predicate under m
-        {
-            std::lock_guard<std::recursive_mutex> lg(m);
-            auto it = pending_body_data.find(stream_id);
-            if (it == pending_body_data.end()) {
-                return -1;  // stream gone
-            }
-            size_t pending = it->second.data.size() - it->second.offset;
-            if (pending <= MAX_STREAM_BUFFER) {
-                return 0;  // drained
-            }
-        }
-
-        // Update generation for next wait iteration
-        gen = drain_gen_.load(std::memory_order_acquire);
-    }
+    size_t pending = it->second.data.size() - it->second.offset;
+    return pending <= MAX_STREAM_BUFFER ? 0 : 1;
 }
 
 void Http2Session::notifyStreamDrain() {
-    {
-        std::lock_guard<std::mutex> dlock(drain_mtx_);
-        drain_gen_.fetch_add(1, std::memory_order_release);
+    wakeStreamDrainWaiters();
+}
+
+void Http2Session::registerStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
+    (void)xsink;
+    assert(sock_obj);
+    std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
+    auto [it, inserted] = drain_waiters_.emplace(sock_obj, 0);
+    if (inserted) {
+        sock_obj->ref();
     }
-    drain_cv_.notify_all();
+    ++it->second;
+}
+
+void Http2Session::unregisterStreamDrainWaiter(QoreObject* sock_obj, ExceptionSink* xsink) {
+    if (!sock_obj) {
+        return;
+    }
+
+    QoreObject* deref_obj = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
+        auto it = drain_waiters_.find(sock_obj);
+        if (it == drain_waiters_.end()) {
+            return;
+        }
+        assert(it->second > 0);
+        if (!--it->second) {
+            deref_obj = it->first;
+            drain_waiters_.erase(it);
+        }
+    }
+
+    if (deref_obj) {
+        deref_obj->deref(xsink);
+    }
+}
+
+void Http2Session::wakeStreamDrainWaiters() {
+    std::vector<QoreObject*> waiters;
+    {
+        std::lock_guard<std::mutex> lock(drain_waiters_mtx_);
+        waiters.reserve(drain_waiters_.size());
+        for (auto& [obj, count] : drain_waiters_) {
+            (void)count;
+            obj->ref();
+            waiters.push_back(obj);
+        }
+    }
+    if (waiters.empty()) {
+        return;
+    }
+
+    ExceptionSink xsink;
+    ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(&xsink), &xsink);
+    ReferenceHolder<AsyncIoControllerPriv> ctrl(
+        ctl_obj
+            ? static_cast<AsyncIoControllerPriv*>(
+                (*ctl_obj)->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, &xsink))
+            : nullptr,
+        &xsink);
+    if (!xsink && ctrl) {
+        for (QoreObject* obj : waiters) {
+            ctrl->wakeSocketByObject(obj, &xsink);
+            if (xsink) {
+                break;
+            }
+        }
+    }
+    for (QoreObject* obj : waiters) {
+        obj->deref(&xsink);
+    }
+    if (xsink) {
+        xsink.clear();
+    }
 }
 
 void Http2Session::processStreamInputStreams(ExceptionSink* xsink) {
