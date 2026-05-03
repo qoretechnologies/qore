@@ -73,8 +73,9 @@ public namespace LineCoverage {
     /**
         The recorder attaches to @ref Qore::ProgramControl "ProgramControl"
         instances and keeps stepping without blocking debugged threads.  Call
-        @ref start() before executing code, @ref stop() when collection should
-        end, and @ref snapshot() to retrieve a deterministic report.
+        @ref start() with an explicit @ref Qore::ProgramControl
+        "ProgramControl" before executing code, @ref stop() when collection
+        should end, and @ref snapshot() to retrieve a deterministic report.
 
         The report has this shape:
         - \c line_count: number of executable source lines seen
@@ -107,11 +108,10 @@ public namespace LineCoverage {
         }
 
         #! Attaches to a program and preloads its statement locations
-        /** @param pgm program to cover; defaults to the current Program */
-        public start(*ProgramControl pgm) {
-            ProgramControl p = pgm ?? ProgramControl::getProgram();
-            loadProgram(p);
-            int program_id = p.getProgramId();
+        /** @param pgm program to cover */
+        public start(ProgramControl pgm) {
+            loadProgram(pgm);
+            int program_id = pgm.getProgramId();
             bool should_add = False;
             {
                 AutoLock al(m);
@@ -122,7 +122,7 @@ public namespace LineCoverage {
             }
             if (should_add) {
                 try {
-                    addProgram(p);
+                    addProgram(pgm);
                 } catch (hash<ExceptionInfo> ex) {
                     AutoLock al(m);
                     delete attached_programs{program_id.toString()};
@@ -132,17 +132,16 @@ public namespace LineCoverage {
         }
 
         #! Detaches from a program
-        /** @param pgm program to stop covering; defaults to the current Program */
-        public stop(*ProgramControl pgm) {
-            ProgramControl p = pgm ?? ProgramControl::getProgram();
-            string program_id = p.getProgramId().toString();
+        /** @param pgm program to stop covering */
+        public stop(ProgramControl pgm) {
+            string program_id = pgm.getProgramId().toString();
             {
                 AutoLock al(m);
                 if (!attached_programs{program_id}.toBool()) {
                     return;
                 }
             }
-            removeProgram(p);
+            removeProgram(pgm);
             AutoLock al(m);
             delete attached_programs{program_id};
         }

@@ -51,6 +51,9 @@ class LineCoverageTest inherits QUnit::Test {
             "new factory-created recorder has no loaded lines");
         assertEq(100.0, report.coverage_percent,
             "empty factory-created recorder has complete coverage");
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub() { recorder.start(); },
+            NOTHING,
+            "factory-created recorders require an explicit ProgramControl");
     }
 
     testRecorderReportsLineCoverage() {
