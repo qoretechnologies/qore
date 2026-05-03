@@ -1,0 +1,375 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file LineCoverage.qm Program statement line coverage helper
+
+/*  LineCoverage.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.3
+
+%modern
+%no-debugging
+%allow-debugger
+%no-child-restrictions
+
+module LineCoverage {
+    version = "0.1";
+    desc = "user module providing Qore Program line coverage collection";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qoretechnologies.com";
+    license = "MIT";
+}
+
+/** @mainpage LineCoverage Module
+
+    @tableofcontents
+
+    @section linecoverageintro Introduction to the LineCoverage Module
+
+    The %LineCoverage module provides a stable Qore-level API for collecting
+    source-line coverage from @ref Qore::Program "Program" execution.  It uses
+    the supported @ref Qore::ProgramControl "ProgramControl" statement metadata
+    API and debugger step callbacks; callers receive deterministic hashes and
+    lists instead of depending on debugger internals.
+
+    @subsection lc_v0_1 v0.1
+    - initial @ref LineCoverage::Recorder "Recorder" API
+    - line, file, and statement hit summaries
+*/
+
+#! Namespace for Qore Program line coverage collection
+public namespace LineCoverage {
+    #! Records executed statement locations for one or more Program instances
+    /**
+        The recorder attaches to @ref Qore::ProgramControl "ProgramControl"
+        instances and keeps stepping without blocking debugged threads.  Call
+        @ref start() before executing code, @ref stop() when collection should
+        end, and @ref snapshot() to retrieve a deterministic report.
+
+        The report has this shape:
+        - \c line_count: number of executable source lines seen
+        - \c covered_line_count: executable source lines with at least one hit
+        - \c coverage_percent: covered_line_count / line_count * 100
+        - \c statement_count: number of executable statements seen
+        - \c covered_statement_count: executable statements with at least one hit
+        - \c lines: sorted list of per-line hashes
+        - \c files: hash keyed by file, with per-file totals
+        - \c statements: sorted list of per-statement hashes
+    */
+    public class Recorder inherits DebugProgram {
+        private {
+            Mutex m();
+            hash<auto> attached_programs = {};
+            hash<auto> statement_locations = {};
+            hash<auto> statement_hits = {};
+        }
+
+        #! Creates a recorder
+        /** @param options reserved for future extension */
+        constructor(*hash<auto> options) {
+        }
+
+        destructor() {
+            try {
+                stopAll();
+            } catch () {
+            }
+        }
+
+        #! Attaches to a program and preloads its statement locations
+        /** @param pgm program to cover; defaults to the current Program */
+        public start(*ProgramControl pgm) {
+            ProgramControl p = pgm ?? ProgramControl::getProgram();
+            loadProgram(p);
+            int program_id = p.getProgramId();
+            bool should_add = False;
+            {
+                AutoLock al(m);
+                if (!attached_programs{program_id.toString()}.toBool()) {
+                    attached_programs{program_id.toString()} = True;
+                    should_add = True;
+                }
+            }
+            if (should_add) {
+                try {
+                    addProgram(p);
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(m);
+                    delete attached_programs{program_id.toString()};
+                    throw ex.err, ex.desc, ex.arg;
+                }
+            }
+        }
+
+        #! Detaches from a program
+        /** @param pgm program to stop covering; defaults to the current Program */
+        public stop(*ProgramControl pgm) {
+            ProgramControl p = pgm ?? ProgramControl::getProgram();
+            string program_id = p.getProgramId().toString();
+            {
+                AutoLock al(m);
+                if (!attached_programs{program_id}.toBool()) {
+                    return;
+                }
+            }
+            removeProgram(p);
+            AutoLock al(m);
+            delete attached_programs{program_id};
+        }
+
+        #! Detaches from all currently attached programs
+        public stopAll() {
+            foreach ProgramControl p in (getAllPrograms()) {
+                string program_id = p.getProgramId().toString();
+                {
+                    AutoLock al(m);
+                    if (!attached_programs{program_id}.toBool()) {
+                        continue;
+                    }
+                }
+                removeProgram(p);
+                AutoLock al(m);
+                delete attached_programs{program_id};
+            }
+        }
+
+        #! Preloads statement locations without attaching the debugger
+        public loadProgram(ProgramControl pgm) {
+            foreach int statement_id in (pgm.getStatementIds()) {
+                ensureStatementInfo(pgm, statement_id);
+            }
+        }
+
+        #! Clears collected hits while preserving loaded statement locations
+        public reset() {
+            AutoLock al(m);
+            statement_hits = {};
+        }
+
+        #! Clears all collected statement locations and hits
+        public clear() {
+            AutoLock al(m);
+            statement_locations = {};
+            statement_hits = {};
+        }
+
+        #! Returns a deterministic coverage report
+        public hash<auto> snapshot() {
+            AutoLock al(m);
+            list<auto> statements = getStatementsLocked();
+            list<auto> lines = getLinesLocked(statements);
+            hash<auto> files = getFilesLocked(lines);
+            int covered_line_count = 0;
+            foreach hash<auto> line in (lines) {
+                if (line.covered.toBool()) {
+                    ++covered_line_count;
+                }
+            }
+            int covered_statement_count = 0;
+            foreach hash<auto> statement in (statements) {
+                if (statement.hit_count.toInt() > 0) {
+                    ++covered_statement_count;
+                }
+            }
+            int line_count = lines.size();
+            return {
+                "line_count": line_count,
+                "covered_line_count": covered_line_count,
+                "coverage_percent": line_count
+                    ? covered_line_count * 100.0 / line_count : 100.0,
+                "statement_count": statements.size(),
+                "covered_statement_count": covered_statement_count,
+                "lines": lines,
+                "files": files,
+                "statements": statements,
+            };
+        }
+
+        onAttach(ProgramControl pgm, reference rs, reference runToStatementId) {
+            loadProgram(pgm);
+            rs = DebugStep;
+        }
+
+        onDetach(ProgramControl pgm, reference rs, reference runToStatementId) {
+        }
+
+        onStep(ProgramControl pgm, int blockStatementId, *int statementId,
+                *int breakpointId, reference flow, reference rs,
+                reference runToStatementId) {
+            if (statementId) {
+                recordStatement(pgm, statementId);
+            }
+            rs = DebugStep;
+        }
+
+        onFunctionEnter(ProgramControl pgm, int statementId, reference rs,
+                reference runToStatementId) {
+            if (statementId) {
+                recordStatement(pgm, statementId);
+            }
+            rs = DebugStep;
+        }
+
+        onFunctionExit(ProgramControl pgm, int statementId, reference result,
+                reference rs, reference runToStatementId) {
+            rs = DebugStep;
+        }
+
+        onException(ProgramControl pgm, int statementId, hash<auto> ex,
+                reference dismiss, reference rs, reference runToStatementId) {
+            if (statementId) {
+                recordStatement(pgm, statementId);
+            }
+            rs = DebugStep;
+        }
+
+        onExit(ProgramControl pgm, int statementId, reference result,
+                reference rs, reference runToStatementId) {
+            rs = DebugStep;
+        }
+
+        private ensureStatementInfo(ProgramControl pgm, int statement_id) {
+            string key = statementKey(pgm.getProgramId(), statement_id);
+            {
+                AutoLock al(m);
+                if (exists statement_locations{key}) {
+                    return;
+                }
+            }
+
+            hash<auto> loc = normalizeStatementInfo(pgm, statement_id);
+            AutoLock al(m);
+            if (!exists statement_locations{key}) {
+                statement_locations{key} = loc;
+            }
+        }
+
+        private recordStatement(ProgramControl pgm, int statement_id) {
+            ensureStatementInfo(pgm, statement_id);
+            string key = statementKey(pgm.getProgramId(), statement_id);
+            AutoLock al(m);
+            statement_hits{key} = (statement_hits{key} ?? 0) + 1;
+        }
+
+        private hash<auto> normalizeStatementInfo(ProgramControl pgm,
+                int statement_id) {
+            hash<auto> info = pgm.getStatementIdInfo(statement_id);
+            int offset = info.offset ?? 0;
+            string source = info.source ?? "";
+            string label = info.file ?? "";
+            string file = source.val() ? source : label;
+            if (!file.val()) {
+                file = "<unknown>";
+            }
+            hash<auto> rv = {
+                "program_id": pgm.getProgramId(),
+                "statement_id": statement_id,
+                "statement_key": statementKey(pgm.getProgramId(),
+                    statement_id),
+                "file": file,
+                "line": (info.start_line ?? 0) + offset,
+                "end_line": (info.end_line ?? info.start_line ?? 0) + offset,
+                "start_line": info.start_line ?? 0,
+                "source_offset": offset,
+            };
+            if (source.val()) {
+                rv.source_label = label;
+            }
+            return rv;
+        }
+
+        private list<auto> getStatementsLocked() {
+            list<auto> rv = ();
+            foreach string key in (sort(map $1.toString(),
+                    keys statement_locations)) {
+                hash<auto> statement = statement_locations{key};
+                statement.hit_count = statement_hits{key} ?? 0;
+                statement.covered = statement.hit_count.toInt() > 0;
+                rv += statement;
+            }
+            return rv;
+        }
+
+        private list<auto> getLinesLocked(list<auto> statements) {
+            hash<auto> line_map = {};
+            foreach hash<auto> statement in (statements) {
+                string key = lineKey(statement.file, statement.line);
+                hash<auto> line = line_map{key} ?? {
+                    "file": statement.file,
+                    "line": statement.line,
+                    "end_line": statement.end_line,
+                    "statement_count": 0,
+                    "hit_count": 0,
+                    "covered": False,
+                    "statement_ids": (),
+                };
+                line.statement_count = line.statement_count.toInt() + 1;
+                line.hit_count = line.hit_count.toInt()
+                    + statement.hit_count.toInt();
+                line.covered = line.covered.toBool()
+                    || statement.hit_count.toInt() > 0;
+                list<auto> ids = line.statement_ids;
+                ids += statement.statement_id;
+                line.statement_ids = ids;
+                line_map{key} = line;
+            }
+
+            list<auto> rv = ();
+            foreach string key in (sort(map $1.toString(), keys line_map)) {
+                rv += line_map{key};
+            }
+            return rv;
+        }
+
+        private hash<auto> getFilesLocked(list<auto> lines) {
+            hash<auto> files = {};
+            foreach hash<auto> line in (lines) {
+                hash<auto> file = files{line.file} ?? {
+                    "file": line.file,
+                    "line_count": 0,
+                    "covered_line_count": 0,
+                    "hit_count": 0,
+                };
+                file.line_count = file.line_count.toInt() + 1;
+                if (line.covered.toBool()) {
+                    file.covered_line_count =
+                        file.covered_line_count.toInt() + 1;
+                }
+                file.hit_count = file.hit_count.toInt()
+                    + line.hit_count.toInt();
+                file.coverage_percent = file.line_count.toInt()
+                    ? file.covered_line_count.toInt() * 100.0
+                        / file.line_count.toInt()
+                    : 100.0;
+                files{line.file} = file;
+            }
+            return files;
+        }
+
+        private string statementKey(int program_id, int statement_id) {
+            return sprintf("%d:%d", program_id, statement_id);
+        }
+
+        private string lineKey(string file, int line) {
+            return sprintf("%s:%d", file, line);
+        }
+    }
+}

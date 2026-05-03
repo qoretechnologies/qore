@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# LineCoverage module tests
+#
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%allow-debugger
+
+%requires ../../../../qlib/LineCoverage.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class LineCoverageTest
+
+class LineCoverageTest inherits QUnit::Test {
+    private {
+        const TargetFile = "line-coverage-target.q";
+    }
+
+    constructor() : QUnit::Test("LineCoverage", "1.0", \ARGV) {
+        addTestCase("ProgramControl exposes statement IDs",
+            \testProgramControlStatementIds());
+        addTestCase("Recorder reports covered and uncovered lines",
+            \testRecorderReportsLineCoverage());
+        addTestCase("Recorder reset and clear state",
+            \testRecorderReset());
+        set_return_value(main());
+    }
+
+    testProgramControlStatementIds() {
+        Program pgm = makeTargetProgram();
+        ProgramControl pc = pgm.getProgram();
+        list<int> statement_ids = pc.getStatementIds();
+
+        assertTrue(statement_ids.size() > 0,
+            "ProgramControl exposes registered statement IDs");
+        hash<auto> info = pc.getStatementIdInfo(statement_ids[0]);
+        assertEq(TargetFile, info.source.val() ? info.source : info.file,
+            "statement info resolves to the target source file");
+        assertTrue(info.start_line > 0,
+            "statement info includes a source start line");
+    }
+
+    testRecorderReportsLineCoverage() {
+        Program pgm = makeTargetProgram();
+        ProgramControl pc = pgm.getProgram();
+        LineCoverage::Recorder recorder();
+
+        recorder.start(pc);
+        assertEq(4, pgm.callFunction("choose", 3),
+            "target function returns the positive branch value");
+        recorder.stop(pc);
+
+        hash<auto> report = recorder.snapshot();
+        assertTrue(report.line_count >= 5,
+            "report includes executable target lines");
+        assertTrue(report.covered_line_count > 0,
+            "report includes covered lines");
+        assertTrue(report.coverage_percent > 0.0
+                && report.coverage_percent < 100.0,
+            "one branch remains uncovered");
+
+        hash<auto> positive = getLine(report, TargetFile, 5);
+        assertTrue(positive.covered,
+            "executed positive branch line is covered");
+        assertTrue(positive.hit_count > 0,
+            "covered line records hits");
+
+        hash<auto> negative = getLine(report, TargetFile, 7);
+        assertFalse(negative.covered,
+            "unexecuted negative branch line is not covered");
+        assertEq(0, negative.hit_count,
+            "uncovered line has no hits");
+
+        assertTrue(report.files{TargetFile}.line_count >= 5,
+            "file summary includes target source lines");
+        assertTrue(report.statements.size() >= report.line_count,
+            "statement summary is included");
+    }
+
+    testRecorderReset() {
+        Program pgm = makeTargetProgram();
+        LineCoverage::Recorder recorder();
+        recorder.loadProgram(pgm.getProgram());
+        hash<auto> loaded_report = recorder.snapshot();
+        assertTrue(loaded_report.line_count > 0,
+            "preloaded recorder has statement locations");
+
+        recorder.reset();
+        hash<auto> report = recorder.snapshot();
+        assertEq(loaded_report.line_count, report.line_count,
+            "reset preserves line locations");
+        assertEq(0, report.covered_line_count,
+            "reset clears line hits");
+        assertEq(0.0, report.coverage_percent,
+            "reset preserves uncovered executable lines");
+
+        recorder.clear();
+        report = recorder.snapshot();
+        assertEq(0, report.line_count,
+            "clear removes line locations");
+        assertEq(100.0, report.coverage_percent,
+            "empty coverage report has complete coverage");
+    }
+
+    private Program makeTargetProgram() {
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER);
+        pgm.parse(("# target program",
+            "int sub choose(int value) {",
+            "    int rv = 0;",
+            "    if (value > 0) {",
+            "        rv = value + 1;",
+            "    } else {",
+            "        rv = -1;",
+            "    }",
+            "    return rv;",
+            "}").join("\n") + "\n", TargetFile);
+        return pgm;
+    }
+
+    private hash<auto> getLine(hash<auto> report, string file, int line) {
+        foreach hash<auto> candidate in (report.lines) {
+            if (candidate.file == file && candidate.line == line) {
+                return candidate;
+            }
+        }
+        fail(sprintf("coverage line %s:%d was not found in %y", file,
+            line, report.lines));
+        return {};
+    }
+}

@@ -2576,6 +2576,18 @@ public:
         return statementIds[statementId-1];
     }
 
+    DLLLOCAL QoreListNode* getStatementIds(ExceptionSink* xsink) const {
+        ReferenceHolder<QoreListNode> rv(new QoreListNode(bigIntTypeInfo), xsink);
+        AutoLocker al(&plock);
+        for (size_t i = 0; i < statementIds.size(); ++i) {
+            if (statementIds[i]) {
+                rv->push(static_cast<int64>(i + 1), xsink);
+                assert(!*xsink);
+            }
+        }
+        return rv.release();
+    }
+
     DLLLOCAL unsigned getProgramId() const {
         return programId;
     }
