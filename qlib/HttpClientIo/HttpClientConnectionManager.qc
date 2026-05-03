@@ -819,9 +819,44 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         int max_retries = opts.max_request_retries;
         bool timeout_retried = False;
         bool h3_close_retried = False;
+        # Wall-clock fail-safe across the entire retry loop.  Without this, a
+        # bug in per-stream wait handling (incorrect deadline, non-firing
+        # future, cancel deadlock) could cause infinite hangs even when each
+        # individual f.get() call is supposed to be bounded.  We saw this
+        # empirically in Qorus issue 1704 where a 120s request_timeout failed
+        # to fire and the workflow thread parked in FutureImpl::get() for
+        # 30+ min.  The budget gives us a hard ceiling regardless of per-stream
+        # behavior — but it must be GENEROUS enough to cover the legitimate
+        # retry path (request_timeout for the first attempt + connect_timeout
+        # for each retry on a fresh connection), otherwise it will pre-empt
+        # the existing recovery path before it can fire.  We allow:
+        #   max(per_attempt * 2, per_attempt + max_retries * connect_timeout)
+        # which covers both "two full attempts" and "one attempt + one retry
+        # per max_retries with connect_timeout each" — whichever is larger.
+        int per_attempt_ms = exists timeout_ms
+            ? timeout_ms : opts.request_timeout;
+        int retry_overhead_ms = max_retries * opts.connect_timeout;
+        int total_budget_ms = per_attempt_ms * 2;
+        if (per_attempt_ms + retry_overhead_ms > total_budget_ms) {
+            total_budget_ms = per_attempt_ms + retry_overhead_ms;
+        }
+        date budget_deadline = now_us() + milliseconds(total_budget_ms);
         while (True) {
             *HttpClientStreamHandle stream;
             try {
+                # Bail at the top of the loop if the wall-clock fail-safe has
+                # fired.  This is the *only* place we cap on total elapsed
+                # time — we deliberately do NOT clamp effective_timeout below
+                # because that would pre-empt the per-attempt timeout (e.g.
+                # the test pattern that expects request_timeout to fire then
+                # connect_timeout to retry on a fresh connection).
+                if (now_us() >= budget_deadline) {
+                    throw "HTTPCLIENT-TIMEOUT",
+                        sprintf("total request budget of %d ms exceeded across "
+                            "%d attempt%s", total_budget_ms, retries + 1,
+                            retries == 0 ? "" : "s");
+                }
+
                 stream = acquireStream(url);
                 # Per-request timeout resolution:
                 # 1. Caller-provided timeout always wins (the caller knows best,
@@ -847,9 +882,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     effective_timeout = opts.connect_timeout;
                 }
                 log(LoggerLevel::DEBUG, "requestIntern %s %s: reused=%y timeout_retried=%y "
-                    "effective_timeout=%y",
+                    "effective_timeout=%y budget_remaining=%dms",
                     method, path, stream.wasConnectionReused(), timeout_retried,
-                    effective_timeout);
+                    effective_timeout,
+                    (budget_deadline - now_us()).durationMilliseconds());
                 hash<auto> resp = stream.request(method, path, headers, body,
                     effective_timeout);
                 checkAltSvc(url, resp);
