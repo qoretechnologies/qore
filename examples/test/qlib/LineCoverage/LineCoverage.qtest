@@ -16,6 +16,7 @@
 class LineCoverageTest inherits QUnit::Test {
     private {
         const TargetFile = "line-coverage-target.q";
+        const MultiLineTargetFile = "line-coverage-multiline-target.q";
     }
 
     constructor() : QUnit::Test("LineCoverage", "1.0", \ARGV) {
@@ -25,6 +26,10 @@ class LineCoverageTest inherits QUnit::Test {
             \testCreateRecorder());
         addTestCase("Recorder reports covered and uncovered lines",
             \testRecorderReportsLineCoverage());
+        addTestCase("Recorder expands multi-line statements",
+            \testRecorderReportsMultilineStatements());
+        addTestCase("Recorder identifies statements across programs",
+            \testRecorderStatementReferencesIncludeProgramIds());
         addTestCase("Recorder reset and clear state",
             \testRecorderReset());
         set_return_value(main());
@@ -93,6 +98,59 @@ class LineCoverageTest inherits QUnit::Test {
             "statement summary is included");
     }
 
+    testRecorderReportsMultilineStatements() {
+        Program pgm = makeMultiLineTargetProgram();
+        ProgramControl pc = pgm.getProgram();
+        LineCoverage::Recorder recorder();
+
+        recorder.start(pc);
+        assertEq(6, pgm.callFunction("multi", 3),
+            "target function returns the multi-line expression value");
+        recorder.stop(pc);
+
+        hash<auto> report = recorder.snapshot();
+        foreach int line in ((3, 4, 5)) {
+            hash<auto> covered = getLine(report, MultiLineTargetFile, line);
+            assertTrue(covered.covered,
+                sprintf("multi-line statement source line %d is covered",
+                    line));
+            assertTrue(covered.statement_refs.size() > 0,
+                "line has statement references");
+            assertEq(pc.getProgramId(), covered.statement_refs[0].program_id,
+                "statement reference includes the program id");
+        }
+    }
+
+    testRecorderStatementReferencesIncludeProgramIds() {
+        Program pgm1 = makeTargetProgram();
+        Program pgm2 = makeTargetProgram();
+        ProgramControl pc1 = pgm1.getProgram();
+        ProgramControl pc2 = pgm2.getProgram();
+        LineCoverage::Recorder recorder();
+
+        recorder.start(pc1);
+        recorder.start(pc2);
+        assertEq(4, pgm1.callFunction("choose", 3));
+        assertEq(5, pgm2.callFunction("choose", 4));
+        recorder.stop(pc1);
+        recorder.stop(pc2);
+
+        hash<auto> positive = getLine(recorder.snapshot(), TargetFile, 5);
+        hash<auto> program_ids = {};
+        foreach hash<auto> ref in (positive.statement_refs) {
+            program_ids{ref.program_id.toString()} = True;
+            assertTrue(ref.statement_id > 0,
+                "statement reference includes the statement id");
+            assertTrue(ref.statement_key.val(),
+                "statement reference includes the compound statement key");
+        }
+
+        assertEq(2, program_ids.size(),
+            "line references distinguish statements from both programs");
+        assertTrue(program_ids{pc1.getProgramId().toString()}.toBool());
+        assertTrue(program_ids{pc2.getProgramId().toString()}.toBool());
+    }
+
     testRecorderReset() {
         Program pgm = makeTargetProgram();
         LineCoverage::Recorder recorder();
@@ -130,6 +188,17 @@ class LineCoverageTest inherits QUnit::Test {
             "    }",
             "    return rv;",
             "}").join("\n") + "\n", TargetFile);
+        return pgm;
+    }
+
+    private Program makeMultiLineTargetProgram() {
+        Program pgm(PO_NO_CHILD_PO_RESTRICTIONS | PO_ALLOW_DEBUGGER);
+        pgm.parse(("# target program",
+            "int sub multi(int value) {",
+            "    return value",
+            "        + 1",
+            "        + 2;",
+            "}").join("\n") + "\n", MultiLineTargetFile);
         return pgm;
     }
 

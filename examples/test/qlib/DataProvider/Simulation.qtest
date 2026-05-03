@@ -58,12 +58,44 @@ class NoResponseRequestProvider inherits AbstractDataProvider {
     }
 }
 
+class MultiActionSimulationProvider inherits AbstractDataProvider {
+    private {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "MultiActionSimulationProvider",
+            "supports_request": True,
+            "supports_read": True,
+            "supports_create": True,
+            "supports_update": True,
+            "supports_upsert": True,
+            "supports_delete": True,
+        };
+    }
+
+    string getName() {
+        return "multi-action-simulation";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+
+    private auto getExampleResponseDataImpl() {
+        return {"response": True};
+    }
+
+    private hash<auto> getExampleRecordDataImpl() {
+        return {"record": True};
+    }
+}
+
 class DataProviderSimulationTest inherits QUnit::Test {
     constructor() : Test("DataProviderSimulationTest", "1.0", \ARGV) {
         addTestCase("default request simulation records and returns example data",
             \testDefaultRequestSimulation());
         addTestCase("request simulation handles no response data",
             \testRequestSimulationWithNoResponse());
+        addTestCase("registered action type selects simulation shape",
+            \testRegisteredActionSimulationShape());
         addTestCase("volatile fields default to none",
             \testDefaultVolatileFields());
 
@@ -103,8 +135,68 @@ class DataProviderSimulationTest inherits QUnit::Test {
         assertEq("example", actions[0].fidelity);
     }
 
+    testRegisteredActionSimulationShape() {
+        string app = registerSimulationApp();
+        on_exit DataProviderActionCatalog::deregisterDynamicApp(app);
+
+        MultiActionSimulationProvider provider();
+        TestSimulationRecorder recorder();
+
+        assertEq({"response": True}, provider.simulateRequest(app,
+            "request-action", {"value": 1}, recorder));
+        assertEq({"record": True}, provider.simulateRequest(app,
+            "create-action", {"value": 1}, recorder));
+        assertEq(UpsertResultInserted, provider.simulateRequest(app,
+            "upsert-action", {"value": 1}, recorder));
+        assertEq(1, provider.simulateRequest(app, "update-action",
+            {"value": 1}, recorder));
+        assertEq(1, provider.simulateRequest(app, "delete-action",
+            {"value": 1}, recorder));
+        assertEq(({"record": True},), provider.simulateRequest(app,
+            "find-action", {"value": 1}, recorder));
+        assertEq({"record": True}, provider.simulateRequest(app,
+            "find-single-action", {"value": 1}, recorder));
+
+        assertEq(7, recorder.recorded(app).size());
+    }
+
     testDefaultVolatileFields() {
         AbstractDataProvider provider = DataProvider::getFactoryObject("null");
         assertEq((), provider.getSimulationVolatileFields("Null", "call"));
+    }
+
+    private string registerSimulationApp() {
+        string app = "SimulationTest" + get_random_string();
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": app,
+            "display_name": "Simulation Test",
+            "short_desc": "Simulation test app",
+            "desc": "Simulation test app",
+            "groups": (AppGroup::DataTransformation,),
+            "logo": "data",
+            "logo_mime_type": MimeTypeSvg,
+            "logo_file_name": "test.svg",
+            "dynamic": True,
+        });
+        registerSimulationAction(app, "request-action", DPAT_API);
+        registerSimulationAction(app, "create-action", DPAT_CREATE);
+        registerSimulationAction(app, "upsert-action", DPAT_UPSERT);
+        registerSimulationAction(app, "update-action", DPAT_UPDATE);
+        registerSimulationAction(app, "delete-action", DPAT_DELETE);
+        registerSimulationAction(app, "find-action", DPAT_FIND);
+        registerSimulationAction(app, "find-single-action", DPAT_FIND_SINGLE);
+        return app;
+    }
+
+    private registerSimulationAction(string app, string action, int action_code) {
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": app,
+            "path": "/",
+            "action": action,
+            "display_name": action,
+            "short_desc": action,
+            "desc": action,
+            "action_code": action_code,
+        });
     }
 }

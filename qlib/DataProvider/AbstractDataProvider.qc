@@ -6981,6 +6981,74 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         @since DataProvider 3.4
     */
     private auto simulateRequestImpl(string app, string action, auto input, AbstractSimulationRecorder recorder) {
+        if (*hash<DataProviderActionInfo> action_info = DataProviderActionCatalog::getAppAction(app, action)) {
+            return simulateRequestForActionCode(app, action, input, recorder, action_info.action_code);
+        }
+
+        return simulateRequestFromCapabilities(app, action, input, recorder);
+    }
+
+    private auto simulateRequestForActionCode(string app, string action, auto input, AbstractSimulationRecorder recorder,
+            int action_code) {
+        switch (action_code) {
+            case DPAT_API:
+                if (supportsRequest()) {
+                    recorder.record(app, action, input, "example");
+                    if (exists (auto rv = getExampleResponseData())) {
+                        return rv;
+                    }
+                    return NULL;
+                }
+                break;
+
+            case DPAT_CREATE:
+                if (supportsCreate()) {
+                    recorder.record(app, action, input, "example");
+                    return getExampleRecordData();
+                }
+                break;
+
+            case DPAT_UPSERT:
+                if (supportsUpsert()) {
+                    recorder.record(app, action, input, "example");
+                    return UpsertResultInserted;
+                }
+                break;
+
+            case DPAT_UPDATE:
+                if (supportsUpdate()) {
+                    recorder.record(app, action, input, "example");
+                    return 1;
+                }
+                break;
+
+            case DPAT_DELETE:
+                if (supportsDelete()) {
+                    recorder.record(app, action, input, "example");
+                    return 1;
+                }
+                break;
+
+            case DPAT_FIND:
+                if (supportsRead()) {
+                    recorder.record(app, action, input, "example");
+                    return (getExampleRecordData(),);
+                }
+                break;
+
+            case DPAT_FIND_SINGLE:
+                if (supportsRead()) {
+                    recorder.record(app, action, input, "example");
+                    return getExampleRecordData();
+                }
+                break;
+        }
+
+        return simulateUnsupportedRequest(app, action, input, recorder);
+    }
+
+    private auto simulateRequestFromCapabilities(string app, string action, auto input,
+            AbstractSimulationRecorder recorder) {
         if (supportsRequest()) {
             recorder.record(app, action, input, "example");
             if (exists (auto rv = getExampleResponseData())) {
@@ -7005,6 +7073,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
             return getExampleRecordData();
         }
 
+        return simulateUnsupportedRequest(app, action, input, recorder);
+    }
+
+    private auto simulateUnsupportedRequest(string app, string action, auto input, AbstractSimulationRecorder recorder) {
         recorder.record(app, action, input, "unsupported");
         throw "DRY-RUN-NOT-SUPPORTED", sprintf("data provider %y of class %y cannot simulate action %y",
             getName(), self.className(), action);

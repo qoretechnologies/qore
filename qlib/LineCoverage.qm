@@ -84,6 +84,8 @@ public namespace LineCoverage {
         - \c statement_count: number of executable statements seen
         - \c covered_statement_count: executable statements with at least one hit
         - \c lines: sorted list of per-line hashes
+          - each line has \c statement_refs with \c program_id, \c statement_id,
+            and \c statement_key for the statements mapped to that line
         - \c files: hash keyed by file, with per-file totals
         - \c statements: sorted list of per-statement hashes
     */
@@ -322,25 +324,36 @@ public namespace LineCoverage {
         private list<auto> getLinesLocked(list<auto> statements) {
             hash<auto> line_map = {};
             foreach hash<auto> statement in (statements) {
-                string key = lineKey(statement.file, statement.line);
-                hash<auto> line = line_map{key} ?? {
-                    "file": statement.file,
-                    "line": statement.line,
-                    "end_line": statement.end_line,
-                    "statement_count": 0,
-                    "hit_count": 0,
-                    "covered": False,
-                    "statement_ids": (),
-                };
-                line.statement_count = line.statement_count.toInt() + 1;
-                line.hit_count = line.hit_count.toInt()
-                    + statement.hit_count.toInt();
-                line.covered = line.covered.toBool()
-                    || statement.hit_count.toInt() > 0;
-                list<auto> ids = line.statement_ids;
-                ids += statement.statement_id;
-                line.statement_ids = ids;
-                line_map{key} = line;
+                int start_line = statement.line.toInt();
+                int end_line = statement.end_line.toInt();
+                if (end_line < start_line) {
+                    end_line = start_line;
+                }
+                for (int line_no = start_line; line_no <= end_line; ++line_no) {
+                    string key = lineKey(statement.file, line_no);
+                    hash<auto> line = line_map{key} ?? {
+                        "file": statement.file,
+                        "line": line_no,
+                        "end_line": line_no,
+                        "statement_count": 0,
+                        "hit_count": 0,
+                        "covered": False,
+                        "statement_refs": (),
+                    };
+                    line.statement_count = line.statement_count.toInt() + 1;
+                    line.hit_count = line.hit_count.toInt()
+                        + statement.hit_count.toInt();
+                    line.covered = line.covered.toBool()
+                        || statement.hit_count.toInt() > 0;
+                    list<auto> refs = line.statement_refs;
+                    refs += {
+                        "program_id": statement.program_id,
+                        "statement_id": statement.statement_id,
+                        "statement_key": statement.statement_key,
+                    };
+                    line.statement_refs = refs;
+                    line_map{key} = line;
+                }
             }
 
             list<auto> rv = ();
