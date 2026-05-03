@@ -157,6 +157,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source runtime const ref", \testStripSourceRuntimeConstRef());
         # Strip source: static class variable access (module)
         addTestCase("AOT strip source static varref module", \testStripSourceStaticVarrefModule());
+        addTestCase("AOT strip source module init function ref",
+            \testStripSourceModuleInitFunctionRef());
         # Strip source: on_exit/on_success handler IR
         addTestCase("AOT strip source on_exit handlers", \testStripSourceOnExitHandlers());
         addTestCase("AOT strip source on_exit builtin class", \testStripSourceOnExitBuiltinClass());
@@ -4486,6 +4488,62 @@ exit(0);
 
         assertEq("42\n", out,
             "static varref from strip-source module works correctly");
+    }
+
+    testStripSourceModuleInitFunctionRef() {
+        string mod_code = "%modern
+
+module StripInitCallRefMod {
+    version = \"1.0\";
+    desc = \"Test module init call reference\";
+    author = \"Test\";
+    license = \"MIT\";
+    init = \\Priv::priv_init();
+}
+
+public namespace StripInitCallRefMod {
+    public class State {
+        public {
+            static int value = 0;
+        }
+
+        static int getValue() {
+            return State::value;
+        }
+    }
+}
+
+namespace Priv {
+    sub priv_init() {
+        StripInitCallRefMod::State::value = 42;
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripInitCallRefMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled,
+            "module init function ref compiled: " + mod_info.compile_out);
+
+        string test_code = "%modern
+
+%requires StripInitCallRefMod
+
+printf(\"%d\\n\", StripInitCallRefMod::State::getValue());
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("42\n", out,
+            "function-reference module init from strip-source module runs correctly");
     }
 
     testStripSourceOnExitHandlers() {

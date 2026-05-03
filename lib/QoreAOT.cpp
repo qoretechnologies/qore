@@ -71,6 +71,7 @@
 #include "qore/intern/Variable.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
@@ -1542,9 +1543,132 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
     return 0;
 }
 
-//! Compile a module init closure's body as an AOT init function.
-/** At qcc time, the module init closure has been fully parsed. We extract its
-    UserClosureVariant (which inherits from UserVariantBase), lower its statement
+static std::string makeModuleInitCompileError(const char* mod_name, const char* module_path,
+        const std::string& detail) {
+    std::string error = "AOT module init for '";
+    error += mod_name ? mod_name : "<unknown>";
+    error += "'";
+    if (module_path && *module_path) {
+        error += " from '";
+        error += module_path;
+        error += "'";
+    }
+    error += " could not be compiled: ";
+    error += detail;
+    return error;
+}
+
+static bool validateModuleInitVariant(const AbstractQoreFunctionVariant* variant, const char* mod_name,
+        const char* module_path, const char* init_kind, std::string& error) {
+    if (!variant) {
+        return true;
+    }
+    if (variant->numParams() == 0) {
+        return true;
+    }
+
+    const AbstractFunctionSignature* sig = variant->getSignature();
+    std::string detail = init_kind;
+    detail += " selected variant signature '";
+    detail += sig ? sig->getSignatureText() : "<unknown>";
+    detail += "'; AOT module init handlers must accept no arguments";
+    error = makeModuleInitCompileError(mod_name, module_path, detail);
+    return false;
+}
+
+static UserVariantBase* getModuleInitUserVariant(const QoreValue& init_c, const char* mod_name,
+        const char* module_path, const QoreFunction*& source_qf, std::string& error) {
+    source_qf = nullptr;
+
+    if (init_c.getType() == NT_CLOSURE) {
+        const QoreClosureParseNode* cpn = dynamic_cast<const QoreClosureParseNode*>(
+            init_c.getInternalNode());
+        if (!cpn) {
+            error = makeModuleInitCompileError(mod_name, module_path,
+                "init value has type 'closure' but is not a QoreClosureParseNode");
+            return nullptr;
+        }
+        UserClosureFunction* uclf = cpn->getFunction();
+        if (!uclf || uclf->numVariants() == 0) {
+            error = makeModuleInitCompileError(mod_name, module_path,
+                "closure has no variants");
+            return nullptr;
+        }
+
+        source_qf = uclf;
+        AbstractQoreFunctionVariant* variant = uclf->first();
+        if (!validateModuleInitVariant(variant, mod_name, module_path, "closure", error)) {
+            return nullptr;
+        }
+        UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+        if (!uvb || !uvb->hasBody()) {
+            error = makeModuleInitCompileError(mod_name, module_path,
+                "closure variant has no user-code body");
+            return nullptr;
+        }
+        return uvb;
+    }
+
+    if (init_c.getType() == NT_FUNCREF) {
+        const ResolvedCallReferenceNode* rcr = dynamic_cast<const ResolvedCallReferenceNode*>(
+            init_c.getInternalNode());
+        if (!rcr) {
+            error = makeModuleInitCompileError(mod_name, module_path,
+                "init value has type 'call reference' but is not a ResolvedCallReferenceNode");
+            return nullptr;
+        }
+
+        QoreFunction* qf = rcr->getFunction();
+        if (!qf) {
+            error = makeModuleInitCompileError(mod_name, module_path,
+                "call reference has no statically resolved function; object-bound runtime method references cannot "
+                "be AOT-lowered as module init handlers");
+            return nullptr;
+        }
+
+        ExceptionSink xsink;
+        const AbstractQoreFunctionVariant* variant = qf->runtimeFindVariant(
+            &xsink, static_cast<const QoreListNode*>(nullptr), true, nullptr);
+        if (xsink.isException()) {
+            xsink.clear();
+            error = makeModuleInitCompileError(mod_name, module_path,
+                std::string("zero-argument variant lookup failed for call reference '") + qf->getName() + "'");
+            return nullptr;
+        }
+        UserVariantBase* uvb = variant ? const_cast<AbstractQoreFunctionVariant*>(variant)->getUserVariantBase()
+            : nullptr;
+        if (!validateModuleInitVariant(variant, mod_name, module_path, "call reference", error)) {
+            return nullptr;
+        }
+        if (!uvb || !uvb->hasBody()) {
+            std::string detail = "call reference '";
+            detail += qf->getName();
+            detail += "' has no zero-argument user-code variant";
+            if (qf->numVariants() == 1) {
+                const AbstractFunctionSignature* sig = qf->first()->getSignature();
+                detail += "; only variant signature is '";
+                detail += sig ? sig->getSignatureText() : "<unknown>";
+                detail += "'";
+            } else {
+                detail += "; variant count is ";
+                detail += std::to_string(qf->numVariants());
+            }
+            error = makeModuleInitCompileError(mod_name, module_path, detail);
+            return nullptr;
+        }
+
+        source_qf = qf;
+        return uvb;
+    }
+
+    error = makeModuleInitCompileError(mod_name, module_path,
+        std::string("expected closure or call reference, got type '") + init_c.getTypeName() + "'");
+    return nullptr;
+}
+
+//! Compile a module init closure or call reference body as an AOT init function.
+/** At qcc time, the module init closure/call reference has been fully parsed. We extract its
+    UserVariantBase, lower its statement
     block to IR using tryLowerFunction, compile to LLVM, and record an
     AOTCompiledInitFunc with target_type=MODULE_INIT. At runtime, the init-func
     execution loop in qore_aot_module_init_v3 will invoke this function and
@@ -1556,7 +1680,7 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
     through the AOT slot map at load time against the local program's namespace
     tree — no cross-program class identity issues.
 
-    @param init_c the init closure value (must be NT_CLOSURE holding QoreClosureParseNode)
+    @param init_c the init value (NT_CLOSURE holding QoreClosureParseNode or NT_FUNCREF)
     @param mod_name the module name (used to build the unique init function name)
     @param pgm the QoreProgram used for IR lowering context
     @param ctx the LLVM context
@@ -1565,41 +1689,20 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
     @param di_cu the shared debug info compile unit
     @param compiled_init_funcs output vector to append the compiled init func to
     @param const_reverse_map optional constant reverse map for slot extraction
-    @return true on success, false on any failure (non-fatal — caller continues)
+    @param error output error message on failure
+    @return true on success, false on any failure
 */
 static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const char* mod_name,
         QoreProgram* pgm, llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
         std::vector<AOTCompiledInitFunc>& compiled_init_funcs,
         const AOTConstantReverseMap* const_reverse_map,
-        const char* module_path = nullptr) {
-    if (init_c.getType() != NT_CLOSURE) {
+        std::string& error, const char* module_path = nullptr) {
+    const QoreFunction* source_qf = nullptr;
+    UserVariantBase* uvb = getModuleInitUserVariant(init_c, mod_name, module_path, source_qf, error);
+    if (!uvb) {
         if (getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: module init of '%s' is not a closure (type=%s)\n",
-                mod_name, init_c.getTypeName());
-        }
-        return false;
-    }
-    const QoreClosureParseNode* cpn = dynamic_cast<const QoreClosureParseNode*>(
-        init_c.getInternalNode());
-    if (!cpn) {
-        if (getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: module init of '%s' not a QoreClosureParseNode\n", mod_name);
-        }
-        return false;
-    }
-    UserClosureFunction* uclf = cpn->getFunction();
-    if (!uclf || uclf->numVariants() == 0) {
-        if (getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: module init closure of '%s' has no variants\n", mod_name);
-        }
-        return false;
-    }
-    AbstractQoreFunctionVariant* variant = uclf->first();
-    UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
-    if (!uvb || !uvb->hasBody()) {
-        if (getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: module init closure of '%s' has no body\n", mod_name);
+            fprintf(stderr, "AOT: %s\n", error.c_str());
         }
         return false;
     }
@@ -1608,10 +1711,11 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
 
     QoreIRFunction* ir_func = nullptr;
     std::string lower_error;
-    if (tryLowerFunction(uvb, init_name.c_str(), pgm, ir_func, lower_error) != 0 || !ir_func) {
+    if (tryLowerFunction(uvb, init_name.c_str(), pgm, ir_func, lower_error, source_qf) != 0 || !ir_func) {
+        error = makeModuleInitCompileError(mod_name, module_path,
+            "IR lowering failed for '" + init_name + "': " + lower_error);
         if (getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: module init IR lowering failed for '%s': %s\n",
-                mod_name, lower_error.c_str());
+            fprintf(stderr, "AOT: %s\n", error.c_str());
         }
         return false;
     }
@@ -1641,9 +1745,10 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
     std::string llvm_error;
     bool ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
     if (!ok) {
+        error = makeModuleInitCompileError(mod_name, module_path,
+            "LLVM lowering failed for '" + init_name + "': " + llvm_error);
         if (getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: module init LLVM lowering failed for '%s': %s\n",
-                mod_name, llvm_error.c_str());
+            fprintf(stderr, "AOT: %s\n", error.c_str());
         }
         delete ir_func;
         return false;
@@ -1669,7 +1774,7 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
 
     compiled_init_funcs.push_back(std::move(cif));
     if (getenv("QORE_AOT_DEBUG")) {
-        fprintf(stderr, "AOT: compiled module init closure for '%s' as '%s'\n",
+        fprintf(stderr, "AOT: compiled module init for '%s' as '%s'\n",
             mod_name, init_name.c_str());
     }
     delete ir_func;
@@ -3770,10 +3875,15 @@ bool QoreAOT::compile(QoreProgram* pgm,
         if (!init_c) {
             continue;
         }
-        compileModuleInitClosureAsInitFunc(init_c, root.first.c_str(), user_mod->getProgram(),
+        std::string init_error;
+        bool init_ok = compileModuleInitClosureAsInitFunc(init_c, root.first.c_str(), user_mod->getProgram(),
             ctx, *module, di_builder, di_cu, compiled_init_funcs, &const_reverse_map,
-            user_mod->getFileName());
+            init_error, user_mod->getFileName());
         init_c.discard(nullptr);
+        if (!init_ok) {
+            error = init_error;
+            return false;
+        }
     }
 
     // Step 2: Try to compile top-level code with AOT mode
@@ -5774,9 +5884,13 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // side effects run at load time (e.g. DataProvider.qm assigns
     // AbstractDataProviderType::anyDataType = new QoreDataType(AutoType)).
     if (init_c_holder) {
-        compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
+        std::string init_error;
+        if (!compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
             *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
-            &const_reverse_map);
+            &const_reverse_map, init_error)) {
+            error = init_error;
+            return false;
+        }
     }
 
     reportAOTCompileStats("module compilation", compiled_count, total_funcs,
@@ -6235,9 +6349,13 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         // Compile module init closure (if any) as an AOT init function so its
         // side effects run at load time.
         if (init_c_holder) {
-            compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
+            std::string init_error;
+            if (!compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
-                &const_reverse_map);
+                &const_reverse_map, init_error)) {
+                error = init_error;
+                return false;
+            }
         }
 
         reportAOTCompileStats("split module compilation", compiled_count, total_funcs,
@@ -8166,9 +8284,13 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             // standard init pipeline.  The closure IR must be lowered to
             // LLVM because it has no counterpart in the input .qo's.
             // That's a small cost relative to the module's method bodies.
-            compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
+            std::string init_error;
+            if (!compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
-                &const_reverse_map);
+                &const_reverse_map, init_error)) {
+                error = init_error;
+                return false;
+            }
         }
 
         reportAOTCompileStats("aggregator (metadata-only)",
@@ -8639,9 +8761,13 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         }
 
         if (init_c_holder) {
-            compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
+            std::string init_error;
+            if (!compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
                 *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
-                &const_reverse_map);
+                &const_reverse_map, init_error)) {
+                error = init_error;
+                return false;
+            }
         }
 
         reportAOTCompileStats("archive aggregator (metadata-only)",
