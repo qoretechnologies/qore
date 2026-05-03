@@ -1054,9 +1054,13 @@ private:
     //! Returns SOCKET-CLOSED if a Socket fd changed during the controller wait
     DLLLOCAL static QoreHashNode* makeSocketWaitGenerationException(PollInfo& pinfo, ExceptionSink* xsink);
 
+    //! Returns true if the poll-info socket fd changed since the last wait snapshot
+    DLLLOCAL static bool hasSocketWaitGenerationChanged(PollInfo& pinfo, QoreHashNode* poll_info);
+
     //! Update EventLoop registration for an operation
     DLLLOCAL void updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
-        QoreObject* socket, const std::string& sock_hash, int events, ExceptionSink* xsink);
+        QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
+        ExceptionSink* xsink);
 
     //! Unregister an operation from the EventLoop
     DLLLOCAL void unregisterFromEventLoop(IoThreadContext& t, const std::string& key,

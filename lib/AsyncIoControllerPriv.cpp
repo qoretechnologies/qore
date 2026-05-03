@@ -397,6 +397,42 @@ QoreHashNode* AsyncIoControllerPriv::makeSocketWaitGenerationException(PollInfo&
     return *xsink ? nullptr : ex.release();
 }
 
+bool AsyncIoControllerPriv::hasSocketWaitGenerationChanged(PollInfo& pinfo, QoreHashNode* poll_info) {
+    if (!pinfo.socket_wait_generation_valid || !poll_info) {
+        return false;
+    }
+
+    QoreValue v = poll_info->getKeyValue("socket");
+    QoreObject* obj = v.getType() == NT_OBJECT ? v.get<QoreObject>() : nullptr;
+    if (!obj) {
+        return false;
+    }
+
+    ExceptionSink local_xsink;
+    QoreSocketObject* sock = static_cast<QoreSocketObject*>(
+        obj->getReferencedPrivateData(CID_SOCKET, &local_xsink));
+    if (!sock) {
+        if (local_xsink) {
+            local_xsink.clear();
+        }
+        return false;
+    }
+
+    bool changed = false;
+    {
+        AutoLocker al(sock->priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*sock->priv->socket);
+        changed = sp->fd_generation != pinfo.socket_wait_fd_generation
+            || sp->sock != pinfo.socket_wait_fd;
+    }
+
+    sock->deref(&local_xsink);
+    if (local_xsink) {
+        local_xsink.clear();
+    }
+    return changed;
+}
+
 void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink* xsink) {
     // Release refs and signal waiters for a command drained from cmdq that
     // will not be processed (because the I/O thread received Quit or is
@@ -4230,7 +4266,20 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         bool needs_full_update = pinfo.cached_sock_hash.empty()
                             || events != pinfo.cached_events
                             || new_sock_obj != pinfo.cached_sock_obj;
-                        if (!needs_full_update && pinfo.spop_obj) {
+                        bool force_fd_reregister = hasSocketWaitGenerationChanged(pinfo,
+                            result.new_poll_info);
+                        if (force_fd_reregister) {
+                            needs_full_update = true;
+                        }
+                        if (pinfo.spop_base) {
+                            uint32_t gen = pinfo.spop_base->getFdGeneration();
+                            if (gen != pinfo.cached_fd_gen) {
+                                pinfo.cached_fd_gen = gen;
+                                needs_full_update = true;
+                                force_fd_reregister = true;
+                            }
+                        } else if (pinfo.spop_obj
+                                && pinfo.spop_obj->getClass()->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
                             SocketPollOperationBase* spop =
                                 static_cast<SocketPollOperationBase*>(
                                     pinfo.spop_obj->getReferencedPrivateData(
@@ -4240,6 +4289,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 if (gen != pinfo.cached_fd_gen) {
                                     pinfo.cached_fd_gen = gen;
                                     needs_full_update = true;
+                                    force_fd_reregister = true;
                                 }
                                 spop->deref(xsink);
                             }
@@ -4256,7 +4306,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                 ASYNC_IO_TRACE("Phase3 UPDATE key='%s' sock='%s' events=%d\n",
                                     result.key.c_str(), sock_hash.c_str(), events);
                                 updateEventLoopRegistration(t, result.key, poll_sock, sock_hash,
-                                    events, xsink);
+                                    events, force_fd_reregister, xsink);
                                 updateExtraFds(t, result.key, poll_sock, result.new_poll_info,
                                     xsink);
 #if defined(__linux__) && defined(HAVE_IO_URING)
@@ -5609,11 +5659,34 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                                 QoreObject* poll_sock = getSocketFromPollInfo(
                                     cmd.continue_poll_result, sock_hash, events, xsink);
                                 if (!*xsink && poll_sock) {
+                                    bool force_fd_reregister = hasSocketWaitGenerationChanged(pinfo,
+                                        cmd.continue_poll_result);
+                                    if (pinfo.spop_base) {
+                                        uint32_t gen = pinfo.spop_base->getFdGeneration();
+                                        if (gen != pinfo.cached_fd_gen) {
+                                            pinfo.cached_fd_gen = gen;
+                                            force_fd_reregister = true;
+                                        }
+                                    } else if (pinfo.spop_obj
+                                            && pinfo.spop_obj->getClass()->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
+                                        SocketPollOperationBase* spop =
+                                            static_cast<SocketPollOperationBase*>(
+                                                pinfo.spop_obj->getReferencedPrivateData(
+                                                    CID_SOCKETPOLLOPERATIONBASE, xsink));
+                                        if (spop) {
+                                            uint32_t gen = spop->getFdGeneration();
+                                            if (gen != pinfo.cached_fd_gen) {
+                                                pinfo.cached_fd_gen = gen;
+                                                force_fd_reregister = true;
+                                            }
+                                            spop->deref(xsink);
+                                        }
+                                    }
                                     pinfo.cached_sock_hash = sock_hash;
                                     pinfo.cached_events = events;
                                     pinfo.cached_sock_obj = poll_sock;
                                     updateEventLoopRegistration(t, cmd.key, poll_sock,
-                                        sock_hash, events, xsink);
+                                        sock_hash, events, force_fd_reregister, xsink);
                                     updateExtraFds(t, cmd.key, poll_sock,
                                         cmd.continue_poll_result, xsink);
                                 }
@@ -5734,7 +5807,8 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
 }
 
 void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
-        QoreObject* socket, const std::string& sock_hash, int events, ExceptionSink* xsink) {
+        QoreObject* socket, const std::string& sock_hash, int events, bool force_fd_reregister,
+        ExceptionSink* xsink) {
     // Convert SOCK_POLLIN/SOCK_POLLOUT to QORE_EV_READ/QORE_EV_WRITE
     int ev_flags = 0;
     if (events & SOCK_POLLIN) {
@@ -5806,6 +5880,14 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
                 t.registered_fds[sock_hash] = curr_fd;
                 t.fd_to_sock_hash[curr_fd] = sock_hash;
                 t.registered_events[sock_hash] = union_events;
+            } else if (force_fd_reregister && union_events) {
+                // The fd number can be reused after close(), especially in
+                // Happy Eyeballs fallback.  epoll/kqueue may have dropped the
+                // old registration even though the integer fd is unchanged.
+                t.loop->modify(curr_fd, union_events, xsink);
+                t.fd_to_sock_hash[curr_fd] = sock_hash;
+                t.registered_events[sock_hash] = union_events;
+                fd_changed = true;
             }
             s->deref(xsink);
         }

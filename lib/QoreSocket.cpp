@@ -7469,9 +7469,11 @@ int SocketConnectInetHappyEyeballsPollState::continuePoll(ExceptionSink* xsink) 
             if (was_primary) {
                 // Assign another active fd as primary so isOpen() remains true
                 sock->sock = QORE_INVALID_SOCKET;
+                ++sock->fd_generation;
                 for (auto& a : active_attempts) {
                     if (a.fd != QORE_INVALID_SOCKET) {
                         sock->sock = a.fd;
+                        ++sock->fd_generation;
                         sock->resetCloseInterrupt();
                         break;
                     }
@@ -7684,6 +7686,7 @@ int SocketConnectInetHappyEyeballsPollState::startNextConnect(ExceptionSink* xsi
         // Assign first racing fd to sock->sock so isOpen() returns true
         if (sock->sock == QORE_INVALID_SOCKET) {
             sock->sock = fd;
+            ++sock->fd_generation;
             sock->resetCloseInterrupt();
         }
 
@@ -7709,7 +7712,12 @@ void SocketConnectInetHappyEyeballsPollState::assignWinner(ExceptionSink* xsink)
     SocketResolvedAddrInfo& wp = addrs[sorted_addrs[winner.addr_idx]];
 
     // Assign winning fd to socket (may already be sock->sock if first attempt won)
-    sock->sock = winner.fd;
+    if (sock->sock != winner.fd) {
+        sock->sock = winner.fd;
+        ++sock->fd_generation;
+    } else {
+        sock->sock = winner.fd;
+    }
     winner.fd = QORE_INVALID_SOCKET;
     sock->resetCloseInterrupt();
     sock->sfamily = wp.family;
