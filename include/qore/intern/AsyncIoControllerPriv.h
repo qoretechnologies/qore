@@ -76,6 +76,13 @@ extern qore_classid_t CID_ASYNCIOCONTROLLER;
 */
 class AsyncIoControllerPriv;  // forward declaration for DT_CONTINUE_POLL
 
+#ifdef DEBUG
+//! Overrides the async I/O thread flag for focused unit tests
+/** @return the previous async I/O thread flag value
+*/
+DLLLOCAL bool qore_set_async_io_thread_for_test(bool value);
+#endif
+
 class QoreCallDispatcher {
 public:
     //! Dispatch type for async work items

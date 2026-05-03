@@ -13,11 +13,23 @@
 class AOTSmokeTest inherits QUnit::Test {
     private {
         string qore_bin;
+        string qcc_bin;
+        string timeout_cmd;
         string libqore_dir;
     }
 
     constructor() : QUnit::Test("AOTSmokeTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        qcc_bin = ENV.QORE_QCC_EXECUTABLE ?? dirname(qore_bin) + "/qcc";
+        if (!is_file(qcc_bin)) {
+            qcc_bin = "qcc";
+        }
+        timeout_cmd = ENV.QORE_TIMEOUT_EXECUTABLE ?? backquote(
+            "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
+        trim timeout_cmd;
+        if (!timeout_cmd.val()) {
+            timeout_cmd = "timeout";
+        }
         # Determine the directory containing libqore (for compile/link)
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         addTestCase("AOT hello world", \testHelloWorld());
@@ -226,6 +238,24 @@ class AOTSmokeTest inherits QUnit::Test {
             "src": src_path,
             "out": out_path,
         };
+    }
+
+    private string prependModulePath(string path) {
+        string cur = ENV.QORE_MODULE_DIR ?? "";
+        return cur == "" ? path : path + ":" + cur;
+    }
+
+    private string dumpQccInfo(string path, bool symbols) {
+        string opts = symbols ? "--dump-info --dump-symbols" : "--dump-info";
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s %s %s 2>&1",
+            libqore_dir, qcc_bin, opts, path));
+    }
+
+    private int aotMetadataOffset(string path, string dump_out) {
+        *list<string> match = (dump_out =~ x/embedded metadata at file offset ([0-9]+)/);
+        assertTrue(match != NOTHING,
+            "qcc dump-info reports embedded metadata file offset for " + path + ": " + dump_out);
+        return match[0].toInt();
     }
 
     #! Compile a script with extra compile flags, run it, and return {compile_out, run_out}
@@ -1839,14 +1869,12 @@ public namespace ModB {
         assertTrue(rb.compiled, "ModB compiled: " + rb.compile_out);
 
         # Symbols must be distinct (prefixed and namespace-qualified).
-        string nm_a = backquote(sprintf("nm -D %s/ModA.qmod 2>/dev/null | "
-            "grep -F ' T _qaot_ModA_ModA::shared_fn(string)' || true", tmp_dir));
-        string nm_b = backquote(sprintf("nm -D %s/ModB.qmod 2>/dev/null | "
-            "grep -F ' T _qaot_ModB_ModB::shared_fn(string)' || true", tmp_dir));
-        assertTrue(nm_a.size() > 0,
-            "ModA.qmod exports _qaot_ModA_ModA::shared_fn(string) symbol");
-        assertTrue(nm_b.size() > 0,
-            "ModB.qmod exports _qaot_ModB_ModB::shared_fn(string) symbol");
+        string dump_a = dumpQccInfo(tmp_dir + "/ModA.qmod", True);
+        string dump_b = dumpQccInfo(tmp_dir + "/ModB.qmod", True);
+        assertTrue(dump_a.regex("_qaot_ModA_ModA::shared_fn\\(string\\)"),
+            "qcc dump-symbols reports ModA _qaot_ModA_ModA::shared_fn(string) symbol: " + dump_a);
+        assertTrue(dump_b.regex("_qaot_ModB_ModB::shared_fn\\(string\\)"),
+            "qcc dump-symbols reports ModB _qaot_ModB_ModB::shared_fn(string) symbol: " + dump_b);
 
         # Run a script that loads both modules and calls each — a correct
         # dispatch yields ModA direct="A:x" and ModB wrapper="A:y:B".
@@ -3260,12 +3288,13 @@ printf(\"op=%y\\n\", fields.op.impl({\"value\": 17}));
             unlink(paths.src);
         }
 
+        string module_path = prependModulePath(mod_info.parent_dir);
         string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
-            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+            libqore_dir, module_path, qore_bin, paths.src));
 
         unlink(qmod_path);
         string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
-            libqore_dir, mod_info.parent_dir, qore_bin, paths.src));
+            libqore_dir, module_path, qore_bin, paths.src));
 
         assertEq(interp_out, aot_out, "AOT nested hash constant output matches interpreted module");
         assertEq("id=string/ID\nname=string/Name\nkind=string/a/B\nop=17\n", aot_out,
@@ -5394,36 +5423,13 @@ public namespace CorruptQmodTest {
         assertTrue(compile_res.compiled,
             "corrupt-qmod-regression: baseline compile succeeded: " + compile_res.compile_out);
 
-        # Corrupt the embedded AOT metadata.  The compiler emits it into
-        # .rodata with PrivateLinkage (no symbol entry), but the section
-        # layout is stable: the first ~48 bytes hold the module description
-        # C-strings (name, version, desc, author, license) followed by the
-        # `QORD` magic + serialized blob.  We locate .rodata via readelf
-        # and zero everything from 0x30 to the end — the module loader still
-        # finds a valid feature name, but deserializeIntoProgram() trips
-        # on the zeroed tag stream and triggers the v3 error path the
-        # deadlock lived on.
-        list<string> se_lines = backquote(sprintf("readelf -SW %s 2>&1", qmod_path)).split("\n");
-        int ro_off = -1;
-        int ro_size = -1;
-        foreach string line in (se_lines) {
-            if (!line.regex(" \\.rodata ")) continue;
-            list<string> tok = ();
-            foreach string p in (line.split(" ")) {
-                if (p != "") tok += p;
-            }
-            # "[N] .rodata PROGBITS <addr> <off> <size> ..."
-            int base = (tok[0].regex("^\\[") && tok.size() > 1) ? 1 : 0;
-            if (tok.size() < base + 5) continue;
-            ro_off = hexToInt(tok[base + 3]);
-            ro_size = hexToInt(tok[base + 4]);
-            break;
-        }
-        assertTrue(ro_off > 0 && ro_size > 64,
-            sprintf("corrupt-qmod-regression: located .rodata off=0x%x size=0x%x", ro_off, ro_size));
-
-        int md_off = ro_off + 0x30;
-        int md_len = ro_size - 0x30;
+        # Corrupt the embedded AOT metadata without depending on ELF section
+        # names.  qcc's dump-info uses LLVM object handling plus metadata
+        # scanning, so it is portable across ELF and Mach-O.
+        string dump_out = dumpQccInfo(qmod_path, False);
+        int qord_off = aotMetadataOffset(qmod_path, dump_out);
+        int md_off = qord_off + 4;
+        int md_len = 4;
         {
             File f();
             f.open2(qmod_path, O_RDWR);
@@ -5444,15 +5450,15 @@ public namespace CorruptQmodTest {
             f.close();
         }
 
-        # Use `timeout 15` so a regression deadlock produces a detectable
+        # Use timeout so a regression deadlock produces a detectable
         # non-zero exit and the test suite doesn't stall indefinitely.
-        string cmd = sprintf("LD_LIBRARY_PATH=%s timeout 15 %s --exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
-            libqore_dir, qore_bin, qmod_path, script);
+        string cmd = sprintf("LD_LIBRARY_PATH=%s %s 15 %s --exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, timeout_cmd, qore_bin, qmod_path, script);
         date started = now_us();
         string out = backquote(cmd);
         date elapsed = now_us() - started;
 
-        # Deadlock would make `timeout 15` kill the process, producing
+        # Deadlock would make timeout kill the process, producing
         # EXIT=124.  With the fix, qore returns fast with a non-zero exit
         # (the module load fails) but NOT 124.  Any of the AOT init error
         # tags ("LOAD-MODULE-ERROR", "MODULE-LOAD-ERROR") is acceptable —

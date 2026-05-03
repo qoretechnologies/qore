@@ -169,10 +169,21 @@ export QORE_BINARY="$QORE"
 export LIBQORE_BINARY="$LIBQORE"
 
 QORE_DIR=`dirname "$QORE"`
+QORE_BUILD_DIR="$QORE_DIR"
+if [ -n "$QORE_LIBDIR" ] && [ -d "$QORE_LIBDIR" ]; then
+    QORE_BUILD_DIR="$QORE_LIBDIR"
+elif [ -n "$LIBQORE" ]; then
+    _libqore_dir=`dirname "$LIBQORE"`
+    if [ -d "$_libqore_dir/qlib-qmod" ] || [ -d "$_libqore_dir/modules" ]; then
+        QORE_BUILD_DIR="$_libqore_dir"
+    elif [ -d "$_libqore_dir/../qlib-qmod" ] || [ -d "$_libqore_dir/../modules" ]; then
+        QORE_BUILD_DIR="$_libqore_dir/.."
+    fi
+fi
 BUILD_MODULE_DIRS=""
 BUILD_QMOD_DIR=""
-if [ -d "$QORE_DIR/modules" ]; then
-    for moddir in "$QORE_DIR/modules"/*; do
+if [ -d "$QORE_BUILD_DIR/modules" ]; then
+    for moddir in "$QORE_BUILD_DIR/modules"/*; do
         if [ -d "$moddir" ]; then
             if [ -z "$BUILD_MODULE_DIRS" ]; then
                 BUILD_MODULE_DIRS="$moddir"
@@ -190,6 +201,8 @@ if [ -n "$QORE_TEST_QMOD_DIR" ]; then
     BUILD_QMOD_DIR="$QORE_TEST_QMOD_DIR"
 elif [ "$QORE_TEST_SOURCE_MODULES" != "1" ] && [ -d "$QORE_DIR/qlib-qmod" ]; then
     BUILD_QMOD_DIR="$QORE_DIR/qlib-qmod"
+elif [ "$QORE_TEST_SOURCE_MODULES" != "1" ] && [ -d "$QORE_BUILD_DIR/qlib-qmod" ]; then
+    BUILD_QMOD_DIR="$QORE_BUILD_DIR/qlib-qmod"
 fi
 
 export LD_LIBRARY_PATH=$QORE_LIB_PATH

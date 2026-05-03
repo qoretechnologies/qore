@@ -29,6 +29,7 @@
 */
 
 #include <cstdint>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -37,6 +38,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
+#include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureParseNode.h"
@@ -101,6 +103,12 @@
 #include "qore/intern/ComplexContextrefNode.h"
 #include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/qore_list_private.h"
+
+static void makeExprDeserializedClosureIRNameUnique(QoreIRFunction& ir, const UserClosureVariant* variant) {
+    static std::atomic<uint64_t> closure_ir_counter{0};
+    ir.name += "@" + std::to_string(reinterpret_cast<uintptr_t>(variant))
+        + "_" + std::to_string(closure_ir_counter.fetch_add(1));
+}
 
 // ============================================================================
 // FUNC_CALL (1)
@@ -1035,6 +1043,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     closure_ir->cached_pre_instantiated = cached_pre_inst;
 
     // Set cached IR on variant
+    makeExprDeserializedClosureIRNameUnique(*closure_ir, closure_variant);
     closure_ir->computeSlotIdsAndEmbed();
     closure_variant->setCachedIR(closure_ir.release());
     closure_variant->pgm = ctx.pgm;

@@ -3675,6 +3675,24 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 }
                 PollInfo& pinfo = it->second;
                 if (pinfo.last_queued_gen == t.phase1_gen) {
+                    if (timed_out && pinfo.timeout_us > 0) {
+                        // A ready fd can queue an op before Step C sees its
+                        // expired operation timeout.  For elapsed positive
+                        // deadlines, the timeout must win, or level-triggered
+                        // readiness can keep the op alive forever (observed
+                        // with macOS kqueue connect-ready).  Do not apply this
+                        // to timeout_us == 0: those are nonblocking probes and
+                        // must still run continuePoll() when readiness is
+                        // available.
+                        for (auto& queued : ops_to_poll) {
+                            if (queued.key == key && queued.was_ready) {
+                                queued.timed_out = true;
+                                queued.was_ready = false;
+                                queued.ready_events = 0;
+                                return true;
+                            }
+                        }
+                    }
                     return false;  // already queued this iteration
                 }
                 if (pinfo.continue_poll_in_flight) {

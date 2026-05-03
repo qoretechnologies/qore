@@ -138,6 +138,49 @@ static const char* get_string_header(ExceptionSink* xsink, QoreHashNode& h, cons
    return str && !str->empty() ? str->c_str() : nullptr;
 }
 
+// Reads a normalized string header without mutating the header hash.  Use this
+// after response headers may have been exposed through info/callback hashes.
+static QoreStringNode* get_string_header_node_ref(ExceptionSink* xsink, const QoreHashNode& h, const char* header,
+        bool allow_multiple = false) {
+    QoreValue n = h.getKeyValue(header);
+    if (n.isNothing())
+        return nullptr;
+
+    qore_type_t t = n.getType();
+    if (t == NT_STRING) {
+        QoreStringNodeValueHelper str(n);
+        return str.getReferencedValue();
+    }
+    assert(t == NT_LIST);
+    if (!allow_multiple) {
+        xsink->raiseException("HTTP-HEADER-ERROR", "multiple \"%s\" headers received in HTTP message", header);
+        return nullptr;
+    }
+
+    const QoreListNode* l = n.get<const QoreListNode>();
+    n = l->retrieveEntry(0);
+    assert(n.getType() == NT_STRING);
+    QoreStringNodeValueHelper first(n);
+    QoreStringNode* rv = new QoreStringNode(**first);
+    for (size_t i = 1; i < l->size(); ++i) {
+        n = l->retrieveEntry(i);
+        assert(n.getType() == NT_STRING);
+        rv->concat(',');
+        QoreStringValueHelper str(n);
+        qore_string_private::get(rv)->concat(*str);
+    }
+    return rv;
+}
+
+static std::optional<std::string> get_string_header_value(ExceptionSink* xsink, const QoreHashNode& h,
+        const char* header, bool allow_multiple = false) {
+    SimpleRefHolder<QoreStringNode> str(get_string_header_node_ref(xsink, h, header, allow_multiple));
+    if ((xsink && *xsink) || !str || str->empty()) {
+        return std::nullopt;
+    }
+    return std::string(str->c_str());
+}
+
 const char* QoreHttpClientObject::getHttpStatusMessage(int code) {
     switch (code) {
         // 1xx: Informational
@@ -220,7 +263,7 @@ static void set_http2_response_info(ExceptionSink* xsink, QoreHashNode& headers,
 }
 
 static void set_body_content_type_info(ExceptionSink* xsink, QoreHashNode& headers, QoreHashNode& info) {
-    const QoreStringNode* ct = get_string_header_node(xsink, headers, "content-type", true);
+    SimpleRefHolder<QoreStringNode> ct(get_string_header_node_ref(xsink, headers, "content-type", true));
     if (*xsink || !ct || ct->empty()) {
         return;
     }
@@ -2509,7 +2552,7 @@ struct qore_httpclient_priv {
             return false;
         }
 
-        const QoreStringNode* challenge = get_string_header_node(xsink, ans, challenge_hdr);
+        SimpleRefHolder<QoreStringNode> challenge(get_string_header_node_ref(xsink, ans, challenge_hdr));
         if (*xsink || !challenge || challenge->empty()) {
             return false;
         }
@@ -4367,6 +4410,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     // Redirect + auth retry loop
     int redirect_count = 0;
     bool auth_retried = false;
+    std::string location_storage;
     const char* location = nullptr;
     ReferenceHolder<QoreHashNode> ans(xsink);
     int code = 0;
@@ -4673,9 +4717,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         }
 
                         if (info) {
-                            // set_body_content_type_info must run BEFORE
-                            // refSelf() of ans — see comment in non-
-                            // streaming path for the refcount reason.
                             set_body_content_type_info(xsink, **ans, *info);
                             info->setKeyValue("response-headers", ans->refSelf(), xsink);
                             QoreValue raw_hdrs = h->getKeyValue("headers_raw");
@@ -4876,11 +4917,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 code = (int)ans->getKeyValue("status_code").getAsBigInt();
 
                 if (info) {
-                    // set_body_content_type_info mutates the headers hash
-                    // (folds multi-value headers) via get_string_header_node,
-                    // so it must run BEFORE we refSelf() ans into the info
-                    // hash — otherwise ans has reference_count() > 1 and
-                    // setKeyValue trips its uniqueness assertion.
                     set_body_content_type_info(xsink, **ans, *info);
                     info->setKeyValue("response-headers", ans->refSelf(), xsink);
                     if (*xsink) {
@@ -4987,11 +5023,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
 
                     if (info) {
-                        // set_body_content_type_info must run BEFORE
-                        // refSelf() of ans — ans has reference_count() > 1
-                        // after response-headers is set, which trips the
-                        // setKeyValue uniqueness assertion in
-                        // get_string_header_node's multi-value fold.
                         set_body_content_type_info(xsink, **ans, *info);
                         info->setKeyValue("response-headers", ans->refSelf(), xsink);
                         QoreValue raw_hdrs = h->getKeyValue("headers_raw");
@@ -5004,16 +5035,18 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     // Determine response transfer-encoding and content-encoding
                     // for body delivery decisions
                     {
-                        const char* te = get_string_header(xsink, **ans, "transfer-encoding");
-                        if (te && strcasestr(te, "chunked")) {
+                        std::optional<std::string> te = get_string_header_value(xsink, **ans,
+                            "transfer-encoding");
+                        if (te && strcasestr(te->c_str(), "chunked")) {
                             is_chunked_response = true;
                         }
                         if (*xsink) {
                             xsink->clear();
                         }
-                        const char* ce = get_string_header(xsink, **ans, "content-encoding");
-                        if (ce && *ce && strcasecmp(ce, "identity")) {
-                            resp_content_encoding = ce;
+                        std::optional<std::string> ce = get_string_header_value(xsink, **ans,
+                            "content-encoding");
+                        if (ce && !ce->empty() && strcasecmp(ce->c_str(), "identity")) {
+                            resp_content_encoding = *ce;
                         }
                         if (*xsink) {
                             xsink->clear();
@@ -5033,12 +5066,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         // per-event delivery.
                         bool is_event_stream = false;
                         {
-                            const char* ct = get_string_header(xsink,
+                            std::optional<std::string> ct = get_string_header_value(xsink,
                                 **ans, "content-type", true);
                             if (*xsink) {
                                 xsink->clear();
                             }
-                            if (ct && strcasestr(ct, "text/event-stream")) {
+                            if (ct && strcasestr(ct->c_str(), "text/event-stream")) {
                                 is_event_stream = true;
                             }
                         }
@@ -5349,9 +5382,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
 
                     if (info) {
-                        // set_body_content_type_info BEFORE refSelf() — see
-                        // comment on the analogous guard elsewhere in this
-                        // function for the refcount/assertion rationale.
                         set_body_content_type_info(xsink, **ans, *info);
                         info->setKeyValue("response-headers", ans->refSelf(), xsink);
                         QoreValue raw_hdrs = h->getKeyValue("headers_raw");
@@ -5474,8 +5504,6 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             code = (int)ans->getKeyValue("status_code").getAsBigInt();
 
             if (info) {
-                // set_body_content_type_info BEFORE refSelf() of ans — see
-                // comment on the analogous guards in the streaming paths.
                 set_body_content_type_info(xsink, **ans, *info);
                 info->setKeyValue("response-headers", ans->refSelf(), xsink);
                 if (*xsink) {
@@ -5501,9 +5529,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // send_internal behavior).  The conn_mgr path uses its own sockets
         // for I/O, but events are fired on msock's queue for user visibility.
         {
-            const char* cl = get_string_header(xsink, **ans, "content-length");
+            std::optional<std::string> cl = get_string_header_value(xsink, **ans, "content-length");
             if (!*xsink && cl) {
-                ssize_t len = strtoll(cl, nullptr, 10);
+                ssize_t len = strtoll(cl->c_str(), nullptr, 10);
                 msock->socket->priv->do_content_length_event(len, QORE_SOURCE_HTTPCLIENT);
             }
             if (*xsink) {
@@ -5529,11 +5557,17 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             QoreStringNodeValueHelper mess(mess_val);
             const QoreStringNode* mess_node = mess_val.getType() == NT_STRING ? *mess : nullptr;
 
-            const QoreStringNode* loc = get_string_header_node(xsink, **ans, "location");
+            SimpleRefHolder<QoreStringNode> loc(get_string_header_node_ref(xsink, **ans, "location"));
             if (*xsink) {
                 return nullptr;
             }
-            location = loc && !loc->empty() ? loc->c_str() : nullptr;
+            if (loc && !loc->empty()) {
+                location_storage = loc->c_str();
+                location = location_storage.c_str();
+            } else {
+                location_storage.clear();
+                location = nullptr;
+            }
             if (!location) {
                 const char* msg = mess_node ? mess_node->c_str() : "<no message>";
                 xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR",
@@ -5546,7 +5580,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
 
             // Fire redirect event on the HTTPClient's event queue
-            msock->socket->priv->do_redirect_event(loc, mess_node, QORE_SOURCE_HTTPCLIENT);
+            msock->socket->priv->do_redirect_event(*loc, mess_node, QORE_SOURCE_HTTPCLIENT);
 
             if (redirectUrlUnlocked(location, this_connection, xsink)) {
                 const char* msg = mess_node ? mess_node->c_str() : "<no message>";
@@ -5582,16 +5616,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
     // Check for max redirects exceeded
     if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
-        const char* mess = get_string_header(xsink, **ans, "status_message");
-        if (!mess) {
-            mess = "<no message>";
-        }
+        std::optional<std::string> mess = get_string_header_value(xsink, **ans, "status_message");
+        const char* msg = mess ? mess->c_str() : "<no message>";
         if (!location) {
             location = "<no location>";
         }
         xsink->raiseException("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED",
             "maximum redirections (%d) exceeded; redirect code %d to '%s' ignored (message: '%s')",
-            max_redirects, code, location, mess);
+            max_redirects, code, location, msg);
         return nullptr;
     }
 
@@ -5678,13 +5710,11 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     // guard at the bottom of the legacy send_internal.
     if (!error_passthru && !recv_callback && !os && !*xsink
             && (code < 100 || code >= 300)) {
-        const char* mess = get_string_header(xsink, **ans, "status_message");
-        if (!mess) {
-            mess = "<no message>";
-        }
+        std::optional<std::string> mess = get_string_header_value(xsink, **ans, "status_message");
+        const char* msg = mess ? mess->c_str() : "<no message>";
         assert(!*xsink);
         xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", ans.release(),
-            "HTTP status code %d received: message: %s", code, mess);
+            "HTTP status code %d received: message: %s", code, msg);
         return nullptr;
     }
 
@@ -5903,13 +5933,11 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
     }
 
     if (!error_passthru && !*xsink && (code < 100 || code >= 300)) {
-        const char* mess = get_string_header(xsink, **ans, "status_message");
-        if (!mess) {
-            mess = "<no message>";
-        }
+        std::optional<std::string> mess = get_string_header_value(xsink, **ans, "status_message");
+        const char* msg = mess ? mess->c_str() : "<no message>";
         assert(!*xsink);
         xsink->raiseExceptionArg("HTTP-CLIENT-RECEIVE-ERROR", ans.release(),
-            "HTTP status code %d received: message: %s", code, mess);
+            "HTTP status code %d received: message: %s", code, msg);
         return nullptr;
     }
 

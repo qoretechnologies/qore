@@ -123,15 +123,44 @@ fi
 case "$PM" in
     macports)
         CMAKE_PREFIX="/opt/local"
+        PM_PREFIX="/opt/local"
         ;;
     homebrew)
         # Homebrew on Apple Silicon; include keg-only package prefixes for CMake
         CMAKE_PREFIX="/opt/homebrew;/opt/homebrew/opt/openssl@3;/opt/homebrew/opt/libxml2;/opt/homebrew/opt/ossp-uuid"
+        PM_PREFIX="${HB:-/opt/homebrew}"
         ;;
     *)
         CMAKE_PREFIX=""
+        PM_PREFIX=""
         ;;
 esac
+
+BASE_QORE_MODULE_DIR="${QORE_MODULE_DIR:-}"
+EXTRA_MODULE_DIRS=""
+
+add_macos_module_dir() {
+    [ -d "$1" ] && EXTRA_MODULE_DIRS="$1:${EXTRA_MODULE_DIRS}"
+    return 0
+}
+
+add_macos_module_dirs() {
+    qore_api_ver="$1"
+    for p in "${PM_PREFIX}" /usr/local; do
+        [ -z "$p" ] && continue
+        if [ -n "$qore_api_ver" ]; then
+            add_macos_module_dir "$p/lib/qore-modules/${qore_api_ver}"
+            add_macos_module_dir "$p/share/qore-modules/${qore_api_ver}"
+        fi
+        add_macos_module_dir "$p/lib/qore-modules"
+        add_macos_module_dir "$p/share/qore-modules"
+    done
+}
+
+# AOT qlib compilation happens during `make` and can require pre-installed
+# binary modules such as json/yaml/uuid, so expose their unversioned paths now.
+add_macos_module_dirs ""
+export QORE_MODULE_DIR="${EXTRA_MODULE_DIRS}${BASE_QORE_MODULE_DIR}"
 
 CMAKE_PREFIX_PATH="${CMAKE_PREFIX}"
 if [ -n "$LLVM_PREFIX" ]; then
@@ -162,20 +191,9 @@ cd "${QORE_SRC_DIR}"
 # prefix or under /usr/local — qore-test-base installs them to /usr/local
 # (INSTALL_PREFIX=/usr/local in prep-macos.sh).  Probe both.
 EXTRA_MODULE_DIRS=""
-case "$PM" in
-    macports) PM_PREFIX="/opt/local" ;;
-    homebrew) PM_PREFIX="${HB:-/opt/homebrew}" ;;
-    *)        PM_PREFIX="" ;;
-esac
 QORE_API_VER=$(build/qore --module-api 2>/dev/null || true)
-for p in "${PM_PREFIX}" /usr/local; do
-    [ -z "$p" ] && continue
-    [ -d "$p/lib/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="$p/lib/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
-    [ -d "$p/lib/qore-modules" ] && EXTRA_MODULE_DIRS="$p/lib/qore-modules:${EXTRA_MODULE_DIRS}"
-    [ -d "$p/share/qore-modules/${QORE_API_VER}" ] && EXTRA_MODULE_DIRS="$p/share/qore-modules/${QORE_API_VER}:${EXTRA_MODULE_DIRS}"
-    [ -d "$p/share/qore-modules" ] && EXTRA_MODULE_DIRS="$p/share/qore-modules:${EXTRA_MODULE_DIRS}"
-done
-export QORE_MODULE_DIR="${QORE_SRC_DIR}/qlib:${EXTRA_MODULE_DIRS}${QORE_MODULE_DIR:-}"
+add_macos_module_dirs "$QORE_API_VER"
+export QORE_MODULE_DIR="${QORE_SRC_DIR}/qlib:${EXTRA_MODULE_DIRS}${BASE_QORE_MODULE_DIR}"
 
 # Run tests using the built qore binary
 export PATH="${BUILD_DIR}:${PATH}"

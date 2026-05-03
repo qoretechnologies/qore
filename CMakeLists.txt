@@ -2273,8 +2273,35 @@ set(QORE_QM_METADATA_MODULE_DIRS
     ${CMAKE_BINARY_DIR}/modules/dataframe
     ${CMAKE_BINARY_DIR}/modules/protobuf)
 string(REPLACE ";" ":" QORE_QM_METADATA_MODULE_DIRS_STR "${QORE_QM_METADATA_MODULE_DIRS}")
+set(QORE_BUILD_EXTERNAL_MODULE_DIRS
+    ${CMAKE_INSTALL_FULL_DATADIR}/qore-modules
+    ${CMAKE_INSTALL_FULL_LIBDIR}/qore-modules
+    /usr/local/share/qore-modules
+    /usr/local/lib/qore-modules
+    /usr/share/qore-modules
+    /usr/lib/qore-modules)
+if(CMAKE_LIBRARY_ARCHITECTURE)
+    list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
+        /usr/local/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules
+        /usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/qore-modules)
+endif()
+if(APPLE)
+    list(APPEND QORE_BUILD_EXTERNAL_MODULE_DIRS
+        /opt/local/share/qore-modules
+        /opt/local/lib/qore-modules
+        /opt/homebrew/share/qore-modules
+        /opt/homebrew/lib/qore-modules)
+endif()
+list(REMOVE_DUPLICATES QORE_BUILD_EXTERNAL_MODULE_DIRS)
+string(REPLACE ";" ":" QORE_BUILD_EXTERNAL_MODULE_DIRS_STR "${QORE_BUILD_EXTERNAL_MODULE_DIRS}")
+set(QORE_BUILD_MODULE_DIRS_STR
+    "${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib:${QORE_BUILD_EXTERNAL_MODULE_DIRS_STR}")
+if(DEFINED ENV{QORE_MODULE_DIR} AND NOT "$ENV{QORE_MODULE_DIR}" STREQUAL "")
+    set(QORE_BUILD_MODULE_DIRS_STR
+        "${QORE_BUILD_MODULE_DIRS_STR}:$ENV{QORE_MODULE_DIR}")
+endif()
 set(QORE_QM_METADATA_ENV
-    "QORE_MODULE_DIR=${QORE_QM_METADATA_MODULE_DIRS_STR}:${CMAKE_SOURCE_DIR}/qlib:/usr/local/share/qore-modules:/usr/local/lib/x86_64-linux-gnu/qore-modules:/usr/share/qore-modules:/usr/lib/x86_64-linux-gnu/qore-modules"
+    "QORE_MODULE_DIR=${QORE_BUILD_MODULE_DIRS_STR}"
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 set(QORE_AOT_BINARY_MODULE_TARGETS)
 foreach(_qore_build_module astparser reflection logger_bin linenoise krb5 mongodb ml tokenizer ocr dataframe protobuf)

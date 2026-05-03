@@ -33,6 +33,7 @@
 #include "qore/intern/QoreJITException.h"
 
 #include <time.h>
+#include <atomic>
 #include <cstdlib>
 
 #include "qore/intern/QoreAOT.h"
@@ -201,6 +202,12 @@ extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, 
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
 
 static std::string describeAOTClassRef(const char* class_ref);
+
+static void makeRuntimeDeserializedClosureIRNameUnique(QoreIRFunction& ir, const UserClosureVariant* variant) {
+    static std::atomic<uint64_t> closure_ir_counter{0};
+    ir.name += "@" + std::to_string(reinterpret_cast<uintptr_t>(variant))
+        + "_" + std::to_string(closure_ir_counter.fetch_add(1));
+}
 
 static const AbstractQoreZoneInfo* runtimeReadAOTDateZone(const char* zone_name) {
     if (!zone_name || !*zone_name || !strcmp(zone_name, "UTC")) {
@@ -3429,6 +3436,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 closure_ir->cached_pre_instantiated = cached_pre_inst;
 
                 // Set cached IR on variant and promote to TIER_IR
+                makeRuntimeDeserializedClosureIRNameUnique(*closure_ir, closure_variant);
                 closure_ir->computeSlotIdsAndEmbed();
                 closure_variant->setCachedIR(closure_ir.release());
                 closure_variant->pgm = pgm;

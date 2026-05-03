@@ -5652,10 +5652,9 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     if (!skip_body_locals) {
         const QoreParseOptions& po = uvb->pgm->getParseOptions();
         for (LocalVar* lv : body_locals) {
-            // Skip closure-use vars in AOT mode: the LLVM code handles their
-            // instantiation/uninstantiation at block scope boundaries via
-            // qore_rt_instantiate_local_aot / qore_rt_pop_closure_var_aot.
-            if (has_aot && lv->closureUse()) {
+            // Closure-use vars must not be pre-instantiated here: doing so creates
+            // empty CVVs in the current frame and shadows captured closure variables.
+            if (lv->closureUse()) {
                 continue;
             }
             lv->instantiate(po);
@@ -5735,8 +5734,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
 
     if (!skip_body_locals) {
         for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-            if (has_aot && body_locals[i]->closureUse()) {
-                // AOT closure-use locals are managed by the LLVM code
+            if (body_locals[i]->closureUse()) {
+                // Closure-use locals are managed by the LLVM code
                 // (emitLocalInstantiation/emitLocalUninstantiation).  On normal
                 // return the CVV is already popped.  On exception paths the LLVM
                 // epilogue may be skipped, so safely pop any remaining CVV here.

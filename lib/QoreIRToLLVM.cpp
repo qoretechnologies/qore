@@ -1727,9 +1727,9 @@ void QoreIRToLLVM::emitLifetimeAnnotations(llvm::Function* llvm_func) {
         return;
     }
 
-    // Compute a constant byte size per alloca (or -1 if dynamic).  Lifetime
-    // intrinsics require a constant size; -1 is the "unknown / conservative
-    // whole-alloca" sentinel.
+#if LLVM_VERSION_MAJOR < 22
+    // Compute a constant byte size per alloca (or -1 if dynamic).  Older LLVM
+    // lifetime intrinsics require a constant size; -1 is the unknown sentinel.
     auto sizeFor = [&](llvm::AllocaInst* ai) -> int64_t {
         llvm::TypeSize ts = dl.getTypeAllocSize(ai->getAllocatedType());
         if (ts.isScalable()) {
@@ -1742,22 +1742,29 @@ void QoreIRToLLVM::emitLifetimeAnnotations(llvm::Function* llvm_func) {
         }
         return -1;
     };
+#endif
 
     // Insert lifetime.start right after each alloca.
     llvm::IRBuilder<> start_builder(llvm_func->getContext());
     for (llvm::AllocaInst* ai : allocas) {
+#if LLVM_VERSION_MAJOR < 22
         int64_t sz = sizeFor(ai);
         if (sz <= 0) {
             sz = -1;
         }
+#endif
         llvm::Instruction* next = ai->getNextNode();
         if (next) {
             start_builder.SetInsertPoint(next);
         } else {
             start_builder.SetInsertPoint(&entry);
         }
+#if LLVM_VERSION_MAJOR >= 22
+        start_builder.CreateLifetimeStart(ai);
+#else
         start_builder.CreateLifetimeStart(ai,
                 llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_func->getContext()), sz));
+#endif
     }
 
     // Emit lifetime.end before every ret / resume terminator.
@@ -1772,12 +1779,18 @@ void QoreIRToLLVM::emitLifetimeAnnotations(llvm::Function* llvm_func) {
         }
         end_builder.SetInsertPoint(term);
         for (llvm::AllocaInst* ai : allocas) {
+#if LLVM_VERSION_MAJOR < 22
             int64_t sz = sizeFor(ai);
             if (sz <= 0) {
                 sz = -1;
             }
+#endif
+#if LLVM_VERSION_MAJOR >= 22
+            end_builder.CreateLifetimeEnd(ai);
+#else
             end_builder.CreateLifetimeEnd(ai,
                     llvm::ConstantInt::get(llvm::Type::getInt64Ty(llvm_func->getContext()), sz));
+#endif
         }
     }
 }
@@ -13988,10 +14001,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Register the on_block_exit handler for deferred execution at function exit.
             // The IR interpreter records handlers and executes them at return time;
             // the JIT does the same via thread-local runtime helpers.
+            obe_type_e obe_type = sinst->stmt ? sinst->stmt->getType() : sinst->obe_type;
             llvm::Value* type_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
-                    static_cast<int>(sinst->stmt->getType()));
-            StatementBlock* code = sinst->stmt->getCode();
+                    static_cast<int>(obe_type));
+            StatementBlock* code = sinst->stmt ? sinst->stmt->getCode() : nullptr;
             if (aot_mode) {
+                if (!code) {
+                    return setAotExpressionFallbackError(error, inst,
+                            "deserialized on-block-exit instruction has no AOT statement slot");
+                }
                 // AOT mode: use slot index instead of raw pointer
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getStmtSlot(
                         reinterpret_cast<const void*>(code));
@@ -14053,6 +14071,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(helper, {type_val, code_as_ptr, handler_ir_as_ptr});
                 }
             } else {
+                if (!code) {
+                    error = "on-block-exit has no AST statement or compiled handler IR";
+                    return false;
+                }
                 // AST fallback
                 llvm::Value* code_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(code));

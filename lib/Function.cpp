@@ -2347,6 +2347,64 @@ const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
     return cached_ir->ast_visible_body_locals;
 }
 
+void UserVariantBase::setCachedIR(QoreIRFunction* ir) {
+    cached_ir = ir;
+    if (cached_ir) {
+        cached_ir->computeIROnlyLocals();
+        all_body_locals_ir_only = cached_ir->areAllBodyLocalsIROnly();
+
+        if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+            if (!cached_ir->ir_only_locals.empty()) {
+                cached_ir->ir_only_locals.clear();
+                cached_ir->ast_visible_body_locals = cached_ir->all_body_locals;
+                all_body_locals_ir_only = false;
+            }
+        }
+
+        // Keep deserialized cached IR aligned with source-lowered IR metadata:
+        // IR-only body locals are owned by the LLVM/IR frame and must not be
+        // treated as pre-instantiated runtime-stack locals.
+        for (LocalVar* lv : cached_ir->all_body_locals) {
+            const void* key = reinterpret_cast<const void*>(lv);
+            if (cached_ir->ir_only_locals.count(key)) {
+                cached_ir->pre_instantiated_locals.erase(key);
+                cached_ir->pre_instantiated_cache.erase(lv);
+            } else {
+                cached_ir->pre_instantiated_locals.insert(key);
+                cached_ir->pre_instantiated_cache.insert(lv);
+            }
+        }
+
+        delete cached_ir->cached_pre_instantiated;
+        auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
+        for (unsigned i = 0; i < signature.numParams(); ++i) {
+            if (signature.lv[i]) {
+                cached_pre_inst->insert(signature.lv[i]);
+                cached_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.lv[i]));
+                cached_ir->pre_instantiated_cache.insert(signature.lv[i]);
+            }
+        }
+        if (signature.argvid) {
+            cached_pre_inst->insert(signature.argvid);
+            cached_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.argvid));
+            cached_ir->pre_instantiated_cache.insert(signature.argvid);
+        }
+        if (signature.selfid) {
+            cached_pre_inst->insert(signature.selfid);
+            cached_ir->pre_instantiated_locals.insert(reinterpret_cast<const void*>(signature.selfid));
+            cached_ir->pre_instantiated_cache.insert(signature.selfid);
+        }
+        for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
+            if (!lv->closureUse()) {
+                cached_pre_inst->insert(lv);
+            }
+        }
+        cached_ir->cached_pre_instantiated = cached_pre_inst;
+    }
+    std::call_once(ir_lower_once, []{});  // consume the flag safely
+    current_tier.store(TIER_IR, std::memory_order_release);
+}
+
 void UserVariantBase::parseInitPushLocalVars(const QoreTypeInfo* classTypeInfo) {
     signature.parseInitPushLocalVars(classTypeInfo);
 }
@@ -3233,15 +3291,14 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     ? cached_aot_ctx->all_body_locals
                     : cached_ir->ast_visible_body_locals;
 
-                // Instantiate AST-visible body locals so that
-                // AST Invoke callbacks can find them on the thread-local stack.
-                // Skip closure-use vars in AOT mode: the LLVM code handles their
-                // instantiation/uninstantiation at block scope boundaries via
-                // qore_rt_instantiate_local_aot / qore_rt_pop_closure_var_aot.
+                // Instantiate AST-visible body locals so that AST Invoke callbacks
+                // can find them on the thread-local stack.  Closure-use vars must
+                // not be pre-instantiated here: doing so creates empty CVVs in the
+                // current frame and shadows captured closure variables.
                 const QoreParseOptions& po = pgm->getParseOptions();
                 if (!body_locals.empty()) {
                     for (LocalVar* lv : body_locals) {
-                        if (cached_aot_ctx && lv->closureUse()) {
+                        if (lv->closureUse()) {
                             continue;
                         }
                         lv->instantiate(po);
@@ -3313,12 +3370,11 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Restore thread-local parse options
                 swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
-                // Uninstantiate in reverse order (LIFO)
-                // Skip closure-use vars in AOT mode: the LLVM code already popped
-                // them via qore_rt_pop_closure_var_aot at block scope boundaries.
+                // Uninstantiate in reverse order (LIFO).  Closure-use vars were
+                // not pre-instantiated above; IR/JIT block-scope code manages them.
                 if (!body_locals.empty()) {
                     for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-                        if (cached_aot_ctx && body_locals[i]->closureUse()) {
+                        if (body_locals[i]->closureUse()) {
                             continue;
                         }
                         body_locals[i]->uninstantiate(xsink);
