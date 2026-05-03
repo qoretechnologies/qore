@@ -2238,6 +2238,7 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 # QM metadata extraction requires the json binary module (via QoreApiMetadata).
 # On a fresh build json will not be installed yet; re-run cmake after
 # installing the json module to enable QM metadata extraction.
+set(QORE_EXECUTABLE ${CMAKE_BINARY_DIR}/qore)
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_MODULE_DIRS

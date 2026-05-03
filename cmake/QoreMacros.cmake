@@ -151,6 +151,12 @@ ENDMACRO (QORE_INSTALL_QPP_METADATA)
 #
 MACRO (QORE_EXTRACT_QM_METADATA _module_name)
     if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR)
+        if(DEFINED QORE_EXECUTABLE)
+            set(_qore_qm_metadata_command
+                ${QORE_EXECUTABLE} ${QORE_QM_METADATA_EXECUTABLE})
+        else()
+            set(_qore_qm_metadata_command ${QORE_QM_METADATA_EXECUTABLE})
+        endif()
         set(_qm_meta_files "")
         foreach(_qm_file ${ARGN})
             get_filename_component(_qm_basename ${_qm_file} NAME)
@@ -158,7 +164,7 @@ MACRO (QORE_EXTRACT_QM_METADATA _module_name)
             if(DEFINED QORE_QM_METADATA_ENV)
                 add_custom_command(OUTPUT ${_qm_meta_out}
                     COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-                        ${QORE_QM_METADATA_EXECUTABLE}
+                        ${_qore_qm_metadata_command}
                         ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
                         ${_qm_meta_out}
                     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
@@ -167,7 +173,7 @@ MACRO (QORE_EXTRACT_QM_METADATA _module_name)
                 )
             else()
                 add_custom_command(OUTPUT ${_qm_meta_out}
-                    COMMAND ${QORE_QM_METADATA_EXECUTABLE}
+                    COMMAND ${_qore_qm_metadata_command}
                         ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
                         ${_qm_meta_out}
                     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${_qm_file}
@@ -251,6 +257,30 @@ ENDMACRO (QORE_BINARY_MODULE_QORE)
 MACRO (QORE_EXTERNAL_BINARY_MODULE _module_name _version)
     QORE_BINARY_MODULE_INTERN2(${_module_name} ${_version} "" 2 ${ARGN})
     set(_external_module_name ${_module_name})
+    if (TARGET ${_module_name})
+        list(FIND QORE_AOT_BINARY_MODULE_TARGETS ${_module_name} _qore_aot_binary_module_found)
+        if (_qore_aot_binary_module_found EQUAL -1)
+            list(APPEND QORE_AOT_BINARY_MODULE_TARGETS ${_module_name})
+        endif()
+        unset(_qore_aot_binary_module_found)
+        list(FIND QORE_QM_METADATA_DEPENDS ${_module_name} _qore_qm_metadata_dep_found)
+        if (_qore_qm_metadata_dep_found EQUAL -1)
+            list(APPEND QORE_QM_METADATA_DEPENDS ${_module_name})
+        endif()
+        unset(_qore_qm_metadata_dep_found)
+    endif()
+    if (NOT DEFINED QORE_QM_METADATA_ENV)
+        set(_qore_external_module_path "${CMAKE_BINARY_DIR}:${CMAKE_SOURCE_DIR}/qlib")
+        if (DEFINED QORE_BUILDTREE_USER_MODULE_PATH
+                AND NOT "${QORE_BUILDTREE_USER_MODULE_PATH}" STREQUAL "")
+            set(_qore_external_module_path
+                "${_qore_external_module_path}:${QORE_BUILDTREE_USER_MODULE_PATH}")
+        endif()
+        set(QORE_QM_METADATA_ENV
+            "QORE_MODULE_DIR=${_qore_external_module_path}:$ENV{QORE_MODULE_DIR}"
+            "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:$ENV{LD_LIBRARY_PATH}")
+        unset(_qore_external_module_path)
+    endif()
 ENDMACRO (QORE_EXTERNAL_BINARY_MODULE)
 
 MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suffix)
@@ -411,8 +441,9 @@ ENDMACRO (QORE_BINARY_MODULE_INTERN2)
 
 # Emit AOT-build rules for a user module producing a .qmod via qcc.
 #
-# Gated on QORE_BUILD_AOT_MODULES; only useful when qcc is a build target
-# (i.e. when building Qore itself) or an external importable target.
+# Gated on QORE_BUILD_AOT_MODULES; uses the in-tree qcc target when building
+# Qore itself, and QORE_QCC_EXECUTABLE from QoreConfig.cmake for external
+# binary module builds.
 #
 # Args (positional):
 #   _name        module base name (e.g. Util, DataProvider)
@@ -425,8 +456,29 @@ ENDMACRO (QORE_BINARY_MODULE_INTERN2)
 # .qmod-vs-.qm precedence rule in ModuleManager, it wins over the sibling
 # .qm source.
 MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
-    if (NOT TARGET qcc)
-        message(FATAL_ERROR "QORE_BUILD_AOT_MODULES=ON requires a qcc target")
+    if (TARGET qcc)
+        set(_qore_qcc_command $<TARGET_FILE:qcc>)
+    elseif (DEFINED QORE_QCC_EXECUTABLE)
+        set(_qore_qcc_command ${QORE_QCC_EXECUTABLE})
+    else()
+        message(FATAL_ERROR "QORE_BUILD_AOT_MODULES=ON requires qcc or QORE_QCC_EXECUTABLE")
+    endif()
+
+    if (NOT DEFINED QCC_FORMAT_STAMP)
+        set(QCC_FORMAT_STAMP ${CMAKE_BINARY_DIR}/qcc-format.stamp)
+        add_custom_command(
+            OUTPUT ${QCC_FORMAT_STAMP}
+            COMMAND ${CMAKE_COMMAND} -E touch ${QCC_FORMAT_STAMP}
+            DEPENDS ${_qore_qcc_command}
+            COMMENT "Updating qcc format-version stamp"
+            VERBATIM
+        )
+        if (NOT TARGET qcc-format-version)
+            add_custom_target(qcc-format-version DEPENDS ${QCC_FORMAT_STAMP})
+        endif()
+    endif()
+    if (NOT DEFINED QORE_AOT_LINK_SOURCE_MODULES)
+        set(QORE_AOT_LINK_SOURCE_MODULES ON)
     endif()
 
     # Split-dir modules emit `build/qlib-qmod/<name>/<name>.qmod` and copy
@@ -506,18 +558,17 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     # runtime-only fixes (QoreAOTRuntime.cpp, Function.cpp evalIntern,
     # slot-reg filtering, etc.) that don't affect qmod output.
     if (${_is_dir})
-        # Symlink at qlib/<name>/<name>.qmod (inside the source subdir,
-        # alongside the resources).  Tests using
+        # Optional symlink at qlib/<name>/<name>.qmod (inside the source
+        # subdir, alongside the resources).  Tests using
         # %prepend-module-path "${SCRIPT_DIR}/../../../../qlib" drive
         # module lookup into the <name>/ folder where the loader prefers
         # the `.qmod` form per the within-folder preference rule added
-        # to ModuleManager::loadModuleIntern.  The link target is
-        # .gitignored (/qlib/*/*.qmod).
+        # to ModuleManager::loadModuleIntern.
         add_custom_command(
             OUTPUT ${_qmod_out}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-                $<TARGET_FILE:qcc> -m ${_source_root}
+                ${_qore_qcc_command} -m ${_source_root}
                 --depfile=${_qmod_dep} -o ${_qmod_out}
             DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
             DEPFILE ${_qmod_dep}
@@ -541,18 +592,17 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             list(APPEND _qmod_resource_copies ${_res_out})
         endforeach()
     else()
-        # Drop a symlink at qlib/<name>.qmod pointing at the freshly
-        # built qmod.  The in-tree test suite uses
+        # Optionally drop a symlink at qlib/<name>.qmod pointing at the
+        # freshly built qmod.  The in-tree test suite uses
         # %prepend-module-path "${SCRIPT_DIR}/../../../../qlib" to anchor
         # module lookup at the source qlib/ directory; placing the qmod
         # there alongside the .qm lets loadModuleIntern's within-dir
-        # preference order pick the AOT artifact.  The link target is
-        # .gitignored (/qlib/*.qmod).
+        # preference order pick the AOT artifact.
         add_custom_command(
             OUTPUT ${_qmod_out}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_qmod_out_dir}
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
-                $<TARGET_FILE:qcc> -m ${_source_root}
+                ${_qore_qcc_command} -m ${_source_root}
                 --depfile=${_qmod_dep} -o ${_qmod_out}
             DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
             DEPFILE ${_qmod_dep}
@@ -561,23 +611,32 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         )
     endif()
 
-    add_custom_command(
-        OUTPUT ${_qmod_source_link}
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            ${_qmod_out} ${_qmod_source_link}
-        DEPENDS ${_qmod_out}
-        COMMENT "Link ${_name}.qmod into source qlib"
-        VERBATIM
-    )
+    set(_qmod_source_link_dep "")
+    if (QORE_AOT_LINK_SOURCE_MODULES)
+        add_custom_command(
+            OUTPUT ${_qmod_source_link}
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                ${_qmod_out} ${_qmod_source_link}
+            DEPENDS ${_qmod_out}
+            COMMENT "Link ${_name}.qmod into source qlib"
+            VERBATIM
+        )
+        set(_qmod_source_link_dep ${_qmod_source_link})
+    endif()
 
     add_custom_target(${_name}-qmod ALL DEPENDS
         ${_qmod_out}
-        ${_qmod_source_link}
+        ${_qmod_source_link_dep}
         ${_qmod_resource_copies})
     # Ensure qcc executable + libqore.so are built before this qmod
     # rule runs — target-level deps, not mtime deps, so a newer qcc
     # binary doesn't force a qmod rebuild on its own.
-    add_dependencies(${_name}-qmod qcc qcc-format-version)
+    if (TARGET qcc)
+        add_dependencies(${_name}-qmod qcc)
+    endif()
+    if (TARGET qcc-format-version)
+        add_dependencies(${_name}-qmod qcc-format-version)
+    endif()
     if (DEFINED QORE_AOT_BINARY_MODULE_TARGETS)
         foreach(_qore_aot_binary_module ${QORE_AOT_BINARY_MODULE_TARGETS})
             if (TARGET ${_qore_aot_binary_module})
@@ -766,6 +825,12 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
     # extract and install QM metadata (automatic for user modules)
     if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR
             AND DEFINED QORE_QM_METADATA_SUBDIR)
+        if(DEFINED QORE_EXECUTABLE)
+            set(_qore_qm_metadata_command
+                ${QORE_EXECUTABLE} ${QORE_QM_METADATA_EXECUTABLE})
+        else()
+            set(_qore_qm_metadata_command ${QORE_QM_METADATA_EXECUTABLE})
+        endif()
         set(_um_qm_meta_files "")
         # use module-specific subdirectory to avoid collisions when
         # different modules contain .qc files with the same basename
@@ -784,7 +849,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
                     add_custom_command(OUTPUT ${_meta_out}
                         COMMAND ${CMAKE_COMMAND} -E env
                             ${QORE_QM_METADATA_ENV}
-                            ${QORE_QM_METADATA_EXECUTABLE}
+                            ${_qore_qm_metadata_command}
                             ${_src_file} ${_meta_out}
                         DEPENDS ${_src_file}
                         COMMENT "Extracting metadata from ${_src_name}"
@@ -792,7 +857,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
                     )
                 else()
                     add_custom_command(OUTPUT ${_meta_out}
-                        COMMAND ${QORE_QM_METADATA_EXECUTABLE}
+                        COMMAND ${_qore_qm_metadata_command}
                             ${_src_file} ${_meta_out}
                         DEPENDS ${_src_file}
                         COMMENT "Extracting metadata from ${_src_name}"
@@ -816,7 +881,7 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
     endif()
 
     # AOT: build a .qmod alongside the .qm source when enabled
-    if (QORE_BUILD_AOT_MODULES AND TARGET qcc)
+    if (QORE_BUILD_AOT_MODULES AND (TARGET qcc OR DEFINED QORE_QCC_EXECUTABLE))
         if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
             QORE_USER_MODULE_AOT_RULES(${f} 1
                 ${CMAKE_SOURCE_DIR}/qlib/${f} ${_mod_targets})
@@ -876,13 +941,14 @@ endfunction()
 # The module will be installed automatically in 'make install' target.
 MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     get_filename_component(f ${_module_file} NAME_WE)
+    unset(_mod_targets)
+    unset(_mod_jar_targets)
     if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
         file(GLOB _mod_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qm" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.qc"
             "${CMAKE_SOURCE_DIR}/qlib/${f}/*.yaml" "${CMAKE_SOURCE_DIR}/qlib/${f}/*.svg")
         file(GLOB _mod_jar_targets "${CMAKE_SOURCE_DIR}/qlib/${f}/jar/*.jar")
         set(qm_install_subdir "${f}") # install files into a subdir
         #message(STATUS "_mod_targets ${_mod_targets}")
-        message(STATUS "_mod_jar_targets ${_mod_jar_targets}")
     else()
         set(_mod_targets ${_module_file})
         set(qm_install_subdir "") # common qm file
@@ -964,7 +1030,7 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
 
     # install user module files
     install(FILES ${_mod_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir})
-    if (DEFINED _mod_jar_targets)
+    if (_mod_jar_targets)
         install(FILES ${_mod_jar_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar)
         message(STATUS "called install for ${_mod_jar_targets} -> ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar")
     endif()
@@ -972,6 +1038,12 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     # extract and install QM metadata (automatic for external user modules)
     if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR
             AND DEFINED _external_module_name)
+        if(DEFINED QORE_EXECUTABLE)
+            set(_qore_qm_metadata_command
+                ${QORE_EXECUTABLE} ${QORE_QM_METADATA_EXECUTABLE})
+        else()
+            set(_qore_qm_metadata_command ${QORE_QM_METADATA_EXECUTABLE})
+        endif()
         set(_ext_qm_meta_files "")
         # use module-specific subdirectory to avoid collisions when
         # different modules contain .qc files with the same basename
@@ -986,13 +1058,25 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
                 endif()
                 get_filename_component(_src_name ${_src_file} NAME)
                 set(_meta_out ${_ext_meta_dir}/${_src_name}.meta.json)
-                add_custom_command(OUTPUT ${_meta_out}
-                    COMMAND ${QORE_QM_METADATA_EXECUTABLE}
-                        ${_src_file} ${_meta_out}
-                    DEPENDS ${_src_file}
-                    COMMENT "Extracting metadata from ${_src_name}"
-                    VERBATIM
-                )
+                if(DEFINED QORE_QM_METADATA_ENV)
+                    add_custom_command(OUTPUT ${_meta_out}
+                        COMMAND ${CMAKE_COMMAND} -E env
+                            ${QORE_QM_METADATA_ENV}
+                            ${_qore_qm_metadata_command}
+                            ${_src_file} ${_meta_out}
+                        DEPENDS ${_src_file}
+                        COMMENT "Extracting metadata from ${_src_name}"
+                        VERBATIM
+                    )
+                else()
+                    add_custom_command(OUTPUT ${_meta_out}
+                        COMMAND ${_qore_qm_metadata_command}
+                            ${_src_file} ${_meta_out}
+                        DEPENDS ${_src_file}
+                        COMMENT "Extracting metadata from ${_src_name}"
+                        VERBATIM
+                    )
+                endif()
                 list(APPEND _ext_qm_meta_files ${_meta_out})
             endif()
         endforeach()
@@ -1004,6 +1088,10 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
                 DEPENDS ${_ext_qm_meta_files})
             add_dependencies(${_external_module_name}-qm-metadata
                 qm-metadata-${f})
+            if(QORE_QM_METADATA_DEPENDS)
+                add_dependencies(qm-metadata-${f}
+                    ${QORE_QM_METADATA_DEPENDS})
+            endif()
             install(FILES ${_ext_qm_meta_files}
                     DESTINATION
                         ${QORE_METADATA_DIR}/${_external_module_name})
@@ -1011,7 +1099,7 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     endif()
 
     # AOT: build a .qmod alongside the .qm source when enabled
-    if (QORE_BUILD_AOT_MODULES AND TARGET qcc)
+    if (QORE_BUILD_AOT_MODULES AND (TARGET qcc OR DEFINED QORE_QCC_EXECUTABLE))
         if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
             QORE_USER_MODULE_AOT_RULES(${f} 1
                 ${CMAKE_SOURCE_DIR}/qlib/${f} ${_mod_targets})
@@ -1019,6 +1107,27 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
             QORE_USER_MODULE_AOT_RULES(${f} 0
                 ${CMAKE_SOURCE_DIR}/${_module_file} ${_mod_targets})
         endif()
+        foreach(_dep ${_mod_deps})
+            get_filename_component(_dep_name ${_dep} NAME_WE)
+            if (TARGET ${_dep_name})
+                add_dependencies(${f}-qmod ${_dep_name})
+            endif()
+            if (TARGET ${_dep_name}-qmod)
+                add_dependencies(${f}-qmod ${_dep_name}-qmod)
+            endif()
+        endforeach()
+        get_property(_qore_external_user_modules GLOBAL PROPERTY QORE_EXTERNAL_USER_MODULE_TARGETS)
+        foreach(_existing_mod ${_qore_external_user_modules})
+            get_property(_existing_deps GLOBAL PROPERTY QORE_EXTERNAL_USER_MODULE_DEPS_${_existing_mod})
+            foreach(_dep ${_existing_deps})
+                get_filename_component(_dep_name ${_dep} NAME_WE)
+                if ("${_dep_name}" STREQUAL "${f}" AND TARGET ${_existing_mod}-qmod)
+                    add_dependencies(${_existing_mod}-qmod ${f}-qmod)
+                endif()
+            endforeach()
+        endforeach()
+        set_property(GLOBAL APPEND PROPERTY QORE_EXTERNAL_USER_MODULE_TARGETS ${f})
+        set_property(GLOBAL PROPERTY QORE_EXTERNAL_USER_MODULE_DEPS_${f} "${_mod_deps}")
     endif()
 ENDMACRO (QORE_EXTERNAL_USER_MODULE)
 

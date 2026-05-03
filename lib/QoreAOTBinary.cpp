@@ -1373,6 +1373,88 @@ static std::string qoreAOTExceptionText(ExceptionSink& xsink) {
     return rv;
 }
 
+static bool aotSerializableTypePathIsOrNothing(const QoreTypeInfo* ti) {
+    return ti && ti->return_vec.size() == 2
+        && ti->return_vec[1].spec.match(NT_NOTHING) == QTI_IDENT;
+}
+
+static bool aotSerializableTypePathStartsWith(const char* s, const char* prefix) {
+    return s && !strncmp(s, prefix, strlen(prefix));
+}
+
+static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_narrow = false) {
+    if (!ti) {
+        return {};
+    }
+
+    if (no_narrow) {
+        if (ti == autoTypeInfo) {
+            return "auto!";
+        }
+        if (ti == autoHashTypeInfo) {
+            return "hash<auto!>";
+        }
+        if (ti == autoHashOrNothingTypeInfo) {
+            return "*hash<auto!>";
+        }
+        if (ti == autoListTypeInfo) {
+            return "list<auto!>";
+        }
+        if (ti == autoListOrNothingTypeInfo) {
+            return "*list<auto!>";
+        }
+    }
+    if (ti == autoNoNarrowTypeInfo) {
+        return "auto!";
+    }
+    if (ti == autoNoNarrowHashTypeInfo) {
+        return "hash<auto!>";
+    }
+    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
+        return "*hash<auto!>";
+    }
+    if (ti == autoNoNarrowListTypeInfo) {
+        return "list<auto!>";
+    }
+    if (ti == autoNoNarrowListOrNothingTypeInfo) {
+        return "*list<auto!>";
+    }
+
+    const char* raw_path = QoreTypeInfo::getPath(ti);
+    bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
+
+    if (QoreTypeInfo::isReference(ti) && raw_path && strchr(raw_path, '<')) {
+        const QoreTypeInfo* ref_ti = QoreTypeInfo::getReferenceTarget(ti);
+        if (ref_ti) {
+            return std::string(or_nothing ? "*reference<" : "reference<")
+                + getAOTSerializableTypePath(ref_ti) + ">";
+        }
+    }
+
+    const QoreTypeInfo* hash_ti = QoreTypeInfo::getReturnComplexHashOrNothing(ti);
+    if (hash_ti) {
+        const char* prefix = or_nothing ? "*hash<" : "hash<";
+        if (hash_ti == autoTypeInfo) {
+            return std::string(prefix) + "auto>";
+        }
+        if (hash_ti == autoNoNarrowTypeInfo) {
+            return std::string(prefix) + "auto!>";
+        }
+        return std::string(prefix) + "string, " + getAOTSerializableTypePath(hash_ti) + ">";
+    }
+
+    const QoreTypeInfo* list_ti = QoreTypeInfo::getReturnComplexListOrNothing(ti);
+    if (list_ti) {
+        bool softlist = aotSerializableTypePathStartsWith(raw_path, "softlist<")
+            || aotSerializableTypePathStartsWith(raw_path, "*softlist<");
+        const char* base = softlist ? "softlist" : "list";
+        return std::string(or_nothing ? "*" : "") + base + "<"
+            + getAOTSerializableTypePath(list_ti) + ">";
+    }
+
+    return raw_path ? raw_path : "";
+}
+
 static void qoreAOTWriteContainerValueType(QoreAOTBinaryWriter& writer,
         QoreAOTContainerValueType kind, const char* type_path) {
     writer.writeU8(static_cast<uint8_t>(kind));
@@ -1392,8 +1474,9 @@ static void qoreAOTWriteListValueType(QoreAOTBinaryWriter& writer,
     const QoreTypeInfo* ti = list ? list->getTypeInfo() : nullptr;
     const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexList(ti);
     if (vt && vt != autoTypeInfo && vt != anyTypeInfo) {
+        std::string type_path = getAOTSerializableTypePath(ti);
         qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
-            QoreTypeInfo::getPath(ti));
+            type_path.c_str());
         return;
     }
     qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Plain, nullptr);
@@ -1414,8 +1497,9 @@ static void qoreAOTWriteHashValueType(QoreAOTBinaryWriter& writer,
         const QoreTypeInfo* ti = hash->getTypeInfo();
         const QoreTypeInfo* vt = QoreTypeInfo::getUniqueReturnComplexHash(ti);
         if (vt && vt != autoTypeInfo && vt != anyTypeInfo) {
+            std::string type_path = getAOTSerializableTypePath(ti);
             qoreAOTWriteContainerValueType(writer, QoreAOTContainerValueType::Complex,
-                QoreTypeInfo::getPath(ti));
+                type_path.c_str());
             return;
         }
     }
@@ -1715,10 +1799,7 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             }
             // NewComplexListNode: `list<T> m();` default-constructed complex list
             if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
-                const char* type_path = QoreTypeInfo::getPath(ncl->typeInfo);
-                if (!type_path) {
-                    type_path = "";
-                }
+                std::string type_path = getAOTSerializableTypePath(ncl->typeInfo);
                 // NewComplexListNode stores `args` as a single QoreValue that
                 // may be a list node or NOTHING. For empty-arg ctor calls
                 // (the common case, `list<T> m();`), args is NOTHING.
@@ -1733,9 +1814,9 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 }
                 writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
                 writeU8(0); // kind: 0 = complex list
-                uint32_t tlen = static_cast<uint32_t>(strlen(type_path));
+                uint32_t tlen = static_cast<uint32_t>(type_path.size());
                 writeU32(tlen);
-                writeStringRef(type_path, tlen);
+                writeStringRef(type_path.c_str(), tlen);
                 writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
                     writeValue(arg_list->retrieveEntry(i));
@@ -1744,16 +1825,13 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             }
             // NewComplexHashNode: `hash<K, V> m();` default-constructed complex hash
             if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
-                const char* type_path = QoreTypeInfo::getPath(nch->typeInfo);
-                if (!type_path) {
-                    type_path = "";
-                }
+                std::string type_path = getAOTSerializableTypePath(nch->typeInfo);
                 uint32_t nargs = nch->args ? static_cast<uint32_t>(nch->args->size()) : 0;
                 writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
                 writeU8(1); // kind: 1 = complex hash
-                uint32_t tlen = static_cast<uint32_t>(strlen(type_path));
+                uint32_t tlen = static_cast<uint32_t>(type_path.size());
                 writeU32(tlen);
-                writeStringRef(type_path, tlen);
+                writeStringRef(type_path.c_str(), tlen);
                 writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
                     writeValue(nch->args->get(i));
@@ -2856,41 +2934,19 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
 
 namespace {
 
-//! Get type path string from QoreTypeInfo, handling null
-static const char* getTypePath(const QoreTypeInfo* ti, bool no_narrow = false) {
-    if (no_narrow) {
-        if (ti == autoTypeInfo) {
-            return "auto!";
-        }
-        if (ti == autoHashTypeInfo) {
-            return "hash<auto!>";
-        }
-        if (ti == autoHashOrNothingTypeInfo) {
-            return "*hash<auto!>";
-        }
-        if (ti == autoListTypeInfo) {
-            return "list<auto!>";
-        }
-        if (ti == autoListOrNothingTypeInfo) {
-            return "*list<auto!>";
-        }
-    }
-    if (ti == autoNoNarrowTypeInfo) {
-        return "auto!";
-    }
-    if (ti == autoNoNarrowHashTypeInfo) {
-        return "hash<auto!>";
-    }
-    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
-        return "*hash<auto!>";
-    }
-    if (ti == autoNoNarrowListTypeInfo) {
-        return "list<auto!>";
-    }
-    if (ti == autoNoNarrowListOrNothingTypeInfo) {
-        return "*list<auto!>";
-    }
-    return ti ? QoreTypeInfo::getPath(ti) : "";
+//! Get a serializable type path string from QoreTypeInfo, preserving no-narrow markers recursively.
+static std::string getTypePath(const QoreTypeInfo* ti, bool no_narrow = false) {
+    return getAOTSerializableTypePath(ti, no_narrow);
+}
+
+static uint32_t internTypePath(QoreAOTBinaryWriter& writer, const QoreTypeInfo* ti, bool no_narrow = false) {
+    std::string path = getTypePath(ti, no_narrow);
+    return writer.internTypePath(path.c_str());
+}
+
+static void writeTypePathRef(QoreAOTBinaryWriter& writer, const QoreTypeInfo* ti, bool no_narrow = false) {
+    std::string path = getTypePath(ti, no_narrow);
+    writer.writeStringRef(path.c_str());
 }
 
 static std::string getNamespaceConstantPath(const qore_ns_private* ns, const char* name) {
@@ -3291,7 +3347,7 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     // against a pre-resolved `const QoreTypeInfo*` table instead of a
     // hash lookup on the path string per param (cf. the original
     // `writer.writeStringRef(getTypePath(...))` path).
-    writer.writeU32(writer.internTypePath(getTypePath(sig->getReturnTypeInfo())));
+    writer.writeU32(internTypePath(writer, sig->getReturnTypeInfo()));
 
     // num params
     uint32_t np = sig->numParams();
@@ -3413,7 +3469,7 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
 
         // param type path — u32 index into per-blob TYPE_TABLE (see
         // return-type comment above).
-        writer.writeU32(writer.internTypePath(getTypePath(sig->getParamTypeInfo(i))));
+        writer.writeU32(internTypePath(writer, sig->getParamTypeInfo(i)));
 
         // default argument
         bool has_default = sig->hasDefaultArg(i);
@@ -3883,7 +3939,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                 continue;
             }
             writer.writeStringRef(mi.first);
-            writer.writeStringRef(getTypePath(mi.second->getTypeInfo()));
+            writeTypePathRef(writer, mi.second->getTypeInfo());
             writer.writeU8(static_cast<uint8_t>(mi.second->access));
             // flags byte — bit 0 = transient
             uint8_t mflags = 0;
@@ -3909,7 +3965,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         writer.writeU32(num_static);
         for (auto& vi : priv->vars.member_list) {
             writer.writeStringRef(vi.first);
-            writer.writeStringRef(getTypePath(vi.second->getTypeInfo()));
+            writeTypePathRef(writer, vi.second->getTypeInfo());
             writer.writeU8(static_cast<uint8_t>(vi.second->access));
             // Serialize the initial value. If the parser folded the init
             // expression to a concrete value (e.g. `static Type t = IntType`
@@ -3948,7 +4004,7 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                 const ConstantEntry* ce = ccli.getEntry();
                 if (!ce->isSystem()) {
                     writer.writeStringRef(ce->getName());
-                    writer.writeStringRef(getTypePath(ce->typeInfo));
+                    writeTypePathRef(writer, ce->typeInfo);
                     writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
                     // QORE_AOT_FEAT_CONST_PENDING: 1 if the constant had a
                     // non-literal init expression (value is not foldable
@@ -4031,7 +4087,7 @@ static bool writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
             const HashDeclMemberMap& mm = hdp->getMembers();
             for (auto& mi : mm.member_list) {
                 writer.writeStringRef(mi.first);
-                writer.writeStringRef(getTypePath(mi.second->getTypeInfo()));
+                writeTypePathRef(writer, mi.second->getTypeInfo());
                 if (mi.second->exp) {
                     writer.writeU8(1);
                     if (!writeMemberDefaultValue(writer, mi.second->exp, "hashdecl",
@@ -4072,7 +4128,7 @@ static void writeEnumsSection(QoreAOTBinaryWriter& writer, const AOTSerializeSta
         writer.writeU16(flags);
 
         // base type path
-        writer.writeStringRef(getTypePath(ed->getBaseTypeInfo()));
+        writeTypePathRef(writer, ed->getBaseTypeInfo());
 
         // members
         uint32_t num_members = static_cast<uint32_t>(ed->getMemberCount());
@@ -4098,7 +4154,7 @@ static void writeTypedefsSection(QoreAOTBinaryWriter& writer, const AOTSerialize
 
     for (auto& ti : state.typedefs) {
         writer.writeStringRef(ti.name.c_str());
-        writer.writeStringRef(getTypePath(ti.typeInfo));
+        writeTypePathRef(writer, ti.typeInfo);
         writer.writeU32(ti.ns_idx);
         writer.writeU8(ti.pub ? 1 : 0);
     }
@@ -4116,7 +4172,7 @@ static void writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
     for (auto& ci : state.constants) {
         const ConstantEntry* ce = ci.entry;
         writer.writeStringRef(ce->getName());
-        writer.writeStringRef(getTypePath(ce->typeInfo));
+        writeTypePathRef(writer, ce->typeInfo);
         writer.writeU32(ci.ns_idx);
         writer.writeU8(static_cast<uint8_t>(ce->getAccess()));
         writer.writeU8(ce->isPublic() ? 1 : 0);
@@ -4158,7 +4214,7 @@ static void writeGlobalsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
     for (auto& gi : state.globals) {
         Var* var = gi.var;
         writer.writeStringRef(var->getName());
-        writer.writeStringRef(getTypePath(var->getTypeInfo(), var->isNoNarrowing()));
+        writeTypePathRef(writer, var->getTypeInfo(), var->isNoNarrowing());
         writer.writeU32(gi.ns_idx);
         writer.writeU8(var->isThreadLocal() ? 1 : 0);
         writer.writeU8(var->isPublic() ? 1 : 0);
@@ -4880,7 +4936,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 return false;
             }
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_HASH_NEW));
-            writer.writeStringRef(QoreTypeInfo::getPath(vti));
+            writeTypePathRef(writer, vti);
             return write_parse_arg_list(vrn->getParseArgs());
         }
         if (vrn->isComplexListConstruct()) {
@@ -4890,7 +4946,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 return false;
             }
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_LIST_NEW));
-            writer.writeStringRef(QoreTypeInfo::getPath(vti));
+            writeTypePathRef(writer, vti);
             const QoreValue& new_args = vrn->getNewArgs();
             if (new_args.hasNode()) {
                 writer.writeU8(1);
@@ -5232,10 +5288,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     }
     if (auto* inst = dynamic_cast<const QoreInstanceOfOperatorNode*>(node)) {
         const QoreTypeInfo* ti = inst->getInstanceTypeInfo();
-        const char* type_path = ti ? QoreTypeInfo::getPath(ti) : "";
-        if (type_path && *type_path) {
+        std::string type_path = getTypePath(ti);
+        if (!type_path.empty()) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::INSTANCEOF));
-            writer.writeStringRef(type_path);
+            writer.writeStringRef(type_path.c_str());
             return classifyAndWriteExpr(writer, inst->getExp(), parent_locals,
                 parent_globals, const_reverse_map);
         }
@@ -5502,7 +5558,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // ParseReferenceNode: \var lvalue reference — serialize inner lvalue expression
     if (auto* prn = dynamic_cast<const ParseReferenceNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::PARSE_REF));
-        writer.writeStringRef(prn->getTypeInfo() ? QoreTypeInfo::getPath(prn->getTypeInfo()) : "");
+        writeTypePathRef(writer, prn->getTypeInfo());
         return write_inline_expr(prn->getLVExp());
     }
 
@@ -5520,7 +5576,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
         if (nch->typeInfo) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_HASH_NEW));
-            writer.writeStringRef(QoreTypeInfo::getPath(nch->typeInfo));
+            writeTypePathRef(writer, nch->typeInfo);
             // Serialize constructor args
             return write_parse_arg_list(nch->args);
         }
@@ -5530,7 +5586,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
         if (ncl->typeInfo) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_LIST_NEW));
-            writer.writeStringRef(QoreTypeInfo::getPath(ncl->typeInfo));
+            writeTypePathRef(writer, ncl->typeInfo);
             // Serialize constructor arg (single QoreValue)
             if (ncl->args.hasNode()) {
                 writer.writeU8(1);
@@ -5568,7 +5624,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // QoreComplexHashCastOperatorNode: cast<hash<string, int>>(hash)
     if (auto* chc = dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_HASH));
-        writer.writeStringRef(QoreTypeInfo::getPath(chc->getCastTypeInfo()));
+        writeTypePathRef(writer, chc->getCastTypeInfo());
         writer.writeU8(chc->isOrNothing() ? 1 : 0);
         QoreValue inner = chc->getExp();
         if (inner.hasNode()) {
@@ -5586,7 +5642,11 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* clc = dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_LIST));
         const QoreTypeInfo* ti = clc->getCastTypeInfo();
-        writer.writeStringRef(ti ? QoreTypeInfo::getPath(ti) : "list");
+        if (ti) {
+            writeTypePathRef(writer, ti);
+        } else {
+            writer.writeStringRef("list");
+        }
         writer.writeU8(clc->isOrNothing() ? 1 : 0);
         QoreValue inner = clc->getExp();
         if (inner.hasNode()) {
@@ -5622,7 +5682,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // QoreEnumCastOperatorNode: cast<EnumType>(val)
     if (auto* ec = dynamic_cast<const QoreEnumCastOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_ENUM));
-        writer.writeStringRef(QoreTypeInfo::getPath(ec->getCastTypeInfo()));
+        writeTypePathRef(writer, ec->getCastTypeInfo());
         writer.writeU8(ec->isOrNothing() ? 1 : 0);
         QoreValue inner = ec->getExp();
         if (inner.hasNode()) {
@@ -5652,12 +5712,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
 
                 // Write class type path (ref2)
                 const QoreTypeInfo* cti = ucf->getClassType();
-                writer.writeStringRef(cti ? QoreTypeInfo::getPath(cti) : "");
+                writeTypePathRef(writer, cti);
 
                 // Write return type
-                const char* ret_path = sig->getReturnTypeInfo()
-                    ? QoreTypeInfo::getPath(sig->getReturnTypeInfo()) : "";
-                writer.writeStringRef(ret_path);
+                writeTypePathRef(writer, sig->getReturnTypeInfo());
 
                 // Write params: count, then (name, type_path, default) per param
                 unsigned num_params = sig->numParams();
@@ -5665,9 +5723,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 for (unsigned p = 0; p < num_params; ++p) {
                     const char* pname = sig->getName(p);
                     writer.writeStringRef(pname ? pname : "");
-                    const char* ptype = sig->getParamTypeInfo(p)
-                        ? QoreTypeInfo::getPath(sig->getParamTypeInfo(p)) : "";
-                    writer.writeStringRef(ptype);
+                    writeTypePathRef(writer, sig->getParamTypeInfo(p));
                     bool has_default = sig->hasDefaultArg(p);
                     writer.writeU8(has_default ? 1 : 0);
                     if (has_default) {
@@ -6661,9 +6717,15 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
 }
 
 //! Get type path string for a LocalVar, handling nullptr typeInfo
-const char* getLocalTypePath(const LocalVar* lv) {
+static std::string getLocalTypePathString(const LocalVar* lv) {
     const QoreTypeInfo* ti = lv->getTypeInfo();
     return getTypePath(ti, lv->isNoNarrowing());
+}
+
+const char* getLocalTypePath(const LocalVar* lv) {
+    thread_local std::string path;
+    path = getLocalTypePathString(lv);
+    return path.c_str();
 }
 
 //! Serialize a single IR instruction
@@ -6725,7 +6787,7 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     writer.writeU32(func.max_value_id);
     writer.writeU32(func.max_local_slot_id);
     writer.writeU32(func.num_guards);
-    writer.writeStringRef(func.return_type_info ? QoreTypeInfo::getPath(func.return_type_info) : "");
+    writeTypePathRef(writer, func.return_type_info);
     // Phase C: Serialize parent_slot_count for handler IR functions
     writer.writeU32(func.parent_slot_count);
     writer.writeU16(static_cast<uint16_t>(func.blocks.size()));
@@ -6740,14 +6802,16 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         [](const auto& a, const auto& b) { return a.second < b.second; });
     for (auto& [lv, slot_id] : sorted_slots) {
         writer.writeStringRef(lv->getName());
-        writer.writeStringRef(getLocalTypePath(lv));
+        std::string type_path = getLocalTypePathString(lv);
+        writer.writeStringRef(type_path.c_str());
         writer.writeU32(slot_id);
     }
 
     // 3. Body locals
     for (auto* lv : func.all_body_locals) {
         writer.writeStringRef(lv->getName());
-        writer.writeStringRef(getLocalTypePath(lv));
+        std::string type_path = getLocalTypePathString(lv);
+        writer.writeStringRef(type_path.c_str());
         auto slot_it = func.local_var_slots.find(lv);
         writer.writeU32(slot_it != func.local_var_slots.end() ? slot_it->second : UINT32_MAX);
     }

@@ -5619,6 +5619,26 @@ static std::string normalizeTypePaths(const std::string& sig) {
         }
         out.push_back(sig[i]);
     }
+
+    // Canonicalize parser/type-info aliases before comparing serialized AOT
+    // slot-map signatures to deserialized runtime signatures.  In particular,
+    // hash<auto!> is stored internally as a no-narrow marker over auto; nested
+    // forms such as reference<hash<auto!>> can be serialized as
+    // reference<hash<string, auto>> while the runtime parser reconstructs
+    // reference<hash<auto>>.  The no-narrow marker affects lvalue narrowing,
+    // not overload identity, so registration matching must compare the
+    // canonical type spelling instead of raw QoreTypeInfo::getPath() output.
+    auto replaceAll = [&out](const char* from, const char* to) {
+        size_t from_len = strlen(from);
+        size_t to_len = strlen(to);
+        for (size_t pos = out.find(from); pos != std::string::npos;
+                pos = out.find(from, pos + to_len)) {
+            out.replace(pos, from_len, to);
+        }
+    };
+    replaceAll("auto!", "auto");
+    replaceAll("hash<string, auto>", "hash<auto>");
+
     return out;
 }
 

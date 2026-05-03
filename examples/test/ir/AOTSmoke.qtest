@@ -88,6 +88,8 @@ class AOTSmokeTest inherits QUnit::Test {
         # Module compilation tests
         addTestCase("AOT module compile", \testAOTModuleCompile());
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
+        addTestCase("AOT module no-narrow reference signatures",
+            \testAOTModuleNoNarrowReferenceSignatures());
         addTestCase("AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
         addTestCase("AOT module IR-only local owns invoke result",
             \testAOTModuleIrOnlyLocalOwnsInvokeResult());
@@ -2080,6 +2082,60 @@ printf(\"%s\", AOTNoNarrowMember::run());
         assertEq(interp_out, aot_out, "compiled module preserves hash<auto!>/list<auto!> member types: " + aot_out);
         assertTrue(aot_out.regex("alpha"), "hash member accepted mixed value types: " + aot_out);
         assertTrue(aot_out.regex("0.3"), "list member accepted mixed value types: " + aot_out);
+    }
+
+    testAOTModuleNoNarrowReferenceSignatures() {
+        string tmp_dir = sprintf("/tmp/aot_no_narrow_ref_sig_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNoNarrowRefSig {
+    version = \"1.0\";
+    desc = \"AOT no-narrow reference signature regression\";
+    author = \"Test\";
+    url = \"http://test.example.com\";
+    license = \"MIT\";
+}
+
+public namespace AOTNoNarrowRefSig {
+    public class C {
+        static string put(reference<hash<auto!>> h, string key, auto val) {
+            h.(key) = val;
+            return sprintf(\"%d:%s\", h.n, h.s);
+        }
+    }
+
+    public string sub run() {
+        hash<auto!> h = {\"n\": 1};
+        return C::put(\\h, \"s\", \"x\") + \":\" + h.s + \"\\n\";
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTNoNarrowRefSig.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNoNarrowRefSig.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "no-narrow reference signature module compiled: " + result.compile_out);
+        assertTrue(result.compile_out.regex("2/2 functions pre-compiled"),
+            "no-narrow reference signature module fully precompiled: " + result.compile_out);
+
+        unlink(qm_path);
+        string out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug --modern "
+            "-l AOTNoNarrowRefSig -e 'printf(\"%%s\", AOTNoNarrowRefSig::run());' 2>&1",
+            libqore_dir, tmp_dir, qore_bin));
+
+        assertEq("1:x:x\n", out,
+            "source-stripped AOT qmod registers reference<hash<auto!>> signatures");
     }
 
     testAOTModuleScalarLocalCoercion() {
