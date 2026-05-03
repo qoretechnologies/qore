@@ -1247,7 +1247,9 @@ pop3.setEventQueue();
 
     private Pop3CommandPollOperation commandAsyncIntern(string command, bool multi = False) {
         Pop3CommandPollOperation op(self, command, multi);
-        execPollOperation(op, sprintf("pop3-command:%s:%s", connect, command));
+        # this pipeline implicitly connects + authenticates, so bound it by connectTimeout
+        # (callers only invoke this when the client is not yet connected)
+        execPollOperation(op, sprintf("pop3-command:%s:%s", connect, command), connectTimeout);
         return op;
     }
 
@@ -1351,14 +1353,14 @@ pop3.setEventQueue();
     private connectAsyncIntern() {
         try {
             Pop3PingPollOperation op(self, sock, False);
-            execPollOperation(op, sprintf("pop3-connect:%s", connect));
+            execPollOperation(op, sprintf("pop3-connect:%s", connect), connectTimeout);
         } catch (hash<ExceptionInfo> ex) {
             sock.close();
             rethrow;
         }
     }
 
-    private execPollOperation(Qore::AbstractPollOperation op, string owner) {
+    private execPollOperation(Qore::AbstractPollOperation op, string owner, timeout to = ioTimeout) {
         *hash<SocketPollInfo> pi = op.continuePoll();
         if (!pi) {
             if (!op.goalReached()) {
@@ -1371,7 +1373,7 @@ pop3.setEventQueue();
             "sock": pi.socket,
             "spop": op,
             "owner": owner,
-            "to": ioTimeout,
+            "to": to,
         });
         if (result.ex) {
             throw result.ex.err, result.ex.desc;
