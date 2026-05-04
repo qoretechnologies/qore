@@ -9116,7 +9116,102 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         return 0;
     };
 
+    // Synchronous poll(2) snapshot of every submitted (entry/target, event) pair.
+    // Closes the cancel-races-dispatch race window where one fd's readiness is
+    // observed by the I/O thread's epoll cycle, dispatched, read by the worker,
+    // and the worker's cancel_owner() then cancels the still-pending other op
+    // before the kernel reports it ready — even when both fds were physically
+    // ready when poll() was called.  poll(2) with timeout=0 is non-blocking;
+    // it adds (|=) to result_events so events the async path already captured
+    // are unaffected.  Any kernel-level readiness present at return time is
+    // recorded — matching typical poll(2) semantics ("everything ready now").
+    auto sync_readiness_snapshot = [&]() {
+        struct SyncMeta {
+            size_t result_index;
+            int requested_event;  // SOCK_POLLIN or SOCK_POLLOUT
+        };
+        std::vector<struct pollfd> pollfds;
+        std::vector<SyncMeta> meta;
+
+        auto add_target = [&](QoreObject* obj, size_t index, int events_mask) {
+            ExceptionSink check_xsink;
+            AbstractPollableIoObjectBase* io = static_cast<AbstractPollableIoObjectBase*>(
+                obj->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, &check_xsink));
+            if (check_xsink) {
+                check_xsink.clear();
+                return;
+            }
+            if (!io) {
+                return;
+            }
+            ReferenceHolder<AbstractPollableIoObjectBase> holder(io, &check_xsink);
+            int fd = io->getPollableDescriptor();
+            if (fd < 0) {
+                return;
+            }
+            for (int ev : {SOCK_POLLIN, SOCK_POLLOUT}) {
+                if (!(events_mask & ev)) {
+                    continue;
+                }
+                struct pollfd pfd;
+                pfd.fd = fd;
+                pfd.events = (ev == SOCK_POLLIN) ? POLLIN : POLLOUT;
+                pfd.revents = 0;
+                pollfds.push_back(pfd);
+                meta.push_back({index, ev});
+            }
+        };
+
+        for (const PollEntry& entry : entries) {
+            add_target(entry.poll_obj, entry.index, static_cast<int>(entry.events));
+            for (const PollEntry::PollTarget& tgt : entry.extra_targets) {
+                add_target(tgt.poll_obj, entry.index, tgt.events);
+            }
+        }
+
+        if (pollfds.empty()) {
+            return;
+        }
+
+        unsigned loop = 0;
+        int rc;
+        while (true) {
+            rc = ::poll(pollfds.data(), pollfds.size(), 0);
+            if (rc >= 0) {
+                break;
+            }
+            if (errno == EINTR && ++loop < 16) {
+                continue;
+            }
+            // Other poll(2) errors: leave async-captured results untouched
+            return;
+        }
+        if (rc == 0) {
+            return;
+        }
+
+        for (size_t i = 0; i < pollfds.size(); ++i) {
+            short re = pollfds[i].revents;
+            if (!re) {
+                continue;
+            }
+            int got = 0;
+            if (re & POLLIN) got |= SOCK_POLLIN;
+            if (re & POLLOUT) got |= SOCK_POLLOUT;
+            if (re & (POLLERR | POLLHUP | POLLNVAL)) got |= SOCK_POLLERR;
+            int matched = got & meta[i].requested_event;
+            // POLLERR/HUP/NVAL are reported regardless of requested events
+            if (got & SOCK_POLLERR) {
+                matched |= SOCK_POLLERR;
+            }
+            if (matched) {
+                result_events[meta[i].result_index] |= matched;
+            }
+        }
+    };
+
     auto build_results = [&]() -> QoreListNode* {
+        sync_readiness_snapshot();
         if (mark_closed_entries()) {
             return nullptr;
         }
