@@ -37,6 +37,10 @@ if [ -z "${REDIS_URL}" ]; then
 fi
 
 export MAKE_JOBS=${MAKE_JOBS:-6}
+NEED_RELEASE_BUILD=1
+if [ "${QORE_EXCLUDE_PERF_TESTS}" = "1" ]; then
+    NEED_RELEASE_BUILD=0
+fi
 
 # ensure LLVM dev libraries are installed (needed for JIT/AOT)
 if ! dpkg -l llvm-dev >/dev/null 2>&1; then
@@ -84,77 +88,94 @@ fi
 
 # build or install Qore
 if [ -d "${QORE_SRC_DIR}/build" ] && [ -f "${QORE_SRC_DIR}/build/CMakeCache.txt" ]; then
-    # Pre-built debug artifact from build stage — install it, then build release in parallel
-    echo && echo "-- installing pre-built Qore (debug) and building release --"
-    (cd ${QORE_SRC_DIR}/build && cmake --install .) &
-    INSTALL_PID=$!
+    if [ "$NEED_RELEASE_BUILD" = "1" ]; then
+        # Pre-built debug artifact from build stage — install it, then build release in parallel
+        echo && echo "-- installing pre-built Qore (debug) and building release --"
+        (cd ${QORE_SRC_DIR}/build && cmake --install .) &
+        INSTALL_PID=$!
 
-    # install tree-sitter CLI for astparser module build (needed for release cmake)
-    if ! command -v tree-sitter > /dev/null 2>&1; then
-        echo && echo "-- installing tree-sitter CLI --"
-        cargo install tree-sitter-cli@0.26.5
-    fi
+        # install tree-sitter CLI for astparser module build (needed for release cmake)
+        if ! command -v tree-sitter > /dev/null 2>&1; then
+            echo && echo "-- installing tree-sitter CLI --"
+            cargo install tree-sitter-cli@0.26.5
+        fi
 
-    (
-        echo "Building Release mode..."
-        mkdir -p build-release
-        cd build-release
-        cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
-        make -j${MAKE_JOBS}
-        echo "Release build complete"
-    ) &
-    RELEASE_BUILD_PID=$!
+        (
+            echo "Building Release mode..."
+            mkdir -p build-release
+            cd build-release
+            cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            make -j${MAKE_JOBS}
+            echo "Release build complete"
+        ) &
+        RELEASE_BUILD_PID=$!
 
-    if ! wait $INSTALL_PID; then
-        echo "Debug install failed"
-        exit 1
+        if ! wait $INSTALL_PID; then
+            echo "Debug install failed"
+            exit 1
+        fi
+        if ! wait $RELEASE_BUILD_PID; then
+            echo "Release build failed"
+            exit 1
+        fi
+        echo "Install and release build completed successfully"
+    else
+        echo && echo "-- installing pre-built Qore (debug); perf tests excluded, skipping release build --"
+        cd ${QORE_SRC_DIR}/build
+        cmake --install .
+        cd ${QORE_SRC_DIR}
     fi
-    if ! wait $RELEASE_BUILD_PID; then
-        echo "Release build failed"
-        exit 1
-    fi
-    echo "Install and release build completed successfully"
 else
-    # No pre-built artifact — full parallel debug + release build
     # install tree-sitter CLI for astparser module build
     if ! command -v tree-sitter > /dev/null 2>&1; then
         echo && echo "-- installing tree-sitter CLI --"
         cargo install tree-sitter-cli@0.26.5
     fi
 
-    echo && echo "-- building Qore Debug and Release in parallel --"
+    if [ "$NEED_RELEASE_BUILD" = "1" ]; then
+        echo && echo "-- building Qore Debug and Release in parallel --"
 
-    (
-        echo "Building Debug mode..."
+        (
+            echo "Building Debug mode..."
+            mkdir -p build
+            cd build
+            cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            make -j${MAKE_JOBS}
+            make install
+            echo "Debug build complete"
+        ) &
+        DEBUG_BUILD_PID=$!
+
+        (
+            echo "Building Release mode..."
+            mkdir -p build-release
+            cd build-release
+            cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
+            make -j${MAKE_JOBS}
+            echo "Release build complete"
+        ) &
+        RELEASE_BUILD_PID=$!
+
+        echo "Waiting for builds to complete..."
+        if ! wait $DEBUG_BUILD_PID; then
+            echo "Debug build failed"
+            exit 1
+        fi
+        if ! wait $RELEASE_BUILD_PID; then
+            echo "Release build failed"
+            exit 1
+        fi
+        echo "Both builds completed successfully"
+    else
+        echo && echo "-- building Qore Debug; perf tests excluded, skipping release build --"
         mkdir -p build
         cd build
         cmake .. -DCMAKE_BUILD_TYPE=debug -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
         make -j${MAKE_JOBS}
         make install
+        cd ${QORE_SRC_DIR}
         echo "Debug build complete"
-    ) &
-    DEBUG_BUILD_PID=$!
-
-    (
-        echo "Building Release mode..."
-        mkdir -p build-release
-        cd build-release
-        cmake .. -DCMAKE_BUILD_TYPE=release -DSINGLE_COMPILATION_UNIT=1 -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX}
-        make -j${MAKE_JOBS}
-        echo "Release build complete"
-    ) &
-    RELEASE_BUILD_PID=$!
-
-    echo "Waiting for builds to complete..."
-    if ! wait $DEBUG_BUILD_PID; then
-        echo "Debug build failed"
-        exit 1
     fi
-    if ! wait $RELEASE_BUILD_PID; then
-        echo "Release build failed"
-        exit 1
-    fi
-    echo "Both builds completed successfully"
 fi
 
 
@@ -193,12 +214,19 @@ chown -R qore:qore ${QORE_SRC_DIR}
 export QORE_MODULE_DIR=${QORE_SRC_DIR}/qlib:${QORE_MODULE_DIR}
 cd ${QORE_SRC_DIR}
 
-# Set up binary selector that uses Release for performance-sensitive tests
-chmod +x ./test/docker_test/qore_binary_selector.sh
 export QORE_DEBUG_BINARY="${QORE_SRC_DIR}/build/qore"
-export QORE_RELEASE_BINARY="${QORE_SRC_DIR}/build-release/qore"
-export QORE_BINARY="${QORE_SRC_DIR}/test/docker_test/qore_binary_selector.sh"
 export QORE_LIBDIR="${QORE_SRC_DIR}/build"
+TEST_LD_LIBRARY_PATH="${QORE_SRC_DIR}/build/lib:${QORE_SRC_DIR}/build/lib/.libs"
+if [ "$NEED_RELEASE_BUILD" = "1" ]; then
+    # Set up binary selector that uses Release for performance-sensitive tests
+    chmod +x ./test/docker_test/qore_binary_selector.sh
+    export QORE_RELEASE_BINARY="${QORE_SRC_DIR}/build-release/qore"
+    export QORE_BINARY="${QORE_SRC_DIR}/test/docker_test/qore_binary_selector.sh"
+    TEST_LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${QORE_SRC_DIR}/build-release/lib:${QORE_SRC_DIR}/build-release/lib/.libs"
+else
+    export QORE_RELEASE_BINARY=""
+    export QORE_BINARY="${QORE_DEBUG_BINARY}"
+fi
 
 # Set up LIBQORE path for run_tests.sh (installed from Debug build)
 if [ -f "${QORE_SRC_DIR}/build/libqore.so" ]; then
@@ -207,10 +235,14 @@ elif [ -f "${QORE_SRC_DIR}/build/libqore.dylib" ]; then
     export LIBQORE_BINARY="${QORE_SRC_DIR}/build/libqore.dylib"
 fi
 
-# Run tests with binary selector (Debug for most tests, Release for WebSocketH2PerfTest)
+# Run tests with binary selector only when perf tests are included.
 # Pass environment variables explicitly to gosu to ensure they're available in the test process
 # Set LD_LIBRARY_PATH to ensure binaries use the correct libqore.so from build directory
-echo && echo "-- running all tests (WebSocketH2PerfTest in Release mode, others in Debug) --"
+if [ "$NEED_RELEASE_BUILD" = "1" ]; then
+    echo && echo "-- running all tests (performance tests in Release mode, others in Debug) --"
+else
+    echo && echo "-- running tests with pre-built Debug Qore; performance tests excluded --"
+fi
 gosu qore:qore env \
     QORE_DEBUG_BINARY="${QORE_DEBUG_BINARY}" \
     QORE_RELEASE_BINARY="${QORE_RELEASE_BINARY}" \
@@ -218,7 +250,7 @@ gosu qore:qore env \
     QORE_LIBDIR="${QORE_LIBDIR}" \
     QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
-    LD_LIBRARY_PATH="${QORE_SRC_DIR}/build/lib:${QORE_SRC_DIR}/build-release/lib:${QORE_SRC_DIR}/build/lib/.libs:${QORE_SRC_DIR}/build-release/lib/.libs:${LD_LIBRARY_PATH}" \
+    LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     ./run_tests.sh
 
 if [ "${drop_pgsql_schema}" = "1" ]; then
