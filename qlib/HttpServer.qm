@@ -6753,7 +6753,11 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
     #! Logs a message
     private log(int level, string fmt) {
         if (logger) {
-            logger.log(level, vsprintf(fmt, argv));
+            # use "%s" wrapper so the already-formatted message is treated as a
+            # literal — re-passing it as Logger::log()'s format string would
+            # re-interpret any embedded "%XY" (e.g. URL-encoded "%2F") and
+            # collapse pure "%s" results to empty output
+            logger.log(level, "%s", vsprintf(fmt, argv));
         }
     }
 }

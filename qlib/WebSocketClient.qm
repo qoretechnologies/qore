@@ -5331,13 +5331,13 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
 
     private logError(string fmt, ...) {
         if (logger) {
-            logger.log(LoggerLevel::ERROR, "WebSocketClientPollOperation: " + vsprintf(fmt, argv));
+            logger.log(LoggerLevel::ERROR, "%s", "WebSocketClientPollOperation: " + vsprintf(fmt, argv));
         }
     }
 
     private logDebug(string fmt, ...) {
         if (logger) {
-            logger.log(LoggerLevel::DEBUG, "WebSocketClientPollOperation: " + vsprintf(fmt, argv));
+            logger.log(LoggerLevel::DEBUG, "%s", "WebSocketClientPollOperation: " + vsprintf(fmt, argv));
         }
     }
 }
@@ -5857,7 +5857,7 @@ public class WebSocketClientHcioPollOp {
 
     private logError(string fmt, ...) {
         if (logger) {
-            logger.log(LoggerLevel::ERROR, "WebSocketClientHcioPollOp: " + vsprintf(fmt, argv));
+            logger.log(LoggerLevel::ERROR, "%s", "WebSocketClientHcioPollOp: " + vsprintf(fmt, argv));
         }
     }
 
@@ -6281,7 +6281,7 @@ public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOper
 
     private logDebug(string fmt, ...) {
         if (logger) {
-            logger.log(LoggerLevel::DEBUG, "WsConnectAndRun: " + vsprintf(fmt, argv));
+            logger.log(LoggerLevel::DEBUG, "%s", "WsConnectAndRun: " + vsprintf(fmt, argv));
         }
     }
 }
