@@ -654,15 +654,15 @@ friend class FileReadPollOperationBase;
 friend class FileReadPollOperation;
 public:
     DLLEXPORT File(const QoreEncoding* cs);
-    DLLEXPORT virtual void deref(ExceptionSink* xsink);
-    DLLEXPORT virtual void deref();
+    DLLEXPORT virtual void deref(ExceptionSink* xsink) override;
+    DLLEXPORT virtual void deref() override;
 
     //! Returns the underlying file descriptor; -1 if not open
     /** @return the underlying file descriptor; -1 if not open
 
         @since %Qore 1.12
     */
-    DLLLOCAL int getPollableDescriptor() const {
+    DLLLOCAL int getPollableDescriptor() const override {
         return QoreFile::getPollableDescriptor();
     }
 
