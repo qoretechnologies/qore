@@ -437,7 +437,7 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"SQUARE_BRACKET_RANGE", 102, true, write_slot_SQUARE_BRACKET_RANGE, "Range subscript operator"},
 
     // 103-253: Unused
-    {nullptr, 103, false, nullptr, nullptr},
+    {"DOT_EVAL_EXPR", 103, true, write_slot_DOT_EVAL_EXPR, "Full dot-eval expression slot payload"},
     {nullptr, 104, false, nullptr, nullptr},
     {nullptr, 105, false, nullptr, nullptr},
     {nullptr, 106, false, nullptr, nullptr},

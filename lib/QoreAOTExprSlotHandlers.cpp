@@ -213,6 +213,11 @@ static bool write_slot_DOT_EVAL_TARGET(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
+//! DOT_EVAL_EXPR: full inline dot-eval expression payload for AST consumers such as Context
+static bool write_slot_DOT_EVAL_EXPR(AOTExprSlotWriteCtx& ctx) {
+    return write_slot_inline_expr(ctx, ctx.expr.child_expr);
+}
+
 //! FUNC_CALL_REF: ref1 = function name
 static bool write_slot_FUNC_CALL_REF(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());

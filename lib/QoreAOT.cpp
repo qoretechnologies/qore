@@ -12510,6 +12510,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
     }
 
+    if (dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        id.kind = AOTExprKind::DOT_EVAL_EXPR;
+        id.child_expr = v;
+        return id;
+    }
+
     // Cast operator nodes: classified with type path + or_nothing instead of EXPR_TREE.
     if (auto* chc = dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)) {
         id.kind = AOTExprKind::CAST_COMPLEX_HASH;

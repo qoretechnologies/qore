@@ -3334,6 +3334,18 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::DOT_EVAL_EXPR: {
+                std::string dot_err;
+                QoreValue dot_expr = readOneExpr(reader, ptr, end, dot_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!dot_err.empty()) {
+                    dot_expr.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(dot_expr);
+                }
+                continue;
+            }
             case AOTExprKind::CONTEXT_REF: {
                 const char* member = reader.readStringRef(ptr);
                 ctx->exprs[i] = toBitsNB(QoreValue(
@@ -9598,10 +9610,17 @@ static void preInitStaticVarsInNamespace(qore_ns_private* ns, ExceptionSink* xsi
             if (!vi.second || vi.second->eval_init) {
                 continue;
             }
+            if (vi.second->exp) {
+                // Source-program static var initializers may still be parse-time
+                // ASTs while an AOT dependency is being loaded.  They must be
+                // evaluated by the normal parse/runtime path, not as a side
+                // effect of AOT module namespace init.
+                continue;
+            }
             // Empty-exp path inside evalInit just calls init() (set typeinfo,
             // create empty container for non-nullable hash/list) and marks
-            // eval_init=true. AOT-deserialized vars never have exp set, so
-            // this is always the path taken.
+            // eval_init=true. AOT-deserialized vars without init functions do
+            // not carry exp; those are the only vars this pass should touch.
             vi.second->evalInit(vi.first, xsink);
             if (xsink && xsink->isException()) {
                 xsink->clear();

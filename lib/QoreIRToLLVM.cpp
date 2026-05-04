@@ -8451,8 +8451,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     || inv->invoke_opcode == QoreIROpcode::NewComplexList) {
                 // Typed container construction invoke
                 if (aot_mode) {
-                    return setAotExpressionFallbackError(error, inst,
-                            "typed container construction invoke has no native lowering");
+                    QoreValue expr_val = inv->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    const char* helper_name = inv->invoke_opcode == QoreIROpcode::NewHashDecl
+                        ? "qore_rt_new_hash_decl_aot"
+                        : (inv->invoke_opcode == QoreIROpcode::NewComplexHash
+                            ? "qore_rt_new_complex_hash_aot"
+                            : "qore_rt_new_complex_list_aot");
+                    const char* helper_throwing_name = inv->invoke_opcode == QoreIROpcode::NewHashDecl
+                        ? "qore_rt_new_hash_decl_aot_throwing"
+                        : (inv->invoke_opcode == QoreIROpcode::NewComplexHash
+                            ? "qore_rt_new_complex_hash_aot_throwing"
+                            : "qore_rt_new_complex_list_aot_throwing");
+                    auto ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type}, false);
+                    auto helper = module.getOrInsertFunction(helper_name, ft);
+                    auto helper_throwing = module.getOrInsertFunction(helper_throwing_name, ft);
+                    result = emitMaybeInvoke(helper, helper_throwing,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                            module, llvm_func, inst);
                 } else {
                     QoreValue expr_val = inv->expr;
                     uint64_t bits;

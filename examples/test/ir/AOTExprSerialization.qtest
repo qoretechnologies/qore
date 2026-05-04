@@ -93,6 +93,13 @@ public namespace AOTExprSerializationMod {
         }
     }
 
+    public class RowSource {
+        public hash<auto> rows() {
+            return (\"domain\": (\"omq\", \"user\"), \"keyname\": (\"a\", \"b\"),
+                \"value\": (\"one\", \"two\"));
+        }
+    }
+
     public list<string> sub head(list<string> xs, int n) {
         return xs[0..n - 1];
     }
@@ -133,9 +140,8 @@ public namespace AOTExprSerializationMod {
 
     public string sub contextDynamicKeys() {
         hash<auto> props;
-        hash<auto> rows = (\"domain\": (\"omq\", \"user\"), \"keyname\": (\"a\", \"b\"),
-            \"value\": (\"one\", \"two\"));
-        context (rows) {
+        RowSource src();
+        context (src.rows()) {
             props.%domain.%keyname = %value;
             auto v = props.%domain.%keyname;
             if (v != %value) {
@@ -146,6 +152,18 @@ public namespace AOTExprSerializationMod {
             return \"bad context dynamic write\";
         }
         return \"context ok\";
+    }
+
+    public string sub consumeList(list<string> xs) {
+        return sprintf(\"%d\", elements(xs));
+    }
+
+    public string sub invokeNewComplexList() {
+        try {
+            return consumeList(new list<string>());
+        } catch (hash<ExceptionInfo> ex) {
+            return \"bad typed list invoke\";
+        }
     }
 
     public string sub verify() {
@@ -175,6 +193,9 @@ public namespace AOTExprSerializationMod {
         string context_result = contextDynamicKeys();
         if (context_result != \"context ok\") {
             return context_result;
+        }
+        if (invokeNewComplexList() != \"0\") {
+            return \"bad typed list invoke\";
         }
         return \"ok\";
     }
@@ -208,6 +229,22 @@ public namespace AOTExprSerializationMod {
             "printf(\"%s\\n\", AOTExprSerializationMod::verify());\n");
         script.close();
 
+        string pending_static_path = tmp_dir + "/pending-static.qr";
+        File pending_static();
+        pending_static.open2(pending_static_path, O_WRONLY | O_CREAT | O_TRUNC);
+        pending_static.write("%modern\n"
+            "class PendingStatic {\n"
+            "    private {\n"
+            "        static PendingStatic singleton = new PendingStatic();\n"
+            "    }\n"
+            "\n"
+            "    constructor() {\n"
+            "    }\n"
+            "}\n"
+            "%requires AOTExprSerializationMod\n"
+            "printf(\"loaded\\n\");\n");
+        pending_static.close();
+
         string qmod_path = qmod_dir + "/AOTExprSerializationMod.qmod";
         string compile_out = backquote(sprintf(
             "QORE_LIBDIR=%s %s -m --strip-source -o %s %s 2>&1",
@@ -226,5 +263,11 @@ public namespace AOTExprSerializationMod {
             libqore_dir, qmod_dir, qcc_bin, qo_dir, script_path));
         assertTrue(is_file(qo_dir + "/run.qo"),
             "qcc compile-only consumer loads AOT qmod without static-var init crash: " + qcc_out);
+
+        string pending_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -c --output-dir=%s %s 2>&1",
+            libqore_dir, qmod_dir, qcc_bin, qo_dir, pending_static_path));
+        assertTrue(is_file(qo_dir + "/pending-static.qo"),
+            "qcc dependency load does not pre-evaluate source static initializers: " + pending_out);
     }
 }
