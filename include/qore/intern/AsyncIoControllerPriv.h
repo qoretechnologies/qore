@@ -606,6 +606,13 @@ private:
         AbstractPollableIoObjectBase* close_sock = nullptr; //!< For CloseSocket: referenced I/O object
         bool submit_replace = false;    //!< For SubmitOp: replace existing operation with same key
 
+        //! Per-thread submit_seq snapshot at push time (post-bump under m).
+        /** Used by SubmitOp/CancelOwner so the SubmitOp tombstone gate can
+            distinguish a fresh submit pushed strictly after a cancel from a
+            stale resubmit pushed before the cancel: a SubmitOp whose
+            seq_at_push exceeds the recorded cancel seq is accepted. */
+        int seq_at_push = 0;
+
         // --- SubmitOp data (ownership transferred to I/O thread) ---
         QoreObject* submit_sock_obj = nullptr;           //!< Referenced socket object
         AbstractPollableIoObjectBase* submit_sock = nullptr; //!< Referenced socket private data
@@ -878,8 +885,19 @@ private:
         //! cancelled owner and dispatches onComplete(canceled=true) immediately
         //! instead of inserting into the cache (which would never be cancelled).
         //! Entries auto-expire after 2 idle cycles.
-        //! Key: owner string, Value: idle_cycles_remaining
-        std::unordered_map<std::string, int> cancelled_owners;
+        /** Tombstone gate is sequence-based: a SubmitOp with @c seq_at_push
+            strictly greater than @c CancelInfo::seq is a fresh submit pushed
+            after the cancel and is accepted; equal-or-lesser seq is rejected
+            as a racing/stale resubmit.  This makes synchronous
+            cancelByOwner() followed by a fresh submit (e.g. FtpClient
+            disconnect-then-reconnect with the same owner string) work
+            without depending on TTL aging.  TTL is retained only as a
+            memory-hygiene bound. */
+        struct CancelInfo {
+            int ttl;
+            int seq;
+        };
+        std::unordered_map<std::string, CancelInfo> cancelled_owners;
 
         //! Cancels deferred because continuePoll() was in flight on a worker
         /** When Cancel arrives for an op whose continuePoll() has been
