@@ -315,6 +315,10 @@ public:
     //! static "constructor" to create a relative time, including microseconds
     DLLEXPORT static DateTimeNode* makeRelative(int n_year, int n_month, int n_day, int n_hour = 0, int n_minute = 0, int n_second = 0, int n_us = 0);
 
+    //! static "constructor" to create a relative time from literal/component metadata without normalization
+    DLLLOCAL static DateTimeNode* makeRelativeUnnormalized(int n_year, int n_month, int n_day, int n_hour = 0,
+        int n_minute = 0, int n_second = 0, int n_us = 0);
+
     //! static "constructor" to create a relative time, including microseconds
     DLLEXPORT static DateTimeNode* makeRelativeFromSeconds(int64 n_second, int n_us = 0);
 };

@@ -246,6 +246,12 @@ DateTimeNode* DateTimeNode::makeRelative(int y, int mo, int d, int h, int mi, in
     return new DateTimeNode(new qore_date_private(y, mo, d, h, mi, s, u, true));
 }
 
+DateTimeNode* DateTimeNode::makeRelativeUnnormalized(int y, int mo, int d, int h, int mi, int s, int u) {
+    DateTimeNode* rv = new DateTimeNode(true);
+    rv->priv->setRelativeDateUnnormalized(y, mo, d, h, mi, s, u);
+    return rv;
+}
+
 DateTimeNode* DateTimeNode::makeRelativeFromSeconds(int64 s, int u) {
     int h = s / 3600;
     if (h)

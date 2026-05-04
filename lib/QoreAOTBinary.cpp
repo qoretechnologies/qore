@@ -2233,7 +2233,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             int minute = static_cast<int>(readI64(ptr));
             int second = static_cast<int>(readI64(ptr));
             int us = static_cast<int>(readI64(ptr));
-            return QoreValue(DateTimeNode::makeRelative(year, month, day, hour, minute, second, us));
+            return QoreValue(DateTimeNode::makeRelativeUnnormalized(year, month, day, hour, minute, second, us));
         }
 
         case QoreAOTValueTag::VT_NUMBER: {

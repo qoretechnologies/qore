@@ -3029,7 +3029,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_date_ex(int64_t date_microseconds, in
         int64_t rel_minutes, int64_t rel_seconds, int64_t rel_us) {
     DateTimeNode* dt;
     if (is_relative) {
-        dt = DateTimeNode::makeRelative(
+        dt = DateTimeNode::makeRelativeUnnormalized(
             static_cast<int>(rel_years),
             static_cast<int>(rel_months),
             static_cast<int>(rel_days),

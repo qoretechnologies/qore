@@ -193,7 +193,7 @@ static QoreValue read_node_EN_DATE(AOTExprNodeReadCtx& ctx) {
         int32_t second = readI32(ctx.ptr, ctx.end);
         int32_t us = readI32(ctx.ptr, ctx.end);
         readU16(ctx.ptr, ctx.end);
-        return QoreValue(DateTimeNode::makeRelative(
+        return QoreValue(DateTimeNode::makeRelativeUnnormalized(
             year, month, day, hour, minute, second, us));
     } else {
         int64_t epoch = readI64(ctx.ptr, ctx.end);

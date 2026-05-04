@@ -3467,9 +3467,11 @@ next_instruction:
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
                 DateTimeNode* dt;
                 if (cinst->constant.date_is_relative) {
-                    // Always use full relative date components to preserve semantics
-                    // (e.g., -1D stays as -1 day, not -24 hours; 5Y stays as 5 years)
-                    dt = DateTimeNode::makeRelative(
+                    // Preserve the literal/component fields exactly.  ISO
+                    // relative-date literals may intentionally contain values
+                    // such as PT140S; AST mode preserves second=140, so IR
+                    // must not carry that into minute=2, second=20.
+                    dt = DateTimeNode::makeRelativeUnnormalized(
                         cinst->constant.rel_years, cinst->constant.rel_months,
                         cinst->constant.rel_days, cinst->constant.rel_hours,
                         cinst->constant.rel_minutes, cinst->constant.rel_seconds,

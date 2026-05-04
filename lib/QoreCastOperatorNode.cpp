@@ -357,6 +357,10 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 }
 
 bool QoreScalarCastOperatorNode::isSupportedCastType(const QoreTypeInfo* typeInfo) {
+    if (QoreTypeInfo::getReturnEnum(typeInfo)) {
+        return false;
+    }
+
     if (typeInfo == autoTypeInfo || typeInfo == autoNoNarrowTypeInfo || typeInfo == anyTypeInfo) {
         return true;
     }

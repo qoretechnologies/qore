@@ -1992,6 +1992,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreOpcodeRegistry.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreCastOperatorNode.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/Function.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/LocalVar.h
     ${CMAKE_SOURCE_DIR}/lib/Function.cpp
@@ -2002,6 +2003,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprSlotHandlers.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprSlotRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTInstRegistry.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreCastOperatorNode.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRBuilder.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprHandlers.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
