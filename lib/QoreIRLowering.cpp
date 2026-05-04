@@ -3898,6 +3898,29 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return inst->result;
     }
     if (auto* rt_const = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+        // Delayed constants are evaluated once during parse commit.  Lower
+        // resolved scalar/literal values directly so AOT does not need an
+        // unserializable RuntimeConstantRefNode for primitive folded constants
+        // such as `foldl $1 | $2, ConstList`.  Keep containers and objects as
+        // named constants; the AOT reverse map preserves their identity and
+        // avoids inlining large or partially non-serializable graphs.
+        ConstantEntry* ce = rt_const->getConstantEntry();
+        if (ce) {
+            QoreValue resolved = ce->getReferencedValue();
+            if (!resolved.needsEval()) {
+                qore_type_t resolved_type = resolved.getType();
+                if (resolved.isEnum() || resolved_type == NT_INT || resolved_type == NT_FLOAT
+                        || resolved_type == NT_BOOLEAN || resolved_type == NT_STRING
+                        || resolved_type == NT_DATE || resolved_type == NT_NUMBER
+                        || resolved_type == NT_BINARY || resolved_type == NT_NULL
+                        || resolved_type == NT_NOTHING) {
+                    auto* inst = builder.createLoadConstant(nullptr, resolved, rt_const->loc);
+                    resolved.discard(nullptr);
+                    return inst->result;
+                }
+            }
+            resolved.discard(nullptr);
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {

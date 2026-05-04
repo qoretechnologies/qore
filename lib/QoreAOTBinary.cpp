@@ -5978,6 +5978,21 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             }
             sv.discard(nullptr);
         }
+        if (ce) {
+            QoreValue sv = ce->getReferencedValue();
+            qore_type_t st = sv.getType();
+            bool can_inline = !sv.needsEval()
+                && !(sv.hasNode() && sv.getInternalNode() == node)
+                && (sv.isEnum() || st == NT_INT || st == NT_FLOAT || st == NT_BOOLEAN
+                    || st == NT_STRING || st == NT_DATE || st == NT_NUMBER || st == NT_BINARY
+                    || st == NT_NULL || st == NT_NOTHING);
+            if (can_inline) {
+                bool ok = classifyAndWriteExpr(writer, sv, parent_locals, parent_globals, const_reverse_map);
+                sv.discard(nullptr);
+                return ok;
+            }
+            sv.discard(nullptr);
+        }
     }
 
     // QoreDotEvalOperatorNode: obj.method(args) — serialize as DOT_EVAL_TARGET.

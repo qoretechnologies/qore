@@ -11687,11 +11687,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
         // Handle inline scalar constants in expression slots
         switch (v.getType()) {
-            case QV_Int:
+            case NT_INT:
                 id.kind = AOTExprKind::CONST_INT;
                 id.ref1 = std::to_string(v.getAsBigInt());
                 return id;
-            case QV_Float:
+            case NT_FLOAT:
                 id.kind = AOTExprKind::CONST_FLOAT;
                 // Use snprintf with enough precision for round-trip fidelity
                 {
@@ -11700,7 +11700,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                     id.ref1 = fbuf;
                 }
                 return id;
-            case QV_Bool:
+            case NT_BOOLEAN:
                 id.kind = AOTExprKind::CONST_BOOL;
                 id.ref1 = v.getAsBool() ? "1" : "0";
                 return id;
@@ -12512,6 +12512,27 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
         std::string path;
         if (!getAOTRuntimeConstantPath(rcr, const_reverse_map, path)) {
+            ConstantEntry* ce = rcr->getConstantEntry();
+            if (ce) {
+                QoreValue sv = ce->getReferencedValue();
+                qore_type_t st = sv.getType();
+                bool can_inline = !sv.needsEval()
+                    && !(sv.hasNode() && sv.getInternalNode() == node)
+                    && (sv.isEnum() || st == NT_INT || st == NT_FLOAT || st == NT_BOOLEAN
+                        || st == NT_STRING || st == NT_DATE || st == NT_NUMBER || st == NT_BINARY
+                        || st == NT_NULL || st == NT_NOTHING);
+                if (can_inline) {
+                    uint64_t sv_bits;
+                    memcpy(&sv_bits, &sv, sizeof(sv_bits));
+                    AOTExprSlotId resolved_id = classifyExpression(sv_bits, slots, const_reverse_map);
+                    sv.discard(nullptr);
+                    if (resolved_id.kind != AOTExprKind::GENERIC_EVAL) {
+                        return resolved_id;
+                    }
+                } else {
+                    sv.discard(nullptr);
+                }
+            }
             id.kind = AOTExprKind::GENERIC_EVAL;
             id.ref1 = getAOTRuntimeConstantDiagnostic(rcr);
             return id;
