@@ -13,12 +13,15 @@
 class AOTExprSerializationTest inherits QUnit::Test {
     private {
         string qore_bin;
+        string qcc_bin;
         string libqore_dir;
     }
 
     constructor() : QUnit::Test("AOTExprSerializationTest", "1.0", \ARGV) {
         qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
 
         addTestCase("AOT module serializes native expression nodes",
             \testAOTModuleNativeExprSerialization());
@@ -108,6 +111,43 @@ public namespace AOTExprSerializationMod {
         return target.value();
     }
 
+    public string sub unshiftListAndHash() {
+        list<string> xs = (\"b\", \"c\");
+        try {
+            unshift xs, \"a\";
+        } catch (hash<ExceptionInfo> ex) {
+            return \"bad unshift try\";
+        }
+        if (xs != (\"a\", \"b\", \"c\")) {
+            return \"bad unshift list\";
+        }
+
+        hash<string, list<int>> h = (\"k\": (2, 3));
+        string k = \"k\";
+        unshift h{k}, 1;
+        if (h{k} != (1, 2, 3)) {
+            return \"bad unshift hash\";
+        }
+        return \"unshift ok\";
+    }
+
+    public string sub contextDynamicKeys() {
+        hash<auto> props;
+        hash<auto> rows = (\"domain\": (\"omq\", \"user\"), \"keyname\": (\"a\", \"b\"),
+            \"value\": (\"one\", \"two\"));
+        context (rows) {
+            props.%domain.%keyname = %value;
+            auto v = props.%domain.%keyname;
+            if (v != %value) {
+                return \"bad context dynamic read\";
+            }
+        }
+        if (props.omq.a != \"one\" || props.user.b != \"two\") {
+            return \"bad context dynamic write\";
+        }
+        return \"context ok\";
+    }
+
     public string sub verify() {
         AOTIssueProgram p(0);
         AOTIssueRestrictedProgram p2(0);
@@ -127,6 +167,14 @@ public namespace AOTExprSerializationMod {
         }
         if (constructorFromAuto(\"runtime\") != \"runtime\") {
             return \"bad runtime constructor variant resolution\";
+        }
+        string unshift_result = unshiftListAndHash();
+        if (unshift_result != \"unshift ok\") {
+            return unshift_result;
+        }
+        string context_result = contextDynamicKeys();
+        if (context_result != \"context ok\") {
+            return context_result;
         }
         return \"ok\";
     }
@@ -162,13 +210,21 @@ public namespace AOTExprSerializationMod {
 
         string qmod_path = qmod_dir + "/AOTExprSerializationMod.qmod";
         string compile_out = backquote(sprintf(
-            "QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
-            libqore_dir, qore_bin, qmod_path, qm_path));
+            "QORE_LIBDIR=%s %s -m --strip-source -o %s %s 2>&1",
+            libqore_dir, qcc_bin, qmod_path, qm_path));
         assertTrue(is_file(qmod_path), "compiled expression-serialization module: " + compile_out);
 
         assertEq("ok\n", runModule(qmod_dir, script_path),
             "AOT qmod preserves serialized native expression nodes");
         assertEq("ok\n", runModule(src_dir, script_path),
             "source module preserves serialized native expression semantics");
+
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(qo_dir);
+        string qcc_out = backquote(sprintf(
+            "QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s -c --output-dir=%s %s 2>&1",
+            libqore_dir, qmod_dir, qcc_bin, qo_dir, script_path));
+        assertTrue(is_file(qo_dir + "/run.qo"),
+            "qcc compile-only consumer loads AOT qmod without static-var init crash: " + qcc_out);
     }
 }

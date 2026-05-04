@@ -7766,11 +7766,22 @@ QoreIRValue QoreIRLowering::lowerUnshift(const QoreValue& expr, std::string& err
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
     }
-    if (!guardLValueBase(lvalue, error)) {
-        return QoreIRValue();
-    }
     QoreIRValue right = lowerExpression(op->getRight(), error);
     if (!right.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Path-based unshift for native IR/AOT lvalues, including try/catch bodies
+    // and nested hash/list member chains.  This avoids emitting
+    // Invoke(UnshiftLValue), which has no source-free AOT lowering.
+    QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
+        lvalue, &right, op->loc, error, false, LVCompoundOp::AddAssign,
+        LVUnaryOp::PreInc, LVBinaryMutOp::Unshift);
+    if (path_result.isValid()) {
+        return path_result;
+    }
+
+    if (!guardLValueBase(lvalue, error)) {
         return QoreIRValue();
     }
     if (!exception_stack.empty()) {
@@ -9271,8 +9282,11 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     }
     // Compound ops compute a new value (e.g. +=, -=): return the instruction's result
     // so the caller uses the actual computed value, not the RHS.
-    // Assignment and unary ops: assignment returns the RHS, unary returns path_inst->result.
-    if (opcode == QoreIROpcode::LValuePathCompound) {
+    // Compound and binary-mut ops compute a new value; return the instruction result so
+    // expression users see the modified target value instead of the RHS operand.
+    // Assignment returns the RHS; unary returns path_inst->result.
+    if (opcode == QoreIROpcode::LValuePathCompound
+            || opcode == QoreIROpcode::LValuePathBinaryMut) {
         return path_inst->result;
     }
     return rhs ? *rhs : path_inst->result;
