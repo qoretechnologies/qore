@@ -972,6 +972,12 @@ enum class AOTExprKind : uint8_t {
     RANGE              = 94,  //!< Range operator: left(AOTExprKind) + right(AOTExprKind)
     ASSIGN             = 95,  //!< Assignment operator: lvalue(AOTExprKind) + value(AOTExprKind)
     CAST_SCALAR        = 96,  //!< Scalar/identity cast: ref1=type_path, u8 or_nothing, u8 has_inner, inner?
+    BIT_AND            = 97,  //!< Bitwise AND operator: left(AOTExprKind) + right(AOTExprKind)
+    BIT_OR             = 98,  //!< Bitwise OR operator: left(AOTExprKind) + right(AOTExprKind)
+    BIT_XOR            = 99,  //!< Bitwise XOR operator: left(AOTExprKind) + right(AOTExprKind)
+    SHIFT_LEFT         = 100, //!< Left shift operator: left(AOTExprKind) + right(AOTExprKind)
+    SHIFT_RIGHT        = 101, //!< Right shift operator: left(AOTExprKind) + right(AOTExprKind)
+    SQUARE_BRACKET_RANGE = 102, //!< Range subscript operator: source + start + stop
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression marker; rejected for new AOT objects
 };

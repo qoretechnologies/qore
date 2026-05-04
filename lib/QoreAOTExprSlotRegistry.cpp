@@ -34,6 +34,7 @@
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QorePlusOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
 #include "qore/intern/QoreExistsOperatorNode.h"
 #include "qore/intern/QoreImplicitArgumentNode.h"
 #include "qore/intern/QoreMinusOperatorNode.h"
@@ -41,6 +42,11 @@
 #include "qore/intern/QoreMultiplicationOperatorNode.h"
 #include "qore/intern/QoreDivisionOperatorNode.h"
 #include "qore/intern/QoreModuloOperatorNode.h"
+#include "qore/intern/QoreBinaryAndOperatorNode.h"
+#include "qore/intern/QoreBinaryOrOperatorNode.h"
+#include "qore/intern/QoreBinaryXorOperatorNode.h"
+#include "qore/intern/QoreShiftLeftOperatorNode.h"
+#include "qore/intern/QoreShiftRightOperatorNode.h"
 #include "qore/intern/QoreImplicitElementNode.h"
 #include "qore/intern/QoreInstanceOfOperatorNode.h"
 #include "qore/intern/QoreRegexMatchOperatorNode.h"
@@ -412,13 +418,25 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 96: CAST_SCALAR
     {"CAST_SCALAR", 96, true, write_slot_CAST, "Scalar cast"},
 
-    // 97-253: Unused
-    {nullptr, 97, false, nullptr, nullptr},
-    {nullptr, 98, false, nullptr, nullptr},
-    {nullptr, 99, false, nullptr, nullptr},
-    {nullptr, 100, false, nullptr, nullptr},
-    {nullptr, 101, false, nullptr, nullptr},
-    {nullptr, 102, false, nullptr, nullptr},
+    // 97: BIT_AND
+    {"BIT_AND", 97, true, write_slot_BIT_AND, "Bitwise AND operator"},
+
+    // 98: BIT_OR
+    {"BIT_OR", 98, true, write_slot_BIT_OR, "Bitwise OR operator"},
+
+    // 99: BIT_XOR
+    {"BIT_XOR", 99, true, write_slot_BIT_XOR, "Bitwise XOR operator"},
+
+    // 100: SHIFT_LEFT
+    {"SHIFT_LEFT", 100, true, write_slot_SHIFT_LEFT, "Left shift operator"},
+
+    // 101: SHIFT_RIGHT
+    {"SHIFT_RIGHT", 101, true, write_slot_SHIFT_RIGHT, "Right shift operator"},
+
+    // 102: SQUARE_BRACKET_RANGE
+    {"SQUARE_BRACKET_RANGE", 102, true, write_slot_SQUARE_BRACKET_RANGE, "Range subscript operator"},
+
+    // 103-253: Unused
     {nullptr, 103, false, nullptr, nullptr},
     {nullptr, 104, false, nullptr, nullptr},
     {nullptr, 105, false, nullptr, nullptr},

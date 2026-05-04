@@ -1123,9 +1123,17 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
             || ek == AOTExprKind::FOLDR || ek == AOTExprKind::MAP
             || ek == AOTExprKind::SELECT || ek == AOTExprKind::RANGE
             || ek == AOTExprKind::ASSIGN || ek == AOTExprKind::LOG_AND
-            || ek == AOTExprKind::LOG_OR) {
+            || ek == AOTExprKind::LOG_OR || ek == AOTExprKind::BIT_AND
+            || ek == AOTExprKind::BIT_OR || ek == AOTExprKind::BIT_XOR
+            || ek == AOTExprKind::SHIFT_LEFT || ek == AOTExprKind::SHIFT_RIGHT) {
         skipOneExpr(rdr, p, e);  // left operand
         skipOneExpr(rdr, p, e);  // right operand
+        return;
+    }
+    if (ek == AOTExprKind::SQUARE_BRACKET_RANGE) {
+        skipOneExpr(rdr, p, e);  // source expression
+        skipOneExpr(rdr, p, e);  // start expression
+        skipOneExpr(rdr, p, e);  // stop expression
         return;
     }
     if (ek == AOTExprKind::MAP_SELECT || ek == AOTExprKind::HASH_MAP_OP) {
@@ -2703,6 +2711,27 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::SQUARE_BRACKET_RANGE: {
+                std::string src_err;
+                QoreValue src = readOneExpr(reader, ptr, end, src_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string start_err;
+                QoreValue start = readOneExpr(reader, ptr, end, start_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string stop_err;
+                QoreValue stop = readOneExpr(reader, ptr, end, stop_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!src_err.empty() || !start_err.empty() || !stop_err.empty()) {
+                    src.discard(nullptr);
+                    start.discard(nullptr);
+                    stop.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreSquareBracketsRangeOperatorNode(&loc_builtin, src, start, stop)));
+                }
+                continue;
+            }
             case AOTExprKind::EXISTS: {
                 std::string operand_err;
                 QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
@@ -2788,6 +2817,39 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreModuloOperatorNode(&loc_builtin, left, right)));
+                }
+                continue;
+            }
+            case AOTExprKind::BIT_AND:
+            case AOTExprKind::BIT_OR:
+            case AOTExprKind::BIT_XOR:
+            case AOTExprKind::SHIFT_LEFT:
+            case AOTExprKind::SHIFT_RIGHT: {
+                std::string left_err;
+                QoreValue left = readOneExpr(reader, ptr, end, left_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                std::string right_err;
+                QoreValue right = readOneExpr(reader, ptr, end, right_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!left_err.empty() || !right_err.empty()) {
+                    left.discard(nullptr);
+                    right.discard(nullptr);
+                    has_unsupported = true;
+                } else if (kind == AOTExprKind::BIT_AND) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreBinaryAndOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::BIT_OR) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreBinaryOrOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::BIT_XOR) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreBinaryXorOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::SHIFT_LEFT) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreShiftLeftOperatorNode(&loc_builtin, left, right)));
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreShiftRightOperatorNode(&loc_builtin, left, right)));
                 }
                 continue;
             }

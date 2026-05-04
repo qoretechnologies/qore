@@ -57,6 +57,7 @@
 #include "qore/intern/QorePlusOperatorNode.h"
 #include "qore/intern/QoreRangeOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
 #include "qore/intern/QoreExistsOperatorNode.h"
 #include "qore/intern/QoreImplicitArgumentNode.h"
 #include "qore/intern/QoreMinusOperatorNode.h"
@@ -64,6 +65,11 @@
 #include "qore/intern/QoreMultiplicationOperatorNode.h"
 #include "qore/intern/QoreDivisionOperatorNode.h"
 #include "qore/intern/QoreModuloOperatorNode.h"
+#include "qore/intern/QoreBinaryAndOperatorNode.h"
+#include "qore/intern/QoreBinaryOrOperatorNode.h"
+#include "qore/intern/QoreBinaryXorOperatorNode.h"
+#include "qore/intern/QoreShiftLeftOperatorNode.h"
+#include "qore/intern/QoreShiftRightOperatorNode.h"
 #include "qore/intern/QoreImplicitElementNode.h"
 #include "qore/intern/QoreInstanceOfOperatorNode.h"
 #include "qore/intern/QoreRegexNMatchOperatorNode.h"
@@ -5356,6 +5362,11 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::SQUARE_BRACKET));
         return write_inline_expr(sq->getLeft()) && write_inline_expr(sq->getRight());
     }
+    if (auto* sbr = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SQUARE_BRACKET_RANGE));
+        return write_inline_expr(sbr->get(0)) && write_inline_expr(sbr->get(1))
+            && write_inline_expr(sbr->get(2));
+    }
     if (auto* exists = dynamic_cast<const QoreExistsOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::EXISTS));
         return classifyAndWriteExpr(writer, exists->getExp(), parent_locals,
@@ -5381,6 +5392,26 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* modulo = dynamic_cast<const QoreModuloOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::MODULO));
         return write_inline_expr(modulo->getLeft()) && write_inline_expr(modulo->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreBinaryAndOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::BIT_AND));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreBinaryOrOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::BIT_OR));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreBinaryXorOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::BIT_XOR));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreShiftLeftOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SHIFT_LEFT));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
+    }
+    if (auto* op = dynamic_cast<const QoreShiftRightOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::SHIFT_RIGHT));
+        return write_inline_expr(op->getLeft()) && write_inline_expr(op->getRight());
     }
     if (auto* keys = dynamic_cast<const QoreKeysOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::KEYS));

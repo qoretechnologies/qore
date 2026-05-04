@@ -351,6 +351,20 @@ static bool write_slot_SQUARE_BRACKET(AOTExprSlotWriteCtx& ctx) {
             ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
 }
 
+static bool write_slot_SQUARE_BRACKET_RANGE(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->get(0),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(1),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(2),
+            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
 static bool write_slot_EXISTS(AOTExprSlotWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
     auto* op = dynamic_cast<const QoreExistsOperatorNode*>(node);
@@ -593,6 +607,26 @@ static bool write_slot_LOG_LE(AOTExprSlotWriteCtx& ctx) {
 
 static bool write_slot_LOG_GE(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreLogicalGreaterThanOrEqualsOperatorNode>(ctx);
+}
+
+static bool write_slot_BIT_AND(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreBinaryAndOperatorNode>(ctx);
+}
+
+static bool write_slot_BIT_OR(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreBinaryOrOperatorNode>(ctx);
+}
+
+static bool write_slot_BIT_XOR(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreBinaryXorOperatorNode>(ctx);
+}
+
+static bool write_slot_SHIFT_LEFT(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreShiftLeftOperatorNode>(ctx);
+}
+
+static bool write_slot_SHIFT_RIGHT(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreShiftRightOperatorNode>(ctx);
 }
 
 static bool write_slot_LOG_AND(AOTExprSlotWriteCtx& ctx) {

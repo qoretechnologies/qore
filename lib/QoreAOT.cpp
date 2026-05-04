@@ -12089,6 +12089,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.child_expr = v;
         return id;
     }
+    if (dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        id.kind = AOTExprKind::SQUARE_BRACKET_RANGE;
+        id.child_expr = v;
+        return id;
+    }
     if (dynamic_cast<const QoreExistsOperatorNode*>(node)) {
         id.kind = AOTExprKind::EXISTS;
         id.child_expr = v;
@@ -12116,6 +12121,31 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (dynamic_cast<const QoreModuloOperatorNode*>(node)) {
         id.kind = AOTExprKind::MODULO;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreBinaryAndOperatorNode*>(node)) {
+        id.kind = AOTExprKind::BIT_AND;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreBinaryOrOperatorNode*>(node)) {
+        id.kind = AOTExprKind::BIT_OR;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreBinaryXorOperatorNode*>(node)) {
+        id.kind = AOTExprKind::BIT_XOR;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreShiftLeftOperatorNode*>(node)) {
+        id.kind = AOTExprKind::SHIFT_LEFT;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreShiftRightOperatorNode*>(node)) {
+        id.kind = AOTExprKind::SHIFT_RIGHT;
         id.child_expr = v;
         return id;
     }

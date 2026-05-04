@@ -49,6 +49,7 @@
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QorePlusOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsRangeOperatorNode.h"
 #include "qore/intern/QoreExistsOperatorNode.h"
 #include "qore/intern/QoreImplicitArgumentNode.h"
 #include "qore/intern/QoreMinusOperatorNode.h"
@@ -56,6 +57,11 @@
 #include "qore/intern/QoreMultiplicationOperatorNode.h"
 #include "qore/intern/QoreDivisionOperatorNode.h"
 #include "qore/intern/QoreModuloOperatorNode.h"
+#include "qore/intern/QoreBinaryAndOperatorNode.h"
+#include "qore/intern/QoreBinaryOrOperatorNode.h"
+#include "qore/intern/QoreBinaryXorOperatorNode.h"
+#include "qore/intern/QoreShiftLeftOperatorNode.h"
+#include "qore/intern/QoreShiftRightOperatorNode.h"
 #include "qore/intern/QoreImplicitElementNode.h"
 #include "qore/intern/QoreInstanceOfOperatorNode.h"
 #include "qore/intern/QoreRegexMatchOperatorNode.h"
@@ -2595,6 +2601,42 @@ static QoreValue read_expr_square_bracket(AOTExprReadCtx& ctx) {
     return QoreValue(new QoreSquareBracketsOperatorNode(&loc_builtin, left, right));
 }
 
+static bool write_expr_square_bracket_range(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SQUARE_BRACKET_RANGE));
+    return classifyAndWriteExpr(ctx.writer, op->get(0), ctx.parent_locals,
+            ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(1), ctx.parent_locals,
+            ctx.parent_globals, ctx.const_reverse_map)
+        && classifyAndWriteExpr(ctx.writer, op->get(2), ctx.parent_locals,
+            ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_square_bracket_range(AOTExprReadCtx& ctx) {
+    std::string src_err;
+    QoreValue src = readOneExpr(ctx.reader, ctx.ptr, ctx.end, src_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    std::string start_err;
+    QoreValue start = readOneExpr(ctx.reader, ctx.ptr, ctx.end, start_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    std::string stop_err;
+    QoreValue stop = readOneExpr(ctx.reader, ctx.ptr, ctx.end, stop_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    if (!src_err.empty() || !start_err.empty() || !stop_err.empty()) {
+        src.discard(nullptr);
+        start.discard(nullptr);
+        stop.discard(nullptr);
+        ctx.error = !src_err.empty() ? src_err : (!start_err.empty() ? start_err : stop_err);
+        return QoreValue();
+    }
+    return QoreValue(new QoreSquareBracketsRangeOperatorNode(&loc_builtin, src, start, stop));
+}
+
 // ============================================================================
 // EXISTS (45)
 // ============================================================================
@@ -3102,6 +3144,46 @@ static QoreValue read_binary_expr(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     return QoreValue(new NodeT(&loc_builtin, left, right));
+}
+
+static bool write_expr_bit_and(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreBinaryAndOperatorNode>(ctx, AOTExprKind::BIT_AND);
+}
+
+static bool write_expr_bit_or(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreBinaryOrOperatorNode>(ctx, AOTExprKind::BIT_OR);
+}
+
+static bool write_expr_bit_xor(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreBinaryXorOperatorNode>(ctx, AOTExprKind::BIT_XOR);
+}
+
+static bool write_expr_shift_left(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreShiftLeftOperatorNode>(ctx, AOTExprKind::SHIFT_LEFT);
+}
+
+static bool write_expr_shift_right(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreShiftRightOperatorNode>(ctx, AOTExprKind::SHIFT_RIGHT);
+}
+
+static QoreValue read_expr_bit_and(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreBinaryAndOperatorNode>(ctx);
+}
+
+static QoreValue read_expr_bit_or(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreBinaryOrOperatorNode>(ctx);
+}
+
+static QoreValue read_expr_bit_xor(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreBinaryXorOperatorNode>(ctx);
+}
+
+static QoreValue read_expr_shift_left(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreShiftLeftOperatorNode>(ctx);
+}
+
+static QoreValue read_expr_shift_right(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreShiftRightOperatorNode>(ctx);
 }
 
 static bool write_expr_log_eq(AOTExprWriteCtx& ctx) {
