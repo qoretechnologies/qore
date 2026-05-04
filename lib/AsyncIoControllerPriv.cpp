@@ -1715,13 +1715,16 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         {
             AutoLocker al(m);
             target = &getThreadForKey(thread_key);
+            // Bump submit_seq BEFORE pushing.  Queue mutation and the I/O
+            // thread's empty checks are synchronized by m, so a command
+            // visible to the I/O thread has a visible sequence bump.
+            // Capture the post-bump per-thread value into the cmd so the
+            // I/O thread can compare it against any cancelled_owners
+            // tombstone (SubmitOp accept gate).
+            ++submit_seq;
+            cmd.seq_at_push = ++target->submit_seq;
             target->cmdq.push(std::move(cmd));
             socket_async_io_guard.release();
-            // Bump submit_seq immediately after push, BEFORE notify().  Queue
-            // mutation and the I/O thread's empty checks are synchronized by m,
-            // so a command visible to the I/O thread has a visible sequence bump.
-            ++submit_seq;
-            ++target->submit_seq;
         }
         // Publish sock_hash → target thread BEFORE notifying, so a concurrent
         // wakeSocketByObject firing as soon as the submitter returns always
@@ -2388,7 +2391,16 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                                 ++cache_count;
                             }
                         }
-                        tp.cancelled_owners[owner_str] = 2;
+                        // Record the current per-thread submit_seq so any
+                        // SubmitOp already pushed (seq_at_push <= this) is
+                        // tombstoned, while subsequent submits (seq_at_push >)
+                        // are accepted as fresh.
+                        int dead_seq = tp.submit_seq.load(std::memory_order_relaxed);
+                        auto& ci = tp.cancelled_owners[owner_str];
+                        ci.ttl = 2;
+                        if (dead_seq > ci.seq) {
+                            ci.seq = dead_seq;
+                        }
                     }
                 }
                 if (!live_remote.empty()) {
@@ -2399,9 +2411,9 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         cmd.owner = owner_str;
                         completion->ROreference();  // one ref per cmd
                         cmd.completion = completion;
-                        tp->cmdq.push(std::move(cmd));
                         ++submit_seq;
-                        ++tp->submit_seq;
+                        cmd.seq_at_push = ++tp->submit_seq;
+                        tp->cmdq.push(std::move(cmd));
                     }
                     wait_remote = true;
                 }
@@ -2436,7 +2448,16 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             }
             // Match CancelOwner cmd semantics: record the owner as recently
             // cancelled so a racing SubmitOp on this thread is rejected.
-            tp.cancelled_owners[owner_str] = 2;
+            // Use the current per-thread submit_seq as the tombstone gate;
+            // SubmitOps already pushed have seq_at_push <= this value and
+            // are rejected, while later submits have seq_at_push > and
+            // are accepted as fresh.
+            int own_seq = tp.submit_seq.load(std::memory_order_relaxed);
+            auto& ci = tp.cancelled_owners[owner_str];
+            ci.ttl = 2;
+            if (own_seq > ci.seq) {
+                ci.seq = own_seq;
+            }
         }
 
         // Wait for remote I/O threads' CancelOwner commands to finish so
@@ -2497,7 +2518,14 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                                 ++cache_count;
                             }
                         }
-                        tp->cancelled_owners[owner_str] = 2;
+                        // Tombstone gate uses the current per-thread
+                        // submit_seq; see CancelOwner handler.
+                        int dead_seq = tp->submit_seq.load(std::memory_order_relaxed);
+                        auto& ci = tp->cancelled_owners[owner_str];
+                        ci.ttl = 2;
+                        if (dead_seq > ci.seq) {
+                            ci.seq = dead_seq;
+                        }
                     }
                 }
                 if (!live_targets.empty()) {
@@ -2508,12 +2536,14 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                         cmd.owner = owner_str;
                         completion->ROreference();  // one ref per cmd
                         cmd.completion = completion;
-                        tp->cmdq.push(std::move(cmd));
                         // Bump submit_seq so the I/O thread's pre-poll
                         // catch-up covers this CancelOwner —
-                        // see Cancel for details.
+                        // see Cancel for details.  Capture the post-bump
+                        // value so the I/O thread records it as the
+                        // tombstone seq for the SubmitOp gate.
                         ++submit_seq;
-                        ++tp->submit_seq;
+                        cmd.seq_at_push = ++tp->submit_seq;
+                        tp->cmdq.push(std::move(cmd));
                     }
                     do_signal = true;
                 }
@@ -5152,7 +5182,19 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // onComplete(canceled=true) immediately instead of silently
                     // inserting an operation that will never be cancelled.
                     // I/O-thread-only — no locking needed.
-                    t.cancelled_owners[cmd.owner] = 2;
+                    /* Tombstone is sequence-gated: the SubmitOp handler accepts
+                       a submit whose seq_at_push is strictly greater than
+                       this recorded seq (a fresh submit pushed after the
+                       cancel).  This makes synchronous cancelByOwner()
+                       followed by a fresh submit (FtpClient
+                       disconnect/reconnect) work without depending on TTL
+                       aging.  Use max() so a later cancel cannot retreat the
+                       gate. */
+                    auto& ci = t.cancelled_owners[cmd.owner];
+                    ci.ttl = 2;
+                    if (cmd.seq_at_push > ci.seq) {
+                        ci.seq = cmd.seq_at_push;
+                    }
 
                     // Report actual cancel count into the shared completion.
                     if (cmd.completion) {
@@ -5319,11 +5361,19 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     // was cancelled (even when the cache was empty at cancel time),
                     // dispatch onComplete(canceled=true) immediately instead of
                     // inserting an entry that will never be cancelled.
+                    //
+                    // Sequence gate: only reject when this SubmitOp's
+                    // seq_at_push is <= the recorded cancel seq.  A
+                    // strictly-greater seq means this submit was pushed
+                    // after the cancel under m and is therefore a fresh
+                    // submit, not a stale racing resubmit.
                     {
                         auto co_it = t.cancelled_owners.find(cmd.owner);
-                        if (co_it != t.cancelled_owners.end()) {
-                            // Reset TTL — keep blocking further submits for this owner
-                            co_it->second = 2;
+                        if (co_it != t.cancelled_owners.end()
+                                && cmd.seq_at_push <= co_it->second.seq) {
+                            // Reset TTL — keep blocking further stale submits
+                            // for this owner
+                            co_it->second.ttl = 2;
                             // Also block key-based re-submissions
                             t.cancelled_keys[cmd.key] = 2;
                             // Build a PollInfo from the submit payload so
@@ -5660,11 +5710,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
         }
     }
 
-    // Age out cancelled_owners — same TTL semantics as cancelled_keys
+    // Age out cancelled_owners — same TTL semantics as cancelled_keys.
+    // The gate is sequence-based; TTL is retained only as a memory bound
+    // so stale tombstones eventually clear.
     if (!t.cancelled_owners.empty()) {
         auto it = t.cancelled_owners.begin();
         while (it != t.cancelled_owners.end()) {
-            if (--(it->second) <= 0) {
+            if (--(it->second.ttl) <= 0) {
                 it = t.cancelled_owners.erase(it);
             } else {
                 ++it;
