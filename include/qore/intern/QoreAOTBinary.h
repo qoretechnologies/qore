@@ -876,6 +876,7 @@ bool readFallbackSource(const uint8_t* data, uint32_t size, const char*& source,
 
 //! Expression identity kinds for serialized slot maps
 enum class AOTExprKind : uint8_t {
+    UNSUPPORTED        = 0,   //!< Compile-time-only invalid marker; never serialized in new AOT output
     FUNC_CALL          = 1,   //!< Regular function call: ref1=function_name
     SELF_METHOD_CALL   = 2,   //!< Self method call: ref1=class_path, ref2=method_name
     STATIC_METHOD_CALL = 3,   //!< Static method call: ref1=class_path, ref2=method_name
@@ -978,8 +979,8 @@ enum class AOTExprKind : uint8_t {
     SHIFT_LEFT         = 100, //!< Left shift operator: left(AOTExprKind) + right(AOTExprKind)
     SHIFT_RIGHT        = 101, //!< Right shift operator: left(AOTExprKind) + right(AOTExprKind)
     SQUARE_BRACKET_RANGE = 102, //!< Range subscript operator: source + start + stop
-    EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
-    GENERIC_EVAL       = 0xFF //!< Unsupported expression marker; rejected for new AOT objects
+    EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
+    GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };
 
 //! Node kinds for recursive expression tree serialization (EXPR_TREE blobs)
@@ -1157,7 +1158,7 @@ struct AOTGlobalSlotId {
 class UserClosureFunction;
 
 struct AOTExprSlotId {
-    AOTExprKind kind = AOTExprKind::GENERIC_EVAL; //!< expression kind
+    AOTExprKind kind = AOTExprKind::UNSUPPORTED; //!< expression kind; UNSUPPORTED is compile-time-only
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
     uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: bit 0 = is_pseudo)
@@ -1223,7 +1224,7 @@ struct AOTSlotIdentities {
     std::vector<AOTBodyLocalId> body_locals; //!< body locals in order
     std::vector<AOTRegexCaseSlotId> regex_cases; //!< indexed by regex case slot index
     std::vector<AOTLVPathSlotId> lv_path_insts;  //!< indexed by lv_path slot index
-    bool has_unsupported_exprs = false;   //!< true if any expression is GENERIC_EVAL or would need EXPR_TREE
+    bool has_unsupported_exprs = false;   //!< true if any expression cannot be serialized without fallback
     bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
     std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for unsupported expression slots
 };
@@ -1245,7 +1246,7 @@ struct AOTCompiledFuncWithSlots {
     //! Optional pre-filtered reverse map for functions whose init context must preserve alternate stable paths.
     std::shared_ptr<const AOTConstantReverseMap> const_reverse_map_override;
     //! Handler IR functions for each statement slot (indexed by stmt slot index).
-    //! Non-null entries have serializable handler IR; null entries need AST fallback.
+    //! Non-null entries have serializable handler IR; null entries are rejected before AOT output is written.
     std::vector<const QoreIRFunction*> handler_irs;
     //! Optional full function IR used when source-stripped AOT code is debugged.
     const QoreIRFunction* debug_ir = nullptr;
@@ -2371,10 +2372,10 @@ QoreValue readOneExpr(
 
 //! Read one top-level serialized IR instruction expression field.
 //!
-//! GENERIC_EVAL is allowed only at this top level: it is the no-payload
-//! sentinel for opcodes whose native IR operands are sufficient and whose AST
-//! expression field was intentionally omitted.  Nested GENERIC_EVAL markers are
-//! still rejected by readOneExpr().
+//! Legacy GENERIC_EVAL is allowed only at this top level when reading old AOT
+//! objects: it is the no-payload sentinel for opcodes whose native IR operands
+//! are sufficient and whose AST expression field was intentionally omitted.
+//! New AOT output must not emit GENERIC_EVAL.
 QoreValue readOneTopLevelIRExpr(
         const QoreAOTBinaryReader& rdr, const uint8_t*& p, const uint8_t* e,
         std::string& err, QoreProgram* pgm,

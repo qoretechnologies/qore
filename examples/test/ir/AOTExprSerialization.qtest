@@ -42,7 +42,54 @@ public class AOTIssueProgram inherits Program {
     }
 }
 
+public class AOTIssueRestrictedProgram inherits Program {
+    constructor(*int po) : Program(PO_NO_INHERIT_GLOBAL_VARS
+            | PO_NO_THREAD_CONTROL
+            | PO_NO_PROCESS_CONTROL
+            | PO_NO_INHERIT_USER_FUNC_VARIANTS
+            | PO_NO_INHERIT_USER_CLASSES
+            | PO_NO_INHERIT_USER_HASHDECLS
+            | PO_NO_INHERIT_PROGRAM_DATA
+            | po) {
+    }
+}
+
 public namespace AOTExprSerializationMod {
+    public class VariantTarget {
+        private {
+            string text;
+        }
+
+        constructor() {
+            text = \"zero\";
+        }
+
+        constructor(string text) {
+            self.text = text;
+        }
+
+        public string value() {
+            return text;
+        }
+    }
+
+    public class Holder {
+        private {
+            static Holder singleton = new Holder();
+        }
+
+        constructor() {
+        }
+
+        public string value() {
+            return \"holder\";
+        }
+
+        public static string getValue() {
+            return singleton.value();
+        }
+    }
+
     public list<string> sub head(list<string> xs, int n) {
         return xs[0..n - 1];
     }
@@ -56,8 +103,14 @@ public namespace AOTExprSerializationMod {
         return template;
     }
 
+    public string sub constructorFromAuto(auto arg) {
+        VariantTarget target(arg);
+        return target.value();
+    }
+
     public string sub verify() {
         AOTIssueProgram p(0);
+        AOTIssueRestrictedProgram p2(0);
         list<string> h = head((\"a\", \"b\", \"c\"), 2);
         if (h != (\"a\", \"b\")) {
             return \"bad list range\";
@@ -68,6 +121,12 @@ public namespace AOTExprSerializationMod {
         *string t = token(\"abc-def:rest\", 0);
         if (t != \"abc-def\") {
             return \"bad regex operand range\";
+        }
+        if (Holder::getValue() != \"holder\") {
+            return \"bad static singleton constructor\";
+        }
+        if (constructorFromAuto(\"runtime\") != \"runtime\") {
+            return \"bad runtime constructor variant resolution\";
         }
         return \"ok\";
     }

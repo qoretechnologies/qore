@@ -2203,8 +2203,16 @@ void QoreProgram::waitForTermination() {
 }
 
 void QoreProgram::waitForTerminationAndDeref(ExceptionSink* xsink) {
-    priv->waitForTerminationAndClear(xsink);
-    deref(xsink);
+    if (xsink) {
+        priv->waitForTerminationAndClear(xsink);
+        deref(xsink);
+        return;
+    }
+
+    ExceptionSink local_xsink;
+    priv->waitForTerminationAndClear(&local_xsink);
+    deref(&local_xsink);
+    local_xsink.clear();
 }
 
 void QoreProgram::lockOptions() {

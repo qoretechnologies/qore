@@ -109,6 +109,9 @@
 #include "qore/intern/ComplexContextrefNode.h"
 #include "qore/intern/CallReferenceCallNode.h"
 #include "qore/intern/qore_list_private.h"
+#include <qore/QoreBigFloatNode.h>
+#include <qore/QoreBigIntNode.h>
+#include <qore/QoreNothingNode.h>
 
 static void makeExprDeserializedClosureIRNameUnique(QoreIRFunction& ir, const UserClosureVariant* variant) {
     static std::atomic<uint64_t> closure_ir_counter{0};
@@ -477,6 +480,44 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
 // NEW_OBJECT (4)
 // ============================================================================
 
+static const AbstractQoreFunctionVariant* resolve_expr_constructor_variant(const QoreClass* qc,
+        const QoreListNode* args, const char* class_path, std::string& error) {
+    if (args && args->needs_eval()) {
+        return nullptr;
+    }
+
+    const QoreMethod* constructor = qc ? qc->getConstructor() : nullptr;
+    if (!constructor) {
+        if (args && !args->empty()) {
+            error = "class '";
+            error += class_path ? class_path : (qc ? qc->getName() : "<unknown>");
+            error += "' has no constructor accepting ";
+            error += std::to_string(args->size());
+            error += " argument(s)";
+        }
+        return nullptr;
+    }
+
+    ExceptionSink xsink;
+    const AbstractQoreFunctionVariant* variant = qore_method_private::get(*constructor)->getFunction()
+        ->runtimeFindVariant(&xsink, args, false, nullptr);
+    if (xsink) {
+        error = "exception resolving constructor variant for class '";
+        error += class_path ? class_path : qc->getName();
+        error += "'";
+        xsink.clear();
+        return nullptr;
+    }
+    if (!variant) {
+        error = "cannot resolve constructor variant for class '";
+        error += class_path ? class_path : qc->getName();
+        error += "' with ";
+        error += std::to_string(args ? args->size() : 0);
+        error += " argument(s)";
+    }
+    return variant;
+}
+
 static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
@@ -546,7 +587,20 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
         }
         return QoreValue();
     }
+    std::string variant_err;
+    const AbstractQoreFunctionVariant* variant = resolve_expr_constructor_variant(qc, args_list, class_path,
+        variant_err);
+    if (!variant_err.empty()) {
+        if (args_list) {
+            args_list->deref(nullptr);
+        }
+        ctx.error = variant_err;
+        return QoreValue();
+    }
     NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list);
+    if (variant) {
+        nocn->setVariant(variant);
+    }
     return QoreValue(nocn);
 }
 
@@ -1473,6 +1527,16 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
         }
         return QoreValue();
     }
+    std::string variant_err;
+    const AbstractQoreFunctionVariant* variant = resolve_expr_constructor_variant(qc, args_list, class_path,
+        variant_err);
+    if (!variant_err.empty()) {
+        if (args_list) {
+            args_list->deref(nullptr);
+        }
+        ctx.error = variant_err;
+        return QoreValue();
+    }
     // ScopedObjectCallNode expects QoreParseListNode, not QoreListNode
     QoreParseListNode* pln = nullptr;
     if (args_list) {
@@ -1489,6 +1553,9 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
     // Convert parse_args to args so evalImpl() doesn't hit the assertion
     if (pln) {
         socn->resolveParseArgs();
+    }
+    if (variant) {
+        socn->setVariant(variant);
     }
     return QoreValue(socn);
 }
@@ -2282,6 +2349,13 @@ static bool write_expr_const_int(AOTExprWriteCtx& ctx) {
         ctx.writer.writeI64(ctx.expr.getAsBigInt());
         return true;
     }
+    if (ctx.expr.hasNode()) {
+        if (auto* i = dynamic_cast<const QoreBigIntNode*>(ctx.expr.getInternalNode())) {
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_INT));
+            ctx.writer.writeI64(i->getValue());
+            return true;
+        }
+    }
     return false;
 }
 
@@ -2298,6 +2372,13 @@ static bool write_expr_const_float(AOTExprWriteCtx& ctx) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_FLOAT));
         ctx.writer.writeF64(ctx.expr.getAsFloat());
         return true;
+    }
+    if (ctx.expr.hasNode()) {
+        if (auto* f = dynamic_cast<const QoreBigFloatNode*>(ctx.expr.getInternalNode())) {
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_FLOAT));
+            ctx.writer.writeF64(f->getValue());
+            return true;
+        }
     }
     return false;
 }
@@ -2332,6 +2413,10 @@ static bool write_expr_const_nothing(AOTExprWriteCtx& ctx) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NOTHING));
         return true;
     }
+    if (ctx.expr.hasNode() && dynamic_cast<const QoreNothingNode*>(ctx.expr.getInternalNode())) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NOTHING));
+        return true;
+    }
     return false;
 }
 
@@ -2345,7 +2430,8 @@ static QoreValue read_expr_const_nothing(AOTExprReadCtx& ctx) {
 // ============================================================================
 
 static bool write_expr_const_null(AOTExprWriteCtx& ctx) {
-    if (!ctx.expr.hasNode() && ctx.expr.getType() == NT_NULL) {
+    if ((!ctx.expr.hasNode() && ctx.expr.getType() == NT_NULL)
+            || (ctx.expr.hasNode() && dynamic_cast<const QoreNullNode*>(ctx.expr.getInternalNode()))) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NULL));
         return true;
     }

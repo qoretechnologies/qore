@@ -130,6 +130,9 @@
 #include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/QoreAOTExprNodeRegistry.h"
 
+#include <qore/QoreBigFloatNode.h>
+#include <qore/QoreBigIntNode.h>
+#include <qore/QoreNothingNode.h>
 #include <qore/QoreObject.h>
 
 #include <cassert>
@@ -4786,19 +4789,19 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const std::vector<AOTLocalSlotId>& parent_locals,
         const std::vector<AOTGlobalSlotId>& parent_globals,
         const AOTConstantReverseMap* const_reverse_map) {
-    auto trace_generic_eval = [&expr](const char* reason, const AbstractQoreNode* node) {
-        if (!getenv("QORE_AOT_TRACE_GENERIC_EVAL")) {
+    auto trace_unsupported_expr = [&expr](const char* reason, const AbstractQoreNode* node) {
+        if (!getenv("QORE_AOT_TRACE_UNSUPPORTED_EXPR") && !getenv("QORE_AOT_TRACE_GENERIC_EVAL")) {
             return;
         }
         const char* object_class = "";
         if (auto* obj = dynamic_cast<const QoreObject*>(node)) {
             object_class = obj->getClassName();
         }
-        fprintf(stderr, "[aot-generic-eval] %s qtype=%d node=%p node_type=%s needs_eval=%d\n",
+        fprintf(stderr, "[aot-unsupported-expr] %s qtype=%d node=%p node_type=%s needs_eval=%d\n",
             reason, expr.getType(), static_cast<const void*>(node), node ? node->getTypeName() : "<none>",
             node ? (node->needs_eval() ? 1 : 0) : (expr.needsEval() ? 1 : 0));
         if (*object_class) {
-            fprintf(stderr, "[aot-generic-eval] object_class=%s\n", object_class);
+            fprintf(stderr, "[aot-unsupported-expr] object_class=%s\n", object_class);
         }
     };
     if (!expr.hasNode()) {
@@ -4836,7 +4839,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             default:
                 break;
         }
-        trace_generic_eval("unsupported inline non-node expression", nullptr);
+        trace_unsupported_expr("unsupported inline non-node expression", nullptr);
         qoreAOTSetExprSerializationError("unsupported inline native AOT expression for "
             + qoreAOTDescribeExpr(expr)
             + "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
@@ -4846,7 +4849,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
 
     const AbstractQoreNode* node = expr.getInternalNode();
     if (!node) {
-        trace_generic_eval("missing inline expression node", nullptr);
+        trace_unsupported_expr("missing inline expression node", nullptr);
         qoreAOTSetExprSerializationError("unsupported inline native AOT expression for "
             + qoreAOTDescribeExpr(expr)
             + "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
@@ -5148,6 +5151,23 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         std::string class_ref = qore_aot_encode_class_ref(&sv->qc);
         writer.writeStringRef(class_ref.c_str());
         writer.writeStringRef(sv->str.c_str());
+        return true;
+    }
+
+    // Heap-allocated scalar literal nodes: large integers and exceptional floats
+    // cannot be represented as immediate QoreValue scalars.
+    if (auto* i = dynamic_cast<const QoreBigIntNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_INT));
+        writer.writeI64(i->getValue());
+        return true;
+    }
+    if (auto* f = dynamic_cast<const QoreBigFloatNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_FLOAT));
+        writer.writeF64(f->getValue());
+        return true;
+    }
+    if (dynamic_cast<const QoreNothingNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NOTHING));
         return true;
     }
 
@@ -6113,7 +6133,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     }
 
     // Unsupported — fail before writing a fallback marker.
-    trace_generic_eval("unsupported inline expression node", node);
+    trace_unsupported_expr("unsupported inline expression node", node);
     qoreAOTSetExprSerializationError("unsupported inline native AOT expression for "
         + qoreAOTDescribeExpr(expr)
         + "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this operation "
@@ -6198,7 +6218,8 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                         expr.ref1.c_str(), expr.ref2.c_str());
                 }
             }
-            if (expr.kind == AOTExprKind::EXPR_TREE || expr.kind == AOTExprKind::GENERIC_EVAL) {
+            if (expr.kind == AOTExprKind::UNSUPPORTED || expr.kind == AOTExprKind::EXPR_TREE
+                    || expr.kind == AOTExprKind::GENERIC_EVAL) {
                 std::string detail;
                 std::string prefix = "slot " + std::to_string(expr_idx);
                 for (const std::string& d : func.slot_ids.unsupported_expr_details) {
@@ -6208,7 +6229,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     }
                 }
                 error = "AOT cannot serialize function '" + func.name
-                    + "' expression " + prefix + " without source fallback";
+                    + "' expression " + prefix + ": fallback markers are forbidden";
                 if (!detail.empty()) {
                     error += ": ";
                     error += detail;
@@ -6216,7 +6237,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                     error += ": ";
                     error += expr.ref1;
                 }
-                error += "; EXPR_TREE and GENERIC_EVAL are fatal for new AOT output";
+                error += "; unsupported expressions, EXPR_TREE, and GENERIC_EVAL are fatal for new AOT output";
                 return false;
             }
             writer.writeU8(static_cast<uint8_t>(expr.kind));

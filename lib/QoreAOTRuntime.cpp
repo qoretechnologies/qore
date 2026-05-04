@@ -202,6 +202,8 @@ extern void removeSignatureLocalsFromBodyLocals(std::vector<LocalVar*>& locals, 
 extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* variant);
 
 static std::string describeAOTClassRef(const char* class_ref);
+static std::string normalizeTypePaths(const std::string& sig);
+static const QoreMethod* findAOTStaticMethod(const QoreClass* qc, const char* method_name);
 
 static void makeRuntimeDeserializedClosureIRNameUnique(QoreIRFunction& ir, const UserClosureVariant* variant) {
     static std::atomic<uint64_t> closure_ir_counter{0};
@@ -362,10 +364,122 @@ static const QoreMethod* resolveAOTSelfMethod(const QoreClass* qc, const char* m
     if (!m) {
         m = qc->findMethod(method_name);
         if (!m) {
-            m = qc->findStaticMethod(method_name);
+            m = findAOTStaticMethod(qc, method_name);
         }
     }
     return m;
+}
+
+static const QoreMethod* findAOTStaticMethod(const QoreClass* qc, const char* method_name) {
+    if (!qc || !method_name || !*method_name) {
+        return nullptr;
+    }
+
+    if (const QoreMethod* m = qc->findStaticMethod(method_name)) {
+        return m;
+    }
+    if (const QoreMethod* m = qore_class_private::get(*const_cast<QoreClass*>(qc))
+            ->parseFindLocalStaticMethod(method_name)) {
+        return m;
+    }
+
+    QoreClassHierarchyIterator hi(*qc);
+    size_t hierarchy_count = 0;
+    while (hi.next()) {
+        if (++hierarchy_count % 100 == 0 && qore_check_cancel(nullptr, "AOT static method hierarchy lookup")) {
+            return nullptr;
+        }
+        const QoreClass& parent_qc = hi.get();
+        if (const QoreMethod* m = parent_qc.findStaticMethod(method_name)) {
+            return m;
+        }
+        if (const QoreMethod* m = qore_class_private::get(*const_cast<QoreClass*>(&parent_qc))
+                ->parseFindLocalStaticMethod(method_name)) {
+            return m;
+        }
+    }
+
+    return nullptr;
+}
+
+static std::string makeAOTVariantSignature(const AbstractQoreFunctionVariant* v) {
+    std::string rv("(");
+    if (v) {
+        if (AbstractFunctionSignature* sig = v->getSignature()) {
+            const type_vec_t& types = sig->getTypeList();
+            for (size_t i = 0; i < types.size(); ++i) {
+                if (i && i % 100 == 0 && qore_check_cancel(nullptr, "AOT variant signature formatting")) {
+                    return {};
+                }
+                if (i > 0) {
+                    rv.append(",");
+                }
+                rv.append(QoreTypeInfo::getPath(types[i]));
+            }
+        }
+    }
+    rv.append(")");
+    return rv;
+}
+
+static const AbstractQoreFunctionVariant* findAOTVariantBySignatureText(MethodFunctionBase* mfb,
+        const char* sig_text) {
+    if (!mfb || !sig_text || !*sig_text) {
+        return nullptr;
+    }
+
+    if (const AbstractQoreFunctionVariant* v = mfb->findVariantBySignatureText(sig_text)) {
+        return v;
+    }
+
+    std::string target_sig = normalizeTypePaths(sig_text);
+    QoreFunctionIterator vi(*mfb);
+    size_t variant_count = 0;
+    while (vi.next()) {
+        if (++variant_count % 100 == 0 && qore_check_cancel(nullptr, "AOT variant signature lookup")) {
+            return nullptr;
+        }
+        const AbstractQoreFunctionVariant* v = vi.getVariant();
+        if (normalizeTypePaths(makeAOTVariantSignature(v)) == target_sig) {
+            return v;
+        }
+    }
+
+    return nullptr;
+}
+
+static const AbstractQoreFunctionVariant* resolveAOTConstructorVariant(const QoreClass* qc,
+        const QoreListNode* args, const char* class_path, std::string& error) {
+    const QoreMethod* constructor = qc ? qc->getConstructor() : nullptr;
+    if (!constructor) {
+        if (args && !args->empty()) {
+            error = "class '";
+            error += class_path ? class_path : (qc ? qc->getName() : "<unknown>");
+            error += "' has no constructor accepting ";
+            error += std::to_string(args->size());
+            error += " argument(s)";
+        }
+        return nullptr;
+    }
+
+    ExceptionSink xsink;
+    const AbstractQoreFunctionVariant* variant = qore_method_private::get(*constructor)->getFunction()
+        ->runtimeFindVariant(&xsink, args, false, nullptr);
+    if (xsink) {
+        error = "exception resolving constructor variant for class '";
+        error += class_path ? class_path : qc->getName();
+        error += "'";
+        xsink.clear();
+        return nullptr;
+    }
+    if (!variant) {
+        error = "cannot resolve constructor variant for class '";
+        error += class_path ? class_path : qc->getName();
+        error += "' with ";
+        error += std::to_string(args ? args->size() : 0);
+        error += " argument(s)";
+    }
+    return variant;
 }
 
 //! Resolve an expression slot identity to NaN-boxed QoreValue bits
@@ -421,19 +535,28 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     class_desc.c_str(), ref2);
                 return 0;
             }
-            const QoreMethod* m = qc->findStaticMethod(ref2);
-            // Fall back to parse-time lookup for not-yet-initialized classes
-            if (!m) {
-                qore_class_private* qcp = qore_class_private::get(
-                    *const_cast<QoreClass*>(qc));
-                m = qcp->parseFindLocalStaticMethod(ref2);
+            std::string method_name_storage;
+            const char* method_name = ref2;
+            const char* sig_text = nullptr;
+            const char* sig_sep = strchr(ref2, '\n');
+            if (sig_sep) {
+                method_name_storage.assign(ref2, sig_sep - ref2);
+                method_name = method_name_storage.c_str();
+                sig_text = sig_sep + 1;
             }
+            const QoreMethod* m = findAOTStaticMethod(qc, method_name);
             if (!m) {
-                printd(0, "AOT v2: cannot find static method '%s::%s'\n", ref1, ref2);
+                printd(0, "AOT v2: cannot find static method '%s::%s'\n", ref1, method_name);
                 return 0;
             }
             // Create StaticMethodCallNode
             StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
+            if (sig_text) {
+                MethodFunctionBase* mfb = qore_method_private::get(*const_cast<QoreMethod*>(m))->getFunction();
+                if (const AbstractQoreFunctionVariant* v = findAOTVariantBySignatureText(mfb, sig_text)) {
+                    smcn->setVariant(v);
+                }
+            }
             return toBitsNB(QoreValue(smcn));
         }
 
@@ -511,7 +634,17 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     }
                 }
             }
+            std::string variant_err;
+            const AbstractQoreFunctionVariant* variant = resolveAOTConstructorVariant(qc, nullptr, ref1,
+                variant_err);
+            if (!variant_err.empty()) {
+                printd(0, "AOT v2: %s\n", variant_err.c_str());
+                return 0;
+            }
             NewObjectCallNode* nocn = new NewObjectCallNode(qc, nullptr);
+            if (variant) {
+                nocn->setVariant(variant);
+            }
             printd(5, "  nocn variant=%p\n", (void*)nocn->getVariant());
             return toBitsNB(QoreValue(nocn));
         }
@@ -527,7 +660,17 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     class_desc.c_str());
                 return 0;
             }
+            std::string variant_err;
+            const AbstractQoreFunctionVariant* variant = resolveAOTConstructorVariant(qc, nullptr, ref1,
+                variant_err);
+            if (!variant_err.empty()) {
+                printd(0, "AOT v2: %s\n", variant_err.c_str());
+                return 0;
+            }
             ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, nullptr);
+            if (variant) {
+                socn->setVariant(variant);
+            }
             return toBitsNB(QoreValue(socn));
         }
 
@@ -1036,7 +1179,7 @@ static const QoreMethod* findAOTMethodByName(const QoreClass* qc, const char* me
         return nullptr;
     }
     const QoreMethod* method = qc->findMethod(method_name);
-    return method ? method : qc->findStaticMethod(method_name);
+    return method ? method : findAOTStaticMethod(qc, method_name);
 }
 
 static const AbstractQoreFunctionVariant* findAOTMethodVariantByRef(
@@ -1915,9 +2058,10 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::NEW_OBJECT:
             case AOTExprKind::SCOPED_NEW_OBJECT: {
                 // ref1 = class path, ref2 = variant signature (e.g. "(string)").
-                // No inline args — constructor args are pre-computed IR operands.
-                // Resolve class and variant at load time and store in call_targets[slot]
-                // so the LLVM code can load them at runtime.
+                // Constructor args are IR operands here, not inline AST values.
+                // If no exact variant signature was serialized, leave the
+                // variant unset so constructor overload resolution runs after
+                // the operand values have been evaluated.
                 ref1 = reader.readStringRef(ptr);
                 ref2 = reader.readStringRef(ptr);
                 const QoreClass* qc = nullptr;
@@ -1928,24 +2072,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                         // Match variant by signature
                         const QoreMethod* cons = qc->getConstructor();
                         if (cons) {
-                            const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
-                            QoreFunctionIterator vi(*cf);
-                            while (vi.next()) {
-                                const AbstractQoreFunctionVariant* v = vi.getVariant();
-                                auto* vsig = v->getSignature();
-                                if (!vsig) continue;
-                                std::string vs("(");
-                                const type_vec_t& types = vsig->getTypeList();
-                                for (size_t vi2 = 0; vi2 < types.size(); ++vi2) {
-                                    if (vi2 > 0) vs.append(",");
-                                    vs.append(QoreTypeInfo::getPath(types[vi2]));
-                                }
-                                vs.append(")");
-                                if (vs == ref2) {
-                                    resolved_variant = v;
-                                    break;
-                                }
-                            }
+                            MethodFunctionBase* cf = qore_method_private::get(*const_cast<QoreMethod*>(cons))
+                                ->getFunction();
+                            resolved_variant = findAOTVariantBySignatureText(cf, ref2);
                         }
                     }
                 }
@@ -1959,6 +2088,23 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                     has_unsupported = true;
                     continue;
+                }
+                if (!resolved_variant && ref2 && *ref2) {
+                    std::string class_desc = describeAOTClassRef(ref1);
+                    printd(0, "AOT v2: cannot resolve constructor variant '%s' for class '%s'\n",
+                        ref2, class_desc.c_str());
+                    if (trace_slot_reg) {
+                        fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] %s cannot resolve constructor "
+                            "variant '%s' for class '%s'\n",
+                            name, i, expr_kind_name, ref2, class_desc.c_str());
+                    }
+                    has_unsupported = true;
+                    continue;
+                }
+                if (!resolved_variant && trace_slot_reg) {
+                    fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] %s defers constructor variant "
+                        "resolution for class '%s' variant='%s'\n",
+                        name, i, expr_kind_name, ref1 ? ref1 : "", ref2 ? ref2 : "");
                 }
                 // Store in call_targets for LLVM to load qc/variant at runtime
                 ctx->call_targets[i].qc = qc;
@@ -2261,7 +2407,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (qc && ref2 && *ref2) {
                         method = qc->findMethod(ref2);
                         if (!method) {
-                            method = qc->findStaticMethod(ref2);
+                            method = findAOTStaticMethod(qc, ref2);
                         }
                     }
                 }
@@ -2283,7 +2429,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref1 && *ref1) {
                     const QoreClass* qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc && ref2 && *ref2) {
-                        method = qc->findStaticMethod(ref2);
+                        method = findAOTStaticMethod(qc, ref2);
                         if (!method) {
                             method = qc->findMethod(ref2);
                         }
@@ -2404,20 +2550,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref1 && method_name) {
                     const QoreClass* qc = findAOTClassByPath(pgm, ref1, false);
                     if (qc) {
-                        const QoreMethod* m = qc->findStaticMethod(method_name);
-                        if (!m) {
-                            qore_class_private* qcp = qore_class_private::get(
-                                *const_cast<QoreClass*>(qc));
-                            m = qcp->parseFindLocalStaticMethod(method_name);
-                        }
+                        const QoreMethod* m = findAOTStaticMethod(qc, method_name);
                         if (m) {
                             ctx->call_targets[i].method = m;
                             ctx->call_targets[i].is_static_method = true;
                             if (sig_text) {
                                 MethodFunctionBase* mfb = qore_method_private::get(
                                     *const_cast<QoreMethod*>(m))->getFunction();
-                                ctx->call_targets[i].variant = mfb
-                                    ? mfb->findVariantBySignatureText(sig_text) : nullptr;
+                                ctx->call_targets[i].variant = findAOTVariantBySignatureText(mfb, sig_text);
                                 ctx->exprs[i] = toBitsNB(QoreValue());
                                 continue;
                             }
@@ -2442,6 +2582,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                             continue;
                         }
                     }
+                }
+                if (trace_slot_reg) {
+                    fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL cannot resolve "
+                        "class='%s' method='%s' signature='%s'\n",
+                        name, i, ref1 ? ref1 : "", method_name ? method_name : "", sig_text ? sig_text : "");
                 }
                 if (call_args) {
                     call_args->deref(nullptr);
@@ -4589,7 +4734,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 if (qc && method_name && *method_name) {
                     method = qc->findMethod(method_name);
                     if (!method) {
-                        method = qc->findStaticMethod(method_name);
+                        method = findAOTStaticMethod(qc, method_name);
                     }
                 }
             }
@@ -4624,7 +4769,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 if (qc && method_name && *method_name) {
                     method = qc->findMethod(method_name);
                     if (!method) {
-                        method = qc->findStaticMethod(method_name);
+                        method = findAOTStaticMethod(qc, method_name);
                     }
                 }
             }
@@ -4651,7 +4796,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             if (class_path && *class_path) {
                 const QoreClass* qc = findAOTClassByPath(pgm, class_path, false);
                 if (qc && method_name && *method_name) {
-                    method = qc->findStaticMethod(method_name);
+                    method = findAOTStaticMethod(qc, method_name);
                 }
             }
             auto* ci = new QoreIRCallStaticDirectInstruction(method, nullptr, expr);

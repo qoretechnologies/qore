@@ -167,6 +167,9 @@
 #include "qore/intern/CaseNodeRegex.h"
 #include "qore/intern/QoreRegexSubst.h"
 #include "qore/intern/QoreTransliteration.h"
+#include <qore/QoreBigFloatNode.h>
+#include <qore/QoreBigIntNode.h>
+#include <qore/QoreNothingNode.h>
 #include <qore/QoreNumberNode.h>
 #include <qore/BinaryNode.h>
 
@@ -787,28 +790,49 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
     }
 }
 
+static bool isRejectedAOTExprKind(AOTExprKind kind) {
+    return kind == AOTExprKind::UNSUPPORTED
+        || kind == AOTExprKind::EXPR_TREE
+        || kind == AOTExprKind::GENERIC_EVAL;
+}
+
+static const char* getRejectedAOTExprKindName(AOTExprKind kind) {
+    switch (kind) {
+        case AOTExprKind::UNSUPPORTED:
+            return "UNSUPPORTED";
+        case AOTExprKind::EXPR_TREE:
+            return "EXPR_TREE";
+        case AOTExprKind::GENERIC_EVAL:
+            return "GENERIC_EVAL";
+        default:
+            return "supported";
+    }
+}
+
 //! Build a diagnostic for functions that cannot be reconstructed from binary metadata.
 static bool getFallbackRequirementReason(const AOTCompiledFuncWithSlots& f, std::string& reason) {
     bool needs_fallback = false;
-    int expr_tree_count = 0;
+    int rejected_count = 0;
     for (size_t i = 0; i < f.slot_ids.exprs.size(); ++i) {
-        if (f.slot_ids.exprs[i].kind == AOTExprKind::EXPR_TREE) {
-            ++expr_tree_count;
-            if (expr_tree_count <= 3) {
+        if (isRejectedAOTExprKind(f.slot_ids.exprs[i].kind)) {
+            ++rejected_count;
+            if (rejected_count <= 3) {
                 reason += reason.empty() ? "" : "; ";
                 reason += "slot ";
                 reason += std::to_string(i);
-                reason += " would require EXPR_TREE serialization";
+                reason += " is ";
+                reason += getRejectedAOTExprKindName(f.slot_ids.exprs[i].kind);
+                reason += " (fallback markers are forbidden)";
             }
         }
     }
-    if (expr_tree_count > 3) {
+    if (rejected_count > 3) {
         reason += reason.empty() ? "" : "; ";
         reason += "and ";
-        reason += std::to_string(expr_tree_count - 3);
-        reason += " more EXPR_TREE slots";
+        reason += std::to_string(rejected_count - 3);
+        reason += " more rejected expression slots";
     }
-    if (expr_tree_count) {
+    if (rejected_count) {
         needs_fallback = true;
     }
 
@@ -10658,9 +10682,30 @@ class ExprTreeSerializer {
 
         // ---- Leaf constants ----
 
+        // Nothing value
+        if (dynamic_cast<const QoreNothingNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NOTHING));
+            writeU16(0);
+            return true;
+        }
+
         // Null node (NULL singleton)
         if (dynamic_cast<const QoreNullNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_NULL));
+            writeU16(0);
+            return true;
+        }
+
+        // Heap-allocated scalar literals
+        if (auto* i = dynamic_cast<const QoreBigIntNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_INT));
+            writeI64(i->getValue());
+            writeU16(0);
+            return true;
+        }
+        if (auto* f = dynamic_cast<const QoreBigFloatNode*>(node)) {
+            writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_FLOAT));
+            writeF64(f->getValue());
             writeU16(0);
             return true;
         }
@@ -11659,8 +11704,8 @@ bool serializeExprTreeToBlob(QoreValue v, const AOTSlotMap& slots, std::vector<u
 
 //! Classify an expression QoreValue for slot map serialization
 /** Checks the AST node type and extracts identity info for supported types.
-    Uses AOTExprKind::GENERIC_EVAL only as an internal unsupported sentinel;
-    the serializer rejects it before writing any fallback marker.
+    Uses AOTExprKind::UNSUPPORTED only as a compile-time sentinel; the serializer
+    rejects it before writing any fallback marker.
 */
 static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const AOTConstantReverseMap* const_reverse_map) {
@@ -11715,7 +11760,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.kind = AOTExprKind::CONST_NULL;
             return id;
         }
-        id.kind = AOTExprKind::GENERIC_EVAL;
+        id.kind = AOTExprKind::UNSUPPORTED;
         id.ref1 = "unsupported non-node expression type ";
         id.ref1 += std::to_string(static_cast<int>(v.getType()));
         return id;
@@ -11723,7 +11768,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 
     const AbstractQoreNode* node = v.getInternalNode();
     if (!node) {
-        id.kind = AOTExprKind::GENERIC_EVAL;
+        id.kind = AOTExprKind::UNSUPPORTED;
         id.ref1 = "null expression node";
         return id;
     }
@@ -11882,7 +11927,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.child_expr = vrn->getNewArgs();
             return id;
         }
-        // Other non-class VarRefNewObjectNode falls through to GENERIC_EVAL
+        // Other non-class VarRefNewObjectNode falls through to UNSUPPORTED.
     }
 
     // NewHashDeclNode: hashdecl construction (new MyHashDecl(...))
@@ -11952,6 +11997,28 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
         // Store closure function pointer for later serialization
         id.closure_func = ucf;
+        return id;
+    }
+
+    // Heap-allocated scalar literal nodes (large int, exceptional float, NOTHING).
+    if (auto* i = dynamic_cast<const QoreBigIntNode*>(node)) {
+        id.kind = AOTExprKind::CONST_INT;
+        id.ref1 = std::to_string(i->getValue());
+        return id;
+    }
+    if (auto* f = dynamic_cast<const QoreBigFloatNode*>(node)) {
+        id.kind = AOTExprKind::CONST_FLOAT;
+        char fbuf[64];
+        snprintf(fbuf, sizeof(fbuf), "%.17g", f->getValue());
+        id.ref1 = fbuf;
+        return id;
+    }
+    if (dynamic_cast<const QoreNothingNode*>(node)) {
+        id.kind = AOTExprKind::CONST_NOTHING;
+        return id;
+    }
+    if (dynamic_cast<const QoreNullNode*>(node)) {
+        id.kind = AOTExprKind::CONST_NULL;
         return id;
     }
 
@@ -12073,7 +12140,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         return id;
     }
     if (dynamic_cast<const QoreWeakAssignmentOperatorNode*>(node)) {
-        id.kind = AOTExprKind::GENERIC_EVAL;
+        id.kind = AOTExprKind::UNSUPPORTED;
         id.ref1 = "unsupported native AOT weak assignment expression; "
             "add a native AOTExprKind serializer/reader for weak assignment or lower this operation to native IR";
         id.child_expr = v;
@@ -12413,11 +12480,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         return id;
     }
 
-    // QoreDotEvalOperatorNode: dot-eval method call (obj.method())
-    // ExprOp-based DotEval opcodes (DotEvalAny/Date/etc.) dispatch via
-    // qore_rt_dot_eval_with_base_aot() which reads from exprs[], so they need EXPR_TREE.
+    // QoreDotEvalOperatorNode: direct dot-eval method call (obj.method()).
     // DotEvalMethodDirect has pre-evaluated args in operands and dispatches via
     // call_targets[], so DOT_EVAL_TARGET (class_path + method_name) is sufficient.
+    // Non-direct ExprOp-based dot-eval forms must be lowered natively before
+    // serialization; they are rejected instead of falling back to EXPR_TREE.
     if (slots.dot_eval_direct_bits.count(bits)) {
         if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
             MethodCallNode* mc = de->getMethodCall();
@@ -12556,14 +12623,14 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                     memcpy(&sv_bits, &sv, sizeof(sv_bits));
                     AOTExprSlotId resolved_id = classifyExpression(sv_bits, slots, const_reverse_map);
                     sv.discard(nullptr);
-                    if (resolved_id.kind != AOTExprKind::GENERIC_EVAL) {
+                    if (!isRejectedAOTExprKind(resolved_id.kind)) {
                         return resolved_id;
                     }
                 } else {
                     sv.discard(nullptr);
                 }
             }
-            id.kind = AOTExprKind::GENERIC_EVAL;
+            id.kind = AOTExprKind::UNSUPPORTED;
             id.ref1 = getAOTRuntimeConstantDiagnostic(rcr);
             return id;
         }
@@ -12572,7 +12639,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         return id;
     }
 
-    // Runtime constant value: look up in const_reverse_map before EXPR_TREE fallback
+    // Runtime constant value: look up in const_reverse_map before rejecting the
+    // unsupported node.
     if (const_reverse_map) {
         auto cit = const_reverse_map->find(node);
         if (cit != const_reverse_map->end()) {
@@ -12584,7 +12652,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
 
     // The old path serialized arbitrary AST as EXPR_TREE here.  That hides native
     // lowering/classification gaps, so report the old root kind and fail instead.
-    id.kind = AOTExprKind::GENERIC_EVAL;
+    id.kind = AOTExprKind::UNSUPPORTED;
     id.ref1 = "unsupported native AOT expression; old fallback would require EXPR_TREE for node '";
     id.ref1 += node->getTypeName();
     id.ref1 += "' (node type ";
@@ -12810,8 +12878,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
             out.exprs.resize(static_cast<size_t>(slot) + 1);
         }
         out.exprs[slot] = classifyExpression(bits, slots, const_reverse_map);
-        if (out.exprs[slot].kind == AOTExprKind::GENERIC_EVAL
-                || out.exprs[slot].kind == AOTExprKind::EXPR_TREE) {
+        if (isRejectedAOTExprKind(out.exprs[slot].kind)) {
             out.has_unsupported_exprs = true;
             std::string detail = "slot ";
             detail += std::to_string(slot);
@@ -12831,12 +12898,12 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
                 QoreValue dbg_v;
                 memcpy(&dbg_v, &bits, sizeof(dbg_v));
                 if (dbg_v.hasNode() && dbg_v.getInternalNode()) {
-                    fprintf(stderr, "AOT: func '%s' has GENERIC_EVAL expr slot %d: '%s' (type %d)\n",
+                    fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: '%s' (type %d)\n",
                         func.name.c_str(), slot,
                         dbg_v.getInternalNode()->getTypeName(),
                         dbg_v.getInternalNode()->getType());
                 } else {
-                    fprintf(stderr, "AOT: func '%s' has GENERIC_EVAL expr slot %d: "
+                    fprintf(stderr, "AOT: func '%s' has unsupported expr slot %d: "
                         "non-node value (type=%d)\n",
                         func.name.c_str(), slot, (int)dbg_v.getType());
                 }

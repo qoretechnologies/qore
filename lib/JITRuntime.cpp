@@ -1578,8 +1578,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_static_var_by_path_for_call(const cha
     return qore_rt_load_static_var_by_path_impl(class_path, var_name, xsink, true);
 }
 
-// --- Object instantiation helper ---
-
 extern "C" DLLEXPORT uint64_t qore_rt_new_object(const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         const QoreListNode* args, ExceptionSink* xsink) {
     RuntimeConfig& rc = rc_get_current_ref();
