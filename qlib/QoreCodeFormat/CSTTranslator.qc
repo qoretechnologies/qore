@@ -1988,10 +1988,12 @@ public class CSTTranslator {
             }
         }
 
+        string source = extractText(node);
         return {
             "nodetype": ANT_Expression,
             "kind": AEK_List,
             "elements": elems,
+            "trailingComma": source =~ /,\s*\)$/,
             "loc": node.loc,
         };
     }

@@ -2101,6 +2101,9 @@ public class CodeFormatter {
             items += emitExpressionStr(node.elements[i]);
         }
         string result = items.join(", ");
+        if (node.trailingComma) {
+            result += ",";
+        }
 
         # Short lists on one line
         if (result.size() < 80) {
@@ -2117,8 +2120,8 @@ public class CodeFormatter {
             }
             indentedItems += indented;
         }
-        if (items.size() == 1) {
-            return "(\n" + indentedItems[0] + "\n)";
+        if (node.trailingComma) {
+            return "(\n" + indentedItems[0] + ",\n)";
         }
         return "(\n" + indentedItems.join(",\n") + ",\n)";
     }

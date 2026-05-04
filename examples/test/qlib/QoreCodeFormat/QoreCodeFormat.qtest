@@ -49,6 +49,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("multi-line expression idempotency", \testMultiLineExprIdempotency());
         addTestCase("nested hash indentation", \testNestedHashIndentation());
         addTestCase("regex escaped slashes", \testRegexEscapedSlashes());
+        addTestCase("single-item list literals", \testSingleItemListLiterals());
 
         set_return_value(main());
     }
@@ -314,6 +315,42 @@ sub test() {
         assertRegex("plus-equals", "x \\+= 1", r5);
         assertRegex("minus-equals", "x -= 2", r5);
         assertRegex("multiply-equals", "x \\*= 3", r5);
+    }
+
+    testSingleItemListLiterals() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        string src = "%modern
+sub test() {
+    return (\"x\",);
+}
+";
+        string result = fmt.format(src);
+        assertRegex("return list keeps trailing comma", "return \\(\"x\",\\);",
+            result);
+        assertTrue(result !~ /return \("x"\);/,
+            "single-item list must not become parenthesized scalar");
+
+        src = "%modern
+sub test() {
+    list<auto> l = (\"x\",);
+    f((\"x\",));
+}
+";
+        result = fmt.format(src);
+        assertRegex("assignment list keeps trailing comma",
+            "list<auto> l = \\(\"x\",\\);", result);
+        assertRegex("nested argument list literal keeps trailing comma",
+            "f\\(\\(\"x\",\\)\\);", result);
+
+        src = "%modern
+sub test() {
+    return (\"x\");
+}
+";
+        result = fmt.format(src);
+        assertRegex("parenthesized scalar is not converted to list",
+            "return \\(\"x\"\\);", result);
     }
 
     testComments() {
