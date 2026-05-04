@@ -1450,6 +1450,10 @@ static QoreValue read_node_EN_CAST(AOTExprNodeReadCtx& ctx) {
         return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, qc, operand,
             or_nothing != 0));
     }
+    if (QoreTypeInfo::isType(ti, NT_OBJECT)) {
+        return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, nullptr, operand,
+            or_nothing != 0));
+    }
     qore_type_t bt = QoreTypeInfo::getBaseType(ti);
     if (bt == NT_HASH) {
         const QoreTypeInfo* ch = QoreTypeInfo::getUniqueReturnComplexHash(ti);
@@ -1478,8 +1482,13 @@ static QoreValue read_node_EN_CAST(AOTExprNodeReadCtx& ctx) {
         return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin, hd, operand,
             or_nothing != 0));
     }
-    return QoreValue(new QoreClassCastOperatorNode(&loc_builtin, nullptr, operand,
-        or_nothing != 0));
+    if (QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
+        return QoreValue(new QoreScalarCastOperatorNode(&loc_builtin, ti, operand,
+            or_nothing != 0));
+    }
+    operand.discard(nullptr);
+    ctx.failed = true;
+    return QoreValue();
 }
 
 // ---- Pre/post increment/decrement ----

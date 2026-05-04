@@ -1982,13 +1982,66 @@ static QoreValue read_expr_parse_ref(AOTExprReadCtx& ctx) {
 // ============================================================================
 
 static bool write_expr_cast_inner(AOTExprWriteCtx& ctx, QoreValue inner) {
-    if (inner.hasNode()) {
-        ctx.writer.writeU8(1);
-        return ::classifyAndWriteExpr(ctx.writer, inner,
-            ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+    ctx.writer.writeU8(1);
+    return ::classifyAndWriteExpr(ctx.writer, inner,
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static bool read_expr_cast_inner(AOTExprReadCtx& ctx, QoreValue& inner);
+
+static const char* get_expr_cast_type_path(const QoreTypeInfo* ti) {
+    if (ti == autoNoNarrowTypeInfo) {
+        return "auto!";
     }
-    ctx.writer.writeU8(0);
-    return true;
+    if (ti == autoNoNarrowHashTypeInfo) {
+        return "hash<auto!>";
+    }
+    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
+        return "*hash<auto!>";
+    }
+    if (ti == autoNoNarrowListTypeInfo) {
+        return "list<auto!>";
+    }
+    if (ti == autoNoNarrowListOrNothingTypeInfo) {
+        return "*list<auto!>";
+    }
+    return QoreTypeInfo::getPath(ti);
+}
+
+// ============================================================================
+// CAST_SCALAR (96)
+// ============================================================================
+
+static bool write_expr_cast_scalar(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    if (auto* sc = dynamic_cast<const QoreScalarCastOperatorNode*>(node)) {
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_SCALAR));
+        ctx.writer.writeStringRef(get_expr_cast_type_path(sc->getCastTypeInfo()));
+        ctx.writer.writeU8(sc->isOrNothing() ? 1 : 0);
+        return write_expr_cast_inner(ctx, sc->getExp());
+    }
+    return false;
+}
+
+static QoreValue read_expr_cast_scalar(AOTExprReadCtx& ctx) {
+    const char* type_path = ctx.reader.readStringRef(ctx.ptr);
+    uint8_t or_nothing = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreValue inner;
+    if (!read_expr_cast_inner(ctx, inner)) {
+        return QoreValue();
+    }
+    if (!type_path || !*type_path) {
+        inner.discard(nullptr);
+        return QoreValue();
+    }
+    std::string type_error;
+    QoreAOTTypeResolver type_resolver(ctx.pgm);
+    const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
+    if (!ti || !QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
+        inner.discard(nullptr);
+        return QoreValue();
+    }
+    return QoreValue(new QoreScalarCastOperatorNode(&loc_builtin, ti, inner, or_nothing != 0));
 }
 
 static bool read_expr_cast_inner(AOTExprReadCtx& ctx, QoreValue& inner) {

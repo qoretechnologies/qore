@@ -2472,8 +2472,8 @@ P{D2}:{D2}(:{D2}(\.{US})?)?             yylval->datetime = makeRelativeTime(yyte
 (::{WORD})+                             yylval->string = strdup(yytext); return SCOPED_REF;
 ({WORD}::)+\${WORD}                     yylval->string = make_scoped_vref(yytext); return SCOPED_VREF;
 (::{WORD})?::\${WORD}                   yylval->string = make_scoped_vref(yytext); return SCOPED_VREF;
-cast<{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,\*]+>)?{WS}*> yylval->string = make_cast(yytext); return QORE_CAST;
-cast<\*{WS}*({WORD}::)*{WORD}{WS}*(<[a-zA-Z<>:_0-9 \t,\*]+>)?{WS}*> yylval->string = make_cast(yytext + 1); return QORE_OR_NOTHING_CAST;
+cast<{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!]+>)?{WS}*> yylval->string = make_cast(yytext); return QORE_CAST;
+cast<\*{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!]+>)?{WS}*> yylval->string = make_cast(yytext + 1); return QORE_OR_NOTHING_CAST;
 ({WORD}::)+\$\.{WORD}                   yylval->nscope = new NamedScope(strdup(yytext)); yylval->nscope->fixBCCall(); return BASE_CLASS_CALL;
 @[Nn][Aa][Nn]@                          {
 #ifdef NAN

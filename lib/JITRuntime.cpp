@@ -1727,6 +1727,11 @@ static uint64_t qore_rt_cast_by_type_path_in_program(uint64_t inner_bits,
     QoreAOTTypeResolver resolver(pgm);
     const QoreTypeInfo* ti = resolver.resolve(resolve_path, error);
 
+    if (ti && QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
+        QoreValue result = QoreScalarCastOperatorNode::castValueToType(ti, or_nothing != 0, inner, xsink);
+        return toBits(result);
+    }
+
     // Try class cast first
     const QoreClass* qc = ti ? QoreTypeInfo::getUniqueReturnClass(ti) : nullptr;
     if (qc || (ti && QoreTypeInfo::isType(ti, NT_OBJECT))) {

@@ -792,6 +792,18 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
             auto* node = new QoreEnumCastOperatorNode(&loc_builtin, ed, ti, QoreValue(), or_nothing);
             return toBitsNB(QoreValue(node));
         }
+        case AOTExprKind::CAST_SCALAR: {
+            std::string type_error;
+            QoreAOTTypeResolver type_resolver(pgm);
+            const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+            if (!ti || !QoreScalarCastOperatorNode::isSupportedCastType(ti)) {
+                printd(0, "AOT v2: cannot resolve scalar type '%s' for cast: %s\n",
+                    ref1, type_error.c_str());
+                return 0;
+            }
+            auto* node = new QoreScalarCastOperatorNode(&loc_builtin, ti, QoreValue(), or_nothing);
+            return toBitsNB(QoreValue(node));
+        }
         default:
             return 0;
     }
@@ -1355,7 +1367,7 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
     // Cast kinds: stringref + u8 or_nothing + u8 has_inner + optional inner expression
     if (ek == AOTExprKind::CAST_HASHDECL || ek == AOTExprKind::CAST_COMPLEX_HASH
             || ek == AOTExprKind::CAST_COMPLEX_LIST || ek == AOTExprKind::CAST_CLASS
-            || ek == AOTExprKind::CAST_ENUM) {
+            || ek == AOTExprKind::CAST_ENUM || ek == AOTExprKind::CAST_SCALAR) {
         rdr.readStringRef(p);
         QoreAOTBinaryReader::readU8(p);
         uint8_t has_inner = QoreAOTBinaryReader::readU8(p);
@@ -2317,7 +2329,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::CAST_COMPLEX_HASH:
             case AOTExprKind::CAST_COMPLEX_LIST:
             case AOTExprKind::CAST_CLASS:
-            case AOTExprKind::CAST_ENUM: {
+            case AOTExprKind::CAST_ENUM:
+            case AOTExprKind::CAST_SCALAR: {
                 // Slot-map cast payloads are compact: type path + flags.  The
                 // evaluated input is carried by the native IR operand, unlike
                 // inline nested expressions which also serialize an inner expr.

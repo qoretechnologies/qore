@@ -409,8 +409,10 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 95: ASSIGN
     {"ASSIGN", 95, true, write_slot_ASSIGN, "Assignment operator"},
 
-    // 96-253: Unused
-    {nullptr, 96, false, nullptr, nullptr},
+    // 96: CAST_SCALAR
+    {"CAST_SCALAR", 96, true, write_slot_CAST, "Scalar cast"},
+
+    // 97-253: Unused
     {nullptr, 97, false, nullptr, nullptr},
     {nullptr, 98, false, nullptr, nullptr},
     {nullptr, 99, false, nullptr, nullptr},

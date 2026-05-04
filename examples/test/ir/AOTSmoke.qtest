@@ -34,7 +34,11 @@ class AOTSmokeTest inherits QUnit::Test {
             "command -v timeout 2>/dev/null || command -v gtimeout 2>/dev/null || true");
         trim timeout_cmd;
         if (!timeout_cmd.val()) {
-            timeout_cmd = "timeout";
+            timeout_cmd = backquote("command -v perl 2>/dev/null || true");
+            trim timeout_cmd;
+            if (timeout_cmd.val()) {
+                timeout_cmd += " -e 'alarm shift; exec @ARGV'";
+            }
         }
         addTestCase("AOT hello world", \testHelloWorld());
         addTestCase("AOT arithmetic", \testArithmetic());
@@ -5456,6 +5460,9 @@ public namespace CorruptQmodTest {
 
         # Use timeout so a regression deadlock produces a detectable
         # non-zero exit and the test suite doesn't stall indefinitely.
+        if (!timeout_cmd.val()) {
+            testSkip("cannot run corrupt .qmod deadlock regression without timeout, gtimeout, or perl");
+        }
         string cmd = sprintf("LD_LIBRARY_PATH=%s %s 15 %s --exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
             libqore_dir, timeout_cmd, qore_bin, qmod_path, script);
         date started = now_us();

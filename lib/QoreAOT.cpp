@@ -11050,7 +11050,7 @@ class ExprTreeSerializer {
         if (auto* op = dynamic_cast<const QoreCastOperatorNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CAST));
             const QoreTypeInfo* ti = op->getCastTypeInfo();
-            writeStr(ti ? QoreTypeInfo::getPath(ti) : "");
+            writeStr(getSlotTypePath(ti));
             writeU8(op->isOrNothing() ? 1 : 0);
             writeU16(1);
             return serializeValue(op->getExp());
@@ -12448,6 +12448,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::CAST_ENUM;
         id.ref1 = QoreTypeInfo::getPath(ec->getCastTypeInfo());
         id.flags = ec->isOrNothing() ? 1 : 0;
+        return id;
+    }
+    if (auto* sc = dynamic_cast<const QoreScalarCastOperatorNode*>(node)) {
+        id.kind = AOTExprKind::CAST_SCALAR;
+        id.ref1 = getSlotTypePath(sc->getCastTypeInfo());
+        id.flags = sc->isOrNothing() ? 1 : 0;
         return id;
     }
 

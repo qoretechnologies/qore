@@ -971,6 +971,7 @@ enum class AOTExprKind : uint8_t {
     CALLREF_CALL       = 93,  //!< Call reference call: callee expression + arguments
     RANGE              = 94,  //!< Range operator: left(AOTExprKind) + right(AOTExprKind)
     ASSIGN             = 95,  //!< Assignment operator: lvalue(AOTExprKind) + value(AOTExprKind)
+    CAST_SCALAR        = 96,  //!< Scalar/identity cast: ref1=type_path, u8 or_nothing, u8 has_inner, inner?
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression marker; rejected for new AOT objects
 };

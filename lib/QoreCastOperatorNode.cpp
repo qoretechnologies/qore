@@ -174,8 +174,24 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
         }
     }
 
-    parse_context.typeInfo = QoreParseTypeInfo::resolveAndDelete(pti, loc, err);
+    parse_context.typeInfo = QoreParseTypeInfo::resolveAny(pti, loc, err);
+    delete pti;
     pti = nullptr;
+
+    if (QoreScalarCastOperatorNode::isSupportedCastType(parse_context.typeInfo)) {
+        const QoreTypeInfo* conversionTypeInfo = QoreScalarCastOperatorNode::getConversionTypeInfo(
+            parse_context.typeInfo, or_nothing);
+        if (conversionTypeInfo && QoreTypeInfo::parseAccepts(conversionTypeInfo, expTypeInfo) == QTI_NOT_EQUAL) {
+            parse_error(*loc, "cast<%s>(%s) is invalid; cannot cast from %s to %s",
+                QoreTypeInfo::getName(parse_context.typeInfo), QoreTypeInfo::getName(expTypeInfo),
+                QoreTypeInfo::getName(expTypeInfo), QoreTypeInfo::getName(parse_context.typeInfo));
+            err = -1;
+        }
+        ReferenceHolder<> holder(this, nullptr);
+        val = new QoreScalarCastOperatorNode(loc, parse_context.typeInfo, takeExp(), or_nothing);
+        set_cast_analysis();
+        return err;
+    }
 
     {
         const QoreClass* qc = or_nothing
@@ -338,6 +354,119 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     parse_error(*loc, "cannot cast<> to type '%s'", QoreTypeInfo::getName(parse_context.typeInfo));
     set_cast_analysis();
     return -1;
+}
+
+bool QoreScalarCastOperatorNode::isSupportedCastType(const QoreTypeInfo* typeInfo) {
+    if (typeInfo == autoTypeInfo || typeInfo == autoNoNarrowTypeInfo || typeInfo == anyTypeInfo) {
+        return true;
+    }
+
+    switch (QoreTypeInfo::getBaseType(typeInfo)) {
+        case NT_INT:
+        case NT_FLOAT:
+        case NT_NUMBER:
+        case NT_STRING:
+        case NT_BOOLEAN:
+        case NT_DATE:
+        case NT_BINARY:
+            return true;
+        default:
+            return false;
+    }
+}
+
+const QoreTypeInfo* QoreScalarCastOperatorNode::getConversionTypeInfo(const QoreTypeInfo* typeInfo,
+        bool or_nothing) {
+    (void)or_nothing;
+    if (typeInfo == autoTypeInfo || typeInfo == autoNoNarrowTypeInfo || typeInfo == anyTypeInfo) {
+        return nullptr;
+    }
+
+    switch (QoreTypeInfo::getBaseType(typeInfo)) {
+        case NT_INT:
+            return softBigIntOrNothingTypeInfo;
+        case NT_FLOAT:
+            return softFloatOrNothingTypeInfo;
+        case NT_NUMBER:
+            return softNumberOrNothingTypeInfo;
+        case NT_STRING:
+            return softStringOrNothingTypeInfo;
+        case NT_BOOLEAN:
+            return softBoolOrNothingTypeInfo;
+        case NT_DATE:
+            return softDateOrNothingTypeInfo;
+        case NT_BINARY:
+            return softBinaryOrNothingTypeInfo;
+        default:
+            return nullptr;
+    }
+}
+
+int QoreScalarCastOperatorNode::checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const {
+    if (val.isNothing() && or_nothing) {
+        return 0;
+    }
+
+    const QoreTypeInfo* conversionTypeInfo = getConversionTypeInfo(typeInfo, or_nothing);
+    if (!conversionTypeInfo) {
+        return 0;
+    }
+
+    if (QoreTypeInfo::runtimeAcceptsValue(conversionTypeInfo, val) == QTI_NOT_EQUAL) {
+        xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to '%s'",
+            val.getTypeName(), QoreTypeInfo::getName(typeInfo));
+        return -1;
+    }
+
+    return 0;
+}
+
+QoreValue QoreScalarCastOperatorNode::castValueToType(const QoreTypeInfo* typeInfo, bool or_nothing,
+        QoreValue inner, ExceptionSink* xsink) {
+    if (inner.isNothing() && or_nothing) {
+        return QoreValue();
+    }
+
+    const QoreTypeInfo* conversionTypeInfo = getConversionTypeInfo(typeInfo, or_nothing);
+    if (!conversionTypeInfo) {
+        return inner.hasNode() ? inner.refSelf() : inner;
+    }
+
+    if (QoreTypeInfo::runtimeAcceptsValue(conversionTypeInfo, inner) == QTI_NOT_EQUAL) {
+        xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to '%s'",
+            inner.getTypeName(), QoreTypeInfo::getName(typeInfo));
+        return QoreValue();
+    }
+
+    QoreValue val = inner.hasNode() ? inner.refSelf() : inner;
+    QoreTypeInfo::acceptAssignment(conversionTypeInfo, "<cast operator>", val, xsink);
+    if (xsink && *xsink) {
+        val.discard(nullptr);
+        return QoreValue();
+    }
+    if (val.isNothing() && !or_nothing) {
+        return QoreTypeInfo::getDefaultQoreValue(typeInfo);
+    }
+    return val;
+}
+
+QoreValue QoreScalarCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xsink) const {
+    return castValueToType(typeInfo, or_nothing, inner, xsink);
+}
+
+QoreValue QoreScalarCastOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
+    ValueEvalOptimizedRefHolder rv(exp, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreValue result = castValue(*rv, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    needs_deref = result.hasNode();
+    return result;
 }
 
 // checks if the value matches the expected type

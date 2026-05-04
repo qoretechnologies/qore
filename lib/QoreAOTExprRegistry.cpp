@@ -304,7 +304,7 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
     {"CALLREF_CALL", 93, true, write_expr_callref_call, read_expr_callref_call, "Call reference call"},
     {"RANGE", 94, true, write_expr_range, read_expr_range, "Range operator"},
     {"ASSIGN", 95, true, write_expr_assign, read_expr_assign, "Assignment operator"},
-    {nullptr, 96, false, nullptr, nullptr, nullptr},
+    {"CAST_SCALAR", 96, true, write_expr_cast_scalar, read_expr_cast_scalar, "Scalar cast"},
     {nullptr, 97, false, nullptr, nullptr, nullptr},
     {nullptr, 98, false, nullptr, nullptr, nullptr},
     {nullptr, 99, false, nullptr, nullptr, nullptr},

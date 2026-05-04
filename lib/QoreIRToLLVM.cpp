@@ -160,8 +160,30 @@ llvm::Value* QoreIRToLLVM::getTypeInfoPointerArg(const QoreTypeInfo* ti) {
     return builder->CreateIntToPtr(ti_ptr, ptr_type);
 }
 
+static std::string qore_ir_get_type_path(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return {};
+    }
+    if (ti == autoNoNarrowTypeInfo) {
+        return "auto!";
+    }
+    if (ti == autoNoNarrowHashTypeInfo) {
+        return "hash<auto!>";
+    }
+    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
+        return "*hash<auto!>";
+    }
+    if (ti == autoNoNarrowListTypeInfo) {
+        return "list<auto!>";
+    }
+    if (ti == autoNoNarrowListOrNothingTypeInfo) {
+        return "*list<auto!>";
+    }
+    return QoreTypeInfo::getPath(ti);
+}
+
 llvm::Value* QoreIRToLLVM::getTypePathArg(const QoreTypeInfo* ti) {
-    return builder->CreateGlobalStringPtr(ti ? QoreTypeInfo::getPath(ti) : "");
+    return builder->CreateGlobalStringPtr(qore_ir_get_type_path(ti));
 }
 
 void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
@@ -1282,8 +1304,9 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
         auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
                 llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
         for (auto it = entry_locals.rbegin(); it != entry_locals.rend(); ++it) {
-            if (pre_instantiated_locals &&
-                    pre_instantiated_locals->count(reinterpret_cast<const void*>(*it))) {
+            const void* key = reinterpret_cast<const void*>(*it);
+            if ((pre_instantiated_locals && pre_instantiated_locals->count(key))
+                    || ir_only_body_locals.count(key)) {
                 continue;
             }
             llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
@@ -8571,7 +8594,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         inv->expr.getInternalNode());
                     if (cast_node) {
                         const QoreTypeInfo* ti = cast_node->getCastTypeInfo();
-                        std::string type_path = ti ? QoreTypeInfo::getPath(ti)
+                        std::string type_path = ti ? qore_ir_get_type_path(ti)
                             : (inv->invoke_opcode == QoreIROpcode::CastList ? "list" : "");
                         llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                         llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
@@ -13908,7 +13931,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     expr_inst->expr.getInternalNode());
                 if (cast_node) {
                     const QoreTypeInfo* ti = cast_node->getCastTypeInfo();
-                    std::string type_path = ti ? QoreTypeInfo::getPath(ti)
+                    std::string type_path = ti ? qore_ir_get_type_path(ti)
                         : (inst->opcode == QoreIROpcode::CastList ? "list" : "");
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,

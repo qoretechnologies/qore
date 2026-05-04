@@ -120,6 +120,50 @@ protected:
     }
 };
 
+class QoreScalarCastOperatorNode : public QoreCastOperatorNode {
+public:
+    DLLLOCAL QoreScalarCastOperatorNode(const QoreProgramLocation* loc, const QoreTypeInfo* typeInfo, QoreValue exp,
+            bool or_nothing)
+            : QoreCastOperatorNode(loc, exp), typeInfo(typeInfo), or_nothing(or_nothing) {
+    }
+
+    DLLLOCAL virtual ~QoreScalarCastOperatorNode() = default;
+
+    DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
+        return typeInfo;
+    }
+
+    DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {
+        ValueHolder n_exp(copy_value_and_resolve_lvar_refs(exp, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return new QoreScalarCastOperatorNode(loc, typeInfo, n_exp.release(), or_nothing);
+    }
+
+    // checks if the value matches the expected type
+    DLLLOCAL virtual int checkValue(ExceptionSink* xsink, const QoreValue& val, bool lvalue) const;
+
+    DLLLOCAL virtual QoreValue castValue(QoreValue inner, ExceptionSink* xsink) const;
+
+    DLLLOCAL virtual bool isOrNothing() const {
+        return or_nothing;
+    }
+
+    DLLLOCAL static bool isSupportedCastType(const QoreTypeInfo* typeInfo);
+
+    DLLLOCAL static const QoreTypeInfo* getConversionTypeInfo(const QoreTypeInfo* typeInfo, bool or_nothing);
+
+    DLLLOCAL static QoreValue castValueToType(const QoreTypeInfo* typeInfo, bool or_nothing, QoreValue inner,
+            ExceptionSink* xsink);
+
+protected:
+    const QoreTypeInfo* typeInfo;
+    bool or_nothing;
+
+    DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
+};
+
 class QoreClassCastOperatorNode : public QoreCastOperatorNode {
 public:
     DLLLOCAL QoreClassCastOperatorNode(const QoreProgramLocation* loc, const QoreClass* qc, QoreValue exp,

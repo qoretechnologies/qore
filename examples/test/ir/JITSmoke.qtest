@@ -149,6 +149,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("fast method call", \testFastMethodCall());
         addTestCase("fast closure/callref call", \testFastClosureCall());
         addTestCase("IR-only body locals skip instantiation", \testIROnlyBodyLocals());
+        addTestCase("child Program JIT IR-only locals", \testChildProgramJitIROnlyLocals());
         addTestCase("assert with IR-only locals", \testAssertIROnly());
         addTestCase("on_block_exit with IR-only locals", \testOnBlockExitWithIROnlyLocals());
         addTestCase("multi-function batch compilation", \testBatchCompilation());
@@ -4659,6 +4660,35 @@ printf(\"%d %d\\n\", r1, r2);
             assertEq("40 10", result,
                     sprintf("ir-only body locals branches %s", mode));
         }
+    }
+
+    testChildProgramJitIROnlyLocals() {
+        # Regression for child Program.callFunction() dispatch into JIT code:
+        # IR-only entry locals must not be popped from the runtime local stack
+        # because evalTiered() did not instantiate them there.
+        string code = "%modern
+Program p(PO_NEW_STYLE);
+p.setExecMode(EM_JIT);
+p.parse(\"%modern
+int sub use_int(int x) { return x * 2; }
+string sub use_string(string s) { return \\\"Hello, \\\" + s; }
+
+auto sub test() {
+    int doubled = use_int(21);
+    string greeting = use_string(\\\"Alice\\\");
+    return (doubled, greeting);
+}
+\", \"child-program-jit-ir-only-locals\");
+p.run();
+
+list<auto> result;
+for (int i = 0; i < 10; ++i) {
+    result = p.callFunction(\"test\");
+}
+printf(\"%d:%s\\n\", result[0], result[1]);
+";
+        string result = trim(runScript(code, "ast"));
+        assertEq("42:Hello, Alice", result, "child Program JIT IR-only locals");
     }
 
     testAssertIROnly() {

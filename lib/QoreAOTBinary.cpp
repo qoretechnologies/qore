@@ -4857,6 +4857,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         return classifyAndWriteExpr(writer, v, parent_locals, parent_globals,
             const_reverse_map);
     };
+    auto write_cast_inner = [&](const QoreValue& v) -> bool {
+        writer.writeU8(1);
+        return write_inline_expr(v);
+    };
     auto write_qore_arg_list = [&](const QoreListNode* args) -> bool {
         size_t nargs = args ? args->size() : 0;
         if (nargs > 255) {
@@ -5709,16 +5713,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeStringRef(hd ? hd->getNamespacePath().c_str() : "hash");
             writer.writeU8(hdc->isOrNothing() ? 1 : 0);
             // Serialize the inner expression being cast
-            QoreValue inner = hdc->getExp();
-            if (inner.hasNode()) {
-                writer.writeU8(1);  // has inner expression
-                if (!write_inline_expr(inner)) {
-                    return false;
-                }
-            } else {
-                writer.writeU8(0);  // no inner expression (cast from nothing)
-            }
-            return true;
+            return write_cast_inner(hdc->getExp());
         }
     }
 
@@ -5727,16 +5722,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_HASH));
         writeTypePathRef(writer, chc->getCastTypeInfo());
         writer.writeU8(chc->isOrNothing() ? 1 : 0);
-        QoreValue inner = chc->getExp();
-        if (inner.hasNode()) {
-            writer.writeU8(1);
-            if (!write_inline_expr(inner)) {
-                return false;
-            }
-        } else {
-            writer.writeU8(0);
-        }
-        return true;
+        return write_cast_inner(chc->getExp());
     }
 
     // QoreComplexListCastOperatorNode: cast<list<int>>(list)
@@ -5749,16 +5735,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeStringRef("list");
         }
         writer.writeU8(clc->isOrNothing() ? 1 : 0);
-        QoreValue inner = clc->getExp();
-        if (inner.hasNode()) {
-            writer.writeU8(1);
-            if (!write_inline_expr(inner)) {
-                return false;
-            }
-        } else {
-            writer.writeU8(0);
-        }
-        return true;
+        return write_cast_inner(clc->getExp());
     }
 
     // QoreClassCastOperatorNode: cast<ClassName>(obj)
@@ -5768,16 +5745,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         std::string class_ref = qc ? qore_aot_encode_class_ref(qc) : "object";
         writer.writeStringRef(class_ref.c_str());
         writer.writeU8(cc->isOrNothing() ? 1 : 0);
-        QoreValue inner = cc->getExp();
-        if (inner.hasNode()) {
-            writer.writeU8(1);
-            if (!write_inline_expr(inner)) {
-                return false;
-            }
-        } else {
-            writer.writeU8(0);
-        }
-        return true;
+        return write_cast_inner(cc->getExp());
     }
 
     // QoreEnumCastOperatorNode: cast<EnumType>(val)
@@ -5785,16 +5753,16 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_ENUM));
         writeTypePathRef(writer, ec->getCastTypeInfo());
         writer.writeU8(ec->isOrNothing() ? 1 : 0);
-        QoreValue inner = ec->getExp();
-        if (inner.hasNode()) {
-            writer.writeU8(1);
-            if (!write_inline_expr(inner)) {
-                return false;
-            }
-        } else {
-            writer.writeU8(0);
-        }
-        return true;
+        return write_cast_inner(ec->getExp());
+    }
+
+    // QoreScalarCastOperatorNode: cast<int>(val), cast<auto!>(val), etc.
+    if (auto* sc = dynamic_cast<const QoreScalarCastOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_SCALAR));
+        std::string type_path = getAOTSerializableTypePath(sc->getCastTypeInfo());
+        writer.writeStringRef(type_path.c_str());
+        writer.writeU8(sc->isOrNothing() ? 1 : 0);
+        return write_cast_inner(sc->getExp());
     }
 
     // QoreClosureParseNode: closure/lambda in expression context (e.g., hash literal values)
