@@ -11001,11 +11001,12 @@ extern "C" DLLEXPORT void qore_aot_register_into_program(QoreProgram* tpgm,
 // @param metadata_len length of @p metadata in bytes
 // Phase 4 slice 10g: per-program batch state for out-of-order
 // registration.  Between qore_aot_script_begin_batch and
-// qore_aot_script_end_batch, qore_aot_script_register calls only do
-// phase-1 (shell creation) via QoreAOTBinaryMultiDeserializer.
-// end_batch runs phase-2 resolution + function registration + init
-// execution atomically for all accumulated blobs, so cross-file
-// inheritance / type refs resolve regardless of register call order.
+// qore_aot_script_end_batch, qore_aot_script_register calls only
+// stash blobs. end_batch first replays all serialized module commands,
+// then runs phase-1 shell creation via QoreAOTBinaryMultiDeserializer,
+// phase-2 resolution + function registration + init execution
+// atomically for all accumulated blobs, so cross-file inheritance /
+// type refs resolve regardless of register call order.
 //
 // Stored on the target QoreProgram via setExternalData — no global
 // mutex needed, lifecycle bound to the program.
@@ -11059,20 +11060,6 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             tpgm->getExternalData(kAotScriptBatchKey);
         if (ext) {
             auto* batch = static_cast<AotScriptBatchState*>(ext);
-            ExceptionSink pch_xsink;
-            ProgramRuntimeParseContextHelper pch(&pch_xsink, tpgm);
-            if (pch_xsink.isException()) {
-                pch_xsink.handleExceptions();
-                return 20;
-            }
-            std::string err;
-            if (!batch->mdes.addBlob(metadata,
-                    static_cast<uint32_t>(metadata_len), err)) {
-                fprintf(stderr, "qore_aot_script_register(%s, batch): "
-                    "addBlob failed: %s\n",
-                    label ? label : "<script>", err.c_str());
-                return 21;
-            }
             AotScriptDeferredBlob d;
             d.metadata = metadata;
             d.metadata_len = metadata_len;
@@ -11085,6 +11072,17 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
     }
 
     ExceptionSink xsink;
+
+    {
+        std::string cmd_error;
+        if (!applyAOTModuleCommandsToProgram(tpgm, metadata,
+                static_cast<uint32_t>(metadata_len), label, cmd_error)) {
+            fprintf(stderr, "qore_aot_script_register(%s): "
+                "module-command replay failed: %s\n",
+                label ? label : "<script>", cmd_error.c_str());
+            return 5;
+        }
+    }
 
     {
         // ProgramRuntimeParseContextHelper is required so
@@ -11195,8 +11193,8 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
 
 // Phase 4 slice 10g: begin a batch of deferred script registrations.
 // Between begin and end, each qore_aot_script_register call only
-// loads shells (phase 1) and stashes (funcs, metadata, label) for
-// the end-batch flush.  Multiple begin calls replace any prior
+// stashes (funcs, metadata, label) for the end-batch flush.  Multiple
+// begin calls replace any prior
 // unflushed state (with a warning) — a host error but non-fatal.
 extern "C" DLLEXPORT void qore_aot_script_begin_batch(QoreProgram* tpgm) {
     if (!tpgm) {
@@ -11262,6 +11260,47 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
         if (xsink.isException()) {
             xsink.handleExceptions();
             return 2;
+        }
+
+        // Replay every blob's serialized %module-cmd directives before any
+        // metadata deserialization.  Batch compilation can serialize a parse
+        // setup command only with the source that issued it; type resolution in
+        // a different fragment must still see that setup regardless of linked
+        // object registration order.
+        size_t cancel_i = 0;
+        for (auto& d : batch->deferred) {
+            if (cancel_i && !(cancel_i % 100)
+                    && qore_check_cancel(&xsink, "AOT script batch module-command replay")) {
+                xsink.handleExceptions();
+                return 8;
+            }
+            std::string cmd_error;
+            if (!applyAOTModuleCommandsToProgram(tpgm, d.metadata,
+                    static_cast<uint32_t>(d.metadata_len),
+                    d.label.c_str(), cmd_error)) {
+                fprintf(stderr, "qore_aot_script_end_batch(%s): "
+                    "module-command replay failed: %s\n",
+                    d.label.c_str(), cmd_error.c_str());
+                return 6;
+            }
+            ++cancel_i;
+        }
+
+        cancel_i = 0;
+        for (auto& d : batch->deferred) {
+            if (cancel_i && !(cancel_i % 100)
+                    && qore_check_cancel(&xsink, "AOT script batch metadata deserialization")) {
+                xsink.handleExceptions();
+                return 9;
+            }
+            std::string err;
+            if (!batch->mdes.addBlob(d.metadata,
+                    static_cast<uint32_t>(d.metadata_len), err)) {
+                fprintf(stderr, "qore_aot_script_end_batch(%s): "
+                    "addBlob failed: %s\n", d.label.c_str(), err.c_str());
+                return 7;
+            }
+            ++cancel_i;
         }
 
         // Phase 2: cross-blob resolution.

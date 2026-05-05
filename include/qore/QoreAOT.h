@@ -160,16 +160,17 @@ DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
 /**
     Between `qore_aot_script_begin_batch(pgm)` and
     `qore_aot_script_end_batch(pgm)`, every call to
-    `qore_aot_script_register(pgm, …)` only loads the blob's
-    declaration shells into the program — class bodies, inheritance,
-    and member types are NOT resolved yet, and no function-pointer
-    registration or init-expression execution runs.
+    `qore_aot_script_register(pgm, …)` only stashes the blob and its
+    function table. No metadata is deserialized yet, and no
+    function-pointer registration or init-expression execution runs.
 
-    `qore_aot_script_end_batch(pgm)` flushes the batch: runs one
-    cross-blob resolution pass (so inheritance between classes from
-    different blobs resolves regardless of register call order),
-    then registers pre-compiled function pointers and runs init
-    expressions for every accumulated blob.
+    `qore_aot_script_end_batch(pgm)` flushes the batch: replays all
+    serialized `%module-cmd` directives first, deserializes every
+    blob's declaration shells, runs one cross-blob resolution pass
+    (so inheritance between classes from different blobs resolves
+    regardless of register call order), then registers pre-compiled
+    function pointers and runs init expressions for every accumulated
+    blob.
 
     Use when the host wants **order-independent registration** of
     a set of `.qo`s — e.g. when several `.qo`s may inherit from or

@@ -44,6 +44,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -690,24 +691,37 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     program state that is not represented by the namespace tree: module search
     path directives and `%module-cmd` directives such as JNI classpath/imports.
 */
-static void appendModulePathListSections(QoreAOTBinaryWriter& writer,
-        QoreProgram* pgm, uint64_t& feature_flags) {
+static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
+        QoreProgram* pgm, uint64_t& feature_flags,
+        size_t module_cmd_begin = 0,
+        size_t module_cmd_end = std::numeric_limits<size_t>::max()) {
     if (!pgm) {
-        return;
+        return true;
     }
     qore_program_private* pp = qore_program_private::get(*pgm);
     if (!pp) {
-        return;
+        return true;
     }
     serializeModulePathLists(writer, pp->prepended_module_paths,
         pp->appended_module_paths, feature_flags);
     std::vector<AOTModuleCommand> commands;
-    commands.reserve(pp->module_parse_commands.size());
-    for (const auto& cmd : pp->module_parse_commands) {
+    module_cmd_begin = std::min(module_cmd_begin, pp->module_parse_commands.size());
+    module_cmd_end = std::min(module_cmd_end, pp->module_parse_commands.size());
+    if (module_cmd_end < module_cmd_begin) {
+        module_cmd_end = module_cmd_begin;
+    }
+    commands.reserve(module_cmd_end - module_cmd_begin);
+    for (size_t i = module_cmd_begin; i < module_cmd_end; ++i) {
+        if (i != module_cmd_begin && !((i - module_cmd_begin) % 100)
+                && qore_check_cancel(nullptr, "AOT module command serialization")) {
+            return false;
+        }
+        const auto& cmd = pp->module_parse_commands[i];
         commands.push_back(AOTModuleCommand{cmd.module, cmd.command});
     }
     serializeModuleCommands(writer, commands, feature_flags);
     writer.feature_flags = feature_flags;
+    return true;
 }
 
 //! Append producer/build diagnostics to the AOT metadata blob.  This section is
@@ -4072,7 +4086,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
         hdr.source_hash = computeSourceHash(label);
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
         writer.feature_flags = hdr.feature_flags;
-        appendModulePathListSections(writer, pgm, hdr.feature_flags);
+        if (!appendModulePathListSections(writer, pgm, hdr.feature_flags)) {
+            error = "operation cancelled during AOT module command serialization";
+            return false;
+        }
         appendBuildInfoSection(writer, "script", target_triple, opt_level, include_source);
 
         // Serialize dependencies from the parsed program's feature lists.
@@ -5990,7 +6007,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         hdr.source_hash = computeSourceHash(label);
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
         writer.feature_flags = hdr.feature_flags;
-        appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+        if (!appendModulePathListSections(writer, *qpgm, hdr.feature_flags)) {
+            error = "operation cancelled during AOT module command serialization";
+            return false;
+        }
         appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source);
 
         // Serialize ALL dependencies (including reexport) so they can be loaded
@@ -6454,7 +6474,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
             writer.feature_flags = hdr.feature_flags;
-            appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+            if (!appendModulePathListSections(writer, *qpgm, hdr.feature_flags)) {
+                error = "operation cancelled during AOT module command serialization";
+                return false;
+            }
             appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source);
 
             // Serialize ALL dependencies (including reexport) so they can be loaded
@@ -6768,7 +6791,9 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         const std::string& source_text_for_fallback,
         const std::string& output_path,
         int opt_level, const char* target_triple, bool include_source,
-        std::string& error) {
+        std::string& error,
+        size_t module_cmd_begin = 0,
+        size_t module_cmd_end = std::numeric_limits<size_t>::max()) {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
@@ -6834,7 +6859,11 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         hdr.source_hash = computeSourceHash(target_canon.c_str());
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
         writer.feature_flags = hdr.feature_flags;
-        appendModulePathListSections(writer, qpgm, hdr.feature_flags);
+        if (!appendModulePathListSections(writer, qpgm, hdr.feature_flags,
+                module_cmd_begin, module_cmd_end)) {
+            error = "operation cancelled during AOT module command serialization";
+            return false;
+        }
         appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
 
         std::string ns_error;
@@ -7122,6 +7151,8 @@ bool QoreAOT::compileScriptFilesBatch(
         std::string canon;
         std::string source;
         std::string out_path;
+        size_t module_cmd_begin = 0;
+        size_t module_cmd_end = 0;
     };
     std::vector<SrcEntry> entries;
     entries.reserve(target_files.size());
@@ -7207,7 +7238,17 @@ bool QoreAOT::compileScriptFilesBatch(
         return false;
     }
 
-    for (auto& e : entries) {
+    qore_program_private* batch_pp = qore_program_private::get(**qpgm);
+    for (size_t i = 0; i < entries.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT batch source parsing")) {
+            error = "operation cancelled during AOT batch source parsing";
+            return false;
+        }
+        auto& e = entries[i];
+        // Stub parse commands have no fragment of their own; serialize them
+        // once with the first emitted source so linked binaries replay the
+        // same setup once before batch deserialization.
+        e.module_cmd_begin = i == 0 ? 0 : batch_pp->module_parse_commands.size();
         qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
             &xsink, &wsink, QP_WARN_DEFAULT);
         if (xsink.isException()) {
@@ -7215,6 +7256,7 @@ bool QoreAOT::compileScriptFilesBatch(
             error = "parse error in target file: " + e.canon;
             return false;
         }
+        e.module_cmd_end = batch_pp->module_parse_commands.size();
     }
     qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     if (xsink.isException()) {
@@ -7237,7 +7279,7 @@ bool QoreAOT::compileScriptFilesBatch(
         std::string per_err;
         if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
                 e.out_path, opt_level, target_triple, include_source,
-                per_err)) {
+                per_err, e.module_cmd_begin, e.module_cmd_end)) {
             error = per_err;
             return false;
         }
@@ -7491,7 +7533,10 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         hdr.source_hash = computeSourceHash(target_canon.c_str());
         hdr.feature_flags = computeFeatureFlags(compiled_funcs);
         writer.feature_flags = hdr.feature_flags;
-        appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+        if (!appendModulePathListSections(writer, *qpgm, hdr.feature_flags)) {
+            error = "operation cancelled during AOT module command serialization";
+            return false;
+        }
         appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
 
         std::string ns_error;
@@ -7974,7 +8019,10 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
             writer.feature_flags = hdr.feature_flags;
-            appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+            if (!appendModulePathListSections(writer, *qpgm, hdr.feature_flags)) {
+                error = "operation cancelled during AOT module command serialization";
+                return false;
+            }
             appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
@@ -8409,7 +8457,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
             writer.feature_flags = hdr.feature_flags;
-            appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+            if (!appendModulePathListSections(writer, *qpgm, hdr.feature_flags)) {
+                error = "operation cancelled during AOT module command serialization";
+                return false;
+            }
             appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;
@@ -8883,7 +8934,10 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
             hdr.source_hash = computeSourceHash(qm_path.c_str());
             hdr.feature_flags = computeFeatureFlags(compiled_funcs);
             writer.feature_flags = hdr.feature_flags;
-            appendModulePathListSections(writer, *qpgm, hdr.feature_flags);
+            if (!appendModulePathListSections(writer, *qpgm, hdr.feature_flags)) {
+                error = "operation cancelled during AOT module command serialization";
+                return false;
+            }
             appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source);
 
             std::vector<std::string> reexport_mods;

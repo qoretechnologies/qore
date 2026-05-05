@@ -97,6 +97,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testCrossModuleSameName());
         addTestCase("AOT qcc stub external constants",
             \testQccStubExternalConstants());
+        addTestCase("AOT linked .qo replays module commands",
+            \testAOTLinkedQoModuleCommands());
         addTestCase("AOT qmod dependency honors prepend module path",
             \testAOTModuleDependencyPrependPath());
         addTestCase("AOT ref foreach ParseNode pointer",
@@ -2026,6 +2028,65 @@ sub main() {
             "missing host constant diagnostic explains the qcc --stub contract: " + run_missing);
         assertTrue(run_missing.regex("EXIT=1"),
             "missing host constant fails fast instead of using a stub placeholder: " + run_missing);
+    }
+
+    testAOTLinkedQoModuleCommands() {
+        string jni_check = backquote(sprintf("LD_LIBRARY_PATH=%s %s -ljni -nX 1 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin));
+        bool jni_available = jni_check.regex("EXIT=0");
+
+        string tmp_dir = sprintf("/tmp/aot_module_cmd_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string src_path = tmp_dir + "/ModuleCmd.qr";
+        string qo_path = qo_dir + "/ModuleCmd.qo";
+        string app_path = tmp_dir + "/module-cmd";
+
+        {
+            File f();
+            f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%try-module jni
+%define NO_JNI
+%endtry
+
+%ifndef NO_JNI
+%module-cmd(jni) import java.util.ArrayList
+%endif
+
+sub main() {
+%ifdef NO_JNI
+    printf(\"no-jni\\n\");
+%else
+    ArrayList $l = new ArrayList();
+    $l.add(\"x\");
+    printf(\"ok\\n\");
+%endif
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, src_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc compiles script-context .qo with %module-cmd metadata: " + compile_out);
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_path));
+        assertTrue(link_out.regex("EXIT=0"),
+            "qcc links .qo containing %module-cmd metadata: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq((jni_available ? "ok\n" : "no-jni\n") + "EXIT=0\n", run_out,
+            "linked .qo binary replays %module-cmd before AOT metadata resolution");
     }
 
     testAOTModuleDependencyPrependPath() {
