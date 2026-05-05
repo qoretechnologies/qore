@@ -40,6 +40,7 @@
 #include <chrono>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Forward declarations
@@ -156,6 +157,31 @@ public:
         stream_queues[stream_key] = queue;
     }
 
+    //! Records stream data that arrived before a listener was registered
+    /** @param stream_key composite key "session_id:stream_id"
+    */
+    DLLLOCAL void markStreamDataPending(const std::string& stream_key) {
+        AutoLocker al(op_lock);
+        pending_stream_data.insert(stream_key);
+    }
+
+    //! Consumes a pending stream-data notification or detects queued data
+    /** Called after listener registration to replay notifications that raced
+        with the handler setup path.  The queue check covers the window where
+        data has already been pushed to the Queue but the worker-dispatched
+        onStreamData() callback has not run yet.
+
+        @param stream_key composite key "session_id:stream_id"
+        @return true if the listener should be notified immediately
+    */
+    DLLLOCAL bool consumePendingOrQueueReady(const std::string& stream_key) {
+        AutoLocker al(op_lock);
+        bool pending = pending_stream_data.erase(stream_key) > 0;
+        auto i = stream_queues.find(stream_key);
+        bool queue_ready = i != stream_queues.end() && i->second && !i->second->empty();
+        return pending || queue_ready;
+    }
+
     //! Returns and clears the list of stream keys with data available
     /** Called by the I/O controller after continuePoll().
     */
@@ -261,6 +287,9 @@ private:
         without Qore interpreter overhead.
     */
     std::unordered_map<std::string, Queue*> stream_queues;
+
+    //! Stream data notifications that arrived before listener registration
+    std::unordered_set<std::string> pending_stream_data;
 
     //! Stream keys with data available (populated by continuePoll, consumed by controller)
     std::vector<std::string> data_ready_streams;

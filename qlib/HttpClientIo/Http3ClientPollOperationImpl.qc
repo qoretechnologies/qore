@@ -602,13 +602,26 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         return sock;
     }
 
-    #! Internal: selects the local bind family without performing DNS
+    #! Internal: selects the local bind family matching the target's first resolved address
     private static int selectLocalBindFamily(string host) {
         if (host =~ /^\[.*\]$/) {
             return AF_INET6;
         }
         if (host =~ /:/) {
             return AF_INET6;
+        }
+        try {
+            list<hash<auto>> addrs = getaddrinfo(host, NOTHING, AF_UNSPEC, 0);
+            if (addrs) {
+                int family = addrs[0].family;
+                if (family == AF_INET || family == AF_INET6) {
+                    return family;
+                }
+            }
+        } catch () {
+            # Keep the previous IPv4 fallback if the synchronous family lookup
+            # fails; the async QUIC resolver will report the authoritative
+            # connection error.
         }
         return AF_INET;
     }

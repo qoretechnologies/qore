@@ -93,6 +93,7 @@ void Http3ServerPollOperationPriv::cleanup(ExceptionSink* xsink) {
         sock_obj = nullptr;
     }
     stream_queues.clear();
+    pending_stream_data.clear();
     data_ready_streams.clear();
     // Drain any unconsumed pending cert/key staged for swap
     {
@@ -1008,6 +1009,7 @@ nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream
 nothing Http3ServerPollOperation::registerStreamListener(int session_id, int stream_id,
         object listener) {
     std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
+    QoreObject* listener_obj = nullptr;
 
     // Store in internal_members
     QoreValue listener_arg = args->retrieveEntry(2);
@@ -1024,11 +1026,18 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
             listeners = new QoreHashNode(objectTypeInfo);
         }
         if (listener_arg.getType() == NT_OBJECT) {
+            listener_obj = const_cast<QoreObject*>(listener_arg.get<const QoreObject>());
             listeners->setKeyValue(skey.c_str(),
-                const_cast<QoreObject*>(listener_arg.get<const QoreObject>())->refSelf(), xsink);
+                listener_obj->refSelf(), xsink);
         }
         self->setMemberValue("stream_listeners", QC_HTTP3SERVERPOLLOPERATION,
             listeners, xsink);
+    }
+
+    if (!*xsink && listener_obj && priv->consumePendingOrQueueReady(skey)) {
+        ASYNC_IO_TRACE("Http3ServerPollOperation::registerStreamListener REPLAY skey='%s' listener=%p\n",
+            skey.c_str(), (void*)listener_obj);
+        listener_obj->evalMethod("notifyIo", nullptr, xsink);
     }
 }
 
@@ -1038,6 +1047,7 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
 nothing Http3ServerPollOperation::onStreamData(string stream_key) {
     ValueHolder listeners(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
     if (*xsink || listeners->isNullOrNothing()) {
+        priv->markStreamDataPending(stream_key->c_str());
         ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NO_LISTENERS skey='%s' xsink=%d null=%d\n",
             stream_key->c_str(), (int)(*xsink ? 1 : 0),
             (int)(listeners->isNullOrNothing() ? 1 : 0));
@@ -1051,6 +1061,7 @@ nothing Http3ServerPollOperation::onStreamData(string stream_key) {
             stream_key->c_str(), (void*)lobj);
         lobj->evalMethod("notifyIo", nullptr, xsink);
     } else {
+        priv->markStreamDataPending(stream_key->c_str());
         ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NO_MATCH skey='%s' listeners_keys=%zu\n",
             stream_key->c_str(), (size_t)lhash->size());
     }

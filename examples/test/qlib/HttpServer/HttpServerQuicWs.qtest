@@ -42,6 +42,7 @@
 %requires ../../../../qlib/AsyncSocketIo
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
 %requires ../../../../qlib/WebSocketUtil.qm
 %requires ../../../../qlib/WebSocketHandler.qm
 %requires ../../../../qlib/WebSocketClient.qm
@@ -166,6 +167,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("WebSocket multiple messages over HTTP/3", \testH3WsMultipleMessages());
         addTestCase("concurrent WebSocket streams over HTTP/3", \testH3WsConcurrentStreams());
         addTestCase("abnormal disconnect over HTTP/3", \testH3WsAbnormalDisconnect());
+        addTestCase("HTTP/3 WebSocket first send after connect is fast", \testH3WsFirstSendAfterConnectFast());
+        addTestCase("HTTP/3 WebSocket destructor disconnect is fast", \testH3WsDestructorDisconnectFast());
         addTestCase("large frame over HTTP/3", \testH3WsLargeFrame());
 
         set_return_value(main());
@@ -210,6 +213,18 @@ l50Xb2GWQesIt9k5jF5IOw==
             "url": "wss://127.0.0.1:" + port,
             "logger": mLogger,
             "http3_mode": "required",
+            "ssl_verify_cert": False,
+        };
+        WebSocketClient wsc(cb, opts);
+        wsc.connect();
+        return wsc;
+    }
+
+    #! Helper to create an auto-negotiated WebSocket client
+    private WebSocketClient createAutoClient(code cb, int port) {
+        hash<auto> opts = {
+            "url": "wss://127.0.0.1:" + port,
+            "logger": mLogger,
             "ssl_verify_cert": False,
         };
         WebSocketClient wsc(cb, opts);
@@ -582,6 +597,78 @@ l50Xb2GWQesIt9k5jF5IOw==
         rv = wg2.wait(30s);
         assertEq(0, rv, "server should still work after abnormal disconnect");
         assertEq("post-abort-test", received2, "echo should match after abnormal disconnect");
+    }
+
+    #! Test that the first application frame after CONNECT is flushed immediately
+    testH3WsFirstSendAfterConnectFast() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        int Iterations = 12;
+        for (int i = 0; i < Iterations; ++i) {
+            WaitGroup wg();
+            wg.add();
+            *data received;
+
+            code cb = sub (*data msg) {
+                if (!exists msg) {
+                    return;
+                }
+                received = msg;
+                try { wg.done(); } catch () {}
+            };
+
+            WebSocketClient wsc = createAutoClient(cb, setup.port);
+            assertTrue(wsc.isHttp3(), sprintf("iteration %d should connect over HTTP/3", i));
+
+            string payload = sprintf("first-send-%02d", i);
+            date start = now_us();
+            wsc.send(payload);
+            int rv = wg.wait(5s);
+            int elapsed_ms = (now_us() - start).durationMilliseconds();
+
+            assertEq(0, rv,
+                sprintf("iteration %d should receive first echo within 5s (elapsed=%dms)", i, elapsed_ms));
+            assertEq(payload, received, sprintf("iteration %d echo should match", i));
+            assertTrue(elapsed_ms < 5000,
+                sprintf("iteration %d first send took %dms (expected < 5000ms)", i, elapsed_ms));
+
+            delete wsc;
+        }
+    }
+
+    #! Test client object destruction closes HTTP/3 WebSocket connections promptly
+    testH3WsDestructorDisconnectFast() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        WebSocketClient wsc = createAutoClient(sub (*data msg) {}, setup.port);
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+
+        date start = now_us();
+        delete wsc;
+        int elapsed_ms = (now_us() - start).durationMilliseconds();
+
+        assertTrue(elapsed_ms < 5000,
+            sprintf("HTTP/3 WebSocket destructor disconnect took %dms (expected < 5000ms)", elapsed_ms));
     }
 
     #! Test large frame with backpressure over HTTP/3
