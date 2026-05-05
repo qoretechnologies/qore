@@ -253,6 +253,12 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
     if (spop_base) {
         spop_base->setIoController(nullptr, nullptr);
     }
+    if (controller && submit_route_thread_idx >= 0 && !submit_route_sock_hash.empty()) {
+        controller->clearProvisionalSocketRoute(submit_route_sock_hash, sock_obj,
+            submit_route_thread_idx);
+        submit_route_thread_idx = -1;
+        submit_route_sock_hash.clear();
+    }
     // Erase the submit-time obj_to_sock_hash entry while sock_obj is still
     // a valid pointer.  Phase 3's updateEventLoopRegistration path already
     // erases entries when socket_refcounts[hash] drops to 0, but when an op
@@ -493,6 +499,12 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
             if (cmd.submit_socket_async_io) {
                 clear_socket_async_io_owner(cmd.submit_sock, xsink);
                 cmd.submit_socket_async_io = false;
+            }
+            if (cmd.submit_route_thread_idx >= 0 && !cmd.submit_route_sock_hash.empty()) {
+                clearProvisionalSocketRoute(cmd.submit_route_sock_hash, cmd.submit_sock_obj,
+                    cmd.submit_route_thread_idx);
+                cmd.submit_route_thread_idx = -1;
+                cmd.submit_route_sock_hash.clear();
             }
             if (cmd.submit_sock_obj) {
                 cmd.submit_sock_obj->deref(xsink);
@@ -1735,9 +1747,10 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         // wake sources) can fire as soon as this submit returns.
         {
             std::string sh = getSocketHash(sock);
-            AutoLocker al(sock_route_lock);
-            sock_to_thread[sh] = t.thread_idx;
-            obj_to_sock_hash[sock_obj] = sh;
+            if (publishSocketRoute(sh, sock_obj, t.thread_idx, true)) {
+                pinfo.submit_route_sock_hash = sh;
+                pinfo.submit_route_thread_idx = t.thread_idx;
+            }
         }
 
         ++submit_seq;
@@ -1777,8 +1790,30 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         // drops sock's last ref, making sock->getUniqueHash() a UAF.
         std::string sock_hash = sock->getUniqueHash();
 
+        // Publish sock_hash → target thread BEFORE notifying, so a concurrent
+        // wakeSocketByObject firing as soon as the submitter returns always
+        // finds the correct route.  Without this, wakeSocket() would default
+        // to thread 0 on a cache miss and silently drop the wake when the op
+        // lives on any other thread — see the block comment below in
+        // wakeSocket(); this was the root cause of the intermittent 10s
+        // SOCKET-TIMEOUT failures in AsyncSocketIo.qtest::concurrent-submit
+        // under QORE_IO_THREADS>=2.
         {
             AutoLocker al(m);
+            target = &getThreadForKey(thread_key);
+        }
+        if (publishSocketRoute(sock_hash, sock_obj, target->thread_idx, true)) {
+            cmd.submit_route_sock_hash = sock_hash;
+            cmd.submit_route_thread_idx = target->thread_idx;
+        }
+        {
+            AutoLocker al(m);
+            if (shutting_down) {
+                socket_async_io_guard.release();
+                cleanupAbandonedCommand(cmd, xsink);
+                xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
+                return nullptr;
+            }
             target = &getThreadForKey(thread_key);
             // Bump submit_seq BEFORE pushing.  Queue mutation and the I/O
             // thread's empty checks are synchronized by m, so a command
@@ -1790,19 +1825,6 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             cmd.seq_at_push = ++target->submit_seq;
             target->cmdq.push(std::move(cmd));
             socket_async_io_guard.release();
-        }
-        // Publish sock_hash → target thread BEFORE notifying, so a concurrent
-        // wakeSocketByObject firing as soon as the submitter returns always
-        // finds the correct route.  Without this, wakeSocket() would default
-        // to thread 0 on a cache miss and silently drop the wake when the op
-        // lives on any other thread — see the block comment below in
-        // wakeSocket(); this was the root cause of the intermittent 10s
-        // SOCKET-TIMEOUT failures in AsyncSocketIo.qtest::concurrent-submit
-        // under QORE_IO_THREADS>=2.
-        {
-            AutoLocker al(sock_route_lock);
-            sock_to_thread[sock_hash] = target->thread_idx;
-            obj_to_sock_hash[sock_obj] = sock_hash;
         }
         target->notifier->notify();
         ASYNC_IO_TRACE("worker submit: ++submit_seq(%d)+pushed+notified key='%s'\n",
@@ -2985,6 +3007,77 @@ void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     target.notifier->notify();
 }
 
+bool AsyncIoControllerPriv::publishSocketRoute(const std::string& sock_hash, QoreObject* sock_obj,
+        int thread_idx, bool preserve_existing) {
+    bool provisional_owner = false;
+    {
+        AutoLocker al(sock_route_lock);
+        auto it = sock_to_thread.find(sock_hash);
+        if (it == sock_to_thread.end()) {
+            sock_to_thread[sock_hash] = thread_idx;
+            if (preserve_existing) {
+                ++provisional_sock_routes[sock_hash];
+                provisional_owner = true;
+            }
+        } else if (!preserve_existing) {
+            it->second = thread_idx;
+            provisional_sock_routes.erase(sock_hash);
+        } else if (it->second == thread_idx) {
+            auto pit = provisional_sock_routes.find(sock_hash);
+            if (pit != provisional_sock_routes.end()) {
+                ++pit->second;
+                provisional_owner = true;
+            }
+        } else {
+            ASYNC_IO_TRACE("socket route preserved sock='%s' existing_thread=%d submit_thread=%d\n",
+                sock_hash.c_str(), it->second, thread_idx);
+        }
+        if (sock_obj) {
+            obj_to_sock_hash[sock_obj] = sock_hash;
+        }
+    }
+    return provisional_owner;
+}
+
+void AsyncIoControllerPriv::clearProvisionalSocketRoute(const std::string& sock_hash,
+        QoreObject* sock_obj, int thread_idx) {
+    AutoLocker al(sock_route_lock);
+    auto pit = provisional_sock_routes.find(sock_hash);
+    if (pit != provisional_sock_routes.end()) {
+        if (pit->second <= 1) {
+            provisional_sock_routes.erase(pit);
+            auto it = sock_to_thread.find(sock_hash);
+            if (it != sock_to_thread.end() && it->second == thread_idx) {
+                sock_to_thread.erase(it);
+            }
+        } else {
+            --pit->second;
+        }
+    }
+    if (sock_obj) {
+        auto oit = obj_to_sock_hash.find(sock_obj);
+        if (oit != obj_to_sock_hash.end() && oit->second == sock_hash) {
+            obj_to_sock_hash.erase(oit);
+        }
+    }
+}
+
+void AsyncIoControllerPriv::clearSocketRouteIfOwner(const std::string& sock_hash,
+        QoreObject* sock_obj, int thread_idx) {
+    AutoLocker al(sock_route_lock);
+    auto it = sock_to_thread.find(sock_hash);
+    if (it != sock_to_thread.end() && it->second == thread_idx) {
+        sock_to_thread.erase(it);
+    }
+    provisional_sock_routes.erase(sock_hash);
+    if (sock_obj) {
+        auto oit = obj_to_sock_hash.find(sock_obj);
+        if (oit != obj_to_sock_hash.end() && oit->second == sock_hash) {
+            obj_to_sock_hash.erase(oit);
+        }
+    }
+}
+
 void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSink* xsink) {
     // Look up the socket hash from the lock-protected obj_to_sock_hash map.
     // This avoids iterating I/O-thread-only registered_sockets/sock_hash_to_keys
@@ -3062,6 +3155,7 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
 
 void AsyncIoControllerPriv::stopClear(ExceptionSink* xsink) {
     stop(xsink);
+    stopThreadPool(xsink);
 }
 
 bool AsyncIoControllerPriv::waitStop(ExceptionSink* xsink) {
@@ -4355,6 +4449,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                     result.key.c_str(), sock_hash.c_str(), events);
                                 updateEventLoopRegistration(t, result.key, poll_sock, sock_hash,
                                     events, force_fd_reregister, xsink);
+                                pinfo.submit_route_sock_hash.clear();
+                                pinfo.submit_route_thread_idx = -1;
                                 updateExtraFds(t, result.key, poll_sock, result.new_poll_info,
                                     xsink);
 #if defined(__linux__) && defined(HAVE_IO_URING)
@@ -4871,14 +4967,22 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         // Remove notifier from event loop
         t.loop->remove(t.notifier->fd(), xsink);
 
-        // Clear all registrations
-        {
-            AutoLocker al2(sock_route_lock);
-            for (auto& [key, sock_obj] : t.registered_sockets) {
-                if (sock_obj) {
-                    obj_to_sock_hash.erase(sock_obj);
-                    sock_obj->deref(xsink);
+        // Clear all registrations.  Build this from the I/O-thread-owned reverse
+        // index instead of calling getReferencedPrivateData() during shutdown.
+        std::unordered_map<std::string, std::string> key_to_sock_hash;
+        key_to_sock_hash.reserve(t.registered_sockets.size());
+        for (const auto& [sock_hash, keys] : t.sock_hash_to_keys) {
+            for (const auto& key : keys) {
+                key_to_sock_hash.emplace(key, sock_hash);
+            }
+        }
+        for (auto& [key, sock_obj] : t.registered_sockets) {
+            if (sock_obj) {
+                auto kit = key_to_sock_hash.find(key);
+                if (kit != key_to_sock_hash.end()) {
+                    clearSocketRouteIfOwner(kit->second, sock_obj, t.thread_idx);
                 }
+                sock_obj->deref(xsink);
             }
         }
         t.registered_sockets.clear();
@@ -5443,6 +5547,12 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             clear_socket_async_io_owner(cmd.submit_sock, xsink);
                             cmd.submit_socket_async_io = false;
                         }
+                        if (cmd.submit_route_thread_idx >= 0 && !cmd.submit_route_sock_hash.empty()) {
+                            clearProvisionalSocketRoute(cmd.submit_route_sock_hash, cmd.submit_sock_obj,
+                                cmd.submit_route_thread_idx);
+                            cmd.submit_route_thread_idx = -1;
+                            cmd.submit_route_sock_hash.clear();
+                        }
                         if (cmd.submit_sock) { cmd.submit_sock->deref(xsink); }
                         if (cmd.submit_sock_obj) { cmd.submit_sock_obj->deref(xsink); }
                         if (cmd.submit_spop_obj) { cmd.submit_spop_obj->deref(xsink); }
@@ -5487,6 +5597,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             pinfo.has_qore_abort = cmd.submit_has_qore_abort;
                             pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
                             pinfo.socket_async_io = cmd.submit_socket_async_io;
+                            pinfo.submit_route_sock_hash = cmd.submit_route_sock_hash;
+                            pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
                             pinfo.controller = this;
                             // Null command fields to prevent double-deref on
                             // command destruction — pinfo.cleanup() owns them now.
@@ -5498,6 +5610,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             cmd.submit_other = nullptr;
                             cmd.submit_queue = nullptr;
                             cmd.submit_socket_async_io = false;
+                            cmd.submit_route_sock_hash.clear();
+                            cmd.submit_route_thread_idx = -1;
                             doCancelIntern(pinfo, xsink);
                             pinfo.cleanup(xsink);
                             break;
@@ -5557,6 +5671,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.has_qore_abort = cmd.submit_has_qore_abort;
                     pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
                     pinfo.socket_async_io = cmd.submit_socket_async_io;
+                    pinfo.submit_route_sock_hash = cmd.submit_route_sock_hash;
+                    pinfo.submit_route_thread_idx = cmd.submit_route_thread_idx;
                     pinfo.controller = this;
 
                     // Set controller back-reference so wakeIoThread() works
@@ -5576,6 +5692,8 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     cmd.submit_other = nullptr;
                     cmd.submit_queue = nullptr;
                     cmd.submit_socket_async_io = false;
+                    cmd.submit_route_sock_hash.clear();
+                    cmd.submit_route_thread_idx = -1;
                     break;
                 }
 
@@ -6001,11 +6119,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
                 t.registered_events.erase(prev_sock_hash);
                 t.registered_fds.erase(prev_sock_hash);
                 t.socket_refcounts.erase(rit);
-                {
-                    AutoLocker al(sock_route_lock);
-                    sock_to_thread.erase(prev_sock_hash);
-                    obj_to_sock_hash.erase(prev_sock);
-                }
+                clearSocketRouteIfOwner(prev_sock_hash, prev_sock, t.thread_idx);
             } else {
                 rit->second--;
                 applyEventUnion(t, prev_sock, prev_sock_hash, xsink);
@@ -6044,11 +6158,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
         t.socket_refcounts[sock_hash] = 1;
         t.registered_events[sock_hash] = union_events;
         // Register socket→thread and obj→sock_hash mappings for wakeSocket routing
-        {
-            AutoLocker al(sock_route_lock);
-            sock_to_thread[sock_hash] = t.thread_idx;
-            obj_to_sock_hash[socket] = sock_hash;
-        }
+        publishSocketRoute(sock_hash, socket, t.thread_idx, false);
     } else {
         t.socket_refcounts[sock_hash]++;
         applyEventUnion(t, socket, sock_hash, xsink);
@@ -6107,11 +6217,7 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(IoThreadContext& t, const st
                 t.registered_events.erase(prev_sock_hash);
                 t.registered_fds.erase(prev_sock_hash);
                 t.socket_refcounts.erase(rit);
-                {
-                    AutoLocker al(sock_route_lock);
-                    sock_to_thread.erase(prev_sock_hash);
-                    obj_to_sock_hash.erase(prev_sock);
-                }
+                clearSocketRouteIfOwner(prev_sock_hash, prev_sock, t.thread_idx);
             } else {
                 rit->second--;
                 applyEventUnion(t, prev_sock, prev_sock_hash, xsink);

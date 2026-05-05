@@ -625,6 +625,8 @@ private:
         bool submit_has_qore_abort = false;              //!< True if abort() is overridden in Qore
         bool submit_has_qore_on_complete = false;        //!< True if onComplete() is overridden in Qore
         bool submit_socket_async_io = false;             //!< True if SubmitOp owns a Socket async I/O claim
+        std::string submit_route_sock_hash;              //!< Submit-time wake route/object mapping, if published
+        int submit_route_thread_idx = -1;                //!< I/O thread for submit_route_sock_hash
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -650,6 +652,8 @@ private:
         uint32_t socket_wait_fd_generation = 0; //!< Socket fd generation snapshot for current wait
         int socket_wait_fd = -1;        //!< Socket fd snapshot for current wait
         bool socket_wait_generation_valid = false; //!< True when socket wait snapshot is usable
+        std::string submit_route_sock_hash; //!< Submit-time wake route/object mapping, if published
+        int submit_route_thread_idx = -1;   //!< I/O thread for submit_route_sock_hash
         //! Cached socket QoreObject* used as a cheap pointer-compare in Phase 3
         /** Set whenever updateEventLoopRegistration is called.  Used in the fast
             path to detect when a poll op transitions to polling a different
@@ -957,6 +961,7 @@ private:
     mutable QoreThreadLock sock_route_lock;
     std::unordered_map<std::string, int> sock_to_thread;  //!< sock_hash → thread index
     std::unordered_map<QoreObject*, std::string> obj_to_sock_hash;  //!< QoreObject* → sock_hash for wakeSocketByObject
+    std::unordered_map<std::string, unsigned> provisional_sock_routes; //!< submit-time route refcounts
 
     // Backward-compatible accessors — returns thread 0 context.
     // Safe for startup/shutdown checks; callers doing cache access must use
@@ -1090,6 +1095,21 @@ private:
     //! Unregister an operation from the EventLoop
     DLLLOCAL void unregisterFromEventLoop(IoThreadContext& t, const std::string& key,
         ExceptionSink* xsink);
+
+    //! Publish a socket wake route
+    /** @return true if this call created a provisional route that must be
+        cleared if the operation completes before EventLoop registration
+    */
+    DLLLOCAL bool publishSocketRoute(const std::string& sock_hash, QoreObject* sock_obj,
+        int thread_idx, bool preserve_existing);
+
+    //! Clear a submit-time provisional socket wake route
+    DLLLOCAL void clearProvisionalSocketRoute(const std::string& sock_hash, QoreObject* sock_obj,
+        int thread_idx);
+
+    //! Clear a socket wake route only if it is still owned by the given thread
+    DLLLOCAL void clearSocketRouteIfOwner(const std::string& sock_hash, QoreObject* sock_obj,
+        int thread_idx);
 
     //! Update extra fd registrations for an operation
     /** @since %Qore 2.3

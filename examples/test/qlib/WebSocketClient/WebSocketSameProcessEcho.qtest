@@ -20,6 +20,7 @@
 %requires ../../../../qlib/AsyncSocketIo/AsyncSocketIo.qm
 %requires HttpServerAsyncIo
 %requires HttpServer
+%requires HttpClientIo
 %requires WebSocketUtil
 %requires WebSocketHandler
 %requires WebSocketClient
@@ -109,7 +110,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     private hash<auto> createServer() {
-        Logger logger("test", LoggerLevel::getLevelInfo());
+        Logger logger("test", m_options.verbose > 2
+            ? LoggerLevel::getLevelDebug()
+            : LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             logger.addAppender(new StdoutAppender());
         }
@@ -165,9 +168,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             delete wsc;
         }
         wsc.connect();
-        if (!wsc.isHttp3()) {
-            testSkip("H3 not negotiated");
-        }
+        assertTrue(wsc.isHttp3(), "auto WebSocket should negotiate HTTP/3");
 
         wsc.send("ECHO-CB");
         int rc = c.waitForZero(5s);
@@ -207,9 +208,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         TestObserver obs(c, \response);
         wsc.registerObserver(obs);
         wsc.observersReady();
-        if (!wsc.isHttp3()) {
-            testSkip("H3 not negotiated");
-        }
+        assertTrue(wsc.isHttp3(), "auto serialized WebSocket should negotiate HTTP/3");
 
         wsc.sendData({"action": "test", "msg": "hello"});
         int rc = c.waitForZero(5s);
@@ -248,9 +247,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             delete wsc;
         }
         wsc.connect();
-        if (!wsc.isHttp3()) {
-            testSkip("H3 not negotiated");
-        }
+        assertTrue(wsc.isHttp3(), "auto heartbeat WebSocket should negotiate HTTP/3");
 
         int rc = got_pong.waitForZero(5s);
         assertEq(0, rc, "HTTP/3 automatic heartbeat should receive a PONG");
