@@ -2193,11 +2193,15 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
         return it != sock_to_thread.end() ? it->second : getThreadIndex(sock_hash);
     };
 
+    auto close_direct = [&]() -> int {
+        sock->closeIo(xsink);
+        return *xsink ? -1 : 0;
+    };
+
     if (on_async_io_thread) {
         int target_idx = get_target_idx();
         if (!inside_continue_poll_batch && current_io_thread_idx == target_idx) {
-            sock->closeIo(xsink);
-            return *xsink ? -1 : 0;
+            return close_direct();
         }
 
         // We cannot wait on another I/O thread from an I/O callback without
@@ -2206,13 +2210,61 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
         // current batch does not close fds while it still owns cached raw
         // operation pointers.
         IoThreadContext* target = nullptr;
+        bool do_direct_close = false;
         {
             AutoLocker al(m);
-            if (shutting_down) {
+            // During final runtime teardown cancelBySocketHash() has already
+            // removed active operations.  Do not restart an idle autostop
+            // controller just to close a socket from object destruction.
+            if ((shutting_down || qore_shutdown.load(std::memory_order_relaxed))
+                    && !inside_continue_poll_batch) {
+                do_direct_close = true;
+            } else if (shutting_down) {
                 xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
                 return -1;
             }
 
+            if (!do_direct_close) {
+                target = io_threads[target_idx].get();
+                if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
+                    startIntern(xsink);
+                    if (*xsink) {
+                        return -1;
+                    }
+                    target = io_threads[target_idx].get();
+                }
+
+                Command cmd;
+                cmd.cmd = IoCommand::CloseSocket;
+                cmd.sock_hash = sock_hash;
+                sock->ref();
+                cmd.close_sock = sock;
+                target->cmdq.push(std::move(cmd));
+                ++submit_seq;
+                ++target->submit_seq;
+            }
+        }
+        if (do_direct_close) {
+            return close_direct();
+        }
+        target->notifier->notify();
+        return *xsink ? -1 : 0;
+    }
+
+    int target_idx = get_target_idx();
+    IoThreadContext* target = nullptr;
+    AsyncOpCompletion* completion = nullptr;
+    bool do_direct_close = false;
+    {
+        AutoLocker al(m);
+        if (shutting_down || qore_shutdown.load(std::memory_order_relaxed)) {
+            while (io_exiting) {
+                io_waiting = true;
+                io_cond.wait(m);
+                io_waiting = false;
+            }
+            do_direct_close = true;
+        } else {
             target = io_threads[target_idx].get();
             if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
                 startIntern(xsink);
@@ -2222,49 +2274,21 @@ int AsyncIoControllerPriv::closeSocketOnController(AbstractPollableIoObjectBase*
                 target = io_threads[target_idx].get();
             }
 
+            completion = new AsyncOpCompletion(1);
             Command cmd;
             cmd.cmd = IoCommand::CloseSocket;
             cmd.sock_hash = sock_hash;
             sock->ref();
             cmd.close_sock = sock;
+            completion->ROreference();
+            cmd.completion = completion;
             target->cmdq.push(std::move(cmd));
             ++submit_seq;
             ++target->submit_seq;
         }
-        target->notifier->notify();
-        return *xsink ? -1 : 0;
     }
-
-    int target_idx = get_target_idx();
-    IoThreadContext* target = nullptr;
-    AsyncOpCompletion* completion = nullptr;
-    {
-        AutoLocker al(m);
-        if (shutting_down) {
-            xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
-            return -1;
-        }
-
-        target = io_threads[target_idx].get();
-        if (!target->running.load(std::memory_order_acquire) || io_exiting || !target->tid) {
-            startIntern(xsink);
-            if (*xsink) {
-                return -1;
-            }
-            target = io_threads[target_idx].get();
-        }
-
-        completion = new AsyncOpCompletion(1);
-        Command cmd;
-        cmd.cmd = IoCommand::CloseSocket;
-        cmd.sock_hash = sock_hash;
-        sock->ref();
-        cmd.close_sock = sock;
-        completion->ROreference();
-        cmd.completion = completion;
-        target->cmdq.push(std::move(cmd));
-        ++submit_seq;
-        ++target->submit_seq;
+    if (do_direct_close) {
+        return close_direct();
     }
 
     target->notifier->notify();
