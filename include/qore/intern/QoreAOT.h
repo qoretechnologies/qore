@@ -64,6 +64,7 @@ class QoreValue;
 class StatementBlock;
 class UserVariantBase;
 class Var;
+class qore_class_private;
 
 //! Pre-resolved function call target for AOT fast calls (avoids per-call dynamic_cast)
 struct QoreAOTCallTarget {
@@ -76,8 +77,13 @@ struct QoreAOTCallTarget {
     const char* method_name = nullptr;     //!< for dot-eval fallback (name-based dispatch)
     const char* class_path = nullptr;      //!< for lazy class resolution when registration order delays availability
     const char* variant_sig = nullptr;     //!< constructor/method signature text retained for diagnostics/lazy resolution
+    const qore_class_private* class_ctx = nullptr; //!< class context for self/base method calls
     bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
     bool is_static_method = false;         //!< method is a static method target
+    bool is_self_method = false;           //!< method target came from SelfFunctionCallNode
+    bool self_ns_single = false;           //!< unqualified self call; false for explicit base/namespace call
+    bool self_is_copy = false;             //!< implicit self copy() call
+    bool self_is_abstract = false;         //!< abstract self call requiring virtual dispatch
 };
 
 //! AOT context: runtime-resolved pointer tables for AOT-compiled functions.

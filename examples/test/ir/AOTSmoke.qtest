@@ -154,6 +154,10 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source hashdecl", \testStripSourceHashDecl());
         addTestCase("AOT strip source hashdecl inheritance", \testStripSourceHashDeclInheritance());
         addTestCase("AOT strip source enum", \testStripSourceEnum());
+        addTestCase("AOT strip source hashdecl enum member type",
+            \testStripSourceHashdeclEnumMemberType());
+        addTestCase("AOT strip source nested object complex member type",
+            \testStripSourceNestedObjectComplexMemberType());
         addTestCase("AOT strip source module dependency", \testStripSourceModuleDependency());
         # Class inheritance and static member tests
         addTestCase("AOT strip source class inheritance", \testStripSourceClassInheritance());
@@ -173,6 +177,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source global var init", \testStripSourceGlobalVarInit());
         # Strip source: complex hash/list construction via new
         addTestCase("AOT strip source complex type new", \testStripSourceComplexTypeNew());
+        addTestCase("AOT strip source typed list preserves hashdecl element type",
+            \testStripSourceTypedListHashdeclElement());
         # Strip source: runtime constant resolution
         addTestCase("AOT strip source runtime const ref", \testStripSourceRuntimeConstRef());
         # Strip source: static class variable access (module)
@@ -4438,6 +4444,98 @@ exit(0);
             "complex type new: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "complex type new: strip-source matches interpreter");
+    }
+
+    testStripSourceTypedListHashdeclElement() {
+        string code = "%modern
+hashdecl TH {
+    int events;
+}
+
+list<hash<TH>> nl(new hash<TH>({
+    \"events\": 1,
+}));
+printf(\"%s %y %d\\n\", nl.fullType(), nl[0].fullType(), nl[0].events);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "typed list hashdecl element: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "typed list hashdecl element: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "typed list hashdecl element: strip-source matches interpreter");
+        assertEq("list<hash<TH>> \"hash<TH>\" 1\n", result.run_out,
+            "typed list hashdecl element preserves declared element type");
+    }
+
+    testStripSourceHashdeclEnumMemberType() {
+        string code = "%modern
+public enum StepKind : string {
+    Input = \"input\",
+    Action = \"action\",
+}
+
+hashdecl Step {
+    enum<StepKind> kind;
+}
+
+hash<Step> s = <Step>{\"kind\": StepKind::Action};
+printf(\"%s %y\\n\", s.fullType(), s.kind);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "hashdecl enum member type: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "hashdecl enum member type: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "hashdecl enum member type: strip-source matches interpreter");
+        assertEq("hash<Step> \"action\"\n", result.run_out,
+            "hashdecl enum member type resolves anchored enum type path");
+    }
+
+    testStripSourceNestedObjectComplexMemberType() {
+        string code = "%modern
+namespace OMQ {
+class SegmentEventQueue {
+    string getName() {
+        return \"queue\";
+    }
+}
+
+class WorkflowQueueBase {
+    private {
+        hash<string, object<SegmentEventQueue>> SQ;
+    }
+
+    constructor() {
+        SQ{\"0\"} = new SegmentEventQueue();
+    }
+
+    string getQueueType() {
+        return SQ.fullType();
+    }
+
+    string getQueueName() {
+        return SQ{\"0\"}.getName();
+    }
+}
+}
+
+OMQ::WorkflowQueueBase w();
+printf(\"%s %s\\n\", w.getQueueType(), w.getQueueName());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled, "nested object complex member type: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "nested object complex member type: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "nested object complex member type: strip-source matches interpreter");
+        assertTrue(result.run_out =~ /^hash<string, object<.*SegmentEventQueue>> queue\n$/,
+            "nested object complex member type resolves anchored object type path: " + result.run_out);
     }
 
     testStripSourceRuntimeConstRef() {

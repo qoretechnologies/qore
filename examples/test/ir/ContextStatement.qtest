@@ -38,6 +38,7 @@ class ContextStatementTest inherits QUnit::Test {
         addTestCase("non-hash context expression", \testNonHash());
         addTestCase("named context with %name:field", \testNamedContext());
         addTestCase("pseudo row %%", \testPseudoRow());
+        addTestCase("hash map pair iterator in context", \testHashMapPairIterator());
 
         set_return_value(main());
     }
@@ -270,5 +271,37 @@ int sub run() {
 }
 printf(\"%d\\n\", run());";
         runAndExpect(code, "6", "pseudo row %%");
+    }
+
+    testHashMapPairIterator() {
+        # Regression: direct $1.key / $1.value hash access inside a hash-map
+        # body lowered to InvokeHashKeyAccess in the context catch region.
+        # The IR interpreter must use the pre-evaluated iterator element, not
+        # re-evaluate the AST expression without the map operator's implicit $1.
+        string code = "
+public hashdecl AppenderParams {
+    *string name;
+    *int rotationCount;
+}
+
+public hashdecl LoggerParams {
+    *hash<string, hash<AppenderParams>> appenders;
+}
+
+string sub run() {
+    hash logger_info = (\"loggerid\": (6,), \"params\": ({\"appenders\": {\"1\": {\"name\": \"X\", \"rotationCount\": 10}}},));
+    hash<auto> loggerMap;
+    context (logger_info) {
+        hash<auto> tmp_params = %params;
+        hash<auto> params;
+        params.appenders = map {$1.key: cast<hash<AppenderParams>>($1.value)},
+            tmp_params.appenders.pairIterator();
+        loggerMap{%loggerid}.params = cast<hash<LoggerParams>>(params);
+    }
+    return sprintf(\"%s:%d\", loggerMap{\"6\"}.params.appenders{\"1\"}.name,
+        loggerMap{\"6\"}.params.appenders{\"1\"}.rotationCount);
+}
+printf(\"%s\\n\", run());";
+        runAndExpect(code, "X:10", "hash map pair iterator access in context");
     }
 }

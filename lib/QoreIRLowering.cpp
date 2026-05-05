@@ -3936,6 +3936,23 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return builder.createLoadConstant(rt_const, expr, rt_const->loc)->result;
     }
     if (auto* new_hd = dynamic_cast<const NewHashDeclNode*>(node)) {
+        const QoreParseListNode* pargs = new_hd->args;
+        QoreIRValue hash_val;
+        if (pargs && !pargs->empty()) {
+            if (pargs->size() != 1) {
+                error = "hashdecl constructor argument count mismatch";
+                return QoreIRValue();
+            }
+            hash_val = lowerExpression(pargs->get(0), error);
+            if (!hash_val.isValid()) {
+                return QoreIRValue();
+            }
+        } else {
+            std::vector<std::string> empty_keys;
+            std::vector<QoreIRValue> empty_vals;
+            hash_val = builder.createMakeHashConstKeys(std::move(empty_keys), empty_vals, new_hd->loc, nullptr)
+                ->result;
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3943,12 +3960,12 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, new_hd->loc);
-            inst->invoke_opcode = QoreIROpcode::NewHashDecl;
+            auto* inst = builder.createInvoke(expr, {hash_val}, normal_block, handler, new_hd->loc);
+            inst->invoke_opcode = QoreIROpcode::NewHashDeclFromHash;
             builder.setBlock(normal_block);
             return inst->result;
         }
-        return builder.createNewHashDecl(new_hd, expr, new_hd->loc)->result;
+        return builder.createNewHashDeclFromHash(new_hd->hd, new_hd->runtime_check, hash_val, new_hd->loc)->result;
     }
     if (auto* new_ch = dynamic_cast<const NewComplexHashNode*>(node)) {
         if (!exception_stack.empty()) {
@@ -4416,6 +4433,80 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
                     vrn->getRuntimeCheck(), hash_val, var->loc)->result;
             }
             // Store the constructed value to the variable
+            if (!storeVarRef(var, construct_val, error, "VarRefNewObjectNode", &expr, var->loc)) {
+                return QoreIRValue();
+            }
+            return construct_val;
+        }
+
+        if (vrn->isComplexHashConstruct()) {
+            const QoreParseListNode* pargs = vrn->getParseArgs();
+            QoreIRValue hash_val;
+            if (pargs && !pargs->empty()) {
+                if (pargs->size() != 1) {
+                    error = "complex hash constructor argument count mismatch";
+                    return QoreIRValue();
+                }
+                hash_val = lowerExpression(pargs->get(0), error);
+                if (!hash_val.isValid()) {
+                    return QoreIRValue();
+                }
+            } else {
+                std::vector<std::string> empty_keys;
+                std::vector<QoreIRValue> empty_vals;
+                hash_val = builder.createMakeHashConstKeys(std::move(empty_keys), empty_vals,
+                    var->loc, nullptr)->result;
+            }
+
+            QoreIRValue construct_val;
+            if (!exception_stack.empty()) {
+                QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                if (!normal_block) {
+                    error = "IR builder failed to create invoke continuation block";
+                    return QoreIRValue();
+                }
+                QoreIRBasicBlock* handler = exception_stack.back();
+                auto* inst = builder.createInvoke(expr, {hash_val}, normal_block, handler, var->loc);
+                inst->invoke_opcode = QoreIROpcode::VrnConstruct;
+                builder.setBlock(normal_block);
+                construct_val = inst->result;
+            } else {
+                auto* inst = builder.createVrnConstruct(vrn, expr, var->loc);
+                inst->operands.push_back(hash_val);
+                construct_val = inst->result;
+            }
+            if (!storeVarRef(var, construct_val, error, "VarRefNewObjectNode", &expr, var->loc)) {
+                return QoreIRValue();
+            }
+            return construct_val;
+        }
+
+        if (vrn->isComplexListConstruct()) {
+            const QoreValue& new_args = vrn->getNewArgs();
+            QoreIRValue value = new_args.isNothing()
+                ? builder.createConstNothing(var->loc)->result
+                : lowerExpression(new_args, error);
+            if (!value.isValid()) {
+                return QoreIRValue();
+            }
+
+            QoreIRValue construct_val;
+            if (!exception_stack.empty()) {
+                QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                if (!normal_block) {
+                    error = "IR builder failed to create invoke continuation block";
+                    return QoreIRValue();
+                }
+                QoreIRBasicBlock* handler = exception_stack.back();
+                auto* inst = builder.createInvoke(expr, {value}, normal_block, handler, var->loc);
+                inst->invoke_opcode = QoreIROpcode::VrnConstruct;
+                builder.setBlock(normal_block);
+                construct_val = inst->result;
+            } else {
+                auto* inst = builder.createVrnConstruct(vrn, expr, var->loc);
+                inst->operands.push_back(value);
+                construct_val = inst->result;
+            }
             if (!storeVarRef(var, construct_val, error, "VarRefNewObjectNode", &expr, var->loc)) {
                 return QoreIRValue();
             }

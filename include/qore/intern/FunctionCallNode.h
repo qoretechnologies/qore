@@ -547,6 +547,22 @@ public:
 
     DLLLOCAL AbstractQoreNode* makeReferenceNodeAndDeref();
 
+    DLLLOCAL bool hasSingleName() const {
+        return ns.size() == 1;
+    }
+
+    DLLLOCAL const qore_class_private* getClassContext() const {
+        return class_ctx;
+    }
+
+    DLLLOCAL bool isCopyCall() const {
+        return is_copy;
+    }
+
+    DLLLOCAL bool isAbstractCall() const {
+        return is_abstract;
+    }
+
 protected:
     NamedScope ns;
     const qore_class_private* class_ctx = nullptr;

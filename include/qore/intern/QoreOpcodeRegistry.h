@@ -334,7 +334,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[370] = {
     { "NewHashDecl"                   , false, false, false,  0, "NewHashDecl", false, true , "ParseNode", true , false, false, false, false }, // 289
     { "NewComplexHash"                , false, false, false,  0, "NewComplexHash", false, true , "ParseNode", true , false, false, false, false }, // 290
     { "NewComplexList"                , false, false, false,  0, "NewComplexList", false, true , "ParseNode", true , false, false, false, false }, // 291
-    { "VrnConstruct"                  , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false, false }, // 292
+    { "VrnConstruct"                  , false, false, false, OPCODE_MIN_OPERANDS(0), "VrnConstruct", false, true , "ParseNode", true , false, false, false, false }, // 292
     { "HashSetKeyValue"               , false, false, false,  3, "HashSetKeyValue", false, true , "ParseNode", false, false, false, false, false }, // 293
     { "IteratorCreateReverse"         , false, false, false,  1, "IteratorCreateReverse", false, true , "ParseNode", true , false, false, false, false }, // 294
     { "Call"                          , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false, false }, // 295

@@ -698,7 +698,9 @@ private:
     const QoreTypeInfo* resolveBuiltin(const char* path);
     const QoreTypeInfo* resolveClassType(const char* path);
     const QoreTypeInfo* resolveHashDeclType(const char* path);
+    const QoreTypeInfo* resolveEnumType(const char* path);
     const QoreTypeInfo* resolveUnionShorthandType(const char* path);
+    const QoreTypeInfo* resolveStructuredComplexType(const char* path);
     const QoreTypeInfo* resolveComplexType(const char* path);
 };
 

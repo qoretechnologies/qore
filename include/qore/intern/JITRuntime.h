@@ -461,6 +461,12 @@ uint64_t qore_rt_load_constant(const RuntimeConstantRefNode* node, ExceptionSink
 //! Load a runtime constant or direct constant value via AOT context slot
 uint64_t qore_rt_load_constant_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Load a member from the current runtime object; returns NaN-boxed QoreValue.
+uint64_t qore_rt_load_self_member(const char* member_name, ExceptionSink* xsink);
+
+//! Load a member for use as a method-call base; preserves raw weak-reference results.
+uint64_t qore_rt_load_self_member_for_call(const char* member_name, ExceptionSink* xsink);
+
 //! Load a static class variable by class path and variable name; returns NaN-boxed QoreValue
 uint64_t qore_rt_load_static_var(QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink);
 uint64_t qore_rt_load_static_var_for_call(QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink);
@@ -558,6 +564,16 @@ uint64_t qore_rt_new_complex_list(const NewComplexListNode* node, ExceptionSink*
 //! Create a new typed list via AOT context slot
 uint64_t qore_rt_new_complex_list_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Create a new typed hash from an already-evaluated hash initializer
+uint64_t qore_rt_new_complex_hash_from_hash(const QoreTypeInfo* typeInfo, uint64_t hash_bits, ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_hash_from_hash_by_type_path(const char* type_path, uint64_t hash_bits,
+    ExceptionSink* xsink);
+
+//! Create a new typed list from an already-evaluated constructor value
+uint64_t qore_rt_new_complex_list_from_value(const QoreTypeInfo* typeInfo, uint64_t value_bits, ExceptionSink* xsink);
+uint64_t qore_rt_new_complex_list_from_value_by_type_path(const char* type_path, uint64_t value_bits,
+    ExceptionSink* xsink);
+
 class VarRefNewObjectNode;
 
 //! Construct value for VarRefNewObjectNode (non-object types: hashdecl/complex hash/list)
@@ -646,6 +662,9 @@ uint64_t qore_rt_hash_key_access(uint64_t hash_val, const char* key, ExceptionSi
 
 //! Look up a key for use as a method-call base; preserves raw weak-reference results.
 uint64_t qore_rt_hash_key_access_for_call(uint64_t hash_val, const char* key, ExceptionSink* xsink);
+
+//! Look up a key known to have an int value; returns NOTHING if unavailable.
+uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, const char* key);
 
 //! Index into a list value; returns NaN-boxed result (with ref).
 //! Returns NOTHING if value is not a list or index is out of bounds.

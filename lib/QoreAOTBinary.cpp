@@ -690,6 +690,28 @@ static bool resolveDeferredConstRefDefault(std::string& path, QoreValue& default
     return true;
 }
 
+static bool setAOTDeferredMemberResolutionError(std::string& error,
+        const char* target_kind, const char* target_name, const char* owner_kind,
+        const char* owner_name, const char* member_name,
+        const char* details = nullptr) {
+    error = "AOT cannot resolve ";
+    error += target_kind ? target_kind : "deferred member default";
+    error += " '";
+    error += target_name ? target_name : "<unknown>";
+    error += "' for ";
+    error += owner_kind ? owner_kind : "member";
+    error += " '";
+    error += owner_name ? owner_name : "<unknown>";
+    error += "::";
+    error += member_name ? member_name : "<unknown>";
+    error += "'";
+    if (details && *details) {
+        error += ": ";
+        error += details;
+    }
+    return false;
+}
+
 static bool skipAOTValueContainerType(const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end, std::string& error) {
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS) == 0) {
@@ -2721,11 +2743,7 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveClassType(const char* path) {
     if (!pgm) {
         return nullptr;
     }
-    ExceptionSink xsink;
-    const QoreClass* qc = pgm->findClass(path, &xsink);
-    if (xsink.isException()) {
-        xsink.clear();
-    }
+    const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(pgm, path);
     if (qc) {
         return qc->getTypeInfo();
     }
@@ -2766,6 +2784,43 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
     const TypedHashDecl* thd = pgm->findHashDecl(decl_name.c_str(), pns);
     if (thd) {
         return thd->getTypeInfo(or_nothing);
+    }
+    return nullptr;
+}
+
+const QoreTypeInfo* QoreAOTTypeResolver::resolveEnumType(const char* path) {
+    if (!pgm) {
+        return nullptr;
+    }
+
+    // path format: "enum<EnumName>" or "*enum<EnumName>". Resolve directly
+    // through QoreProgram like hashdecls above so anchored paths emitted by
+    // QoreTypeInfo::getPath() ("enum<::Ns::Enum>") do not go through the
+    // generic parser resolver, which treats the leading "::" as an empty
+    // namespace component during runtime lookup.
+    bool or_nothing = false;
+    const char* enum_path = path;
+    if (!strncmp(path, "*enum<", 6)) {
+        or_nothing = true;
+        enum_path = path + 1;
+    }
+    if (strncmp(enum_path, "enum<", 5)) {
+        return nullptr;
+    }
+    const char* start = enum_path + 5;
+    const char* end = strchr(start, '>');
+    if (!end || end[1]) {
+        return nullptr;
+    }
+    std::string enum_name(start, end - start);
+    while (enum_name.rfind("::", 0) == 0) {
+        enum_name.erase(0, 2);
+    }
+
+    const QoreNamespace* pns = nullptr;
+    const QoreEnumDecl* ed = pgm->findEnum(enum_name.c_str(), pns);
+    if (ed) {
+        return ed->getTypeInfo(or_nothing);
     }
     return nullptr;
 }
@@ -2844,6 +2899,72 @@ static bool extract_aot_single_type_arg(const char* path, const char* type_name,
             }
             arg.assign(start, q - start);
             return !arg.empty();
+        }
+    }
+    return false;
+}
+
+static std::string trim_aot_type_component(const std::string& str);
+
+static bool split_aot_type_args(const std::string& args, std::vector<std::string>& out) {
+    out.clear();
+    std::string current;
+    int angle_depth = 0;
+    int paren_depth = 0;
+    for (char c : args) {
+        if (c == '<' && paren_depth == 0) {
+            ++angle_depth;
+        } else if (c == '>' && paren_depth == 0 && angle_depth > 0) {
+            --angle_depth;
+        } else if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')' && paren_depth > 0) {
+            --paren_depth;
+        }
+
+        if (c == ',' && angle_depth == 0 && paren_depth == 0) {
+            out.push_back(trim_aot_type_component(current));
+            current.clear();
+            continue;
+        }
+        current.push_back(c);
+    }
+
+    out.push_back(trim_aot_type_component(current));
+    for (const std::string& arg : out) {
+        if (arg.empty()) {
+            out.clear();
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool extract_aot_type_args(const char* path, const char* type_name, bool& or_nothing,
+        std::vector<std::string>& args) {
+    or_nothing = false;
+    args.clear();
+    const char* p = path;
+    if (*p == '*') {
+        or_nothing = true;
+        ++p;
+    }
+
+    size_t type_len = strlen(type_name);
+    if (strncmp(p, type_name, type_len) || p[type_len] != '<') {
+        return false;
+    }
+
+    const char* start = p + type_len + 1;
+    int depth = 1;
+    for (const char* q = start; *q; ++q) {
+        if (*q == '<') {
+            ++depth;
+        } else if (*q == '>' && --depth == 0) {
+            if (q[1]) {
+                return false;
+            }
+            return split_aot_type_args(std::string(start, q - start), args);
         }
     }
     return false;
@@ -2931,7 +3052,139 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveUnionShorthandType(const char* p
     return qore_get_union_type(member_types, or_nothing);
 }
 
+const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char* path) {
+    bool or_nothing = false;
+    std::vector<std::string> args;
+
+    if (extract_aot_type_args(path, "object", or_nothing, args)) {
+        if (args.size() != 1) {
+            return nullptr;
+        }
+        if (args[0] == "auto") {
+            return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
+        }
+        std::string class_path = normalize_aot_type_path(args[0].c_str());
+        const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(pgm, class_path.c_str());
+        if (!qc) {
+            return nullptr;
+        }
+        return or_nothing ? qc->getOrNothingTypeInfo() : qc->getTypeInfo();
+    }
+
+    if (extract_aot_type_args(path, "hash", or_nothing, args)) {
+        if (args.size() == 1) {
+            if (args[0] == "auto") {
+                return or_nothing ? autoHashOrNothingTypeInfo : autoHashTypeInfo;
+            }
+            if (args[0] == "auto!") {
+                return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
+            }
+            std::string hashdecl_path = or_nothing ? "*hash<" : "hash<";
+            hashdecl_path += args[0];
+            hashdecl_path += '>';
+            return resolveHashDeclType(hashdecl_path.c_str());
+        }
+        if (args.size() != 2 || args[0] != "string") {
+            return nullptr;
+        }
+        if (args[1] == "auto") {
+            return or_nothing ? autoHashOrNothingTypeInfo : autoHashTypeInfo;
+        }
+        if (args[1] == "auto!") {
+            return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
+        }
+        std::string error;
+        const QoreTypeInfo* value_type = resolve(args[1].c_str(), error);
+        if (!QoreTypeInfo::hasType(value_type)) {
+            return nullptr;
+        }
+        return or_nothing
+            ? qore_get_complex_hash_or_nothing_type(value_type)
+            : qore_get_complex_hash_type(value_type);
+    }
+
+    if (extract_aot_type_args(path, "list", or_nothing, args)) {
+        if (args.size() != 1) {
+            return nullptr;
+        }
+        if (args[0] == "auto") {
+            return or_nothing ? autoListOrNothingTypeInfo : autoListTypeInfo;
+        }
+        if (args[0] == "auto!") {
+            return or_nothing ? autoNoNarrowListOrNothingTypeInfo : autoNoNarrowListTypeInfo;
+        }
+        std::string error;
+        const QoreTypeInfo* value_type = resolve(args[0].c_str(), error);
+        if (!QoreTypeInfo::hasType(value_type)) {
+            return nullptr;
+        }
+        return or_nothing
+            ? qore_get_complex_list_or_nothing_type(value_type)
+            : qore_get_complex_list_type(value_type);
+    }
+
+    if (extract_aot_type_args(path, "softlist", or_nothing, args)) {
+        if (args.size() != 1) {
+            return nullptr;
+        }
+        if (args[0] == "auto" || args[0] == "auto!") {
+            return or_nothing ? softAutoListOrNothingTypeInfo : softAutoListTypeInfo;
+        }
+        std::string error;
+        const QoreTypeInfo* value_type = resolve(args[0].c_str(), error);
+        if (!QoreTypeInfo::hasType(value_type)) {
+            return nullptr;
+        }
+        return or_nothing
+            ? qore_get_complex_softlist_or_nothing_type(value_type)
+            : qore_get_complex_softlist_type(value_type);
+    }
+
+    if (extract_aot_type_args(path, "reference", or_nothing, args)) {
+        if (args.size() != 1) {
+            return nullptr;
+        }
+        if (args[0] == "auto" || args[0] == "auto!") {
+            return or_nothing ? referenceOrNothingTypeInfo : referenceTypeInfo;
+        }
+        std::string error;
+        const QoreTypeInfo* value_type = resolve(args[0].c_str(), error);
+        if (!QoreTypeInfo::hasType(value_type)) {
+            return nullptr;
+        }
+        return or_nothing
+            ? qore_get_complex_reference_or_nothing_type(value_type)
+            : qore_get_complex_reference_type(value_type);
+    }
+
+    if (extract_aot_type_args(path, "union", or_nothing, args)) {
+        if (args.empty() || args.size() > QORE_MAX_UNION_MEMBERS) {
+            return nullptr;
+        }
+        type_vec_t member_types;
+        member_types.reserve(args.size());
+        for (const std::string& arg : args) {
+            if (arg == "auto") {
+                return autoTypeInfo;
+            }
+            std::string error;
+            const QoreTypeInfo* member = resolve(arg.c_str(), error);
+            if (!QoreTypeInfo::hasType(member)) {
+                return nullptr;
+            }
+            member_types.push_back(member);
+        }
+        return qore_get_union_type(member_types, or_nothing);
+    }
+
+    return nullptr;
+}
+
 const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
+    if (const QoreTypeInfo* ti = resolveStructuredComplexType(path)) {
+        return ti;
+    }
+
     bool or_nothing = false;
     std::string inner_type;
     if (extract_aot_single_type_arg(path, "reference", or_nothing, inner_type)) {
@@ -3011,6 +3264,10 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
     // Hashdecl type paths must resolve to the canonical TypedHashDecl type object.
     if (!result) {
         result = resolveHashDeclType(path);
+    }
+
+    if (!result) {
+        result = resolveEnumType(path);
     }
 
     // QoreTypeInfo::getPath() can emit compact top-level union spellings such
@@ -8111,12 +8368,8 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
         QoreClass* qc = class_list[idx];
 
         for (auto& pbc : pending_bases[idx]) {
-            // Look up base class by path in the program
-            ExceptionSink xsink;
-            const QoreClass* base = pgm->findClass(pbc.base_path.c_str(), &xsink);
-            if (xsink.isException()) {
-                xsink.clear();
-            }
+            const QoreClass* base = qoreAOTResolveClassRefForDeserialization(
+                pgm, pbc.base_path.c_str());
             if (base) {
                 // Add base class to this class with proper access level
                 qc->addBaseClass(const_cast<QoreClass*>(base),
@@ -8176,13 +8429,12 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
         for (auto& pim : pending_instance_members[i]) {
             const QoreTypeInfo* ti = nullptr;
             if (!pim.type_path.empty()) {
-                ti = type_resolver->resolve(pim.type_path.c_str(), error);
-                if (!error.empty()) {
-                    printd(2, "AOT deser: cannot resolve type '%s' for instance member '%s' "
-                        "in class '%s': %s (falling back to auto)\n",
-                        pim.type_path.c_str(), pim.name.c_str(), qc->getName(), error.c_str());
-                    error.clear();
-                    ti = autoTypeInfo;
+                std::string type_error;
+                ti = type_resolver->resolve(pim.type_path.c_str(), type_error);
+                if (!type_error.empty() || !ti) {
+                    return setAOTDeferredMemberResolutionError(error, "member type",
+                        pim.type_path.c_str(), "class", qc->getName(),
+                        pim.name.c_str(), type_error.c_str());
                 }
             }
 
@@ -8206,14 +8458,15 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                     }
                     pim.default_val = QoreValue(socn);
                 } else {
-                    printd(0, "AOT deser: cannot resolve pending NewObject class '%s' for "
-                        "instance member '%s' in class '%s'\n",
-                        qoreAOTDescribeClassRef(pim.pending_new_class_path.c_str()).c_str(),
-                        pim.name.c_str(), qc->getName());
+                    std::string class_desc = qoreAOTDescribeClassRef(
+                        pim.pending_new_class_path.c_str());
                     for (auto& v : pim.pending_new_args) {
                         v.discard(nullptr);
                     }
                     pim.pending_new_args.clear();
+                    return setAOTDeferredMemberResolutionError(error,
+                        "new-object default class", class_desc.c_str(), "class",
+                        qc->getName(), pim.name.c_str());
                 }
                 pim.pending_new_class_path.clear();
             }
@@ -8231,16 +8484,16 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                     if (member) {
                         pim.default_val = QoreValue::makeEnum(member);
                     } else {
-                        printd(0, "AOT deser: enum member '%s::%s' not found for "
-                            "instance member '%s' in class '%s'\n",
-                            pim.pending_enum_path.c_str(),
-                            pim.pending_enum_member.c_str(),
-                            pim.name.c_str(), qc->getName());
+                        std::string enum_member = pim.pending_enum_path + "::"
+                            + pim.pending_enum_member;
+                        return setAOTDeferredMemberResolutionError(error,
+                            "enum member default", enum_member.c_str(), "class",
+                            qc->getName(), pim.name.c_str());
                     }
                 } else {
-                    printd(0, "AOT deser: enum '%s' not found for instance member "
-                        "'%s' in class '%s'\n",
-                        pim.pending_enum_path.c_str(), pim.name.c_str(), qc->getName());
+                    return setAOTDeferredMemberResolutionError(error,
+                        "enum default", pim.pending_enum_path.c_str(), "class",
+                        qc->getName(), pim.name.c_str());
                 }
                 pim.pending_enum_path.clear();
                 pim.pending_enum_member.clear();
@@ -8267,13 +8520,12 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                             &loc_builtin, hd, parse_args, false);
                         pim.default_val = QoreValue(nhd);
                     } else {
-                        printd(0, "AOT deser: hashdecl '%s' not found for instance member "
-                            "'%s' in class '%s'\n",
-                            pim.pending_complex_default_path.c_str(), pim.name.c_str(),
-                            qc->getName());
                         if (parse_args) {
                             parse_args->deref(nullptr);
                         }
+                        return setAOTDeferredMemberResolutionError(error,
+                            "hashdecl default", pim.pending_complex_default_path.c_str(),
+                            "class", qc->getName(), pim.name.c_str());
                     }
                 } else {
                     // kind 0 (complex list) or kind 1 (complex hash)
@@ -8294,13 +8546,15 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                             pim.default_val = QoreValue(nch);
                         }
                     } else {
-                        printd(0, "AOT deser: type '%s' not found for instance member "
-                            "'%s' in class '%s' (complex default kind=%d)\n",
-                            pim.pending_complex_default_path.c_str(), pim.name.c_str(),
-                            qc->getName(), (int)pim.pending_complex_default_kind);
                         if (parse_args) {
                             parse_args->deref(nullptr);
                         }
+                        std::string details = "complex default kind="
+                            + std::to_string((int)pim.pending_complex_default_kind);
+                        return setAOTDeferredMemberResolutionError(error,
+                            "complex default type",
+                            pim.pending_complex_default_path.c_str(), "class",
+                            qc->getName(), pim.name.c_str(), details.c_str());
                     }
                 }
                 pim.pending_complex_default_kind = -1;
@@ -8381,13 +8635,12 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
         for (auto& psm : pending_static_members[i]) {
             const QoreTypeInfo* ti = nullptr;
             if (!psm.type_path.empty()) {
-                ti = type_resolver->resolve(psm.type_path.c_str(), error);
-                if (!error.empty()) {
-                    printd(2, "AOT deser: cannot resolve type '%s' for static member '%s' "
-                        "in class '%s': %s (falling back to auto)\n",
-                        psm.type_path.c_str(), psm.name.c_str(), qc->getName(), error.c_str());
-                    error.clear();
-                    ti = autoTypeInfo;
+                std::string type_error;
+                ti = type_resolver->resolve(psm.type_path.c_str(), type_error);
+                if (!type_error.empty() || !ti) {
+                    return setAOTDeferredMemberResolutionError(error, "static member type",
+                        psm.type_path.c_str(), "class", qc->getName(),
+                        psm.name.c_str(), type_error.c_str());
                 }
             }
 
@@ -8411,14 +8664,15 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                     }
                     psm.default_val = QoreValue(socn);
                 } else {
-                    printd(0, "AOT deser: cannot resolve pending NewObject class '%s' for "
-                        "static member '%s' in class '%s'\n",
-                        qoreAOTDescribeClassRef(psm.pending_new_class_path.c_str()).c_str(),
-                        psm.name.c_str(), qc->getName());
+                    std::string class_desc = qoreAOTDescribeClassRef(
+                        psm.pending_new_class_path.c_str());
                     for (auto& v : psm.pending_new_args) {
                         v.discard(nullptr);
                     }
                     psm.pending_new_args.clear();
+                    return setAOTDeferredMemberResolutionError(error,
+                        "new-object default class", class_desc.c_str(), "class",
+                        qc->getName(), psm.name.c_str());
                 }
                 psm.pending_new_class_path.clear();
             }
@@ -8436,16 +8690,16 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                     if (member) {
                         psm.default_val = QoreValue::makeEnum(member);
                     } else {
-                        printd(0, "AOT deser: enum member '%s::%s' not found for "
-                            "static member '%s' in class '%s'\n",
-                            psm.pending_enum_path.c_str(),
-                            psm.pending_enum_member.c_str(),
-                            psm.name.c_str(), qc->getName());
+                        std::string enum_member = psm.pending_enum_path + "::"
+                            + psm.pending_enum_member;
+                        return setAOTDeferredMemberResolutionError(error,
+                            "enum member default", enum_member.c_str(), "class",
+                            qc->getName(), psm.name.c_str());
                     }
                 } else {
-                    printd(0, "AOT deser: enum '%s' not found for static member "
-                        "'%s' in class '%s'\n",
-                        psm.pending_enum_path.c_str(), psm.name.c_str(), qc->getName());
+                    return setAOTDeferredMemberResolutionError(error,
+                        "enum default", psm.pending_enum_path.c_str(), "class",
+                        qc->getName(), psm.name.c_str());
                 }
                 psm.pending_enum_path.clear();
                 psm.pending_enum_member.clear();
@@ -8470,13 +8724,12 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                             &loc_builtin, hd, parse_args, false);
                         psm.default_val = QoreValue(nhd);
                     } else {
-                        printd(0, "AOT deser: hashdecl '%s' not found for static member "
-                            "'%s' in class '%s'\n",
-                            psm.pending_complex_default_path.c_str(), psm.name.c_str(),
-                            qc->getName());
                         if (parse_args) {
                             parse_args->deref(nullptr);
                         }
+                        return setAOTDeferredMemberResolutionError(error,
+                            "hashdecl default", psm.pending_complex_default_path.c_str(),
+                            "class", qc->getName(), psm.name.c_str());
                     }
                 } else {
                     const QoreTypeInfo* cti = qore_get_type_from_string_intern(
@@ -8496,13 +8749,15 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                             psm.default_val = QoreValue(nch);
                         }
                     } else {
-                        printd(0, "AOT deser: type '%s' not found for static member "
-                            "'%s' in class '%s' (complex default kind=%d)\n",
-                            psm.pending_complex_default_path.c_str(), psm.name.c_str(),
-                            qc->getName(), (int)psm.pending_complex_default_kind);
                         if (parse_args) {
                             parse_args->deref(nullptr);
                         }
+                        std::string details = "complex default kind="
+                            + std::to_string((int)psm.pending_complex_default_kind);
+                        return setAOTDeferredMemberResolutionError(error,
+                            "complex default type",
+                            psm.pending_complex_default_path.c_str(), "class",
+                            qc->getName(), psm.name.c_str(), details.c_str());
                     }
                 }
                 psm.pending_complex_default_kind = -1;
@@ -8770,17 +9025,16 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                     if (member) {
                         phm.default_val = QoreValue::makeEnum(member);
                     } else {
-                        printd(0, "AOT deser: enum member '%s::%s' not found "
-                            "for hashdecl '%s' member '%s'\n",
-                            phm.pending_enum_path.c_str(),
-                            phm.pending_enum_member.c_str(),
+                        std::string enum_member = phm.pending_enum_path + "::"
+                            + phm.pending_enum_member;
+                        return setAOTDeferredMemberResolutionError(error,
+                            "enum member default", enum_member.c_str(), "hashdecl",
                             hd->getName(), phm.name.c_str());
                     }
                 } else {
-                    printd(0, "AOT deser: enum '%s' not found for hashdecl "
-                        "'%s' member '%s'\n",
-                        phm.pending_enum_path.c_str(), hd->getName(),
-                        phm.name.c_str());
+                    return setAOTDeferredMemberResolutionError(error,
+                        "enum default", phm.pending_enum_path.c_str(), "hashdecl",
+                        hd->getName(), phm.name.c_str());
                 }
                 phm.pending_enum_path.clear();
                 phm.pending_enum_member.clear();
@@ -8803,14 +9057,15 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                     phm.default_val = QoreValue(new ScopedObjectCallNode(
                         &loc_builtin, qc, parse_args));
                 } else {
-                    printd(0, "AOT deser: class '%s' not found for hashdecl "
-                        "'%s' member '%s' default\n",
-                        qoreAOTDescribeClassRef(phm.pending_new_class_path.c_str()).c_str(),
-                        hd->getName(), phm.name.c_str());
+                    std::string class_desc = qoreAOTDescribeClassRef(
+                        phm.pending_new_class_path.c_str());
                     for (auto& a : phm.pending_new_args) {
                         a.discard(nullptr);
                     }
                     phm.pending_new_args.clear();
+                    return setAOTDeferredMemberResolutionError(error,
+                        "new-object default class", class_desc.c_str(),
+                        "hashdecl", hd->getName(), phm.name.c_str());
                 }
                 phm.pending_new_class_path.clear();
             }
@@ -8835,13 +9090,12 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                         phm.default_val = QoreValue(new NewHashDeclNode(
                             &loc_builtin, default_hd, parse_args, false));
                     } else {
-                        printd(0, "AOT deser: hashdecl '%s' not found for "
-                            "hashdecl '%s' member '%s' default\n",
-                            phm.pending_complex_default_path.c_str(),
-                            hd->getName(), phm.name.c_str());
                         if (parse_args) {
                             parse_args->deref(nullptr);
                         }
+                        return setAOTDeferredMemberResolutionError(error,
+                            "hashdecl default", phm.pending_complex_default_path.c_str(),
+                            "hashdecl", hd->getName(), phm.name.c_str());
                     }
                 } else {
                     const QoreTypeInfo* cti = qore_get_type_from_string_intern(
@@ -8859,14 +9113,15 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
                                 &loc_builtin, cti, parse_args));
                         }
                     } else {
-                        printd(0, "AOT deser: type '%s' not found for "
-                            "hashdecl '%s' member '%s' default (complex kind=%d)\n",
-                            phm.pending_complex_default_path.c_str(),
-                            hd->getName(), phm.name.c_str(),
-                            (int)phm.pending_complex_default_kind);
                         if (parse_args) {
                             parse_args->deref(nullptr);
                         }
+                        std::string details = "complex default kind="
+                            + std::to_string((int)phm.pending_complex_default_kind);
+                        return setAOTDeferredMemberResolutionError(error,
+                            "complex default type",
+                            phm.pending_complex_default_path.c_str(), "hashdecl",
+                            hd->getName(), phm.name.c_str(), details.c_str());
                     }
                 }
                 phm.pending_complex_default_kind = -1;
@@ -8882,12 +9137,10 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
 
             const QoreTypeInfo* mti = type_resolver->resolve(phm.type_path.c_str(), error);
             if (!error.empty()) {
-                // Fall back to auto type when the type can't be resolved
-                printd(0, "AOT: cannot resolve type '%s' for member '%s' "
-                    "in hashdecl '%s': %s (falling back to auto)\n",
-                    phm.type_path.c_str(), phm.name.c_str(), hd->getName(), error.c_str());
-                error.clear();
-                mti = autoTypeInfo;
+                std::string type_error = error;
+                return setAOTDeferredMemberResolutionError(error, "member type",
+                    phm.type_path.c_str(), "hashdecl", hd->getName(),
+                    phm.name.c_str(), type_error.c_str());
             }
             // Narrow the deserialized default into the member's declared type.
             // writeValue's NT_HASH / NT_LIST paths serialize by key/value or
@@ -9259,6 +9512,15 @@ bool QoreAOTBinaryDeserializer::deserializeEnums(std::string& error) {
             }
             edp->deref();
             continue;
+        }
+
+        // Update root namespace's edmap so findEnum() works immediately during
+        // the type-resolution phase, before the later full rebuildAllIndexes().
+        {
+            qore_program_private* pp_ed = qore_program_private::get(*pgm);
+            qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+                qore_ns_private::get(*pp_ed->RootNS));
+            rpriv->edmap.update(ed->getName(), ns_list[ns_idx], ed);
         }
     }
 

@@ -1,0 +1,74 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires FsUtil
+%requires DataProvider
+%requires ProviderIndexUtil
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%exec-class DataProviderAOTTest
+
+public class DataProviderAOTTest inherits QUnit::Test {
+    constructor() : Test("DataProvider AOT Test", "1.0") {
+        addTestCase("provider index preserves type cache", \providerIndexPreservesTypeCache());
+
+        # Return for compatibility with test harnesses that check the return value.
+        set_return_value(main());
+    }
+
+    private checkYaml() {
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+    }
+
+    providerIndexPreservesTypeCache() {
+        checkYaml();
+
+        string dir = make_tmp_dir();
+        on_exit remove_tree(dir);
+
+        bool had_env = exists ENV{ProviderIndexEnvVar};
+        string old_env = had_env ? ENV{ProviderIndexEnvVar} : "";
+        on_exit {
+            if (had_env) {
+                ProviderIndexUtil::setEnvironmentVariable(old_env);
+            } else {
+                unsetenv(ProviderIndexEnvVar);
+                remove ENV{ProviderIndexEnvVar};
+            }
+        }
+
+        ProviderIndexUtil::setEnvironmentVariable(dir);
+        ProviderIndexUtil::writeDataProviderIndex(<DataProviderIndexInfo>{
+            "factorymap": {},
+            "appmap": {},
+            "schememap": {},
+            "appinfomap": {},
+            "actioninfomap": {},
+            "top_actioninfomap": {},
+        }, 0s, {});
+
+        DataProvider::registerKnownTypes();
+        list<string> before = DataProvider::getTypeCache().listRegisteredTypes();
+        hash<string, bool> before_map = map {$1: True}, before;
+        assertTrue(before_map{"/qore/hash"}, "registered type cache contains builtin hash type before index read");
+
+        *list<hash<auto>> apps = ProviderIndexUtil::getCachedApps();
+        assertEq(0, apps ? apps.size() : 0, "test index has no cached apps");
+
+        list<string> after = DataProvider::getTypeCache().listRegisteredTypes();
+        hash<string, bool> after_map = map {$1: True}, after;
+        assertTrue(after_map{"/qore/hash"}, "registered type cache contains builtin hash type after index read");
+        assertEq(before, after, "ProviderIndexUtil read must not reset the shared DataProvider type cache");
+    }
+}

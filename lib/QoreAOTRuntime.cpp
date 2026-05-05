@@ -1063,6 +1063,29 @@ static const QoreClass* resolveAOTClassRefInProgram(QoreProgram* pgm,
     if (!qc && pseudo) {
         qc = findPseudoClassByPath(class_path);
     }
+    if (!qc) {
+        const char* req_path = class_path;
+        if (req_path[0] == ':' && req_path[1] == ':') {
+            req_path += 2;
+        }
+        QorePrivateNamespaceIterator nsi(qore_ns_private::get(*pp->RootNS));
+        while (nsi.next()) {
+            ConstClassListIterator cli(nsi.get()->classList);
+            while (cli.next()) {
+                const QoreClass* c = cli.get();
+                const char* cpath = c ? c->getPath() : nullptr;
+                if (!cpath || !*cpath) {
+                    continue;
+                }
+                if (!strcmp(cpath, class_path)) {
+                    return c;
+                }
+                if (cpath[0] == ':' && cpath[1] == ':' && !strcmp(cpath + 2, req_path)) {
+                    return c;
+                }
+            }
+        }
+    }
     return qc;
 }
 
@@ -3900,6 +3923,16 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (self_call && self_call->getMethod()) {
             ctx->call_targets[i].method = self_call->getMethod();
             ctx->call_targets[i].qc = self_call->getClass();
+            ctx->call_targets[i].method_name = self_call->getName();
+            ctx->call_targets[i].variant = self_call->getVariant();
+            if (ctx->call_targets[i].variant) {
+                ctx->call_targets[i].uvb = ctx->call_targets[i].variant->getUserVariantBase();
+            }
+            ctx->call_targets[i].class_ctx = self_call->getClassContext();
+            ctx->call_targets[i].is_self_method = true;
+            ctx->call_targets[i].self_ns_single = self_call->hasSingleName();
+            ctx->call_targets[i].self_is_copy = self_call->isCopyCall();
+            ctx->call_targets[i].self_is_abstract = self_call->isAbstractCall();
             continue;
         }
         // Dot-eval method call (obj.method())
@@ -10453,18 +10486,33 @@ static void executeInitFunctions(
                     ++failed;
                     break;
                 }
+                auto has_concrete_static_value = [&xsink](QoreVarInfo* vi) -> bool {
+                    if (!vi || !vi->eval_init) {
+                        return false;
+                    }
+                    QoreValue current = vi->getRuntimeReferencedValue();
+                    bool concrete = !current.needsEval();
+                    current.discard(&xsink);
+                    return concrete;
+                };
+                bool target_has_concrete_value = has_concrete_static_value(target_vi);
+                bool shadow_has_concrete_value = has_concrete_static_value(shadow_vi);
                 // The target program may have copied the static var from the
                 // module program with an already-initialized value.  Clean up
                 // the old value before re-assigning so assignInit finds a
                 // clean QoreLValue (avoids assert in debug builds / leak in
                 // release builds). refSelf() on result each time because
                 // assignInit takes ownership.
-                if (target_vi) {
+                if (target_vi && !target_has_concrete_value) {
                     target_vi->val.removeValue(true).discard(&xsink);
                     target_vi->assignInit(result.refSelf());
                     target_vi->eval_init = true;
                 }
-                if (shadow_vi && shadow_vi != target_vi) {
+                // The shadow module program is shared by all imports of this
+                // AOT module.  Initialize it once, but do not reset live
+                // module static state when the same module is imported into a
+                // transient dependency program.
+                if (shadow_vi && shadow_vi != target_vi && !shadow_has_concrete_value) {
                     shadow_vi->val.removeValue(true).discard(&xsink);
                     shadow_vi->assignInit(result.refSelf());
                     shadow_vi->eval_init = true;

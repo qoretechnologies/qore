@@ -1478,6 +1478,33 @@ static bool hasLastUseCallArgSlots(const IRValueSlots& values, const std::vector
     return false;
 }
 
+static QoreValue raiseIRAstFallback(ExceptionSink* xsink, const char* kind,
+        const QoreIRFunction* func, const QoreIRBasicBlock* block, size_t ip,
+        const QoreIRInstruction* inst, QoreIROpcode invoke_opcode, const QoreValue& expr) {
+    if (xsink) {
+        const QoreProgramLocation* loc = inst ? inst->loc : nullptr;
+        const AbstractQoreNode* node = expr.getInternalNode();
+        int line = loc ? loc->start_line + loc->offset : -1;
+        xsink->raiseException("IR-AST-FALLBACK-ERROR",
+            "AST expression fallback is disabled: kind='%s' function='%s' block='%s' ip=%zu "
+            "opcode=%s(%d) invoke_opcode=%s(%d) result_slot=%d expr_type=%s node_type=%s source=%s:%d",
+            kind ? kind : "unknown",
+            func ? func->name.c_str() : "",
+            block ? block->name.c_str() : "",
+            ip,
+            inst ? getOpcodeName(static_cast<int>(inst->opcode)) : "<none>",
+            inst ? static_cast<int>(inst->opcode) : -1,
+            getOpcodeName(static_cast<int>(invoke_opcode)),
+            static_cast<int>(invoke_opcode),
+            inst && inst->result.isValid() ? static_cast<int>(inst->result.id) : -1,
+            expr.getTypeName(),
+            node ? typeid(*node).name() : "<null>",
+            loc ? loc->getFileValue() : "",
+            line);
+    }
+    return QoreValue();
+}
+
 // Evaluate an invoke instruction by dispatching to the appropriate eval method.
 // Unary/binary computation opcodes use evalUnary/evalBinary with the IR operand
 // values.  Expression opcodes (Call, DotEval, LoadLValue, etc.) use evalExpr
@@ -1488,7 +1515,9 @@ static bool hasLastUseCallArgSlots(const IRValueSlots& values, const std::vector
 // computed value as the result.  Using evalBinary with the operand values returns
 // the correct computed value.
 static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
-        const IRValueSlots& values, ExceptionSink* xsink) {
+        const IRValueSlots& values, ExceptionSink* xsink,
+        const QoreIRFunction* func, const QoreIRBasicBlock* block, size_t ip,
+        bool preserve_hash_key_weak_result = false) {
     QoreIROpcode op = inv->invoke_opcode;
 
     switch (op) {
@@ -1502,7 +1531,9 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::UnaryMinusAny:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
-        case QoreIROpcode::IsCollectionType: {
+        case QoreIROpcode::IsCollectionType:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt: {
             QoreValue val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
             return QoreIRInterpreter::evalUnary(op, val, xsink);
         }
@@ -1698,7 +1729,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     return QoreValue(match);
                 }
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
         // Regex extract: use operand value instead of re-evaluating subject expression
         case QoreIROpcode::RegexExtractAny:
@@ -1714,7 +1745,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     }
                 }
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
         // Call-type opcodes: use pre-evaluated operands to avoid double-evaluation
         case QoreIROpcode::Call:
@@ -1759,14 +1790,14 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     return QoreValue();
                 }
             }
-            if (!inv->operands.empty()) {
+            if (op != QoreIROpcode::CallIndirect) {
                 const ParseNode* parse_node = nullptr;
                 if (inv->expr.hasNode()) {
                     parse_node = dynamic_cast<const ParseNode*>(inv->expr.getInternalNode());
                 }
                 const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
-                size_t arg_start = (op == QoreIROpcode::CallIndirect) ? 1 : 0;
-                QoreListNode* arg_list = buildArgList(values, inv->operands, arg_start, xsink);
+                QoreListNode* arg_list = buildArgListFromIROperands(inv->operands, 0,
+                    inv->operands.size(), values);
                 if (xsink && *xsink) {
                     if (arg_list) {
                         arg_list->deref(xsink);
@@ -1819,6 +1850,39 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (used_operands) {
                     return res;
                 }
+            } else if (!inv->operands.empty()) {
+                const ParseNode* parse_node = nullptr;
+                if (inv->expr.hasNode()) {
+                    parse_node = dynamic_cast<const ParseNode*>(inv->expr.getInternalNode());
+                }
+                const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
+                QoreListNode* arg_list = buildArgListFromIROperands(inv->operands, 1,
+                    inv->operands.size(), values);
+                if (xsink && *xsink) {
+                    if (arg_list) {
+                        arg_list->deref(xsink);
+                    }
+                    return QoreValue();
+                }
+                bool used_operands = false;
+                QoreValue res;
+                if (auto* call = dynamic_cast<const CallReferenceCallNode*>(
+                        inv->expr.getInternalNode())) {
+                    QoreValue exp = call->getExp();
+                    if (exp.hasNode()) {
+                        exp = exp.refSelf();
+                    }
+                    // Direct evalImpl() — avoids evalExprNode() overhead
+                    CallReferenceCallNode clone(loc, exp, arg_list);
+                    res = evalAndRef(&clone, xsink);
+                    used_operands = true;
+                }
+                if (!used_operands && arg_list) {
+                    arg_list->deref(xsink);
+                }
+                if (used_operands) {
+                    return res;
+                }
             }
             // Fall through: no operands or cast failed — direct eval avoids evalExprNode overhead
             // Handle ScopedObjectCallNode (bare "new") directly
@@ -1831,7 +1895,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         scoped->getVariant(), scoped->getArgs(), xsink);
                 }
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // DotEval opcodes: use pre-evaluated base to avoid double-evaluation
@@ -1852,7 +1916,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 }
             }
             // Direct eval — avoids evalExprNode() overhead
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // NewObject: construct object with pre-computed NaN-boxed operand values.
@@ -1911,13 +1975,34 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         // VrnConstruct: construct hashdecl/complex types without local variable assignment
         case QoreIROpcode::VrnConstruct: {
             if (inv->expr.hasNode()) {
-                auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(inv->expr.getInternalNode());
+                auto* node = inv->expr.getInternalNode();
+                auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node);
+                if (!inv->operands.empty()) {
+                    QoreValue init = getIRValue(values, inv->operands[0]);
+                    if (vrn && vrn->isComplexHashConstruct()) {
+                        return fromBits(qore_rt_new_complex_hash_from_hash(vrn->getTypeInfo(),
+                            toBits(init), xsink));
+                    }
+                    if (vrn && vrn->isComplexListConstruct()) {
+                        return fromBits(qore_rt_new_complex_list_from_value(vrn->getTypeInfo(),
+                            toBits(init), xsink));
+                    }
+                    if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+                        return fromBits(qore_rt_new_complex_hash_from_hash(nch->typeInfo,
+                            toBits(init), xsink));
+                    }
+                    if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+                        return fromBits(qore_rt_new_complex_list_from_value(ncl->typeInfo,
+                            toBits(init), xsink));
+                    }
+                    return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+                }
                 if (vrn) {
                     return vrn->constructValue(xsink);
                 }
             }
             // Direct eval — avoids evalExprNode() overhead
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // NewHashDeclFromHash: construct hashdecl from pre-lowered hash operand
@@ -1930,16 +2015,123 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (vrn) {
                     hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
                     runtime_check = vrn->getRuntimeCheck();
+                } else if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(inv->expr.getInternalNode())) {
+                    hd = nhd->hd;
+                    runtime_check = nhd->runtime_check;
                 }
             }
             if (hd) {
-                const QoreHashNode* init = hash_val.getType() == NT_HASH
-                    ? hash_val.get<const QoreHashNode>() : nullptr;
+                const QoreHashNode* init = nullptr;
+                if (hash_val.getType() != NT_NOTHING) {
+                    if (hash_val.getType() != NT_HASH) {
+                        xsink->raiseException("HASHDECL-INIT-ERROR",
+                            "hashdecl '%s' hash initializer value must be a hash; got type '%s' instead",
+                            hd->getName(), hash_val.getTypeName());
+                        return QoreValue();
+                    }
+                    init = hash_val.get<const QoreHashNode>();
+                }
                 QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(init,
                     runtime_check, xsink);
                 return result ? QoreValue(result) : QoreValue();
             }
             return QoreValue();
+        }
+
+        case QoreIROpcode::LoadConstant: {
+            if (auto* node = dynamic_cast<const RuntimeConstantRefNode*>(
+                    inv->expr.getInternalNode())) {
+                return fromBits(qore_rt_load_constant(node, xsink));
+            }
+            if (inv->expr.needsEval()) {
+                return inv->expr.eval(xsink);
+            }
+            return inv->expr.refSelf();
+        }
+
+        case QoreIROpcode::LoadSelfMember: {
+            if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(
+                    inv->expr.getInternalNode())) {
+                uint64_t result_bits = preserve_hash_key_weak_result
+                    ? qore_rt_load_self_member_for_call(self_ref->str, xsink)
+                    : qore_rt_load_self_member(self_ref->str, xsink);
+                return fromBits(result_bits);
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
+
+        case QoreIROpcode::NewHashDecl: {
+            if (auto* node = dynamic_cast<const NewHashDeclNode*>(inv->expr.getInternalNode())) {
+                return fromBits(qore_rt_new_hash_decl(node, xsink));
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
+
+        case QoreIROpcode::NewComplexHash: {
+            if (auto* node = dynamic_cast<const NewComplexHashNode*>(inv->expr.getInternalNode())) {
+                return fromBits(qore_rt_new_complex_hash(node, xsink));
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
+
+        case QoreIROpcode::NewComplexList: {
+            if (auto* node = dynamic_cast<const NewComplexListNode*>(inv->expr.getInternalNode())) {
+                return fromBits(qore_rt_new_complex_list(node, xsink));
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
+
+        case QoreIROpcode::LoadStaticVar: {
+            if (auto* static_var = dynamic_cast<const StaticClassVarRefNode*>(
+                    inv->expr.getInternalNode())) {
+                uint64_t result_bits = preserve_hash_key_weak_result
+                    ? qore_rt_load_static_var_for_call(&static_var->vi, static_var->str.c_str(), xsink)
+                    : qore_rt_load_static_var(&static_var->vi, static_var->str.c_str(), xsink);
+                return fromBits(result_bits);
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
+
+        case QoreIROpcode::CreateClosure: {
+            if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(inv->expr.getInternalNode())) {
+                return fromBits(qore_rt_create_closure(closure, xsink));
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
+
+        case QoreIROpcode::CreateCallRef:
+            return fromBits(qore_rt_create_call_ref(toBits(inv->expr), xsink));
+
+        case QoreIROpcode::CreateMethodRef:
+            return fromBits(qore_rt_create_method_ref(toBits(inv->expr), xsink));
+
+        case QoreIROpcode::CreateParseRef: {
+            if (auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(inv->expr.getInternalNode())) {
+                return fromBits(qore_rt_create_parse_ref(parse_ref, xsink));
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
+
+        // HashKeyAccess invoke: native hash/object member access with pre-evaluated base.
+        case QoreIROpcode::HashKeyAccess: {
+            if (!inv->operands.empty()) {
+                QoreValue base = getIRValue(values, inv->operands[0]);
+                uint64_t base_bits = toBits(base);
+                const char* key = inv->invoke_key_name.c_str();
+                uint64_t result_bits = preserve_hash_key_weak_result
+                    ? qore_rt_hash_key_access_for_call(base_bits, key, xsink)
+                    : qore_rt_hash_key_access(base_bits, key, xsink);
+                return fromBits(result_bits);
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
+        }
+
+        case QoreIROpcode::HashKeyAccessInt: {
+            if (!inv->operands.empty()) {
+                QoreValue base = getIRValue(values, inv->operands[0]);
+                return fromBits(qore_rt_hash_key_access_int(toBits(base), inv->invoke_key_name.c_str()));
+            }
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // ListPush invoke: native list push with pre-evaluated operands
@@ -1981,7 +2173,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 return cast_node->castValue(inner, xsink);
             }
             // Fallback for unresolved CastAny
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // CallClosureDirect: call closure/callref with pre-evaluated operands
@@ -2014,7 +2206,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 }
                 return fromBits(result_bits);
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // StoreLValue invoke: use pre-evaluated RHS operand and weak flag
@@ -2030,7 +2222,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         inv->weak);
                 }
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // Binary compound assignment lvalue opcodes: extract the lvalue from the
@@ -2056,7 +2248,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     return QoreIRInterpreter::evalLValueBinary(op, binop->getLeft(), right, xsink);
                 }
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // Unary lvalue opcodes: extract the lvalue from the AST and delegate
@@ -2073,7 +2265,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     return QoreIRInterpreter::evalLValueUnary(op, unaryop->getExp(), xsink);
                 }
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // Ternary lvalue opcodes: extract the lvalue and use pre-evaluated operands.
@@ -2089,7 +2281,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         length, replacement, xsink);
                 }
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // InstanceOf: native type check with pre-evaluated operand
@@ -2114,7 +2306,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         return QoreTypeInfo::runtimeAcceptsValue(ti, val) ? true : false;
                 }
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
         // Keys: native hash/object key retrieval with pre-evaluated operand
         case QoreIROpcode::KeysAny:
@@ -2142,7 +2334,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 }
                 return QoreValue();
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // Lvalue-modifying opcodes: direct eval() — avoids evalExprNode() overhead.
@@ -2185,7 +2377,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         loc ? loc->start_line : 0);
                 fflush(stderr);
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // BackgroundInt: decomposed path with pre-evaluated args
@@ -2197,13 +2389,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             if (matched) {
                 return result;
             }
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
         // Everything else (LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
         default:
-            return evalAndRef(inv->expr, xsink);
+            return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
     }
 }
 
@@ -4066,7 +4258,10 @@ next_instruction:
                     default:
                         break;
                 }
-                QoreValue res = evalInvoke(inv, values, xsink);
+                bool preserve_hash_key_weak_result = (inv->invoke_opcode == QoreIROpcode::HashKeyAccess
+                    || inv->invoke_opcode == QoreIROpcode::LoadSelfMember
+                    || inv->invoke_opcode == QoreIROpcode::LoadStaticVar) && isDotEvalOnlyBase(inst);
+                QoreValue res = evalInvoke(inv, values, xsink, &func, block, ip, preserve_hash_key_weak_result);
                 // Post-invalidation: ensure slot cache is cleared after the lvalue
                 // operation modifies TLS. Always invalidate (not repopulate) since
                 // the invoke expression may be a complex lvalue.
@@ -5894,7 +6089,39 @@ load_local_done:
             case QoreIROpcode::VrnConstruct: {
                 auto* vrn_inst = static_cast<QoreIRVrnConstructInstruction*>(inst);
                 QoreValue out;
-                if (vrn_inst->vrn) {
+                if (!vrn_inst->operands.empty()) {
+                    QoreValue init = getIRValue(values, vrn_inst->operands[0]);
+                    const AbstractQoreNode* node = vrn_inst->expr.getInternalNode();
+                    const QoreTypeInfo* typeInfo = nullptr;
+                    bool is_hash = false;
+                    bool is_list = false;
+                    if (vrn_inst->vrn) {
+                        typeInfo = vrn_inst->vrn->getTypeInfo();
+                        is_hash = vrn_inst->vrn->isComplexHashConstruct();
+                        is_list = vrn_inst->vrn->isComplexListConstruct();
+                    } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+                        typeInfo = vrn->getTypeInfo();
+                        is_hash = vrn->isComplexHashConstruct();
+                        is_list = vrn->isComplexListConstruct();
+                    } else if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+                        typeInfo = nch->typeInfo;
+                        is_hash = true;
+                    } else if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+                        typeInfo = ncl->typeInfo;
+                        is_list = true;
+                    }
+
+                    uint64_t result_bits = is_hash
+                        ? qore_rt_new_complex_hash_from_hash(typeInfo, toBits(init), xsink)
+                        : is_list
+                            ? qore_rt_new_complex_list_from_value(typeInfo, toBits(init), xsink)
+                            : toBits(QoreValue());
+                    out = fromBits(result_bits);
+                    if (!is_hash && !is_list && xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR",
+                            "vrn.construct with lowered operand has no complex hash/list target metadata");
+                    }
+                } else if (vrn_inst->vrn) {
                     uint64_t result_bits = qore_rt_vrn_construct(vrn_inst->vrn, xsink);
                     out = fromBits(result_bits);
                 } else if (vrn_inst->expr.hasNode()) {
@@ -7813,7 +8040,8 @@ load_local_done:
                 if (inst->operands.empty()) {
                     // Delegate-to-AST: operands are empty, expression stored in inst->expr
                     auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
-                    res = evalAndRef(expr_inst->expr, xsink);
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
                 } else if (inst->operands.size() < 3) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "ternary op missing operands");
@@ -7845,7 +8073,8 @@ load_local_done:
                 if (inst->operands.empty()) {
                     // Delegate-to-AST: operands are empty, expression stored in inst->expr
                     auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
-                    res = evalAndRef(expr_inst->expr, xsink);
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
                 } else if (inst->operands.size() < 4) {
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "quaternary op missing operands");
@@ -10234,10 +10463,12 @@ lvalue_path_unary_done:
                     }
                     res = QoreValue(match);
                 } else {
-                    res = evalAndRef(expr_inst->expr, xsink);
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
                 }
             } else {
-                res = evalAndRef(expr_inst->expr, xsink);
+                res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                    expr_inst->expr);
             }
             if (xsink && *xsink) {
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
@@ -10312,7 +10543,8 @@ lvalue_path_unary_done:
                             res = QoreValue(regex->extractSubstrings(*str, xsink));
                         }
                     } else {
-                        res = evalAndRef(expr_inst->expr, xsink);
+                        res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                            expr_inst->expr);
                     }
                 } else if (auto* extract_node = dynamic_cast<const QoreRegexExtractOperatorNode*>(
                         expr_inst->expr.getInternalNode())) {
@@ -10321,13 +10553,16 @@ lvalue_path_unary_done:
                         QoreStringNodeValueHelper str(str_val);
                         res = QoreValue(regex->extractSubstrings(*str, xsink));
                     } else {
-                        res = evalAndRef(expr_inst->expr, xsink);
+                        res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                            expr_inst->expr);
                     }
                 } else {
-                    res = evalAndRef(expr_inst->expr, xsink);
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
                 }
             } else {
-                res = evalAndRef(expr_inst->expr, xsink);
+                res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                    expr_inst->expr);
             }
             if (xsink && *xsink) {
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -10383,7 +10618,8 @@ lvalue_path_unary_done:
                 // Invalidate all caches BEFORE the lvalue operation to prevent COW inflation
                 cleanupLocalCaches();
                 // Direct eval() — avoids evalExprNode() overhead (refSelf + ValueHolder)
-                QoreValue res = evalAndRef(expr_inst->expr, xsink);
+                QoreValue res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                    expr_inst->expr);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -10425,7 +10661,8 @@ lvalue_path_unary_done:
                             break;
                     }
                 } else {
-                    res = evalAndRef(expr_inst->expr, xsink);
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         return false;
@@ -10463,7 +10700,8 @@ lvalue_path_unary_done:
                         return false;
                     }
                 } else {
-                    res = evalAndRef(expr_inst->expr, xsink);
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
                     if (xsink && *xsink) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         return false;
@@ -10504,7 +10742,8 @@ lvalue_path_unary_done:
                             inner ? typeid(*inner).name() : "<null>");
                         fflush(stderr);
                     }
-                    res = evalAndRef(expr_inst->expr, xsink);
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -10523,8 +10762,14 @@ lvalue_path_unary_done:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
-                // Direct eval() — avoids evalExprNode() overhead
-                QoreValue res = evalAndRef(expr_inst->expr, xsink);
+                QoreValue res;
+                if (!inst->operands.empty()) {
+                    res = QoreIRInterpreter::evalUnary(inst->opcode,
+                        getIRValue(values, inst->operands[0]), xsink);
+                } else {
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
+                }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     return false;
@@ -10572,8 +10817,8 @@ lvalue_path_unary_done:
                 if (cast_node) {
                     res = cast_node->castValue(inner, xsink);
                 } else {
-                    // Fallback for unresolved CastAny (QoreParseCastOperatorNode)
-                    res = evalExprNode(expr_inst->expr, xsink);
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -10606,10 +10851,12 @@ lvalue_path_unary_done:
                     if (dot_eval) {
                         res = dot_eval->evalWithBase(base, xsink);
                     } else {
-                        res = evalAndRef(expr_inst->expr, xsink);
+                        res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                            expr_inst->expr);
                     }
                 } else {
-                    res = evalAndRef(expr_inst->expr, xsink);
+                    res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
+                        expr_inst->expr);
                 }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
