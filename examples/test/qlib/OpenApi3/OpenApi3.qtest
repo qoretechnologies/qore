@@ -407,6 +407,8 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test OpenAPI 3.1 negative cases", \testOpenApi31NegativeCases());
         addTestCase("Test OpenAPI 3.1 type validation", \testOpenApi31TypeValidation());
         addTestCase("Test multiple content types in requestBody", \testMultipleContentTypes());
+        addTestCase("Test generator nullable nested named hash body params",
+            \testGeneratorNullableNestedNamedHashBodyParams());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -4400,5 +4402,49 @@ public class OpenApi3Test inherits QUnit::Test {
             assertTrue(exists op.body);
             assertEq("body", op.body.name);
         }
+    }
+
+    testGeneratorNullableNestedNamedHashBodyParams() {
+        string source =
+            "/** @REST /v1/example\n"
+            "*/\n"
+            "class ExampleRestClass {\n"
+            "    /** @REST PUT action=getOptions\n"
+            "        @SCHEMA\n"
+            "        @summary Get options\n"
+            "        @desc Gets options.\n"
+            "        @params\n"
+            "        - output_type (*hash TypeSpecInfo): output type\n"
+            "          - type (string): type source\n"
+            "          - name (string): type name\n"
+            "          - options (*hash UndefinedHash): provider options\n"
+            "        - output_field (string): output field\n"
+            "        @return (hash ResultInfo): result\n"
+            "        - ok (bool): True on success\n"
+            "        @ENDSCHEMA\n"
+            "    */\n"
+            "    hash<auto> putGetOptions(hash<auto> cx, *hash<auto> ah) { }\n"
+            "}\n";
+
+        list<hash<RestMethodInfo>> methods =
+            OpenApi3SchemaTokenizer::parseSourceContent(source);
+        assertEq(1, methods.size());
+
+        OpenApi3SchemaGenerator gen({"title": "Generator Test",
+            "version": "1.0"});
+        gen.addMethod("/v1/example", methods[0]);
+
+        hash<auto> spec = gen.generate();
+        list<string> path_keys = keys spec.paths;
+        assertEq(("/v1/example/getOptions",), path_keys);
+        hash<auto> body_schema = spec.paths{path_keys[0]}.put.requestBody
+            .content{"application/json"}.schema;
+        hash<auto> output_type = body_schema.properties.output_type;
+        assertEq(True, output_type.nullable);
+        assertEq(2, output_type.allOf.size());
+        assertEq("#/components/schemas/TypeSpecInfo",
+            output_type.allOf[0]."\$ref");
+        assertTrue(exists output_type.allOf[1].properties.type);
+        assertTrue(exists spec.components.schemas.TypeSpecInfo);
     }
 }

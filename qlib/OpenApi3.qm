@@ -6121,7 +6121,7 @@ public class OpenApi3SchemaGenerator {
             return schema;
         }
         if (schema."\$ref") {
-            hash<auto> rv = {
+            hash<auto!> rv = {
                 "allOf": (schema, child_schema),
             };
             if (schema.nullable) {
