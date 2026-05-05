@@ -750,7 +750,8 @@ static uint64_t computeSourceHash(const char* label) {
 
 //! Report AOT compilation statistics
 static void reportAOTCompileStats(const char* label, int compiled_count, int total_funcs,
-        int failed_count, const std::vector<AOTCompiledFunc>& compiled_funcs) {
+        int failed_count, const std::vector<AOTCompiledFunc>& compiled_funcs,
+        const char* target_triple, bool metadata_only = false) {
     int unsupported_count = 0;
     int handler_fallback_count = 0;
     for (auto& cf : compiled_funcs) {
@@ -771,18 +772,29 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
             ++handler_fallback_count;
         }
         if ((has_unsup || has_handler_issue) && getenv("QORE_AOT_DEBUG")) {
-            fprintf(stderr, "AOT: function '%s' is not fully serializable (%s%s)\n",
+            fprintf(stderr, "AOT: function '%s' is missing required AOT metadata (%s%s)\n",
                 cf.name.c_str(),
                 has_unsup ? "unsupported exprs" : "",
                 has_handler_issue ? (has_unsup ? " + missing handler IRs" : "missing handler IRs") : "");
         }
     }
-    printf("AOT %s: %d/%d functions pre-compiled (%d failed, %d skipped)\n",
-        label, compiled_count, total_funcs, failed_count,
-        total_funcs - compiled_count - failed_count);
+    std::string resolved_target = target_triple && *target_triple
+        ? target_triple : llvm::sys::getDefaultTargetTriple();
+    int skipped_count = total_funcs - compiled_count - failed_count;
+    const char* action = metadata_only
+        ? "prepared AOT metadata for"
+        : "generated native code for";
+    if (failed_count || skipped_count) {
+        printf("AOT %s: %s %d/%d functions (target: %s; %d failed, %d skipped)\n",
+            label, action, compiled_count, total_funcs, resolved_target.c_str(),
+            failed_count, skipped_count);
+    } else {
+        printf("AOT %s: %s %d functions (target: %s)\n",
+            label, action, compiled_count, resolved_target.c_str());
+    }
     int total_fallback = unsupported_count + handler_fallback_count;
     if (total_fallback > 0) {
-        printf("AOT: %d/%d functions fully serialized, %d not fully serializable",
+        printf("AOT: incomplete AOT metadata: %d/%d functions complete, %d missing required metadata",
             compiled_count - total_fallback, compiled_count, total_fallback);
         if (unsupported_count > 0 && handler_fallback_count > 0) {
             printf(" (%d unsupported exprs, %d missing handlers)",
@@ -792,8 +804,7 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
         }
         printf("\n");
     } else {
-        printf("AOT: all %d functions fully serialized\n",
-            compiled_count);
+        printf("AOT: complete AOT metadata generated for %d functions\n", compiled_count);
     }
 }
 
@@ -885,7 +896,7 @@ static bool getFallbackRequirementReason(const AOTCompiledFuncWithSlots& f, std:
     return needs_fallback;
 }
 
-//! Reject source fallback requirements; all AOT objects must be fully serialized.
+//! Reject source fallback requirements; all AOT objects must have complete metadata.
 static bool rejectSourceFallbackRequirements(const std::vector<AOTCompiledFuncWithSlots>& funcs,
         std::string& error) {
     std::vector<std::string> failures;
@@ -912,8 +923,8 @@ static bool rejectSourceFallbackRequirements(const std::vector<AOTCompiledFuncWi
 
     error = "AOT source fallback is disabled; ";
     error += std::to_string(fallback_count);
-    error += fallback_count == 1 ? " function is not fully serializable" :
-        " functions are not fully serializable";
+    error += fallback_count == 1 ? " function is missing required AOT metadata" :
+        " functions are missing required AOT metadata";
     error += ": ";
     for (size_t i = 0; i < failures.size(); ++i) {
         if (i) {
@@ -4031,7 +4042,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
 
     // Report compilation stats
     reportAOTCompileStats("compilation", compiled_count, total_funcs + 1,
-        failed_count, compiled_funcs);
+        failed_count, compiled_funcs, target_triple);
 
     // Step 3: Build serialized metadata and generate main() + function registration table
     {
@@ -5941,7 +5952,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     }
 
     reportAOTCompileStats("module compilation", compiled_count, total_funcs,
-        failed_count, compiled_funcs);
+        failed_count, compiled_funcs, target_triple);
 
     // Step 4: Generate module ABI with serialized metadata
     {
@@ -6406,7 +6417,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         }
 
         reportAOTCompileStats("split module compilation", compiled_count, total_funcs,
-            failed_count, compiled_funcs);
+            failed_count, compiled_funcs, target_triple);
 
         // Step 10: Generate module ABI with serialized metadata
         {
@@ -6785,7 +6796,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     }
 
     reportAOTCompileStats("script-context .qo (batch)",
-        compiled_count, total_funcs, failed_count, compiled_funcs);
+        compiled_count, total_funcs, failed_count, compiled_funcs, target_triple);
 
     // Build the fragment metadata blob.
     std::vector<uint8_t> metadata_blob;
@@ -7419,7 +7430,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     }
 
     reportAOTCompileStats("script-context .qo", compiled_count, total_funcs,
-        failed_count, compiled_funcs);
+        failed_count, compiled_funcs, target_triple);
 
     // Build the fragment metadata blob covering just this file's
     // contributions (slice 5 format).  No module-info globals, no
@@ -7893,7 +7904,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
 
         reportAOTCompileStats(
             is_primary ? "per-file .qo (primary)" : "per-file .qo (secondary)",
-            compiled_count, total_funcs, failed_count, compiled_funcs);
+            compiled_count, total_funcs, failed_count, compiled_funcs, target_triple);
 
         // Phase 4 slice 5: build the per-file fragment metadata blob
         // (uncompressed).  Both primary and secondary `.qo`s carry a
@@ -8332,7 +8343,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         }
 
         reportAOTCompileStats("aggregator (metadata-only)",
-            compiled_count, total_funcs, failed_count, compiled_funcs);
+            compiled_count, total_funcs, failed_count, compiled_funcs, target_triple, true);
 
         // Build aggregated metadata blob (same binary format as
         // compileSeparatedModule) and wire it into generateModuleABIV2
@@ -8809,7 +8820,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         }
 
         reportAOTCompileStats("archive aggregator (metadata-only)",
-            compiled_count, total_funcs, failed_count, compiled_funcs);
+            compiled_count, total_funcs, failed_count, compiled_funcs, target_triple, true);
 
         {
             QoreAOTBinaryWriter writer;
