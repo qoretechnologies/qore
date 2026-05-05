@@ -117,20 +117,26 @@ class BinaryHandler inherits AbstractHttpRequestHandler {
     }
 }
 
-#! Handler that injects a fake Alt-Svc header pointing to a non-QUIC port
+#! Handler that injects a fake Alt-Svc header pointing to a non-QUIC alt-authority
+/** @param fake_port the port advertised in the Alt-Svc h3 alternative
+    @param fake_host the host advertised; empty (default) means same-origin per
+        RFC 7838 §2.1 — supply a different string to test the cross-origin filter
+*/
 class FakeAltSvcHandler inherits AbstractHttpRequestHandler {
     private {
         int m_fake_port;
+        string m_fake_host;
     }
 
-    constructor(int fake_port) {
+    constructor(int fake_port, string fake_host = "") {
         m_fake_port = fake_port;
+        m_fake_host = fake_host;
     }
 
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
         return makeResponse(200, "Hello World", {
             "Content-Type": "text/plain",
-            "Alt-Svc": sprintf("h3=\":%d\"; ma=3600", m_fake_port),
+            "Alt-Svc": sprintf("h3=\"%s:%d\"; ma=3600", m_fake_host, m_fake_port),
         });
     }
 }
@@ -302,6 +308,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("ConnMgr async Alt-Svc H2→H3 upgrade", \testConnMgrAsyncAltSvcUpgrade());
         addTestCase("ConnMgr Alt-Svc ignored with proxy", \testConnMgrAltSvcProxyGuard());
         addTestCase("ConnMgr Alt-Svc cross-origin ignored", \testConnMgrAltSvcCrossOrigin());
+        addTestCase("ConnMgr Alt-Svc H3 unreachable falls back",
+            \testConnMgrAltSvcUnreachableH3FallsBack());
 
         # Group 8: Happy-eyeballs + dual-stack Alt-Svc (RFC 8305)
         addTestCase("Alt-Svc H3 upgrade via localhost fast path",
@@ -1485,17 +1493,25 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
     }
 
-    #! Test: cross-origin Alt-Svc is ignored
+    #! Test: cross-origin Alt-Svc is ignored (host mismatch per RFC 7838 §2.1)
+    /** Asserts the cross-origin filter in HttpClientConnectionManager.checkAltSvc():
+        when the alt-authority host differs from the origin host, the manager
+        must drop the entry without caching h3 and without draining the pooled
+        H2 connection.  The second request therefore reuses the live H2
+        connection with no upgrade attempt — no UDP timeout window in play.
+    */
     testConnMgrAltSvcCrossOrigin() {
-        # Create a TCP-only server that returns Alt-Svc pointing to a different host
         HttpServer server(<HttpServerOptionInfo>{
             "logger": mLogger,
             "enable_h3": False,
         });
         on_exit delete server;
 
-        # Handler returns Alt-Svc with a cross-origin host
-        server.setHandler("xorigin", "/test", NOTHING, new FakeAltSvcHandler(443));
+        # Alt-Svc advertises h3 on a host that differs from the origin
+        # (origin is 127.0.0.1).  The host-string mismatch triggers the
+        # cross-origin filter regardless of DNS — no resolution happens.
+        server.setHandler("xorigin", "/test", NOTHING,
+            new FakeAltSvcHandler(443, "otherhost.invalid"));
         server.waitForAsyncIo();
         hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
             "service": "0",
@@ -1517,21 +1533,63 @@ l50Xb2GWQesIt9k5jF5IOw==
 
         string url = sprintf("https://127.0.0.1:%d", info.port);
 
-        # First request gets Alt-Svc pointing to port 443 (same host, but
-        # FakeAltSvcHandler uses the configured port — let's verify the
-        # manager doesn't blindly upgrade)
         hash<auto> resp1 = mgr.request(url, "GET", "/test");
         assertEq(200, resp1.status_code, "cross-origin: first request OK");
+        assertTrue(exists resp1.headers."alt-svc",
+            "cross-origin: response carried Alt-Svc header");
 
-        # Second request should still be H2 — the fake Alt-Svc port (443)
-        # doesn't match a running QUIC server, so even if cached, the
-        # connection would fail and fall back to H2
+        # No h3 cache, no H2 drain → second request reuses pooled H2 → fast.
         hash<auto> resp2 = mgr.request(url, "GET", "/test");
         assertEq(200, resp2.status_code, "cross-origin: second request OK");
-
-        # Verify we're still on H2 (no successful H3 upgrade)
         assertNeq("h3", resp2.protocol ?? "h2",
-            "cross-origin: should NOT upgrade to H3 with mismatched Alt-Svc port");
+            "cross-origin: must NOT upgrade to H3 when alt-host differs from origin");
+    }
+
+    #! Test: same-origin Alt-Svc to an unreachable H3 port falls back to H2
+    /** Distinct from the cross-origin case: here the alt-authority host
+        matches the origin so the manager DOES cache h3 and drain the H2
+        connection.  The second request attempts H3 to the advertised port
+        (1, with no QUIC listener), which fails fast on UDP loopback (ICMP
+        Port Unreachable).  The catch in createConnection() then builds a
+        fresh H2 connection.  connect_timeout is set low as a backstop in
+        case the platform doesn't surface ICMP errors.
+    */
+    testConnMgrAltSvcUnreachableH3FallsBack() {
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "enable_h3": False,
+        });
+        on_exit delete server;
+
+        server.setHandler("fake-altsvc", "/test", NOTHING, new FakeAltSvcHandler(1));
+        server.waitForAsyncIo();
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": "0",
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        server.waitForAsyncIo();
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "auto",
+                "accept_all_certs": True,
+                "logger": mLogger,
+                "request_timeout": 15s,
+                "connect_timeout": 500ms,
+            },
+        );
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", info.port);
+
+        hash<auto> resp1 = mgr.request(url, "GET", "/test");
+        assertEq(200, resp1.status_code, "fallback: first request OK");
+
+        hash<auto> resp2 = mgr.request(url, "GET", "/test");
+        assertEq(200, resp2.status_code, "fallback: second request OK after H3 fail");
+        assertNeq("h3", resp2.protocol ?? "h2",
+            "fallback: H3 to unreachable port must fall back to H2");
     }
 
     #! Regression: Alt-Svc H3 upgrade via "localhost" must not stall.
