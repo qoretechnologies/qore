@@ -189,6 +189,10 @@ class AOTSmokeTest inherits QUnit::Test {
             \testBatchFragmentConstantReverseMapOrder());
         addTestCase("AOT batch fragments defer class constant refs",
             \testBatchFragmentDeferredClassConstantRefs());
+        addTestCase("AOT batch fragments filter statement locations",
+            \testBatchFragmentStatementLocFilter());
+        addTestCase("AOT qcc dump modern slot expressions",
+            \testQccDumpModernSlotExprKinds());
         # Strip source: static class variable access (module)
         addTestCase("AOT strip source static varref module", \testStripSourceStaticVarrefModule());
         addTestCase("AOT strip source module init function ref",
@@ -271,6 +275,11 @@ class AOTSmokeTest inherits QUnit::Test {
         string opts = symbols ? "--dump-info --dump-symbols" : "--dump-info";
         return backquote(sprintf("LD_LIBRARY_PATH=%s %s %s %s 2>&1",
             libqore_dir, qcc_bin, opts, path));
+    }
+
+    private string dumpQccSections(string path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s --dump-info --dump-sections %s 2>&1",
+            libqore_dir, qcc_bin, path));
     }
 
     private int aotMetadataOffset(string path, string dump_out) {
@@ -4907,6 +4916,110 @@ sub main() {
             libqore_dir, app_path));
         assertEq("QorusServer\nint\nEXIT=0\n", run_out,
             "batch fragment member/class const refs resolve after shell phase: " + run_out);
+    }
+
+    testBatchFragmentStatementLocFilter() {
+        # Batch mode parses all source files in one QoreProgram and emits one
+        # `.qo` per source.  Each fragment must serialize only its own
+        # statement-location metadata; otherwise small fragments grow with the
+        # whole context and spend seconds registering irrelevant slot maps.
+        string tmp_dir = sprintf("/tmp/aot_batch_stmt_locs_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string small_path = tmp_dir + "/small.qr";
+        string large_path = tmp_dir + "/large.qr";
+        {
+            File f();
+            f.open2(small_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+int sub small() {
+    return 1;
+}
+");
+            f.close();
+        }
+        {
+            string large_body;
+            for (int i = 0; i < 500; ++i) {
+                large_body += sprintf("    i += %d;\n", i);
+            }
+
+            File f();
+            f.open2(large_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+int sub large() {
+    int i = 0;
+" + large_body + "    return i;
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, small_path, large_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc batch compiles statement-location filter fragments: " + compile_out);
+
+        *list<string> small_match = (compile_out =~ x/([^\n]+small_qr\.qo): batch-compiled/);
+        assertTrue(small_match != NOTHING,
+            "qcc output reports small fragment path: " + compile_out);
+
+        string dump_out = dumpQccSections(small_match[0]);
+        *list<string> slot_match = (dump_out =~ x/SLOT_MAPS\s+type=11 offset=[0-9]+ size=([0-9]+)/);
+        assertTrue(slot_match != NOTHING,
+            "qcc dump reports SLOT_MAPS section for small fragment: " + dump_out);
+
+        int slot_size = slot_match[0].toInt();
+        assertTrue(slot_size < 8192,
+            sprintf("small fragment SLOT_MAPS section is context-local (%d bytes): %s",
+                slot_size, dump_out));
+    }
+
+    testQccDumpModernSlotExprKinds() {
+        # qcc --dump-info has its own lightweight SLOT_MAPS parser. Keep it
+        # synchronized with the writer/runtime registries so diagnostics do not
+        # report valid AOT binaries as malformed when newer slot expression
+        # kinds appear in dynamic lvalue paths.
+        hash<auto> paths = writeTempScript("%modern
+%require-types
+
+hash<auto> sub f(int i) {
+    hash<auto> h;
+    h.(cast<string>(i & 3)) = i << 1;
+    h.(cast<string>(i ^ 2)) = i >> 1;
+    return h;
+}
+
+printf(\"%y\\n\", f(3));
+");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -b --compile --output %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin, paths.out, paths.src));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "modern slot expression probe compiles: " + compile_out);
+
+        string dump_out = dumpQccInfo(paths.out, False);
+        assertTrue(dump_out.regex("expr-slots=[1-9]"),
+            "probe generated slot expressions: " + dump_out);
+        assertTrue(dump_out.regex("malformed=0"),
+            "qcc dump parses modern slot expression payloads: " + dump_out);
+        assertTrue(!dump_out.regex("malformed=[1-9]"),
+            "qcc dump reports no malformed slot expression payloads: " + dump_out);
     }
 
     testStripSourceStaticVarrefModule() {

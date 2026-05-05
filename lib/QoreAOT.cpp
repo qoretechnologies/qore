@@ -455,10 +455,12 @@ struct AOTCompiledFunc {
     std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs;
 };
 
-static void attachAOTProgramStatementLocs(QoreProgram* pgm,
-        std::vector<AOTCompiledFuncWithSlots>& func_slots) {
+static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
+        std::vector<AOTCompiledFuncWithSlots>& func_slots,
+        std::string& error,
+        const char* file_filter = nullptr) {
     if (!pgm || func_slots.empty()) {
-        return;
+        return true;
     }
 
     qore_program_private* pp = qore_program_private::get(*pgm);
@@ -467,11 +469,19 @@ static void attachAOTProgramStatementLocs(QoreProgram* pgm,
 
     std::vector<AOTCompiledFuncWithSlots::AOTStmtLocEntry> locs;
     std::unordered_set<std::string> seen;
-    for (const QoreProgramLocation* loc : stmt_locs) {
+    for (size_t i = 0; i < stmt_locs.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT statement-location metadata collection")) {
+            error = "AOT statement-location metadata collection cancelled";
+            return false;
+        }
+        const QoreProgramLocation* loc = stmt_locs[i];
         if (!loc || loc->start_line <= 0) {
             continue;
         }
         const char* file = loc->getFileValue();
+        if (file_filter && strcmp(file, file_filter)) {
+            continue;
+        }
         const char* source = loc->getSourceValue();
         std::string key(file);
         key.push_back('\n');
@@ -498,6 +508,7 @@ static void attachAOTProgramStatementLocs(QoreProgram* pgm,
     if (!locs.empty()) {
         func_slots.front().aot_stmt_locs = std::move(locs);
     }
+    return true;
 }
 
 // ---- Feature flag helpers ----
@@ -4157,7 +4168,9 @@ bool QoreAOT::compile(QoreProgram* pgm,
             setAOTInitFuncConstantExclusions(fws, cif);
             func_slots.push_back(std::move(fws));
         }
-        attachAOTProgramStatementLocs(pgm, func_slots);
+        if (!attachAOTProgramStatementLocs(pgm, func_slots, error)) {
+            return false;
+        }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
@@ -6031,7 +6044,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             setAOTInitFuncConstantExclusions(fws, cif);
             func_slots.push_back(std::move(fws));
         }
-        attachAOTProgramStatementLocs(*qpgm, func_slots);
+        if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
+            return false;
+        }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
@@ -6494,7 +6509,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 setAOTInitFuncConstantExclusions(fws, cif);
                 func_slots.push_back(std::move(fws));
             }
-            attachAOTProgramStatementLocs(*qpgm, func_slots);
+            if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
+                return false;
+            }
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
                 return false;
             }
@@ -6862,7 +6879,9 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             setAOTInitFuncConstantExclusions(fws, cif);
             func_slots.push_back(std::move(fws));
         }
-        attachAOTProgramStatementLocs(qpgm, func_slots);
+        if (!attachAOTProgramStatementLocs(qpgm, func_slots, error, target_canon.c_str())) {
+            return false;
+        }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
@@ -7516,7 +7535,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             setAOTInitFuncConstantExclusions(fws, cif);
             func_slots.push_back(std::move(fws));
         }
-        attachAOTProgramStatementLocs(*qpgm, func_slots);
+        if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
+            return false;
+        }
         if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
             return false;
         }
@@ -8004,7 +8025,9 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 setAOTInitFuncConstantExclusions(fws, cif);
                 func_slots.push_back(std::move(fws));
             }
-            attachAOTProgramStatementLocs(*qpgm, func_slots);
+            if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error, target_canon.c_str())) {
+                return false;
+            }
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
                 return false;
             }
@@ -8436,7 +8459,9 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 setAOTInitFuncConstantExclusions(fws, cif);
                 func_slots.push_back(std::move(fws));
             }
-            attachAOTProgramStatementLocs(*qpgm, func_slots);
+            if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
+                return false;
+            }
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
                 return false;
             }
@@ -8908,7 +8933,9 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 setAOTInitFuncConstantExclusions(fws, cif);
                 func_slots.push_back(std::move(fws));
             }
-            attachAOTProgramStatementLocs(*qpgm, func_slots);
+            if (!attachAOTProgramStatementLocs(*qpgm, func_slots, error)) {
+                return false;
+            }
             if (!serializeSlotMaps(writer, func_slots, &const_reverse_map, error)) {
                 return false;
             }

@@ -1398,6 +1398,11 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::MULTIPLY:
         case AOTExprKind::DIVIDE:
         case AOTExprKind::MODULO:
+        case AOTExprKind::BIT_AND:
+        case AOTExprKind::BIT_OR:
+        case AOTExprKind::BIT_XOR:
+        case AOTExprKind::SHIFT_LEFT:
+        case AOTExprKind::SHIFT_RIGHT:
         case AOTExprKind::NULL_COAL:
         case AOTExprKind::VALUE_COAL:
         case AOTExprKind::FOLDL:
@@ -1488,6 +1493,11 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
+        case AOTExprKind::SQUARE_BRACKET_RANGE:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx)
+                && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
         case AOTExprKind::CALL_REF:
         case AOTExprKind::OBJ_METHOD_REF:
         case AOTExprKind::CONST_NOTHING:
@@ -1567,7 +1577,8 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::CAST_COMPLEX_HASH:
         case AOTExprKind::CAST_COMPLEX_LIST:
         case AOTExprKind::CAST_CLASS:
-        case AOTExprKind::CAST_ENUM: {
+        case AOTExprKind::CAST_ENUM:
+        case AOTExprKind::CAST_SCALAR: {
             if (!dump_skip_string_ref(reader, p, end) || !dump_skip_bytes(p, end, 1)) {
                 return false;
             }
@@ -1600,6 +1611,9 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::OBJ_METHOD_REF_EXPR:
             return dump_skip_string_ref(reader, p, end)
                 && dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
+
+        case AOTExprKind::DOT_EVAL_EXPR:
+            return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::CLOSURE_CREATE: {
             if (!dump_skip_string_ref(reader, p, end)
