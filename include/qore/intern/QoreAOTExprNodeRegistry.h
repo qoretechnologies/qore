@@ -77,4 +77,7 @@ inline const QoreAOTExprNodeKindInfo* getAOTExprNodeKindInfo(uint8_t kind_byte) 
     return info.name ? &info : nullptr;
 }
 
+//! Validate expression node registry invariants
+bool qore_aot_validate_expr_node_registry(std::string& error);
+
 #endif // _QORE_AOTEXPRNODEREGISTRY_H

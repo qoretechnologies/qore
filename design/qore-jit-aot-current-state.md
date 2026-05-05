@@ -32,7 +32,8 @@ The JIT path must preserve:
 
 - `ExceptionSink` semantics through native exception unwinding.
 - Qore reference ownership for every returned value.
-- Local and closure variable coherence when handlers or AST fallback paths run.
+- Local and closure variable coherence when runtime helpers can observe or
+  mutate variables outside native SSA state.
 - Debugger-driven AST override in tiered mode.
 
 ## Tiered Execution
@@ -75,7 +76,33 @@ the source modules. Module lookup prefers the compiled `.qmod` over the `.qm`
 when both are present in the same module location.
 
 This makes the installed default fast while preserving source modules for
-documentation, fallback, and development.
+documentation, inspection, and development.
+
+## Lowering And Fallback Policy
+
+IR/JIT/AOT lowering must be fail-closed. Unsupported expressions,
+instructions, or metadata combinations must produce diagnostics with enough
+opcode, node, type, and source-location context to implement native lowering;
+they must not silently emit `EXPR_TREE`, `GENERIC_EVAL`, or source fallback.
+
+AOT artifacts require complete serialized metadata. Source text can be embedded
+for diagnostics or inspection, but it is not a runtime fallback for missing AOT
+metadata.
+
+## Validated Registries
+
+The current implementation relies on explicit registries for extension safety:
+
+- Opcode metadata is validated before IR verification.
+- IR expression lowering uses explicit claim predicates; a handler that claims
+  a node must either return IR or report why native lowering is impossible.
+- AOT expression-slot, expression-node, and instruction-group registries are
+  validated before serialization; unknown instruction subclasses fail
+  serialization with the dynamic C++ type name.
+- JIT runtime helpers are listed in one registry in `JITRuntime.cpp`; the JIT
+  validates names, addresses, and duplicates before registering ORC symbols.
+- Type-spec match dispatch validates complete, duplicate-free coverage of the
+  closed built-in `q_typespec_t` set before dispatch.
 
 ## Current Hardening Rules
 

@@ -129,9 +129,11 @@ cmake -S . -B build -DQORE_BUILD_AOT_MODULES=OFF
 
     @subsection aot_source_visibility Source Visibility
 
-    \c qcc defaults to stripped source. Use \c --include-source when runtime
-    fallback or source-rich diagnostics are required. Source-stripped artifacts
-    contain QORD metadata and native code but not readable Qore source text.
+    \c qcc defaults to stripped source. Use \c --include-source when
+    source-rich diagnostics or source inspection are required.
+    Source-stripped artifacts contain QORD metadata and native code but not
+    readable Qore source text. Missing AOT metadata is an error; source is not
+    used as a runtime fallback for incomplete artifacts.
 
     @subsection qcc_tool Qore Code Compiler (qcc)
 

@@ -73,6 +73,17 @@ static int expectedOperands(QoreIROpcode op) {
     return getOpcodeExpectedOperands(static_cast<int>(op));
 }
 
+static const std::string& getOpcodeRegistryValidationError() {
+    static const std::string registry_error = []() {
+        std::string error;
+        if (!qore_ir_validate_opcode_registry(error)) {
+            return "IR opcode registry validation failed: " + error;
+        }
+        return std::string();
+    }();
+    return registry_error;
+}
+
 // Collect all branch targets (blocks that can be reached)
 static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const QoreIRFunction& func) {
     std::unordered_set<const QoreIRBasicBlock*> targets;
@@ -148,6 +159,12 @@ static std::unordered_set<const QoreIRBasicBlock*> collectBranchTargets(const Qo
 }
 
 bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
+    const std::string& registry_error = getOpcodeRegistryValidationError();
+    if (!registry_error.empty()) {
+        error = registry_error;
+        return false;
+    }
+
     if (func.blocks.empty()) {
         error = "function has no basic blocks";
         return false;

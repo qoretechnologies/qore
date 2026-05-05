@@ -32,6 +32,9 @@
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QoreTypeSpecMatchRegistry.h"
 
+#include <array>
+#include <string>
+
 // Defined in QoreTypeInfo.cpp — used by match handlers
 DLLLOCAL qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTypeInfo* that_type,
     bool& may_not_match, bool& may_need_filter);
@@ -123,4 +126,42 @@ const QoreTypeSpecMatchHandlerInfo* getQoreTypeSpecMatchHandler(q_typespec_t typ
         }
     }
     return nullptr;
+}
+
+bool qore_type_spec_validate_match_registry(std::string& error) {
+    std::array<bool, QORE_TYPE_SPEC_COUNT> seen{};
+    for (const QoreTypeSpecMatchHandlerInfo* info = QORE_TYPE_SPEC_MATCH_REGISTRY; info->name; ++info) {
+        if (!info->name || !*info->name) {
+            error = "type-spec match registry contains an unnamed entry";
+            return false;
+        }
+        if (!info->description || !*info->description) {
+            error = "type-spec match registry entry '" + std::string(info->name) + "' has no description";
+            return false;
+        }
+        if (!info->handler) {
+            error = "type-spec match registry entry '" + std::string(info->name) + "' has no handler";
+            return false;
+        }
+        unsigned typespec = static_cast<unsigned>(info->typespec);
+        if (typespec >= QORE_TYPE_SPEC_COUNT) {
+            error = "type-spec match registry entry '" + std::string(info->name)
+                + "' uses invalid type-spec id " + std::to_string(typespec);
+            return false;
+        }
+        if (seen[typespec]) {
+            error = "duplicate type-spec match registry entry for type-spec id " + std::to_string(typespec)
+                + " ('" + std::string(info->name) + "')";
+            return false;
+        }
+        seen[typespec] = true;
+    }
+
+    for (unsigned i = 0; i < QORE_TYPE_SPEC_COUNT; ++i) {
+        if (!seen[i]) {
+            error = "type-spec match registry is missing type-spec id " + std::to_string(i);
+            return false;
+        }
+    }
+    return true;
 }

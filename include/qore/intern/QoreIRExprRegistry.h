@@ -45,9 +45,13 @@ struct QoreIRExprCtx {
 // Handler function type
 typedef QoreIRValue (*QoreIRExprHandlerFn)(QoreIRExprCtx&);
 
+// Claim function type. Returns true when the handler owns the expression shape.
+typedef bool (*QoreIRExprClaimFn)(const QoreValue&);
+
 // Registry entry structure
 struct QoreIRExprHandlerInfo {
     const char* name;
+    QoreIRExprClaimFn claim;
     QoreIRExprHandlerFn handler;
     const char* description;
 };
@@ -55,5 +59,8 @@ struct QoreIRExprHandlerInfo {
 // Registry table and access function
 extern const QoreIRExprHandlerInfo QORE_IR_EXPR_REGISTRY[];
 extern const size_t QORE_IR_EXPR_REGISTRY_SIZE;
+
+//! Validate expression lowering registry invariants
+bool qore_ir_validate_expr_registry(std::string& error);
 
 #endif

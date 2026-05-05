@@ -3687,15 +3687,69 @@ static bool isInvokeLValueNode(const AbstractQoreNode* node) {
         || dynamic_cast<const QoreSpliceOperatorNode*>(node);
 }
 
+static std::string describeIRLoweringExpr(const QoreValue& expr) {
+    std::string desc = "QoreValue type '";
+    desc += expr.getTypeName();
+    desc += "'";
+
+    const AbstractQoreNode* node = expr.hasNode() ? expr.getInternalNode() : nullptr;
+    if (!node) {
+        return desc;
+    }
+
+    desc += ", node '";
+    desc += node->getTypeName();
+    desc += "'";
+
+    const auto* parse_node = dynamic_cast<const ParseNode*>(node);
+    if (parse_node && parse_node->loc) {
+        desc += " at ";
+        desc += parse_node->loc->getFile() ? parse_node->loc->getFile() : "<unknown>";
+        desc += ":";
+        desc += std::to_string(parse_node->loc->start_line);
+    }
+    return desc;
+}
+
+static const std::string& getIRExprRegistryValidationError() {
+    static const std::string registry_error = []() {
+        std::string error;
+        if (!qore_ir_validate_expr_registry(error)) {
+            return "IR expression registry validation failed: " + error;
+        }
+        return std::string();
+    }();
+    return registry_error;
+}
+
 QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& error) {
-    // Dispatch through registry of 80 expression handlers
+    const std::string& registry_error = getIRExprRegistryValidationError();
+    if (!registry_error.empty()) {
+        error = registry_error;
+        return QoreIRValue();
+    }
+
+    // Dispatch through explicitly claimed expression handlers. Once a handler
+    // claims an expression shape, silent NotApplicable is an error: this keeps
+    // future handlers/plugins from relying on ordering fallthrough.
     for (size_t i = 0; i < QORE_IR_EXPR_REGISTRY_SIZE; ++i) {
         const QoreIRExprHandlerInfo& info = QORE_IR_EXPR_REGISTRY[i];
+        if (!info.claim(expr)) {
+            continue;
+        }
         QoreIRExprCtx ctx{*this, expr, error};
         QoreIRValue result = info.handler(ctx);
         if (result.isValid() || !error.empty()) {
             return result;
         }
+
+        error = "IR expression handler '";
+        error += info.name ? info.name : "<unnamed>";
+        error += "' claimed ";
+        error += describeIRLoweringExpr(expr);
+        error += " but returned no IR value and no diagnostic; fix the handler claim predicate or report why "
+            "the expression cannot be lowered";
+        return QoreIRValue();
     }
 
     const AbstractQoreNode* node = expr.getInternalNode();
@@ -4273,9 +4327,7 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             values.reserve(list->size());
             for (size_t i = 0; i < list->size(); ++i) {
                 QoreValue entry = list->retrieveEntry(i);
-                QoreIRValue lowered = isContainerLiteral(entry)
-                    ? lowerContainerLiteral(entry, error)
-                    : lowerConstant(entry, error);
+                QoreIRValue lowered = lowerContainerElement(entry, error);
                 if (!lowered.isValid()) {
                     return QoreIRValue();
                 }
@@ -4298,9 +4350,7 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
                 const char* key = it.getKey();
                 values.push_back(builder.createConstString(key ? key : "")->result);
                 QoreValue entry = it.get();
-                QoreIRValue lowered = isContainerLiteral(entry)
-                    ? lowerContainerLiteral(entry, error)
-                    : lowerConstant(entry, error);
+                QoreIRValue lowered = lowerContainerElement(entry, error);
                 if (!lowered.isValid()) {
                     return QoreIRValue();
                 }

@@ -684,10 +684,11 @@ static_assert(QORE_IR_MAX_OPCODE == 369, "QORE_IR_MAX_OPCODE changed — update 
 //! Legacy files still have property functions for backward compatibility:
 //!   - lib/QoreIRLowering.cpp: opcodeCanReturnNothing(), opcodeNeverReturnsNothing()
 //!   - lib/QoreIRPrinter.cpp: opcodeName()
-//!   - QoreIR.h: isTerminator() (for inline use in hot paths)
 //!
-//! These functions will eventually be refactored to use the registry (Phase 3),
-//! but currently maintain independent implementations.
+//! Functions in lib/QoreIRInterpreter.cpp, lib/QoreIRToLLVM.cpp, and
+//! lib/QoreAOTInstRegistry.cpp still carry operation-family switches for actual
+//! execution/lowering dispatch; registry metadata is validated separately so
+//! adding opcodes cannot silently omit basic properties.
 
 //! Returns true if the opcode is a unary computation op (used by Invoke dispatch)
 //! Delegates to OpcodeInfo::is_unary_invoke in the registry.
@@ -2332,26 +2333,7 @@ private:
 
 //! Check if an opcode is a block terminator (transfers control flow)
 inline bool isTerminator(QoreIROpcode op) {
-    switch (op) {
-        case QoreIROpcode::Invoke:
-        case QoreIROpcode::InvokeMethodDirect:
-        case QoreIROpcode::InvokeDotEvalMethodDirect:
-        case QoreIROpcode::Br:
-        case QoreIROpcode::BrIf:
-        case QoreIROpcode::SwitchInt:
-        case QoreIROpcode::SwitchString:
-        case QoreIROpcode::IteratorNext:
-        case QoreIROpcode::Return:
-        case QoreIROpcode::ReturnNothing:
-        case QoreIROpcode::Throw:
-        case QoreIROpcode::Rethrow:
-        case QoreIROpcode::InvokeSimError:
-        case QoreIROpcode::ThreadExit:
-        case QoreIROpcode::BranchIfLtLocalInt:
-            return true;
-        default:
-            return false;
-    }
+    return getOpcodeIsTerminator(static_cast<int>(op));
 }
 
 #endif

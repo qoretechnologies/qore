@@ -54,6 +54,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <string>
 
 #include <qore/ExceptionSink.h>
 #include <qore/QoreValue.h>
@@ -101,6 +102,220 @@
 #include <qore/intern/Context.h>  // Context class (for native `context` IR lowering helpers)
 #include <qore/intern/QoreObjectIntern.h>  // qore_object_private::takeMembers for HashKeySlice over object
 #include <qore/intern/BackquoteNode.h>
+
+static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
+    { "qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any) },
+    { "qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any) },
+    { "qore_rt_mul_any", reinterpret_cast<void*>(&qore_rt_mul_any) },
+    { "qore_rt_add_assign_any", reinterpret_cast<void*>(&qore_rt_add_assign_any) },
+    { "qore_rt_sub_assign_any", reinterpret_cast<void*>(&qore_rt_sub_assign_any) },
+    { "qore_rt_mul_assign_any", reinterpret_cast<void*>(&qore_rt_mul_assign_any) },
+    { "qore_rt_add_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_add_assign_any_throwing) },
+    { "qore_rt_sub_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_sub_assign_any_throwing) },
+    { "qore_rt_mul_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_mul_assign_any_throwing) },
+    { "qore_rt_div_any", reinterpret_cast<void*>(&qore_rt_div_any) },
+    { "qore_rt_mod_any", reinterpret_cast<void*>(&qore_rt_mod_any) },
+    { "qore_rt_div_int", reinterpret_cast<void*>(&qore_rt_div_int) },
+    { "qore_rt_mod_int", reinterpret_cast<void*>(&qore_rt_mod_int) },
+    { "qore_rt_div_float", reinterpret_cast<void*>(&qore_rt_div_float) },
+    { "qore_rt_to_int", reinterpret_cast<void*>(&qore_rt_to_int) },
+    { "qore_rt_to_float", reinterpret_cast<void*>(&qore_rt_to_float) },
+    { "qore_rt_to_bool", reinterpret_cast<void*>(&qore_rt_to_bool) },
+    { "qore_rt_is_null_or_nothing", reinterpret_cast<void*>(&qore_rt_is_null_or_nothing) },
+    { "qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref) },
+    { "qore_rt_decref", reinterpret_cast<void*>(&qore_rt_decref) },
+    { "qore_rt_decref_nothrow", reinterpret_cast<void*>(&qore_rt_decref_nothrow) },
+    { "qore_rt_throw", reinterpret_cast<void*>(&qore_rt_throw) },
+    { "qore_rt_throw_value", reinterpret_cast<void*>(&qore_rt_throw_value) },
+    { "qore_rt_has_exception", reinterpret_cast<void*>(&qore_rt_has_exception) },
+    { "qore_rt_invoke_expr", reinterpret_cast<void*>(&qore_rt_invoke_expr) },
+    { "qore_rt_make_string", reinterpret_cast<void*>(&qore_rt_make_string) },
+    { "qore_rt_make_string_len", reinterpret_cast<void*>(&qore_rt_make_string_len) },
+    { "qore_rt_backquote", reinterpret_cast<void*>(&qore_rt_backquote) },
+    { "qore_rt_backquote_throwing", reinterpret_cast<void*>(&qore_rt_backquote_throwing) },
+    { "qore_rt_find", reinterpret_cast<void*>(&qore_rt_find) },
+    { "qore_rt_find_throwing", reinterpret_cast<void*>(&qore_rt_find_throwing) },
+    { "qore_rt_background_dot_eval_name_call_aot",
+        reinterpret_cast<void*>(&qore_rt_background_dot_eval_name_call_aot) },
+    { "qore_rt_background_dot_eval_name_call_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_background_dot_eval_name_call_aot_throwing) },
+    { "qore_rt_background_call_ref_value_aot",
+        reinterpret_cast<void*>(&qore_rt_background_call_ref_value_aot) },
+    { "qore_rt_background_call_ref_value_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_background_call_ref_value_aot_throwing) },
+    { "qore_rt_catch_exception", reinterpret_cast<void*>(&qore_rt_catch_exception) },
+    { "qore_rt_catch_end", reinterpret_cast<void*>(&qore_rt_catch_end) },
+    { "qore_rt_rethrow", reinterpret_cast<void*>(&qore_rt_rethrow) },
+    { "qore_rt_deopt", reinterpret_cast<void*>(&qore_rt_deopt) },
+    { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
+    { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
+    { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
+    { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
+    { "qore_rt_assign_local", reinterpret_cast<void*>(&qore_rt_assign_local) },
+    { "qore_rt_assign_local_no_coerce", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce) },
+    { "qore_rt_assign_local_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_throwing) },
+    { "qore_rt_assign_local_no_coerce_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_throwing) },
+    { "qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value) },
+    { "qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local) },
+    { "qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local) },
+    { "qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op) },
+    { "qore_rt_unary_op", reinterpret_cast<void*>(&qore_rt_unary_op) },
+    { "qore_rt_expr_op", reinterpret_cast<void*>(&qore_rt_expr_op) },
+    { "qore_rt_comparison_op", reinterpret_cast<void*>(&qore_rt_comparison_op) },
+    { "qore_rt_ternary_op", reinterpret_cast<void*>(&qore_rt_ternary_op) },
+    { "qore_rt_load_global", reinterpret_cast<void*>(&qore_rt_load_global) },
+    { "qore_rt_store_global", reinterpret_cast<void*>(&qore_rt_store_global) },
+    { "qore_rt_load_closure", reinterpret_cast<void*>(&qore_rt_load_closure) },
+    { "qore_rt_store_closure", reinterpret_cast<void*>(&qore_rt_store_closure) },
+    { "qore_rt_load_thread_local", reinterpret_cast<void*>(&qore_rt_load_thread_local) },
+    { "qore_rt_store_thread_local", reinterpret_cast<void*>(&qore_rt_store_thread_local) },
+    { "qore_rt_lvalue_load", reinterpret_cast<void*>(&qore_rt_lvalue_load) },
+    { "qore_rt_lvalue_store", reinterpret_cast<void*>(&qore_rt_lvalue_store) },
+    { "qore_rt_lvalue_unary", reinterpret_cast<void*>(&qore_rt_lvalue_unary) },
+    { "qore_rt_lvalue_binary", reinterpret_cast<void*>(&qore_rt_lvalue_binary) },
+    { "qore_rt_lvalue_ternary", reinterpret_cast<void*>(&qore_rt_lvalue_ternary) },
+    { "qore_rt_make_list", reinterpret_cast<void*>(&qore_rt_make_list) },
+    { "qore_rt_make_list_by_type_path", reinterpret_cast<void*>(&qore_rt_make_list_by_type_path) },
+    { "qore_rt_make_hash", reinterpret_cast<void*>(&qore_rt_make_hash) },
+    { "qore_rt_make_hash_by_type_path", reinterpret_cast<void*>(&qore_rt_make_hash_by_type_path) },
+    { "qore_rt_make_hash_const_keys", reinterpret_cast<void*>(&qore_rt_make_hash_const_keys) },
+    { "qore_rt_make_hash_const_keys_by_type_path",
+        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_by_type_path) },
+    { "qore_rt_exec_statement", reinterpret_cast<void*>(&qore_rt_exec_statement) },
+    { "qore_rt_thread_exit", reinterpret_cast<void*>(&qore_rt_thread_exit) },
+    { "qore_rt_context_init", reinterpret_cast<void*>(&qore_rt_context_init) },
+    { "qore_rt_context_init_throwing", reinterpret_cast<void*>(&qore_rt_context_init_throwing) },
+    { "qore_rt_context_ref_at", reinterpret_cast<void*>(&qore_rt_context_ref_at) },
+    { "qore_rt_context_ref_at_throwing", reinterpret_cast<void*>(&qore_rt_context_ref_at_throwing) },
+    { "qore_rt_context_row", reinterpret_cast<void*>(&qore_rt_context_row) },
+    { "qore_rt_context_row_throwing", reinterpret_cast<void*>(&qore_rt_context_row_throwing) },
+    { "qore_rt_context_max_pos", reinterpret_cast<void*>(&qore_rt_context_max_pos) },
+    { "qore_rt_context_set_pos", reinterpret_cast<void*>(&qore_rt_context_set_pos) },
+    { "qore_rt_context_destroy", reinterpret_cast<void*>(&qore_rt_context_destroy) },
+    { "qore_rt_guard_type", reinterpret_cast<void*>(&qore_rt_guard_type) },
+    { "qore_rt_make_date", reinterpret_cast<void*>(&qore_rt_make_date) },
+    { "qore_rt_make_date_ex", reinterpret_cast<void*>(&qore_rt_make_date_ex) },
+    { "qore_rt_make_enum", reinterpret_cast<void*>(&qore_rt_make_enum) },
+    { "qore_rt_hash_key_access", reinterpret_cast<void*>(&qore_rt_hash_key_access) },
+    { "qore_rt_hash_key_access_for_call", reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call) },
+    { "qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access) },
+    { "qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat) },
+    { "qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var) },
+    { "qore_rt_load_static_var_for_call", reinterpret_cast<void*>(&qore_rt_load_static_var_for_call) },
+    { "qore_rt_load_static_var_throwing", reinterpret_cast<void*>(&qore_rt_load_static_var_throwing) },
+    { "qore_rt_load_static_var_for_call_throwing",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_for_call_throwing) },
+    { "qore_rt_list_size", reinterpret_cast<void*>(&qore_rt_list_size) },
+    { "qore_rt_list_get_int", reinterpret_cast<void*>(&qore_rt_list_get_int) },
+    { "qore_rt_list_get_float", reinterpret_cast<void*>(&qore_rt_list_get_float) },
+    { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
+    { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
+    { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
+    { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
+    { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
+    { "qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot) },
+    { "qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing) },
+    { "qore_rt_assign_local_no_coerce_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot_throwing) },
+    { "qore_rt_instantiate_local_aot", reinterpret_cast<void*>(&qore_rt_instantiate_local_aot) },
+    { "qore_rt_uninstantiate_local_aot", reinterpret_cast<void*>(&qore_rt_uninstantiate_local_aot) },
+    { "qore_rt_pop_closure_var_aot", reinterpret_cast<void*>(&qore_rt_pop_closure_var_aot) },
+    { "qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot) },
+    { "qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot) },
+    { "qore_rt_load_thread_local_aot", reinterpret_cast<void*>(&qore_rt_load_thread_local_aot) },
+    { "qore_rt_store_thread_local_aot", reinterpret_cast<void*>(&qore_rt_store_thread_local_aot) },
+    { "qore_rt_load_closure_aot", reinterpret_cast<void*>(&qore_rt_load_closure_aot) },
+    { "qore_rt_store_closure_aot", reinterpret_cast<void*>(&qore_rt_store_closure_aot) },
+    { "qore_rt_invoke_expr_aot", reinterpret_cast<void*>(&qore_rt_invoke_expr_aot) },
+    { "qore_rt_load_constant_aot", reinterpret_cast<void*>(&qore_rt_load_constant_aot) },
+    { "qore_rt_list_assignment_value", reinterpret_cast<void*>(&qore_rt_list_assignment_value) },
+    { "qore_rt_list_assignment_value_throwing", reinterpret_cast<void*>(&qore_rt_list_assignment_value_throwing) },
+    { "qore_rt_load_static_var_by_path", reinterpret_cast<void*>(&qore_rt_load_static_var_by_path) },
+    { "qore_rt_load_static_var_by_path_for_call",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call) },
+    { "qore_rt_load_static_var_by_path_throwing",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_throwing) },
+    { "qore_rt_load_static_var_by_path_for_call_throwing",
+        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call_throwing) },
+    { "qore_rt_create_closure_aot", reinterpret_cast<void*>(&qore_rt_create_closure_aot) },
+    { "qore_rt_create_static_method_call_ref_aot",
+        reinterpret_cast<void*>(&qore_rt_create_static_method_call_ref_aot) },
+    { "qore_rt_create_static_method_call_ref_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_create_static_method_call_ref_aot_throwing) },
+    { "qore_rt_create_function_call_ref_aot", reinterpret_cast<void*>(&qore_rt_create_function_call_ref_aot) },
+    { "qore_rt_create_function_call_ref_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_create_function_call_ref_aot_throwing) },
+    { "qore_rt_create_self_method_ref_aot", reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot) },
+    { "qore_rt_create_self_method_ref_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot_throwing) },
+    { "qore_rt_create_object_method_ref_aot", reinterpret_cast<void*>(&qore_rt_create_object_method_ref_aot) },
+    { "qore_rt_create_object_method_ref_aot_throwing",
+        reinterpret_cast<void*>(&qore_rt_create_object_method_ref_aot_throwing) },
+    { "qore_rt_create_parse_ref_aot", reinterpret_cast<void*>(&qore_rt_create_parse_ref_aot) },
+    { "qore_rt_create_local_ref_aot", reinterpret_cast<void*>(&qore_rt_create_local_ref_aot) },
+    { "qore_rt_create_member_hash_ref_aot", reinterpret_cast<void*>(&qore_rt_create_member_hash_ref_aot) },
+    { "qore_rt_new_hash_decl_aot", reinterpret_cast<void*>(&qore_rt_new_hash_decl_aot) },
+    { "qore_rt_new_complex_hash_aot", reinterpret_cast<void*>(&qore_rt_new_complex_hash_aot) },
+    { "qore_rt_new_complex_list_aot", reinterpret_cast<void*>(&qore_rt_new_complex_list_aot) },
+    { "qore_rt_lvalue_load_aot", reinterpret_cast<void*>(&qore_rt_lvalue_load_aot) },
+    { "qore_rt_lvalue_store_aot", reinterpret_cast<void*>(&qore_rt_lvalue_store_aot) },
+    { "qore_rt_lvalue_unary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_unary_aot) },
+    { "qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot) },
+    { "qore_rt_lvalue_ternary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_ternary_aot) },
+    { "qore_rt_lv_path_assign", reinterpret_cast<void*>(&qore_rt_lv_path_assign) },
+    { "qore_rt_lv_path_compound", reinterpret_cast<void*>(&qore_rt_lv_path_compound) },
+    { "qore_rt_lv_path_unary", reinterpret_cast<void*>(&qore_rt_lv_path_unary) },
+    { "qore_rt_lv_path_binary_mut", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut) },
+    { "qore_rt_lv_path_ternary", reinterpret_cast<void*>(&qore_rt_lv_path_ternary) },
+    { "qore_rt_lv_path_assign_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_aot) },
+    { "qore_rt_lv_path_compound_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_aot) },
+    { "qore_rt_lv_path_unary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_unary_aot) },
+    { "qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot) },
+    { "qore_rt_lv_path_ternary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_ternary_aot) },
+    { "qore_rt_push_on_block_exit_aot", reinterpret_cast<void*>(&qore_rt_push_on_block_exit_aot) },
+    { "qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target) },
+    { "qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args) },
+    { "qore_rt_call_with_args_aot", reinterpret_cast<void*>(&qore_rt_call_with_args_aot) },
+    { "qore_rt_call_with_args_aot_consume_args",
+        reinterpret_cast<void*>(&qore_rt_call_with_args_aot_consume_args) },
+    { "qore_rt_call_direct_aot_consume_args", reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args) },
+    { "qore_rt_call_static_method_direct_aot_consume_args",
+        reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args) },
+    { "qore_rt_dot_eval_with_base", reinterpret_cast<void*>(&qore_rt_dot_eval_with_base) },
+    { "qore_rt_dot_eval_with_base_aot", reinterpret_cast<void*>(&qore_rt_dot_eval_with_base_aot) },
+    { "qore_rt_regex_op_with_operand", reinterpret_cast<void*>(&qore_rt_regex_op_with_operand) },
+    { "qore_rt_regex_op_with_operand_aot", reinterpret_cast<void*>(&qore_rt_regex_op_with_operand_aot) },
+    { "qore_rt_switch_case_match", reinterpret_cast<void*>(&qore_rt_switch_case_match) },
+};
+
+const QoreJITRuntimeSymbolInfo* qore_jit_get_runtime_symbols(size_t& count) {
+    count = sizeof(qore_jit_runtime_symbols) / sizeof(qore_jit_runtime_symbols[0]);
+    return qore_jit_runtime_symbols;
+}
+
+bool qore_jit_validate_runtime_symbols(std::string& error) {
+    std::set<std::string> names;
+    size_t count = 0;
+    const QoreJITRuntimeSymbolInfo* symbols = qore_jit_get_runtime_symbols(count);
+    for (size_t i = 0; i < count; ++i) {
+        const QoreJITRuntimeSymbolInfo& symbol = symbols[i];
+        if (!symbol.name || !*symbol.name) {
+            error = "JIT runtime helper registry contains an unnamed symbol at index " + std::to_string(i);
+            return false;
+        }
+        if (!symbol.address) {
+            error = "JIT runtime helper '" + std::string(symbol.name) + "' has a null address";
+            return false;
+        }
+        auto [it, inserted] = names.insert(symbol.name);
+        if (!inserted) {
+            error = "duplicate JIT runtime helper symbol '" + std::string(symbol.name) + "'";
+            return false;
+        }
+    }
+    return true;
+}
 
 // --- Runtime location tracking for LLVM-generated code ---
 // Returns pointer to the thread-local runtime_loc variable for per-line location updates.

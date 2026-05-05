@@ -141,6 +141,7 @@
 #include <deque>
 #include <limits>
 #include <numeric>
+#include <typeinfo>
 #include <unordered_set>
 #include <zlib.h>
 
@@ -6499,6 +6500,14 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         error = "AOT expression registry validation failed: " + registry_error;
         return false;
     }
+    if (!qore_aot_validate_expr_node_registry(registry_error)) {
+        error = "AOT expression node registry validation failed: " + registry_error;
+        return false;
+    }
+    if (!qore_aot_validate_inst_group_registry(registry_error)) {
+        error = "AOT instruction group registry validation failed: " + registry_error;
+        return false;
+    }
 
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SLOT_MAPS);
 
@@ -7052,7 +7061,7 @@ void serializeFallbackSources(QoreAOTBinaryWriter& writer,
 #include "qore/intern/Variable.h"
 
 //! Determine the instruction group for serialization using dynamic_cast
-static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
+static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst, std::string* error = nullptr) {
     // Check specific subclasses from most to least derived to avoid false matches.
     // Order matters because some subclasses derive from others (e.g. InvokeSimError from Throw).
     if (dynamic_cast<const QoreIRConstInstruction*>(inst)) {
@@ -7247,11 +7256,22 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     if (dynamic_cast<const QoreIRExprInstruction*>(inst)) {
         return QoreIRInstGroup::Expr;
     }
-    if (inst->element_type) {
-        return QoreIRInstGroup::TypedBase;
+    if (typeid(*inst) == typeid(QoreIRInstruction)) {
+        return inst->element_type ? QoreIRInstGroup::TypedBase : QoreIRInstGroup::Base;
     }
-    // Default: base instruction (no extra fields)
-    return QoreIRInstGroup::Base;
+
+    if (error) {
+        const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst->opcode));
+        *error = "cannot serialize IR instruction opcode ";
+        *error += oi && oi->name ? oi->name : "<unknown>";
+        *error += " (";
+        *error += std::to_string(static_cast<uint16_t>(inst->opcode));
+        *error += "): dynamic instruction type '";
+        *error += typeid(*inst).name();
+        *error += "' has no AOT instruction group mapping; add a classifyInstruction() mapping, "
+            "AOT_INST_GROUP_REGISTRY entry, and read/write handlers before this instruction can be serialized";
+    }
+    return QoreIRInstGroup::Unsupported;
 }
 
 //! Get type path string for a LocalVar, handling nullptr typeInfo
@@ -7270,11 +7290,17 @@ const char* getLocalTypePath(const LocalVar* lv) {
 static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInstruction* inst,
         const std::unordered_map<const QoreIRBasicBlock*, uint16_t>& block_idx,
         const AOTExprWriteFunc& writeExpr) {
+    std::string classify_error;
+    QoreIRInstGroup group = classifyInstruction(inst, &classify_error);
+    if (!classify_error.empty()) {
+        qoreAOTSetExprSerializationError(std::move(classify_error));
+        return false;
+    }
+
     // Write opcode
     writer.writeU16(static_cast<uint16_t>(inst->opcode));
 
     // Classify and write group tag
-    QoreIRInstGroup group = classifyInstruction(inst);
     writer.writeU8(static_cast<uint8_t>(group));
 
     // Write base fields: result, operands, exception_target
@@ -7376,6 +7402,12 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
 
 bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
         const AOTExprWriteFunc& writeExpr) {
+    std::string registry_error;
+    if (!qore_aot_validate_inst_group_registry(registry_error)) {
+        qoreAOTSetExprSerializationError("AOT instruction group registry validation failed: " + registry_error);
+        return false;
+    }
+
     // 1. Function header
     writer.writeStringRef(func.name.c_str());
     writer.writeU32(func.max_value_id);

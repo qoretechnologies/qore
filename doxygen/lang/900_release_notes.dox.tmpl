@@ -480,7 +480,7 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     Module lookup prefers a \c .qmod over a \c .qm in the same module
     location, so installed user modules use the AOT-compiled version for
     better startup and runtime performance by default.  Source modules remain
-    installed for documentation, development, and fallback workflows.
+    installed for documentation, inspection, and development workflows.
 
     Disable this behavior with \c -DQORE_BUILD_AOT_MODULES=OFF.  See
     @ref qore_modules "Qore Modules" and @ref exec_mode_aot "AOT

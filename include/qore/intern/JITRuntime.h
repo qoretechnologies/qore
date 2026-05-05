@@ -32,7 +32,9 @@
 #ifndef _QORE_INTERN_JITRUNTIME_H
 #define _QORE_INTERN_JITRUNTIME_H
 
+#include <cstddef>
 #include <cstdint>
+#include <string>
 
 class ExceptionSink;
 class QoreIRFunction;
@@ -40,6 +42,17 @@ class QoreIRLValuePathInstruction;
 class QoreValue;
 class QoreVarInfo;
 class UserVariantBase;
+
+struct QoreJITRuntimeSymbolInfo {
+    const char* name;
+    void* address;
+};
+
+//! Returns the central JIT runtime helper symbol registry.
+const QoreJITRuntimeSymbolInfo* qore_jit_get_runtime_symbols(size_t& count);
+
+//! Validates the central JIT runtime helper symbol registry.
+bool qore_jit_validate_runtime_symbols(std::string& error);
 
 // C ABI helpers called by JIT-generated code.
 // All functions use extern "C" linkage so LLVM can resolve them by name.

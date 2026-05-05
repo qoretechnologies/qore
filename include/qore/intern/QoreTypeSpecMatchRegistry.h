@@ -32,6 +32,7 @@
 #define _QORE_QORETYESPEMATCHREGISTRY_H
 
 #include "qore/intern/QoreTypeInfo.h"
+#include <string>
 
 // Context passed to each handler function
 struct QoreTypeSpecMatchCtx {
@@ -57,5 +58,7 @@ struct QoreTypeSpecMatchHandlerInfo {
 extern const QoreTypeSpecMatchHandlerInfo QORE_TYPE_SPEC_MATCH_REGISTRY[];
 
 const QoreTypeSpecMatchHandlerInfo* getQoreTypeSpecMatchHandler(q_typespec_t typespec);
+
+bool qore_type_spec_validate_match_registry(std::string& error);
 
 #endif

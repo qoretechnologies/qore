@@ -68,6 +68,8 @@ enum q_typespec_t : unsigned char {
     QTS_ENUM = 11,
 };
 
+static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_ENUM) + 1;
+
 typedef std::function<void (QoreValue&, ExceptionSink*)> q_type_map_t;
 
 // returns type info for base types

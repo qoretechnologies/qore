@@ -12,6 +12,8 @@
 #ifndef _QORE_OPCODE_REGISTRY_H
 #define _QORE_OPCODE_REGISTRY_H
 
+#include <string>
+
 //! Centralized metadata for IR opcodes - SINGLE SOURCE OF TRUTH
 //!
 //! All opcode properties are defined here. Query functions below provide
@@ -517,6 +519,54 @@ inline bool getOpcodeIsUnaryInvoke(int opcode_id) {
 inline bool getOpcodeIsBinaryInvoke(int opcode_id) {
     const OpcodeInfo* info = getOpcodeInfo(opcode_id);
     return info ? info->is_binary_invoke : false;
+}
+
+//! Validate opcode registry invariants that are not expressible as static_asserts.
+inline bool qore_ir_validate_opcode_registry(std::string& error) {
+    constexpr int REGISTRY_SIZE = sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]);
+
+    for (int i = 0; i < REGISTRY_SIZE; ++i) {
+        const OpcodeInfo& info = OPCODE_REGISTRY[i];
+
+        if (!info.name || !*info.name) {
+            error = "opcode registry entry " + std::to_string(i) + " has no name";
+            return false;
+        }
+        if (!info.description || !*info.description) {
+            error = "opcode registry entry '" + std::string(info.name) + "' has no description";
+            return false;
+        }
+        if (!info.corresponding_ast_node || !*info.corresponding_ast_node) {
+            error = "opcode registry entry '" + std::string(info.name) + "' has no AST/source classification";
+            return false;
+        }
+        if (info.can_return_nothing && info.never_returns_nothing) {
+            error = "opcode registry entry '" + std::string(info.name)
+                + "' is both can_return_nothing and never_returns_nothing";
+            return false;
+        }
+        if (info.optional_result && !info.produces_result) {
+            error = "opcode registry entry '" + std::string(info.name)
+                + "' has optional_result without produces_result";
+            return false;
+        }
+        if (info.is_unary_invoke && info.is_binary_invoke) {
+            error = "opcode registry entry '" + std::string(info.name)
+                + "' is both unary-invoke and binary-invoke";
+            return false;
+        }
+
+        if (info.expected_operands < -1) {
+            int min_operands = -info.expected_operands - 2;
+            if (min_operands < 0) {
+                error = "opcode registry entry '" + std::string(info.name)
+                    + "' has invalid minimum operand encoding";
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 #endif

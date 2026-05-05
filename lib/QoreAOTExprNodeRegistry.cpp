@@ -35,6 +35,8 @@
 #include "qore/intern/CallReferenceNode.h"
 #include "QoreAOTExprNodeHandlers.cpp"
 
+#include <string>
+
 // 256-entry registry table (one entry per possible uint8_t value)
 // Entries for defined kinds point to their handlers; undefined kinds have null entries
 const QoreAOTExprNodeKindInfo AOT_EXPR_NODE_KIND_REGISTRY[256] = {
@@ -303,3 +305,49 @@ const QoreAOTExprNodeKindInfo AOT_EXPR_NODE_KIND_REGISTRY[256] = {
     {nullptr, 252, false, nullptr, nullptr}, {nullptr, 253, false, nullptr, nullptr},
     {nullptr, 254, false, nullptr, nullptr}, {nullptr, 255, false, nullptr, nullptr},
 };
+
+bool qore_aot_validate_expr_node_registry(std::string& error) {
+    for (unsigned i = 0; i < 256; ++i) {
+        const auto& info = AOT_EXPR_NODE_KIND_REGISTRY[i];
+
+        if (info.kind_value != i) {
+            error = "AOT expression node registry index " + std::to_string(i)
+                + " has kind value " + std::to_string(info.kind_value);
+            return false;
+        }
+
+        if (!info.name) {
+            if (info.is_supported || info.read_fn || info.description) {
+                error = "undefined AOT expression node registry index " + std::to_string(i)
+                    + " has active metadata or handlers";
+                return false;
+            }
+            continue;
+        }
+
+        if (!*info.name) {
+            error = "AOT expression node registry index " + std::to_string(i)
+                + " has an empty name";
+            return false;
+        }
+
+        if (info.is_supported) {
+            if (!info.read_fn) {
+                error = "AOT expression node registry entry '" + std::string(info.name)
+                    + "' is supported without a read handler";
+                return false;
+            }
+            if (!info.description || !*info.description) {
+                error = "AOT expression node registry entry '" + std::string(info.name)
+                    + "' has no description";
+                return false;
+            }
+        } else if (info.read_fn) {
+            error = "AOT expression node registry entry '" + std::string(info.name)
+                + "' is unsupported but has a read handler";
+            return false;
+        }
+    }
+
+    return true;
+}

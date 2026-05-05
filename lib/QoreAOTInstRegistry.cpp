@@ -40,6 +40,7 @@
 #include "qore/QoreValue.h"
 
 #include <cstdio>
+#include <string>
 
 // Forward declarations for recursive serialization functions
 // serializeIRFunction declared in QoreAOTBinary.h
@@ -3421,3 +3422,58 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
 
     #undef UNUSED_ENTRY
 };
+
+bool qore_aot_validate_inst_group_registry(std::string& error) {
+    static_assert(AOT_INST_GROUP_TABLE_SIZE == 256, "AOT instruction group registry must cover uint8_t");
+
+    for (unsigned i = 0; i < AOT_INST_GROUP_TABLE_SIZE; ++i) {
+        const auto& info = AOT_INST_GROUP_REGISTRY[i];
+
+        if (info.raw_value != i) {
+            error = "AOT instruction group registry index " + std::to_string(i)
+                + " has raw value " + std::to_string(info.raw_value);
+            return false;
+        }
+
+        if (!info.name) {
+            if (info.is_serializable || info.has_nested_ir || info.write_fn || info.read_fn || info.description) {
+                error = "undefined AOT instruction group registry index " + std::to_string(i)
+                    + " has active metadata or handlers";
+                return false;
+            }
+            continue;
+        }
+
+        if (!*info.name) {
+            error = "AOT instruction group registry index " + std::to_string(i)
+                + " has an empty name";
+            return false;
+        }
+
+        if (!info.description || !*info.description) {
+            error = "AOT instruction group registry entry '" + std::string(info.name)
+                + "' has no description";
+            return false;
+        }
+
+        if (info.is_serializable) {
+            if (!info.write_fn || !info.read_fn) {
+                error = "AOT instruction group registry entry '" + std::string(info.name)
+                    + "' is serializable without read/write handlers";
+                return false;
+            }
+        } else if (info.write_fn || info.read_fn) {
+            error = "AOT instruction group registry entry '" + std::string(info.name)
+                + "' is not serializable but has read/write handlers";
+            return false;
+        }
+
+        if (info.has_nested_ir && !info.is_serializable) {
+            error = "AOT instruction group registry entry '" + std::string(info.name)
+                + "' has nested IR but is not serializable";
+            return false;
+        }
+    }
+
+    return true;
+}

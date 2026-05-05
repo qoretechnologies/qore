@@ -49,6 +49,7 @@
 
 #include <algorithm>
 #include <set>
+#include <string>
 
 const QoreAnyTypeInfo staticAnyTypeInfo;
 const QoreAutoTypeInfo staticAutoTypeInfo;
@@ -1368,9 +1369,27 @@ const char* QoreTypeSpec::getSimpleTypeName() const {
     return nullptr;
 }
 
+static const std::string& getQoreTypeSpecMatchRegistryValidationError() {
+    static const std::string error = []() {
+        std::string validation_error;
+        if (!qore_type_spec_validate_match_registry(validation_error)) {
+            return validation_error;
+        }
+        return std::string();
+    }();
+    return error;
+}
+
 qore_type_result_e QoreTypeSpec::match(const QoreTypeSpec& t, bool& may_not_match, bool& may_need_filter,
         qore_type_result_e& max_result, bool known_initial_assignment) const {
     //printd(5, "QoreTypeSpec::match() typespec: %d t.typespec: %d\n", (int)typespec, (int)t.typespec);
+    const std::string& registry_error = getQoreTypeSpecMatchRegistryValidationError();
+    assert(registry_error.empty());
+    if (!registry_error.empty()) {
+        max_result = QTI_NOT_EQUAL;
+        return QTI_NOT_EQUAL;
+    }
+
     const QoreTypeSpecMatchHandlerInfo* info = getQoreTypeSpecMatchHandler(typespec);
     if (info && info->handler) {
         QoreTypeSpecMatchCtx ctx{t, may_not_match, may_need_filter, max_result, known_initial_assignment};

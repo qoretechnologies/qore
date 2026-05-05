@@ -361,6 +361,17 @@ class AOTSmokeTest inherits QUnit::Test {
         return backquote(run_cmd);
     }
 
+    private bool compileOutputHasCompleteAot(string compile_out) {
+        *list<string> native_match = (compile_out =~ x/generated native code for (\d+) functions/);
+        *list<string> metadata_match = (compile_out =~ x/complete AOT metadata generated for (\d+) functions/);
+        return native_match && metadata_match && native_match[0] == metadata_match[0];
+    }
+
+    private bool compileOutputHasCompleteAotCount(string compile_out, string count) {
+        return compile_out.regex("generated native code for " + count + " functions")
+            && compile_out.regex("complete AOT metadata generated for " + count + " functions");
+    }
+
     #! Compile a script and return {compile_out, run_out, all_precompiled}
     private hash<auto> compileCheckAndRun(string code, *list<string> run_args) {
         hash<auto> paths = writeTempScript(code);
@@ -374,12 +385,9 @@ class AOTSmokeTest inherits QUnit::Test {
             libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
-        # Parse "N/M functions pre-compiled" from compile output
-        bool all_precompiled = False;
-        *list<string> match = (compile_out =~ x/(\d+)\/(\d+) functions pre-compiled/);
-        if (match) {
-            all_precompiled = (match[0] == match[1]);
-        }
+        # Full AOT serialization is mandatory; the output reports native code
+        # generation and complete metadata for the same function count.
+        bool all_precompiled = compileOutputHasCompleteAot(compile_out);
 
         string run_out;
         if (is_file(paths.out)) {
@@ -1798,7 +1806,7 @@ public class AOTLocalTempCleanup {
         string qmod_path = tmp_dir + "/AOTLocalTempCleanup.qmod";
         hash<auto> result = compileModuleFile(qm_path, qmod_path);
         assertTrue(result.compiled, "IR-only local ownership module compiled: " + result.compile_out);
-        assertTrue(result.compile_out.regex("1/1 functions pre-compiled"),
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "1"),
             "IR-only local ownership module fully precompiled: " + result.compile_out);
 
         string out = backquote(sprintf(
@@ -2052,7 +2060,7 @@ public namespace AOTTestMod {
         assertTrue(result.compiled, "module compilation produced .qmod: " + result.compile_out);
         assertTrue(result.compile_out.regex("compiled module \\(O2"),
             "compile output shows module compilation: " + result.compile_out);
-        assertTrue(result.compile_out.regex("3/3 functions pre-compiled"),
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "3"),
             "all module functions pre-compiled: " + result.compile_out);
 
         # Write a test script that loads the compiled module
@@ -2198,7 +2206,7 @@ public namespace AOTNoNarrowRefSig {
         string qmod_path = tmp_dir + "/AOTNoNarrowRefSig.qmod";
         hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
         assertTrue(result.compiled, "no-narrow reference signature module compiled: " + result.compile_out);
-        assertTrue(result.compile_out.regex("2/2 functions pre-compiled"),
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "2"),
             "no-narrow reference signature module fully precompiled: " + result.compile_out);
 
         unlink(qm_path);
@@ -3482,12 +3490,9 @@ printf(\"%d\\n\", AOTSplitSlash::slash_val());
             libqore_dir, libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
-        # Parse pre-compile stats
-        bool all_precompiled = False;
-        *list<string> match = (compile_out =~ x/(\d+)\/(\d+) functions pre-compiled/);
-        if (match) {
-            all_precompiled = (match[0] == match[1]);
-        }
+        # Full AOT serialization is mandatory; the output reports native code
+        # generation and complete metadata for the same function count.
+        bool all_precompiled = compileOutputHasCompleteAot(compile_out);
 
         string run_out;
         int binary_size = 0;
@@ -3641,9 +3646,9 @@ exit(0);
         # Verify compile output shows source-stripped
         assertTrue(result.compile_out.regex("source-stripped"),
             "compile output shows source-stripped: " + result.compile_out);
-        # Verify it reports functions pre-compiled
-        assertTrue(result.compile_out.regex("\\d+/\\d+ functions pre-compiled"),
-            "compile output shows pre-compile stats: " + result.compile_out);
+        # Verify it reports generated native code and complete AOT metadata
+        assertTrue(compileOutputHasCompleteAot(result.compile_out),
+            "compile output shows complete AOT stats: " + result.compile_out);
     }
 
     testStripSourceNoSourceInBinary() {

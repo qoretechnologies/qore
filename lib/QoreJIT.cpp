@@ -217,258 +217,43 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
 
     // Build symbol map for all C ABI runtime helpers
     llvm::orc::SymbolMap symbols;
+    std::string symbol_error;
 
     auto addSymbol = [&](const char* name, void* addr) {
+        if (!symbol_error.empty()) {
+            return;
+        }
+        if (!name || !*name) {
+            symbol_error = "JIT runtime helper registry contains an unnamed symbol";
+            return;
+        }
+        if (!addr) {
+            symbol_error = "JIT runtime helper '" + std::string(name) + "' has a null address";
+            return;
+        }
         auto flags = llvm::JITSymbolFlags::Exported | llvm::JITSymbolFlags::Callable;
-        symbols[es.intern(name)] = {llvm::orc::ExecutorAddr::fromPtr(addr), flags};
+        auto [it, inserted] = symbols.insert({es.intern(name), {llvm::orc::ExecutorAddr::fromPtr(addr), flags}});
+        if (!inserted) {
+            symbol_error = "duplicate JIT runtime helper symbol '" + std::string(name) + "'";
+        }
     };
 
-    // Arithmetic helpers
-    addSymbol("qore_rt_add_any", reinterpret_cast<void*>(&qore_rt_add_any));
-    addSymbol("qore_rt_sub_any", reinterpret_cast<void*>(&qore_rt_sub_any));
-    addSymbol("qore_rt_mul_any", reinterpret_cast<void*>(&qore_rt_mul_any));
-    addSymbol("qore_rt_add_assign_any", reinterpret_cast<void*>(&qore_rt_add_assign_any));
-    addSymbol("qore_rt_sub_assign_any", reinterpret_cast<void*>(&qore_rt_sub_assign_any));
-    addSymbol("qore_rt_mul_assign_any", reinterpret_cast<void*>(&qore_rt_mul_assign_any));
-    addSymbol("qore_rt_add_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_add_assign_any_throwing));
-    addSymbol("qore_rt_sub_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_sub_assign_any_throwing));
-    addSymbol("qore_rt_mul_assign_any_throwing", reinterpret_cast<void*>(&qore_rt_mul_assign_any_throwing));
-    addSymbol("qore_rt_div_any", reinterpret_cast<void*>(&qore_rt_div_any));
-    addSymbol("qore_rt_mod_any", reinterpret_cast<void*>(&qore_rt_mod_any));
-    addSymbol("qore_rt_div_int", reinterpret_cast<void*>(&qore_rt_div_int));
-    addSymbol("qore_rt_mod_int", reinterpret_cast<void*>(&qore_rt_mod_int));
-    addSymbol("qore_rt_div_float", reinterpret_cast<void*>(&qore_rt_div_float));
+    std::string registry_error;
+    if (!qore_jit_validate_runtime_symbols(registry_error)) {
+        error = "failed to validate JIT runtime helper registry: " + registry_error;
+        return false;
+    }
 
-    // Conversion helpers
-    addSymbol("qore_rt_to_int", reinterpret_cast<void*>(&qore_rt_to_int));
-    addSymbol("qore_rt_to_float", reinterpret_cast<void*>(&qore_rt_to_float));
-    addSymbol("qore_rt_to_bool", reinterpret_cast<void*>(&qore_rt_to_bool));
-    addSymbol("qore_rt_is_null_or_nothing", reinterpret_cast<void*>(&qore_rt_is_null_or_nothing));
+    size_t symbol_count = 0;
+    const QoreJITRuntimeSymbolInfo* runtime_symbols = qore_jit_get_runtime_symbols(symbol_count);
+    for (size_t i = 0; i < symbol_count; ++i) {
+        addSymbol(runtime_symbols[i].name, runtime_symbols[i].address);
+    }
 
-    // Refcount helpers
-    addSymbol("qore_rt_incref", reinterpret_cast<void*>(&qore_rt_incref));
-    addSymbol("qore_rt_decref", reinterpret_cast<void*>(&qore_rt_decref));
-    addSymbol("qore_rt_decref_nothrow", reinterpret_cast<void*>(&qore_rt_decref_nothrow));
-
-    // Exception helpers
-    addSymbol("qore_rt_throw", reinterpret_cast<void*>(&qore_rt_throw));
-    addSymbol("qore_rt_throw_value", reinterpret_cast<void*>(&qore_rt_throw_value));
-    addSymbol("qore_rt_has_exception", reinterpret_cast<void*>(&qore_rt_has_exception));
-
-    // Invoke helpers
-    addSymbol("qore_rt_invoke_expr", reinterpret_cast<void*>(&qore_rt_invoke_expr));
-    addSymbol("qore_rt_make_string", reinterpret_cast<void*>(&qore_rt_make_string));
-    addSymbol("qore_rt_make_string_len", reinterpret_cast<void*>(&qore_rt_make_string_len));
-    addSymbol("qore_rt_backquote", reinterpret_cast<void*>(&qore_rt_backquote));
-    addSymbol("qore_rt_backquote_throwing", reinterpret_cast<void*>(&qore_rt_backquote_throwing));
-    addSymbol("qore_rt_find", reinterpret_cast<void*>(&qore_rt_find));
-    addSymbol("qore_rt_find_throwing", reinterpret_cast<void*>(&qore_rt_find_throwing));
-    addSymbol("qore_rt_background_dot_eval_name_call_aot",
-        reinterpret_cast<void*>(&qore_rt_background_dot_eval_name_call_aot));
-    addSymbol("qore_rt_background_dot_eval_name_call_aot_throwing",
-        reinterpret_cast<void*>(&qore_rt_background_dot_eval_name_call_aot_throwing));
-    addSymbol("qore_rt_background_call_ref_value_aot",
-        reinterpret_cast<void*>(&qore_rt_background_call_ref_value_aot));
-    addSymbol("qore_rt_background_call_ref_value_aot_throwing",
-        reinterpret_cast<void*>(&qore_rt_background_call_ref_value_aot_throwing));
-    addSymbol("qore_rt_catch_exception", reinterpret_cast<void*>(&qore_rt_catch_exception));
-    addSymbol("qore_rt_catch_end", reinterpret_cast<void*>(&qore_rt_catch_end));
-    addSymbol("qore_rt_rethrow", reinterpret_cast<void*>(&qore_rt_rethrow));
-
-    // Deopt helpers
-    addSymbol("qore_rt_deopt", reinterpret_cast<void*>(&qore_rt_deopt));
-
-    // Guard helpers
-    addSymbol("qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing));
-    addSymbol("qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int));
-    addSymbol("qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float));
-
-    // Local variable helpers
-    addSymbol("qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local));
-    addSymbol("qore_rt_assign_local", reinterpret_cast<void*>(&qore_rt_assign_local));
-    addSymbol("qore_rt_assign_local_no_coerce", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce));
-    addSymbol("qore_rt_assign_local_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_throwing));
-    addSymbol("qore_rt_assign_local_no_coerce_throwing",
-        reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_throwing));
-    addSymbol("qore_rt_make_weak_value", reinterpret_cast<void*>(&qore_rt_make_weak_value));
-    addSymbol("qore_rt_load_local", reinterpret_cast<void*>(&qore_rt_load_local));
-    addSymbol("qore_rt_uninstantiate_local", reinterpret_cast<void*>(&qore_rt_uninstantiate_local));
-
-    // Generic opcode dispatch helpers
-    addSymbol("qore_rt_binary_op", reinterpret_cast<void*>(&qore_rt_binary_op));
-    addSymbol("qore_rt_unary_op", reinterpret_cast<void*>(&qore_rt_unary_op));
-    addSymbol("qore_rt_expr_op", reinterpret_cast<void*>(&qore_rt_expr_op));
-    addSymbol("qore_rt_comparison_op", reinterpret_cast<void*>(&qore_rt_comparison_op));
-    addSymbol("qore_rt_ternary_op", reinterpret_cast<void*>(&qore_rt_ternary_op));
-
-    // Variable access helpers
-    addSymbol("qore_rt_load_global", reinterpret_cast<void*>(&qore_rt_load_global));
-    addSymbol("qore_rt_store_global", reinterpret_cast<void*>(&qore_rt_store_global));
-    addSymbol("qore_rt_load_closure", reinterpret_cast<void*>(&qore_rt_load_closure));
-    addSymbol("qore_rt_store_closure", reinterpret_cast<void*>(&qore_rt_store_closure));
-    addSymbol("qore_rt_load_thread_local", reinterpret_cast<void*>(&qore_rt_load_thread_local));
-    addSymbol("qore_rt_store_thread_local", reinterpret_cast<void*>(&qore_rt_store_thread_local));
-
-    // LValue operation helpers
-    addSymbol("qore_rt_lvalue_load", reinterpret_cast<void*>(&qore_rt_lvalue_load));
-    addSymbol("qore_rt_lvalue_store", reinterpret_cast<void*>(&qore_rt_lvalue_store));
-    addSymbol("qore_rt_lvalue_unary", reinterpret_cast<void*>(&qore_rt_lvalue_unary));
-    addSymbol("qore_rt_lvalue_binary", reinterpret_cast<void*>(&qore_rt_lvalue_binary));
-    addSymbol("qore_rt_lvalue_ternary", reinterpret_cast<void*>(&qore_rt_lvalue_ternary));
-
-    // Container construction helpers
-    addSymbol("qore_rt_make_list", reinterpret_cast<void*>(&qore_rt_make_list));
-    addSymbol("qore_rt_make_list_by_type_path", reinterpret_cast<void*>(&qore_rt_make_list_by_type_path));
-    addSymbol("qore_rt_make_hash", reinterpret_cast<void*>(&qore_rt_make_hash));
-    addSymbol("qore_rt_make_hash_by_type_path", reinterpret_cast<void*>(&qore_rt_make_hash_by_type_path));
-    addSymbol("qore_rt_make_hash_const_keys", reinterpret_cast<void*>(&qore_rt_make_hash_const_keys));
-    addSymbol("qore_rt_make_hash_const_keys_by_type_path",
-        reinterpret_cast<void*>(&qore_rt_make_hash_const_keys_by_type_path));
-
-    // Statement execution helpers
-    addSymbol("qore_rt_exec_statement", reinterpret_cast<void*>(&qore_rt_exec_statement));
-    addSymbol("qore_rt_thread_exit", reinterpret_cast<void*>(&qore_rt_thread_exit));
-
-    // Native `context` statement helpers
-    addSymbol("qore_rt_context_init", reinterpret_cast<void*>(&qore_rt_context_init));
-    addSymbol("qore_rt_context_init_throwing",
-        reinterpret_cast<void*>(&qore_rt_context_init_throwing));
-    addSymbol("qore_rt_context_ref_at", reinterpret_cast<void*>(&qore_rt_context_ref_at));
-    addSymbol("qore_rt_context_ref_at_throwing",
-        reinterpret_cast<void*>(&qore_rt_context_ref_at_throwing));
-    addSymbol("qore_rt_context_row", reinterpret_cast<void*>(&qore_rt_context_row));
-    addSymbol("qore_rt_context_row_throwing",
-        reinterpret_cast<void*>(&qore_rt_context_row_throwing));
-    addSymbol("qore_rt_context_max_pos", reinterpret_cast<void*>(&qore_rt_context_max_pos));
-    addSymbol("qore_rt_context_set_pos", reinterpret_cast<void*>(&qore_rt_context_set_pos));
-    addSymbol("qore_rt_context_destroy", reinterpret_cast<void*>(&qore_rt_context_destroy));
-
-    // Guard type helper
-    addSymbol("qore_rt_guard_type", reinterpret_cast<void*>(&qore_rt_guard_type));
-
-    // Date construction helper
-    addSymbol("qore_rt_make_date", reinterpret_cast<void*>(&qore_rt_make_date));
-    addSymbol("qore_rt_make_date_ex", reinterpret_cast<void*>(&qore_rt_make_date_ex));
-
-    // Enum construction helper
-    addSymbol("qore_rt_make_enum", reinterpret_cast<void*>(&qore_rt_make_enum));
-
-    // Specialized access helpers (Phase 5b)
-    addSymbol("qore_rt_hash_key_access", reinterpret_cast<void*>(&qore_rt_hash_key_access));
-    addSymbol("qore_rt_hash_key_access_for_call", reinterpret_cast<void*>(&qore_rt_hash_key_access_for_call));
-    addSymbol("qore_rt_list_index_access", reinterpret_cast<void*>(&qore_rt_list_index_access));
-    addSymbol("qore_rt_string_concat", reinterpret_cast<void*>(&qore_rt_string_concat));
-    addSymbol("qore_rt_load_static_var", reinterpret_cast<void*>(&qore_rt_load_static_var));
-    addSymbol("qore_rt_load_static_var_for_call", reinterpret_cast<void*>(&qore_rt_load_static_var_for_call));
-    addSymbol("qore_rt_load_static_var_throwing", reinterpret_cast<void*>(&qore_rt_load_static_var_throwing));
-    addSymbol("qore_rt_load_static_var_for_call_throwing",
-        reinterpret_cast<void*>(&qore_rt_load_static_var_for_call_throwing));
-
-    // Optimized list iteration helpers (higher-order optimization)
-    addSymbol("qore_rt_list_size", reinterpret_cast<void*>(&qore_rt_list_size));
-    addSymbol("qore_rt_list_get_int", reinterpret_cast<void*>(&qore_rt_list_get_int));
-    addSymbol("qore_rt_list_get_float", reinterpret_cast<void*>(&qore_rt_list_get_float));
-
-    // AOT context-based helpers (Phase 7b)
-    addSymbol("qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot));
-    addSymbol("qore_rt_cleanup_run_allocas",
-        reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas));
-    addSymbol("qore_rt_reload_local_if_stale",
-        reinterpret_cast<void*>(&qore_rt_reload_local_if_stale));
-    addSymbol("qore_rt_reload_local_if_stale_aot",
-        reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot));
-    addSymbol("qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot));
-    addSymbol("qore_rt_assign_local_no_coerce_aot", reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot));
-    addSymbol("qore_rt_assign_local_aot_throwing", reinterpret_cast<void*>(&qore_rt_assign_local_aot_throwing));
-    addSymbol("qore_rt_assign_local_no_coerce_aot_throwing",
-        reinterpret_cast<void*>(&qore_rt_assign_local_no_coerce_aot_throwing));
-    addSymbol("qore_rt_instantiate_local_aot", reinterpret_cast<void*>(&qore_rt_instantiate_local_aot));
-    addSymbol("qore_rt_uninstantiate_local_aot", reinterpret_cast<void*>(&qore_rt_uninstantiate_local_aot));
-    addSymbol("qore_rt_pop_closure_var_aot", reinterpret_cast<void*>(&qore_rt_pop_closure_var_aot));
-    addSymbol("qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot));
-    addSymbol("qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot));
-    addSymbol("qore_rt_load_thread_local_aot", reinterpret_cast<void*>(&qore_rt_load_thread_local_aot));
-    addSymbol("qore_rt_store_thread_local_aot", reinterpret_cast<void*>(&qore_rt_store_thread_local_aot));
-    addSymbol("qore_rt_load_closure_aot", reinterpret_cast<void*>(&qore_rt_load_closure_aot));
-    addSymbol("qore_rt_store_closure_aot", reinterpret_cast<void*>(&qore_rt_store_closure_aot));
-    addSymbol("qore_rt_invoke_expr_aot", reinterpret_cast<void*>(&qore_rt_invoke_expr_aot));
-    addSymbol("qore_rt_load_constant_aot", reinterpret_cast<void*>(&qore_rt_load_constant_aot));
-    addSymbol("qore_rt_list_assignment_value",
-        reinterpret_cast<void*>(&qore_rt_list_assignment_value));
-    addSymbol("qore_rt_list_assignment_value_throwing",
-        reinterpret_cast<void*>(&qore_rt_list_assignment_value_throwing));
-    addSymbol("qore_rt_load_static_var_by_path",
-        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path));
-    addSymbol("qore_rt_load_static_var_by_path_for_call",
-        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call));
-    addSymbol("qore_rt_load_static_var_by_path_throwing",
-        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_throwing));
-    addSymbol("qore_rt_load_static_var_by_path_for_call_throwing",
-        reinterpret_cast<void*>(&qore_rt_load_static_var_by_path_for_call_throwing));
-    addSymbol("qore_rt_create_closure_aot", reinterpret_cast<void*>(&qore_rt_create_closure_aot));
-    addSymbol("qore_rt_create_static_method_call_ref_aot",
-        reinterpret_cast<void*>(&qore_rt_create_static_method_call_ref_aot));
-    addSymbol("qore_rt_create_static_method_call_ref_aot_throwing",
-        reinterpret_cast<void*>(&qore_rt_create_static_method_call_ref_aot_throwing));
-    addSymbol("qore_rt_create_function_call_ref_aot",
-        reinterpret_cast<void*>(&qore_rt_create_function_call_ref_aot));
-    addSymbol("qore_rt_create_function_call_ref_aot_throwing",
-        reinterpret_cast<void*>(&qore_rt_create_function_call_ref_aot_throwing));
-    addSymbol("qore_rt_create_self_method_ref_aot",
-        reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot));
-    addSymbol("qore_rt_create_self_method_ref_aot_throwing",
-        reinterpret_cast<void*>(&qore_rt_create_self_method_ref_aot_throwing));
-    addSymbol("qore_rt_create_object_method_ref_aot",
-        reinterpret_cast<void*>(&qore_rt_create_object_method_ref_aot));
-    addSymbol("qore_rt_create_object_method_ref_aot_throwing",
-        reinterpret_cast<void*>(&qore_rt_create_object_method_ref_aot_throwing));
-    addSymbol("qore_rt_create_parse_ref_aot", reinterpret_cast<void*>(&qore_rt_create_parse_ref_aot));
-    addSymbol("qore_rt_create_local_ref_aot", reinterpret_cast<void*>(&qore_rt_create_local_ref_aot));
-    addSymbol("qore_rt_create_member_hash_ref_aot",
-        reinterpret_cast<void*>(&qore_rt_create_member_hash_ref_aot));
-    addSymbol("qore_rt_new_hash_decl_aot", reinterpret_cast<void*>(&qore_rt_new_hash_decl_aot));
-    addSymbol("qore_rt_new_complex_hash_aot", reinterpret_cast<void*>(&qore_rt_new_complex_hash_aot));
-    addSymbol("qore_rt_new_complex_list_aot", reinterpret_cast<void*>(&qore_rt_new_complex_list_aot));
-    addSymbol("qore_rt_lvalue_load_aot", reinterpret_cast<void*>(&qore_rt_lvalue_load_aot));
-    addSymbol("qore_rt_lvalue_store_aot", reinterpret_cast<void*>(&qore_rt_lvalue_store_aot));
-    addSymbol("qore_rt_lvalue_unary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_unary_aot));
-    addSymbol("qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot));
-    addSymbol("qore_rt_lvalue_ternary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_ternary_aot));
-    addSymbol("qore_rt_lv_path_assign", reinterpret_cast<void*>(&qore_rt_lv_path_assign));
-    addSymbol("qore_rt_lv_path_compound", reinterpret_cast<void*>(&qore_rt_lv_path_compound));
-    addSymbol("qore_rt_lv_path_unary", reinterpret_cast<void*>(&qore_rt_lv_path_unary));
-    addSymbol("qore_rt_lv_path_binary_mut", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut));
-    addSymbol("qore_rt_lv_path_ternary", reinterpret_cast<void*>(&qore_rt_lv_path_ternary));
-    addSymbol("qore_rt_lv_path_assign_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_aot));
-    addSymbol("qore_rt_lv_path_compound_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_aot));
-    addSymbol("qore_rt_lv_path_unary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_unary_aot));
-    addSymbol("qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot));
-    addSymbol("qore_rt_lv_path_ternary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_ternary_aot));
-    addSymbol("qore_rt_push_on_block_exit_aot", reinterpret_cast<void*>(&qore_rt_push_on_block_exit_aot));
-
-    // Fast call with explicit target (multi-function module compilation)
-    addSymbol("qore_rt_call_fast_with_target", reinterpret_cast<void*>(&qore_rt_call_fast_with_target));
-
-    // Call with pre-evaluated args helpers
-    addSymbol("qore_rt_call_with_args", reinterpret_cast<void*>(&qore_rt_call_with_args));
-    addSymbol("qore_rt_call_with_args_aot", reinterpret_cast<void*>(&qore_rt_call_with_args_aot));
-    addSymbol("qore_rt_call_with_args_aot_consume_args",
-            reinterpret_cast<void*>(&qore_rt_call_with_args_aot_consume_args));
-    addSymbol("qore_rt_call_direct_aot_consume_args",
-            reinterpret_cast<void*>(&qore_rt_call_direct_aot_consume_args));
-    addSymbol("qore_rt_call_static_method_direct_aot_consume_args",
-            reinterpret_cast<void*>(&qore_rt_call_static_method_direct_aot_consume_args));
-
-    // DotEval with pre-evaluated base helpers
-    addSymbol("qore_rt_dot_eval_with_base", reinterpret_cast<void*>(&qore_rt_dot_eval_with_base));
-    addSymbol("qore_rt_dot_eval_with_base_aot", reinterpret_cast<void*>(&qore_rt_dot_eval_with_base_aot));
-
-    // Regex with pre-evaluated operand helpers
-    addSymbol("qore_rt_regex_op_with_operand", reinterpret_cast<void*>(&qore_rt_regex_op_with_operand));
-    addSymbol("qore_rt_regex_op_with_operand_aot", reinterpret_cast<void*>(&qore_rt_regex_op_with_operand_aot));
-
-    // Switch case match helper (enum-aware)
-    addSymbol("qore_rt_switch_case_match", reinterpret_cast<void*>(&qore_rt_switch_case_match));
+    if (!symbol_error.empty()) {
+        error = "failed to validate JIT runtime helper registry: " + symbol_error;
+        return false;
+    }
 
     auto err = jd.define(llvm::orc::absoluteSymbols(std::move(symbols)));
     if (err) {

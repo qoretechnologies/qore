@@ -141,4 +141,7 @@ inline const QoreIRInstGroupInfo* getAOTInstGroupInfo(uint8_t raw_group) {
     return &info;
 }
 
+//! Validate instruction group registry invariants
+bool qore_aot_validate_inst_group_registry(std::string& error);
+
 #endif // _QORE_INTERN_QOREAOTINSTREGISTRY_H
