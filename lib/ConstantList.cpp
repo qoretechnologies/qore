@@ -279,7 +279,14 @@ int ConstantEntry::parseCommitRuntimeInit() {
 
 QoreValue ConstantEntry::getReferencedValue() const {
     if (val.getType() == NT_RTCONSTREF) {
-        return val.get<const RuntimeConstantRefNode>()->getConstantEntry()->saved_val.refSelf();
+        ConstantEntry* rce = val.get<const RuntimeConstantRefNode>()->getConstantEntry();
+        if (rce->saved_val) {
+            return rce->saved_val.refSelf();
+        }
+        if (rce->aot_shell_pending) {
+            return val.refSelf();
+        }
+        return rce->saved_val.refSelf();
     } else {
         return val.refSelf();
     }
@@ -287,7 +294,14 @@ QoreValue ConstantEntry::getReferencedValue() const {
 
 const QoreValue ConstantEntry::getValue() const {
     if (val.getType() == NT_RTCONSTREF) {
-        return val.get<const RuntimeConstantRefNode>()->getConstantEntry()->saved_val;
+        ConstantEntry* rce = val.get<const RuntimeConstantRefNode>()->getConstantEntry();
+        if (rce->saved_val) {
+            return rce->saved_val;
+        }
+        if (rce->aot_shell_pending) {
+            return val;
+        }
+        return rce->saved_val;
     } else {
         return val;
     }

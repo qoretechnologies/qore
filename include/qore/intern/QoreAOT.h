@@ -74,6 +74,8 @@ struct QoreAOTCallTarget {
     const QoreMethod* method = nullptr;    //!< for static/self method calls (pre-resolved)
     const QoreClass* qc = nullptr;         //!< for dot-eval method calls (pre-resolved)
     const char* method_name = nullptr;     //!< for dot-eval fallback (name-based dispatch)
+    const char* class_path = nullptr;      //!< for lazy class resolution when registration order delays availability
+    const char* variant_sig = nullptr;     //!< constructor/method signature text retained for diagnostics/lazy resolution
     bool is_pseudo = false;                //!< for dot-eval pseudo-method calls
     bool is_static_method = false;         //!< method is a static method target
 };
@@ -400,8 +402,15 @@ extern "C" QoreStringNode* qore_aot_module_init_v3(
     const QoreAOTFunc* functions, int num_functions
 );
 
-//! C ABI entry point called by AOT-compiled modules from their generated qore_module_ns_init()
+//! Legacy C ABI entry point called by AOT-compiled modules from their generated qore_module_ns_init()
 extern "C" void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNamespace* qore_ns);
+
+//! C ABI entry point called by AOT-compiled modules from their generated qore_module_ns_init() adapter
+/** Accepts the module manager ExceptionSink so AOT namespace initialization failures
+    are reported as module-load errors instead of being reduced to diagnostics.
+*/
+extern "C" void qore_aot_module_ns_init_v2(QoreNamespace* root_ns, QoreNamespace* qore_ns,
+    ExceptionSink* xsink);
 
 //! C ABI entry point called by AOT-compiled modules from their generated qore_module_delete()
 extern "C" void qore_aot_module_delete();
@@ -641,17 +650,20 @@ public:
            the standard parser name-walk — no `.qo` preload needed.
         2. For each source: compile its contributions with the
            per-file filter (`compile_file`), emit fragment
-           + register symbols, write `OUTPUT_DIR/BASENAME.qo`.
+           + register symbols, write one collision-free `.qo` per target
+           under `OUTPUT_DIR`.
 
         Functional output is identical to N separate
-        `compileScriptFile` calls, just much faster at scale.  A
+        `compileScriptFile` calls, just much faster at scale.  Batch
+        output names and register symbols are derived from canonical source
+        paths so same-basename sources cannot overwrite each other.  A
         qctl-shape build (24 files) does 1 parse instead of 24 with
         576 metadata preload ops.
 
         @param target_files absolute or relative paths of source
                 files to compile together
         @param output_dir directory for output `.qo` files
-                (created if missing; `BASENAME.qo` per target)
+                (created if missing; one collision-free `.qo` per target)
         @param parse_options parse options to seed the compile program
         @param error error message on failure
         @param opt_level LLVM optimization level 0-3 (default: 2)

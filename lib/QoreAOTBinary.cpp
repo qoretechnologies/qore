@@ -139,6 +139,7 @@
 #include <algorithm>
 #include <cstring>
 #include <deque>
+#include <limits>
 #include <numeric>
 #include <unordered_set>
 #include <zlib.h>
@@ -2691,6 +2692,9 @@ static const BuiltinTypeEntry builtin_types[] = {
     {"*softbool",       &softBoolOrNothingTypeInfo},
     {"*softdate",       &softDateOrNothingTypeInfo},
     {"*softlist",       &softListOrNothingTypeInfo},
+    {"int|float",       &bigIntOrFloatTypeInfo},
+    {"int|float|number", &bigIntFloatOrNumberTypeInfo},
+    {"float|number",    &floatOrNumberTypeInfo},
     {"auto list",       &autoListTypeInfo},
     {"auto hash",       &autoHashTypeInfo},
     {"*auto list",      &autoListOrNothingTypeInfo},
@@ -2845,6 +2849,88 @@ static bool extract_aot_single_type_arg(const char* path, const char* type_name,
     return false;
 }
 
+static std::string trim_aot_type_component(const std::string& str) {
+    size_t start = str.find_first_not_of(" \t\r\n");
+    if (start == std::string::npos) {
+        return std::string();
+    }
+    size_t end = str.find_last_not_of(" \t\r\n");
+    return str.substr(start, end - start + 1);
+}
+
+static bool split_aot_union_shorthand(const char* path, bool& or_nothing, std::vector<std::string>& members) {
+    or_nothing = false;
+    members.clear();
+
+    const char* p = path;
+    if (*p == '*') {
+        or_nothing = true;
+        ++p;
+    }
+
+    std::string current;
+    int angle_depth = 0;
+    int paren_depth = 0;
+    bool found_union_separator = false;
+    for (; *p; ++p) {
+        char c = *p;
+        if (c == '<' && paren_depth == 0) {
+            ++angle_depth;
+        } else if (c == '>' && paren_depth == 0 && angle_depth > 0) {
+            --angle_depth;
+        } else if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')' && paren_depth > 0) {
+            --paren_depth;
+        }
+
+        if (c == '|' && angle_depth == 0 && paren_depth == 0) {
+            members.push_back(trim_aot_type_component(current));
+            current.clear();
+            found_union_separator = true;
+            continue;
+        }
+        current.push_back(c);
+    }
+
+    if (!found_union_separator) {
+        members.clear();
+        return false;
+    }
+
+    members.push_back(trim_aot_type_component(current));
+    for (const std::string& member : members) {
+        if (member.empty()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+const QoreTypeInfo* QoreAOTTypeResolver::resolveUnionShorthandType(const char* path) {
+    bool or_nothing = false;
+    std::vector<std::string> member_paths;
+    if (!split_aot_union_shorthand(path, or_nothing, member_paths)) {
+        return nullptr;
+    }
+
+    type_vec_t member_types;
+    member_types.reserve(member_paths.size());
+    for (const std::string& member_path : member_paths) {
+        std::string member_error;
+        const QoreTypeInfo* member = resolve(member_path.c_str(), member_error);
+        if (!member) {
+            return nullptr;
+        }
+        if (member == autoTypeInfo) {
+            return autoTypeInfo;
+        }
+        member_types.push_back(member);
+    }
+
+    return qore_get_union_type(member_types, or_nothing);
+}
+
 const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
     bool or_nothing = false;
     std::string inner_type;
@@ -2925,6 +3011,12 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
     // Hashdecl type paths must resolve to the canonical TypedHashDecl type object.
     if (!result) {
         result = resolveHashDeclType(path);
+    }
+
+    // QoreTypeInfo::getPath() can emit compact top-level union spellings such
+    // as "int|float|number"; keep that canonical spelling round-trippable.
+    if (!result) {
+        result = resolveUnionShorthandType(path);
     }
 
     // Try the parser-based resolver for complex types (handles everything)
@@ -6171,6 +6263,46 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         // Save entry start position and write size placeholder
         uint32_t entry_size_pos = writer.position();
         writer.writeU32(0);  // placeholder for entry size (patched below)
+        const uint32_t entry_payload_start = entry_size_pos + 4;
+        const char* trace_entry_env = getenv("QORE_AOT_SLOT_TRACE");
+        const bool trace_entry = trace_entry_env
+            && (!*trace_entry_env || func.name.find(trace_entry_env) != std::string::npos);
+        auto traceEntryOffset = [&writer, entry_payload_start, &func, trace_entry](const char* label) {
+            if (trace_entry) {
+                fprintf(stderr, "[aot-slot] func=%s %s off=%u\n",
+                    func.name.c_str(), label, writer.position() - entry_payload_start);
+            }
+        };
+        const bool wide_loc_tables = (writer.feature_flags & QORE_AOT_FEAT_WIDE_LOC_TABLES) != 0;
+        auto writeLocTableCount = [&writer, wide_loc_tables, &func, &error](size_t count,
+                const char* table_name) -> bool {
+            if (wide_loc_tables) {
+                if (count > std::numeric_limits<uint32_t>::max()) {
+                    error = "too many ";
+                    error += table_name;
+                    error += " entries in function '";
+                    error += func.name;
+                    error += "': ";
+                    error += std::to_string(count);
+                    error += " exceeds u32 wire format";
+                    return false;
+                }
+                writer.writeU32(static_cast<uint32_t>(count));
+                return true;
+            }
+            if (count > std::numeric_limits<uint16_t>::max()) {
+                error = "too many ";
+                error += table_name;
+                error += " entries in function '";
+                error += func.name;
+                error += "': ";
+                error += std::to_string(count);
+                error += " exceeds legacy u16 wire format; QORE_AOT_FEAT_WIDE_LOC_TABLES is required";
+                return false;
+            }
+            writer.writeU16(static_cast<uint16_t>(count));
+            return true;
+        };
 
         // Function header
         writer.writeStringRef(func.name.c_str());
@@ -6182,6 +6314,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         writer.writeU16(static_cast<uint16_t>(func.slot_ids.body_locals.size()));
         writer.writeU8(func.slot_ids.has_unsupported_exprs ? 1 : 0);
         writer.writeU8(static_cast<uint8_t>(func.num_lv_path_insts)); // was: padding byte
+        traceEntryOffset("after header");
 
         // Local slot entries (in slot order)
         for (auto& local : func.slot_ids.locals) {
@@ -6190,6 +6323,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU8(local.flags);
             writer.writeU16(local.param_index);
         }
+        traceEntryOffset("after locals");
 
         // Global slot entries (in slot order)
         for (auto& global : func.slot_ids.globals) {
@@ -6197,6 +6331,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeStringRef(global.type_path.c_str());
             writer.writeU8(global.is_thread_local ? 1 : 0);
         }
+        traceEntryOffset("after globals");
 
         // Expression slot entries (in slot order)
         for (size_t expr_idx = 0; expr_idx < func.slot_ids.exprs.size(); ++expr_idx) {
@@ -6274,6 +6409,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 return false;
             }
         }
+        traceEntryOffset("after exprs");
 
         // Body local entries (in order)
         for (auto& bl : func.slot_ids.body_locals) {
@@ -6282,6 +6418,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU8(bl.is_closure ? 1 : 0);
             writer.writeU32(bl.slot_id);
         }
+        traceEntryOffset("after body-locals");
 
         // Regex case entries (in slot-index order)
         // Format per case: pattern_ref(u32) options(i64) is_negated(u8)
@@ -6290,6 +6427,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeI64(rc.options);
             writer.writeU8(rc.is_negated ? 1 : 0);
         }
+        traceEntryOffset("after regex");
 
         // LValuePath instruction entries (in slot-index order)
         for (auto& lvid : func.slot_ids.lv_path_insts) {
@@ -6353,6 +6491,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 }
             }
         }
+        traceEntryOffset("after lvpath");
 
         // Handler IR entries for statement slots
         // For each stmt slot, write u8 flag (1 = handler IR follows, 0 = no handler IR)
@@ -6395,18 +6534,26 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 writer.writeU8(0);
             }
         }
+        traceEntryOffset("after stmt-handlers");
 
         // Location table entries (AOT runtime_loc tracking)
-        writer.writeU16(static_cast<uint16_t>(func.aot_locs.size()));
+        if (!writeLocTableCount(func.aot_locs.size(), "location table")) {
+            return false;
+        }
+        traceEntryOffset("after loc count");
         for (auto& loc : func.aot_locs) {
             writer.writeU16(static_cast<uint16_t>(loc.start_line));
             writer.writeU16(static_cast<uint16_t>(loc.end_line));
             writer.writeStringRef(loc.file.c_str());
         }
+        traceEntryOffset("after loc table");
 
         // Metadata-only statement location entries for source-stripped
         // ProgramControl::findStatementId() support.
-        writer.writeU16(static_cast<uint16_t>(func.aot_stmt_locs.size()));
+        if (!writeLocTableCount(func.aot_stmt_locs.size(), "statement location table")) {
+            return false;
+        }
+        traceEntryOffset("after stmt-loc count");
         for (auto& loc : func.aot_stmt_locs) {
             writer.writeU16(static_cast<uint16_t>(loc.start_line));
             writer.writeU16(static_cast<uint16_t>(loc.end_line));
@@ -6414,12 +6561,14 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeStringRef(loc.file.c_str());
             writer.writeStringRef(loc.source.c_str());
         }
+        traceEntryOffset("after stmt-loc table");
 
         // Full function IR for source-stripped debug execution.  This is not
         // source fallback: it is the same lowered IR used for AOT codegen,
         // interpreted only when DebugProgram attaches to an AOT-only variant.
         if (func.debug_ir) {
             writer.writeU8(1);
+            traceEntryOffset("after debug-ir flag");
             uint32_t size_pos = writer.position();
             writer.writeU32(0);
             const auto& parent_locals = func.slot_ids.locals;
@@ -6446,13 +6595,16 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             }
             uint32_t end_pos = writer.position();
             writer.patchU32(size_pos, end_pos - size_pos - 4);
+            traceEntryOffset("after debug-ir payload");
         } else {
             writer.writeU8(0);
+            traceEntryOffset("after debug-ir flag");
         }
 
         // Patch the entry size field
         uint32_t entry_end_pos = writer.position();
         writer.patchU32(entry_size_pos, entry_end_pos - entry_size_pos - 4);
+        traceEntryOffset("entry end");
     }
 
     writer.endSection(sec_idx);
@@ -6870,7 +7022,36 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
 
     // Write base fields: result, operands, exception_target
     writer.writeU32(inst->result.id);
-    writer.writeU8(static_cast<uint8_t>(inst->operands.size()));
+    if ((writer.feature_flags & QORE_AOT_FEAT_WIDE_IR_OPERANDS) != 0) {
+        if (inst->operands.size() > UINT16_MAX) {
+            const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst->opcode));
+            std::string diag = "cannot serialize IR instruction opcode ";
+            diag += oi && oi->name ? oi->name : "<unknown>";
+            diag += " (";
+            diag += std::to_string(static_cast<uint16_t>(inst->opcode));
+            diag += "): operand count ";
+            diag += std::to_string(inst->operands.size());
+            diag += " exceeds the u16 AOT debug IR wire limit";
+            qoreAOTSetExprSerializationError(std::move(diag));
+            return false;
+        }
+        writer.writeU16(static_cast<uint16_t>(inst->operands.size()));
+    } else {
+        if (inst->operands.size() > UINT8_MAX) {
+            const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst->opcode));
+            std::string diag = "cannot serialize IR instruction opcode ";
+            diag += oi && oi->name ? oi->name : "<unknown>";
+            diag += " (";
+            diag += std::to_string(static_cast<uint16_t>(inst->opcode));
+            diag += "): operand count ";
+            diag += std::to_string(inst->operands.size());
+            diag += " exceeds legacy u8 AOT debug IR wire limit; "
+                "QORE_AOT_FEAT_WIDE_IR_OPERANDS is required";
+            qoreAOTSetExprSerializationError(std::move(diag));
+            return false;
+        }
+        writer.writeU8(static_cast<uint8_t>(inst->operands.size()));
+    }
     for (auto& op : inst->operands) {
         writer.writeU32(op.id);
     }
@@ -6886,11 +7067,38 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
     // Write group-specific fields via registry dispatch
     const auto* ginfo = getAOTInstGroupInfo(static_cast<uint8_t>(group));
     if (!ginfo || !ginfo->is_serializable) {
+        const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst->opcode));
+        std::string diag = "cannot serialize IR instruction opcode ";
+        diag += oi && oi->name ? oi->name : "<unknown>";
+        diag += " (";
+        diag += std::to_string(static_cast<uint16_t>(inst->opcode));
+        diag += "): classified AOT instruction group ";
+        diag += std::to_string(static_cast<uint8_t>(group));
+        if (!ginfo) {
+            diag += " is not registered";
+        } else {
+            diag += " ('";
+            diag += ginfo->name ? ginfo->name : "<unnamed>";
+            diag += "') is not serializable";
+        }
+        diag += "; IR lowering/codegen must not emit non-roundtrippable AOT debug IR";
+        qoreAOTSetExprSerializationError(std::move(diag));
         return false;
     }
     if (ginfo->write_fn) {
         AOTInstWriteCtx wctx{writer, inst, block_idx, writeExpr};
         if (!ginfo->write_fn(wctx)) {
+            const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst->opcode));
+            std::string diag = "failed to serialize IR instruction opcode ";
+            diag += oi && oi->name ? oi->name : "<unknown>";
+            diag += " (";
+            diag += std::to_string(static_cast<uint16_t>(inst->opcode));
+            diag += ") in AOT instruction group ";
+            diag += ginfo->name ? ginfo->name : "<unnamed>";
+            diag += " (";
+            diag += std::to_string(static_cast<uint8_t>(group));
+            diag += ")";
+            qoreAOTSetExprSerializationError(std::move(diag));
             return false;
         }
     }
@@ -6957,9 +7165,35 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         writer.writeU8(block->is_loop_header ? 1 : 0);
         writer.writeU16(static_cast<uint16_t>(block->instructions.size()));
 
-        for (auto& inst_ptr : block->instructions) {
+        for (size_t inst_idx = 0; inst_idx < block->instructions.size(); ++inst_idx) {
+            auto& inst_ptr = block->instructions[inst_idx];
+            uint32_t inst_start = writer.position();
+            QoreIRInstGroup group = classifyInstruction(inst_ptr.get());
+            if (const char* trace = getenv("QORE_AOT_TRACE_IR_SERIALIZE")) {
+                bool match = !*trace || (func.name.find(trace) != std::string::npos);
+                if (match) {
+                    const OpcodeInfo* oi = getOpcodeInfo(static_cast<uint16_t>(inst_ptr->opcode));
+                    const auto* gi = getAOTInstGroupInfo(static_cast<uint8_t>(group));
+                    fprintf(stderr,
+                        "[aot-ir-ser] func=%s block=%s inst=%zu pos=%u opcode=%s(%u) group=%s(%u)\n",
+                        func.name.c_str(), block->name.c_str(), inst_idx, inst_start,
+                        oi && oi->name ? oi->name : "<unknown>",
+                        static_cast<uint16_t>(inst_ptr->opcode),
+                        gi && gi->name ? gi->name : "<unknown>",
+                        static_cast<uint8_t>(group));
+                }
+            }
             if (!serializeIRInstruction(writer, inst_ptr.get(), block_idx, writeExpr)) {
                 return false;
+            }
+            if (const char* trace = getenv("QORE_AOT_TRACE_IR_SERIALIZE")) {
+                bool match = !*trace || (func.name.find(trace) != std::string::npos);
+                if (match) {
+                    fprintf(stderr,
+                        "[aot-ir-ser] func=%s block=%s inst=%zu bytes=%u next_pos=%u\n",
+                        func.name.c_str(), block->name.c_str(), inst_idx,
+                        writer.position() - inst_start, writer.position());
+                }
             }
         }
     }
@@ -6984,12 +7218,38 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
 // pgm's namespace tree has every declared type present as a shell;
 // cross-blob base-class / member-type lookups (via pgm->findClass)
 // will succeed in subsequent phase-2 runs regardless of load order.
+static bool checkAOTFeatureCompatibility(const QoreAOTBinaryReader& reader, std::string& error) {
+    uint64_t unsupported = reader.getHeader().feature_flags & ~QORE_AOT_SUPPORTED_FEATURES;
+    if (!unsupported) {
+        return true;
+    }
+
+    char unsupported_buf[32];
+    snprintf(unsupported_buf, sizeof(unsupported_buf), "0x%016llx",
+        static_cast<unsigned long long>(unsupported));
+    char supported_buf[32];
+    snprintf(supported_buf, sizeof(supported_buf), "0x%016llx",
+        static_cast<unsigned long long>(QORE_AOT_SUPPORTED_FEATURES));
+
+    error = "AOT binary '";
+    error += reader.getLabel() ? reader.getLabel() : "<unknown>";
+    error += "' requires unsupported feature flags ";
+    error += unsupported_buf;
+    error += " (runtime supports ";
+    error += supported_buf;
+    error += "); update Qore or rebuild the AOT binary with a compatible qcc";
+    return false;
+}
+
 bool QoreAOTBinaryDeserializer::openAndDeserializeShells(QoreProgram* in_pgm,
         const uint8_t* data, uint32_t size, std::string& error) {
     pgm = in_pgm;
 
     // Open and validate the binary blob
     if (!reader.open(data, size, error)) {
+        return false;
+    }
+    if (!checkAOTFeatureCompatibility(reader, error)) {
         return false;
     }
 
@@ -7101,10 +7361,19 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembersPhase(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
-    return resolveTypes(error)
-        && resolveConstants(error)
+    if (!resolveTypes(error)
+            || !resolveConstants(error)
+            || !resolveStaticsAndConstants(error)) {
+        return false;
+    }
+    {
+        qore_program_private* pp_idx = qore_program_private::get(*pgm);
+        qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+            qore_ns_private::get(*pp_idx->RootNS));
+        rpriv->rebuildAllIndexes();
+    }
+    return deserializeFunctionsAndMethods(error)
         && resolveStaticMembersPhase(error)
-        && deserializeFunctionsAndMethods(error)
         && resolveMembers(error);
 }
 
@@ -7172,12 +7441,17 @@ bool QoreAOTBinaryDeserializer::importInheritedMembersPhase(std::string& error) 
     return importInheritedMembers(error);
 }
 
-// Phase-split 2a-c.  Top-level globals.  Class static members are registered
-// before instance members so member defaults can resolve static var references.
+// Phase-split 2a-c.  Top-level globals.  Run before function/method signatures
+// are deserialized so native default-argument expressions can resolve globals
+// declared in sibling script fragments.
 bool QoreAOTBinaryDeserializer::resolveStaticsAndConstants(std::string& error) {
+    if (globals_deserialized) {
+        return true;
+    }
     if (!deserializeGlobals(error)) {
         return false;
     }
+    globals_deserialized = true;
     return true;
 }
 
@@ -7231,6 +7505,22 @@ bool QoreAOTBinaryDeserializer::resolveTypeTable(std::string& error) {
         type_table_resolved[i] = ti;
     }
     return true;
+}
+
+const QoreProgramLocation* QoreAOTBinaryDeserializer::getBlobLocation(int16_t start_line,
+        int16_t end_line) const {
+    if (!pgm) {
+        return &loc_builtin;
+    }
+    const char* label = reader.getLabel();
+    if (!label || !*label) {
+        return &loc_builtin;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const char* interned_label = pp->addString(label);
+    QoreProgramLocation loc(interned_label, start_line, end_line);
+    return pp->getLocation(loc, start_line, end_line);
 }
 
 bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& error) {
@@ -7562,6 +7852,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         // by the namespace (QoreClass destructor is protected)
         QoreClass* qc = new QoreClass(name, path, domain);
         qore_class_private* priv = qore_class_private::get(*qc);
+        priv->loc = getBlobLocation();
         priv->pub = (flags & 0x0001) != 0;
         if (flags & 0x0002) {
             priv->final = true;
@@ -8350,12 +8641,15 @@ bool QoreAOTBinaryDeserializer::resolveClassConstants(std::string& error) {
             priv->addUserConstant(pcc.name.c_str(), QoreValue(),
                 static_cast<ClassAccess>(pcc.access), ti);
 
+            ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
+            if (ce) {
+                ce->loc = getBlobLocation();
+            }
             if (pcc.pending_init) {
                 // Pending init-func: parser-time references must defer to
                 // runtime.  Look the new ConstantEntry back up and swap its
                 // val for a self-referential RuntimeConstantRefNode; the
                 // init-func populates saved_val when it runs at register time.
-                ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
                 if (ce) {
                     ce->aot_shell_pending = true;
                     ce->val.discard(nullptr);
@@ -9104,7 +9398,7 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         // scanMergeCommittedNamespace to skip it (isUserPublic() returns false).
         // Create the ConstantEntry directly with: pub = is_pub, init = true (value
         // already resolved), builtin = false (user constant from AOT module).
-        ConstantEntry* ce = new ConstantEntry(&loc_builtin, name, val,
+        ConstantEntry* ce = new ConstantEntry(getBlobLocation(), name, val,
             final_ti, is_pub != 0, true, false,
             static_cast<ClassAccess>(access));
         if (pending) {
@@ -9161,7 +9455,7 @@ bool QoreAOTBinaryDeserializer::deserializeGlobals(std::string& error) {
         }
 
         // Create the global variable directly
-        Var* var = new Var(get_runtime_location(), name, ti, false,
+        Var* var = new Var(getBlobLocation(), name, ti, false,
             is_thread_local != 0);
         if (is_pub) {
             var->setPublic();
@@ -9908,7 +10202,26 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
             // Add method to class
             uint64_t t_add0 = time_on ? now_us() : 0;
-            qore_class_private::addUserMethod(*qc, method_name, mvb, is_static != 0);
+            if (qore_class_private::addUserMethod(*qc, method_name, mvb, is_static != 0)) {
+                error = "cannot add AOT method '";
+                error += qc->getName();
+                error += "::";
+                error += method_name ? method_name : "(null)";
+                error += "()'";
+                error += is_static ? " (static" : " (instance";
+                error += is_abstract ? ", abstract" : ", concrete";
+                error += ") from ";
+                error += reader.getLabel() ? reader.getLabel() : "(unknown source)";
+                if (entry_first_line || entry_last_line) {
+                    error += ":";
+                    error += std::to_string(entry_first_line);
+                    if (entry_last_line && entry_last_line != entry_first_line) {
+                        error += "-";
+                        error += std::to_string(entry_last_line);
+                    }
+                }
+                return false;
+            }
             if (time_on) {
                 local_add_us += now_us() - t_add0;
             }

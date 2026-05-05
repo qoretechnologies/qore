@@ -1075,6 +1075,8 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_METHOD_SYNC, "method-sync"},
         {QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS, "typed-value-containers"},
         {QORE_AOT_FEAT_MODULE_COMMANDS, "module-commands"},
+        {QORE_AOT_FEAT_WIDE_IR_OPERANDS, "wide-ir-operands"},
+        {QORE_AOT_FEAT_WIDE_LOC_TABLES, "wide-loc-tables"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -3010,9 +3012,11 @@ int main(int argc, char** argv) {
     // Batch-compile mode.  When `-c` is used with
     // multiple positional source files (and no module-ish flag), parse
     // them into one QoreProgram (one parse cycle) and emit one `.qo`
-    // per source into --output-dir.  This avoids compileScriptFile's
-    // O(N^2) sibling-preload cost when the build system invokes qcc
-    // per-file.
+    // per source into --output-dir.  Output names are derived from
+    // canonical source paths to prevent same-basename sources in one
+    // application from overwriting each other.  This avoids
+    // compileScriptFile's O(N^2) sibling-preload cost when the build
+    // system invokes qcc per-file.
     if (compile_only && !context_dir && (optind + 1 < argc)) {
         if (!batch_output_dir) {
             fprintf(stderr, "error: multiple source files require "

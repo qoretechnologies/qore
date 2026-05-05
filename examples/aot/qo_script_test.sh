@@ -56,7 +56,7 @@ echo "  defined T symbols:   ${DEFS}"
 
 echo ""
 echo "=== Step 5: link C++ host + run ==="
-g++ -std=c++17 -Iinclude -Ibuild -Ibuild/include -Lbuild \
+g++ -std=c++20 -Iinclude -Ibuild -Ibuild/include -Lbuild \
     examples/aot/qo_script_test.cpp \
     "${TMP}/lib.qo" "${TMP}/main.qo" \
     -lqore -Wl,-rpath,build \

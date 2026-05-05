@@ -58,7 +58,10 @@ class LocalVar;
 class Var;
 class UserVariantBase;
 class QoreParseListNode;
+class ExceptionSink;
 struct QoreProgramLocation;
+
+bool qore_check_cancel(ExceptionSink* xsink, const char* operation);
 
 //! Reverse map from constant value node pointer to fully-qualified constant name
 typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;
@@ -127,8 +130,10 @@ constexpr uint64_t QORE_AOT_FEAT_CLASS_HASH = 1ULL << 33; //!< CLASSES records c
 constexpr uint64_t QORE_AOT_FEAT_METHOD_SYNC = 1ULL << 34; //!< FUNCTIONS/METHODS variant flags preserve synchronized gates
 constexpr uint64_t QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS = 1ULL << 35; //!< Serialized list/hash values preserve complex/hashdecl runtime typeInfo
 constexpr uint64_t QORE_AOT_FEAT_MODULE_COMMANDS = 1ULL << 36; //!< `%module-cmd` directives replayed from source-stripped AOT metadata
+constexpr uint64_t QORE_AOT_FEAT_WIDE_IR_OPERANDS = 1ULL << 37; //!< Serialized debug/handler IR instruction operand counts are u16, not legacy u8
+constexpr uint64_t QORE_AOT_FEAT_WIDE_LOC_TABLES = 1ULL << 38; //!< SLOT_MAPS location and statement-location table counts are u32, not legacy u16
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -693,6 +698,7 @@ private:
     const QoreTypeInfo* resolveBuiltin(const char* path);
     const QoreTypeInfo* resolveClassType(const char* path);
     const QoreTypeInfo* resolveHashDeclType(const char* path);
+    const QoreTypeInfo* resolveUnionShorthandType(const char* path);
     const QoreTypeInfo* resolveComplexType(const char* path);
 };
 
@@ -1601,6 +1607,13 @@ private:
     //! time from the parsed header.
     bool uses_type_table = false;
 
+    //! True after deserializeGlobals() has run successfully.  Globals are
+    //! created before function/method signature deserialization so native
+    //! default arguments can resolve cross-fragment globals; the older later
+    //! phase still calls resolveStaticsAndConstants(), so it must be
+    //! idempotent.
+    bool globals_deserialized = false;
+
     //! Resolve every entry in the TYPE_TABLE section into
     //! type_table_resolved.  No-op when the section is absent.  Must
     //! run after shells across all sibling sessions exist so
@@ -1627,6 +1640,7 @@ private:
     bool deserializeMethods(std::string& error);
     bool deserializeFallbackSources(std::string& error);
     bool commitDeserializedClasses(std::string& error);
+    const QoreProgramLocation* getBlobLocation(int16_t start_line = 0, int16_t end_line = 0) const;
 
 public:
     //! Phase 4 slice 10: phase-1 entry point — open blob, create type
@@ -1687,6 +1701,13 @@ public:
         instance-member default expressions can reference class static members. */
     bool resolveStaticMembersPhase(std::string& error);
 
+    //! Phase-split 2a-post — top-level globals.
+    /** Must run before function/method deserialization because variant
+        signatures can contain native default expressions that reference
+        globals declared in a sibling script fragment.  Idempotent after
+        the first successful call. */
+    bool resolveStaticsAndConstants(std::string& error);
+
     //! Phase-split 2a-3 — resolve this session's OWN instance members.
     /** Must run after resolveConstants() and resolveStaticMembersPhase() so
         expression-tree member defaults can resolve constants and static vars,
@@ -1725,14 +1746,12 @@ public:
     //! populated. */
     bool importInheritedMembersPhase(std::string& error);
 
-    //! Phase-split 2a-post — top-level globals.
-    bool resolveStaticsAndConstants(std::string& error);
-
     //! Phase-split 2a-2c — deserialize functions and methods.
     /** Adds method variants to every class's pending method map
         (hm/shm).  No parseCommit fires here.  Must run after
-        resolveTypes(), resolveConstants(), and resolveStaticMembersPhase(),
-        and before resolveMembers() so member defaults can resolve static calls. */
+        resolveTypes(), resolveConstants(), resolveStaticMembersPhase(), and
+        resolveStaticsAndConstants(), and before resolveMembers() so member
+        defaults can resolve static calls. */
     bool deserializeFunctionsAndMethods(std::string& error);
 
     //! Phase-split 2c — commit all newly deserialized classes.
@@ -2041,46 +2060,78 @@ public:
             }                                                        \
         } while (0)
 
-        // 2a: types/bases first, then constants, static members, and methods
-        // across all sessions, then each session's OWN instance members.  The
-        // barriers are required for member defaults like Class::Defaults.Key,
-        // Class::staticVar, and Class::staticMethod().
+        auto runSessionPhase = [this, &error](const char* context, auto&& fn) -> bool {
+            size_t i = 0;
+            for (auto& sess : sessions) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, context)) {
+                    error = std::string("operation cancelled during ") + context;
+                    return false;
+                }
+                if (!fn(*sess)) {
+                    return false;
+                }
+                ++i;
+            }
+            return true;
+        };
+
+        // 2a: types/bases first, then constants, methods, static members,
+        // and each session's OWN instance members.  Methods must be added
+        // before static/default resolution can observe or initialize class
+        // state; otherwise abstract declarations can arrive after an AOT
+        // class was already marked initialized.  The barriers are required
+        // for member defaults like Class::Defaults.Key, Class::staticVar,
+        // Class::staticMethod(), and signature defaults that reference
+        // globals declared in sibling script fragments.
         AOT_PHASE_TIME(1, {
-            for (auto& sess : sessions) {
-                if (!sess->resolveTypes(error)) return false;
+            if (!runSessionPhase("AOT type resolution",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.resolveTypes(error);
+                    })) return false;
+            if (!runSessionPhase("AOT constant resolution",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.resolveConstants(error);
+                    })) return false;
+            if (!runSessionPhase("AOT global resolution",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.resolveStaticsAndConstants(error);
+                    })) return false;
+            if (!sessions.empty()) {
+                rebuildRootIndexesOnce();
             }
-            for (auto& sess : sessions) {
-                if (!sess->resolveConstants(error)) return false;
-            }
-            for (auto& sess : sessions) {
-                if (!sess->resolveStaticMembersPhase(error)) return false;
-            }
-            for (auto& sess : sessions) {
-                if (!sess->deserializeFunctionsAndMethods(error)) return false;
-            }
-            for (auto& sess : sessions) {
-                if (!sess->resolveMembers(error)) return false;
-            }
+            if (!runSessionPhase("AOT function and method deserialization",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.deserializeFunctionsAndMethods(error);
+                    })) return false;
+            if (!runSessionPhase("AOT static member resolution",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.resolveStaticMembersPhase(error);
+                    })) return false;
+            if (!runSessionPhase("AOT member resolution",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.resolveMembers(error);
+                    })) return false;
         });
         // 2a-sml: re-propagate super-class map lists now that
         // every session has attached its direct bases.
         AOT_PHASE_TIME(2, {
-            for (auto& sess : sessions) {
-                if (!sess->rebuildBaseClassSmlPhase(error)) return false;
-            }
+            if (!runSessionPhase("AOT base class map rebuild",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.rebuildBaseClassSmlPhase(error);
+                    })) return false;
         });
         // 2a-import: copy base-class members into derived classes
         // only AFTER every session has finished resolveTypesAndMembers.
         AOT_PHASE_TIME(3, {
-            for (auto& sess : sessions) {
-                if (!sess->importInheritedMembersPhase(error)) return false;
-            }
+            if (!runSessionPhase("AOT inherited member import",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.importInheritedMembersPhase(error);
+                    })) return false;
         });
-        // 2a-post: top-level globals.
+        // 2a-post: top-level globals.  Already performed before
+        // function/method deserialization; keep this timing bucket reserved
+        // so existing phase timing output stays stable.
         AOT_PHASE_TIME(4, {
-            for (auto& sess : sessions) {
-                if (!sess->resolveStaticsAndConstants(error)) return false;
-            }
         });
         // 2b: function and method deserialization used to live here.  It now
         // runs before resolveMembers() so member default expression trees can
@@ -2092,29 +2143,34 @@ public:
         // sessions so a session's parseCommit walk can find
         // sibling sessions' classes prepared.
         AOT_PHASE_TIME(6, {
-            for (auto& sess : sessions) {
-                if (!sess->commitClassesPrepare(error)) return false;
-            }
+            if (!runSessionPhase("AOT class commit prepare",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.commitClassesPrepare(error);
+                    })) return false;
         });
         AOT_PHASE_TIME(7, {
-            for (auto& sess : sessions) {
-                if (!sess->commitClassesDoCommit(error)) return false;
-            }
+            if (!runSessionPhase("AOT class commit",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.commitClassesDoCommit(error);
+                    })) return false;
         });
         AOT_PHASE_TIME(8, {
-            for (auto& sess : sessions) {
-                if (!sess->commitClassesImportAbstract(error)) return false;
-            }
+            if (!runSessionPhase("AOT abstract import",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.commitClassesImportAbstract(error);
+                    })) return false;
         });
         AOT_PHASE_TIME(9, {
-            for (auto& sess : sessions) {
-                if (!sess->commitClassesResolveAbstract(error)) return false;
-            }
+            if (!runSessionPhase("AOT abstract resolution",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.commitClassesResolveAbstract(error);
+                    })) return false;
         });
         AOT_PHASE_TIME(10, {
-            for (auto& sess : sessions) {
-                if (!sess->commitClassesValidate(error)) return false;
-            }
+            if (!runSessionPhase("AOT class validation",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.commitClassesValidate(error);
+                    })) return false;
         });
         // 2d: finalize — pending static-method defaults, fallback
         // sources, single cross-session index rebuild, BCA resolution.
@@ -2125,15 +2181,17 @@ public:
         // pre-index + post-index halves so a single rebuild covers the
         // whole batch.
         AOT_PHASE_TIME(11, {
-            for (auto& sess : sessions) {
-                if (!sess->finalizePreIndex(error)) return false;
-            }
+            if (!runSessionPhase("AOT pre-index finalization",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.finalizePreIndex(error);
+                    })) return false;
             if (!sessions.empty()) {
                 rebuildRootIndexesOnce();
             }
-            for (auto& sess : sessions) {
-                if (!sess->finalizePostIndex(error)) return false;
-            }
+            if (!runSessionPhase("AOT post-index finalization",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.finalizePostIndex(error);
+                    })) return false;
         });
 #undef AOT_PHASE_TIME
         return true;

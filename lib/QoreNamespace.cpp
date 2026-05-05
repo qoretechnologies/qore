@@ -496,18 +496,27 @@ void qore_ns_private::runtimeImportSystemClasses(const qore_ns_private& source, 
     // add sub namespaces
     for (nsmap_t::const_iterator i = source.nsl.nsmap.begin(), e = source.nsl.nsmap.end(); i != e; ++i) {
         QoreNamespace* nns = nsl.find(i->first);
+        bool created = false;
         if (!nns) {
             qore_ns_private* npns = new qore_ns_private(i->first.c_str(), *i->second->priv);
             nns = npns->ns;
             nns->priv->imported = true;
             nns = nsl.runtimeAdd(nns, this)->ns;
+            created = true;
         }
 
         nns->priv->runtimeImportSystemClasses(*i->second->priv, rns, xsink);
         //printd(5, "qore_ns_private::runtimeImportSystemClasses() this: %p '%s::' imported %p '%s::'\n", this,
         //    name.c_str(), ns, ns->getName());
-        if (*xsink)
+        if (*xsink) {
             break;
+        }
+        if (created && nns->priv->isEmpty()) {
+            nsmap_t::iterator ni = nsl.nsmap.find(i->first);
+            assert(ni != nsl.nsmap.end() && ni->second == nns);
+            nsl.nsmap.erase(ni);
+            delete nns;
+        }
     }
 }
 
@@ -523,18 +532,27 @@ void qore_ns_private::runtimeImportSystemHashDecls(const qore_ns_private& source
     // add sub namespaces
     for (nsmap_t::const_iterator i = source.nsl.nsmap.begin(), e = source.nsl.nsmap.end(); i != e; ++i) {
         QoreNamespace* nns = nsl.find(i->first);
+        bool created = false;
         if (!nns) {
             qore_ns_private* npns = new qore_ns_private(i->first.c_str(), *i->second->priv);
             nns = npns->ns;
             nns->priv->imported = true;
             nns = nsl.runtimeAdd(nns, this)->ns;
+            created = true;
         }
 
         nns->priv->runtimeImportSystemHashDecls(*i->second->priv, rns, xsink);
         //printd(5, "qore_ns_private::runtimeImportSystemHashDecls() this: %p '%s::' imported %p '%s::'\n", this,
         //    name.c_str(), ns, ns->getName());
-        if (*xsink)
+        if (*xsink) {
             break;
+        }
+        if (created && nns->priv->isEmpty()) {
+            nsmap_t::iterator ni = nsl.nsmap.find(i->first);
+            assert(ni != nsl.nsmap.end() && ni->second == nns);
+            nsl.nsmap.erase(ni);
+            delete nns;
+        }
     }
 }
 
@@ -550,18 +568,27 @@ void qore_ns_private::runtimeImportSystemConstants(const qore_ns_private& source
     // add sub namespaces
     for (nsmap_t::const_iterator i = source.nsl.nsmap.begin(), e = source.nsl.nsmap.end(); i != e; ++i) {
         QoreNamespace* nns = nsl.find(i->first);
+        bool created = false;
         if (!nns) {
             qore_ns_private* npns = new qore_ns_private(i->first.c_str(), *i->second->priv);
             nns = npns->ns;
             nns->priv->imported = true;
             nns = nsl.runtimeAdd(nns, this)->ns;
+            created = true;
         }
 
         nns->priv->runtimeImportSystemConstants(*i->second->priv, rns, xsink);
         //printd(5, "qore_ns_private::runtimeImportSystemConstants() this: %p '%s::' imported %p '%s::'\n", this,
         //   name.c_str(), ns, ns->getName());
-        if (*xsink)
+        if (*xsink) {
             break;
+        }
+        if (created && nns->priv->isEmpty()) {
+            nsmap_t::iterator ni = nsl.nsmap.find(i->first);
+            assert(ni != nsl.nsmap.end() && ni->second == nns);
+            nsl.nsmap.erase(ni);
+            delete nns;
+        }
     }
 }
 
@@ -577,18 +604,27 @@ void qore_ns_private::runtimeImportSystemFunctions(const qore_ns_private& source
     // add sub namespaces
     for (nsmap_t::const_iterator i = source.nsl.nsmap.begin(), e = source.nsl.nsmap.end(); i != e; ++i) {
         QoreNamespace* nns = nsl.find(i->first);
+        bool created = false;
         if (!nns) {
             qore_ns_private* npns = new qore_ns_private(i->first.c_str(), *i->second->priv);
             nns = npns->ns;
             nns->priv->imported = true;
             nns = nsl.runtimeAdd(nns, this)->ns;
+            created = true;
         }
 
         nns->priv->runtimeImportSystemFunctions(*i->second->priv, rns, xsink);
         //printd(5, "qore_ns_private::runtimeImportSystemFunctions() this: %p '%s::' imported %p '%s::'\n", this,
         //    name.c_str(), ns, ns->getName());
-        if (*xsink)
+        if (*xsink) {
             break;
+        }
+        if (created && nns->priv->isEmpty()) {
+            nsmap_t::iterator ni = nsl.nsmap.find(i->first);
+            assert(ni != nsl.nsmap.end() && ni->second == nns);
+            nsl.nsmap.erase(ni);
+            delete nns;
+        }
     }
 }
 

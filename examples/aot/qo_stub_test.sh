@@ -20,11 +20,13 @@ trap 'rm -rf "${TMP}"' EXIT
 
 QCC="./build/qcc"
 
+source_id() {
+    realpath "$1" | sed 's/[^A-Za-z0-9_]/_/g'
+}
+
 cat > "${TMP}/host_stub.qc" <<'EOF'
 # Declarative stubs — parsed into compile program, no .qo emitted.
-%new-style
-%strict-args
-%require-types
+%modern
 
 public namespace MyHost {
     public const HostVersion = "1.0";
@@ -36,9 +38,7 @@ public namespace MyHost {
 EOF
 
 cat > "${TMP}/target.qc" <<'EOF'
-%new-style
-%strict-args
-%require-types
+%modern
 
 int sub compute() {
     # Cross-file references to the stub-declared symbols.
@@ -78,9 +78,7 @@ echo "  confirmed: stub produced no .qo; target has 1 register entry point"
 echo ""
 echo "=== Step 4: batch mode with --stub ==="
 cat > "${TMP}/target2.qc" <<'EOF'
-%new-style
-%strict-args
-%require-types
+%modern
 
 string sub greet() {
     return "host=" + MyHost::HostVersion;
@@ -88,13 +86,18 @@ string sub greet() {
 EOF
 BATCH_DIR="${TMP}/batch"
 mkdir -p "${BATCH_DIR}"
+TARGET_ID="$(source_id "${TMP}/target.qc")"
+TARGET2_ID="$(source_id "${TMP}/target2.qc")"
 "${QCC}" -c --stub="${TMP}/host_stub.qc" \
     --output-dir="${BATCH_DIR}" \
     "${TMP}/target.qc" "${TMP}/target2.qc" | tail -2
 # Both targets must have .qo; stub must not.
-[ -f "${BATCH_DIR}/target.qo" ] || { echo "FAIL: target.qo missing"; exit 1; }
-[ -f "${BATCH_DIR}/target2.qo" ] || { echo "FAIL: target2.qo missing"; exit 1; }
-[ ! -f "${BATCH_DIR}/host_stub.qo" ] || { echo "FAIL: stub emitted a .qo"; exit 1; }
+[ -f "${BATCH_DIR}/${TARGET_ID}.qo" ] || { echo "FAIL: ${TARGET_ID}.qo missing"; exit 1; }
+[ -f "${BATCH_DIR}/${TARGET2_ID}.qo" ] || { echo "FAIL: ${TARGET2_ID}.qo missing"; exit 1; }
+if find "${BATCH_DIR}" -maxdepth 1 -name '*host_stub*.qo' | grep -q .; then
+    echo "FAIL: stub emitted a .qo"
+    exit 1
+fi
 echo "  confirmed: batch mode emitted 2 target .qos, no stub .qo"
 
 echo ""

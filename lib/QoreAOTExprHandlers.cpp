@@ -253,6 +253,13 @@ static QoreValue read_expr_func_call(AOTExprReadCtx& ctx) {
 static const QoreMethod* resolve_aot_self_method(const QoreClass* qc, const char* method_name,
         qore_class_private*& qcp) {
     qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+    // parseFindSelfMethod() calls initialize().  During AOT method/signature
+    // deserialization that can commit a class before all of its methods have
+    // been attached, which breaks later abstract-method registration.  Leave
+    // pending AOT classes name-based until normal class commit/finalization.
+    if (!qcp->initialized) {
+        return nullptr;
+    }
     const QoreMethod* m = qcp->parseFindSelfMethod(method_name);
     if (!m) {
         m = qc->findMethod(method_name);
@@ -261,6 +268,15 @@ static const QoreMethod* resolve_aot_self_method(const QoreClass* qc, const char
         }
     }
     return m;
+}
+
+static QoreValue make_unresolved_aot_self_method_call(const char* method_ref, QoreParseListNode* pln,
+        const QoreClass* qc) {
+    SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(method_ref), pln, qc);
+    if (pln) {
+        sfcn->resolveParseArgs();
+    }
+    return QoreValue(sfcn);
 }
 
 static bool write_expr_self_method_call(AOTExprWriteCtx& ctx) {
@@ -345,10 +361,7 @@ static QoreValue read_expr_self_method_call(AOTExprReadCtx& ctx) {
     qore_class_private* qcp = nullptr;
     const QoreMethod* m = resolve_aot_self_method(qc, method_name, qcp);
     if (!m) {
-        if (pln) {
-            pln->deref();
-        }
-        return QoreValue();
+        return make_unresolved_aot_self_method_call(method_ref, pln, qc);
     }
     if (m->isStatic()) {
         StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, pln);
@@ -505,6 +518,18 @@ static const AbstractQoreFunctionVariant* resolve_expr_constructor_variant(const
         error = "exception resolving constructor variant for class '";
         error += class_path ? class_path : qc->getName();
         error += "'";
+        QoreValue ex_err = xsink.getExceptionErr();
+        QoreValue ex_desc = xsink.getExceptionDesc();
+        if (ex_err.getType() == NT_STRING) {
+            QoreStringValueHelper ex_err_str(ex_err);
+            error += ": ";
+            error += ex_err_str->c_str();
+        }
+        if (ex_desc.getType() == NT_STRING) {
+            QoreStringValueHelper ex_desc_str(ex_desc);
+            error += ": ";
+            error += ex_desc_str->c_str();
+        }
         xsink.clear();
         return nullptr;
     }
@@ -779,10 +804,13 @@ static bool write_expr_global_varref(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_global_varref(AOTExprReadCtx& ctx) {
     const char* index_str = ctx.reader.readStringRef(ctx.ptr);
     if (!index_str) {
+        ctx.error = "missing global variable reference payload";
         return QoreValue();
     }
     Var* gvar = resolve_global_varref_payload(index_str, ctx.pgm, ctx.globals, ctx.num_globals);
     if (!gvar) {
+        ctx.error = "cannot resolve global variable reference '" + std::string(index_str)
+            + "' while deserializing native AOT expression";
         return QoreValue();
     }
     GlobalVarRefNode* vrn = new GlobalVarRefNode(&loc_builtin, strdup(gvar->getName()), gvar);

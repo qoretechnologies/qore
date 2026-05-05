@@ -3419,6 +3419,17 @@ next_instruction:
             fflush(stderr);
         }
 
+        auto raiseMissingAOTExpr = [&](const char* what, const QoreValue& expr) {
+            const QoreProgramLocation* loc = inst->loc;
+            int line = loc ? loc->start_line + loc->offset : -1;
+            xsink->raiseException("IR-EXEC-ERROR",
+                "%s expression not resolved in AOT IR: function='%s' block='%s' ip=%zu opcode=%s(%d) "
+                "result_slot=%d expr_type=%s source=%s:%d",
+                what, func.name.c_str(), block->name.c_str(), ip,
+                getOpcodeName(static_cast<int>(inst->opcode)), static_cast<int>(inst->opcode),
+                inst->result.id, expr.getTypeName(), loc ? loc->getFileValue() : "", line);
+        };
+
         switch (inst->opcode) {
             case QoreIROpcode::ConstInt: {
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
@@ -5796,7 +5807,17 @@ load_local_done:
             case QoreIROpcode::NewHashDecl: {
                 auto* nhd_inst = static_cast<QoreIRNewHashDeclInstruction*>(inst);
                 bool needs_deref = true;
-                QoreValue out = const_cast<NewHashDeclNode*>(nhd_inst->node)->eval(needs_deref, xsink);
+                const AbstractQoreNode* node = nhd_inst->node
+                    ? nhd_inst->node
+                    : nhd_inst->expr.getInternalNode();
+                const NewHashDeclNode* nhd = dynamic_cast<const NewHashDeclNode*>(node);
+                if (!nhd) {
+                    raiseMissingAOTExpr("new hashdecl", nhd_inst->expr);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue out = const_cast<NewHashDeclNode*>(nhd)->eval(needs_deref, xsink);
                 if (!needs_deref && out.hasNode()) {
                     out = out.refSelf();
                 }
@@ -5815,7 +5836,17 @@ load_local_done:
             case QoreIROpcode::NewComplexHash: {
                 auto* nch_inst = static_cast<QoreIRNewComplexHashInstruction*>(inst);
                 bool needs_deref = true;
-                QoreValue out = const_cast<NewComplexHashNode*>(nch_inst->node)->eval(needs_deref, xsink);
+                const AbstractQoreNode* node = nch_inst->node
+                    ? nch_inst->node
+                    : nch_inst->expr.getInternalNode();
+                const NewComplexHashNode* nch = dynamic_cast<const NewComplexHashNode*>(node);
+                if (!nch) {
+                    raiseMissingAOTExpr("new complex hash", nch_inst->expr);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue out = const_cast<NewComplexHashNode*>(nch)->eval(needs_deref, xsink);
                 if (!needs_deref && out.hasNode()) {
                     out = out.refSelf();
                 }
@@ -5834,7 +5865,17 @@ load_local_done:
             case QoreIROpcode::NewComplexList: {
                 auto* ncl_inst = static_cast<QoreIRNewComplexListInstruction*>(inst);
                 bool needs_deref = true;
-                QoreValue out = const_cast<NewComplexListNode*>(ncl_inst->node)->eval(needs_deref, xsink);
+                const AbstractQoreNode* node = ncl_inst->node
+                    ? ncl_inst->node
+                    : ncl_inst->expr.getInternalNode();
+                const NewComplexListNode* ncl = dynamic_cast<const NewComplexListNode*>(node);
+                if (!ncl) {
+                    raiseMissingAOTExpr("new complex list", ncl_inst->expr);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue out = const_cast<NewComplexListNode*>(ncl)->eval(needs_deref, xsink);
                 if (!needs_deref && out.hasNode()) {
                     out = out.refSelf();
                 }

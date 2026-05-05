@@ -3907,7 +3907,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         ConstantEntry* ce = rt_const->getConstantEntry();
         if (ce) {
             QoreValue resolved = ce->getReferencedValue();
-            if (!resolved.needsEval()) {
+            if (!ce->aot_shell_pending && ce->hasValue() && !resolved.needsEval()) {
                 qore_type_t resolved_type = resolved.getType();
                 if (resolved.isEnum() || resolved_type == NT_INT || resolved_type == NT_FLOAT
                         || resolved_type == NT_BOOLEAN || resolved_type == NT_STRING

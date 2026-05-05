@@ -422,7 +422,6 @@ int ParseSelfMethodReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext
         *const_cast<QoreClass*>(QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()))
     );
     meth = class_ctx->parseResolveSelfMethod(loc, method.c_str(), class_ctx);
-    method.clear();
     return meth ? 0 : -1;
 }
 

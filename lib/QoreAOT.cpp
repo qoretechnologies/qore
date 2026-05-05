@@ -664,6 +664,13 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // complex/hashdecl type metadata so downstream AOT compilation sees the
     // same typed constants as source parsing.
     flags |= QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS;
+    // Debug/handler IR can contain large literal container construction
+    // instructions with more than 255 SSA operands.
+    flags |= QORE_AOT_FEAT_WIDE_IR_OPERANDS;
+    // Source-stripped statement metadata can be large in generated programs
+    // (Qorus emits >64K entries in some functions), so location-table counts
+    // must not truncate to u16.
+    flags |= QORE_AOT_FEAT_WIDE_LOC_TABLES;
     return flags;
 }
 
@@ -4879,15 +4886,15 @@ static int getLicenseEnum(const std::string& license_str) {
 /** Creates:
     - Init adapter: wraps the AOT init impl (returns QoreStringNode*) into the
       qore_module_init_t signature (void(QoreModuleInitContext&, ExceptionSink&))
-    - NS init adapter: wraps the AOT ns_init impl (2-arg) into the
-      qore_module_ns_init_t signature (3-arg, ignoring ExceptionSink)
+    - NS init adapter: wraps the AOT ns_init impl into the
+      qore_module_ns_init_t signature, preserving ExceptionSink propagation
     - Module desc function: {sanitized_name}_qore_module_desc(QoreModuleInfo&)
       that calls qore_aot_fill_module_desc() with all metadata
 
     @param ctx LLVM context
     @param module LLVM module
     @param init_impl_fn the __qore_aot_module_init_impl function (returns ptr)
-    @param ns_init_impl_fn the __qore_aot_module_ns_init_impl function (ptr, ptr -> void)
+    @param ns_init_impl_fn the __qore_aot_module_ns_init_impl function (ptr, ptr, ptr -> void)
     @param del_impl_fn the __qore_aot_module_delete_impl function (void -> void)
     @param mod_info module metadata
 */
@@ -4946,7 +4953,7 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
     }
 
     // --- NS init adapter: void(ptr %root, ptr %qore, ptr %xsink) ---
-    // Calls ns_init_impl_fn(root, qore) (ignores xsink)
+    // Calls ns_init_impl_fn(root, qore, xsink)
     llvm::Function* ns_init_adapter_fn;
     {
         auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false);
@@ -4957,12 +4964,11 @@ static void emitModuleDescFunction(llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::Value* root_arg = &*arg_it++;
         llvm::Value* qore_arg = &*arg_it++;
         llvm::Value* xsink_arg = &*arg_it;
-        (void)xsink_arg;
 
         auto* entry_bb = llvm::BasicBlock::Create(ctx, "entry", ns_init_adapter_fn);
         llvm::IRBuilder<> builder(entry_bb);
 
-        builder.CreateCall(ns_init_impl_fn, {root_arg, qore_arg});
+        builder.CreateCall(ns_init_impl_fn, {root_arg, qore_arg, xsink_arg});
         builder.CreateRetVoid();
     }
 
@@ -5139,6 +5145,19 @@ static std::string fileBasenameKeepExt(const std::string& path) {
         base = base.substr(slash + 1);
     }
     return base;
+}
+
+//! Source identity for script-context batch `.qo` artifacts.
+//!
+//! Batch mode can compile unrelated directories into one output dir and
+//! later register subsets through generated aggregators.  Basename-only
+//! identities are therefore unsafe: `lib/qorus.ql` and `bin/qorus.qr`
+//! both used to emit `qorus.qo` plus `qore_qorus_qorus_*` symbols, so one
+//! fragment silently replaced the other.  Use the canonical source path
+//! instead; callers that generate aggregators must mirror this exact
+//! sanitization.
+static std::string scriptBatchSourceId(const std::string& target_canon) {
+    return sanitizeCIdentifier(target_canon);
 }
 
 //! Phase 4 slice 10d: emit per-file script register entry symbols
@@ -5547,9 +5566,12 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
     }, false);
     auto aot_mod_init_fn = module.getOrInsertFunction("qore_aot_module_init_v3", aot_mod_init_type);
 
-    // Declare qore_aot_module_ns_init: void (root_ns, qore_ns)
-    auto* aot_mod_ns_init_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
-    auto aot_mod_ns_init_fn = module.getOrInsertFunction("qore_aot_module_ns_init", aot_mod_ns_init_type);
+    // Declare qore_aot_module_ns_init_v2: void (root_ns, qore_ns, xsink)
+    auto* aot_mod_ns_init_type = llvm::FunctionType::get(void_type, {
+        ptr_type, ptr_type, ptr_type
+    }, false);
+    auto aot_mod_ns_init_fn = module.getOrInsertFunction("qore_aot_module_ns_init_v2",
+        aot_mod_ns_init_type);
 
     // Declare qore_aot_module_delete: void ()
     auto* aot_mod_del_type = llvm::FunctionType::get(void_type, {}, false);
@@ -5602,7 +5624,7 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
     // Create internal implementation function for ns_init
     llvm::Function* ns_init_impl_fn;
     {
-        auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
+        auto* fn_type = llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false);
         ns_init_impl_fn = llvm::Function::Create(fn_type, llvm::Function::InternalLinkage,
             "__qore_aot_module_ns_init_impl", module);
 
@@ -5611,9 +5633,10 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
 
         auto arg_it = ns_init_impl_fn->arg_begin();
         llvm::Value* root_ns_val = &*arg_it++;
-        llvm::Value* qore_ns_val = &*arg_it;
+        llvm::Value* qore_ns_val = &*arg_it++;
+        llvm::Value* xsink_val = &*arg_it;
 
-        builder.CreateCall(aot_mod_ns_init_fn, {root_ns_val, qore_ns_val});
+        builder.CreateCall(aot_mod_ns_init_fn, {root_ns_val, qore_ns_val, xsink_val});
         builder.CreateRetVoid();
     }
 
@@ -6723,7 +6746,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     llvm::InitializeNativeTargetAsmParser();
 
     llvm::LLVMContext ctx;
-    std::string mod_name_san = sanitizeCIdentifier(fileBasenameNoExt(target_canon));
+    std::string mod_name_san = scriptBatchSourceId(target_canon);
     auto module = std::make_unique<llvm::Module>(
         "qore_aot_script_" + mod_name_san, ctx);
 
@@ -7068,16 +7091,7 @@ bool QoreAOT::compileScriptFilesBatch(
             return false;
         }
         e.source = stripIncludeDirectives(e.source);
-        std::string bn = e.canon;
-        size_t slash = bn.rfind('/');
-        if (slash != std::string::npos) {
-            bn = bn.substr(slash + 1);
-        }
-        size_t dot = bn.rfind('.');
-        if (dot != std::string::npos && dot > 0) {
-            bn = bn.substr(0, dot);
-        }
-        e.out_path = out_dir + "/" + bn + ".qo";
+        e.out_path = out_dir + "/" + scriptBatchSourceId(e.canon) + ".qo";
         entries.push_back(std::move(e));
     }
 

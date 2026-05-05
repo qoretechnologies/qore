@@ -10050,7 +10050,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot(QoreAOTContext* ctx,
         int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
     const QoreAOTCallTarget& target = ctx->call_targets[slot];
-    return qore_rt_new_object_nb(target.qc, target.variant, args, nargs, xsink);
+    const QoreClass* qc = target.qc;
+    if (!qc && target.class_path && *target.class_path) {
+        qc = qore_aot_resolve_class_ref(ctx->pgm, target.class_path, false);
+    }
+    if (!qc) {
+        xsink->raiseException("AOT-ERROR",
+            "cannot resolve class '%s' for AOT new object call target slot %d",
+            target.class_path && *target.class_path ? target.class_path : "<missing>", slot);
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_object_nb(qc, target.variant, args, nargs, xsink);
 }
 
 // Dispatch a method call on a QoreObject with pre-evaluated args.

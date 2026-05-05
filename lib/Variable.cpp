@@ -1175,7 +1175,11 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
     switch (root.kind) {
         case LVPathStepKind::LocalVar: {
             auto* lv = reinterpret_cast<const LocalVar*>(root.ref_ptr);
-            assert(lv);
+            if (!lv) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "cannot resolve local lvalue root '%s'", root.name.c_str());
+                return -1;
+            }
             if (lv->getLValue(*this, for_remove, false)) {
                 clearPtr();
                 return -1;
@@ -1184,7 +1188,11 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
         }
         case LVPathStepKind::ClosureVar: {
             auto* lv = reinterpret_cast<const LocalVar*>(root.ref_ptr);
-            assert(lv);
+            if (!lv) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "cannot resolve closure lvalue root '%s'", root.name.c_str());
+                return -1;
+            }
             ClosureVarValue* cvv = thread_get_runtime_closure_var(lv);
             if (!cvv) {
                 cvv = thread_find_closure_var(root.name.c_str());
@@ -1203,7 +1211,13 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
         case LVPathStepKind::GlobalVar:
         case LVPathStepKind::ThreadLocalVar: {
             auto* var = reinterpret_cast<const Var*>(root.ref_ptr);
-            assert(var);
+            if (!var) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "cannot resolve %s lvalue root '%s'",
+                    root.kind == LVPathStepKind::GlobalVar ? "global" : "thread-local",
+                    root.name.c_str());
+                return -1;
+            }
             if (const_cast<Var*>(var)->getLValue(*this, for_remove)) {
                 clearPtr();
                 return -1;

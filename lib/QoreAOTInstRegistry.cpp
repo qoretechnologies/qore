@@ -2249,13 +2249,15 @@ static std::unique_ptr<QoreIRInstruction> readNewHashDeclFromHash(
         AOTInstReadCtx& ctx) {
     const char* hd_path = ctx.reader.readStringRef(ctx.ptr);
     if (!hd_path || !*hd_path) {
+        ctx.error = "missing hashdecl path";
         return nullptr;
     }
     uint8_t runtime_check = QoreAOTBinaryReader::readU8(ctx.ptr);
 
     // Resolve hashdecl by namespace path
-    QoreProgram* pgm = getProgram();
+    QoreProgram* pgm = ctx.pgm ? ctx.pgm : getProgram();
     if (!pgm) {
+        ctx.error = std::string("cannot resolve hashdecl '") + hd_path + "': no program context";
         return nullptr;
     }
     qore_program_private* pp = qore_program_private::get(*pgm);
@@ -3005,6 +3007,11 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
     // Read path steps
     uint8_t num_steps = QoreAOTBinaryReader::readU8(ctx.ptr);
     for (uint8_t i = 0; i < num_steps; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT lvalue path deserialization")) {
+            ctx.error = "operation cancelled during AOT lvalue path deserialization";
+            delete pi;
+            return nullptr;
+        }
         LVPathStep step;
         step.kind = static_cast<LVPathStepKind>(QoreAOTBinaryReader::readU8(ctx.ptr));
         step.slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
@@ -3020,15 +3027,19 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
             uint32_t num_slice_ops = QoreAOTBinaryReader::readU32(ctx.ptr);
             step.slice_operand_ids.reserve(num_slice_ops);
             for (uint32_t k = 0; k < num_slice_ops; ++k) {
+                if (k && !(k % 100)
+                        && qore_check_cancel(nullptr, "AOT lvalue slice operand deserialization")) {
+                    ctx.error = "operation cancelled during AOT lvalue slice operand deserialization";
+                    delete pi;
+                    return nullptr;
+                }
                 step.slice_operand_ids.push_back(QoreAOTBinaryReader::readU32(ctx.ptr));
             }
         }
-        // Resolve ref_ptr from slot_to_local for closure-body / handler IR
-        // paths. The main-function AOT context still resolves ref_ptr from
-        // ctx->locals in buildContextFromSlotMap (QoreAOTRuntime.cpp), but
-        // closure body IR is deserialized via deserializeIRFunction which
-        // doesn't run that resolution — without this fix, navigatePath on a
-        // LocalVar / ClosureVar root crashes dereferencing null ref_ptr.
+        // Resolve ref_ptr for debug/cached IR paths. The native AOT context
+        // resolves roots in buildContextFromSlotMap (QoreAOTRuntime.cpp), but
+        // deserialized IR executes directly through QoreIRInterpreter; every
+        // root kind must therefore be rebound here as well.
         if (step.kind == LVPathStepKind::LocalVar
                 || step.kind == LVPathStepKind::ClosureVar) {
             if (LocalVar* lv = ctx.resolveLocalBySlot(step.slot_id)) {
@@ -3049,6 +3060,24 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
             // This keeps module writes aligned with LoadStaticVar-by-path reads
             // after the module namespace is merged into an importing program.
             scv->deref(nullptr);
+        } else if ((step.kind == LVPathStepKind::GlobalVar
+                || step.kind == LVPathStepKind::ThreadLocalVar)
+                && !step.name.empty()) {
+            if (!ctx.pgm) {
+                ctx.error = "cannot resolve global lvalue path root '" + step.name
+                    + "': no runtime program";
+                delete pi;
+                return nullptr;
+            }
+            qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+            const qore_ns_private* vns = nullptr;
+            step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
+                *pp->RootNS, step.name.c_str(), vns);
+            if (!step.ref_ptr) {
+                ctx.error = "cannot resolve global lvalue path root '" + step.name + "'";
+                delete pi;
+                return nullptr;
+            }
         }
         pi->path.push_back(std::move(step));
     }

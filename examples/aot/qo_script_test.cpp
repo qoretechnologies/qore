@@ -14,7 +14,7 @@
 // Build:
 //   LD_LIBRARY_PATH=build ./build/qcc -c -o /tmp/slice10d/lib.qo lib.qc
 //   LD_LIBRARY_PATH=build ./build/qcc -c -L /tmp/slice10d -o /tmp/slice10d/main.qo main.q
-//   g++ -std=c++17 -Iinclude -Lbuild \
+//   g++ -std=c++20 -Iinclude -Lbuild \
 //       examples/aot/qo_script_test.cpp /tmp/slice10d/*.qo \
 //       -lqore -Wl,-rpath,build -o /tmp/qo_script_test
 //   LD_LIBRARY_PATH=build /tmp/qo_script_test
