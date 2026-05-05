@@ -194,6 +194,10 @@ struct QoreParseContext {
     //!
     //! Motivation + scope: see `design/parser-lvalue-type-propagation.md`.
     const QoreTypeInfo* expected_type_info = nullptr;
+    //! True when parse initialization of the current expression saw a qcc
+    //! --stub external constant. Constants with such dependencies cannot be
+    //! folded at compile time; AOT must preserve their initializer expression.
+    bool external_stub_constant_ref = false;
 
     DLLLOCAL QoreParseContext(QoreProgram* pgm = getProgram()) : pgm(pgm) {
     }

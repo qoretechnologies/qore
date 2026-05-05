@@ -330,6 +330,18 @@ public:
     //! own container node appears in the program reverse map.
     std::string current_const_path;
 
+    //! Constants serialized by the current AOT blob.  If set, writeValue()
+    //! must not emit references to same-blob constants unless they are already
+    //! available at the current section's deserialization point.
+    const std::unordered_set<std::string>* current_blob_const_fqns = nullptr;
+
+    //! Constants already available to the reader while serializing the current
+    //! value.  When current_blob_const_fqns is set, this is the complete allow
+    //! list for VT_CONST_REF emission from namespace-constant values; constants
+    //! from later same-blob positions or sibling `.qo` fragments are not
+    //! available yet and must be serialized by value.
+    const std::unordered_set<std::string>* available_const_ref_fqns = nullptr;
+
     //! Per-blob type-path interner — when non-empty, `writeVariantSignature`
     //! emits a `u32` index into this table instead of the legacy inline
     //! string.  The TYPE_TABLE section is written at the tail of
@@ -1454,6 +1466,10 @@ class QoreAOTBinaryDeserializer {
         //! Deferred VT_EXPR_NATIVE default.  The payload uses string-pool refs,
         //! so it is materialized later with the owning binary reader.
         std::vector<uint8_t> pending_expr_native_blob;
+        //! Serialized default payload.  Member records are read while only
+        //! declaration shells exist; nested const refs inside values must be
+        //! materialized after the batch-wide constant registration phase.
+        std::vector<uint8_t> value_blob;
     };
     std::vector<std::vector<PendingInstanceMember>> pending_instance_members;
 
@@ -1479,6 +1495,8 @@ class QoreAOTBinaryDeserializer {
         std::string pending_const_ref_path;
         //! Same deferred-native-expression channel as PendingInstanceMember.
         std::vector<uint8_t> pending_expr_native_blob;
+        //! Same serialized-default channel as PendingInstanceMember.
+        std::vector<uint8_t> value_blob;
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 
@@ -1628,6 +1646,9 @@ private:
     bool resolveInstanceMembers(std::string& error);
     bool importInheritedMembers(std::string& error);
     bool resolveStaticMembers(std::string& error);
+    bool registerClassConstantShells(std::string& error);
+    bool resolveClassConstantValues(std::string& error);
+    bool resolveNamespaceConstants(std::string& error);
     bool resolveClassConstants(std::string& error);
     bool resolveHashdeclMembers(std::string& error);
     bool resolveTypedefs(std::string& error);
@@ -1691,6 +1712,28 @@ public:
 
     //! Phase-split 2a-1 — resolve base classes and type-only metadata.
     bool resolveTypes(std::string& error);
+
+    //! Phase-split 2a-2a — register class-constant shells only.
+    /** In batch mode this must run across all sessions before class-constant
+        value blobs are materialized, because class constants can reference
+        constants declared in sibling fragments. */
+    bool registerClassConstantShellsPhase(std::string& error) {
+        return registerClassConstantShells(error);
+    }
+
+    //! Phase-split 2a-2b — register namespace constants.
+    /** Must run after class-constant shells are registered so namespace
+        constants can preserve references to class constants as runtime refs. */
+    bool resolveNamespaceConstantsPhase(std::string& error) {
+        return resolveNamespaceConstants(error);
+    }
+
+    //! Phase-split 2a-2c — materialize class-constant values.
+    /** Must run after class-constant shells and namespace constants are
+        registered across all sessions. */
+    bool resolveClassConstantValuesPhase(std::string& error) {
+        return resolveClassConstantValues(error);
+    }
 
     //! Phase-split 2a-2 — register class and namespace constants.
     /** Must run across all sessions after resolveTypes() and before
@@ -2090,9 +2133,17 @@ public:
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.resolveTypes(error);
                     })) return false;
-            if (!runSessionPhase("AOT constant resolution",
+            if (!runSessionPhase("AOT class constant shell registration",
                     [&error](QoreAOTBinaryDeserializer& sess) {
-                        return sess.resolveConstants(error);
+                        return sess.registerClassConstantShellsPhase(error);
+                    })) return false;
+            if (!runSessionPhase("AOT namespace constant resolution",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.resolveNamespaceConstantsPhase(error);
+                    })) return false;
+            if (!runSessionPhase("AOT class constant value resolution",
+                    [&error](QoreAOTBinaryDeserializer& sess) {
+                        return sess.resolveClassConstantValuesPhase(error);
                     })) return false;
             if (!runSessionPhase("AOT global resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {

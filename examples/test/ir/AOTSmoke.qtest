@@ -95,6 +95,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testHandlerRecursionGuard());
         addTestCase("AOT cross-module same-name dispatch",
             \testCrossModuleSameName());
+        addTestCase("AOT qcc stub external constants",
+            \testQccStubExternalConstants());
         addTestCase("AOT qmod dependency honors prepend module path",
             \testAOTModuleDependencyPrependPath());
         addTestCase("AOT ref foreach ParseNode pointer",
@@ -181,6 +183,12 @@ class AOTSmokeTest inherits QUnit::Test {
             \testStripSourceTypedListHashdeclElement());
         # Strip source: runtime constant resolution
         addTestCase("AOT strip source runtime const ref", \testStripSourceRuntimeConstRef());
+        addTestCase("AOT constant reverse map honors namespace constant order",
+            \testNamespaceConstantReverseMapOrder());
+        addTestCase("AOT batch fragments avoid forward constant refs",
+            \testBatchFragmentConstantReverseMapOrder());
+        addTestCase("AOT batch fragments defer class constant refs",
+            \testBatchFragmentDeferredClassConstantRefs());
         # Strip source: static class variable access (module)
         addTestCase("AOT strip source static varref module", \testStripSourceStaticVarrefModule());
         addTestCase("AOT strip source module init function ref",
@@ -1916,6 +1924,99 @@ printf(\"%s\\n\", ModB::shared_fn(\"y\"));
             libqore_dir, tmp_dir, qore_bin, paths.src));
         assertEq("A:x\nA:y:B\n", out,
             "cross-module same-name dispatch produces correct results: " + out);
+    }
+
+    testQccStubExternalConstants() {
+        string tmp_dir = sprintf("/tmp/aot_stub_const_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string stub_path = tmp_dir + "/stub.qc";
+        string provider_path = tmp_dir + "/provider.qr";
+        string main_path = tmp_dir + "/main.qr";
+        string provider_qo = tmp_dir + "/provider.qo";
+        string main_qo = tmp_dir + "/main.qo";
+        string app_path = tmp_dir + "/stub-ok";
+        string missing_app_path = tmp_dir + "/stub-missing";
+
+        {
+            File f();
+            f.open2(stub_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%new-style
+public namespace Host {
+    public const Build = \"\";
+    public const Banner = sprintf(\"build %s\", Build);
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(provider_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace Host {
+    public const Build = \"real\";
+    public const Banner = sprintf(\"build %s\", Build);
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(main_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+sub main() {
+    string b = Host::Banner;
+    printf(\"%s\\n\", b);
+}
+");
+            f.close();
+        }
+
+        string compile_main = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --stub=%s -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, stub_path, main_qo, main_path));
+        assertTrue(compile_main.regex("EXIT=0"),
+            "qcc compiles main source with declaration-only stub: " + compile_main);
+
+        string compile_provider = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, provider_qo, provider_path));
+        assertTrue(compile_provider.regex("EXIT=0"),
+            "qcc compiles runtime provider source: " + compile_provider);
+
+        string link_ok = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, provider_qo, main_qo));
+        assertTrue(link_ok.regex("EXIT=0"),
+            "qcc links provider before stub-compiled main: " + link_ok);
+
+        string run_ok = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("build real\nEXIT=0\n", run_ok,
+            "stub constants resolve to host-injected runtime constants, not placeholder values");
+
+        string link_missing = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, missing_app_path, main_qo));
+        assertTrue(link_missing.regex("EXIT=0"),
+            "qcc can link a host-missing binary so runtime diagnostics can name the missing constant: "
+            + link_missing);
+
+        string run_missing = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, missing_app_path));
+        assertTrue(run_missing.regex("cannot resolve runtime constant reference 'Host::Banner'"),
+            "missing host constant reports the unresolved stub-derived constant path: " + run_missing);
+        assertTrue(run_missing.regex("runtime host must inject the external constant"),
+            "missing host constant diagnostic explains the qcc --stub contract: " + run_missing);
+        assertTrue(run_missing.regex("EXIT=1"),
+            "missing host constant fails fast instead of using a stub placeholder: " + run_missing);
     }
 
     testAOTModuleDependencyPrependPath() {
@@ -4565,6 +4666,247 @@ exit(0);
             "runtime const ref: all pre-compiled: " + result.compile_out);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out, "runtime const ref: strip-source matches interpreter");
+    }
+
+    testNamespaceConstantReverseMapOrder() {
+        # Regression: folded containers can share node pointers across
+        # constants. The reverse map must not encode an earlier constant's
+        # value through a later same-blob constant, because namespace constants
+        # are deserialized in section order.
+        string code = "%modern
+%require-types
+
+public namespace OMQ {
+    public const CommonAPI = (
+        (\"name\": \"common\", \"returns\": \"hash\"),
+    );
+    public const JobAPI = CommonAPI + (
+        (\"name\": \"job\", \"returns\": \"nothing\"),
+    );
+}
+
+printf(\"%s\\n\", OMQ::CommonAPI[0].name);
+printf(\"%s\\n\", OMQ::JobAPI[0].name);
+printf(\"%s\\n\", OMQ::JobAPI[1].name);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "namespace constant reverse map order: compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "namespace constant reverse map order: all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "namespace constant reverse map order: strip-source matches interpreter");
+    }
+
+    testBatchFragmentConstantReverseMapOrder() {
+        # qcc batch mode parses all sources in one program, but emits one `.qo`
+        # per source. A fragment must not serialize an earlier constant's value
+        # through a later sibling fragment's constant path.
+        string tmp_dir = sprintf("/tmp/aot_batch_const_order_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string common_path = tmp_dir + "/a_common.qr";
+        string job_path = tmp_dir + "/b_job.qr";
+        string main_path = tmp_dir + "/c_main.qr";
+        string app_path = tmp_dir + "/app";
+
+        {
+            File f();
+            f.open2(common_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public const CommonAPI = (
+        (\"name\": \"common\", \"returns\": \"hash\"),
+    );
+}
+");
+            f.close();
+        }
+        {
+            string job_items;
+            for (int i = 0; i < 28; ++i) {
+                job_items += sprintf("        \"job_%d\",\n", i);
+            }
+
+            File f();
+            f.open2(job_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public const JobFunctionApi = (
+" + job_items + "    );
+
+    public const JobAPI = JobFunctionApi + CommonAPI + (
+        (\"name\": \"job\", \"returns\": \"nothing\"),
+    );
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(main_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+sub main() {
+    printf(\"%s\\n\", OMQ::CommonAPI[0].name);
+    printf(\"%s\\n\", OMQ::JobAPI[28].name);
+    printf(\"%s\\n\", OMQ::JobAPI[29].name);
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, common_path, job_path, main_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc batch compiles sibling fragments: " + compile_out);
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s/*.qo 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_dir));
+        assertTrue(link_out.regex("EXIT=0"),
+            "qcc links sibling fragments: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("common\ncommon\njob\nEXIT=0\n", run_out,
+            "batch fragment constants do not depend on later sibling const refs: " + run_out);
+    }
+
+    testBatchFragmentDeferredClassConstantRefs() {
+        # Batch-linked fragments are registered in object/link order, not
+        # necessarily source parse order.  Member defaults and class constants
+        # must therefore defer nested const-ref materialization until all
+        # sibling-fragment constant shells are registered.
+        string tmp_dir = sprintf("/tmp/aot_batch_deferred_consts_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string common_path = tmp_dir + "/z_common.qr";
+        string user_path = tmp_dir + "/a_user.qr";
+        string helper_path = tmp_dir + "/b_helper.qr";
+        string main_path = tmp_dir + "/c_main.qr";
+        string app_path = tmp_dir + "/app";
+
+        {
+            File f();
+            f.open2(common_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public const QorusServerDefines = (\"QorusServer\", \"QorusHasAlerts\");
+
+    public class ProgramLike {
+        private {
+            list<string> defs;
+        }
+
+        constructor(list<string> defs) {
+            self.defs = defs;
+        }
+
+        public string firstDefine() {
+            return defs[0];
+        }
+    }
+
+    public class MapperProgram {
+        public {
+            const PythonTypeMap = {
+                \"int\": \"int\",
+                \"string\": \"Any\",
+            };
+        }
+    }
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(user_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public class UserApi {
+        public {
+            static ProgramLike DynamicLogic(QorusServerDefines);
+        }
+
+        public static string firstDefine() {
+            return DynamicLogic.firstDefine();
+        }
+    }
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(helper_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+public namespace OMQ {
+    public class MapperFieldCodeTypeHelper {
+        public {
+            const PythonTypeMap = OMQ::MapperProgram::PythonTypeMap;
+        }
+    }
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(main_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+sub main() {
+    printf(\"%s\\n\", OMQ::UserApi::firstDefine());
+    printf(\"%s\\n\", OMQ::MapperFieldCodeTypeHelper::PythonTypeMap{\"int\"});
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, common_path, user_path,
+            helper_path, main_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc batch compiles deferred const-ref fragments: " + compile_out);
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s/*.qo 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_dir));
+        assertTrue(link_out.regex("EXIT=0"),
+            "qcc links deferred const-ref fragments: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("QorusServer\nint\nEXIT=0\n", run_out,
+            "batch fragment member/class const refs resolve after shell phase: " + run_out);
     }
 
     testStripSourceStaticVarrefModule() {

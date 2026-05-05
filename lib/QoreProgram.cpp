@@ -1801,6 +1801,30 @@ void qore_program_private::addStatementToIndexIntern(name_section_sline_statemen
     }
 }
 
+AbstractStatement* qore_program_private::findStatementInIndexIntern(
+        const name_section_sline_statement_map_t& statementIndex, const char* key, int line) const {
+    if (!key) {
+        return nullptr;
+    }
+    name_section_sline_statement_map_t::const_iterator it = statementIndex.find(key);
+    if (it == statementIndex.end() || !it->second) {
+        return nullptr;
+    }
+    sline_statement_map_t::const_iterator li = it->second->statementMap.find(line);
+    return li == it->second->statementMap.end() ? nullptr : li->second;
+}
+
+AbstractStatement* qore_program_private::findIndexedStatementForLocation(const char* file, const char* source,
+        int start_line, int offset) const {
+    if (start_line <= 0) {
+        return nullptr;
+    }
+    if (source && *source) {
+        return findStatementInIndexIntern(statementByFileIndex, source, start_line + offset);
+    }
+    return findStatementInIndexIntern(statementByFileIndex, file, start_line + offset);
+}
+
 void qore_program_private::registerStatement(QoreProgram *pgm, AbstractStatement *statement, bool addToIndex) {
     if (pgm && statement) {
         // plock must already be held

@@ -48,7 +48,7 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
         bool n_pub, bool n_init, bool n_builtin, ClassAccess n_access)
         : loc(loc), name(n), typeInfo(ti), val(val), in_init(false), pub(n_pub),
         init(n_init), builtin(n_builtin), delayed_eval(false), has_init_expr(false),
-        aot_shell_pending(false), access(n_access) {
+        aot_shell_pending(false), external_stub(false), external_stub_dependent(false), access(n_access) {
     QoreProgram* pgm = getProgram();
     if (pgm)
         pwo = qore_program_private::getParseWarnOptions(pgm);
@@ -68,6 +68,8 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         in_init(false), pub(old.pub), init(true), builtin(old.builtin), delayed_eval(old.delayed_eval),
         has_init_expr(old.has_init_expr),
         aot_shell_pending(old.aot_shell_pending),
+        external_stub(old.external_stub),
+        external_stub_dependent(old.external_stub_dependent),
         saved_val(old.saved_val.refSelf()),
         access(old.access), from_module(old.from_module) {
     assert(!old.in_init);
@@ -157,6 +159,24 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     }
 }
 
+void ConstantEntry::makeExternalStubDeclaration() {
+    assert(!builtin);
+    delayed_eval = false;
+    has_init_expr = false;
+    aot_shell_pending = false;
+    external_stub = true;
+    external_stub_dependent = false;
+    init = true;
+
+    saved_val.discard(nullptr);
+    aot_init_expr.discard(nullptr);
+
+    QoreValue placeholder = val;
+    val.clear();
+    val = new RuntimeConstantRefNode(loc, this, true);
+    placeholder.discard(nullptr);
+}
+
 int ConstantEntry::parseInit(ClassNs ptr) {
     //printd(5, "ConstantEntry::parseInit() this: %p '%s' pub: %d init: %d in_init: %d node: %p '%s' "
     //  "class context: %p '%s' ns: %p ('%s') pub: %d\n", this, name.c_str(), pub, init, in_init, node,
@@ -178,6 +198,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
     }
 
     int err = 0;
+    bool external_stub_constant_ref = false;
 
     QoreProgram* pgm;
     if (!builtin) {
@@ -199,6 +220,7 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
         err = parse_init_value(val, parse_context);
         typeInfo = parse_context.typeInfo;
+        external_stub_constant_ref = parse_context.external_stub_constant_ref;
 
         // Enrich exception with constant name for better debugging
         if (err) {
@@ -216,6 +238,10 @@ int ConstantEntry::parseInit(ClassNs ptr) {
 
     //printd(5, "ConstantEntry::parseInit() this: %p %s initialized to node: %p (%s) value: %d type: '%s'\n", this,
     //  name.c_str(), node, get_type_name(node), node->is_value(), QoreTypeInfo::getName(typeInfo));
+
+    if (external_stub_constant_ref) {
+        external_stub_dependent = true;
+    }
 
     // do not evaluate expression if any parse exceptions have been thrown
     if (!val.hasNode() || !val.getInternalNode()->needs_eval() || pgm->parseExceptionRaised()) {
@@ -244,7 +270,13 @@ int ConstantEntry::parseCommitRuntimeInit() {
     // The expression AST is ref-counted; this keeps it alive after saved_val is replaced.
     aot_init_expr = saved_val.refSelf();
 
+    if (external_stub_dependent) {
+        saved_val.discard(nullptr);
+        return 0;
+    }
+
     int err = 0;
+    bool defer_external_stub = false;
 
     // evaluate expression
     ExceptionSink xsink;
@@ -261,8 +293,22 @@ int ConstantEntry::parseCommitRuntimeInit() {
             typeInfo = saved_val.getTypeInfo();
             assert(!saved_val.getInternalNode() || !saved_val.needsEval());
         } else {
-            typeInfo = nothingTypeInfo;
+            QoreValue ex_err = xsink.getExceptionErr();
+            if (ex_err.getType() == NT_STRING) {
+                QoreStringValueHelper ex_err_str(ex_err);
+                defer_external_stub = !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT");
+            }
+            if (!defer_external_stub) {
+                typeInfo = nothingTypeInfo;
+            }
         }
+    }
+
+    if (defer_external_stub) {
+        xsink.clear();
+        external_stub_dependent = true;
+        saved_val.discard(nullptr);
+        return 0;
     }
 
     if (xsink.isEvent()) {
@@ -283,7 +329,7 @@ QoreValue ConstantEntry::getReferencedValue() const {
         if (rce->saved_val) {
             return rce->saved_val.refSelf();
         }
-        if (rce->aot_shell_pending) {
+        if (rce->aot_shell_pending || rce->external_stub) {
             return val.refSelf();
         }
         return rce->saved_val.refSelf();
@@ -298,7 +344,7 @@ const QoreValue ConstantEntry::getValue() const {
         if (rce->saved_val) {
             return rce->saved_val;
         }
-        if (rce->aot_shell_pending) {
+        if (rce->aot_shell_pending || rce->external_stub) {
             return val;
         }
         return rce->saved_val;
@@ -385,6 +431,11 @@ void ConstantList::parseDeleteAll() {
         qore_program_private::addParseException(getProgram(), xsink);
 }
 
+static bool parsingExternalStubDeclarations() {
+    QoreProgram* pgm = getProgram();
+    return pgm && qore_program_private::get(*pgm)->isParsingStubDeclarations();
+}
+
 cnemap_t::iterator ConstantList::parseAdd(const QoreProgramLocation* loc, const char* name, QoreValue value,
         const QoreTypeInfo* typeInfo, bool pub, ClassAccess access) {
     // first check if the constant has already been defined
@@ -397,6 +448,9 @@ cnemap_t::iterator ConstantList::parseAdd(const QoreProgramLocation* loc, const 
     ConstantEntry* ce = new ConstantEntry(loc, name, value,
         typeInfo || (value.hasNode() && value.getInternalNode()->needs_eval()) ? typeInfo : value.getTypeInfo(),
         pub, false, false, access);
+    if (parsingExternalStubDeclarations()) {
+        ce->makeExternalStubDeclaration();
+    }
     return cnemap.insert(cnemap_t::value_type(ce->getName(), ce)).first;
 }
 
@@ -532,6 +586,9 @@ void ConstantList::parseAdd(const QoreProgramLocation* loc, const std::string& n
     }
 
     ConstantEntry* ce = new ConstantEntry(loc, name.c_str(), val, val.getTypeInfo(), false, false, false, access);
+    if (parsingExternalStubDeclarations()) {
+        ce->makeExternalStubDeclaration();
+    }
     cnemap[ce->getName()] = ce;
 }
 

@@ -523,7 +523,8 @@ public:
         parsing_in_progress : 1,
         ns_const : 1,
         ns_vars : 1,
-        expression_mode : 1
+        expression_mode : 1,
+        parsing_stub_declarations : 1
         ;
 
     qore_exec_mode_t exec_mode = QEM_TIERED;
@@ -641,6 +642,7 @@ public:
             ns_const(false),
             ns_vars(false),
             expression_mode(false),
+            parsing_stub_declarations(false),
             pwo(n_parse_options),
             pgm(n_pgm) {
         printd(QPP_DBG_LVL, "qore_program_private_base::qore_program_private_base() this: %p pgm: %p po: " QLLD "\n",
@@ -2235,6 +2237,18 @@ public:
     DLLLOCAL void importHashDecl(ExceptionSink* xsink, qore_program_private& from_pgm, const char* path,
             const char* new_name = nullptr, q_setpub_t set_pub = CSP_UNCHANGED, bool reexport = false);
 
+    //! Returns true while qcc --stub files are being parsed as declaration-only sources.
+    DLLLOCAL bool isParsingStubDeclarations() const {
+        return parsing_stub_declarations;
+    }
+
+    //! Sets qcc --stub declaration-only parse mode and returns the previous value.
+    DLLLOCAL bool setParsingStubDeclarations(bool v) {
+        bool old = parsing_stub_declarations;
+        parsing_stub_declarations = v;
+        return old;
+    }
+
     DLLLOCAL const char* addString(const char* str) {
         str_set_t::iterator i = str_set.lower_bound(str);
         if (i == str_set.end() || strcmp(*i, str)) {
@@ -2891,6 +2905,10 @@ public:
     }
 
     DLLLOCAL void addStatementToIndexIntern(name_section_sline_statement_map_t* statementIndex, const char* key, AbstractStatement* statement, int offs, const char* section, int sectionOffs);
+    DLLLOCAL AbstractStatement* findStatementInIndexIntern(const name_section_sline_statement_map_t& statementIndex,
+            const char* key, int line) const;
+    DLLLOCAL AbstractStatement* findIndexedStatementForLocation(const char* file, const char* source,
+            int start_line, int offset) const;
     DLLLOCAL static void registerStatement(QoreProgram* pgm, AbstractStatement* statement, bool addToIndex);
     DLLLOCAL QoreHashNode* getSourceIndicesIntern(name_section_sline_statement_map_t* statementIndex, ExceptionSink* xsink) const;
     DLLLOCAL QoreHashNode* getSourceLabels(ExceptionSink* xsink) {

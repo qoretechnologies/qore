@@ -3835,6 +3835,15 @@ static QoreAOTContext* buildContextFromSlotMap(
                 fprintf(stderr, "[aot-slot-reg] '%s': unresolved expr[%d] kind=%d ref1='%s' ref2='%s'\n",
                     name, i, static_cast<int>(kind), ref1 ? ref1 : "", ref2 ? ref2 : "");
             }
+            if (kind == AOTExprKind::RUNTIME_CONST_REF) {
+                std::string msg = "cannot resolve runtime constant reference '";
+                msg += ref1 ? ref1 : "";
+                msg += "' in expression slot ";
+                msg += std::to_string(i);
+                msg += "; if this reference came from qcc --stub, the runtime host must inject the external "
+                    "constant before loading the AOT binary";
+                setBuildError(msg);
+            }
             has_unsupported = true;
         }
 
@@ -4452,6 +4461,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 const char* interned_file = pp->addString(loc_file);
                 const char* interned_source = loc_source && *loc_source
                     ? pp->addString(loc_source) : nullptr;
+                if (pp->findIndexedStatementForLocation(interned_file, interned_source,
+                        start_line, static_cast<int>(offset))) {
+                    continue;
+                }
                 QoreProgramLocation tmp(interned_file, start_line, end_line,
                     interned_source, static_cast<int>(offset));
                 const QoreProgramLocation* loc = pp->getLocation(tmp, start_line, end_line);

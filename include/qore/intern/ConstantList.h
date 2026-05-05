@@ -103,7 +103,9 @@ public:
         builtin : 1,      // builtin vs user
         delayed_eval : 1, // delayed evaluation
         has_init_expr : 1, // had a delayed-eval init expression (for AOT)
-        aot_shell_pending : 1 // AOT-deserialized shell whose init-func has not run
+        aot_shell_pending : 1, // AOT-deserialized shell whose init-func has not run
+        external_stub : 1, // qcc --stub declaration; value is supplied by the runtime host
+        external_stub_dependent : 1 // initializer references an external stub constant
         ;
 
     DLLLOCAL ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue v,
@@ -203,6 +205,19 @@ public:
     DLLLOCAL bool hasInitExpr() const {
         return has_init_expr;
     }
+
+    //! Returns true for qcc --stub constants that are declarations only.
+    DLLLOCAL bool isExternalStub() const {
+        return external_stub;
+    }
+
+    //! Returns true when this constant's preserved init expression depends on a qcc --stub constant.
+    DLLLOCAL bool isExternalStubDependent() const {
+        return external_stub_dependent;
+    }
+
+    //! Converts this parse-time stub placeholder into a runtime-resolved declaration.
+    DLLLOCAL void makeExternalStubDeclaration();
 
     //! Returns the preserved init expression (for AOT lowering); NOTHING if not preserved
     DLLLOCAL const QoreValue getInitExpr() const {
@@ -462,6 +477,9 @@ protected:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         parse_context.typeInfo = ce->typeInfo;
+        if (ce->external_stub) {
+            parse_context.external_stub_constant_ref = true;
+        }
         return 0;
     }
 
@@ -487,6 +505,13 @@ protected:
         // handled above); any other eval path is a programmer error (typically
         // parse-time fold of an unpopulated pending constant) and must raise
         // rather than loop.
+        if (ce->external_stub) {
+            xsink->raiseException("EXTERNAL-STUB-CONSTANT",
+                "cannot evaluate external stub constant '%s'; the runtime host "
+                "must inject this constant before loading AOT code that references it",
+                ce->getName());
+            return QoreValue();
+        }
         if (ce->aot_shell_pending || !ce->hasValue()) {
             xsink->raiseException("AOT-PENDING-CONSTANT",
                 "cannot evaluate AOT-deserialized constant '%s' before its "
@@ -523,6 +548,13 @@ public:
         if (ce->saved_val) {
             return ce->saved_val.getAsString(str, foff, xsink);
         }
+        if (ce->external_stub) {
+            xsink->raiseException("EXTERNAL-STUB-CONSTANT",
+                "cannot convert external stub constant '%s' to a string; the runtime host "
+                "must inject this constant before loading AOT code that references it",
+                ce->getName());
+            return -1;
+        }
         if (ce->aot_shell_pending || !ce->hasValue()) {
             xsink->raiseException("AOT-PENDING-CONSTANT",
                 "cannot convert AOT-deserialized constant '%s' to a string before its "
@@ -536,6 +568,14 @@ public:
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
         if (ce->saved_val) {
             return ce->saved_val.getAsString(del, foff, xsink);
+        }
+        if (ce->external_stub) {
+            xsink->raiseException("EXTERNAL-STUB-CONSTANT",
+                "cannot convert external stub constant '%s' to a string; the runtime host "
+                "must inject this constant before loading AOT code that references it",
+                ce->getName());
+            del = false;
+            return nullptr;
         }
         if (ce->aot_shell_pending || !ce->hasValue()) {
             xsink->raiseException("AOT-PENDING-CONSTANT",
@@ -552,7 +592,7 @@ public:
         if (ce->saved_val) {
             return ce->saved_val.getTypeName();
         }
-        if (ce->aot_shell_pending || !ce->hasValue()) {
+        if (ce->external_stub || ce->aot_shell_pending || !ce->hasValue()) {
             return QoreTypeInfo::getName(ce->typeInfo);
         }
         return ce->val.getTypeName();

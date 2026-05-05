@@ -6964,6 +6964,22 @@ static bool loadRequireModules(QoreProgram* pgm,
     return true;
 }
 
+class ParseStubDeclarationModeHelper {
+public:
+    DLLLOCAL ParseStubDeclarationModeHelper(QoreProgram* pgm)
+            : pp(qore_program_private::get(*pgm)),
+            old(pp->setParsingStubDeclarations(true)) {
+    }
+
+    DLLLOCAL ~ParseStubDeclarationModeHelper() {
+        pp->setParsingStubDeclarations(old);
+    }
+
+private:
+    qore_program_private* pp;
+    bool old;
+};
+
 // Phase 4 slice 11b: parse a list of stub files into the given
 // program before target parsing.  Stubs declare namespaces,
 // typedefs, and constants that the host synthesizes in C++ at
@@ -6992,8 +7008,11 @@ static bool parseStubFiles(QoreProgram* pgm,
         }
         ExceptionSink xsink;
         ExceptionSink wsink;
-        pgm->parsePending(src.c_str(), canon.c_str(),
-            &xsink, &wsink, QP_WARN_DEFAULT);
+        {
+            ParseStubDeclarationModeHelper h(pgm);
+            pgm->parsePending(src.c_str(), canon.c_str(),
+                &xsink, &wsink, QP_WARN_DEFAULT);
+        }
         if (xsink.isException()) {
             xsink.handleExceptions();
             error = "parse error in stub file: " + canon;
