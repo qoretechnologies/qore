@@ -318,7 +318,11 @@ class RestCmd {
         }
 
         if (exists body) {
-            body = parse_to_qore_value(body);
+            try {
+                body = parse_to_qore_value_with_yaml(body);
+            } catch (hash<ExceptionInfo> ex) {
+                error("invalid request body: %s", ex.desc);
+            }
         }
 
         if (opt."data") {
@@ -624,7 +628,7 @@ class RestCmd {
 
     static usage() {
         printf("%s - Qore REST client\n\n", color.bold("rest"));
-        printf("%s %s [options] get|put|post|delete URL ['body']\n\n", color.bold("Usage:"),
+        printf("%s %s [options] get|put|post|delete URL ['YAML/Qore body']\n\n", color.bold("Usage:"),
             get_script_name());
 
         printf("%s\n", color.bold("Options:"));
@@ -694,7 +698,11 @@ class RestCmd {
             color.dim("Note:"));
         printf("connections with automatic protocol selection and connection multiplexing\n");
         printf("on HTTP/2 and HTTP/3. Use -l (--literal) for verbose HTTP request/response\n");
-        printf("output.\n");
+        printf("output.\n\n");
+        printf("%s Request bodies accept YAML / JSON-compatible YAML, legacy Qore values,\n",
+            color.dim("Body:"));
+        printf("%s, and file references such as %s.\n",
+            color.key("%STR=literal strings"), color.key("$yaml<body.yaml>"));
         exit(1);
     }
 
