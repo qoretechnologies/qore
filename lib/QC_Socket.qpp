@@ -1861,26 +1861,70 @@ static int check_response_code(int status_code, ExceptionSink* xsink) {
     return 0;
 }
 
-static int extractQuicBodyPtrLen(const AbstractQoreNode* body, const void*& ptr, size_t& len, ExceptionSink* xsink) {
+static int extractDataBodyPtrLen(const QoreValue& body, const void*& ptr, size_t& len, char short_buf[7],
+        ExceptionSink* xsink, const char* ex_name) {
     ptr = nullptr;
     len = 0;
-    if (!body) {
+    if (body.isNullOrNothing()) {
         return 0;
     }
-    qore_type_t t = body->getType();
+    if (body.isShortString()) {
+        body.getShortString(short_buf);
+        ptr = short_buf;
+        len = body.shortStringLen();
+        return 0;
+    }
+    qore_type_t t = body.getType();
     if (t == NT_BINARY) {
-        const BinaryNode* b = static_cast<const BinaryNode*>(body);
+        const BinaryNode* b = body.get<const BinaryNode>();
         ptr = b->getPtr();
         len = b->size();
     } else if (t == NT_STRING) {
-        const QoreStringNode* s = static_cast<const QoreStringNode*>(body);
+        const QoreStringNode* s = body.get<const QoreStringNode>();
         ptr = s->c_str();
         len = s->size();
     } else {
-        xsink->raiseException("QUIC-ERROR", "body must be string or binary, got type '%s'", body->getTypeName());
+        xsink->raiseException(ex_name, "body must be string or binary, got type '%s'", body.getTypeName());
         return -1;
     }
     return 0;
+}
+
+static int copyDataBodyToBinary(const QoreValue& body, SimpleRefHolder<BinaryNode>& holder,
+        const BinaryNode*& bin, ExceptionSink* xsink, const char* ex_name) {
+    const void* ptr = nullptr;
+    size_t len = 0;
+    char short_buf[7];
+    if (extractDataBodyPtrLen(body, ptr, len, short_buf, xsink, ex_name)) {
+        return -1;
+    }
+    if (len) {
+        holder = new BinaryNode;
+        holder->append(ptr, len);
+        bin = *holder;
+    }
+    return 0;
+}
+
+static int materializeDataBodyNode(const QoreValue& body, ValueHolder& holder,
+        const AbstractQoreNode*& node, ExceptionSink* xsink, const char* ex_name) {
+    node = nullptr;
+    if (body.isNullOrNothing()) {
+        return 0;
+    }
+    if (body.isShortString()) {
+        char short_buf[7];
+        body.getShortString(short_buf);
+        holder = QoreValue(new QoreStringNode(short_buf, body.shortStringLen(), QCS_UTF8));
+        node = holder->get<const AbstractQoreNode>();
+        return 0;
+    }
+    if (body.getType() == NT_BINARY || body.getType() == NT_STRING) {
+        node = body.get<const AbstractQoreNode>();
+        return 0;
+    }
+    xsink->raiseException(ex_name, "body must be string or binary, got type '%s'", body.getTypeName());
+    return -1;
 }
 
 //! Server-sent event hash
@@ -2609,20 +2653,10 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
     // Get body data and size
     const void* body_ptr = nullptr;
     size_t body_size = 0;
-    if (body) {
-        if (body->getType() == NT_BINARY) {
-            const BinaryNode* b = static_cast<const BinaryNode*>(body);
-            body_ptr = b->getPtr();
-            body_size = b->size();
-        } else if (body->getType() == NT_STRING) {
-            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            body_ptr = str->c_str();
-            body_size = str->size();
-        } else {
-            xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR",
-                "body must be a string or binary value; got type '%s' instead", body->getTypeName());
-            return QoreValue();
-        }
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 4), body_ptr, body_size, body_short_buf,
+            xsink, "SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR")) {
+        return QoreValue();
     }
 
     // Add headers using the standard do_headers() function which properly handles Content-Length
@@ -2694,20 +2728,10 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
     // Get body data and size
     const void* body_ptr = nullptr;
     size_t body_size = 0;
-    if (body) {
-        if (body->getType() == NT_BINARY) {
-            const BinaryNode* b = static_cast<const BinaryNode*>(body);
-            body_ptr = b->getPtr();
-            body_size = b->size();
-        } else if (body->getType() == NT_STRING) {
-            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            body_ptr = str->c_str();
-            body_size = str->size();
-        } else {
-            xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
-                "body must be a string or binary value; got type '%s' instead", body->getTypeName());
-            return QoreValue();
-        }
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 4), body_ptr, body_size, body_short_buf,
+            xsink, "SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR")) {
+        return QoreValue();
     }
 
     // Add headers
@@ -6800,19 +6824,9 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
     // Get body data
     const BinaryNode* body_bin = nullptr;
     SimpleRefHolder<BinaryNode> body_holder;
-    if (body) {
-        qore_type_t body_type = body->getType();
-        if (body_type == NT_BINARY) {
-            body_bin = static_cast<const BinaryNode*>(body);
-        } else if (body_type == NT_STRING) {
-            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            // Create a binary node from the string's raw bytes
-            size_t size = str->size();
-            void* copy = malloc(size);
-            memcpy(copy, str->c_str(), size);
-            body_holder = new BinaryNode(copy, size);
-            body_bin = *body_holder;
-        }
+    if (copyDataBodyToBinary(get_param_value(args, 3), body_holder, body_bin,
+            xsink, "HTTP2-ERROR")) {
+        return QoreValue();
     }
 
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -6942,19 +6956,10 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
 nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers, *data body) {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    SimpleRefHolder<BinaryNode> body_holder;
-
-    if (body) {
-        qore_type_t body_type = body->getType();
-        if (body_type == NT_BINARY) {
-            const BinaryNode* bin = static_cast<const BinaryNode*>(body);
-            body_ptr = bin->getPtr();
-            body_len = bin->size();
-        } else if (body_type == NT_STRING) {
-            const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-            body_ptr = str->c_str();
-            body_len = str->size();
-        }
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 3), body_ptr, body_len, body_short_buf,
+            xsink, "HTTP2-ERROR")) {
+        return QoreValue();
     }
 
     s->submitHttp2Response(stream_id, status_code, headers, body_ptr, body_len, xsink);
@@ -7342,25 +7347,10 @@ AbstractPollOperation Socket::startPollHttp2ClientMultiplex() {
 int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (body) {
-        switch (body->getType()) {
-            case NT_BINARY: {
-                const BinaryNode* b = static_cast<const BinaryNode*>(body);
-                body_ptr = b->getPtr();
-                body_len = b->size();
-                break;
-            }
-            case NT_STRING: {
-                const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
-                body_ptr = str->c_str();
-                body_len = str->size();
-                break;
-            }
-            default:
-                xsink->raiseException("HTTP2-ERROR", "body must be string or binary, got type '%s'",
-                    body->getTypeName());
-                return -1;
-        }
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 1), body_ptr, body_len, body_short_buf,
+            xsink, "HTTP2-ERROR")) {
+        return -1;
     }
 
     int stream_id = s->submitHttp2Request(headers, body_ptr, body_len, xsink, streaming);
@@ -7576,9 +7566,15 @@ AbstractPollOperation Socket::startPollQuicSendResponse(int session_id, int stre
         xsink->raiseException("QUIC-ERROR", "invalid status_code %d: must be 100-599", (int)status_code);
         return QoreValue();
     }
+    ValueHolder materialized_body(xsink);
+    const AbstractQoreNode* body_node = nullptr;
+    if (materializeDataBodyNode(get_param_value(args, 4), materialized_body, body_node,
+            xsink, "QUIC-ERROR")) {
+        return QoreValue();
+    }
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(
-        new SocketQuicSendResponsePollOperation(xsink, s, session_id, stream_id, status_code, headers, body),
+        new SocketQuicSendResponsePollOperation(xsink, s, session_id, stream_id, status_code, headers, body_node),
         xsink
     );
     if (*xsink) {
@@ -7635,7 +7631,9 @@ bool Socket::isQuic() [flags=CONSTANT] {
 int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body) {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 3), body_ptr, body_len, body_short_buf,
+            xsink, "QUIC-ERROR")) {
         return -1;
     }
     int64_t stream_id = s->submitQuicRequest(method->c_str(), path->c_str(), headers, body_ptr, body_len, xsink);
@@ -7718,7 +7716,9 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
     }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 1), body_ptr, body_len, body_short_buf,
+            xsink, "QUIC-ERROR")) {
         return -1;
     }
     int rc = s->sendQuicClientStreamData(stream_id, body_ptr, body_len, (bool)end_stream, xsink);
@@ -7834,7 +7834,9 @@ nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_cod
     }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 4), body_ptr, body_len, body_short_buf,
+            xsink, "QUIC-ERROR")) {
         return QoreValue();
     }
     s->submitQuicResponse(session_id, stream_id, status_code, headers, body_ptr, body_len, xsink);
@@ -8126,7 +8128,9 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
     }
     const void* body_ptr = nullptr;
     size_t body_len = 0;
-    if (extractQuicBodyPtrLen(body, body_ptr, body_len, xsink)) {
+    char body_short_buf[7];
+    if (extractDataBodyPtrLen(get_param_value(args, 2), body_ptr, body_len, body_short_buf,
+            xsink, "QUIC-ERROR")) {
         return -1;
     }
     int rc = s->submitQuicStreamData(session_id, stream_id, body_ptr, body_len,

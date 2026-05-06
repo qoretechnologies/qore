@@ -42,6 +42,28 @@
 
 /** @cond INTERNAL */
 
+static int materializeHttp3ServerDataBodyNode(const QoreValue& body, ValueHolder& holder,
+        const AbstractQoreNode*& node, ExceptionSink* xsink) {
+    node = nullptr;
+    if (body.isNullOrNothing()) {
+        return 0;
+    }
+    if (body.isShortString()) {
+        char short_buf[7];
+        body.getShortString(short_buf);
+        holder = QoreValue(new QoreStringNode(short_buf, body.shortStringLen(), QCS_UTF8));
+        node = holder->get<const AbstractQoreNode>();
+        return 0;
+    }
+    if (body.getType() == NT_BINARY || body.getType() == NT_STRING) {
+        node = body.get<const AbstractQoreNode>();
+        return 0;
+    }
+    xsink->raiseException("HTTP3-ERROR", "body must be string or binary, got type '%s'",
+        body.getTypeName());
+    return -1;
+}
+
 // ============================================================
 // Http3ServerPollOperationPriv implementation
 // ============================================================
@@ -805,7 +827,13 @@ bool Http3ServerPollOperation::hasError() [flags=RET_VALUE_ONLY] {
 */
 nothing Http3ServerPollOperation::startSendResponse(int status_code, *hash<auto> headers,
         *data body) {
-    priv->startSendResponse((int)status_code, headers, body, xsink);
+    ValueHolder materialized_body(xsink);
+    const AbstractQoreNode* body_node = nullptr;
+    if (materializeHttp3ServerDataBodyNode(get_param_value(args, 2), materialized_body,
+            body_node, xsink)) {
+        return QoreValue();
+    }
+    priv->startSendResponse((int)status_code, headers, body_node, xsink);
 }
 
 //! Starts sending a streaming HTTP/3 response

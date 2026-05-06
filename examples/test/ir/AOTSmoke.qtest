@@ -1842,6 +1842,8 @@ public namespace AOTShortStringFastPath {
             string quote = \"\\\"\";
             string escape = \"\\\\\";
             string empty = \"\";
+            string type = \"btree\";
+            *string method;
         }
 
         string direct() {
@@ -1863,6 +1865,25 @@ public namespace AOTShortStringFastPath {
         bool hardEq() {
             return quote === quote;
         }
+
+        int findSep() {
+            string s = \"a\\n\\n\";
+            return s.find(\"\\n\\n\");
+        }
+
+        string lower() {
+            string s = \"A\";
+            return s.lwr();
+        }
+
+        bool equalPartial() {
+            string s = \"/x\";
+            return s.equalPartial(\"/\");
+        }
+
+        string optionalMethodFallback() {
+            return method.val() ? method.upr() : type.upr();
+        }
     }
 }
 ";
@@ -1878,7 +1899,7 @@ public namespace AOTShortStringFastPath {
         hash<auto> result = compileModuleFile(qm_path, qmod_path);
         assertTrue(result.compiled,
             "SSO numeric fast-path regression module compiled: " + result.compile_out);
-        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "5"),
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "9"),
             "SSO numeric fast-path regression module fully precompiled: " + result.compile_out);
 
         string script_path = tmp_dir + "/run.qr";
@@ -1889,7 +1910,8 @@ public namespace AOTShortStringFastPath {
 %requires AOTShortStringFastPath
 
 AOTShortStringFastPath::Writer w();
-printf(\"%y\\n\", (w.direct(), w.mapped((\"a\\\"b\",)), w.emptyTruthy(), w.quoteTruthy(), w.hardEq()));
+printf(\"%y\\n\", (w.direct(), w.mapped((\"a\\\"b\",)), w.emptyTruthy(), w.quoteTruthy(), w.hardEq(),
+    w.findSep(), w.lower(), w.equalPartial(), w.optionalMethodFallback()));
 ");
             f.close();
         }
@@ -1897,8 +1919,8 @@ printf(\"%y\\n\", (w.direct(), w.mapped((\"a\\\"b\",)), w.emptyTruthy(), w.quote
         string out = backquote(sprintf(
             "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s 2>&1",
             libqore_dir, tmp_dir, qore_bin, script_path));
-        assertEq("[\"\\\\\\\"\", [\"a\\\\\\\"b\"], False, True, True]\n", out,
-            "AOT qmod SSO values stay out of numeric float/int fast paths");
+        assertEq("[\"\\\\\\\"\", [\"a\\\\\\\"b\"], False, True, True, 1, \"a\", True, \"BTREE\"]\n", out,
+            "AOT qmod SSO values stay out of numeric fast paths and legacy pseudo dispatch");
     }
 
     testAOTModuleIrOnlyLocalOwnsInvokeResult() {
