@@ -1544,18 +1544,23 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     QoreStringNodeValueHelper str(val);
                     return QoreValue(str.getReferencedValue());
                 }
-                case NT_INT:
-                    return QoreValue(new QoreStringNodeMaker(QLLD, val.getAsBigInt()));
+                case NT_INT: {
+                    char buf[64];
+                    int len = snprintf(buf, sizeof(buf), QLLD, val.getAsBigInt());
+                    return QoreValue::makeStringValue(buf, len > 0 ? static_cast<size_t>(len) : 0);
+                }
                 case NT_FLOAT:
                     return QoreValue(q_fix_decimal(new QoreStringNodeMaker("%.9g", val.getAsFloat()), 0));
                 case NT_BOOLEAN:
-                    return QoreValue(new QoreStringNodeMaker(QLLD, val.getAsBigInt()));
+                    return val.getAsBool()
+                        ? QoreValue::makeStringValue("1", 1)
+                        : QoreValue::makeStringValue("0", 1);
                 case NT_NOTHING:
                 case NT_NULL:
-                    return QoreValue(new QoreStringNode());
+                    return QoreValue::makeStringValue("");
                 default: {
                     QoreStringValueHelper sv(val);
-                    return QoreValue(new QoreStringNode(*sv));
+                    return QoreValue::makeStringValue(sv->c_str(), sv->size(), sv->getEncoding());
                 }
             }
         }
@@ -4114,7 +4119,7 @@ next_instruction:
                 // Multi-string concatenation - a + b + c + d in single pass
                 if (inst->operands.empty()) {
                     setOwnedValueSlot(values, cleanup, inst->result.id,
-                        QoreValue(new QoreStringNode()), xsink);
+                        QoreValue::makeStringValue(""), xsink);
                     ++ip;
                     break;
                 }
@@ -10236,7 +10241,7 @@ lvalue_path_unary_done:
                         }
                     } else if (method_name && !strcmp(method_name, "type") && nargs == 0) {
                         // Inline: type() - return type name string
-                        res = QoreValue(new QoreStringNode(base.getTypeName()));
+                        res = QoreValue::makeStringValue(base.getTypeName());
                     } else {
                         // Unsupported pseudo-method, use generic runtime dispatch
                         called_external = true;
@@ -10397,7 +10402,7 @@ lvalue_path_unary_done:
                         }
                     } else if (method_name && !strcmp(method_name, "type") && nargs == 0) {
                         // Inline: type() - return type name string
-                        res = QoreValue(new QoreStringNode(base.getTypeName()));
+                        res = QoreValue::makeStringValue(base.getTypeName());
                     } else {
                         // Unsupported pseudo-method, use generic runtime dispatch
                         called_external = true;

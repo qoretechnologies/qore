@@ -54,7 +54,7 @@ QoreValue ColumnData::getValueAt(int64_t i, ExceptionSink* xsink) const {
         case ColumnType::INT64:
             return QoreValue(int_data[i]);
         case ColumnType::STRING:
-            return QoreValue(new QoreStringNode(str_data[i]));
+            return QoreValue::makeStringValue(str_data[i]);
         case ColumnType::BOOL:
             return QoreValue((bool)bool_data[i]);
         case ColumnType::DATE:

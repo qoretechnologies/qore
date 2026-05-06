@@ -2270,7 +2270,7 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 error = "invalid string offset in value";
                 return QoreValue();
             }
-            return QoreValue(new QoreStringNode(str, len, QCS_UTF8));
+            return QoreValue::makeStringValue(str, len, QCS_UTF8);
         }
 
         case QoreAOTValueTag::VT_ABS_DATE: {
@@ -4302,6 +4302,72 @@ static bool writeMemberDefaultValue(QoreAOTBinaryWriter& writer, const QoreValue
     return true;
 }
 
+static bool qoreAOTWriteDefaultArgValuePayloadImpl(QoreAOTBinaryWriter& writer, const QoreValue& v,
+        const char* owner_kind, const char* owner_name, const char* param_name,
+        std::string* error, const std::vector<AOTLocalSlotId>* parent_locals) {
+    if (v.hasNode() && v.needsEval()) {
+        std::string native_error;
+        if (writeNativeMemberDefaultExpr(writer, v, parent_locals, &native_error)) {
+            return true;
+        }
+        if (!aotValueTagPreservesMemberDefault(v)) {
+            std::string diag = "AOT cannot serialize ";
+            diag += owner_kind ? owner_kind : "callable";
+            diag += " '";
+            diag += owner_name ? owner_name : "<unknown>";
+            diag += "' parameter '";
+            diag += param_name ? param_name : "<unknown>";
+            diag += "' default without fallback";
+            if (!native_error.empty()) {
+                diag += ": ";
+                diag += native_error;
+            }
+            diag += "; default=";
+            diag += qoreAOTDescribeExpr(v);
+            diag += "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
+                "default argument to native IR";
+
+            if (error) {
+                *error = diag;
+            }
+            qoreAOTSetExprSerializationError(std::move(diag));
+            return false;
+        }
+    }
+
+    if (aotValueTagPreservesMemberDefault(v)) {
+        writer.writeValue(v);
+        return true;
+    }
+
+    std::string native_error;
+    if (writeNativeMemberDefaultExpr(writer, v, parent_locals, &native_error)) {
+        return true;
+    }
+
+    std::string diag = "AOT cannot serialize ";
+    diag += owner_kind ? owner_kind : "callable";
+    diag += " '";
+    diag += owner_name ? owner_name : "<unknown>";
+    diag += "' parameter '";
+    diag += param_name ? param_name : "<unknown>";
+    diag += "' default without fallback";
+    if (!native_error.empty()) {
+        diag += ": ";
+        diag += native_error;
+    }
+    diag += "; default=";
+    diag += qoreAOTDescribeExpr(v);
+    diag += "; no fallback marker was emitted; add a native AOTExprKind serializer/reader or lower this "
+        "default argument to native IR";
+
+    if (error) {
+        *error = diag;
+    }
+    qoreAOTSetExprSerializationError(std::move(diag));
+    return false;
+}
+
 //! Write CLASSES section
 static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state,
         std::string& error) {
@@ -5063,6 +5129,13 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
 
 } // anonymous namespace
 
+bool qoreAOTWriteDefaultArgValuePayload(QoreAOTBinaryWriter& writer, const QoreValue& v,
+        const char* owner_kind, const char* owner_name, const char* param_name,
+        std::string* error, const std::vector<AOTLocalSlotId>* parent_locals) {
+    return qoreAOTWriteDefaultArgValuePayloadImpl(writer, v, owner_kind, owner_name,
+        param_name, error, parent_locals);
+}
+
 //! Lower a closure variant to IR for serialization
 /** Follows the same pattern as buildContextForVariant() in QoreAOTRuntime.cpp.
     @param variant the closure variant to lower
@@ -5272,6 +5345,13 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             std::string ns_path = member->getEnumDecl()->getNamespacePath();
             writer.writeStringRef(ns_path.c_str());
             writer.writeStringRef(member->getName());
+            return true;
+        }
+        if (expr.isShortString()) {
+            char buf[8];
+            expr.getShortString(buf);
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
+            writer.writeStringRef(buf, expr.shortStringLen());
             return true;
         }
         // Handle inline primitive values
@@ -5635,7 +5715,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // QoreStringNode: string literal constant (e.g., "" as constructor arg)
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
-        writer.writeStringRef(str->c_str());
+        writer.writeStringRef(str->c_str(), str->size());
         return true;
     }
 
@@ -6308,7 +6388,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                     bool has_default = sig->hasDefaultArg(p);
                     writer.writeU8(has_default ? 1 : 0);
                     if (has_default) {
-                        writer.writeValue(sig->getDefaultArgList()[p]);
+                        std::string default_error;
+                        if (!qoreAOTWriteDefaultArgValuePayload(writer, sig->getDefaultArgList()[p],
+                                "closure", ucf->getName(), pname, &default_error)) {
+                            qoreAOTSetExprSerializationError(std::move(default_error));
+                            return false;
+                        }
                     }
                 }
                 uint16_t closure_flags = 0;

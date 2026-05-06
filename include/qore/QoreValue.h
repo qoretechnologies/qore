@@ -41,6 +41,7 @@
 #include <cstring>
 #include <cassert>
 #include <type_traits>
+#include <string>
 
 // ============================================================================
 // Legacy type definitions - kept for QoreLValue and binary module compatibility
@@ -58,12 +59,14 @@ typedef unsigned char valtype_t;
 #define QV_Node  (valtype_t)3  //!< for heap-allocated values
 #define QV_Ref   (valtype_t)4  //!< for references (when used with lvalues)
 #define QV_Enum  (valtype_t)5  //!< for enum values (stores const QoreEnumMember*)
+#define QV_Value (valtype_t)6  //!< for inline QoreValue storage in lvalues
 ///@}
 
 // Forward declarations
 class AbstractQoreNode;
 class QoreStringNode;
 class QoreString;
+class QoreEncoding;
 class ExceptionSink;
 class QoreTypeInfo;
 class QoreValue;
@@ -85,6 +88,7 @@ union qore_value_u {
     double f;                   //!< for double values
     AbstractQoreNode* n;        //!< for all heap-allocated values
     const QoreEnumMember* em;   //!< for enum member pointers (QV_Enum)
+    uint64_t qv;                //!< for inline QoreValue bits (QV_Value)
 };
 
 // ============================================================================
@@ -495,11 +499,75 @@ public:
     // Short string operations
     // ========================================================================
 
-    //! Try to create a short string inline. Returns false if string is too long.
+    //! Try to create a short string inline.
+    /** @param out receives the inline value on success
+        @param str string bytes to store
+        @param len byte length of \a str
+        @return true if the string fits inline, false otherwise
+    */
     DLLEXPORT static bool tryMakeShortString(QoreValue& out, const char* str, size_t len);
 
-    //! Create a short string (asserts if too long)
+    //! Create a short string.
+    /** @param str string bytes to store
+        @param len byte length of \a str
+        @return inline string value
+        @note asserts if \a len is greater than SHORTSTR_MAX_BYTES
+    */
     DLLEXPORT static QoreValue makeShortString(const char* str, size_t len);
+
+    //! Create a Qore string value using default encoding.
+    /** @param str string bytes to store
+        @param len byte length of \a str
+        @return string value, using inline storage when the effective encoding is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const char* str, size_t len);
+
+    //! Create a Qore string value using default encoding.
+    /** @param str null-terminated string bytes to store
+        @return string value, using inline storage when the effective encoding is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const char* str);
+
+    //! Create a Qore string value with the given encoding.
+    /** @param str string bytes to store
+        @param len byte length of \a str
+        @param enc string encoding; QCS_DEFAULT is used when null
+        @return string value, using inline storage when \a enc is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const char* str, size_t len, const QoreEncoding* enc);
+
+    //! Create a Qore string value with the given encoding.
+    /** @param str null-terminated string bytes to store
+        @param enc string encoding; QCS_DEFAULT is used when null
+        @return string value, using inline storage when \a enc is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const char* str, const QoreEncoding* enc);
+
+    //! Create a Qore string value using default encoding.
+    /** @param str string bytes to store
+        @return string value, using inline storage when the effective encoding is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const std::string& str);
+
+    //! Create a Qore string value with the given encoding.
+    /** @param str string bytes to store
+        @param enc string encoding; QCS_DEFAULT is used when null
+        @return string value, using inline storage when \a enc is UTF-8 and the byte length fits
+    */
+    DLLEXPORT static QoreValue makeStringValue(const std::string& str, const QoreEncoding* enc);
+
+    //! Create a UTF-8 Qore string value.
+    /** @param str UTF-8 string bytes to store
+        @param len byte length of \a str
+        @return UTF-8 string value, using inline storage when the byte length fits
+    */
+    DLLEXPORT static QoreValue makeUtf8StringValue(const char* str, size_t len);
+
+    //! Create a UTF-8 Qore string value.
+    /** @param str null-terminated UTF-8 string bytes to store
+        @return UTF-8 string value, using inline storage when the byte length fits
+    */
+    DLLEXPORT static QoreValue makeUtf8StringValue(const char* str);
 
     //! Get length of short string (asserts if not a short string)
     DLLLOCAL size_t shortStringLen() const {

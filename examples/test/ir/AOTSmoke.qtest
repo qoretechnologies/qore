@@ -66,6 +66,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT dot-eval memberGate base",
             \testDotEvalMemberGateBase());
         addTestCase("AOT string operations", \testStringOps());
+        addTestCase("AOT soft string switch case", \testSoftStringSwitchCase());
         addTestCase("AOT regex switch", \testSwitchRegex());
         addTestCase("AOT exit code", \testExitCode());
         addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
@@ -848,6 +849,34 @@ printf(\"lower: %s\\n\", s.lwr());
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT string ops output matches interpreter");
+    }
+
+    testSoftStringSwitchCase() {
+        string code = "%modern
+class T {
+    int f(*string c) {
+        int tok_type;
+        switch (c) {
+            case \"+\":
+                tok_type = 1;
+                break;
+            case \"*\":
+                tok_type = 2;
+                break;
+            case \"%\":
+                tok_type = 3;
+                break;
+        }
+        return tok_type;
+    }
+}
+
+T t();
+printf(\"%d\\n\", t.f(chr(ord(\"+\"))));
+";
+        string aot_out = compileAndRun(code);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, aot_out, "AOT soft string switch matches interpreter");
     }
 
     testSwitchRegex() {

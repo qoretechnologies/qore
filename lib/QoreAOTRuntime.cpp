@@ -714,7 +714,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
 
         case AOTExprKind::CONST_STRING: {
             // String literal constant (e.g., "" passed as constructor arg)
-            return toBitsNB(QoreValue(new QoreStringNode(ref1 ? ref1 : "")));
+            return toBitsNB(QoreValue::makeStringValue(ref1));
         }
 
         case AOTExprKind::CONST_BINARY: {

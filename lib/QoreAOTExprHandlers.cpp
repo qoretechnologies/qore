@@ -1839,10 +1839,18 @@ static QoreValue read_expr_const_enum(AOTExprReadCtx& ctx) {
 // ============================================================================
 
 static bool write_expr_const_string(AOTExprWriteCtx& ctx) {
+    if (ctx.expr.isShortString()) {
+        char buf[8];
+        ctx.expr.getShortString(buf);
+        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
+        ctx.writer.writeStringRef(buf, ctx.expr.shortStringLen());
+        return true;
+    }
+
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
-        ctx.writer.writeStringRef(str->c_str());
+        ctx.writer.writeStringRef(str->c_str(), str->size());
         return true;
     }
     return false;
@@ -1850,7 +1858,7 @@ static bool write_expr_const_string(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_const_string(AOTExprReadCtx& ctx) {
     const char* str_content = ctx.reader.readStringRef(ctx.ptr);
-    return QoreValue(new QoreStringNode(str_content ? str_content : ""));
+    return QoreValue::makeStringValue(str_content);
 }
 
 // ============================================================================

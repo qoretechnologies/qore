@@ -5015,7 +5015,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_add_typed(uint64_t left, uint64_t r
 // This is more efficient than chaining AddString operations for a + b + c + d patterns
 extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi(uint64_t* args, int nargs, ExceptionSink* xsink) {
     if (nargs == 0) {
-        return toBits(QoreValue(new QoreStringNode()));
+        return toBits(QoreValue::makeStringValue(""));
     }
 
     // First pass: calculate total length and find first non-NOTHING string for encoding
@@ -8453,7 +8453,7 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
             return v.release();
         }
         if (ct == NT_STRING) {
-            return QoreValue(new QoreStringNode);
+            return QoreValue::makeStringValue("");
         }
         if (ct == NT_BINARY) {
             return QoreValue(new BinaryNode);
@@ -11505,7 +11505,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
 //! Fast pseudo-method: type() - return type name string
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
-    return toBits(QoreValue(new QoreStringNode(v.getTypeName())));
+    return toBits(QoreValue::makeStringValue(v.getTypeName()));
 }
 
 namespace {

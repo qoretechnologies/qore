@@ -2465,6 +2465,25 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const std::vector<AOTGlobalSlotId>& parent_globals,
         const AOTConstantReverseMap* const_reverse_map = nullptr);
 
+//! Write a default-argument value payload for AOT metadata without a fallback marker
+/** Writes either a direct QoreAOTValueTag payload or a VT_EXPR_NATIVE payload.
+    Unsupported defaults are fatal: the function returns false and sets a
+    detailed diagnostic that names the default owner and parameter.
+    The caller is responsible for writing any surrounding has-default marker.
+    @param writer binary writer to write to
+    @param v default argument value or expression to serialize
+    @param owner_kind human-readable callable kind for diagnostics
+    @param owner_name callable name for diagnostics
+    @param param_name parameter name for diagnostics
+    @param error receives a detailed failure reason when serialization fails
+    @param parent_locals optional parent local-slot metadata for closure defaults
+    @return true if the payload was serialized without fallback, false otherwise
+*/
+bool qoreAOTWriteDefaultArgValuePayload(QoreAOTBinaryWriter& writer, const QoreValue& v,
+        const char* owner_kind, const char* owner_name, const char* param_name,
+        std::string* error = nullptr,
+        const std::vector<AOTLocalSlotId>* parent_locals = nullptr);
+
 //! Read one expression from inline closure/handler IR binary data
 //! @param rdr binary reader for reading data
 //! @param p current read pointer (advanced by reading)

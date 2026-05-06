@@ -974,7 +974,11 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
         bool has_default = sig->hasDefaultArg(p);
         ctx.writer.writeU8(has_default ? 1 : 0);
         if (has_default) {
-            ctx.writer.writeValue(sig->getDefaultArgList()[p]);
+            std::string default_error;
+            if (!qoreAOTWriteDefaultArgValuePayload(ctx.writer, sig->getDefaultArgList()[p],
+                    "closure", ucf->getName(), pname, &default_error)) {
+                return false;
+            }
         }
     }
     uint16_t closure_flags = 0;

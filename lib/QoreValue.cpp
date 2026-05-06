@@ -160,6 +160,50 @@ QoreValue QoreValue::makeShortString(const char* str, size_t len) {
     return v;
 }
 
+QoreValue QoreValue::makeStringValue(const char* str, size_t len, const QoreEncoding* enc) {
+    if (!str) {
+        str = "";
+        len = 0;
+    }
+
+    const QoreEncoding* value_enc = enc ? enc : QCS_DEFAULT;
+    if (value_enc == QCS_UTF8) {
+        QoreValue v;
+        if (tryMakeShortString(v, str, len)) {
+            return v;
+        }
+    }
+    return QoreValue(new QoreStringNode(str, len, value_enc));
+}
+
+QoreValue QoreValue::makeStringValue(const char* str, size_t len) {
+    return makeStringValue(str, len, QCS_DEFAULT);
+}
+
+QoreValue QoreValue::makeStringValue(const char* str, const QoreEncoding* enc) {
+    return makeStringValue(str, str ? strlen(str) : 0, enc);
+}
+
+QoreValue QoreValue::makeStringValue(const char* str) {
+    return makeStringValue(str, str ? strlen(str) : 0, QCS_DEFAULT);
+}
+
+QoreValue QoreValue::makeStringValue(const std::string& str, const QoreEncoding* enc) {
+    return makeStringValue(str.data(), str.size(), enc);
+}
+
+QoreValue QoreValue::makeStringValue(const std::string& str) {
+    return makeStringValue(str.data(), str.size(), QCS_DEFAULT);
+}
+
+QoreValue QoreValue::makeUtf8StringValue(const char* str, size_t len) {
+    return makeStringValue(str, len, QCS_UTF8);
+}
+
+QoreValue QoreValue::makeUtf8StringValue(const char* str) {
+    return makeStringValue(str, str ? strlen(str) : 0, QCS_UTF8);
+}
+
 void QoreValue::getShortString(char* buf) const {
     assert(isShortString());
     size_t len = shortStringLen();
@@ -438,12 +482,22 @@ bool QoreValue::isEqualHard(const QoreValue& other) const {
             double b = other.getAsFloat();
             return a == b;
         }
-        case NT_STRING:
-            // Short strings would have equal bits if equal, so must be node comparison
+        case NT_STRING: {
+            // Short strings have identical bits when equal.  If only one side
+            // is inline, compare string contents instead of falling through to
+            // pointer-only node comparison.
             if (isShortString() && other.isShortString()) {
-                return bits == other.bits;
+                return false;
             }
-            break;
+            ExceptionSink xsink;
+            QoreStringNodeValueHelper lhs(*this);
+            QoreStringNodeValueHelper rhs(other);
+            const QoreStringNode* lstr = *lhs;
+            const QoreStringNode* rstr = *rhs;
+            bool rv = lstr && rstr && lstr->equalSoft(*rstr, &xsink);
+            xsink.clear();
+            return rv;
+        }
         case NT_NOTHING:
         case NT_NULL:
             return true;
@@ -698,7 +752,13 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xs
     } else if (isShortString()) {
         char buf[8];
         getShortString(buf);
-        str.concat(buf);
+        QoreString tmp(buf, shortStringLen(), QCS_UTF8);
+        str.concat('"');
+        str.concatEscape(&tmp, '\"', '\\', xsink);
+        if (xsink && *xsink) {
+            return -1;
+        }
+        str.concat('"');
     } else if (isPointer()) {
         AbstractQoreNode* n = getPointerUnsafe();
         if (n) {
@@ -732,9 +792,12 @@ QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* 
     }
     if (isShortString()) {
         del = true;
-        char buf[8];
-        getShortString(buf);
-        return new QoreString(buf);
+        QoreString* rv = new QoreString(QCS_UTF8);
+        if (getAsString(*rv, format_offset, xsink)) {
+            delete rv;
+            return nullptr;
+        }
+        return rv;
     }
     if (isPointer()) {
         AbstractQoreNode* n = getPointerUnsafe();

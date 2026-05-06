@@ -156,7 +156,7 @@ static QoreValue read_node_EN_FLOAT(AOTExprNodeReadCtx& ctx) {
 static QoreValue read_node_EN_STRING(AOTExprNodeReadCtx& ctx) {
     std::string s = readStr(ctx.ptr, ctx.end);
     readU16(ctx.ptr, ctx.end);
-    return QoreValue(new QoreStringNode(s));
+    return QoreValue::makeStringValue(s);
 }
 
 static QoreValue read_node_EN_BOOL(AOTExprNodeReadCtx& ctx) {

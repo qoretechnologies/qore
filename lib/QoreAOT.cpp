@@ -7219,7 +7219,7 @@ bool QoreAOT::compileScriptFilesBatch(
             val = QoreValue(true);
         } else {
             name = def.substr(0, eq);
-            val = QoreValue(new QoreStringNode(def.substr(eq + 1)));
+            val = QoreValue::makeStringValue(def.substr(eq + 1));
         }
         qpgm->parseDefine(name.c_str(), val);
     }
