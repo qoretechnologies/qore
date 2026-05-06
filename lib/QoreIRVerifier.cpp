@@ -1060,6 +1060,11 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
                 case QoreIROpcode::ListAssignAny:
                     return inv->operands.size() >= 2 ? nullptr : &inv->expr;
 
+                case QoreIROpcode::RangeSliceAny:
+                case QoreIROpcode::RangeSliceInt:
+                case QoreIROpcode::RangeSliceFloat:
+                    return inv->operands.size() >= 3 ? nullptr : &inv->expr;
+
                 default:
                     return &inv->expr;
             }

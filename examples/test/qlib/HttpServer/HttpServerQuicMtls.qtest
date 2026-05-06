@@ -255,8 +255,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             mgr.request(sprintf("https://127.0.0.1:%d", quic_port), "GET", "/mtls");
         } catch (hash<ExceptionInfo> ex) {
             caught_exception = True;
-            # The connection should fail due to TLS handshake error
-            @debug(printf("Expected exception: %s: %s\n", ex.err, ex.desc));
+            assertTrue(ex.err.val(), "TLS handshake failure should provide an exception code");
         }
         assertTrue(caught_exception, "request without client cert should fail when FAIL_IF_NO_PEER_CERT is set");
     }

@@ -83,6 +83,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR collection ops smoke", \testIrCollectionOpsSmoke());
         addTestCase("IR dot-eval smoke", \testIrDotEvalSmoke());
         addTestCase("IR nested exception smoke", \testIrNestedExceptionSmoke());
+        addTestCase("IR range slice invoke smoke", \testIrRangeSliceInvokeSmoke());
         addTestCase("IR date shift smoke", \testIrDateShiftSmoke());
         addTestCase("IR date shift operator smoke", \testIrDateShiftOperatorSmoke());
         addTestCase("IR date guard smoke", \testIrDateGuardSmoke());
@@ -968,6 +969,45 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
         assertEq("slice:20,30 range:2\n", stdout_output, "Unexpected IR range slice output");
+    }
+
+    testIrRangeSliceInvokeSmoke() {
+        string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        script.file.write("try {\n");
+        script.file.write("    list path = (\"root\", \"child\", \"leaf\");\n");
+        script.file.write("    list tail = path[1..];\n");
+        script.file.write("    printf(\"invoke-rangeslice:%s,%s\\n\", tail[0], tail[1]);\n");
+        script.file.write("} catch (ex) {\n");
+        script.file.write("    printf(\"invoke-rangeslice:error\\n\");\n");
+        script.file.write("}\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir --ir-fallback-warn %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR exec mode range-slice invoke process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+        assertFalse(err_output =~ /IR-AST-FALLBACK-ERROR/, "Unexpected IR AST fallback error");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("invoke-rangeslice:child,leaf\n", stdout_output,
+            "Unexpected IR range slice invoke output");
     }
 
     testIrRangeSliceMaybeNothingSmoke() {

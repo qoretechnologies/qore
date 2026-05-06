@@ -1706,6 +1706,25 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             QoreValue right = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
             return QoreIRInterpreter::evalBinary(op, left, right, xsink);
         }
+        // Ternary computation opcodes.  These can be emitted as Invoke
+        // instructions inside try/on_error regions so exceptions branch to the
+        // handler, but the operands are already evaluated SSA values.
+        case QoreIROpcode::RangeSliceAny:
+        case QoreIROpcode::RangeSliceInt:
+        case QoreIROpcode::RangeSliceFloat: {
+            if (inv->operands.size() < 3) {
+                if (xsink) {
+                    xsink->raiseException("IR-EXEC-ERROR",
+                        "RangeSlice invoke requires three operands; got %zu",
+                        inv->operands.size());
+                }
+                return QoreValue();
+            }
+            QoreValue first = getIRValue(values, inv->operands[0]);
+            QoreValue second = getIRValue(values, inv->operands[1]);
+            QoreValue third = getIRValue(values, inv->operands[2]);
+            return QoreIRInterpreter::evalTernary(op, first, second, third, xsink);
+        }
         // Regex match/nmatch: use operand value instead of AST expression's left operand
         case QoreIROpcode::RegexMatchAny:
         case QoreIROpcode::RegexMatchBool:

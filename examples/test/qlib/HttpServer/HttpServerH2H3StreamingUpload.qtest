@@ -312,7 +312,8 @@ l50Xb2GWQesIt9k5jF5IOw==
                 {"Content-Type": MimeTypeText});
         } catch (hash<ExceptionInfo> ex) {
             caught = True;
-            @debug(printf("Expected callback exception: %s: %s\n", ex.err, ex.desc));
+            assertEq("TEST-CALLBACK-ERROR", ex.err,
+                "callback exception should preserve the callback error");
         }
         assertTrue(caught, "callback exception should propagate to caller");
     }
