@@ -120,6 +120,8 @@ module SqlUtil {
     - implemented support for \c NULLS \c FIRST / \c NULLS \c LAST qualifiers in the
       @ref select_option_orderby "orderby" option using a new hash format, as well as per-column
       \c DESC support for column operator expressions
+    - fixed implicit join generation for composite foreign key constraints whose stored column order differs from
+      the referenced primary key order
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -8629,6 +8631,15 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             }
         }
 
+        #! returns a hash mapping target column names to source column names for a foreign constraint targeting the given table and columns
+        *hash<string, string> findConstraintColumnMapOn(string table, softlist<auto> cols) {
+            foreach AbstractForeignConstraint fk in (h.iterator()) {
+                if (fk.target.table == table && fk.target.columns.matchKeys(cols)) {
+                    return fk.getSourceColumnMapForTargetColumns(cols);
+                }
+            }
+        }
+
         #! returns \c "foreign constraint" for the type of object encapsulated
         string getElementName() {
             return "foreign constraint";
@@ -8676,6 +8687,42 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
         #! Returns @ref True "True" if the constraint refers to the given target column
         bool hasTargetColumn(string col) {
             return target.hasColumn(col);
+        }
+
+        #! returns a hash mapping target column names to source column names, preserving the target column order in \a cols
+        /** @param cols the target columns to map; the columns must match the target columns in the constraint
+
+            @return a hash whose keys are target column names and whose values are the corresponding source column names
+
+            @throw FOREIGN-CONSTRAINT-ERROR the source and target column metadata do not have the same cardinality or a requested target column is not present
+        */
+        hash<string, string> getSourceColumnMapForTargetColumns(softlist<auto> cols) {
+            list<string> source_cols = h.keys();
+            list<string> target_cols = target.columns.keys();
+            if (source_cols.size() != target_cols.size()) {
+                throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y has %d source column%s and %d "
+                    "target column%s", getName(), source_cols.size(), source_cols.size() == 1 ? "" : "s",
+                    target_cols.size(), target_cols.size() == 1 ? "" : "s");
+            }
+
+            hash<string, string> rv;
+            foreach string col in (cols) {
+                bool found = False;
+                int i = 0;
+                foreach string target_col in (target_cols) {
+                    if (target_col == col) {
+                        rv{col} = source_cols[i];
+                        found = True;
+                        break;
+                    }
+                    ++i;
+                }
+                if (!found) {
+                    throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y does not target column %y; "
+                        "target columns: %y", getName(), col, target_cols);
+                }
+            }
+            return rv;
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not

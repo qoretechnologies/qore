@@ -4809,15 +4809,15 @@ string sql = table.getSelectSql(sh, \args);
                     jel += sprintf("%s.%s = %s.%s", jtn, key, an, value);
                 }
             } else {
-                *hash fkh;
+                *hash<string, string> fkh;
                 if (!jt.primaryKey.empty()) {
                     # see if there is a foreign constraint from table -> pk of self
-                    fkh = t.getForeignConstraints().findConstraintOn(jt.name, jt.primaryKey.keys());
+                    fkh = t.getForeignConstraints().findConstraintColumnMapOn(jt.name, jt.primaryKey.keys());
                     if (fkh) {
-                        AbstractIterator pki = jt.primaryKey.keyIterator();
-                        AbstractIterator fki = fkh.keyIterator();
-                        while (pki.next() && fki.next())
-                            jel += sprintf("%s.%s = %s.%s", jtn, pki.getValue(), an, fki.getValue());
+                        HashIterator i(fkh);
+                        while (i.next()) {
+                            jel += sprintf("%s.%s = %s.%s", jtn, i.getKey(), an, i.getValue());
+                        }
                     }
                 }
                 if (!fkh) {
@@ -4825,12 +4825,12 @@ string sql = table.getSelectSql(sh, \args);
                     if (!jt.foreignConstraints.empty()) {
                         AbstractPrimaryKey pk = t.getPrimaryKey();
                         if (!pk.empty()) {
-                            fkh = jt.foreignConstraints.findConstraintOn(t.getName(), pk.keys());
+                            fkh = jt.foreignConstraints.findConstraintColumnMapOn(t.getName(), pk.keys());
                             if (fkh) {
-                                AbstractIterator fki = fkh.keyIterator();
-                                AbstractIterator pki = pk.keyIterator();
-                                while (pki.next() && fki.next())
-                                    jel += sprintf("%s.%s = %s.%s", jtn, fki.getValue(), an, pki.getValue());
+                                HashIterator i(fkh);
+                                while (i.next()) {
+                                    jel += sprintf("%s.%s = %s.%s", jtn, i.getValue(), an, i.getKey());
+                                }
                             }
                         }
                     }
