@@ -63,7 +63,10 @@ fi
 
 # Setup source directory
 QORE_SRC_DIR="${QORE_SRC_DIR:-$(pwd)}"
+export QORE_SRC_DIR
 cd "${QORE_SRC_DIR}"
+
+./test/docker_test/print-ci-provenance.sh || true
 
 # Number of parallel jobs (use sysctl on macOS)
 MAKE_JOBS="${MAKE_JOBS:-$(sysctl -n hw.ncpu)}"

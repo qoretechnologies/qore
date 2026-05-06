@@ -22,6 +22,8 @@ echo "export QORE_GID=999" >> ${ENV_FILE}
 
 . ${ENV_FILE}
 
+${QORE_SRC_DIR}/test/docker_test/print-ci-provenance.sh || true
+
 if [ -z "${QORE_DB_CONNSTR_PGSQL}" ]; then
     . examples/test/docker_test/postgres_lib.sh
     setup_postgres_on_host

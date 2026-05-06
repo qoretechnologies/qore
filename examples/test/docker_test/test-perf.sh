@@ -21,8 +21,11 @@ if [ "${QORE_SRC_DIR}" = "" ]; then
         QORE_SRC_DIR=$WORKDIR/qore
     fi
 fi
+export QORE_SRC_DIR
 
 export MAKE_JOBS=${MAKE_JOBS:-6}
+
+${QORE_SRC_DIR}/test/docker_test/print-ci-provenance.sh || true
 
 # install from pre-built artifact
 #

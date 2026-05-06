@@ -21,8 +21,11 @@ if [ "${QORE_SRC_DIR}" = "" ]; then
         QORE_SRC_DIR=$WORKDIR/qore
     fi
 fi
+export QORE_SRC_DIR
 
 export MAKE_JOBS=${MAKE_JOBS:-6}
+
+${QORE_SRC_DIR}/test/docker_test/print-ci-provenance.sh || true
 
 if ! command -v pkg-config > /dev/null 2>&1 || ! pkg-config --exists krb5 krb5-gssapi libcares; then
     echo && echo "-- installing Kerberos 5 and c-ares development headers --"
@@ -100,3 +103,23 @@ make -j${MAKE_JOBS}
 
 # Remove intermediate object files to reduce artifact size
 find . -name "*.o" -delete 2>/dev/null || true
+
+{
+    echo "qore_ci_build_artifact_info_version=1"
+    printf "created_utc=%s\n" "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf "ci_job_name=%s\n" "${CI_JOB_NAME:-unknown}"
+    printf "ci_job_image=%s\n" "${CI_JOB_IMAGE:-unknown}"
+    printf "ci_commit_sha=%s\n" "${CI_COMMIT_SHA:-unknown}"
+    printf "qore_source_head=%s\n" "$(git -C "${QORE_SRC_DIR}" rev-parse HEAD 2>/dev/null || echo unknown)"
+    echo "cmake_build_type=Release"
+    if [ -f /etc/qore-test-base-build-info ]; then
+        echo
+        echo "[qore-test-base-build-info]"
+        cat /etc/qore-test-base-build-info
+    fi
+    if [ -x "${QORE_SRC_DIR}/build/qore" ]; then
+        echo
+        echo "[built-qore-version]"
+        "${QORE_SRC_DIR}/build/qore" -V 2>&1 || true
+    fi
+} > "${QORE_SRC_DIR}/build/qore-ci-build-artifact-info"
