@@ -79,9 +79,20 @@ void qore_async_io_log_v(int level, const char* fmt, va_list args) {
         lgr->deref(&xsink);
         return;
     }
-    // Format and log
+    // Format and log.  QoreString::vsprintf returns -1 (no retry) when its
+    // buffer is too small; re-copy the va_list and retry until it fits.
+    // Without the loop, large substituted values silently render as empty
+    // log messages.
     QoreStringNode* msg = new QoreStringNode();
-    msg->vsprintf(fmt, args);
+    while (true) {
+        va_list iter_args;
+        va_copy(iter_args, args);
+        int rc = msg->vsprintf(fmt, iter_args);
+        va_end(iter_args);
+        if (!rc) {
+            break;
+        }
+    }
     ExceptionSink xsink;
     lgr->logArgs(level, msg, nullptr, &xsink);
     msg->deref();
