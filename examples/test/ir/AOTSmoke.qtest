@@ -2217,7 +2217,7 @@ sub main() {
         assertTrue(link_out.regex("EXIT=0"),
             "qcc links .qo containing %module-cmd metadata: " + link_out);
 
-        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+        string run_out = backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u JDK_JAVA_OPTIONS LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
             libqore_dir, app_path));
         assertEq((jni_available ? "ok\n" : "no-jni\n") + "EXIT=0\n", run_out,
             "linked .qo binary replays %module-cmd before AOT metadata resolution");

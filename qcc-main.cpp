@@ -44,6 +44,7 @@
 #include <cstring>
 #include <cerrno>
 #include <dirent.h>
+#include <dlfcn.h>
 #include <limits>
 #include <map>
 #include <memory>
@@ -61,10 +62,201 @@
 
 static const char* QCC_VERSION = "1.0";
 
+#ifndef QORE_QCC_SOURCE_INCLUDE_DIR
+#define QORE_QCC_SOURCE_INCLUDE_DIR ""
+#endif
+
+#ifndef QORE_QCC_BUILD_INCLUDE_DIR
+#define QORE_QCC_BUILD_INCLUDE_DIR ""
+#endif
+
+#ifndef QORE_QCC_INSTALL_INCLUDE_DIR
+#define QORE_QCC_INSTALL_INCLUDE_DIR ""
+#endif
+
+#ifndef QORE_QCC_BUILD_LIBDIR
+#define QORE_QCC_BUILD_LIBDIR ""
+#endif
+
+#ifndef QORE_QCC_INSTALL_LIBDIR
+#define QORE_QCC_INSTALL_LIBDIR ""
+#endif
+
 //! Check if a path is a directory
 static bool is_directory(const char* path) {
     struct stat st;
     return (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
+}
+
+//! Check if a path is a regular file
+static bool is_file(const std::string& path) {
+    struct stat st;
+    return stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
+//! Join two path components.
+static std::string join_path(const std::string& lhs, const char* rhs) {
+    if (lhs.empty()) {
+        return rhs;
+    }
+    if (lhs.back() == '/') {
+        return lhs + rhs;
+    }
+    return lhs + "/" + rhs;
+}
+
+//! Return the directory part of a path, or empty when no directory is present.
+static std::string dirname_of(const std::string& path) {
+    size_t pos = path.find_last_of('/');
+    if (pos == std::string::npos) {
+        return std::string();
+    }
+    if (pos == 0) {
+        return "/";
+    }
+    return path.substr(0, pos);
+}
+
+//! Add a path once, preserving first-match order.
+static void add_unique_path(std::vector<std::string>& paths, const std::string& path) {
+    if (path.empty()) {
+        return;
+    }
+    if (std::find(paths.begin(), paths.end(), path) == paths.end()) {
+        paths.push_back(path);
+    }
+}
+
+//! Split Qore-style env path variables.  QORE_INCLUDE_DIR is documented as colon-separated;
+//! semicolons are also accepted so CMake-style values work in developer environments.
+static void add_env_paths(std::vector<std::string>& paths, const char* env) {
+    if (!env || !*env) {
+        return;
+    }
+    const char* start = env;
+    for (const char* p = env; ; ++p) {
+        if (*p == ':' || *p == ';' || *p == '\0') {
+            if (p > start) {
+                add_unique_path(paths, std::string(start, p - start));
+            }
+            if (*p == '\0') {
+                break;
+            }
+            start = p + 1;
+        }
+    }
+}
+
+//! Add an include directory if it contains either public Qore headers or generated headers.
+static void add_qore_include_candidate(std::vector<std::string>& dirs, const std::string& dir) {
+    if (dir.empty()) {
+        return;
+    }
+    if (is_file(join_path(dir, "qore/Qore.h")) || is_file(join_path(dir, "qore/qore-version.h"))) {
+        add_unique_path(dirs, dir);
+    }
+}
+
+//! Add a library directory if it exists.
+static void add_qore_lib_candidate(std::vector<std::string>& dirs, const std::string& dir) {
+    if (!dir.empty() && is_directory(dir.c_str())) {
+        add_unique_path(dirs, dir);
+    }
+}
+
+//! Quote one shell argument.
+static std::string shell_quote(const std::string& arg) {
+    std::string rv("'");
+    for (char c : arg) {
+        if (c == '\'') {
+            rv += "'\\''";
+        } else {
+            rv.push_back(c);
+        }
+    }
+    rv.push_back('\'');
+    return rv;
+}
+
+//! Directory containing the loaded libqore.
+static std::string get_loaded_libqore_dir() {
+    if (const char* env = std::getenv("QORE_LIBDIR")) {
+        if (*env) {
+            return env;
+        }
+    }
+
+    Dl_info info;
+    if (!dladdr(reinterpret_cast<void*>(&qore_init), &info) || !info.dli_fname) {
+        return std::string();
+    }
+
+    std::string path(info.dli_fname);
+    if (!path.empty() && path[0] != '/') {
+        char* resolved = realpath(path.c_str(), nullptr);
+        if (resolved) {
+            path = resolved;
+            free(resolved);
+        }
+    }
+    return dirname_of(path);
+}
+
+//! Derive qcc link-mode include and library search paths from env, build-tree, install-tree,
+//! and the loaded libqore path.  CI runs qcc from the build artifact without a matching
+//! system install, so link-mode must not rely on compiler defaults.
+static void collect_qcc_link_paths(std::vector<std::string>& include_dirs,
+        std::vector<std::string>& lib_dirs) {
+    std::vector<std::string> env_include_dirs;
+    add_env_paths(env_include_dirs, std::getenv("QORE_INCLUDE_DIRS"));
+    add_env_paths(env_include_dirs, std::getenv("QORE_INCLUDE_DIR"));
+    for (const auto& dir : env_include_dirs) {
+        add_qore_include_candidate(include_dirs, dir);
+    }
+
+    const std::string loaded_libdir = get_loaded_libqore_dir();
+    add_qore_lib_candidate(lib_dirs, loaded_libdir);
+    add_qore_lib_candidate(lib_dirs, QORE_QCC_BUILD_LIBDIR);
+    add_qore_lib_candidate(lib_dirs, QORE_QCC_INSTALL_LIBDIR);
+
+    std::vector<std::string> lib_based_include_dirs;
+    if (!loaded_libdir.empty()) {
+        lib_based_include_dirs.push_back(join_path(loaded_libdir, "include"));
+        std::string parent = dirname_of(loaded_libdir);
+        if (!parent.empty()) {
+            lib_based_include_dirs.push_back(join_path(parent, "include"));
+            std::string grandparent = dirname_of(parent);
+            if (!grandparent.empty()) {
+                lib_based_include_dirs.push_back(join_path(grandparent, "include"));
+            }
+        }
+    }
+
+    const bool loaded_from_build_tree = !loaded_libdir.empty()
+        && loaded_libdir == QORE_QCC_BUILD_LIBDIR;
+    if (loaded_from_build_tree) {
+        add_qore_include_candidate(include_dirs, QORE_QCC_BUILD_INCLUDE_DIR);
+        add_qore_include_candidate(include_dirs, QORE_QCC_SOURCE_INCLUDE_DIR);
+    }
+    for (const auto& dir : lib_based_include_dirs) {
+        add_qore_include_candidate(include_dirs, dir);
+    }
+    add_qore_include_candidate(include_dirs, QORE_QCC_INSTALL_INCLUDE_DIR);
+    if (!loaded_from_build_tree) {
+        add_qore_include_candidate(include_dirs, QORE_QCC_BUILD_INCLUDE_DIR);
+        add_qore_include_candidate(include_dirs, QORE_QCC_SOURCE_INCLUDE_DIR);
+    }
+}
+
+//! Add compiler/linker flags for qcc link mode.
+static void append_qcc_link_flags(std::string& cmd, const std::vector<std::string>& lib_dirs) {
+    for (const auto& dir : lib_dirs) {
+        cmd += " -L" + shell_quote(dir);
+    }
+    cmd += " -lqore";
+    for (const auto& dir : lib_dirs) {
+        cmd += " -Wl,-rpath," + shell_quote(dir);
+    }
 }
 
 // Phase C Item 2: mirror `QoreAOT::sanitizeCIdentifier` for the
@@ -2843,15 +3035,28 @@ int main(int argc, char** argv) {
         } else {
             cxx = "g++";
         }
+        std::vector<std::string> include_dirs;
+        std::vector<std::string> lib_dirs;
+        collect_qcc_link_paths(include_dirs, lib_dirs);
+
         std::string cmd = cxx + " -std=c++17";
-        cmd += " \"" + glue_path + "\"";
-        for (const auto& op : object_paths) {
-            cmd += " \"" + op + "\"";
+        for (const auto& dir : include_dirs) {
+            cmd += " -I" + shell_quote(dir);
         }
-        cmd += " -lqore -o \"";
-        cmd += output_path;
-        cmd += "\"";
+        cmd += " " + shell_quote(glue_path);
+        for (const auto& op : object_paths) {
+            cmd += " " + shell_quote(op);
+        }
+        append_qcc_link_flags(cmd, lib_dirs);
+        cmd += " -o ";
+        cmd += shell_quote(output_path);
         if (verbose) {
+            for (const auto& dir : include_dirs) {
+                printf("qcc link: include dir: %s\n", dir.c_str());
+            }
+            for (const auto& dir : lib_dirs) {
+                printf("qcc link: library dir: %s\n", dir.c_str());
+            }
             printf("qcc link: %s\n", cmd.c_str());
         }
         int link_rc = std::system(cmd.c_str());

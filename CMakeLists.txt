@@ -1955,7 +1955,13 @@ target_link_libraries(qore libqore)
 
 # qcc - Qore Code Compiler (AOT)
 add_executable(qcc qcc-main.cpp)
-target_link_libraries(qcc libqore ${ZLIB_LIBRARIES})
+target_link_libraries(qcc libqore ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
+target_compile_definitions(qcc PRIVATE
+    QORE_QCC_SOURCE_INCLUDE_DIR="${CMAKE_SOURCE_DIR}/include"
+    QORE_QCC_BUILD_INCLUDE_DIR="${CMAKE_BINARY_DIR}/include"
+    QORE_QCC_INSTALL_INCLUDE_DIR="${CMAKE_INSTALL_FULL_INCLUDEDIR}"
+    QORE_QCC_BUILD_LIBDIR="${CMAKE_BINARY_DIR}"
+    QORE_QCC_INSTALL_LIBDIR="${CMAKE_INSTALL_FULL_LIBDIR}")
 set_target_properties(qcc PROPERTIES INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR})
 set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 
