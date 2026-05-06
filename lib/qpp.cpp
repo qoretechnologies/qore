@@ -2917,8 +2917,20 @@ protected:
                 continue;
             }
             if (ptype == "*data") {
-                fprintf(fp, "    const AbstractQoreNode* %s = "
-                    "get_param_value(args, %d).get<const AbstractQoreNode>();\n", p.name.c_str(), i);
+                fprintf(fp,
+                    "    QoreValue qpp_data_value_%d = get_param_value(args, %d);\n"
+                    "    ValueHolder qpp_data_holder_%d(xsink);\n"
+                    "    const AbstractQoreNode* %s = nullptr;\n"
+                    "    if (qpp_data_value_%d.isShortString()) {\n"
+                    "        char qpp_data_short_string_%d[7];\n"
+                    "        qpp_data_value_%d.getShortString(qpp_data_short_string_%d);\n"
+                    "        qpp_data_holder_%d = QoreValue(new QoreStringNode(qpp_data_short_string_%d,\n"
+                    "            qpp_data_value_%d.shortStringLen(), QCS_UTF8));\n"
+                    "        %s = qpp_data_holder_%d->get<const AbstractQoreNode>();\n"
+                    "    } else {\n"
+                    "        %s = qpp_data_value_%d.get<const AbstractQoreNode>();\n"
+                    "    }\n",
+                    i, i, i, p.name.c_str(), i, i, i, i, i, i, i, p.name.c_str(), i, p.name.c_str(), i);
                 continue;
             }
             // skip "..." arg which is just for documentation

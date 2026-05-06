@@ -14,6 +14,7 @@ public class CryptoTest inherits QUnit::Test {
         const Str = "Hello There This is a Test - 1234567890";
         const Key = "1234567812345abcabcdefghijklmnopqrstuvwxyz";
         const Aad = "additional authenticated data";
+        const ShortAad = "aad";
     }
 
     constructor() : Test("Crypto test", "1.0") {
@@ -142,6 +143,19 @@ public class CryptoTest inherits QUnit::Test {
         # decryption must fail with different AAD
         assertThrows("DECRYPT-ERROR", \decrypt_to_binary(), (alg, x1, Key, NOTHING, mac), alg + " encrypt bin");
         assertThrows("DECRYPT-ERROR", \decrypt_to_string(), (alg, x1, Key, NOTHING, mac), alg + " encrypt bin");
+
+        # test with short-string AAD; this covers generated *data C++ bindings with SSO values
+        x1 = encrypt(alg, str, Key, NOTHING, \mac, 16, ShortAad);
+        assertEq(str, binary_to_string(decrypt_to_binary(alg, x1, Key, NOTHING, mac, ShortAad)),
+            alg + " encrypt bin+short-aad");
+        assertEq(str, decrypt_to_string(alg, x1, Key, NOTHING, mac, ShortAad),
+            alg + " encrypt str+short-aad");
+
+        # decryption must fail without the short-string AAD
+        assertThrows("DECRYPT-ERROR", \decrypt_to_binary(), (alg, x1, Key, NOTHING, mac),
+            alg + " encrypt bin+missing-short-aad");
+        assertThrows("DECRYPT-ERROR", \decrypt_to_string(), (alg, x1, Key, NOTHING, mac),
+            alg + " encrypt str+missing-short-aad");
     }
 
     testPbkdf2() {
