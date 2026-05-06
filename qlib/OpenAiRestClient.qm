@@ -138,6 +138,9 @@ public class OpenAiRestClientBase {
         #! Default OpenAi API version
         const DefaultApiVersion = "v1";
 
+        #! Default embedding model
+        const DefaultEmbeddingModel = "text-embedding-3-small";
+
         #! Default constructor options
         const DefaultOptions = {
             "url": DefaultUrl,
@@ -155,6 +158,7 @@ public class OpenAiRestClientBase {
                 opts.swagger = path;
             }
         }
+        remove opts{"embedding-model"};
         return DefaultOptions + opts;
     }
 }
@@ -397,6 +401,14 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
                         "the schema may be out of date and may cause valid API calls to fail",
                     "type": "bool",
                     "default_value": False,
+                },
+                "embedding-model": <ConnectionOptionInfo>{
+                    "display_name": "Embedding Model",
+                    "short_desc": "OpenAI embedding model name",
+                    "desc": "The OpenAI embedding model used by embedding clients when this "
+                        "connection is selected for embeddings",
+                    "type": "string",
+                    "default_value": OpenAiRestClientBase::DefaultEmbeddingModel,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": DefaultPingHeaders,
