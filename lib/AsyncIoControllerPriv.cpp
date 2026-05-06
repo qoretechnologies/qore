@@ -6434,11 +6434,23 @@ void AsyncIoControllerPriv::log(int level, const char* fmt, ...) const {
         return;
     }
 
-    va_list args;
-    va_start(args, fmt);
+    // QoreString::vsprintf returns -1 (no retry) when the buffer is too small;
+    // re-start va_list and retry until it fits, mirroring the established
+    // pattern in support.cpp printe()/print_debug().  Without the loop, large
+    // owner / key strings (e.g. socket-sync owners) silently render as empty
+    // log messages.
     QoreStringNode* msg = new QoreStringNode();
-    msg->vsprintf(fmt, args);
-    va_end(args);
+    {
+        va_list args;
+        while (true) {
+            va_start(args, fmt);
+            int rc = msg->vsprintf(fmt, args);
+            va_end(args);
+            if (!rc) {
+                break;
+            }
+        }
+    }
 
     ExceptionSink xsink;
     lgr->logArgs(level, msg, nullptr, &xsink);
