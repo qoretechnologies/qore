@@ -98,6 +98,9 @@ public class VoyageRestClientBase {
         #! Default Voyage AI API version
         const DefaultApiVersion = "v1";
 
+        #! Default Voyage AI embedding model
+        const DefaultEmbeddingModel = "voyage-3";
+
         #! Default constructor options
         const DefaultOptions = {
             "url": DefaultUrl,
@@ -139,6 +142,7 @@ public class VoyageRestClientBase {
             rv.headers."Authorization" = "Bearer " + rv.apikey;
             remove rv.apikey;
         }
+        remove rv{"embedding-model"};
         return rv;
     }
 }
@@ -209,6 +213,14 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use",
                     "type": "string",
                     "default_value": VoyageRestClientBase::DefaultApiVersion,
+                },
+                "embedding-model": <ConnectionOptionInfo>{
+                    "display_name": "Embedding Model",
+                    "short_desc": "Voyage AI embedding model name",
+                    "desc": "The Voyage AI embedding model used by embedding clients when "
+                        "this connection is selected for embeddings",
+                    "type": "string",
+                    "default_value": VoyageRestClientBase::DefaultEmbeddingModel,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": VoyageRestClientBase::DefaultPingHeaders,
