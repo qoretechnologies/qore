@@ -58,7 +58,7 @@ module PdfCoDataProvider {
             "logo": PdfCoDataProvider::PdfCoLogo,
             "logo_file_name": "pdfco-logo.svg",
             "logo_mime_type": MimeTypeSvg,
-            "groups": (DataProvider::AppGroup::DataTransformation,),
+            "groups": (DataProvider::AppGroup::Documents,),
         });
 
         # ============================================================
@@ -157,16 +157,15 @@ module PdfCoDataProvider {
             "display_name": "Convert from Images into PDF",
             "short_desc": "Convert one or more images into a PDF document",
             "desc": "Converts images to a PDF document.\n\n"
-                "The `url` parameter should contain the image URL(s). "
-                "Multiple images can be provided as comma-separated URLs.",
+                "Provide either an uploaded image via `file` or a list of image URLs via `url`.",
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoConvertImagesToPdfRequestDataType::Fields{"file",}, {
+                PdfCoConvertImagesToPdfRequestDataType::Fields{"file", "url", "name"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoConvertImagesToPdfRequestDataType::Fields - "file",
+                PdfCoConvertImagesToPdfRequestDataType::Fields - ("file", "url", "name"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -186,11 +185,11 @@ module PdfCoDataProvider {
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoConvertToPdfRequestDataType::Fields{"file",}, {
+                PdfCoConvertToPdfRequestDataType::Fields{"file", "url", "name"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoConvertToPdfRequestDataType::Fields - "file",
+                PdfCoConvertToPdfRequestDataType::Fields - ("file", "url", "name"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -210,15 +209,16 @@ module PdfCoDataProvider {
             "display_name": "Merge a PDF",
             "short_desc": "Merge multiple PDF documents into one",
             "desc": "Merges multiple PDF documents into a single PDF.\n\n"
-                "Provide multiple source URLs as comma-separated values in the `url` field.",
+                "Provide source documents either as a list of URLs in the `url` field "
+                "or via the `file` field for an uploaded document.",
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoMergePdfRequestDataType::Fields{"file",}, {
+                PdfCoMergePdfRequestDataType::Fields{"file", "url", "name"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoMergePdfRequestDataType::Fields - "file",
+                PdfCoMergePdfRequestDataType::Fields - ("file", "url", "name"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -266,11 +266,11 @@ module PdfCoDataProvider {
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoCompressPdfRequestDataType::Fields{"file",}, {
+                PdfCoCompressPdfRequestDataType::Fields{"file", "url", "JPEGQuality"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoCompressPdfRequestDataType::Fields - "file",
+                PdfCoCompressPdfRequestDataType::Fields - ("file", "url", "JPEGQuality"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -291,11 +291,13 @@ module PdfCoDataProvider {
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoAddTextImagesRequestDataType::Fields{"file",}, {
+                PdfCoAddTextImagesRequestDataType::Fields{"file", "annotationsString",
+                    "imagesString"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoAddTextImagesRequestDataType::Fields - "file",
+                PdfCoAddTextImagesRequestDataType::Fields
+                    - ("file", "annotationsString", "imagesString"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -372,11 +374,11 @@ module PdfCoDataProvider {
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoGetPdfInfoRequestDataType::Fields{"file",}, {
+                PdfCoGetPdfInfoRequestDataType::Fields{"file", "url", "password"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoGetPdfInfoRequestDataType::Fields - "file",
+                PdfCoGetPdfInfoRequestDataType::Fields - ("file", "url", "password"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoPdfInfoResponseDataType();
@@ -518,11 +520,12 @@ module PdfCoDataProvider {
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoAiInvoiceParserRequestDataType::Fields{"file",}, {
+                PdfCoAiInvoiceParserRequestDataType::Fields{"file", "url", "lineItemStructure"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoAiInvoiceParserRequestDataType::Fields - "file",
+                PdfCoAiInvoiceParserRequestDataType::Fields
+                    - ("file", "url", "lineItemStructure"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoInvoiceParserResponseDataType();
@@ -543,11 +546,13 @@ module PdfCoDataProvider {
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoParseDocumentRequestDataType::Fields{"file",}, {
+                PdfCoParseDocumentRequestDataType::Fields{"file", "url", "templateId",
+                    "outputFormat"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoParseDocumentRequestDataType::Fields - "file",
+                PdfCoParseDocumentRequestDataType::Fields
+                    - ("file", "url", "templateId", "outputFormat"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoDocumentParserResponseDataType();
@@ -568,11 +573,11 @@ module PdfCoDataProvider {
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoDocumentClassifierRequestDataType::Fields{"file",}, {
+                PdfCoDocumentClassifierRequestDataType::Fields{"file", "url", "rulescsv"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoDocumentClassifierRequestDataType::Fields - "file",
+                PdfCoDocumentClassifierRequestDataType::Fields - ("file", "url", "rulescsv"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoDocumentClassifierResponseDataType();
@@ -747,11 +752,11 @@ module PdfCoDataProvider {
             "action_code": DPAT_API,
 
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoUploadFileRequestDataType::Fields{"file",}, {
+                PdfCoUploadFileRequestDataType::Fields{"file", "url", "name"}, {
                     "preselected": True,
                 },
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                PdfCoUploadFileRequestDataType::Fields - "file",
+                PdfCoUploadFileRequestDataType::Fields - ("file", "url", "name"),
             ),
             "get_output_type": AbstractDataProviderType sub () {
                 return new PdfCoUrlResponseDataType();
@@ -768,7 +773,7 @@ module PdfCoDataProvider {
             "short_desc": "Check the status of an asynchronous job",
             "desc": "Checks the status of an asynchronous job.\n\n"
                 "Use this action to poll for the result of any action submitted "
-                "with `async` = `true`.\n\n"
+                "with `async` = `True`.\n\n"
                 "Returns the job status (`working`, `success`, or `failed`) and the "
                 "result URL when complete.",
             "action_code": DPAT_API,

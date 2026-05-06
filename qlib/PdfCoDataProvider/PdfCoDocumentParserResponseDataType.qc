@@ -38,7 +38,7 @@ public class PdfCoParsedObjectDataType inherits HashDataType {
             "objectType": {
                 "type": StringOrNothingType,
                 "display_name": "Object Type",
-                "short_desc": "Kind of parsed object (`field` or `table`)",
+                "short_desc": "Kind of parsed object (field or table)",
                 "desc": "Kind of parsed object: `field` for scalar values, `table` for tabular data",
             },
             "value": {
@@ -55,16 +55,18 @@ public class PdfCoParsedObjectDataType inherits HashDataType {
                 "desc": "Zero-based page index where the object was located",
             },
             "rectangle": {
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("ParsedObjectRectangle", SoftFloatType, True),
                 "display_name": "Rectangle",
-                "short_desc": "Bounding rectangle as `[x1, y1, x2, y2]`",
-                "desc": "Bounding rectangle as `[x1, y1, x2, y2]` four-element coordinate array",
+                "short_desc": "Bounding rectangle as a four-element coordinate array",
+                "desc": "Bounding rectangle as a four-element numeric array `[x1, y1, x2, y2]`",
             },
             "rows": {
                 "type": SoftAutoListOrNothingType,
                 "display_name": "Rows",
-                "short_desc": "Parsed table rows (only for `table` objects)",
-                "desc": "Parsed table rows; populated only when `objectType` is `table`",
+                "short_desc": "Parsed table rows for table objects",
+                "desc": "Parsed table rows; populated only when `objectType` is `table`. The row "
+                    "structure is template-dependent and reflects the columns defined in the "
+                    "document parser template.",
             },
         };
     }
@@ -98,10 +100,10 @@ public class PdfCoDocumentParserBodyDataType inherits HashDataType {
                 "desc": "Version of the document parser template that was used",
             },
             "timestamp": {
-                "type": StringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Timestamp",
-                "short_desc": "ISO 8601 timestamp when parsing completed",
-                "desc": "ISO 8601 timestamp indicating when parsing completed",
+                "short_desc": "Timestamp when parsing completed",
+                "desc": "Timestamp indicating when parsing completed",
             },
             "elapsed": {
                 "type": SoftFloatOrNothingType,

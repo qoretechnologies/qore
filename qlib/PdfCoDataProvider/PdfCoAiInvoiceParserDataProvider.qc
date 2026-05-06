@@ -70,13 +70,7 @@ public class PdfCoAiInvoiceParserRequestDataType inherits HashDataType {
                 "short_desc": "Webhook URL for results",
                 "desc": "Webhook URL to receive results when processing is complete",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

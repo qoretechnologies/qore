@@ -84,13 +84,7 @@ public class PdfCoGenerateBarcodeRequestDataType inherits HashDataType {
                 "short_desc": "Return the barcode image inline",
                 "desc": "Set to `True` to return the barcode image inline",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

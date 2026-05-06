@@ -108,13 +108,7 @@ public class PdfCoSendEmailRequestDataType inherits HashDataType {
                 "short_desc": "Send the email as a background job",
                 "desc": "Set to `True` to send the email as a background job",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

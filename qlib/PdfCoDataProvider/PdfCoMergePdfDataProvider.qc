@@ -81,13 +81,7 @@ public class PdfCoMergePdfRequestDataType inherits HashDataType {
                 "short_desc": "Custom title for the merged document",
                 "desc": "Custom title for the merged document",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

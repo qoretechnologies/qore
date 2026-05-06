@@ -73,4 +73,41 @@ public namespace PdfCoDataProvider {
 
     #! PDF.co logo in SVG format (loaded from file)
     public const PdfCoLogo = File::readTextFile(get_script_dir() + "/pdfco-logo.svg");
+
+    #! Common fields supported by every endpoint that fetches the source from a URL
+    /** PDF.co's URL-based endpoints uniformly accept HTTP basic-auth credentials for the
+        source URL, an async webhook URL, and free-form processing profiles. Mix these into
+        request type \c Fields when the action sends a remote URL to PDF.co.
+    */
+    public const PdfCoRemoteSourceFields = {
+        "httpusername": {
+            "type": StringOrNothingType,
+            "display_name": "HTTP Username",
+            "short_desc": "HTTP basic-auth username for the source URL",
+            "desc": "HTTP basic-auth username if the source `url` requires authentication",
+        },
+        "httppassword": {
+            "type": StringOrNothingType,
+            "display_name": "HTTP Password",
+            "short_desc": "HTTP basic-auth password for the source URL",
+            "desc": "HTTP basic-auth password if the source `url` requires authentication",
+            "sensitive": True,
+        },
+        "callback": {
+            "type": StringOrNothingType,
+            "display_name": "Callback URL",
+            "short_desc": "Webhook URL invoked when the async job completes",
+            "desc": "Webhook URL that PDF.co will invoke when an async job completes. "
+                "Only applies when `async` is set to `True`.",
+        },
+        "profiles": {
+            "type": StringOrNothingType,
+            "display_name": "Profiles",
+            "short_desc": "Advanced processing profiles as a JSON string",
+            "desc": "Advanced processing profiles as a JSON string for fine-grained control "
+                "over OCR, encryption, and other internal options.\n\n"
+                "**Example**: `{\"OCRMode\": \"TextFromImagesAndVectorsLowRes\", "
+                "\"OCRResolution\": 300}`",
+        },
+    };
 }

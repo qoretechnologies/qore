@@ -103,13 +103,7 @@ public class PdfCoReadBarcodeRequestDataType inherits HashDataType {
                 "short_desc": "Run as a background job",
                 "desc": "Set to `True` to run as a background job",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

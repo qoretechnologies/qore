@@ -76,13 +76,7 @@ public class PdfCoSplitPdfRequestDataType inherits HashDataType {
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

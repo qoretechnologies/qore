@@ -130,13 +130,7 @@ public class PdfCoConvertFromPdfRequestDataType inherits HashDataType {
                     <AllowedValueInfo>{"value": "3", "desc": "Advanced line grouping"},
                 ),
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {
