@@ -845,6 +845,10 @@ private:
     // Phase 5c: Set IRBuilder debug location from instruction's source location
     void setDebugLocation(const QoreIRInstruction* inst);
 
+    // NaN-boxed type predicates shared by inline fast paths.
+    llvm::Value* emitIsBoxedInt48(llvm::Value* qv);
+    llvm::Value* emitIsBoxedFloat(llvm::Value* qv);
+
     // Phase 5b: Emit inline LLVM fast-path for .any arithmetic (AddAny/SubAny/MulAny).
     // Type-checks operands for int+int and float+float, falls back to helper for mixed types.
     llvm::Value* emitAnyArithFastPath(llvm::Instruction::BinaryOps int_op,

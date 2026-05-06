@@ -117,6 +117,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
         addTestCase("AOT module no-narrow reference signatures",
             \testAOTModuleNoNarrowReferenceSignatures());
+        addTestCase("AOT module SSO values avoid numeric fast paths",
+            \testAOTModuleSsoAvoidsNumericFastPaths());
         addTestCase("AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
         addTestCase("AOT module IR-only local owns invoke result",
             \testAOTModuleIrOnlyLocalOwnsInvokeResult());
@@ -1816,6 +1818,87 @@ printf(\"sum: %d\\n\", sum);
             "so_path": so_path,
             "compiled": is_file(so_path),
         };
+    }
+
+    testAOTModuleSsoAvoidsNumericFastPaths() {
+        string tmp_dir = sprintf("/tmp/aot_sso_fastpath_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+
+module AOTShortStringFastPath {
+    version = \"1.0\";
+    desc = \"SSO numeric fast-path regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTShortStringFastPath {
+    public class Writer {
+        private {
+            string quote = \"\\\"\";
+            string escape = \"\\\\\";
+            string empty = \"\";
+        }
+
+        string direct() {
+            return escape + quote;
+        }
+
+        list<auto> mapped(list<auto> values) {
+            return map replace(string($1), quote, escape + quote), values;
+        }
+
+        bool emptyTruthy() {
+            return empty ? True : False;
+        }
+
+        bool quoteTruthy() {
+            return quote ? True : False;
+        }
+
+        bool hardEq() {
+            return quote === quote;
+        }
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTShortStringFastPath.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTShortStringFastPath.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled,
+            "SSO numeric fast-path regression module compiled: " + result.compile_out);
+        assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "5"),
+            "SSO numeric fast-path regression module fully precompiled: " + result.compile_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        {
+            File f();
+            f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%requires AOTShortStringFastPath
+
+AOTShortStringFastPath::Writer w();
+printf(\"%y\\n\", (w.direct(), w.mapped((\"a\\\"b\",)), w.emptyTruthy(), w.quoteTruthy(), w.hardEq()));
+");
+            f.close();
+        }
+
+        string out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, script_path));
+        assertEq("[\"\\\\\\\"\", [\"a\\\\\\\"b\"], False, True, True]\n", out,
+            "AOT qmod SSO values stay out of numeric float/int fast paths");
     }
 
     testAOTModuleIrOnlyLocalOwnsInvokeResult() {

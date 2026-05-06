@@ -709,6 +709,21 @@ llvm::Value* QoreIRToLLVM::hasNodeInline(llvm::Value* qv) {
     return builder->CreateAnd(is_pointer, ptr_not_null);
 }
 
+llvm::Value* QoreIRToLLVM::emitIsBoxedInt48(llvm::Value* qv) {
+    llvm::Value* tag = builder->CreateAnd(qv, llvm::ConstantInt::get(i64_type, TAG_MASK));
+    return builder->CreateICmpEQ(tag, llvm::ConstantInt::get(i64_type, TAG_INT48));
+}
+
+llvm::Value* QoreIRToLLVM::emitIsBoxedFloat(llvm::Value* qv) {
+    // Mirrors QoreValue::isFloat(): encoded doubles are non-zero, below the
+    // INT48 boundary, and must exclude short strings (top 12 bits 0xFFC).
+    llvm::Value* not_nothing = builder->CreateICmpNE(qv, llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+    llvm::Value* below_boundary = builder->CreateICmpULT(qv, llvm::ConstantInt::get(i64_type, TAG_INT48));
+    llvm::Value* tag12 = builder->CreateLShr(qv, llvm::ConstantInt::get(i64_type, 52));
+    llvm::Value* not_short_string = builder->CreateICmpNE(tag12, llvm::ConstantInt::get(i64_type, 0xFFC));
+    return builder->CreateAnd(builder->CreateAnd(not_nothing, below_boundary), not_short_string);
+}
+
 // Phase 4: Inline qore_rt_ref - reference count a value if it's a node
 // Emits: has_node ? qore_rt_refself(val) : val
 // This avoids external function call overhead for the type check
@@ -6871,8 +6886,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     boxed = boxBool(val);
                 }
             }
-            // Profile-informed: use inline NaN-boxing check instead of runtime call
-            // Int check: value < TAG_INT48 (int values are in the lower range)
+            // Profile-informed: use inline NaN-boxing check instead of runtime call.
             llvm::Value* guard_pass;
             bool profile_hot = false;
             if (current_ir_func && ginst->guard_id < current_ir_func->guard_profile_count) {
@@ -6882,9 +6896,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             if (profile_hot || boxed->getType() == i64_type) {
-                // Inline check: NaN-boxed int has bits < TAG_INT48
-                guard_pass = builder->CreateICmpULT(boxed,
-                    llvm::ConstantInt::get(i64_type, TAG_INT48), "guard_int_inline");
+                guard_pass = emitIsBoxedInt48(boxed);
             } else {
                 auto helper = module.getOrInsertFunction("qore_rt_guard_int",
                         llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -6930,12 +6942,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
             }
             if (profile_hot) {
-                // Inline check: NaN-boxed float: bits > DOUBLE_ENCODE_OFFSET && bits < TAG_INT48
-                llvm::Value* above_offset = builder->CreateICmpUGT(boxed,
-                    llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
-                llvm::Value* below_int = builder->CreateICmpULT(boxed,
-                    llvm::ConstantInt::get(i64_type, TAG_INT48));
-                guard_pass = builder->CreateAnd(above_offset, below_int, "guard_float_inline");
+                guard_pass = emitIsBoxedFloat(boxed);
             } else {
                 auto helper = module.getOrInsertFunction("qore_rt_guard_float",
                         llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -6995,9 +7002,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 cond = cond_val;
             } else if (cond_val->getType() == i64_type
                     && nanboxed_values.count(br->condition.id)) {
-                // NaN-boxed value: inline fast-paths for all value types,
-                // only fall back to qore_rt_to_bool for pointer/node types
-                // (strings, hashes, lists, objects).
+                // NaN-boxed value: inline fast-paths for scalar values, fall
+                // back to qore_rt_to_bool for strings, nodes, enums, etc.
                 //
                 // Dispatch by tag (top 16 bits of NaN-boxed value):
                 //   0x0000 (NOTHING)  -> false
@@ -7013,6 +7019,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::BasicBlock* bb_chk_tag = llvm::BasicBlock::Create(ctx, "brif.chk_tag", llvm_func);
                 llvm::BasicBlock* bb_int48 = llvm::BasicBlock::Create(ctx, "brif.int48", llvm_func);
                 llvm::BasicBlock* bb_special = llvm::BasicBlock::Create(ctx, "brif.special", llvm_func);
+                llvm::BasicBlock* bb_chk_float = llvm::BasicBlock::Create(ctx, "brif.chk_float", llvm_func);
                 llvm::BasicBlock* bb_double = llvm::BasicBlock::Create(ctx, "brif.double", llvm_func);
                 llvm::BasicBlock* bb_slow = llvm::BasicBlock::Create(ctx, "brif.slow", llvm_func);
                 llvm::BasicBlock* bb_merge = llvm::BasicBlock::Create(ctx, "brif.merge", llvm_func);
@@ -7026,7 +7033,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 builder->SetInsertPoint(bb_chk_tag);
                 llvm::Value* tag = builder->CreateLShr(cond_val,
                         llvm::ConstantInt::get(i64_type, 48));
-                llvm::SwitchInst* sw = builder->CreateSwitch(tag, bb_double, 3);
+                llvm::SwitchInst* sw = builder->CreateSwitch(tag, bb_chk_float, 3);
                 sw->addCase(llvm::ConstantInt::get(
                         static_cast<llvm::IntegerType*>(i64_type), 0xFFF9), bb_int48);
                 sw->addCase(llvm::ConstantInt::get(
@@ -7047,6 +7054,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* is_true = builder->CreateICmpEQ(cond_val,
                         llvm::ConstantInt::get(i64_type, VAL_TRUE));
                 builder->CreateCondBr(is_true, bb_true, bb_false);
+
+                // Only true boxed floats take the floating-point path; short
+                // strings live below TAG_INT48 and must go through runtime bool.
+                builder->SetInsertPoint(bb_chk_float);
+                llvm::Value* is_float = emitIsBoxedFloat(cond_val);
+                builder->CreateCondBr(is_float, bb_double, bb_slow);
 
                 // DOUBLE: subtract offset, bitcast to double, compare != 0.0
                 builder->SetInsertPoint(bb_double);
@@ -15484,16 +15497,9 @@ llvm::Value* QoreIRToLLVM::emitAnyArithFastPath(llvm::Instruction::BinaryOps int
         const QoreIRInstruction* inst,
         llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module) {
-    // Constants for tag checking
-    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
-    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
-
     // Check if both are int48-tagged
-    llvm::Value* lhs_tag = builder->CreateAnd(lhs, tag_mask);
-    llvm::Value* rhs_tag = builder->CreateAnd(rhs, tag_mask);
-    llvm::Value* lhs_is_int = builder->CreateICmpEQ(lhs_tag, tag_int48);
-    llvm::Value* rhs_is_int = builder->CreateICmpEQ(rhs_tag, tag_int48);
+    llvm::Value* lhs_is_int = emitIsBoxedInt48(lhs);
+    llvm::Value* rhs_is_int = emitIsBoxedInt48(rhs);
     llvm::Value* both_int = builder->CreateAnd(lhs_is_int, rhs_is_int);
 
     // Create basic blocks
@@ -15514,16 +15520,10 @@ llvm::Value* QoreIRToLLVM::emitAnyArithFastPath(llvm::Instruction::BinaryOps int
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
 
-    // Check float path: double-encoded values satisfy
-    //   bits > DOUBLE_ENCODE_OFFSET && bits < DOUBLE_BOUNDARY (== TAG_INT48)
+    // Check float path: exclude SSO short strings from the double range.
     builder->SetInsertPoint(check_float_bb);
-    llvm::Value* double_boundary = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* lhs_gt_offset = builder->CreateICmpUGT(lhs, double_offset);
-    llvm::Value* lhs_lt_boundary = builder->CreateICmpULT(lhs, double_boundary);
-    llvm::Value* lhs_is_float = builder->CreateAnd(lhs_gt_offset, lhs_lt_boundary);
-    llvm::Value* rhs_gt_offset = builder->CreateICmpUGT(rhs, double_offset);
-    llvm::Value* rhs_lt_boundary = builder->CreateICmpULT(rhs, double_boundary);
-    llvm::Value* rhs_is_float = builder->CreateAnd(rhs_gt_offset, rhs_lt_boundary);
+    llvm::Value* lhs_is_float = emitIsBoxedFloat(lhs);
+    llvm::Value* rhs_is_float = emitIsBoxedFloat(rhs);
     llvm::Value* both_float = builder->CreateAnd(lhs_is_float, rhs_is_float);
     builder->CreateCondBr(both_float, fast_float_bb, slow_bb);
 
@@ -15565,16 +15565,9 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
         const QoreIRInstruction* inst,
         llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module) {
-    // Constants for tag checking
-    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
-    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
-
     // Check if both are int48-tagged
-    llvm::Value* lhs_tag = builder->CreateAnd(lhs, tag_mask);
-    llvm::Value* rhs_tag = builder->CreateAnd(rhs, tag_mask);
-    llvm::Value* lhs_is_int = builder->CreateICmpEQ(lhs_tag, tag_int48);
-    llvm::Value* rhs_is_int = builder->CreateICmpEQ(rhs_tag, tag_int48);
+    llvm::Value* lhs_is_int = emitIsBoxedInt48(lhs);
+    llvm::Value* rhs_is_int = emitIsBoxedInt48(rhs);
     llvm::Value* both_int = builder->CreateAnd(lhs_is_int, rhs_is_int);
 
     // Create basic blocks
@@ -15595,16 +15588,10 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpFastPath(llvm::CmpInst::Predicate int_pred,
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
 
-    // Check float path: double-encoded values satisfy
-    //   bits > DOUBLE_ENCODE_OFFSET && bits < DOUBLE_BOUNDARY (== TAG_INT48)
+    // Check float path: exclude SSO short strings from the double range.
     builder->SetInsertPoint(check_float_bb);
-    llvm::Value* double_boundary = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* lhs_gt_offset = builder->CreateICmpUGT(lhs, double_offset);
-    llvm::Value* lhs_lt_boundary = builder->CreateICmpULT(lhs, double_boundary);
-    llvm::Value* lhs_is_float = builder->CreateAnd(lhs_gt_offset, lhs_lt_boundary);
-    llvm::Value* rhs_gt_offset = builder->CreateICmpUGT(rhs, double_offset);
-    llvm::Value* rhs_lt_boundary = builder->CreateICmpULT(rhs, double_boundary);
-    llvm::Value* rhs_is_float = builder->CreateAnd(rhs_gt_offset, rhs_lt_boundary);
+    llvm::Value* lhs_is_float = emitIsBoxedFloat(lhs);
+    llvm::Value* rhs_is_float = emitIsBoxedFloat(rhs);
     llvm::Value* both_float = builder->CreateAnd(lhs_is_float, rhs_is_float);
     builder->CreateCondBr(both_float, fast_float_bb, slow_bb);
 
@@ -15648,10 +15635,6 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
         const QoreIRInstruction* inst,
         llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module, bool handle_nothing) {
-    // Constants for tag checking
-    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
-    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
     llvm::Value* nothing_val = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
 
     // Create basic blocks
@@ -15683,10 +15666,8 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
     if (handle_nothing) {
         builder->SetInsertPoint(check_int_bb);
     }
-    llvm::Value* lhs_tag = builder->CreateAnd(lhs, tag_mask);
-    llvm::Value* rhs_tag = builder->CreateAnd(rhs, tag_mask);
-    llvm::Value* lhs_is_int = builder->CreateICmpEQ(lhs_tag, tag_int48);
-    llvm::Value* rhs_is_int = builder->CreateICmpEQ(rhs_tag, tag_int48);
+    llvm::Value* lhs_is_int = emitIsBoxedInt48(lhs);
+    llvm::Value* rhs_is_int = emitIsBoxedInt48(rhs);
     llvm::Value* both_int = builder->CreateAnd(lhs_is_int, rhs_is_int);
 
     builder->CreateCondBr(both_int, fast_int_bb, check_float_bb);
@@ -15700,16 +15681,10 @@ llvm::Value* QoreIRToLLVM::emitAnyCompoundAssignFastPath(llvm::Instruction::Bina
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
 
-    // Check float path: double-encoded values satisfy
-    //   bits > DOUBLE_ENCODE_OFFSET && bits < DOUBLE_BOUNDARY (== TAG_INT48)
+    // Check float path: exclude SSO short strings from the double range.
     builder->SetInsertPoint(check_float_bb);
-    llvm::Value* double_boundary = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* lhs_gt_offset = builder->CreateICmpUGT(lhs, double_offset);
-    llvm::Value* lhs_lt_boundary = builder->CreateICmpULT(lhs, double_boundary);
-    llvm::Value* lhs_is_float = builder->CreateAnd(lhs_gt_offset, lhs_lt_boundary);
-    llvm::Value* rhs_gt_offset = builder->CreateICmpUGT(rhs, double_offset);
-    llvm::Value* rhs_lt_boundary = builder->CreateICmpULT(rhs, double_boundary);
-    llvm::Value* rhs_is_float = builder->CreateAnd(rhs_gt_offset, rhs_lt_boundary);
+    llvm::Value* lhs_is_float = emitIsBoxedFloat(lhs);
+    llvm::Value* rhs_is_float = emitIsBoxedFloat(rhs);
     llvm::Value* both_float = builder->CreateAnd(lhs_is_float, rhs_is_float);
     builder->CreateCondBr(both_float, fast_float_bb, slow_bb);
 
@@ -15798,11 +15773,6 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
                 {lv_bits_or_slot, store_val, xsink_arg});
     };
 
-    // Constants
-    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
-    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
-
     // Determine opcode for slow path
     llvm::Value* opcode_val = llvm::ConstantInt::get(i32_type, static_cast<int>(inst->opcode));
 
@@ -15859,10 +15829,8 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
     llvm::BasicBlock* fast_int_end = nullptr;
     if (has_int_path) {
         builder->SetInsertPoint(check_int_bb);
-        llvm::Value* current_tag = builder->CreateAnd(current, tag_mask);
-        llvm::Value* rhs_tag = builder->CreateAnd(val_boxed, tag_mask);
-        llvm::Value* current_is_int = builder->CreateICmpEQ(current_tag, tag_int48);
-        llvm::Value* rhs_is_int = builder->CreateICmpEQ(rhs_tag, tag_int48);
+        llvm::Value* current_is_int = emitIsBoxedInt48(current);
+        llvm::Value* rhs_is_int = emitIsBoxedInt48(val_boxed);
         llvm::Value* both_int = builder->CreateAnd(current_is_int, rhs_is_int);
 
         llvm::BasicBlock* after_int_bb = has_float_path ? check_float_bb : slow_bb;
@@ -15886,13 +15854,8 @@ llvm::Value* QoreIRToLLVM::emitLValueCompoundAssignFastPath(
     llvm::BasicBlock* fast_float_end = nullptr;
     if (has_float_path) {
         builder->SetInsertPoint(check_float_bb);
-        llvm::Value* double_boundary = llvm::ConstantInt::get(i64_type, TAG_INT48);
-        llvm::Value* lhs_gt_offset = builder->CreateICmpUGT(current, double_offset);
-        llvm::Value* lhs_lt_boundary = builder->CreateICmpULT(current, double_boundary);
-        llvm::Value* lhs_is_float = builder->CreateAnd(lhs_gt_offset, lhs_lt_boundary);
-        llvm::Value* rhs_gt_offset = builder->CreateICmpUGT(val_boxed, double_offset);
-        llvm::Value* rhs_lt_boundary = builder->CreateICmpULT(val_boxed, double_boundary);
-        llvm::Value* rhs_is_float = builder->CreateAnd(rhs_gt_offset, rhs_lt_boundary);
+        llvm::Value* lhs_is_float = emitIsBoxedFloat(current);
+        llvm::Value* rhs_is_float = emitIsBoxedFloat(val_boxed);
         llvm::Value* both_float = builder->CreateAnd(lhs_is_float, rhs_is_float);
         builder->CreateCondBr(both_float, fast_float_bb, slow_bb);
 
@@ -16021,14 +15984,8 @@ llvm::Value* QoreIRToLLVM::emitAnyBitwiseFastPath(llvm::Instruction::BinaryOps i
 llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_int,
         const QoreIRInstruction* inst,
         llvm::Value* operand, llvm::Function* llvm_func, llvm::Module& module) {
-    // Constants for tag checking
-    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
-    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
-
     // Check if operand is int48-tagged
-    llvm::Value* op_tag = builder->CreateAnd(operand, tag_mask);
-    llvm::Value* is_int = builder->CreateICmpEQ(op_tag, tag_int48);
+    llvm::Value* is_int = emitIsBoxedInt48(operand);
 
     // Create basic blocks
     llvm::BasicBlock* fast_int_bb = llvm::BasicBlock::Create(ctx, "unary_fast_int", llvm_func);
@@ -16047,13 +16004,9 @@ llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_in
     builder->CreateBr(merge_bb);
     llvm::BasicBlock* fast_int_end = builder->GetInsertBlock();
 
-    // Check float path: double-encoded values satisfy
-    //   bits > DOUBLE_ENCODE_OFFSET && bits < DOUBLE_BOUNDARY (== TAG_INT48)
+    // Check float path: exclude SSO short strings from the double range.
     builder->SetInsertPoint(check_float_bb);
-    llvm::Value* double_boundary = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* gt_offset = builder->CreateICmpUGT(operand, double_offset);
-    llvm::Value* lt_boundary = builder->CreateICmpULT(operand, double_boundary);
-    llvm::Value* is_float = builder->CreateAnd(gt_offset, lt_boundary);
+    llvm::Value* is_float = emitIsBoxedFloat(operand);
     builder->CreateCondBr(is_float, fast_float_bb, slow_bb);
 
     // Fast float path: unbox, fneg (or identity for plus), box
@@ -16092,16 +16045,9 @@ llvm::Value* QoreIRToLLVM::emitAnyUnaryFastPath(bool is_minus, int opcode_val_in
 llvm::Value* QoreIRToLLVM::emitAnyCmpSpaceshipFastPath(const QoreIRInstruction* inst,
         llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module) {
-    // Constants for tag checking
-    llvm::Value* tag_mask = llvm::ConstantInt::get(i64_type, 0xFFFF000000000000ULL);
-    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
-
     // Check if both are int48-tagged
-    llvm::Value* lhs_tag = builder->CreateAnd(lhs, tag_mask);
-    llvm::Value* rhs_tag = builder->CreateAnd(rhs, tag_mask);
-    llvm::Value* lhs_is_int = builder->CreateICmpEQ(lhs_tag, tag_int48);
-    llvm::Value* rhs_is_int = builder->CreateICmpEQ(rhs_tag, tag_int48);
+    llvm::Value* lhs_is_int = emitIsBoxedInt48(lhs);
+    llvm::Value* rhs_is_int = emitIsBoxedInt48(rhs);
     llvm::Value* both_int = builder->CreateAnd(lhs_is_int, rhs_is_int);
 
     // Create basic blocks
@@ -16131,13 +16077,8 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpSpaceshipFastPath(const QoreIRInstruction* 
 
     // Check float path
     builder->SetInsertPoint(check_float_bb);
-    llvm::Value* double_boundary = llvm::ConstantInt::get(i64_type, TAG_INT48);
-    llvm::Value* lhs_gt_offset = builder->CreateICmpUGT(lhs, double_offset);
-    llvm::Value* lhs_lt_boundary = builder->CreateICmpULT(lhs, double_boundary);
-    llvm::Value* lhs_is_float = builder->CreateAnd(lhs_gt_offset, lhs_lt_boundary);
-    llvm::Value* rhs_gt_offset = builder->CreateICmpUGT(rhs, double_offset);
-    llvm::Value* rhs_lt_boundary = builder->CreateICmpULT(rhs, double_boundary);
-    llvm::Value* rhs_is_float = builder->CreateAnd(rhs_gt_offset, rhs_lt_boundary);
+    llvm::Value* lhs_is_float = emitIsBoxedFloat(lhs);
+    llvm::Value* rhs_is_float = emitIsBoxedFloat(rhs);
     llvm::Value* both_float = builder->CreateAnd(lhs_is_float, rhs_is_float);
     builder->CreateCondBr(both_float, fast_float_bb, slow_bb);
 
@@ -16196,10 +16137,6 @@ llvm::Value* QoreIRToLLVM::emitAnyCmpSpaceshipFastPath(const QoreIRInstruction* 
 // - Otherwise → runtime helper
 llvm::Value* QoreIRToLLVM::emitHardEqualityFastPath(bool is_eq, llvm::Value* lhs, llvm::Value* rhs,
         llvm::Function* llvm_func, llvm::Module& module) {
-    // Constants
-    llvm::Value* double_offset = llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET);
-    llvm::Value* tag_int48 = llvm::ConstantInt::get(i64_type, TAG_INT48);
-
     // Create basic blocks
     llvm::BasicBlock* bits_equal_bb = llvm::BasicBlock::Create(ctx, "he_bits_equal", llvm_func);
     llvm::BasicBlock* float_nan_check_bb = llvm::BasicBlock::Create(ctx, "he_float_nan", llvm_func);
@@ -16214,10 +16151,7 @@ llvm::Value* QoreIRToLLVM::emitHardEqualityFastPath(bool is_eq, llvm::Value* lhs
 
     // Bits equal path: check if it's a float (need NaN check)
     builder->SetInsertPoint(bits_equal_bb);
-    // Float-encoded values satisfy: bits > DOUBLE_ENCODE_OFFSET && bits < TAG_INT48
-    llvm::Value* gt_offset = builder->CreateICmpUGT(lhs, double_offset);
-    llvm::Value* lt_boundary = builder->CreateICmpULT(lhs, tag_int48);
-    llvm::Value* is_float = builder->CreateAnd(gt_offset, lt_boundary);
+    llvm::Value* is_float = emitIsBoxedFloat(lhs);
     builder->CreateCondBr(is_float, float_nan_check_bb, result_true_bb);
 
     // Float NaN check: NaN !== NaN even if bits are identical
