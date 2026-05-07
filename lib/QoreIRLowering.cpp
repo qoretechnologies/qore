@@ -4318,6 +4318,11 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     if (expr.isEnum()) {
         return builder.createConstEnum(expr.getEnumMember())->result;
     }
+    // QoreNullNode satisfies isNothing() through the generic node predicate;
+    // check NULL first so IR preserves NULL instead of lowering it as NOTHING.
+    if (expr.isNull()) {
+        return builder.createConstNull()->result;
+    }
     if (expr.isNothing()) {
         return builder.createConstNothing()->result;
     }
@@ -4410,9 +4415,6 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
             inst->constant.rel_us = info.us;
         }
         return inst->result;
-    }
-    if (expr.isNull()) {
-        return builder.createConstNull()->result;
     }
     return QoreIRValue();
 }
