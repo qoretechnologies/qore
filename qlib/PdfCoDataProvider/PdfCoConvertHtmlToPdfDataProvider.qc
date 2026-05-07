@@ -59,8 +59,14 @@ public class PdfCoConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "desc": "Source type for conversion. Not required when a file is provided.",
                 "preselected": True,
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "html", "desc": "Convert raw HTML code to PDF"},
-                    <AllowedValueInfo>{"value": "url", "desc": "Convert a web page URL to PDF"},
+                    <AllowedValueInfo>{
+                        "value": "html", "display_name": "HTML",
+                        "desc": "Convert raw HTML code to PDF",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "url", "display_name": "URL",
+                        "desc": "Convert a web page URL to PDF",
+                    },
                 ),
             },
             "margins": {
@@ -76,16 +82,16 @@ public class PdfCoConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "desc": "Page size.\n\n"
                     "Select a standard size or enter custom dimensions (e.g., `200 300`).",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "Letter", "desc": "US Letter (8.5 x 11 in)"},
-                    <AllowedValueInfo>{"value": "Legal", "desc": "US Legal (8.5 x 14 in)"},
-                    <AllowedValueInfo>{"value": "Tabloid", "desc": "US Tabloid (11 x 17 in)"},
-                    <AllowedValueInfo>{"value": "Ledger", "desc": "US Ledger (17 x 11 in)"},
-                    <AllowedValueInfo>{"value": "A0", "desc": "ISO A0 (841 x 1189 mm)"},
-                    <AllowedValueInfo>{"value": "A1", "desc": "ISO A1 (594 x 841 mm)"},
-                    <AllowedValueInfo>{"value": "A2", "desc": "ISO A2 (420 x 594 mm)"},
-                    <AllowedValueInfo>{"value": "A3", "desc": "ISO A3 (297 x 420 mm)"},
-                    <AllowedValueInfo>{"value": "A4", "desc": "ISO A4 (210 x 297 mm)"},
-                    <AllowedValueInfo>{"value": "A5", "desc": "ISO A5 (148 x 210 mm)"},
+                    <AllowedValueInfo>{"value": "Letter", "display_name": "Letter", "desc": "US Letter (8.5 x 11 in)"},
+                    <AllowedValueInfo>{"value": "Legal", "display_name": "Legal", "desc": "US Legal (8.5 x 14 in)"},
+                    <AllowedValueInfo>{"value": "Tabloid", "display_name": "Tabloid", "desc": "US Tabloid (11 x 17 in)"},
+                    <AllowedValueInfo>{"value": "Ledger", "display_name": "Ledger", "desc": "US Ledger (17 x 11 in)"},
+                    <AllowedValueInfo>{"value": "A0", "display_name": "A0", "desc": "ISO A0 (841 x 1189 mm)"},
+                    <AllowedValueInfo>{"value": "A1", "display_name": "A1", "desc": "ISO A1 (594 x 841 mm)"},
+                    <AllowedValueInfo>{"value": "A2", "display_name": "A2", "desc": "ISO A2 (420 x 594 mm)"},
+                    <AllowedValueInfo>{"value": "A3", "display_name": "A3", "desc": "ISO A3 (297 x 420 mm)"},
+                    <AllowedValueInfo>{"value": "A4", "display_name": "A4", "desc": "ISO A4 (210 x 297 mm)"},
+                    <AllowedValueInfo>{"value": "A5", "display_name": "A5", "desc": "ISO A5 (148 x 210 mm)"},
                 ),
             },
             "orientation": {
@@ -94,8 +100,14 @@ public class PdfCoConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "short_desc": "Page orientation",
                 "desc": "Page orientation",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "Portrait", "desc": "Portrait orientation"},
-                    <AllowedValueInfo>{"value": "Landscape", "desc": "Landscape orientation"},
+                    <AllowedValueInfo>{
+                        "value": "Portrait", "display_name": "Portrait",
+                        "desc": "Portrait orientation",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "Landscape", "display_name": "Landscape",
+                        "desc": "Landscape orientation",
+                    },
                 ),
             },
             "header": {
@@ -132,9 +144,18 @@ public class PdfCoConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "short_desc": "CSS media type",
                 "desc": "CSS media type",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "print", "desc": "Print media type"},
-                    <AllowedValueInfo>{"value": "screen", "desc": "Screen media type"},
-                    <AllowedValueInfo>{"value": "none", "desc": "No media type"},
+                    <AllowedValueInfo>{
+                        "value": "print", "display_name": "Print",
+                        "desc": "Print media type — applies print stylesheets",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "screen", "display_name": "Screen",
+                        "desc": "Screen media type — applies screen stylesheets",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "none", "display_name": "None",
+                        "desc": "No specific media type",
+                    },
                 ),
             },
             "async": {
@@ -154,6 +175,41 @@ public class PdfCoConvertHtmlToPdfRequestDataType inherits HashDataType {
                 "display_name": "Expiration",
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
+            },
+            "DoNotWaitFullLoad": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Do Not Wait Full Load",
+                "short_desc": "Convert without waiting for the page to fully load",
+                "desc": "Set to `True` to convert the page without waiting for it to fully "
+                    "load. Useful for pages that never reach an idle state because of "
+                    "long-running scripts or analytics requests.",
+            },
+            "renderTimeout": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Render Timeout",
+                "short_desc": "Maximum milliseconds to wait for page rendering",
+                "desc": "Maximum number of milliseconds to wait for page rendering (up to "
+                    "`177000`)",
+            },
+            "legacyRendition": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Legacy Rendition",
+                "short_desc": "Force rendering with an older Chromium version",
+                "desc": "Set to `True` to force rendering with an older Chromium version to "
+                    "work around version-specific issues",
+            },
+            "outputDataFormat": {
+                "type": StringOrNothingType,
+                "display_name": "Output Data Format",
+                "short_desc": "Set to base64 to receive base64-encoded output content",
+                "desc": "Set to `base64` to receive the converted file as base64-encoded "
+                    "content in the response instead of as a URL",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "base64", "display_name": "Base64",
+                        "desc": "Return the converted file as base64-encoded content",
+                    },
+                ),
             },
         } + PdfCoRemoteSourceFields;
     }

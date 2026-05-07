@@ -50,6 +50,7 @@ public class PdfCoSplitPdfRequestDataType inherits HashDataType {
                 "short_desc": "Page indices or ranges to split by",
                 "desc": "Page indices or ranges to split by (e.g., `1-3, 4-6, 7-`)",
                 "required": True,
+                "example_value": "1-3, 4-6",
             },
             "password": {
                 "type": StringOrNothingType,

@@ -50,6 +50,7 @@ public class PdfCoSearchTextRequestDataType inherits HashDataType {
                 "short_desc": "The text string to search for in the PDF",
                 "desc": "The text string to search for in the PDF",
                 "required": True,
+                "example_value": "invoice",
             },
             "regexSearch": {
                 "type": SoftBoolOrNothingType,
@@ -64,9 +65,18 @@ public class PdfCoSearchTextRequestDataType inherits HashDataType {
                 "short_desc": "Word boundary matching mode",
                 "desc": "Word boundary matching mode for the search",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "None", "desc": "Exact substring match (default)"},
-                    <AllowedValueInfo>{"value": "SmartMatch", "desc": "Flexible word boundary match"},
-                    <AllowedValueInfo>{"value": "ExactMatch", "desc": "Strict whole-word match"},
+                    <AllowedValueInfo>{
+                        "value": "None", "display_name": "Substring",
+                        "desc": "Exact substring match (default)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "SmartMatch", "display_name": "Smart Match",
+                        "desc": "Flexible word boundary match",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "ExactMatch", "display_name": "Exact Match",
+                        "desc": "Strict whole-word match",
+                    },
                 ),
             },
             "inline": {

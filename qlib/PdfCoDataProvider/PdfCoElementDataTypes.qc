@@ -110,9 +110,9 @@ public class PdfCoTextAnnotationDataType inherits HashDataType {
                 "short_desc": "Text alignment",
                 "desc": "Text alignment (default: `left`)",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "left", "desc": "Left-aligned"},
-                    <AllowedValueInfo>{"value": "center", "desc": "Center-aligned"},
-                    <AllowedValueInfo>{"value": "right", "desc": "Right-aligned"},
+                    <AllowedValueInfo>{"value": "left", "display_name": "Left", "desc": "Left-aligned"},
+                    <AllowedValueInfo>{"value": "center", "display_name": "Center", "desc": "Center-aligned"},
+                    <AllowedValueInfo>{"value": "right", "display_name": "Right", "desc": "Right-aligned"},
                 ),
             },
             "link": {
@@ -145,12 +145,26 @@ public class PdfCoTextAnnotationDataType inherits HashDataType {
                 "short_desc": "Type of annotation",
                 "desc": "Type of annotation to add",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "Text", "desc": "Plain text"},
-                    <AllowedValueInfo>{"value": "TextField", "desc": "Single-line text input field"},
-                    <AllowedValueInfo>{"value": "TextFieldMultiline",
-                        "desc": "Multi-line text input field"},
-                    <AllowedValueInfo>{"value": "Checkbox", "desc": "Unchecked checkbox"},
-                    <AllowedValueInfo>{"value": "CheckboxChecked", "desc": "Pre-checked checkbox"},
+                    <AllowedValueInfo>{
+                        "value": "Text", "display_name": "Text",
+                        "desc": "Plain text",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "TextField", "display_name": "Text Field",
+                        "desc": "Single-line text input field",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "TextFieldMultiline", "display_name": "Multi-line Text Field",
+                        "desc": "Multi-line text input field",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "Checkbox", "display_name": "Checkbox",
+                        "desc": "Unchecked checkbox",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "CheckboxChecked", "display_name": "Checked Checkbox",
+                        "desc": "Pre-checked checkbox",
+                    },
                 ),
             },
         };
@@ -332,11 +346,22 @@ public class PdfCoFormFieldDefinitionDataType inherits HashDataType {
                 "desc": "Type of form field to create",
                 "required": True,
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "TextField", "desc": "Single-line text input"},
-                    <AllowedValueInfo>{"value": "TextFieldMultiline",
-                        "desc": "Multi-line text input"},
-                    <AllowedValueInfo>{"value": "Checkbox", "desc": "Unchecked checkbox"},
-                    <AllowedValueInfo>{"value": "CheckboxChecked", "desc": "Pre-checked checkbox"},
+                    <AllowedValueInfo>{
+                        "value": "TextField", "display_name": "Text Field",
+                        "desc": "Single-line text input",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "TextFieldMultiline", "display_name": "Multi-line Text Field",
+                        "desc": "Multi-line text input",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "Checkbox", "display_name": "Checkbox",
+                        "desc": "Unchecked checkbox",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "CheckboxChecked", "display_name": "Checked Checkbox",
+                        "desc": "Pre-checked checkbox",
+                    },
                 ),
             },
             "id": {

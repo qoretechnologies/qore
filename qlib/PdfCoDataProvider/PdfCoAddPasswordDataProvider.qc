@@ -51,6 +51,7 @@ public class PdfCoAddPasswordRequestDataType inherits HashDataType {
                 "desc": "Owner password for full document control (editing, printing permissions)",
                 "required": True,
                 "sensitive": True,
+                "example_value": "owner-secret",
             },
             "userPassword": {
                 "type": StringOrNothingType,
@@ -66,10 +67,22 @@ public class PdfCoAddPasswordRequestDataType inherits HashDataType {
                 "short_desc": "Encryption algorithm to use",
                 "desc": "Encryption algorithm to use (default: `AES_128bit`)",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "RC4_40bit", "desc": "RC4 40-bit (legacy)"},
-                    <AllowedValueInfo>{"value": "RC4_128bit", "desc": "RC4 128-bit (legacy)"},
-                    <AllowedValueInfo>{"value": "AES_128bit", "desc": "AES 128-bit (recommended)"},
-                    <AllowedValueInfo>{"value": "AES_256bit", "desc": "AES 256-bit"},
+                    <AllowedValueInfo>{
+                        "value": "RC4_40bit", "display_name": "RC4 40-bit",
+                        "desc": "RC4 40-bit (legacy, weak)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "RC4_128bit", "display_name": "RC4 128-bit",
+                        "desc": "RC4 128-bit (legacy)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "AES_128bit", "display_name": "AES 128-bit",
+                        "desc": "AES 128-bit (recommended)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "AES_256bit", "display_name": "AES 256-bit",
+                        "desc": "AES 256-bit (strongest)",
+                    },
                 ),
             },
             "allowPrintDocument": {
@@ -125,8 +138,14 @@ public class PdfCoAddPasswordRequestDataType inherits HashDataType {
                 "short_desc": "Maximum allowed print quality",
                 "desc": "Maximum allowed print quality (requires `ownerPassword`)",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "HighResolution", "desc": "High-resolution printing allowed"},
-                    <AllowedValueInfo>{"value": "LowResolution", "desc": "Low-resolution printing only"},
+                    <AllowedValueInfo>{
+                        "value": "HighResolution", "display_name": "High Resolution",
+                        "desc": "High-resolution printing allowed",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "LowResolution", "display_name": "Low Resolution",
+                        "desc": "Low-resolution printing only",
+                    },
                 ),
             },
             "async": {

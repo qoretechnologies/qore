@@ -93,6 +93,7 @@ public class PdfCoCompressPdfRequestDataType inherits HashDataType {
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "base64",
+                        "display_name": "Base64",
                         "desc": "Return the compressed file as base64-encoded content",
                     },
                 ),

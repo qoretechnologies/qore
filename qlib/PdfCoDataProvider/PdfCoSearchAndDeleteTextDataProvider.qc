@@ -92,26 +92,6 @@ public class PdfCoSearchAndDeleteTextRequestDataType inherits HashDataType {
                 "desc": "PDF file password if the document is protected",
                 "sensitive": True,
             },
-            "httpusername": {
-                "type": StringOrNothingType,
-                "display_name": "HTTP Username",
-                "short_desc": "HTTP basic-auth username for the source URL",
-                "desc": "Username for HTTP basic-auth on a protected source URL",
-                "sensitive": True,
-            },
-            "httppassword": {
-                "type": StringOrNothingType,
-                "display_name": "HTTP Password",
-                "short_desc": "HTTP basic-auth password for the source URL",
-                "desc": "Password for HTTP basic-auth on a protected source URL",
-                "sensitive": True,
-            },
-            "callback": {
-                "type": StringOrNothingType,
-                "display_name": "Callback URL",
-                "short_desc": "Webhook URL for async completion notification",
-                "desc": "Webhook URL that PDF.co calls when an async job completes",
-            },
             "async": {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Async",

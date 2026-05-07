@@ -51,17 +51,20 @@ public class PdfCoConvertFromPdfRequestDataType inherits HashDataType {
                 "desc": "Output format for conversion",
                 "required": True,
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "csv", "desc": "Convert to CSV format"},
-                    <AllowedValueInfo>{"value": "json", "desc": "Convert to JSON format"},
-                    <AllowedValueInfo>{"value": "json-ai", "desc": "Convert to JSON format using AI"},
-                    <AllowedValueInfo>{"value": "text", "desc": "Convert to plain text format"},
-                    <AllowedValueInfo>{"value": "xls", "desc": "Convert to XLS format"},
-                    <AllowedValueInfo>{"value": "xlsx", "desc": "Convert to XLSX format"},
-                    <AllowedValueInfo>{"value": "xml", "desc": "Convert to XML format"},
-                    <AllowedValueInfo>{"value": "html", "desc": "Convert to HTML format"},
-                    <AllowedValueInfo>{"value": "jpg", "desc": "Convert to JPG format"},
-                    <AllowedValueInfo>{"value": "png", "desc": "Convert to PNG format"},
-                    <AllowedValueInfo>{"value": "tiff", "desc": "Convert to TIFF format"},
+                    <AllowedValueInfo>{"value": "csv", "display_name": "CSV", "desc": "Convert to CSV format"},
+                    <AllowedValueInfo>{"value": "json", "display_name": "JSON", "desc": "Convert to JSON format"},
+                    <AllowedValueInfo>{
+                        "value": "json-ai", "display_name": "JSON (AI)",
+                        "desc": "Convert to JSON format using AI",
+                    },
+                    <AllowedValueInfo>{"value": "text", "display_name": "Text", "desc": "Convert to plain text format"},
+                    <AllowedValueInfo>{"value": "xls", "display_name": "XLS", "desc": "Convert to XLS format"},
+                    <AllowedValueInfo>{"value": "xlsx", "display_name": "XLSX", "desc": "Convert to XLSX format"},
+                    <AllowedValueInfo>{"value": "xml", "display_name": "XML", "desc": "Convert to XML format"},
+                    <AllowedValueInfo>{"value": "html", "display_name": "HTML", "desc": "Convert to HTML format"},
+                    <AllowedValueInfo>{"value": "jpg", "display_name": "JPEG", "desc": "Convert to JPG format"},
+                    <AllowedValueInfo>{"value": "png", "display_name": "PNG", "desc": "Convert to PNG format"},
+                    <AllowedValueInfo>{"value": "tiff", "display_name": "TIFF", "desc": "Convert to TIFF format"},
                 ),
             },
             "pages": {
@@ -125,9 +128,31 @@ public class PdfCoConvertFromPdfRequestDataType inherits HashDataType {
                 "short_desc": "Line grouping mode",
                 "desc": "Line grouping mode for text extraction",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "1", "desc": "Default line grouping"},
-                    <AllowedValueInfo>{"value": "2", "desc": "Alternative line grouping"},
-                    <AllowedValueInfo>{"value": "3", "desc": "Advanced line grouping"},
+                    <AllowedValueInfo>{
+                        "value": "1", "display_name": "Default",
+                        "desc": "Default line grouping",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "2", "display_name": "Alternative",
+                        "desc": "Alternative line grouping",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "3", "display_name": "Advanced",
+                        "desc": "Advanced line grouping",
+                    },
+                ),
+            },
+            "outputDataFormat": {
+                "type": StringOrNothingType,
+                "display_name": "Output Data Format",
+                "short_desc": "Set to base64 to receive base64-encoded output content",
+                "desc": "Set to `base64` to receive the converted output as base64-encoded "
+                    "content in the response instead of as a URL",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "base64", "display_name": "Base64",
+                        "desc": "Return the converted output as base64-encoded content",
+                    },
                 ),
             },
         } + PdfCoRemoteSourceFields;

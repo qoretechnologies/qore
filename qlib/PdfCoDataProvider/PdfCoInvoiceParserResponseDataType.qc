@@ -204,10 +204,11 @@ public class PdfCoInvoiceHeaderDataType inherits HashDataType {
                 "desc": "Invoice number",
             },
             "invoiceDate": {
-                "type": StringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Invoice Date",
                 "short_desc": "Invoice date",
-                "desc": "Invoice date",
+                "desc": "Invoice date as parsed from the document (ISO 8601 string in the API response, "
+                    "coerced to a `date` value)",
             },
             "poNo": {
                 "type": StringOrNothingType,
@@ -318,10 +319,11 @@ public class PdfCoPaymentDetailsDataType inherits HashDataType {
                 "desc": "Payment terms",
             },
             "dueDate": {
-                "type": StringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Due Date",
                 "short_desc": "Payment due date",
-                "desc": "Payment due date",
+                "desc": "Payment due date as parsed from the document (ISO 8601 string in the API response, "
+                    "coerced to a `date` value)",
             },
             "total": {
                 "type": StringOrNothingType,
