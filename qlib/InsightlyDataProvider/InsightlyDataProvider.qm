@@ -130,29 +130,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "contacts",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         # Get Contact
@@ -245,29 +223,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "organisations",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -359,29 +315,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "leads",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -473,29 +407,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "opportunities",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -587,29 +499,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "projects",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -701,29 +591,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "tasks",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -748,6 +616,8 @@ module InsightlyDataProvider {
 
         # ========== NOTE ACTIONS ==========
 
+        # PARENT_TYPE/PARENT_ID are registered inline so that has_dependents propagates
+        # to <ActionOptionInfo> -- getActionOptionFromFields() does not propagate it
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": InsightlyDataProvider::AppName,
             "path": "/notes/create",
@@ -761,8 +631,31 @@ module InsightlyDataProvider {
             "get_output_type": AbstractDataProviderType sub () {
                 return new InsightlyNoteDataType();
             },
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                InsightlyCreateNoteRequestDataType::Fields),
+            "options": {
+                "PARENT_TYPE": <ActionOptionInfo>{
+                    "display_name": "Parent Type",
+                    "short_desc": "Parent record type",
+                    "desc": "The type of record this note will be attached to. Insightly v3.1 "
+                        "requires notes to be created under a parent record.",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "allowed_values": LinkSubjectTypeAllowedValues,
+                    "example_value": "Contact",
+                    "has_dependents": True,
+                    "on_change": ("refetch",),
+                },
+                "PARENT_ID": <ActionOptionInfo>{
+                    "display_name": "Parent ID",
+                    "short_desc": "Parent record identifier",
+                    "desc": "The ID of the parent record (contact, lead, opportunity, "
+                        "organisation, or project) this note is attached to",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "depends_on": ("PARENT_TYPE",),
+                    "ref_data": "note_parent",
+                },
+            } + DataProviderActionCatalog::getActionOptionFromFields(
+                InsightlyCreateNoteRequestDataType::Fields - ("PARENT_TYPE", "PARENT_ID")),
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -815,29 +708,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "notes",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -929,29 +800,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "calendar_events",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -1043,29 +892,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "products",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -1089,23 +916,7 @@ module InsightlyDataProvider {
         });
 
         # ========== EMAIL ACTIONS ==========
-
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": InsightlyDataProvider::AppName,
-            "path": "/emails/create",
-            "action": "create-email",
-            "groups": "Emails",
-            "display_name": "Create Email",
-            "short_desc": "Create a new email record",
-            "desc": "Create a new email record in Insightly CRM",
-            "action_code": DPAT_API,
-            "data_provider_info": InsightlyCreateEmailDataProvider::ProviderInfo,
-            "get_output_type": AbstractDataProviderType sub () {
-                return new InsightlyEmailDataType();
-            },
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                InsightlyCreateEmailRequestDataType::Fields),
-        });
+        # Note: Insightly v3.1 API supports only GET/DELETE on emails — no POST/PUT.
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": InsightlyDataProvider::AppName,
@@ -1140,29 +951,7 @@ module InsightlyDataProvider {
                     "type": AbstractDataProviderTypeMap."*int",
                     "ref_data": "emails",
                 },
-                "skip": <ActionOptionInfo>{
-                    "display_name": "Skip",
-                    "short_desc": "Number of records to skip",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "top": <ActionOptionInfo>{
-                    "display_name": "Top",
-                    "short_desc": "Maximum results",
-                    "type": AbstractDataProviderTypeMap."*int",
-                    "preselected": True,
-                },
-                "brief": <ActionOptionInfo>{
-                    "display_name": "Brief",
-                    "short_desc": "Return brief results",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-                "count_total": <ActionOptionInfo>{
-                    "display_name": "Count Total",
-                    "short_desc": "Include total count",
-                    "type": AbstractDataProviderTypeMap."*bool",
-                },
-            },
+            } + CommonListActionOptions,
         });
 
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{

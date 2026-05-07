@@ -29,14 +29,25 @@ public class InsightlyWatchNewOrganisationsDataProvider inherits InsightlyWatchD
     }
 
     list<hash<auto>> fetchRecords(date since) {
-        return fetchAllPages("Organisations");
+        return fetchRecordsUpdatedAfter("Organisations", since);
     }
 
     hash<auto> getFakeExampleData() {
         return {
             "ORGANISATION_ID": 100001,
             "ORGANISATION_NAME": "Acme Corp",
+            "BACKGROUND": "Global manufacturer of widgets and gadgets",
+            "IMAGE_URL": "https://acme.example.com/logo.png",
+            "OWNER_USER_ID": 12345,
+            "VISIBLE_TO": "EVERYONE",
+            "CONTACTINFOS": (
+                {"TYPE": "PHONE", "SUBTYPE": "Work", "LABEL": "Main",
+                    "DETAIL": "+1-555-0100"},
+                {"TYPE": "WEBSITE", "SUBTYPE": "Company", "LABEL": "Home",
+                    "DETAIL": "https://acme.example.com"},
+            ),
             "DATE_CREATED_UTC": "2026-04-01T10:30:00Z",
+            "DATE_UPDATED_UTC": "2026-04-01T10:30:00Z",
         };
     }
 
