@@ -245,7 +245,6 @@ public class BgeM3RestConnection inherits RestClient::RestConnection {
             },
             "base_scheme_map": {
                 "http": "bge-m3",
-                "https": "bge-m3",
             },
             "options": RestConnection::ConnectionScheme.options + {
                 "model": <ConnectionOptionInfo>{
