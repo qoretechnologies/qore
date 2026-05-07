@@ -6129,6 +6129,64 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                     AbstractDataProviderTypeMap."any"));
             },
         },
+        # --- Regex operators ---
+        # Declared without a "code" field: there is no portable SQL form for regex
+        # matching across all backends (PG/Oracle/MySQL each have different syntax,
+        # MSSQL pre-2025 and Firebird have none, SQLite needs a registered UDF).
+        # Per-DB SqlUtil modules override these with native SQL via "code".
+        # Backends without an override keep this metadata-only entry, which the
+        # DataProvider framework treats as "non-pushdownable" and applies the
+        # predicate as a client-side filter on the iterator — see
+        # @ref AbstractDataProvider::splitPushdownableExpression().
+        DP_OP_REGEX_MATCH: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_REGEX_MATCH,
+                "display_name": "regex match (=~)",
+                "short_desc": "Returns True if the string matches the regular expression",
+                "desc": "Returns True if the first argument matches the second as a regular expression. "
+                    "Pushed down to native SQL on backends with regex support; otherwise applied as a "
+                    "client-side filter on the result iterator.",
+                "symbol": "=~",
+                "groups": "Comparison",
+                "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                    DataProviderSignatureOptionalStringListValueType),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            },
+        },
+        DP_OP_REGEX_NMATCH: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_REGEX_NMATCH,
+                "display_name": "regex non-match (!~)",
+                "short_desc": "Returns True if the string does not match the regular expression",
+                "desc": "Returns True if the first argument does not match the second as a regular "
+                    "expression. Pushed down to native SQL on backends with regex support; otherwise "
+                    "applied as a client-side filter on the result iterator.",
+                "symbol": "!~",
+                "groups": "Comparison",
+                "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                    DataProviderSignatureOptionalStringListValueType),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            },
+        },
+        DP_OP_REGEX_SUBST: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_REGEX_SUBST,
+                "display_name": "regex substitution",
+                "short_desc": "Performs regex substitution on a string",
+                "desc": "Performs regular expression substitution. Args: string, regex pattern, "
+                    "replacement, optional options list (\"i\" for case-insensitive, \"g\" for global). "
+                    "Pushed down to native SQL on backends with regexp_replace support; otherwise "
+                    "applied client-side.",
+                "symbol": "regexSubst",
+                "groups": "Data Manipulation",
+                "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                    DataProviderSignatureStringType, DataProviderSignatureOptionalStringListValueType),
+                "return_type": AbstractDataProviderTypeMap."string",
+            },
+        },
     };
 
     #! a hash of valid operators for use in @ref where_clauses

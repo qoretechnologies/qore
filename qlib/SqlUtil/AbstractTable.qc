@@ -5280,13 +5280,27 @@ string sql = table.getSelectSql(sh, \args);
 
     private *string getExpressionIntern(reference<hash<QueryInfo>> info, int role,
             hash<DataProviderExpression> cond, AbstractDataProviderType expected_type) {
-        *hash<auto> exp = info.expression_map{cond.exp};
+        *hash<auto> exp = info.expression_map{cond.exp}
+            ?? info.expression_map{OperatorAliasMap{cond.exp}};
         if (!exp) {
             throw "SQLUTIL-EXPRESSION-ERROR", sprintf("expression references unknown expression %y; supported "
                 "expressions: %y", cond.exp, keys info.expression_map);
         }
 
         AbstractDataProvider::verifyExpression(role, exp.exp, LC_All, expected_type, cond);
+        if (!exists exp.code) {
+            # Metadata-only entry: this op has no native SQL push-down on this backend
+            # (e.g. regex on MSSQL/Firebird). Fail strictly rather than silently
+            # falling back to a per-row client-side filter that would scale poorly on
+            # large tables. Callers wanting to opt into a residual client-side filter
+            # can split the where clause via
+            # @ref AbstractDataProvider::splitPushdownableExpression() before passing it
+            # to the table.
+            throw "SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE",
+                sprintf("operator %y is declared in this provider's expression map but has no native SQL "
+                    "push-down on this backend; rewrite the predicate using ops the backend supports, or "
+                    "use a backend with native support for this op", cond.exp);
+        }
         return exp.code(\info, role, cond.args);
     }
 
