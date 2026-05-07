@@ -6187,6 +6187,31 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "return_type": AbstractDataProviderTypeMap."string",
             },
         },
+        # --- Date formatting ---
+        # Declared without a "code" field: there is no portable SQL form for
+        # date-to-string formatting across backends (PostgreSQL/Oracle use
+        # to_char(); MySQL uses date_format(); SQLite uses strftime();
+        # MSSQL 2012+ uses FORMAT()). Per-DB SqlUtil modules override this
+        # entry with a native SQL closure via "code". Backends without an
+        # override leave the entry metadata-only; strict-throw will surface
+        # the missing implementation if a caller attempts to use it.
+        DP_FUNC_FORMAT_DATE: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_FORMAT_DATE,
+                "display_name": "format_date",
+                "short_desc": "Formats a date as a string",
+                "desc": "Formats a date/time value as a string using a backend-specific format mask. "
+                    "Common format codes: YYYY (year), MM (month), DD (day), HH (hour 24h), "
+                    "mm (minute), SS (second), us (microseconds). Pushed down to native SQL on "
+                    "backends with date-formatting support.",
+                "symbol": "format_date",
+                "groups": "Date/Time",
+                "role": ER_All,
+                "args": (DataProviderSignatureDateType, DataProviderSignatureStringType),
+                "return_type": AbstractDataProviderTypeMap."string",
+            },
+        },
     };
 
     #! a hash of valid operators for use in @ref where_clauses
