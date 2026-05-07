@@ -384,36 +384,44 @@ QoreHashNode* Http2PollOperationPriv::continueSendPoll(ExceptionSink* xsink) {
 
 void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue,
         QoreObject* queue_obj, QoreEventNotifier* notifier, QoreObject* notifier_obj) {
-    // Push to pending queue (sq_lock only — never held during I/O)
+    // Push to pending queue (sq_lock only — never held during I/O).
+    // The pending entry is applied to stream_queues at the start of the
+    // next drainStreamQueues() call on the I/O thread, which is the single
+    // source of truth for body delivery: it drains buffered DATA via
+    // takeStreamData() and pushes a NOTHING sentinel when the stream is
+    // remote-closed.
+    //
+    // We intentionally do NOT drain via takeStreamData() here on the
+    // caller (worker) thread.  Doing so created a dual-drain race:
+    //   - the worker submits a takeStreamData poll op (runs on I/O thread)
+    //     to extract any already-buffered DATA, pushing chunks to `queue`.
+    //   - the I/O thread later runs drainStreamQueues() which iterates
+    //     stream_queues and again calls takeStreamData (now empty) before
+    //     pushing the NOTHING sentinel.
+    // Whichever path drains the data wins, but the timing depended on
+    // controller scheduling; under load a worker poll op could complete
+    // *after* drainStreamQueues had already pushed NOTHING and erased
+    // the stream_queues entry, so the worker's chunks were pushed to a
+    // queue that the handler thread had already stopped reading (it had
+    // received the NOTHING sentinel and exited the read loop with an
+    // empty body).  This manifested as a silent HTTP/2 POST → 204 No
+    // Content for non-zero Content-Length requests on Alpine ARM64 CI
+    // (HttpServer.qtest asyncModeHttp2Test "HTTP/2 POST 50000 bytes" job
+    // 174122, develop @ 7c6e45674).
+    //
+    // The caller (HttpServerAsyncIo register_body_queue closure) calls
+    // resumeMultiplexedReading() after this returns, which submits the
+    // h2op to the controller; the next continueReadPoll cycle then drains
+    // any buffered DATA into the queue and pushes NOTHING on END_STREAM.
     {
         AutoLocker al(sq_lock);
         pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj, {}}});
     }
 
-    // Drain any data already buffered in the H2 session for this stream.
-    // queue->push() wakes the consumer directly; both calls are thread-safe.
-    ExceptionSink xsink;
-    while (true) {
-        BinaryNode* data = sock->readHttp2StreamDataForAsyncPoll(stream_id, 0, &xsink);
-        if (xsink) {
-            xsink.clear();
-            break;
-        }
-        if (!data || data->empty()) {
-            if (data) {
-                data->deref(&xsink);
-            }
-            break;
-        }
-        queue->push(&xsink, data);
-        if (xsink) {
-            data->deref(&xsink);
-            xsink.clear();
-            break;
-        }
-    }
-
-    // Wake the I/O thread so it applies the pending registration
+    // Wake the I/O thread so it picks up the pending registration on its
+    // next continueReadPoll cycle (resume happens via the caller; this
+    // wake only matters when the h2op is already active for unrelated
+    // reasons, e.g. another stream's I/O is in flight).
     ExceptionSink wake_xsink;
     wakeIoThread(&wake_xsink);
 }
