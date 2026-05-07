@@ -106,6 +106,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("owner required", \ownerRequiredTest());
         addTestCase("cancel by owner", \cancelByOwnerTest());
         addTestCase("delegated abort worker dispatch", \delegatedAbortWorkerDispatchTest());
+        addTestCase("delegated no-op abort", \delegatedNoOpAbortTest());
         addTestCase("ping wrapper abort worker dispatch", \pingWrapperAbortWorkerDispatchTest());
         addTestCase("poll pipeline rejects worker delegate", \pollPipelineRejectsWorkerDelegateTest());
         addTestCase("poll pipeline recv frame no sync probe", \pollPipelineRecvFrameNoSyncProbeTest());
@@ -352,6 +353,16 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         if (release_abort.getCount()) {
             release_abort.dec();
         }
+    }
+
+    delegatedNoOpAbortTest() {
+        EventNotifier notifier();
+        AsyncSocketIo::NotifierPollOperation inner(notifier);
+        DelegatingPollOperation wrapped(inner);
+
+        wrapped.abort();
+        assertEq("pending", wrapped.getState(), "no-op abort should leave the inner operation unchanged");
+        assertFalse(wrapped.goalReached(), "no-op abort should not mark the operation complete");
     }
 
     pingWrapperAbortWorkerDispatchTest() {

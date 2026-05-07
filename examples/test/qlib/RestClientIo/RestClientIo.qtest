@@ -123,6 +123,25 @@ class ErrorHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that blocks until released, used to keep an async ping request in flight
+class BlockingJsonHandler inherits AbstractHttpRequestHandler {
+    private {
+        Counter entered;
+        Counter release;
+    }
+
+    constructor(Counter entered, Counter release) {
+        self.entered = entered;
+        self.release = release;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        entered.dec();
+        release.waitForZero();
+        return makeResponse(200, make_json({"path": hdr.path}), {"Content-Type": MimeTypeJson});
+    }
+}
+
 #! Mock OAuth2 token endpoint handler
 class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
     private {
@@ -512,6 +531,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("ping poll 401 retry", \testPingPoll401Retry());
         addTestCase("ping poll 401 no retry", \testPingPoll401NoRetry());
         addTestCase("ping poll non-existent host", \testPingPollNonExistentHost());
+        addTestCase("ping poll abort cancels request", \testPingPollAbortCancelsRequest());
         addTestCase("ping poll connection-closed retry", \testPingPollConnectionClosedRetry());
 
         # Cookie option tests
@@ -2853,6 +2873,37 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         *hash<ExceptionInfo> ex = drivePingOp(op);
         assertTrue(exists ex, "non-existent host ping should throw");
         assertEq("QOREADDRINFO-GETINFO-ERROR", ex.err);
+    }
+
+    testPingPollAbortCancelsRequest() {
+%ifndef NoJson
+        Counter entered(1);
+        Counter release(1);
+        string path = sprintf("/ping-abort-%d", clock_getmicros());
+        server.setHandler(path, path, MimeTypeJson, new BlockingJsonHandler(entered, release));
+        on_exit {
+            if (release.getCount()) {
+                release.dec();
+            }
+        }
+
+        RestConnection rc = createPingConnection("ping-abort", {
+            "ping_path": path,
+        });
+        AbstractPollOperation op = rc.startPollConnect();
+
+        *hash<SocketPollInfo> info;
+        while (op.getState() != "io-waiting") {
+            info = op.continuePoll();
+            assertTrue(exists info, "ping should still be waiting before abort");
+            Socket::poll((info,), 5s);
+        }
+
+        assertEq(0, entered.waitForZero(5s), "server should receive the pending ping request");
+        op.abort();
+        assertEq("complete", op.getState(), "abort should complete the ping operation");
+        assertFalse(op.goalReached(), "aborted ping should not report success");
+%endif
     }
 
     #! Regression test: connection-closed notifier must trigger a retry, not throw HTTPCLIENT-NOT-READY

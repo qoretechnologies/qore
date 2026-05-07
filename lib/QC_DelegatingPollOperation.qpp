@@ -43,12 +43,15 @@ public:
     SocketPollOperationBase* inner_base;
     ResolvedCallReferenceNode* on_complete_code;
     QoreObject* counter_obj;
+    bool inner_has_abort;
+    bool inner_has_get_output;
 
     DLLLOCAL DelegatingPollOperationPriv(QoreObject* self, QoreObject* inner_obj,
             SocketPollOperationBase* inner_base, ResolvedCallReferenceNode* on_complete_code,
-            QoreObject* counter_obj)
+            QoreObject* counter_obj, bool inner_has_abort, bool inner_has_get_output)
         : SocketPollOperationBase(self), inner_obj(inner_obj), inner_base(inner_base),
-          on_complete_code(on_complete_code), counter_obj(counter_obj) {
+          on_complete_code(on_complete_code), counter_obj(counter_obj), inner_has_abort(inner_has_abort),
+          inner_has_get_output(inner_has_get_output) {
         inner_obj->ref();
         if (inner_base) {
             inner_base->ref();
@@ -140,7 +143,7 @@ public:
     DLLLOCAL void abort(ExceptionSink* xsink) override {
         if (inner_base) {
             inner_base->abort(xsink);
-        } else {
+        } else if (inner_has_abort) {
             ValueHolder rv(inner_obj->evalMethod("abort", nullptr, xsink), xsink);
         }
     }
@@ -180,6 +183,9 @@ public:
         if (inner_base) {
             return inner_base->getOutput();
         }
+        if (!inner_has_get_output) {
+            return QoreValue();
+        }
         ExceptionSink xsink;
         ValueHolder rv(inner_obj->evalMethod("getOutput", nullptr, &xsink), &xsink);
         if (xsink) {
@@ -206,6 +212,11 @@ protected:
         return "delegating";
     }
 };
+
+static bool qore_delegating_poll_op_has_override(const QoreClass* cls, const char* method) {
+    const QoreMethod* meth = cls->findMethod(method);
+    return meth && meth->getClass()->getID() != CID_ABSTRACTPOLLOPERATION;
+}
 
 // DGC dispatch entry point — see QC_DelegatingPollOperation.h.
 bool qore_delegating_poll_op_scan_members(QoreObject& qobj, RObject& obj,
@@ -285,7 +296,9 @@ DelegatingPollOperation::constructor(AbstractPollOperation inner, *code on_compl
     }
 
     self->setPrivate(CID_DELEGATINGPOLLOPERATION,
-        new DelegatingPollOperationPriv(self, inner_obj, inner_base, on_complete_ref, counter_obj));
+        new DelegatingPollOperationPriv(self, inner_obj, inner_base, on_complete_ref, counter_obj,
+            qore_delegating_poll_op_has_override(inner_cls, "abort"),
+            qore_delegating_poll_op_has_override(inner_cls, "getOutput")));
 
     // DGC custom scanner gate — the priv holds ref'd inner_obj /
     // counter_obj / on_complete_code in raw C++ pointers that the
