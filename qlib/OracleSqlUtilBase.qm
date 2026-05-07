@@ -2709,20 +2709,8 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     return sprintf("%s like %s", exp0, exp1);
                 },
             },
-            DP_OP_REGEX_MATCH: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_REGEX_MATCH,
-                    "display_name": "regex match (=~)",
-                    "short_desc": "Returns True if the string matches the regular expression",
-                    "desc": "Returns True if the first argument matches the second as a regular expression; "
-                        "uses Oracle REGEXP_LIKE() function (with 'i' flag for case-insensitive)",
-                    "symbol": "=~",
-                    "groups": "Comparison",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                        DataProviderSignatureOptionalStringListValueType),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            # Inherit metadata from DefaultExpressionMap; provide Oracle-native code only.
+            DP_OP_REGEX_MATCH: DefaultExpressionMap{DP_OP_REGEX_MATCH} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string");
@@ -2735,20 +2723,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     return sprintf("regexp_like(%s, %s)", exp0, exp1);
                 },
             },
-            DP_OP_REGEX_NMATCH: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_REGEX_NMATCH,
-                    "display_name": "regex non-match (!~)",
-                    "short_desc": "Returns True if the string does not match the regular expression",
-                    "desc": "Returns True if the first argument does not match the second as a regular "
-                        "expression; uses Oracle NOT REGEXP_LIKE() (with 'i' flag for case-insensitive)",
-                    "symbol": "!~",
-                    "groups": "Comparison",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                        DataProviderSignatureOptionalStringListValueType),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            DP_OP_REGEX_NMATCH: DefaultExpressionMap{DP_OP_REGEX_NMATCH} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string");
@@ -2761,21 +2736,7 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                     return sprintf("not regexp_like(%s, %s)", exp0, exp1);
                 },
             },
-            DP_OP_REGEX_SUBST: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_REGEX_SUBST,
-                    "display_name": "regex substitution",
-                    "short_desc": "Performs regex substitution on a string",
-                    "desc": "Performs regular expression substitution using Oracle REGEXP_REPLACE(); "
-                        "args: string, regex pattern, replacement, optional options list (\"g\" is default "
-                        "in Oracle, \"i\" for case-insensitive)",
-                    "symbol": "regexSubst",
-                    "groups": "Data Manipulation",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                        DataProviderSignatureStringType, DataProviderSignatureOptionalStringListValueType),
-                    "return_type": AbstractDataProviderTypeMap."string",
-                },
+            DP_OP_REGEX_SUBST: DefaultExpressionMap{DP_OP_REGEX_SUBST} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string");
@@ -2783,7 +2744,6 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                         AbstractDataProviderTypeMap."string");
                     string exp2 = info.table.getExpressionArg(\info, role, args[2],
                         AbstractDataProviderTypeMap."string");
-                    # build Oracle match_param flags from options list
                     # Oracle REGEXP_REPLACE is global by default; "i" maps to 'i' match param
                     string flags = "";
                     if (exists args[3]) {
