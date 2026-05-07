@@ -41,6 +41,7 @@ module BgeM3RestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("bge-m3", BgeM3RestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("bge-m3-fastapi", BgeM3RestConnection::ConnectionScheme);
     };
 }
 
@@ -234,15 +235,16 @@ public class BgeM3RestConnection inherits RestClient::RestConnection {
                 "collection-metadata bookkeeping.\n\n"
                 "If the deployment requires authentication, set `apikey`; it is "
                 "sent as the `Authorization: Bearer` header.\n\n"
-                "The connection uses the `bge-m3://` URL scheme.",
+                "The connection uses the `bge-m3://` URL scheme; "
+                "`bge-m3-fastapi://` is accepted as an alias.",
             "cls": Class::forName("BgeM3RestConnection"),
             "auto_url": True,
             "schemes": {
                 "bge-m3": True,
+                "bge-m3-fastapi": True,
             },
             "base_scheme_map": {
                 "http": "bge-m3",
-                "https": "bge-m3",
             },
             "options": RestConnection::ConnectionScheme.options + {
                 "model": <ConnectionOptionInfo>{
