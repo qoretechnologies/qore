@@ -74,8 +74,12 @@ class SGLangEmbedderTest inherits QUnit::Test {
             \testPinnedStyleSkipsProbe());
         addTestCase("native /embed accepts 'embeddings' response shape",
             \testNativeEmbeddingsShape());
-        addTestCase("non-404 errors propagate without fallback",
-            \testNon404Propagates());
+        addTestCase("permanent 400 classified as EMBEDDER-MODEL-CONFIG-ERROR",
+            \testPermanent400ClassifiedAsModelConfigError());
+        addTestCase("transient 400 propagates as REST-RESPONSE-ERROR",
+            \testTransient400PropagatesAsRestError());
+        addTestCase("5xx propagates as REST-RESPONSE-ERROR",
+            \testTransient5xxPropagatesAsRestError());
         addTestCase("native vector-count mismatch throws",
             \testNativeShapeMismatch());
         addTestCase("api_key forwarded as Bearer auth",
@@ -142,8 +146,8 @@ class SGLangEmbedderTest inherits QUnit::Test {
         assertEq((1.0, 2.0, 3.0), rv[0]);
         assertEq((4.0, 5.0, 6.0), rv[1]);
         assertEq(SGLangEmbedder::StyleOpenAi, emb.getEndpointStyle());
-        # Second call uses pinned style — no probe.
-        emb.encodeBatch(("again",));
+        # Second call uses pinned style — no probe; same 2-vector response.
+        emb.encodeBatch(("again", "more"));
         assertEq(2, handler.requests.size());
         assertEq("/v1/embeddings", handler.requests[0].path);
         assertEq("/v1/embeddings", handler.requests[1].path);
@@ -214,8 +218,9 @@ class SGLangEmbedderTest inherits QUnit::Test {
         assertEq(SGLangEmbedder::StyleNative, emb.getEndpointStyle());
     }
 
-    testNon404Propagates() {
+    testPermanent400ClassifiedAsModelConfigError() {
         checkModule();
+        # Classic SGLang case: /v1/embeddings called against a chat-only model.
         installHandler({
             "/v1/embeddings": {
                 "code": 400,
@@ -226,16 +231,71 @@ class SGLangEmbedderTest inherits QUnit::Test {
         SGLangEmbedder emb = makeEmbedder();
         try {
             emb.encodeBatch(("hello",));
+            fail("expected EMBEDDER-MODEL-CONFIG-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-MODEL-CONFIG-ERROR", ex.err);
+            assertEq("sglang", ex.arg.backend);
+            assertEq("bge-m3", ex.arg.model);
+            assertEq(400, ex.arg.status_code);
+            # original REST exception preserved in arg
+            assertEq("REST-RESPONSE-ERROR", ex.arg.original_err);
+            assertEq(True, exists ex.arg.original_desc);
+            # response body preserved verbatim
+            assertEq("error", ex.arg.body.object);
+            assertEq("model is not an embedding model", ex.arg.body.message);
+        }
+        # Style not pinned because no successful encode happened.
+        assertNothing(emb.getEndpointStyle());
+        # Only /v1/embeddings was attempted — permanent 400 does NOT fall back.
+        assertEq(1, handler.requests.size());
+        assertEq("/v1/embeddings", handler.requests[0].path);
+    }
+
+    testTransient400PropagatesAsRestError() {
+        checkModule();
+        # 400 that is NOT a permanent model error (e.g., malformed request shape).
+        # Must propagate as REST-RESPONSE-ERROR with body intact, no fallback.
+        installHandler({
+            "/v1/embeddings": {
+                "code": 400,
+                "body": {"object": "error",
+                    "message": "missing required field: input"},
+            },
+        });
+        SGLangEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("hello",));
             fail("expected REST-RESPONSE-ERROR");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("REST-RESPONSE-ERROR", ex.err);
             assertEq(400, ex.arg.status_code);
+            # body must remain accessible (issue 159 note §4)
+            assertEq("missing required field: input", ex.arg.body.message);
         }
-        # Style not pinned because no successful encode happened.
-        assertNothing(emb.getEndpointStyle());
-        # Only /v1/embeddings was attempted — we do not fall back on non-404.
+        # No fallback to /embed even on transient 400.
         assertEq(1, handler.requests.size());
         assertEq("/v1/embeddings", handler.requests[0].path);
+    }
+
+    testTransient5xxPropagatesAsRestError() {
+        checkModule();
+        installHandler({
+            "/v1/embeddings": {
+                "code": 503,
+                "body": {"object": "error", "message": "service overloaded"},
+            },
+        });
+        SGLangEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("hello",));
+            fail("expected REST-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(503, ex.arg.status_code);
+            assertEq("service overloaded", ex.arg.body.message);
+        }
+        # No fallback on 5xx.
+        assertEq(1, handler.requests.size());
     }
 
     testNativeShapeMismatch() {

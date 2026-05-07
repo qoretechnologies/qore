@@ -5276,6 +5276,94 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
         return expinfo.exp.return_type.acceptsValue(expinfo.impl(rec, exp, template_context));
     }
 
+    #! Splits an expression tree into pushdownable and client-side parts
+    /** Walks the expression and decides per node whether it can be pushed down to
+        the underlying provider (whose expression map is given by @a expmap) or
+        must be evaluated client-side. An entry is considered pushdownable when
+        @a expmap (or @ref OperatorAliasMap) yields a hash whose @c "code" key is
+        non-NOTHING; entries with a present metadata @c "exp" but no @c "code"
+        signal "no native push-down" and the predicate is split off for
+        client-side evaluation by the framework.
+
+        AND-conjuncts at the top level are split independently so that the
+        pushdownable conjuncts go into the SQL where clause and only the
+        non-pushdownable conjuncts are applied as a row filter.
+
+        @param cond the where-clause expression to split (or NOTHING)
+        @param expmap the data provider's expression map
+        @return a hash with two keys:
+        - @c pushdown: the sub-expression that can be pushed down (or NOTHING)
+        - @c client: the sub-expression to evaluate client-side (or NOTHING)
+
+        @since DataProvider 3.4
+    */
+    static hash<auto> splitPushdownableExpression(*hash<DataProviderExpression> cond,
+            hash<auto> expmap) {
+        if (!cond) {
+            return {"pushdown": NOTHING, "client": NOTHING};
+        }
+        if (cond.exp == DP_OP_AND) {
+            list<auto> push_args = ();
+            list<auto> client_args = ();
+            foreach auto arg in (cond.args) {
+                hash<auto> sub_split;
+                if (arg instanceof hash<DataProviderExpression>) {
+                    sub_split = AbstractDataProvider::splitPushdownableExpression(
+                        cast<hash<DataProviderExpression>>(arg), expmap);
+                } else {
+                    # non-expression conjunct (e.g. literal True): treat as pushdownable
+                    sub_split = {"pushdown": arg, "client": NOTHING};
+                }
+                if (exists sub_split.pushdown) {
+                    push_args += sub_split.pushdown;
+                }
+                if (exists sub_split.client) {
+                    client_args += sub_split.client;
+                }
+            }
+            return {
+                "pushdown": push_args.size() == 0
+                    ? NOTHING
+                    : (push_args.size() == 1
+                        ? push_args[0]
+                        : <DataProviderExpression>{"exp": DP_OP_AND, "args": push_args}),
+                "client": client_args.size() == 0
+                    ? NOTHING
+                    : (client_args.size() == 1
+                        ? client_args[0]
+                        : <DataProviderExpression>{"exp": DP_OP_AND, "args": client_args}),
+            };
+        }
+        if (AbstractDataProvider::expressionPushdownable(cond, expmap)) {
+            return {"pushdown": cond, "client": NOTHING};
+        }
+        return {"pushdown": NOTHING, "client": cond};
+    }
+
+    #! Returns @ref True if the expression and all its sub-expressions can be pushed
+    #! down to a provider with the given expression map.
+    /** An expression is pushdownable when its operator resolves in the map (directly
+        or via @ref OperatorAliasMap) to an entry with a non-NOTHING @c "code" field,
+        and every sub-expression argument is also pushdownable.
+
+        @since DataProvider 3.4
+    */
+    static bool expressionPushdownable(hash<DataProviderExpression> cond, hash<auto> expmap) {
+        *hash<auto> entry = expmap{cond.exp} ?? expmap{OperatorAliasMap{cond.exp}};
+        if (!entry || !exists entry.code) {
+            return False;
+        }
+        foreach auto arg in (cond.args) {
+            if (arg instanceof hash<DataProviderExpression>) {
+                if (!AbstractDataProvider::expressionPushdownable(
+                        cast<hash<DataProviderExpression>>(arg), expmap)) {
+                    return False;
+                }
+            }
+        }
+        return True;
+    }
+
     #! Pre-processes an expression tree for repeated evaluation
     /** Walks the expression tree and pre-computes field reference paths so that
         @ref evalGenericExpressionValue() does not need to run regex operations on every call.

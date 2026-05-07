@@ -626,7 +626,7 @@ public class DpqlTest inherits QUnit::Test {
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
                 '@email =~ /example.com$/i');
-            assertEq(DP_SEARCH_OP_REGEX, exp.exp);
+            assertEq(DP_OP_REGEX_MATCH, exp.exp);
             assertEq("email", exp.args[0].field);
             assertEq("example.com$", exp.args[1]);
             # Check for case-insensitive flag (now a list of flag name strings)
@@ -638,7 +638,7 @@ public class DpqlTest inherits QUnit::Test {
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
                 '@text =~ /^start.*end$/ims');
-            assertEq(DP_SEARCH_OP_REGEX, exp.exp);
+            assertEq(DP_OP_REGEX_MATCH, exp.exp);
             assertEq("text", exp.args[0].field);
             assertEq("^start.*end$", exp.args[1]);
             # Check all flags are present as a single list at args[2]
@@ -647,6 +647,15 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue(inlist("i", flags));
             assertTrue(inlist("m", flags));
             assertTrue(inlist("s", flags));
+        }
+
+        # Regex non-match (!~) emits the canonical nmatch op
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@email !~ /\\.tmp$/i');
+            assertEq(DP_OP_REGEX_NMATCH, exp.exp);
+            assertEq("email", exp.args[0].field);
+            assertEq(("i",), exp.args[2]);
         }
 
         # Test scientific notation

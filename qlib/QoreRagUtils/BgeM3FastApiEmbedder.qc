@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! Qore QoreRagUtils module — VoyageEmbedder definition
+#! Qore QoreRagUtils module — BgeM3FastApiEmbedder definition
 
-/** VoyageEmbedder.qc Copyright 2026 Qore Technologies, s.r.o.
+/** BgeM3FastApiEmbedder.qc Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -23,58 +23,73 @@
 */
 
 public namespace QoreRagUtils {
-#! Voyage AI-backed embedder — calls the Voyage \c /embeddings endpoint
-/** Wraps @ref VoyageRestClient::VoyageRestClientIo "VoyageRestClientIo" for
-    async-capable HTTP calls to the Voyage AI API.
+#! BGE-M3 FastAPI sidecar embedder — calls the native \c /embed endpoint
+/** Wraps @ref BgeM3RestClient::BgeM3RestClientIo "BgeM3RestClientIo" and
+    posts directly to \c POST /embed with the BGE-M3 native request shape.
+
+    The sidecar can also produce sparse vectors for hybrid retrieval, but
+    @ref AbstractEmbedder::encodeBatch() returns only dense vectors.  Sparse
+    embeddings are surfaced through the
+    @ref BgeM3FastApiDataProvider::BgeM3FastApiEmbeddingsDataProvider
+    "BgeM3FastApiEmbeddingsDataProvider" data-provider action instead.
 
     @par Configuration
 
-    - \c api_key (required): Voyage API key; passed via the \c apikey option
-    - \c url (optional): override the default Voyage URL
-    - \c model (optional): model name, default \c "voyage-3"
-    - \c dimension (optional): forwarded as the \c output_dimension request
-      parameter; when unset the dimension is auto-detected on first call
+    - \c url (optional): sidecar URL, default \c "http://localhost:30680"
+    - \c model (optional): reported back via @ref getModel(); the sidecar
+      always serves \c "bge-m3" so the default matches reality
+    - \c api_key (optional): bearer token for sidecars with authentication
+      enabled
+    - \c dimension (optional): cached dimension; when unset the dimension is
+      auto-detected on first call
+    - \c batch_size (optional): forwarded as the \c batch_size field in the
+      sidecar request when set; when unset the sidecar's own default is used
+    - \c options.return_sparse (optional): when @ref True, asks the sidecar
+      to return sparse vectors as well (the dense ones are still what is
+      returned to callers); default @ref False
     - \c timeout (optional): default request timeout (per-call \c opts override
       takes precedence)
     - \c connect_timeout (optional): default connection timeout (per-call
       \c opts override takes precedence)
 */
-public class VoyageEmbedder inherits AbstractEmbedder {
+public class BgeM3FastApiEmbedder inherits AbstractEmbedder {
     public {
-        #! Default model name
-        const DefaultModel = "voyage-3";
+        #! Default sidecar URL
+        const DefaultUrl = "http://localhost:30680";
+
+        #! Default model name reported by @ref getModel()
+        const DefaultModel = "bge-m3";
 
         #! Backend identifier reported in @c EMBEDDER-MODEL-CONFIG-ERROR
-        const Backend = "voyage";
+        const Backend = "bge-m3-fastapi";
     }
 
     private {
         #! Captured configuration
         hash<EmbedderConfig> config;
-        #! Resolved model name
+        #! Resolved model name (echoed back via @ref getModel())
         string model_name;
         #! Lazily-created REST client
-        *VoyageRestClient::VoyageRestClientIo rest_client;
+        *BgeM3RestClient::BgeM3RestClientIo rest_client;
         #! Cached embedding dimension (from config or auto-detected)
         *int cached_dimension;
+        #! Whether to ask the sidecar to also return sparse vectors
+        bool return_sparse = False;
         #! Guard for lazy initialization
         Mutex init_mutex();
     }
 
     #! Creates the embedder
-    /** @param config embedder configuration; \c api_key must be set
-
-        @throw EMBEDDER-CONFIG-ERROR if required fields are missing
+    /** @param config embedder configuration; all fields optional
     */
     constructor(hash<EmbedderConfig> config) {
-        if (!config.api_key.val()) {
-            throw "EMBEDDER-CONFIG-ERROR",
-                "VoyageEmbedder requires 'api_key' in EmbedderConfig";
-        }
         self.config = config;
-        model_name = config.model ?? DefaultModel;
+        model_name = config.model.val() ? config.model : DefaultModel;
         if (exists config.dimension) {
             cached_dimension = config.dimension;
+        }
+        if (config.options.return_sparse.typeCode() == NT_BOOLEAN) {
+            return_sparse = config.options.return_sparse;
         }
     }
 
@@ -84,14 +99,18 @@ public class VoyageEmbedder inherits AbstractEmbedder {
         return rv[0];
     }
 
-    #! Encodes a batch of texts into vectors
-    /** @param texts input texts
+    #! Encodes a batch of texts into vectors via \c POST /embed
+    /** Empty input returns an empty list without contacting the sidecar.
+
+        @param texts input texts
         @param opts optional per-call overrides; recognized keys:
         - \c timeout (\c *timeout) — request timeout
         - \c connect_timeout (\c *timeout) — connection timeout
 
-        @throw EMBEDDER-RESPONSE-ERROR if the response shape is malformed
-        @throw EMBEDDER-MODEL-CONFIG-ERROR if the backend reports a permanent
+        @throw EMBEDDER-RESPONSE-ERROR if the response is missing \c dense or
+        the returned vector count does not match the input text count, or
+        any vector is empty or non-numeric
+        @throw EMBEDDER-MODEL-CONFIG-ERROR if the sidecar reports a permanent
         model/configuration failure
         @throw REST-RESPONSE-ERROR for transient infrastructure failures
     */
@@ -101,16 +120,17 @@ public class VoyageEmbedder inherits AbstractEmbedder {
         }
 
         hash<auto> body = {
-            "model": model_name,
-            "input": texts,
+            "texts": texts,
+            "return_dense": True,
+            "return_sparse": return_sparse,
         };
-        if (exists cached_dimension) {
-            body.output_dimension = cached_dimension;
+        if (exists config.batch_size && config.batch_size > 0) {
+            body.batch_size = config.batch_size;
         }
 
         hash<auto> resp;
         try {
-            resp = pickRestClient(opts).restPost("/embeddings", body);
+            resp = pickRestClient(opts).restPost("/embed", body);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "REST-RESPONSE-ERROR" && isPermanentEmbedderConfigError(ex)) {
                 throwEmbedderModelConfigError(ex, Backend, model_name);
@@ -118,31 +138,26 @@ public class VoyageEmbedder inherits AbstractEmbedder {
             rethrow;
         }
 
-        # sort by index to align with input order
-        *list<auto> data = resp.body.data;
-        if (!exists data) {
+        *list<auto> vectors = resp.body.dense;
+        if (!exists vectors) {
             throw "EMBEDDER-RESPONSE-ERROR",
-                sprintf("%s: response missing 'data' field", Backend),
+                sprintf("%s: /embed response missing 'dense' vector data", Backend),
                 {"body": resp.body};
         }
-        if (data.size() != texts.size()) {
+        if (vectors.size() != texts.size()) {
             throw "EMBEDDER-RESPONSE-ERROR",
-                sprintf("%s: response returned %d items for %d input texts",
-                    Backend, data.size(), texts.size()),
+                sprintf("%s: /embed returned %d vectors for %d input texts",
+                    Backend, vectors.size(), texts.size()),
                 {"body": resp.body};
         }
-        list<hash<auto>> sorted_data = sort(cast<list<hash<auto>>>(data),
-            int sub(hash<auto> a, hash<auto> b) {
-                return a."index" <=> b."index";
-            });
 
         list<list<float>> result = ();
-        foreach hash<auto> item in (sorted_data) {
-            list<float> vec = validateAndCastVector(item.embedding, resp.body);
+        foreach auto vec in (vectors) {
+            list<float> typed = validateAndCastVector(vec, resp.body);
             if (!exists cached_dimension) {
-                cached_dimension = vec.size();
+                cached_dimension = typed.size();
             }
-            push result, vec;
+            push result, typed;
         }
         return result;
     }
@@ -156,32 +171,32 @@ public class VoyageEmbedder inherits AbstractEmbedder {
         return cached_dimension ?? -1;
     }
 
-    #! Returns the configured model name
+    #! Returns the configured model name without making any HTTP request
     *string getModel() {
         return model_name;
     }
 
-    #! Classifies a Voyage \c REST-RESPONSE-ERROR as a permanent model/config failure
-    /** Recognizes:
-        - HTTP 400 / 404 with body type \c BadRequestError or
-          \c InvalidModelError (Voyage's structured error type field)
-        - HTTP 400 / 404 with response body containing keywords
-          \c "model" + (\c "not found" | \c "invalid" |
-          \c "is not an embedding" | \c "does not appear to be an embedding" |
-          \c "unsupported model")
+    #! Classifies a sidecar \c REST-RESPONSE-ERROR as a permanent model/config failure
+    /** The BGE-M3 FastAPI sidecar always serves \c bge-m3, so model errors
+        are unusual; the classifier recognizes:
+        - HTTP 400 / 404 / 422 with body containing model-related keywords
+          (\c "not found" / \c "unsupported" / \c "invalid" / \c "is not an
+          embedding")
+
+        FastAPI uses 422 for request-validation errors; the body has
+        \c {"detail": [{"loc": ..., "msg": ..., "type": ...}]}.  We do NOT
+        treat a generic 422 as permanent because it can also indicate a
+        client-side request-shape bug.
     */
     private bool isPermanentEmbedderConfigError(hash<ExceptionInfo> ex) {
         *int status_code = ex.arg.status_code;
-        if (status_code != 400 && status_code != 404) {
+        if (status_code != 400 && status_code != 404 && status_code != 422) {
             return False;
         }
         auto body = ex.arg.body;
-        # Voyage structured error type
-        *string error_type = body."type" ?? body.error."type" ?? body.error_type;
-        if (error_type == "BadRequestError" || error_type == "InvalidModelError") {
-            return True;
-        }
-        *string message = body.detail ?? body.message ?? body.error.message ?? body.error;
+        *string message = body.detail.typeCode() == NT_STRING
+            ? body.detail
+            : (body.message ?? body.error);
         if (!exists message && body.typeCode() == NT_STRING) {
             message = body;
         }
@@ -189,7 +204,7 @@ public class VoyageEmbedder inherits AbstractEmbedder {
             return False;
         }
         string lower = message.lwr();
-        if (lower.find("model") == -1) {
+        if (lower.find("model") == -1 && lower.find("embedding") == -1) {
             return False;
         }
         return lower.find("not found") != -1
@@ -204,7 +219,7 @@ public class VoyageEmbedder inherits AbstractEmbedder {
     private list<float> validateAndCastVector(auto raw, auto body) {
         if (!exists raw) {
             throw "EMBEDDER-RESPONSE-ERROR",
-                sprintf("%s: response item missing 'embedding' field", Backend),
+                sprintf("%s: response missing embedding vector entry", Backend),
                 {"body": body};
         }
         if (raw.typeCode() != NT_LIST || !raw.lsize()) {
@@ -227,9 +242,9 @@ public class VoyageEmbedder inherits AbstractEmbedder {
         transient REST client is built so the override does not leak into
         other concurrent calls.  Otherwise the cached client is returned.
     */
-    private VoyageRestClient::VoyageRestClientIo pickRestClient(*hash<auto> opts) {
+    private BgeM3RestClient::BgeM3RestClientIo pickRestClient(*hash<auto> opts) {
         if (exists opts.timeout || exists opts.connect_timeout) {
-            return new VoyageRestClient::VoyageRestClientIo(
+            return new BgeM3RestClient::BgeM3RestClientIo(
                 buildRestOptions(opts.timeout, opts.connect_timeout));
         }
         ensureRestClient();
@@ -239,10 +254,11 @@ public class VoyageEmbedder inherits AbstractEmbedder {
     #! Builds the constructor option hash for the underlying REST client
     private hash<auto> buildRestOptions(*timeout req_timeout, *timeout conn_timeout) {
         hash<auto!> opts = {
-            "apikey": config.api_key,
+            "url": config.url ?? DefaultUrl,
+            "model": model_name,
         };
-        if (config.url.val()) {
-            opts.url = config.url;
+        if (config.api_key.val()) {
+            opts.apikey = config.api_key;
         }
         *timeout effective_timeout = req_timeout ?? config.timeout;
         if (exists effective_timeout) {
@@ -261,7 +277,7 @@ public class VoyageEmbedder inherits AbstractEmbedder {
             init_mutex.lock();
             on_exit init_mutex.unlock();
             if (!rest_client) {
-                rest_client = new VoyageRestClient::VoyageRestClientIo(buildRestOptions());
+                rest_client = new BgeM3RestClient::BgeM3RestClientIo(buildRestOptions());
             }
         }
     }

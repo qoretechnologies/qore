@@ -67,13 +67,19 @@ public class LocalOnnxEmbedder inherits AbstractEmbedder {
     }
 
     #! Encodes a single piece of text into a vector
-    list<float> encode(string text) {
+    /** @param text the input text
+        @param opts ignored by this backend (no HTTP layer)
+    */
+    list<float> encode(string text, *hash<auto> opts) {
         ensureModel();
         return model.embed(text);
     }
 
     #! Encodes a batch of texts into vectors
-    list<list<float>> encodeBatch(list<string> texts) {
+    /** @param texts the input texts
+        @param opts ignored by this backend (no HTTP layer)
+    */
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
         ensureModel();
         return model.embedBatch(texts);
     }

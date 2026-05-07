@@ -4809,15 +4809,15 @@ string sql = table.getSelectSql(sh, \args);
                     jel += sprintf("%s.%s = %s.%s", jtn, key, an, value);
                 }
             } else {
-                *hash fkh;
+                *hash<string, string> fkh;
                 if (!jt.primaryKey.empty()) {
                     # see if there is a foreign constraint from table -> pk of self
-                    fkh = t.getForeignConstraints().findConstraintOn(jt.name, jt.primaryKey.keys());
+                    fkh = t.getForeignConstraints().findConstraintColumnMapOn(jt.name, jt.primaryKey.keys());
                     if (fkh) {
-                        AbstractIterator pki = jt.primaryKey.keyIterator();
-                        AbstractIterator fki = fkh.keyIterator();
-                        while (pki.next() && fki.next())
-                            jel += sprintf("%s.%s = %s.%s", jtn, pki.getValue(), an, fki.getValue());
+                        HashIterator i(fkh);
+                        while (i.next()) {
+                            jel += sprintf("%s.%s = %s.%s", jtn, i.getKey(), an, i.getValue());
+                        }
                     }
                 }
                 if (!fkh) {
@@ -4825,12 +4825,12 @@ string sql = table.getSelectSql(sh, \args);
                     if (!jt.foreignConstraints.empty()) {
                         AbstractPrimaryKey pk = t.getPrimaryKey();
                         if (!pk.empty()) {
-                            fkh = jt.foreignConstraints.findConstraintOn(t.getName(), pk.keys());
+                            fkh = jt.foreignConstraints.findConstraintColumnMapOn(t.getName(), pk.keys());
                             if (fkh) {
-                                AbstractIterator fki = fkh.keyIterator();
-                                AbstractIterator pki = pk.keyIterator();
-                                while (pki.next() && fki.next())
-                                    jel += sprintf("%s.%s = %s.%s", jtn, fki.getValue(), an, pki.getValue());
+                                HashIterator i(fkh);
+                                while (i.next()) {
+                                    jel += sprintf("%s.%s = %s.%s", jtn, i.getValue(), an, i.getKey());
+                                }
                             }
                         }
                     }
@@ -5280,13 +5280,27 @@ string sql = table.getSelectSql(sh, \args);
 
     private *string getExpressionIntern(reference<hash<QueryInfo>> info, int role,
             hash<DataProviderExpression> cond, AbstractDataProviderType expected_type) {
-        *hash<auto> exp = info.expression_map{cond.exp};
+        *hash<auto> exp = info.expression_map{cond.exp}
+            ?? info.expression_map{OperatorAliasMap{cond.exp}};
         if (!exp) {
             throw "SQLUTIL-EXPRESSION-ERROR", sprintf("expression references unknown expression %y; supported "
                 "expressions: %y", cond.exp, keys info.expression_map);
         }
 
         AbstractDataProvider::verifyExpression(role, exp.exp, LC_All, expected_type, cond);
+        if (!exists exp.code) {
+            # Metadata-only entry: this op has no native SQL push-down on this backend
+            # (e.g. regex on MSSQL/Firebird). Fail strictly rather than silently
+            # falling back to a per-row client-side filter that would scale poorly on
+            # large tables. Callers wanting to opt into a residual client-side filter
+            # can split the where clause via
+            # @ref AbstractDataProvider::splitPushdownableExpression() before passing it
+            # to the table.
+            throw "SQLUTIL-EXPRESSION-NOT-PUSHDOWNABLE",
+                sprintf("operator %y is declared in this provider's expression map but has no native SQL "
+                    "push-down on this backend; rewrite the predicate using ops the backend supports, or "
+                    "use a backend with native support for this op", cond.exp);
+        }
         return exp.code(\info, role, cond.args);
     }
 

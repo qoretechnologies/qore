@@ -124,6 +124,7 @@ public class SqlTestBase inherits QUnit::Test {
         addTestCase("Delete", \deleteTest());
         addTestCase("result set placeholder", \resultSetPlaceholderTest());
         addTestCase("Serialization", \serializationTest());
+        addTestCase("implicit composite foreign key join", \implicitCompositeForeignKeyJoinTest());
         addTestCase("wrong schema", \test2358SqlutilSchema());
         addTestCase("get DB size #3385", \testGetPhysicalSize());
     }
@@ -148,6 +149,60 @@ public class SqlTestBase inherits QUnit::Test {
         # test that the table object works
         string sql = t.getSelectSql(("columns": "id", "limit": 1));
         assertEq(Type::String, sql.type());
+    }
+
+    implicitCompositeForeignKeyJoinTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        hash<auto> tables = {
+            "sqlutil_fk_parent": {
+                "columns": {
+                    "id_a": c_number(14, True),
+                    "id_b": c_varchar(100, True),
+                    "name": c_varchar(100),
+                },
+                "primary_key": {"name": "pk_sqlutil_fk_parent", "columns": ("id_a", "id_b")},
+            },
+            "sqlutil_fk_child": {
+                "columns": {
+                    "fk_a": c_number(14, True),
+                    "fk_b": c_varchar(100, True),
+                    "value": c_varchar(100),
+                },
+                "primary_key": {"name": "pk_sqlutil_fk_child", "columns": ("fk_a", "fk_b")},
+                "foreign_constraints": {
+                    "fk_sqlutil_fk_child_parent": {
+                        "columns": ("fk_b", "fk_a"),
+                        "table": "sqlutil_fk_parent",
+                        "target_columns": ("id_b", "id_a"),
+                    },
+                },
+            },
+        };
+
+        Tables tc(table.getDatasource(), tables);
+        AbstractTable parent = tc.sqlutil_fk_parent;
+        AbstractTable child = tc.sqlutil_fk_child;
+
+        string sql = parent.getSelectSql({
+            "columns": "id_a",
+            "join": join_inner(child, "c"),
+        });
+        assertTrue(sql =~ /\.id_a = c\.fk_a/, sql);
+        assertTrue(sql =~ /\.id_b = c\.fk_b/, sql);
+        assertFalse(sql =~ /\.id_a = c\.fk_b/, sql);
+        assertFalse(sql =~ /\.id_b = c\.fk_a/, sql);
+
+        sql = child.getSelectSql({
+            "columns": "fk_a",
+            "join": join_inner(parent, "p"),
+        });
+        assertTrue(sql =~ /\.fk_a = p\.id_a/, sql);
+        assertTrue(sql =~ /\.fk_b = p\.id_b/, sql);
+        assertFalse(sql =~ /\.fk_a = p\.id_b/, sql);
+        assertFalse(sql =~ /\.fk_b = p\.id_a/, sql);
     }
 
     dbProviderTest() {

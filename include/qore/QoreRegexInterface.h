@@ -74,13 +74,18 @@ class QoreRegexSubstInterface {
 public:
     DLLEXPORT QoreRegexSubstInterface(ExceptionSink* xsink, const QoreString& pattern);
 
+    //! Constructs with PCRE2 options; pass QRE_GLOBAL to perform global (replace-all) substitution
     DLLEXPORT QoreRegexSubstInterface(ExceptionSink* xsink, const QoreString& pattern, int64 opts);
 
     DLLEXPORT QoreRegexSubstInterface(ExceptionSink* xsink, const char* pattern);
 
+    //! Constructs with PCRE2 options; pass QRE_GLOBAL to perform global (replace-all) substitution
     DLLEXPORT QoreRegexSubstInterface(ExceptionSink* xsink, const char* pattern, int64 opts);
 
     DLLEXPORT ~QoreRegexSubstInterface();
+
+    //! Replace every match instead of only the first
+    DLLEXPORT void setGlobal();
 
     DLLEXPORT QoreStringNode* subst(const QoreString& target, const QoreString& newstr, ExceptionSink* xsink) const;
 

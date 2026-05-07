@@ -3234,6 +3234,34 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         }
                         return;
                     }
+                    # Defensive consistency check: if Content-Length advertised a
+                    # non-zero body but END_STREAM arrived with no DATA chunks
+                    # delivered, the request body was lost in transit
+                    # (intermittent multiplexed-dispatch race observed on Alpine
+                    # ARM64 CI).  Fail the request explicitly with 502 instead
+                    # of silently dispatching the handler with an empty body —
+                    # which would otherwise be auto-converted to 204 No Content
+                    # and corrupt application semantics for echo/upload paths.
+                    if (h2_complete && !body_data.size() && hdr."content-length"
+                            && int(hdr."content-length") > 0) {
+                        string etxt = sprintf(
+                            "HTTP/2 request body delivery race: Content-Length "
+                            "%y advertised but no DATA chunks received before "
+                            "END_STREAM (stream=%d)",
+                            hdr."content-length", sid);
+                        listener.logError("%s: from %s", etxt,
+                            cx."peer-info".address_desc);
+                        cx.close = True;
+                        if (async_response_out) {
+                            async_response_out = buildAsyncErrorResponse(502, etxt,
+                                cx, listener, s, !is_multiplexed);
+                        } else {
+                            sendHttpError(listener, cx, s, 502, etxt, NOTHING,
+                                NOTHING, cx."response-encoding",
+                                hdr.method == "HEAD");
+                        }
+                        return;
+                    }
                 }
                 # Apply max body size check
                 if (max_body > 0 && body_data.size() > max_body) {

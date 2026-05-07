@@ -768,54 +768,22 @@ auto v = c.name;
             #! expression map overrides for SQLite3
             const Sqlite3ExpressionMap = DefaultExpressionMap + {
                 # --- Type conversions (SQLite-specific CAST types) ---
-                DP_OP_TO_STRING: {
-                    "exp": <DataProviderExpressionInfo>{
-                        "type": DET_Operator,
-                        "name": DP_OP_TO_STRING,
-                        "display_name": "to string",
-                        "short_desc": "Converts a value to a string",
-                        "desc": "Converts a value to a string using SQLite CAST(x AS text)",
-                        "symbol": "toString",
-                        "groups": "Data Conversion",
-                        "args": (DataProviderSignatureAnyType,),
-                        "return_type": AbstractDataProviderTypeMap."string",
-                    },
+                # Inherit metadata from DefaultExpressionMap; provide SQLite-native code only.
+                DP_OP_TO_STRING: DefaultExpressionMap{DP_OP_TO_STRING} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as text)", exp0);
                     },
                 },
-                DP_OP_TO_FLOAT: {
-                    "exp": <DataProviderExpressionInfo>{
-                        "type": DET_Operator,
-                        "name": DP_OP_TO_FLOAT,
-                        "display_name": "to float",
-                        "short_desc": "Converts a value to a floating-point number",
-                        "desc": "Converts a value to a float using SQLite CAST(x AS real)",
-                        "symbol": "toFloat",
-                        "groups": "Data Conversion",
-                        "args": (DataProviderSignatureAnyType,),
-                        "return_type": AbstractDataProviderTypeMap."float",
-                    },
+                DP_OP_TO_FLOAT: DefaultExpressionMap{DP_OP_TO_FLOAT} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
                         return sprintf("cast(%s as real)", exp0);
                     },
                 },
-                DP_OP_TO_NUMBER: {
-                    "exp": <DataProviderExpressionInfo>{
-                        "type": DET_Operator,
-                        "name": DP_OP_TO_NUMBER,
-                        "display_name": "to number",
-                        "short_desc": "Converts a value to an arbitrary-precision number",
-                        "desc": "Converts a value to a numeric type using SQLite CAST(x AS numeric)",
-                        "symbol": "toNumber",
-                        "groups": "Data Conversion",
-                        "args": (DataProviderSignatureAnyType,),
-                        "return_type": AbstractDataProviderTypeMap."number",
-                    },
+                DP_OP_TO_NUMBER: DefaultExpressionMap{DP_OP_TO_NUMBER} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."any");
@@ -841,26 +809,63 @@ auto v = c.name;
                     },
                 },
                 # --- Date formatting (SQLite strftime) ---
-                DP_FUNC_FORMAT_DATE: {
-                    "exp": <DataProviderExpressionInfo>{
-                        "type": DET_Function,
-                        "name": DP_FUNC_FORMAT_DATE,
-                        "display_name": "format_date",
-                        "short_desc": "Formats a date as a string",
-                        "desc": "Formats a date/time value as a string using SQLite strftime(); "
-                            "format codes: YYYY (year), YY (2-digit year), MM (month), DD (day), "
-                            "HH (hour 24h), mm (minute), SS (second), us/ms (fractional seconds)",
-                        "symbol": "format_date",
-                        "groups": "Date/Time",
-                        "role": ER_All,
-                        "args": (DataProviderSignatureDateType, DataProviderSignatureStringType),
-                        "return_type": AbstractDataProviderTypeMap."string",
-                    },
+                DP_FUNC_FORMAT_DATE: DefaultExpressionMap{DP_FUNC_FORMAT_DATE} + {
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."date");
                         string fmt = Sqlite3Table::convertDateFormat(args[1]);
                         return sprintf("strftime('%s', %s)", fmt, exp0);
+                    },
+                },
+                # --- Regex operators (SQLite REGEXP + regexp_replace UDFs are registered
+                #     by the qore sqlite3 driver). Metadata inherited from
+                #     DefaultExpressionMap; only the SQL-generation code is DB-specific. ---
+                DP_OP_REGEX_MATCH: DefaultExpressionMap{DP_OP_REGEX_MATCH} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        bool case_insensitive = exists args[2] && inlist("i", args[2]);
+                        if (case_insensitive) {
+                            return sprintf("%s REGEXP ('(?i)' || %s)", exp0, exp1);
+                        }
+                        return sprintf("%s REGEXP %s", exp0, exp1);
+                    },
+                },
+                DP_OP_REGEX_NMATCH: DefaultExpressionMap{DP_OP_REGEX_NMATCH} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        bool case_insensitive = exists args[2] && inlist("i", args[2]);
+                        if (case_insensitive) {
+                            return sprintf("%s NOT REGEXP ('(?i)' || %s)", exp0, exp1);
+                        }
+                        return sprintf("%s NOT REGEXP %s", exp0, exp1);
+                    },
+                },
+                DP_OP_REGEX_SUBST: DefaultExpressionMap{DP_OP_REGEX_SUBST} + {
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        string exp2 = info.table.getExpressionArg(\info, role, args[2],
+                            AbstractDataProviderTypeMap."string");
+                        string flags = "";
+                        if (exists args[3]) {
+                            foreach auto opt in (args[3]) {
+                                if (opt == "i" || opt == "g" || opt == "m" || opt == "s" || opt == "x") {
+                                    flags += opt;
+                                }
+                            }
+                        }
+                        if (flags.val()) {
+                            return sprintf("regexp_replace(%s, %s, %s, '%s')", exp0, exp1, exp2, flags);
+                        }
+                        return sprintf("regexp_replace(%s, %s, %s)", exp0, exp1, exp2);
                     },
                 },
                 # --- String functions (SQLite uses substr() not ANSI substring()) ---

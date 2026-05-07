@@ -120,6 +120,8 @@ module SqlUtil {
     - implemented support for \c NULLS \c FIRST / \c NULLS \c LAST qualifiers in the
       @ref select_option_orderby "orderby" option using a new hash format, as well as per-column
       \c DESC support for column operator expressions
+    - fixed implicit join generation for composite foreign key constraints whose stored column order differs from
+      the referenced primary key order
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -6127,6 +6129,89 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                     AbstractDataProviderTypeMap."any"));
             },
         },
+        # --- Regex operators ---
+        # Declared without a "code" field: there is no portable SQL form for regex
+        # matching across all backends (PG/Oracle/MySQL each have different syntax,
+        # MSSQL pre-2025 and Firebird have none, SQLite needs a registered UDF).
+        # Per-DB SqlUtil modules override these with native SQL via "code".
+        # Backends without an override keep this metadata-only entry, which the
+        # DataProvider framework treats as "non-pushdownable" and applies the
+        # predicate as a client-side filter on the iterator — see
+        # @ref AbstractDataProvider::splitPushdownableExpression().
+        DP_OP_REGEX_MATCH: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_REGEX_MATCH,
+                "display_name": "regex match (=~)",
+                "short_desc": "Returns True if the string matches the regular expression",
+                "desc": "Returns True if the first argument matches the second as a regular expression. "
+                    "Pushed down to native SQL on backends with regex support; otherwise applied as a "
+                    "client-side filter on the result iterator.",
+                "symbol": "=~",
+                "groups": "Comparison",
+                "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                    DataProviderSignatureOptionalStringListValueType),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            },
+        },
+        DP_OP_REGEX_NMATCH: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_REGEX_NMATCH,
+                "display_name": "regex non-match (!~)",
+                "short_desc": "Returns True if the string does not match the regular expression",
+                "desc": "Returns True if the first argument does not match the second as a regular "
+                    "expression. Pushed down to native SQL on backends with regex support; otherwise "
+                    "applied as a client-side filter on the result iterator.",
+                "symbol": "!~",
+                "groups": "Comparison",
+                "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                    DataProviderSignatureOptionalStringListValueType),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            },
+        },
+        DP_OP_REGEX_SUBST: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_REGEX_SUBST,
+                "display_name": "regex substitution",
+                "short_desc": "Performs regex substitution on a string",
+                "desc": "Performs regular expression substitution. Args: string, regex pattern, "
+                    "replacement, optional options list (\"i\" for case-insensitive, \"g\" for global). "
+                    "Pushed down to native SQL on backends with regexp_replace support; otherwise "
+                    "applied client-side.",
+                "symbol": "regexSubst",
+                "groups": "Data Manipulation",
+                "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                    DataProviderSignatureStringType, DataProviderSignatureOptionalStringListValueType),
+                "return_type": AbstractDataProviderTypeMap."string",
+            },
+        },
+        # --- Date formatting ---
+        # Declared without a "code" field: there is no portable SQL form for
+        # date-to-string formatting across backends (PostgreSQL/Oracle use
+        # to_char(); MySQL uses date_format(); SQLite uses strftime();
+        # MSSQL 2012+ uses FORMAT()). Per-DB SqlUtil modules override this
+        # entry with a native SQL closure via "code". Backends without an
+        # override leave the entry metadata-only; strict-throw will surface
+        # the missing implementation if a caller attempts to use it.
+        DP_FUNC_FORMAT_DATE: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_FORMAT_DATE,
+                "display_name": "format_date",
+                "short_desc": "Formats a date as a string",
+                "desc": "Formats a date/time value as a string using a backend-specific format mask. "
+                    "Common format codes: YYYY (year), MM (month), DD (day), HH (hour 24h), "
+                    "mm (minute), SS (second), us (microseconds). Pushed down to native SQL on "
+                    "backends with date-formatting support.",
+                "symbol": "format_date",
+                "groups": "Date/Time",
+                "role": ER_All,
+                "args": (DataProviderSignatureDateType, DataProviderSignatureStringType),
+                "return_type": AbstractDataProviderTypeMap."string",
+            },
+        },
     };
 
     #! a hash of valid operators for use in @ref where_clauses
@@ -8629,6 +8714,15 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
             }
         }
 
+        #! returns a hash mapping target column names to source column names for a foreign constraint targeting the given table and columns
+        *hash<string, string> findConstraintColumnMapOn(string table, softlist<auto> cols) {
+            foreach AbstractForeignConstraint fk in (h.iterator()) {
+                if (fk.target.table == table && fk.target.columns.matchKeys(cols)) {
+                    return fk.getSourceColumnMapForTargetColumns(cols);
+                }
+            }
+        }
+
         #! returns \c "foreign constraint" for the type of object encapsulated
         string getElementName() {
             return "foreign constraint";
@@ -8676,6 +8770,42 @@ AbstractForeignConstraint ix = fcs.fk_jobs_job_defs;
         #! Returns @ref True "True" if the constraint refers to the given target column
         bool hasTargetColumn(string col) {
             return target.hasColumn(col);
+        }
+
+        #! returns a hash mapping target column names to source column names, preserving the target column order in \a cols
+        /** @param cols the target columns to map; the columns must match the target columns in the constraint
+
+            @return a hash whose keys are target column names and whose values are the corresponding source column names
+
+            @throw FOREIGN-CONSTRAINT-ERROR the source and target column metadata do not have the same cardinality or a requested target column is not present
+        */
+        hash<string, string> getSourceColumnMapForTargetColumns(softlist<auto> cols) {
+            list<string> source_cols = h.keys();
+            list<string> target_cols = target.columns.keys();
+            if (source_cols.size() != target_cols.size()) {
+                throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y has %d source column%s and %d "
+                    "target column%s", getName(), source_cols.size(), source_cols.size() == 1 ? "" : "s",
+                    target_cols.size(), target_cols.size() == 1 ? "" : "s");
+            }
+
+            hash<string, string> rv;
+            foreach string col in (cols) {
+                bool found = False;
+                int i = 0;
+                foreach string target_col in (target_cols) {
+                    if (target_col == col) {
+                        rv{col} = source_cols[i];
+                        found = True;
+                        break;
+                    }
+                    ++i;
+                }
+                if (!found) {
+                    throw "FOREIGN-CONSTRAINT-ERROR", sprintf("foreign constraint %y does not target column %y; "
+                        "target columns: %y", getName(), col, target_cols);
+                }
+            }
+            return rv;
         }
 
         #! returns @ref True "True" if the argument is equal to the current object, @ref False "False" if not

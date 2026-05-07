@@ -1,0 +1,469 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  BgeM3FastApiEmbedder.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/BgeM3RestClient.qm
+%requires ../../../../qlib/QoreRagUtils
+%requires QUnit
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class BgeM3FastApiEmbedderTest
+
+#! HTTP stub that records every request and returns a configurable response per path.
+class FakeBgeM3Handler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+        hash<string, hash<auto>> responses;
+        Mutex m();
+    }
+
+    constructor(hash<string, hash<auto>> responses) {
+        self.responses = responses;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        hash<auto> body_parsed = body.val() ? parse_json(body) : {};
+        m.lock();
+        push requests, {
+            "path": cx.raw_path,
+            "method": hdr.method,
+            "auth": hdr."authorization",
+            "body": body_parsed,
+        };
+        *hash<auto> resp = responses{cx.raw_path};
+        m.unlock();
+
+        if (!resp) {
+            return makeResponse(404, "{\"detail\":\"Not Found\"}",
+                {"Content-Type": MimeTypeJson});
+        }
+        # Optional response delay for timeout tests; sleep outside the lock so
+        # other threads can still record requests during the wait.
+        if (resp.delay_ms) {
+            usleep(resp.delay_ms * 1000);
+        }
+        int code = resp.code ?? 200;
+        string body_out = resp.body.typeCode() == NT_STRING
+            ? resp.body
+            : make_json(resp.body);
+        return makeResponse(code, body_out, {"Content-Type": MimeTypeJson});
+    }
+}
+
+class BgeM3FastApiEmbedderTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeBgeM3Handler handler;
+    }
+
+    constructor() : Test("BgeM3FastApiEmbedderTest", "1.0") {
+        addTestCase("dense response success", \testDenseSuccess());
+        addTestCase("empty input issues no HTTP call",
+            \testEmptyInputNoHttp());
+        addTestCase("vector count mismatch throws", \testCountMismatch());
+        addTestCase("missing dense throws", \testMissingDense());
+        addTestCase("getDimension caches after first encode",
+            \testDimensionCaching());
+        addTestCase("batch_size only sent when configured",
+            \testBatchSizeOptional());
+        addTestCase("sparse alongside dense does not break dense path",
+            \testSparseAlongsideDense());
+        addTestCase("getModel returns config without HTTP",
+            \testGetModelNoHttp());
+        addTestCase("api_key forwarded as Bearer auth",
+            \testApiKeyForwarded());
+        addTestCase("default model is bge-m3", \testDefaultModel());
+        addTestCase("per-call timeout aborts a slow response",
+            \testPerCallTimeoutAborts());
+        addTestCase("EmbedderConfig.timeout default applied without per-call opts",
+            \testConfigTimeoutDefaultApplied());
+        addTestCase("per-call timeout overrides EmbedderConfig.timeout",
+            \testPerCallTimeoutOverridesConfigTimeout());
+        addTestCase("empty vector throws EMBEDDER-RESPONSE-ERROR",
+            \testEmptyVectorThrows());
+        addTestCase("non-numeric vector throws EMBEDDER-RESPONSE-ERROR",
+            \testNonNumericVectorThrows());
+        addTestCase("permanent 400 classified as EMBEDDER-MODEL-CONFIG-ERROR",
+            \testPermanent400ClassifiedAsModelConfigError());
+        addTestCase("transient 5xx propagates with body intact",
+            \testTransient5xxPropagates());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": False,
+        };
+        http = new HttpServer(http_opts);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    private installHandler(hash<string, hash<auto>> responses) {
+        if (handler) {
+            http.removeHandler("emb");
+        }
+        handler = new FakeBgeM3Handler(responses);
+        http.setHandler("emb", "/", MimeTypeJson, handler);
+    }
+
+    private BgeM3FastApiEmbedder makeEmbedder(*hash<auto> extras) {
+        hash<EmbedderConfig> cfg = <EmbedderConfig>{
+            "backend": "bge-m3-fastapi",
+            "url": "http://localhost:" + port,
+            "model": "bge-m3",
+        };
+        if (exists extras.batch_size) {
+            cfg.batch_size = extras.batch_size;
+        }
+        if (exists extras.api_key) {
+            cfg.api_key = extras.api_key;
+        }
+        if (exists extras.options) {
+            cfg.options = extras.options;
+        }
+        return new BgeM3FastApiEmbedder(cfg);
+    }
+
+    testDenseSuccess() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {
+                    "dense": (
+                        (1.0, 2.0, 3.0),
+                        (4.0, 5.0, 6.0),
+                    ),
+                    "sparse": NULL,
+                },
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        list<list<float>> rv = emb.encodeBatch(("hello", "world"));
+        assertEq(2, rv.size());
+        assertEq((1.0, 2.0, 3.0), rv[0]);
+        assertEq((4.0, 5.0, 6.0), rv[1]);
+        assertEq(1, handler.requests.size());
+        assertEq("/embed", handler.requests[0].path);
+        # EmbedderConfig.batch_size defaults to 32; forwarded to the sidecar.
+        assertEq(32, handler.requests[0].body.batch_size);
+        # return_dense always True; return_sparse default False
+        assertEq(True, handler.requests[0].body.return_dense);
+        assertEq(False, handler.requests[0].body.return_sparse);
+        assertEq(("hello", "world"), handler.requests[0].body.texts);
+    }
+
+    testEmptyInputNoHttp() {
+        checkModule();
+        installHandler({});
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        list<list<float>> rv = emb.encodeBatch(());
+        assertEq(0, rv.size());
+        # Critical: no HTTP requests issued for empty input.
+        assertEq(0, handler.requests.size());
+    }
+
+    testCountMismatch() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {"dense": ((1.0, 2.0),)},  # 1 vector for 2 texts
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("a", "b"));
+            fail("expected EMBEDDER-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-RESPONSE-ERROR", ex.err);
+            assertRegex("returned 1 vectors for 2 input texts", ex.desc);
+        }
+    }
+
+    testMissingDense() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {"sparse": ()},  # no "dense" key
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("a",));
+            fail("expected EMBEDDER-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-RESPONSE-ERROR", ex.err);
+            assertRegex("missing 'dense'", ex.desc);
+        }
+    }
+
+    testDimensionCaching() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {"dense": ((0.1, 0.2, 0.3, 0.4),)},
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        emb.encodeBatch(("seed",));
+        assertEq(4, emb.getDimension());
+        # getDimension after first encode must not issue another request
+        int before = handler.requests.size();
+        assertEq(4, emb.getDimension());
+        assertEq(before, handler.requests.size());
+    }
+
+    testBatchSizeOptional() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {"dense": ((0.1,),)},
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder({"batch_size": 64});
+        emb.encodeBatch(("a",));
+        assertEq(1, handler.requests.size());
+        assertEq(64, handler.requests[0].body.batch_size);
+    }
+
+    testSparseAlongsideDense() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {
+                    "dense": ((0.5, 0.6),),
+                    "sparse": ({"42": 0.9, "73": 0.4},),
+                },
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder({
+            "options": {"return_sparse": True},
+        });
+        list<list<float>> rv = emb.encodeBatch(("a",));
+        assertEq(1, rv.size());
+        assertEq((0.5, 0.6), rv[0]);
+        # Verify return_sparse propagated to the request body.
+        assertEq(True, handler.requests[0].body.return_sparse);
+    }
+
+    testGetModelNoHttp() {
+        checkModule();
+        installHandler({});
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        # getModel must not issue an HTTP call
+        assertEq("bge-m3", emb.getModel());
+        assertEq(0, handler.requests.size());
+    }
+
+    testApiKeyForwarded() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {"dense": ((1.0,),)},
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder({"api_key": "secret-key"});
+        emb.encodeBatch(("x",));
+        assertEq(1, handler.requests.size());
+        assertEq("Bearer secret-key", handler.requests[0].auth);
+    }
+
+    testDefaultModel() {
+        checkModule();
+        installHandler({});
+        # Construct without explicit model; must default to "bge-m3"
+        BgeM3FastApiEmbedder emb = new BgeM3FastApiEmbedder(<EmbedderConfig>{
+            "backend": "bge-m3-fastapi",
+            "url": "http://localhost:" + port,
+        });
+        assertEq("bge-m3", emb.getModel());
+    }
+
+    testPerCallTimeoutAborts() {
+        checkModule();
+        # Handler sleeps 1500ms before responding; per-call timeout is 200ms.
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "delay_ms": 1500,
+                "body": {"dense": ((0.1,),)},
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("hello",), {"timeout": 200ms});
+            fail("expected a timeout exception");
+        } catch (hash<ExceptionInfo> ex) {
+            # The timeout surfaces as a SOCKET-* / TIMEOUT-* style exception
+            # from the underlying HTTP stack; we only require that *some*
+            # exception fires before the 1500ms response completes.
+            assertEq(True, exists ex.err, "exception was thrown");
+        }
+    }
+
+    testConfigTimeoutDefaultApplied() {
+        checkModule();
+        # Handler sleeps 1500ms; config default timeout is 300ms; no per-call opts.
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "delay_ms": 1500,
+                "body": {"dense": ((0.1,),)},
+            },
+        });
+        BgeM3FastApiEmbedder emb = new BgeM3FastApiEmbedder(<EmbedderConfig>{
+            "backend": "bge-m3-fastapi",
+            "url": "http://localhost:" + port,
+            "model": "bge-m3",
+            "timeout": 300ms,
+        });
+        try {
+            emb.encodeBatch(("hello",));
+            fail("expected a timeout exception (config default 300ms)");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(True, exists ex.err, "exception was thrown");
+        }
+    }
+
+    testPerCallTimeoutOverridesConfigTimeout() {
+        checkModule();
+        # Handler responds in 600ms.  Config default 5000ms (would succeed) but
+        # per-call timeout 200ms forces a fail — proves per-call > config.
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "delay_ms": 600,
+                "body": {"dense": ((0.1,),)},
+            },
+        });
+        BgeM3FastApiEmbedder emb = new BgeM3FastApiEmbedder(<EmbedderConfig>{
+            "backend": "bge-m3-fastapi",
+            "url": "http://localhost:" + port,
+            "model": "bge-m3",
+            "timeout": 5s,
+        });
+        try {
+            emb.encodeBatch(("hello",), {"timeout": 200ms});
+            fail("expected a timeout exception (per-call 200ms wins over config 5s)");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(True, exists ex.err, "exception was thrown");
+        }
+    }
+
+    testEmptyVectorThrows() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {"dense": ((),)},   # one empty vector
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("hello",));
+            fail("expected EMBEDDER-RESPONSE-ERROR for empty vector");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-RESPONSE-ERROR", ex.err);
+            assertRegex("empty or non-list", ex.desc);
+            # body preserved in arg
+            assertEq(True, exists ex.arg.body);
+        }
+    }
+
+    testNonNumericVectorThrows() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {"dense": (("oops", "nope"),)},
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("hello",));
+            fail("expected EMBEDDER-RESPONSE-ERROR for non-numeric vector");
+        } catch (hash<ExceptionInfo> ex) {
+            # Must NOT leak as RUNTIME-TYPE-ERROR
+            assertEq("EMBEDDER-RESPONSE-ERROR", ex.err);
+            assertRegex("non-numeric", ex.desc);
+            assertEq(True, exists ex.arg.body);
+        }
+    }
+
+    testPermanent400ClassifiedAsModelConfigError() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 400,
+                "body": {"detail": "the configured model is not an embedding model"},
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("hello",));
+            fail("expected EMBEDDER-MODEL-CONFIG-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-MODEL-CONFIG-ERROR", ex.err);
+            assertEq("bge-m3-fastapi", ex.arg.backend);
+            assertEq("bge-m3", ex.arg.model);
+            assertEq(400, ex.arg.status_code);
+            assertEq("REST-RESPONSE-ERROR", ex.arg.original_err);
+            assertEq(True, exists ex.arg.original_desc);
+            # body preserved
+            assertRegex("not an embedding", ex.arg.body.detail);
+        }
+    }
+
+    testTransient5xxPropagates() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 503,
+                "body": {"detail": "service overloaded"},
+            },
+        });
+        BgeM3FastApiEmbedder emb = makeEmbedder();
+        try {
+            emb.encodeBatch(("hello",));
+            fail("expected REST-RESPONSE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err);
+            assertEq(503, ex.arg.status_code);
+            # body preserved (issue 159 note §4)
+            assertEq("service overloaded", ex.arg.body.detail);
+        }
+    }
+}

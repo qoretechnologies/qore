@@ -1590,6 +1590,15 @@ cargo install tree-sitter-cli@0.26.5
         infrastructure used by @ref httpclientiointro "HttpClientIo",
         @ref restclientio_intro "RestClientIo", and
         @ref httpserverasynciointro "HttpServerAsyncIo"
+    - @ref bgem3fastapidataproviderintro "BgeM3FastApiDataProvider" module
+      - new module providing a data provider API for the BGE-M3 FastAPI embedding sidecar
+      - exposes embeddings (<tt>/embed</tt>), health (<tt>/health</tt>), and metrics (<tt>/metrics</tt>) as DPC actions
+      - dense and sparse vector generation suitable for hybrid retrieval pipelines
+    - @ref bgem3restclientintro "BgeM3RestClient" module
+      - new module providing a REST client for <a href="https://huggingface.co/BAAI/bge-m3">BGE-M3</a> FastAPI embedding sidecar services
+      - exposes the sidecar's native endpoints (<tt>/embed</tt>, <tt>/health</tt>, <tt>/metrics</tt>)
+      - serves the \c bge-m3 multilingual embedding model with dense and sparse vector support
+      - provides BgeM3RestConnection for connection management with \c bge-m3:// URL scheme
     - @ref bigcommercedataproviderintro "BigCommerceDataProvider" module
       - new module providing a data provider API for <a href="https://www.bigcommerce.com/">BigCommerce</a> e-commerce
       - customer management (create, update, search, delete)
@@ -2142,7 +2151,7 @@ cargo install tree-sitter-cli@0.26.5
     - @ref qoreragutilsintro "QoreRagUtils" module
       - new module providing a composable abstraction layer for retrieval-augmented generation (RAG)
       - defines abstract embedder, vector store, reranker, and chunker building blocks plus a \c RagPipeline orchestrator
-      - ships built-in concrete backends: \c LocalOnnxEmbedder, \c OpenAiEmbedder, \c VoyageEmbedder, \c SGLangEmbedder, \c LocalOnnxReranker, \c VoyageReranker, \c HttpGatewayReranker, \c StructuredChunker, \c FixedChunker
+      - ships built-in concrete backends: \c LocalOnnxEmbedder, \c OpenAiEmbedder, \c VoyageEmbedder, \c SGLangEmbedder, \c BgeM3FastApiEmbedder, \c LocalOnnxReranker, \c VoyageReranker, \c HttpGatewayReranker, \c StructuredChunker, \c FixedChunker
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
       - can be used from command-line applications or network handlers (WebSocket, HTTP, etc.)

@@ -24,6 +24,7 @@ public class ParseToQoreValueTest inherits QUnit::Test {
         addTestCase("issue 3483", \issue3483());
         addTestCase("issue 3138", \issue3138());
         addTestCase("Tests for parse_to_qore_value()", \parseToQoreValueTest());
+        addTestCase("Tests for parse_to_qore_value_with_yaml()", \parseToQoreValueWithYamlTest());
         set_return_value(main());
     }
 
@@ -73,6 +74,7 @@ public class ParseToQoreValueTest inherits QUnit::Test {
         assertEq("two", parse_to_qore_value("two"));
         assertEq("three", parse_to_qore_value("\"three\""));
         assertEq(2016-05-09, parse_to_qore_value("2016-05-09"));
+        assertEq("a: 1", parse_to_qore_value("a: 1"));
 
         # test %STR=
         assertEq("hello, there, a=b", parse_to_qore_value("%STR=hello, there, a=b"));
@@ -95,5 +97,21 @@ public class ParseToQoreValueTest inherits QUnit::Test {
         assertEq((("a": 500), ("a": 1.234)), parse_to_qore_value("(a = 500),a=1.234"));
 
         assertEq({"a": 1, "b": (1, 2)}, parse_to_qore_value("{a=1,b=(1,2)}"));
+    }
+
+    parseToQoreValueWithYamlTest() {
+        assertEq(("name": "test", "enabled": True, "tags": ("a", "b")),
+            parse_to_qore_value_with_yaml("name=test,enabled=True,tags=(a,b)"));
+        assertEq("a: 1", parse_to_qore_value_with_yaml("%STR=a: 1"));
+        assertEq("a: 1", parse_to_qore_value_with_yaml("\"a: 1\""));
+
+%ifndef NoYaml
+        assertEq(("name": "test", "enabled": True, "tags": ("a", "b")),
+            parse_to_qore_value_with_yaml("name: test\nenabled: true\ntags:\n  - a\n  - b\n"));
+        assertEq(("a": 1), parse_to_qore_value_with_yaml("# comment\na: 1"));
+        assertEq(("a": (1, 2)), parse_to_qore_value_with_yaml("{\"a\":[1,2]}"));
+        assertThrows("PARSE-ERROR", "YAML parser", \parse_to_qore_value_with_yaml(), "a: [1,");
+        assertThrows("PARSE-ERROR", "YAML parser", \parse_to_qore_value_with_yaml(), "a: ]");
+%endif
     }
 }

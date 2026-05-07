@@ -491,6 +491,9 @@ public const OperatorAliasMap = {
     "REGEX-MATCH": DP_OP_REGEX_MATCH,
     "REGEX-NMATCH": DP_OP_REGEX_NMATCH,
     "REGEX-SUBST": DP_OP_REGEX_SUBST,
+    # Bridge legacy search-op name to the canonical expression-op name so that
+    # expression maps keyed on DP_OP_REGEX_MATCH resolve a `regex` lookup.
+    DP_SEARCH_OP_REGEX: DP_OP_REGEX_MATCH,
     "REPLACE": DP_OP_REPLACE,
     "SUBSTR": DP_FUNC_SUBSTR,
     "IN-RANGE": DP_OP_RANGE,

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Util.qm Qore user module for generally useful routines
 
-/*  Util.qm Copyright 2014 - 2025 Qore Technologies, s.r.o.
+/*  Util.qm Copyright 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -90,6 +90,7 @@ module Util {
     - @ref Util::parse_memory_size()
     - @ref Util::parse_ranges()
     - @ref Util::parse_to_qore_value()
+    - @ref Util::parse_to_qore_value_with_yaml()
     - @ref Util::parse_uri_query()
     - @ref Util::plural()
     - @ref Util::regex_escape()
@@ -116,6 +117,8 @@ module Util {
       and reverse ranges (e.g., "5-3" returns (5, 4, 3))
     - fixed @ref Util::substitute_env_vars() "substitute_env_vars()" to properly handle \c "${VAR}" and
       \c "$(VAR)" syntax by correctly stripping delimiters
+    - added @ref Util::parse_to_qore_value_with_yaml() "parse_to_qore_value_with_yaml()" for command-line
+      values that should accept either the legacy Qore value syntax or YAML / JSON-compatible YAML
 
     @subsection util_2_2 Util 2.2
     - added @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output
@@ -1352,6 +1355,101 @@ public auto sub parse_to_qore_value(string arg) {
 
     # try to fold all types to the most specific type when returning
     return auto_cast(v);
+}
+
+bool sub parse_to_qore_value_yaml_candidate(string arg) {
+    DataLineIterator it(arg);
+    while (it.next()) {
+        string line = trim(it.getValue());
+        if (!line.size() || line =~ /^#/) {
+            continue;
+        }
+
+        if (line =~ /^(---|%YAML)/i) {
+            return True;
+        }
+        if (line =~ /^%(STR|EVAL)=/ || line =~ /^"/ || line =~ /^'/ || line =~ /^\$/) {
+            return False;
+        }
+        if (line =~ /^\{\s*("|})/ || line =~ /^\[/ || line =~ /^-\s+\S/) {
+            return True;
+        }
+        if (line =~ /^[^=]+:(\s|$)/ && line !~ /^[a-z][a-z0-9+.-]*:\/\//i) {
+            return True;
+        }
+        return False;
+    }
+    return False;
+}
+
+string sub parse_to_qore_value_with_yaml_error(string arg, *hash<ExceptionInfo> qore_ex,
+        *hash<ExceptionInfo> yaml_ex, bool yaml_missing) {
+    string desc = sprintf("Could not parse command-line value %y as a Qore value or YAML.", arg);
+    if (qore_ex) {
+        desc += sprintf(" Qore parser: %s: %s.", qore_ex.err, qore_ex.desc);
+    }
+    if (yaml_missing) {
+        desc += " YAML parsing requires the yaml module, which is unavailable.";
+    } else if (yaml_ex) {
+        desc += sprintf(" YAML parser: %s: %s.", yaml_ex.err, yaml_ex.desc);
+    }
+    desc += " Examples: YAML 'name: test\\nenabled: true', JSON '{\"name\":\"test\"}', "
+        "Qore 'name=test,enabled=True', literal '%STR=raw text'.";
+    return desc;
+}
+
+#! Parses a command-line value with legacy Qore syntax and YAML / JSON-compatible YAML support
+/** This function is intended for command-line arguments that should accept the legacy
+    @ref parse_to_qore_value() syntax as well as YAML / JSON-compatible YAML. The legacy
+    Qore syntax is still used for non-YAML-looking values. YAML-looking values are parsed
+    as YAML first so values such as <tt>a: 1</tt> become hashes instead of plain strings.
+
+    @param arg a string to convert to a Qore value
+
+    @return the Qore value corresponding to the input string
+
+    @throw PARSE-ERROR cannot parse the string given
+
+    @see parse_to_qore_value()
+
+    @since Util 2.3
+*/
+public auto sub parse_to_qore_value_with_yaml(string arg) {
+    bool yaml_candidate = parse_to_qore_value_yaml_candidate(arg);
+
+    if (yaml_candidate) {
+%ifndef NoYaml
+        *hash<ExceptionInfo> yaml_ex;
+        try {
+            return parse_yaml(arg);
+        } catch (hash<ExceptionInfo> ex) {
+            yaml_ex = ex;
+        }
+        throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, NOTHING, yaml_ex, False);
+%else
+        try {
+            return parse_to_qore_value(arg);
+        } catch (hash<ExceptionInfo> qore_ex) {
+            throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, qore_ex, NOTHING, True);
+        }
+%endif
+    }
+
+    try {
+        return parse_to_qore_value(arg);
+    } catch (hash<ExceptionInfo> qore_ex) {
+%ifndef NoYaml
+        *hash<ExceptionInfo> yaml_ex;
+        try {
+            return parse_yaml(arg);
+        } catch (hash<ExceptionInfo> ex) {
+            yaml_ex = ex;
+        }
+        throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, qore_ex, yaml_ex, False);
+%else
+        throw "PARSE-ERROR", parse_to_qore_value_with_yaml_error(arg, qore_ex, NOTHING, True);
+%endif
+    }
 }
 
 #! Serializes the given value to a string that can be deserialized with parse_to_qore_value()

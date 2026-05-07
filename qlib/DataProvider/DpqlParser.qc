@@ -447,6 +447,8 @@ public class DpqlParser {
             case DP_SEARCH_OP_BETWEEN:
             case DP_SEARCH_OP_IN:
             case DP_SEARCH_OP_REGEX:
+            case DP_OP_REGEX_MATCH:
+            case DP_OP_REGEX_NMATCH:
                 return True;
         }
         # Check for provider-specific comparison operators (e.g. "like")
@@ -924,7 +926,12 @@ public class DpqlParser {
             case DPQL_TOK_OP_REGEX:
                 nextToken();  # consume =~
                 skipWhitespace();
-                return parseRegexExpr(left);
+                return parseRegexExpr(left, DP_OP_REGEX_MATCH, "=~");
+
+            case DPQL_TOK_OP_NMATCH:
+                nextToken();  # consume !~
+                skipWhitespace();
+                return parseRegexExpr(left, DP_OP_REGEX_NMATCH, "!~");
 
             case DPQL_TOK_IDENTIFIER: {
                 string kw = tok.value.lwr();
@@ -1013,16 +1020,21 @@ public class DpqlParser {
         return left;
     }
 
-    #! Parses a regex expression after =~
-    private hash<DataProviderExpression> parseRegexExpr(auto left) {
+    #! Parses a regex expression after =~ or !~
+    /** @param left the left-hand side expression
+        @param op_name the canonical expression-map operator name (DP_OP_REGEX_MATCH or DP_OP_REGEX_NMATCH)
+        @param op_sym the source-level operator symbol used in diagnostics (\"=~\" or \"!~\")
+    */
+    private hash<DataProviderExpression> parseRegexExpr(auto left, string op_name, string op_sym) {
         if (atEnd()) {
-            addError("Expected regex pattern after '=~'", "DPQL-E009", line, column, line, column);
+            addError(sprintf("Expected regex pattern after '%s'", op_sym), "DPQL-E009",
+                line, column, line, column);
             throw "DPQL-PARSE-ERROR", "Expected regex pattern";
         }
 
         hash<DpqlTokenInfo> tok = peek();
         if (tok.type != DPQL_TOK_REGEX) {
-            addError("Expected regex pattern after '=~'", "DPQL-E009", tok);
+            addError(sprintf("Expected regex pattern after '%s'", op_sym), "DPQL-E009", tok);
             throw "DPQL-PARSE-ERROR", "Expected regex pattern";
         }
 
@@ -1070,7 +1082,7 @@ public class DpqlParser {
         }
 
         return <DataProviderExpression>{
-            "exp": DP_SEARCH_OP_REGEX,
+            "exp": op_name,
             "args": args,
         };
     }
@@ -1877,6 +1889,8 @@ public class DpqlParser {
             case DP_SEARCH_OP_IN:
             case DP_SEARCH_OP_BETWEEN:
             case DP_SEARCH_OP_REGEX:
+            case DP_OP_REGEX_MATCH:
+            case DP_OP_REGEX_NMATCH:
             case DP_SEARCH_OP_NOT:
             case DP_OP_AND:
             case DP_OP_OR:

@@ -1,0 +1,304 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  BgeM3FastApiDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/BgeM3RestClient.qm
+%requires ../../../../qlib/BgeM3FastApiDataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class BgeM3FastApiDataProviderTest
+
+#! HTTP stub that records every request and returns a configurable response per path.
+class FakeBgeM3Handler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+        hash<string, hash<auto>> responses;
+        Mutex m();
+    }
+
+    constructor(hash<string, hash<auto>> responses) {
+        self.responses = responses;
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        hash<auto> body_parsed = body.val() && hdr."content-type" =~ /json/ ? parse_json(body) : {};
+        push requests, {
+            "path": cx.raw_path,
+            "method": hdr.method,
+            "auth": hdr."authorization",
+            "accept": hdr."accept",
+            "body": body_parsed,
+        };
+        *hash<auto> resp = responses{cx.raw_path};
+        if (!resp) {
+            return makeResponse(404, "{\"detail\":\"Not Found\"}",
+                {"Content-Type": MimeTypeJson});
+        }
+        int code = resp.code ?? 200;
+        string content_type = resp.content_type ?? MimeTypeJson;
+        string body_out = resp.body.typeCode() == NT_STRING
+            ? resp.body
+            : make_json(resp.body);
+        return makeResponse(code, body_out, {"Content-Type": content_type});
+    }
+}
+
+public class BgeM3FastApiDataProviderTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeBgeM3Handler handler;
+    }
+
+    constructor() : Test("BgeM3FastApiDataProviderTest", "1.0") {
+        addTestCase("root provider name + child names", \testRootSanity());
+        addTestCase("flat ChildMap covers every registered action path",
+            \testChildMapPathResolution());
+        addTestCase("create-embeddings round-trip", \testEmbeddingsRoundTrip());
+        addTestCase("create-embeddings request type fields",
+            \testEmbeddingsRequestTypeFields());
+        addTestCase("health round-trip", \testHealthRoundTrip());
+        addTestCase("metrics round-trip wraps Prometheus body in {text}",
+            \testMetricsRoundTrip());
+        addTestCase("action catalog options + output_type populated",
+            \testActionCatalogShape());
+        addTestCase("connection scheme registered + getDataProvider works",
+            \testConnectionScheme());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": False,
+        };
+        http = new HttpServer(http_opts);
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    private checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    private installHandler(hash<string, hash<auto>> responses) {
+        if (handler) {
+            http.removeHandler("emb");
+        }
+        handler = new FakeBgeM3Handler(responses);
+        # path regex ".*" matches every URL, including single-segment paths like
+        # "health" / "metrics" that have no embedded "/" once the leading slash
+        # is stripped during handler lookup
+        http.setHandler("emb", ".*", NOTHING, handler);
+    }
+
+    private string testUrl() {
+        return "http://localhost:" + port;
+    }
+
+    private RestClientIo::RestClientIo makeRest() {
+        return new BgeM3RestClient::BgeM3RestClientIo({"url": testUrl()});
+    }
+
+    testRootSanity() {
+        checkModule();
+        installHandler({});
+        BgeM3FastApiDataProvider::BgeM3FastApiDataProvider prov(makeRest());
+        assertEq("bge-m3-fastapi", prov.getName());
+        assertEq(("create-embeddings", "health", "metrics"),
+            sort(prov.getChildProviderNames()));
+    }
+
+    testChildMapPathResolution() {
+        # Every registered action path must resolve through the root provider's
+        # ChildMap; mismatched paths silently disable ref_data and doRequestImpl.
+        installHandler({});
+        BgeM3FastApiDataProvider::BgeM3FastApiDataProvider prov(makeRest());
+        list<string> child_names = sort(prov.getChildProviderNames());
+
+        list<hash<DataProviderActionInfo>> actions = (
+            DataProviderActionCatalog::getAppAction(
+                BgeM3FastApiDataProvider::BgeM3FastApiDataProvider::AppName,
+                "create-embeddings"),
+            DataProviderActionCatalog::getAppAction(
+                BgeM3FastApiDataProvider::BgeM3FastApiDataProvider::AppName,
+                "health"),
+            DataProviderActionCatalog::getAppAction(
+                BgeM3FastApiDataProvider::BgeM3FastApiDataProvider::AppName,
+                "metrics"),
+        );
+        foreach hash<DataProviderActionInfo> action in (actions) {
+            list<string> segs = action.path.split("/");
+            # path is "/<name>" → split yields ("", "<name>")
+            string first = segs[1];
+            assertEq(True, inlist(first, child_names),
+                sprintf("action path %y first segment %y must be a child of root",
+                    action.path, first));
+        }
+    }
+
+    testEmbeddingsRoundTrip() {
+        checkModule();
+        installHandler({
+            "/embed": {
+                "code": 200,
+                "body": {
+                    "dense": ((0.1, 0.2, 0.3),),
+                    "sparse": ({"42": 0.9, "73": 0.4},),
+                },
+            },
+        });
+        BgeM3FastApiDataProvider::BgeM3FastApiDataProvider prov(makeRest());
+        AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
+        assertEq("create-embeddings", emb.getName());
+
+        hash<auto> resp = emb.doRequest({
+            "texts": ("hello",),
+            "return_dense": True,
+            "return_sparse": True,
+            "batch_size": 128,
+        });
+
+        # request shape
+        assertEq(1, handler.requests.size());
+        assertEq("POST", handler.requests[0].method);
+        assertEq("/embed", handler.requests[0].path);
+        assertEq(("hello",), handler.requests[0].body.texts);
+        assertEq(True, handler.requests[0].body.return_dense);
+        assertEq(True, handler.requests[0].body.return_sparse);
+        assertEq(128, handler.requests[0].body.batch_size);
+
+        # response shape — both dense and sparse populated
+        assertEq(1, resp.dense.size());
+        assertEq((0.1, 0.2, 0.3), resp.dense[0]);
+        assertEq(1, resp.sparse.size());
+        assertEq(0.9, resp.sparse[0]."42");
+    }
+
+    testEmbeddingsRequestTypeFields() {
+        BgeM3FastApiEmbeddingsRequestDataType req_type();
+        hash<string, AbstractDataField> fields = req_type.getFields();
+
+        # Type was constructed via addQoreFields() — fields must actually be present.
+        # This catches the silent HashDataType("Name", Fields) anti-pattern.
+        assertEq(True, fields.hasKey("texts"));
+        assertEq(True, fields.hasKey("return_dense"));
+        assertEq(True, fields.hasKey("return_sparse"));
+        assertEq(True, fields.hasKey("batch_size"));
+        assertEq(4, fields.size());
+    }
+
+    testHealthRoundTrip() {
+        checkModule();
+        installHandler({
+            "/health": {
+                "code": 200,
+                "body": {
+                    "status": "ok",
+                    "memory": {
+                        "total_bytes": 128453689344,
+                        "available_bytes": 45852987392,
+                        "available_fraction": 0.357,
+                        "pressure": "ok",
+                    },
+                },
+            },
+        });
+        BgeM3FastApiDataProvider::BgeM3FastApiDataProvider prov(makeRest());
+        AbstractDataProvider hlth = prov.getChildProvider("health");
+        assertEq("health", hlth.getName());
+
+        hash<auto> resp = hlth.doRequest(NOTHING);
+        assertEq("GET", handler.requests[0].method);
+        assertEq("/health", handler.requests[0].path);
+        assertEq("ok", resp.status);
+        assertEq("ok", resp.memory.pressure);
+        assertEq(128453689344, resp.memory.total_bytes);
+    }
+
+    testMetricsRoundTrip() {
+        checkModule();
+        installHandler({
+            "/metrics": {
+                "code": 200,
+                "content_type": "text/plain",
+                "body": "# HELP bge_m3_memory_pressure ok\n"
+                    "# TYPE bge_m3_memory_pressure gauge\n"
+                    "bge_m3_memory_pressure 0.357\n",
+            },
+        });
+        BgeM3FastApiDataProvider::BgeM3FastApiDataProvider prov(makeRest());
+        AbstractDataProvider mtr = prov.getChildProvider("metrics");
+        assertEq("metrics", mtr.getName());
+
+        hash<auto> resp = mtr.doRequest(NOTHING);
+        assertEq("GET", handler.requests[0].method);
+        assertEq("/metrics", handler.requests[0].path);
+        # Provider wraps the raw text body in {text}
+        assertEq(True, resp.text.val());
+        assertRegex("bge_m3_memory_pressure", resp.text);
+    }
+
+    testActionCatalogShape() {
+        # Per data-provider-checklist §5: every DPAT_API action MUST have
+        # `options` populated and `output_type` set.
+        list<string> actions = ("create-embeddings", "health", "metrics");
+        foreach string a in (actions) {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+                BgeM3FastApiDataProvider::BgeM3FastApiDataProvider::AppName, a);
+            assertEq(DPAT_API, action.action_code, sprintf("%y action_code", a));
+            assertEq(True, exists action.output_type, sprintf("%y output_type", a));
+        }
+
+        # create-embeddings: texts is required + preselected; return_dense/return_sparse preselected.
+        hash<DataProviderActionInfo> ce = DataProviderActionCatalog::getAppAction(
+            BgeM3FastApiDataProvider::BgeM3FastApiDataProvider::AppName,
+            "create-embeddings");
+        assertEq(True, ce.options.texts.required);
+        assertEq(True, ce.options.return_dense.preselected);
+        assertEq(True, ce.options.return_sparse.preselected);
+        # output_type is the response data type
+        assertTrue(ce.output_type
+            instanceof BgeM3FastApiDataProvider::BgeM3FastApiEmbeddingsResponseDataType);
+    }
+
+    testConnectionScheme() {
+        # Scheme was registered at module init time.
+        *hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme("bge-m3");
+        assertEq(True, exists info, "bge-m3 scheme registered");
+        assertEq(True, info.schemes."bge-m3");
+
+        # Build a connection from the URL and verify it returns a data provider.
+        BgeM3RestClient::BgeM3RestConnection conn(
+            "test", "test connection", "bge-m3://localhost:" + port);
+        assertEq("bge-m3", conn.getType());
+        assertEq(True, conn.hasDataProvider());
+    }
+}

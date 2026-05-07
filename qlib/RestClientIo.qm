@@ -2053,7 +2053,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             @param hdr request headers (optional)
             @param notifier EventNotifier to signal on response completion
 
-            @return hash with "future" (Future) and "stream_id" (int)
+            @return hash with "future" (Future), "stream_id" (int), and "stream"
+                (HttpClientStreamHandle)
 
             @since %RestClientIo 1.2
         */
@@ -2115,7 +2116,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             return stream.submitAsyncWithNotifier(method, path, request_headers,
-                prepared.serialized_body, notifier);
+                prepared.serialized_body, notifier) + {
+                "stream": stream,
+            };
         }
 
         #! Starts or continues a Negotiate exchange for a polling ping
@@ -4741,6 +4744,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         #! Raw HTTP response Future (resolved by C++ PromiseAction on I/O thread)
         *Future pending_future;
 
+        #! Current HTTP ping stream, kept for cancellation
+        *HttpClientIo::HttpClientStreamHandle pending_stream;
+
         #! EventNotifier for OAuth2 token refresh (signaled when response arrives)
         *EventNotifier oauth2_notifier;
 
@@ -4752,6 +4758,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
 
         #! Future for OAuth2 token refresh response
         *Future oauth2_future;
+
+        #! OAuth2 refresh operation, kept for cancellation
+        *RestClientIoAsyncRequestOperation oauth2_operation;
 
         #! RestClientIo for OAuth2 token endpoint (kept alive for connection lifetime)
         *RestClientIo oauth2_rcio;
@@ -4853,6 +4862,15 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         return goal_reached;
     }
 
+    #! Aborts any pending ping or OAuth2 refresh work
+    /** Cancels any in-flight HTTP request or OAuth2 refresh operation and marks
+        the ping operation complete without setting @ref goalReached() to @ref True.
+    */
+    abort() {
+        cancelPendingWork();
+        state = SPS_COMPLETE;
+    }
+
     *hash<SocketPollInfo> continuePoll() {
         while (True) {
             if (state == SPS_OAUTH2_CONNECTING) {
@@ -4939,6 +4957,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
                 # Future::get() is non-blocking here: isDone() confirmed it is resolved
                 hash<auto> resp = pending_future.get();
                 delete pending_future;
+                delete pending_stream;
 
                 int status_code = resp.status_code.toInt();
                 if ((status_code / 100) == 2) {
@@ -5024,6 +5043,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         hash<auto> result = oauth2_rcio.doRequestRawAsyncWithNotifier("POST", oauth2_req.path,
             oauth2_req.headers, oauth2_req.body, oauth2_notifier);
         oauth2_future = result.future;
+        oauth2_operation = result.operation;
         delete oauth2_req;
     }
 
@@ -5031,6 +5051,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
     private processOAuth2RefreshResult() {
         hash<auto> resp = oauth2_future.get();
         delete oauth2_future;
+        delete oauth2_operation;
         delete oauth2_notifier;
         delete oauth2_rcio;
 
@@ -5149,6 +5170,47 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
             ping_method, \ping_path, ping_body, \ping_headers, notifier,
             \negotiate_context);
         pending_future = result.future;
+        pending_stream = result.stream;
+    }
+
+    private cancelPendingWork() {
+        if (pending_stream) {
+            try {
+                pending_stream.cancel();
+            } catch () {
+            }
+            delete pending_stream;
+        }
+        if (oauth2_operation) {
+            try {
+                oauth2_operation.cancel();
+            } catch () {
+            }
+            delete oauth2_operation;
+        }
+        if (pending_future) {
+            delete pending_future;
+        }
+        if (oauth2_future) {
+            delete oauth2_future;
+        }
+        if (oauth2_notifier) {
+            delete oauth2_notifier;
+        }
+        if (oauth2_conn_notifier) {
+            delete oauth2_conn_notifier;
+        }
+        if (connection_ready_notifier) {
+            delete connection_ready_notifier;
+        }
+        if (oauth2_req) {
+            delete oauth2_req;
+        }
+        if (oauth2_rcio) {
+            delete oauth2_rcio;
+        }
+        connection_ready_conn = NOTHING;
+        oauth2_connection_ready_conn = NOTHING;
     }
 }
 

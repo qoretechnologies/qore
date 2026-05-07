@@ -2018,310 +2018,106 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 }
             },
             # --- Date/Time functions for PostgreSQL ---
-            DP_FUNC_NOW: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_NOW,
-                    "display_name": "now",
-                    "short_desc": "Returns the current date/time",
-                    "desc": "Returns the current date/time with microsecond precision",
-                    "symbol": "now()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            # Inherit metadata from DefaultExpressionMap; provide PostgreSQL-native code only.
+            DP_FUNC_NOW: DefaultExpressionMap{DP_FUNC_NOW} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return "now()";
                 },
             },
             # --- Duration functions for PostgreSQL ---
-            DP_FUNC_YEARS: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_YEARS,
-                    "display_name": "years",
-                    "short_desc": "Returns an interval of the given number of years",
-                    "desc": "Returns an interval of the given number of years",
-                    "symbol": "years()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureIntType,),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            DP_FUNC_YEARS: DefaultExpressionMap{DP_FUNC_YEARS} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s * interval '1 year'",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
                 },
             },
-            DP_FUNC_MONTHS: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_MONTHS,
-                    "display_name": "months",
-                    "short_desc": "Returns an interval of the given number of months",
-                    "desc": "Returns an interval of the given number of months",
-                    "symbol": "months()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureIntType,),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            DP_FUNC_MONTHS: DefaultExpressionMap{DP_FUNC_MONTHS} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s * interval '1 month'",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
                 },
             },
-            DP_FUNC_WEEKS: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_WEEKS,
-                    "display_name": "weeks",
-                    "short_desc": "Returns an interval of the given number of weeks",
-                    "desc": "Returns an interval of the given number of weeks",
-                    "symbol": "weeks()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureIntType,),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            DP_FUNC_WEEKS: DefaultExpressionMap{DP_FUNC_WEEKS} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s * interval '1 week'",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
                 },
             },
-            DP_FUNC_DAYS: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_DAYS,
-                    "display_name": "days",
-                    "short_desc": "Returns an interval of the given number of days",
-                    "desc": "Returns an interval of the given number of days",
-                    "symbol": "days()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureIntType,),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            DP_FUNC_DAYS: DefaultExpressionMap{DP_FUNC_DAYS} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s * interval '1 day'",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
                 },
             },
-            DP_FUNC_HOURS: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_HOURS,
-                    "display_name": "hours",
-                    "short_desc": "Returns an interval of the given number of hours",
-                    "desc": "Returns an interval of the given number of hours",
-                    "symbol": "hours()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureIntType,),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            DP_FUNC_HOURS: DefaultExpressionMap{DP_FUNC_HOURS} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s * interval '1 hour'",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
                 },
             },
-            DP_FUNC_MINUTES: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_MINUTES,
-                    "display_name": "minutes",
-                    "short_desc": "Returns an interval of the given number of minutes",
-                    "desc": "Returns an interval of the given number of minutes",
-                    "symbol": "minutes()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureIntType,),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            DP_FUNC_MINUTES: DefaultExpressionMap{DP_FUNC_MINUTES} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s * interval '1 minute'",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
                 },
             },
-            DP_FUNC_SECONDS: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_SECONDS,
-                    "display_name": "seconds",
-                    "short_desc": "Returns an interval of the given number of seconds",
-                    "desc": "Returns an interval of the given number of seconds",
-                    "symbol": "seconds()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureIntType,),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            DP_FUNC_SECONDS: DefaultExpressionMap{DP_FUNC_SECONDS} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s * interval '1 second'",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
                 },
             },
-            DP_FUNC_MILLISECONDS: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_MILLISECONDS,
-                    "display_name": "milliseconds",
-                    "short_desc": "Returns an interval of the given number of milliseconds",
-                    "desc": "Returns an interval of the given number of milliseconds",
-                    "symbol": "milliseconds()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureIntType,),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            DP_FUNC_MILLISECONDS: DefaultExpressionMap{DP_FUNC_MILLISECONDS} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s * interval '1 millisecond'",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
                 },
             },
-            DP_FUNC_MICROSECONDS: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_MICROSECONDS,
-                    "display_name": "microseconds",
-                    "short_desc": "Returns an interval of the given number of microseconds",
-                    "desc": "Returns an interval of the given number of microseconds",
-                    "symbol": "microseconds()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureIntType,),
-                    "return_type": AbstractDataProviderTypeMap."date",
-                },
+            DP_FUNC_MICROSECONDS: DefaultExpressionMap{DP_FUNC_MICROSECONDS} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s * interval '1 microsecond'",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
                 },
             },
             # --- Date extraction functions for PostgreSQL ---
-            DP_FUNC_GET_YEAR: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_GET_YEAR,
-                    "display_name": "get_year",
-                    "short_desc": "Extracts the year from a date",
-                    "desc": "Extracts the year component from a date/time value",
-                    "symbol": "get_year()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureDateType,),
-                    "return_type": AbstractDataProviderTypeMap."int",
-                },
+            DP_FUNC_GET_YEAR: DefaultExpressionMap{DP_FUNC_GET_YEAR} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("extract(year from %s)",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
                 },
             },
-            DP_FUNC_GET_MONTH: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_GET_MONTH,
-                    "display_name": "get_month",
-                    "short_desc": "Extracts the month from a date",
-                    "desc": "Extracts the month component from a date/time value (1-12)",
-                    "symbol": "get_month()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureDateType,),
-                    "return_type": AbstractDataProviderTypeMap."int",
-                },
+            DP_FUNC_GET_MONTH: DefaultExpressionMap{DP_FUNC_GET_MONTH} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("extract(month from %s)",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
                 },
             },
-            DP_FUNC_GET_DAY: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_GET_DAY,
-                    "display_name": "get_day",
-                    "short_desc": "Extracts the day from a date",
-                    "desc": "Extracts the day-of-month component from a date/time value (1-31)",
-                    "symbol": "get_day()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureDateType,),
-                    "return_type": AbstractDataProviderTypeMap."int",
-                },
+            DP_FUNC_GET_DAY: DefaultExpressionMap{DP_FUNC_GET_DAY} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("extract(day from %s)",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
                 },
             },
-            DP_FUNC_GET_HOUR: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_GET_HOUR,
-                    "display_name": "get_hour",
-                    "short_desc": "Extracts the hour from a date",
-                    "desc": "Extracts the hour component from a date/time value (0-23)",
-                    "symbol": "get_hour()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureDateType,),
-                    "return_type": AbstractDataProviderTypeMap."int",
-                },
+            DP_FUNC_GET_HOUR: DefaultExpressionMap{DP_FUNC_GET_HOUR} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("extract(hour from %s)",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
                 },
             },
-            DP_FUNC_GET_MINUTE: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_GET_MINUTE,
-                    "display_name": "get_minute",
-                    "short_desc": "Extracts the minute from a date",
-                    "desc": "Extracts the minute component from a date/time value (0-59)",
-                    "symbol": "get_minute()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureDateType,),
-                    "return_type": AbstractDataProviderTypeMap."int",
-                },
+            DP_FUNC_GET_MINUTE: DefaultExpressionMap{DP_FUNC_GET_MINUTE} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("extract(minute from %s)",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
                 },
             },
-            DP_FUNC_GET_SECOND: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_GET_SECOND,
-                    "display_name": "get_second",
-                    "short_desc": "Extracts the second from a date",
-                    "desc": "Extracts the second component from a date/time value (0-59)",
-                    "symbol": "get_second()",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureDateType,),
-                    "return_type": AbstractDataProviderTypeMap."int",
-                },
+            DP_FUNC_GET_SECOND: DefaultExpressionMap{DP_FUNC_GET_SECOND} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("extract(second from %s)",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
                 },
             },
             # --- String pattern matching operators for PostgreSQL ---
-            DP_OP_LIKE: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_LIKE,
-                    "display_name": "like",
-                    "short_desc": "Returns True if the string matches the SQL LIKE pattern",
-                    "desc": "Returns True if the first argument matches the second using SQL LIKE pattern matching; "
-                        "optional third argument enables case-insensitive matching (PostgreSQL ILIKE)",
-                    "symbol": "like",
-                    "groups": "Comparison",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                        DataProviderSignatureOptionalBoolType),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            DP_OP_LIKE: DefaultExpressionMap{DP_OP_LIKE} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string");
@@ -2331,20 +2127,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("%s %s %s", exp0, op, exp1);
                 },
             },
-            DP_OP_REGEX_MATCH: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_REGEX_MATCH,
-                    "display_name": "regex match (=~)",
-                    "short_desc": "Returns True if the string matches the regular expression",
-                    "desc": "Returns True if the first argument matches the second as a POSIX regular expression; "
-                        "uses PostgreSQL ~ operator (or ~* for case-insensitive)",
-                    "symbol": "=~",
-                    "groups": "Comparison",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                        DataProviderSignatureOptionalStringListValueType),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            # Inherit metadata from DefaultExpressionMap; provide PostgreSQL-native code only.
+            DP_OP_REGEX_MATCH: DefaultExpressionMap{DP_OP_REGEX_MATCH} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string");
@@ -2354,20 +2138,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("%s %s %s", exp0, case_insensitive ? "~*" : "~", exp1);
                 },
             },
-            DP_OP_REGEX_NMATCH: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_REGEX_NMATCH,
-                    "display_name": "regex non-match (!~)",
-                    "short_desc": "Returns True if the string does not match the regular expression",
-                    "desc": "Returns True if the first argument does not match the second as a POSIX regular "
-                        "expression; uses PostgreSQL !~ operator (or !~* for case-insensitive)",
-                    "symbol": "!~",
-                    "groups": "Comparison",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                        DataProviderSignatureOptionalStringListValueType),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            DP_OP_REGEX_NMATCH: DefaultExpressionMap{DP_OP_REGEX_NMATCH} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string");
@@ -2377,21 +2148,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("%s %s %s", exp0, case_insensitive ? "!~*" : "!~", exp1);
                 },
             },
-            DP_OP_REGEX_SUBST: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_REGEX_SUBST,
-                    "display_name": "regex substitution",
-                    "short_desc": "Performs regex substitution on a string",
-                    "desc": "Performs regular expression substitution using PostgreSQL regexp_replace(); "
-                        "args: string, regex pattern, replacement, optional options list (\"g\" for global, "
-                        "\"i\" for case-insensitive)",
-                    "symbol": "regexSubst",
-                    "groups": "Data Manipulation",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                        DataProviderSignatureStringType, DataProviderSignatureOptionalStringListValueType),
-                    "return_type": AbstractDataProviderTypeMap."string",
-                },
+            DP_OP_REGEX_SUBST: DefaultExpressionMap{DP_OP_REGEX_SUBST} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string");
@@ -2416,20 +2173,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("regexp_replace(%s, %s, %s)", exp0, exp1, exp2);
                 },
             },
-            DP_OP_CONTAINS: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_CONTAINS,
-                    "display_name": "contains",
-                    "short_desc": "Returns True if the string contains the given substring",
-                    "desc": "Returns True if the first argument contains the second as a substring; "
-                        "optional third argument enables case-insensitive matching (default: True)",
-                    "symbol": "contains",
-                    "groups": "Comparison",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                        DataProviderSignatureBoolType),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            DP_OP_CONTAINS: DefaultExpressionMap{DP_OP_CONTAINS} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string");
@@ -2439,20 +2183,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("%s %s '%%' || %s || '%%'", exp0, op, exp1);
                 },
             },
-            DP_OP_STARTS_WITH: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_STARTS_WITH,
-                    "display_name": "starts with",
-                    "short_desc": "Returns True if the string starts with the given characters",
-                    "desc": "Returns True if the first argument starts with the second; "
-                        "optional third argument enables case-insensitive matching (default: True)",
-                    "symbol": "startsWith",
-                    "groups": "Comparison",
-                    "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
-                        DataProviderSignatureBoolType),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            DP_OP_STARTS_WITH: DefaultExpressionMap{DP_OP_STARTS_WITH} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
@@ -2462,20 +2193,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("%s %s %s || '%%'", exp0, op, exp1);
                 },
             },
-            DP_OP_ENDS_WITH: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_ENDS_WITH,
-                    "display_name": "ends with",
-                    "short_desc": "Returns True if the string ends with the given characters",
-                    "desc": "Returns True if the first argument ends with the second; "
-                        "optional third argument enables case-insensitive matching (default: True)",
-                    "symbol": "endsWith",
-                    "groups": "Comparison",
-                    "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
-                        DataProviderSignatureBoolType),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            DP_OP_ENDS_WITH: DefaultExpressionMap{DP_OP_ENDS_WITH} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
@@ -2485,20 +2203,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("%s %s '%%' || %s", exp0, op, exp1);
                 },
             },
-            DP_OP_REPLACE: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_REPLACE,
-                    "display_name": "string replace",
-                    "short_desc": "Replaces all occurrences of a string pattern",
-                    "desc": "Replaces all occurrences of the second argument with the third in the first; "
-                        "uses PostgreSQL replace() function",
-                    "symbol": "replace",
-                    "groups": "Data Manipulation",
-                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
-                        DataProviderSignatureStringType),
-                    "return_type": AbstractDataProviderTypeMap."string",
-                },
+            DP_OP_REPLACE: DefaultExpressionMap{DP_OP_REPLACE} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string");
@@ -2510,72 +2215,28 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 },
             },
             # --- Type conversion operators for PostgreSQL ---
-            DP_OP_TO_STRING: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_TO_STRING,
-                    "display_name": "to string",
-                    "short_desc": "Converts a value to a string",
-                    "desc": "Converts a value to text using PostgreSQL CAST(x AS text)",
-                    "symbol": "toString",
-                    "groups": "Data Conversion",
-                    "args": (DataProviderSignatureAnyType,),
-                    "return_type": AbstractDataProviderTypeMap."string",
-                },
+            DP_OP_TO_STRING: DefaultExpressionMap{DP_OP_TO_STRING} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
                     return sprintf("cast(%s as text)", exp0);
                 },
             },
-            DP_OP_TO_INT: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_TO_INT,
-                    "display_name": "to int",
-                    "short_desc": "Converts a value to an integer",
-                    "desc": "Converts a value to an integer using PostgreSQL CAST(x AS integer)",
-                    "symbol": "toInt",
-                    "groups": "Data Conversion",
-                    "args": (DataProviderSignatureAnyType,),
-                    "return_type": AbstractDataProviderTypeMap."int",
-                },
+            DP_OP_TO_INT: DefaultExpressionMap{DP_OP_TO_INT} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
                     return sprintf("cast(%s as integer)", exp0);
                 },
             },
-            DP_OP_TO_FLOAT: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_TO_FLOAT,
-                    "display_name": "to float",
-                    "short_desc": "Converts a value to a floating-point number",
-                    "desc": "Converts a value to a float using PostgreSQL CAST(x AS double precision)",
-                    "symbol": "toFloat",
-                    "groups": "Data Conversion",
-                    "args": (DataProviderSignatureAnyType,),
-                    "return_type": AbstractDataProviderTypeMap."float",
-                },
+            DP_OP_TO_FLOAT: DefaultExpressionMap{DP_OP_TO_FLOAT} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
                     return sprintf("cast(%s as double precision)", exp0);
                 },
             },
-            DP_OP_TO_NUMBER: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_TO_NUMBER,
-                    "display_name": "to number",
-                    "short_desc": "Converts a value to an arbitrary-precision number",
-                    "desc": "Converts a value to a numeric type using PostgreSQL CAST(x AS numeric)",
-                    "symbol": "toNumber",
-                    "groups": "Data Conversion",
-                    "args": (DataProviderSignatureAnyType,),
-                    "return_type": AbstractDataProviderTypeMap."number",
-                },
+            DP_OP_TO_NUMBER: DefaultExpressionMap{DP_OP_TO_NUMBER} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
@@ -2605,18 +2266,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("cast(%s as timestamp)", exp0);
                 },
             },
-            DP_OP_TO_BOOL: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_TO_BOOL,
-                    "display_name": "to bool",
-                    "short_desc": "Converts a value to a boolean",
-                    "desc": "Converts a value to a boolean using PostgreSQL CAST(x AS boolean)",
-                    "symbol": "toBool",
-                    "groups": "Data Conversion",
-                    "args": (DataProviderSignatureAnyType,),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            DP_OP_TO_BOOL: DefaultExpressionMap{DP_OP_TO_BOOL} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any");
@@ -2624,35 +2274,13 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 },
             },
             # --- String manipulation operators for PostgreSQL ---
-            DP_OP_TO_LOWER: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_TO_LOWER,
-                    "display_name": "to lower case",
-                    "short_desc": "Converts a string to lower case",
-                    "desc": "Returns the string converted to all lower case using PostgreSQL lower()",
-                    "symbol": "lwr",
-                    "groups": "Data Manipulation",
-                    "args": (DataProviderSignatureStringType,),
-                    "return_type": AbstractDataProviderTypeMap."string",
-                },
+            DP_OP_TO_LOWER: DefaultExpressionMap{DP_OP_TO_LOWER} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("lower(%s)", info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string"));
                 },
             },
-            DP_OP_TO_UPPER: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_TO_UPPER,
-                    "display_name": "to upper case",
-                    "short_desc": "Converts a string to upper case",
-                    "desc": "Returns the string converted to all upper case using PostgreSQL upper()",
-                    "symbol": "upr",
-                    "groups": "Data Manipulation",
-                    "args": (DataProviderSignatureStringType,),
-                    "return_type": AbstractDataProviderTypeMap."string",
-                },
+            DP_OP_TO_UPPER: DefaultExpressionMap{DP_OP_TO_UPPER} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("upper(%s)", info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."string"));
@@ -2676,20 +2304,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 },
             },
             # --- Control flow operators for PostgreSQL ---
-            DP_OP_TERNARY: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_TERNARY,
-                    "display_name": "ternary (?:)",
-                    "short_desc": "Conditional expression: returns second arg if first is true, third otherwise",
-                    "desc": "Evaluates the first argument as a boolean; if true, returns the second argument; "
-                        "otherwise returns the third argument; uses PostgreSQL CASE WHEN ... THEN ... ELSE ... END",
-                    "symbol": "?:",
-                    "groups": "Logical",
-                    "args": (DataProviderSignatureBoolType, DataProviderSignatureAnyType,
-                        DataProviderSignatureAnyType),
-                    "return_type": AbstractDataProviderTypeMap."any",
-                },
+            DP_OP_TERNARY: DefaultExpressionMap{DP_OP_TERNARY} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string cond = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."bool");
@@ -2700,39 +2315,14 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("case when %s then %s else %s end", cond, true_val, false_val);
                 },
             },
-            DP_OP_HAS_VALUE: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Operator,
-                    "name": DP_OP_HAS_VALUE,
-                    "display_name": "has value",
-                    "short_desc": "Returns True if the argument is not null",
-                    "desc": "Returns True if the argument has a non-null value; uses PostgreSQL IS NOT NULL",
-                    "symbol": "val",
-                    "groups": "Comparison",
-                    "args": (DataProviderSignatureAnyType,),
-                    "return_type": AbstractDataProviderTypeMap."bool",
-                },
+            DP_OP_HAS_VALUE: DefaultExpressionMap{DP_OP_HAS_VALUE} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("%s is not null", info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."any"));
                 },
             },
             # --- Additional date/string functions for PostgreSQL ---
-            DP_FUNC_FORMAT_DATE: {
-                "exp": <DataProviderExpressionInfo>{
-                    "type": DET_Function,
-                    "name": DP_FUNC_FORMAT_DATE,
-                    "display_name": "format_date",
-                    "short_desc": "Formats a date as a string",
-                    "desc": "Formats a date/time value as a string using PostgreSQL to_char(); "
-                        "format codes: YYYY (year), MM (month), DD (day), HH (hour 24h), "
-                        "mm (minute), SS (second), us (microseconds)",
-                    "symbol": "format_date",
-                    "groups": "Date/Time",
-                    "role": ER_All,
-                    "args": (DataProviderSignatureDateType, DataProviderSignatureStringType),
-                    "return_type": AbstractDataProviderTypeMap."string",
-                },
+            DP_FUNC_FORMAT_DATE: DefaultExpressionMap{DP_FUNC_FORMAT_DATE} + {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     string exp0 = info.table.getExpressionArg(\info, role, args[0],
                         AbstractDataProviderTypeMap."date");
