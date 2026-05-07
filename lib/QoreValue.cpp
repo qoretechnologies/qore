@@ -740,6 +740,10 @@ int QoreValue::getAsString(QoreString& str, int format_offset, ExceptionSink* xs
                 ? &YamlNullString : &NothingTypeString);
         return 0;
     }
+    if (isNull()) {
+        qore_string_private::get(str)->concat(&NullTypeString);
+        return 0;
+    }
 
     if (isInt()) {
         str.sprintf(QLLD, getInt());
@@ -776,6 +780,10 @@ QoreString* QoreValue::getAsString(bool& del, int format_offset, ExceptionSink* 
         del = false;
         return (format_offset == FMT_YAML_SHORT || format_offset <= FMT_YAML_LONG)
             ? &YamlNullString : &NothingTypeString;
+    }
+    if (isNull()) {
+        del = false;
+        return &NullTypeString;
     }
 
     if (isInt()) {

@@ -572,8 +572,8 @@ static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
             }
             // Per-instruction data may unlock separate feature gates: LVPath
             // instructions carry multi-slice step kinds when a slice lvalue
-            // (e.g. `remove h{"a","b"}`) was lowered natively, plus optional
-            // delete/remove AST and regex/transliteration pattern metadata.
+            // (e.g. `remove h{"a","b"}`) was lowered natively, plus
+            // regex/transliteration pattern metadata.
             // Older readers cannot reconstruct those extra fields, so gate them.
             if (inst->opcode == QoreIROpcode::LValuePathAssign
                     || inst->opcode == QoreIROpcode::LValuePathCompound
@@ -582,7 +582,6 @@ static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
                     || inst->opcode == QoreIROpcode::LValuePathTernary) {
                 const auto* pi
                         = static_cast<const QoreIRLValuePathInstruction*>(inst.get());
-                flags |= QORE_AOT_FEAT_LVPATH_DELETE_EXPR;
                 flags |= QORE_AOT_FEAT_LVPATH_PATTERN;
                 for (const auto& step : pi->path) {
                     if (step.kind == LVPathStepKind::HashKeySlice
@@ -638,7 +637,6 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // advertise the current LValuePath wire format at the blob level even when
     // the top-level native functions themselves do not contain LValuePath ops.
     flags |= QORE_AOT_FEAT_LVPATH_SLICE;
-    flags |= QORE_AOT_FEAT_LVPATH_DELETE_EXPR;
     flags |= QORE_AOT_FEAT_LVPATH_PATTERN;
     // Function-call expression metadata carries the parse-time variant
     // signature, and inline function-call payloads carry their argument
@@ -669,6 +667,10 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // from deserialized method maps can change declaration order and break
     // cross-Program class compatibility.
     flags |= QORE_AOT_FEAT_CLASS_HASH;
+    // Imported classes can be marked as dependency injections. Preserve the
+    // target class path so class hierarchy checks keep source-parse
+    // compatibility after source-stripped AOT load.
+    flags |= QORE_AOT_FEAT_CLASS_INJECTION;
     // Function and method records preserve synchronized gates so source-stripped
     // AOT dispatch takes the same lock/deadlock paths as source execution.
     flags |= QORE_AOT_FEAT_METHOD_SYNC;
@@ -683,6 +685,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // (Qorus emits >64K entries in some functions), so location-table counts
     // must not truncate to u16.
     flags |= QORE_AOT_FEAT_WIDE_LOC_TABLES;
+    // Local slot records carry source body-local ordinals so duplicate local
+    // names in sibling/nested scopes resolve to the exact LocalVar identity.
+    flags |= QORE_AOT_FEAT_LOCAL_DECL_ORDINAL;
     return flags;
 }
 
@@ -2621,6 +2626,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.aot_locs = std::move(aot_locs_local);
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
+                    // Keep the serialized debug IR source-visible.  The LLVM
+                    // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
+                    // to avoid dynamic-linker interposition; stack traces and
+                    // diagnostics must keep the original Qore variant key.
+                    ir_func->name = variant_key;
+                    ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
                     cf.debug_ir.reset(ir_func);
                     ir_func = nullptr;
                     compiled_funcs.push_back(std::move(cf));
@@ -2840,6 +2851,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.aot_locs = std::move(aot_locs_local);
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
+                        // Keep the serialized debug IR source-visible.  The LLVM
+                        // function uses cf.llvm_symbol (possibly _qaot_-prefixed)
+                        // to avoid dynamic-linker interposition; stack traces and
+                        // diagnostics must keep the original Qore variant key.
+                        ir_func->name = variant_key;
+                        ir_func->display_name = QoreIRFunction::deriveDisplayName(variant_key);
                         cf.debug_ir.reset(ir_func);
                         ir_func = nullptr;
                         compiled_funcs.push_back(std::move(cf));
@@ -13045,6 +13062,11 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         }
     }
 
+    std::unordered_map<const void*, uint32_t> body_local_ordinals;
+    for (uint32_t i = 0; i < func.all_body_locals.size(); ++i) {
+        body_local_ordinals[reinterpret_cast<const void*>(func.all_body_locals[i])] = i;
+    }
+
     // Extract local slot identities (indexed by slot) — after expression
     // classification which may have added extra locals via ExprTreeSerializer.
     // Slot indices may have gaps; size by max(slot)+1 to avoid OOB writes.
@@ -13063,6 +13085,10 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         lid.name = lv->getName();
         lid.type_path = getSlotTypePath(lv->getTypeInfoForLValue());
         lid.local_var_ptr = ptr;
+        auto ordinal_it = body_local_ordinals.find(ptr);
+        if (ordinal_it != body_local_ordinals.end()) {
+            lid.body_ordinal = ordinal_it->second;
+        }
 
         lid.flags = 0;
         lid.param_index = 0;
@@ -13151,7 +13177,6 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         lvid.binary_mut_op = static_cast<uint8_t>(pi->binary_mut_op);
         lvid.ternary_op = static_cast<uint8_t>(pi->ternary_op);
         lvid.ref_rv = pi->ref_rv ? 1 : 0;
-        lvid.delete_lvalue_expr = pi->delete_lvalue_expr;
         // Extract pattern info for RegexSubst / Transliterate binary_mut ops —
         // without this, the AOT-reconstructed instruction has an empty pattern_expr
         // and the runtime regex substitute / transliterate is a no-op.

@@ -1258,7 +1258,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 vl.xsink->raiseException("LVALUE-ERROR", "%s", error.c_str());
                 return -1;
             }
-            if (vi->getLValue(*this)) {
+            if (vi->getLValue(*this, root.name.c_str())) {
                 clearPtr();
                 return -1;
             }

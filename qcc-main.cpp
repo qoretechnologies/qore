@@ -1269,6 +1269,7 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_MODULE_COMMANDS, "module-commands"},
         {QORE_AOT_FEAT_WIDE_IR_OPERANDS, "wide-ir-operands"},
         {QORE_AOT_FEAT_WIDE_LOC_TABLES, "wide-loc-tables"},
+        {QORE_AOT_FEAT_LOCAL_DECL_ORDINAL, "local-decl-ordinal"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -1953,11 +1954,13 @@ static bool summarize_aot_slot_maps(const QoreAOTBinaryReader& reader,
             ++summary.unsupported_functions;
         }
 
+        const size_t local_slot_extra_bytes =
+            (reader.getHeader().feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0 ? 7 : 3;
         bool malformed = false;
         for (uint16_t i = 0; i < num_locals && !malformed; ++i) {
             malformed = !dump_skip_string_ref(reader, p, entry_end)
                 || !dump_skip_string_ref(reader, p, entry_end)
-                || !dump_skip_bytes(p, entry_end, 3);
+                || !dump_skip_bytes(p, entry_end, local_slot_extra_bytes);
         }
         for (uint16_t i = 0; i < num_globals && !malformed; ++i) {
             malformed = !dump_skip_string_ref(reader, p, entry_end)

@@ -32,6 +32,59 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/qore_program_private.h"
 
+static LocalVar* qore_closure_vlist_self(const LVarSet* vlist) {
+    if (!vlist) {
+        return nullptr;
+    }
+
+    for (LocalVar* lv : *vlist) {
+        if (lv && (lv->isSelf() || (lv->getName() && !strcmp(lv->getName(), "self")))) {
+            return lv;
+        }
+    }
+    return nullptr;
+}
+
+static QoreClosureBase* qore_closure_try_object_context(const QoreClosureParseNode* closure, LocalVar* self_lv,
+        cvv_vec_t* cvec) {
+    QoreObject* o = nullptr;
+    const qore_class_private* c_ctx = nullptr;
+    runtime_get_object_and_class(o, c_ctx);
+    if (o) {
+        return new QoreObjectClosureNode(o, c_ctx, closure, cvec);
+    }
+
+    if (!self_lv) {
+        return nullptr;
+    }
+
+    ExceptionSink xsink;
+    bool needs_deref = true;
+    QoreValue self_val = self_lv->eval(needs_deref, &xsink);
+    if (xsink) {
+        xsink.clear();
+        if (needs_deref) {
+            self_val.discard(nullptr);
+        }
+        return nullptr;
+    }
+    if (self_val.getType() != NT_OBJECT) {
+        if (needs_deref) {
+            self_val.discard(nullptr);
+        }
+        return nullptr;
+    }
+
+    o = self_val.get<QoreObject>();
+    const QoreClass* qc = o->getClass();
+    c_ctx = qc ? qore_class_private::get(*qc) : nullptr;
+    QoreClosureBase* rv = new QoreObjectClosureNode(o, c_ctx, closure, cvec);
+    if (needs_deref) {
+        self_val.discard(nullptr);
+    }
+    return rv;
+}
+
 QoreClosureParseNode::QoreClosureParseNode(const QoreProgramLocation* loc, UserClosureFunction* n_uf, bool n_lambda)
         : ParseNode(loc, NT_CLOSURE), uf(n_uf), lambda(n_lambda), in_method(false) {
     set_effect_as_root(false);
@@ -47,17 +100,31 @@ QoreClosureParseNode::~QoreClosureParseNode() {
     delete uf;
 }
 
-QoreClosureNode* QoreClosureParseNode::evalClosure() const {
+QoreClosureBase* QoreClosureParseNode::evalClosure() const {
     // Capture only the variables referenced by this closure.  Capturing the whole cvstack retains
     // unrelated AOT-preinstantiated closure locals and can create uncollectable cycles.
-    return new QoreClosureNode(this, thread_get_closure_vars_for_vlist(getVList()), runtime_get_class());
+    cvv_vec_t* cvec = thread_get_closure_vars_for_vlist(getVList());
+
+    // Source-stripped AOT can reconstruct a method-local closure with lexical
+    // self in its vlist even if the closure's in-method flag is unavailable.
+    // Preserve object-closure semantics so delayed invocation (for example
+    // Program::setThreadInit()) still sees the method receiver.
+    if (LocalVar* self_lv = qore_closure_vlist_self(getVList())) {
+        if (QoreClosureBase* rv = qore_closure_try_object_context(this, self_lv, cvec)) {
+            return rv;
+        }
+    }
+
+    return new QoreClosureNode(this, cvec, runtime_get_class());
 }
 
-QoreObjectClosureNode* QoreClosureParseNode::evalObjectClosure() const {
-    QoreObject* o;
-    const qore_class_private* c_ctx;
-    runtime_get_object_and_class(o, c_ctx);
-    return new QoreObjectClosureNode(o, c_ctx, this, thread_get_closure_vars_for_vlist(getVList()));
+QoreClosureBase* QoreClosureParseNode::evalObjectClosure() const {
+    cvv_vec_t* cvec = thread_get_closure_vars_for_vlist(getVList());
+    if (QoreClosureBase* rv = qore_closure_try_object_context(this, qore_closure_vlist_self(getVList()), cvec)) {
+        return rv;
+    }
+
+    return new QoreClosureNode(this, cvec, runtime_get_class());
 }
 
 QoreValue QoreClosureParseNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {

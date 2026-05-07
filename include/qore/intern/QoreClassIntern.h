@@ -1198,7 +1198,10 @@ public:
         return val.assignInitial(v);
     }
 
-    DLLLOCAL int getLValue(LValueHelper& lvh) {
+    DLLLOCAL int getLValue(LValueHelper& lvh, const char* name = "<static variable>") {
+        if (!eval_init && evalInit(name, lvh.vl.xsink)) {
+            return -1;
+        }
         lvh.setAndLock(rwl);
         if (checkFinalized(lvh.vl.xsink)) {
             return -1;

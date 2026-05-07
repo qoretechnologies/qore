@@ -1330,11 +1330,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* summarize_stmt = dynamic_cast<const SummarizeStatement*>(stmt)) {
-        auto* inst = builder.createSummarize(summarize_stmt, stmt->loc);
-        if (!exception_stack.empty()) {
-            inst->exception_target = exception_stack.back();
+        error = "unsupported IR statement lowering: legacy summarize statement has no native lowering";
+        if (stmt->loc) {
+            error += " at ";
+            error += stmt->loc->getFile() ? stmt->loc->getFile() : "<unknown>";
+            error += ":";
+            error += std::to_string(stmt->loc->start_line);
         }
-        return true;
+        error += "; AST statement fallback is disabled";
+        return false;
     }
     if (auto* context_stmt = dynamic_cast<const ContextStatement*>(stmt)) {
         // Native IR lowering of `context` — mirrors the non-ref Foreach shape.
@@ -2213,6 +2217,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             bool skip_inline = has_unconditional && has_error;
 
             if (!skip_inline) {
+                // Clear the runtime OBE registration before executing inline
+                // handler code.  Handler bodies may contain return/break/etc.;
+                // if such a non-local exit happens before ScopeExit runs, the
+                // interpreter's return cleanup would see the handler still
+                // registered and fire it a second time.
+                builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
+
                 // Phase 1: Inline handlers at fall-through exit.  The
                 // Scope entry that owns these handlers is at
                 // cleanup_stack.size()-1 (it gets popped below); pass
@@ -2226,13 +2237,15 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                         /*barrier_depth=*/cleanup_stack.size())) {
                     return false;
                 }
-            }
-            // Phase 2a: Emit ScopeExit (inline_lowered when handlers were inlined)
-            auto* se_inst = builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/!skip_inline);
-            // When handlers execute at runtime (!inline_lowered), they may throw.
-            // Set exception_target so the interpreter routes to the try/catch landing pad.
-            if (skip_inline && !exception_stack.empty()) {
-                se_inst->exception_target = exception_stack.back();
+            } else {
+                // Phase 2a: Emit ScopeExit to execute runtime handlers.
+                auto* se_inst = builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/false);
+                // When handlers execute at runtime, they may throw.  Set
+                // exception_target so the interpreter routes to the try/catch
+                // landing pad.
+                if (!exception_stack.empty()) {
+                    se_inst->exception_target = exception_stack.back();
+                }
             }
         }
         // Always pop scope/cleanup stacks - they're tracking compile-time state, not IR instructions
@@ -2321,6 +2334,13 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         const BlockCleanupEntry entry = cleanup_stack[i - 1];
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
+                // Clear the runtime OBE registration before executing inline
+                // handler code.  A handler can contain a non-local exit; if the
+                // ScopeExit ran after the inline body, that exit path would
+                // leave the handler registered and fire it again during return
+                // cleanup.
+                builder.createScopeExit(entry.scope_id, is_error, entry.loc, /*inline_lowered=*/true);
+
                 // Phase 1: Inline handlers on break/continue/return cleanup.
                 // Each Scope's handlers occupy the range [entry.handler_start,
                 // next_inner_scope.handler_start) in block_handlers — handlers
@@ -2356,8 +2376,6 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                         /*barrier_depth=*/i)) {
                     return false;
                 }
-                // Phase 2a: Pop scope_stack without re-executing handlers (inline_lowered=true)
-                builder.createScopeExit(entry.scope_id, is_error, entry.loc, /*inline_lowered=*/true);
                 break;
             }
             case BlockCleanupEntry::Lvars:
@@ -3789,9 +3807,9 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         }
         return builder.createLoadImplicitElement(impl_elem->loc)->result;
     }
-    // Delegate unsupported expression types to AST evaluation via ExprOp.
-    // The interpreter's evalExpr() default case calls evalExprNode() for any opcode,
-    // so we use QoreIROpcode::Call as a generic expression evaluation opcode.
+    // Handle expression node shapes that still carry AST metadata but execute through
+    // dedicated native IR/JIT/AOT helpers.  Unsupported shapes must report an error
+    // below instead of emitting a generic AST-evaluation fallback.
     if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
@@ -8330,16 +8348,6 @@ QoreIRValue QoreIRLowering::lowerDelete(const QoreValue& expr, std::string& erro
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
             op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Delete);
         if (path_result.isValid()) {
-            // Store the original AST lvalue expression for runtime fallback via
-            // LValueRemoveHelper::deleteLValue() (matches AST detach-then-destroy
-            // semantics for async-I/O-interacting object destructors).
-            auto& insts = builder.getBlock()->instructions;
-            if (!insts.empty()) {
-                auto* path_inst = dynamic_cast<QoreIRLValuePathInstruction*>(insts.back().get());
-                if (path_inst) {
-                    path_inst->delete_lvalue_expr = op->getExp();
-                }
-            }
             markLocalUnassignmentFromExpression(op->getExp());
             return path_result;
         }
@@ -8569,7 +8577,7 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
 
     // Decomposed paths — pre-evaluate args (and receiver/callref where applicable)
     // so the spawned thread's code runs with IR-evaluated operands instead of
-    // a raw ParseNode* handed to qore_rt_invoke_expr at AST fallback time.
+    // depending on a raw ParseNode*.
     //
     // Operand layouts by inner-expression type:
     //   SelfFunctionCallNode       → [arg...] or [ConstNothing] sentinel for zero args
@@ -8578,7 +8586,7 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
     //   QoreDotEvalOperatorNode    → [receiver, arg...]  (always ≥ 1 operand)
     //   CallReferenceCallNode      → [callref, arg...]   (always ≥ 1 operand)
     //
-    // An empty operand list still signals the AST fallback path.
+    // An empty operand list is rejected by LLVM/AOT lowering; no AST fallback is emitted.
     QoreValue inner_expr = op->getExp();
     if (inner_expr.hasNode()) {
         const AbstractQoreNode* inner = inner_expr.getInternalNode();

@@ -148,10 +148,32 @@ static void dni(ExceptionSink* xsink, QoreStringNode* s, nset_t& nset, const Qor
     if (ntype == NT_OBJECT) {
         const QoreObject *o = n.get<const QoreObject>();
         const qore_object_private* priv = qore_object_private::get(*o);
-        s->sprintf("priv: %p elements: %d (cls: %p, type: %s, valid: %s)", priv, o->size(xsink),
+        int rrefs;
+        int rcount;
+        int refs;
+        int tref_count;
+        RSet* rset;
+        bool deferred_scan;
+        int scan_private_data;
+        int status;
+        {
+            AutoLocker al(priv->rlck);
+            refs = priv->references.load();
+            rrefs = priv->rrefs.load();
+            rcount = priv->rcount;
+            tref_count = priv->tRefs.reference_count();
+            rset = priv->rset;
+            deferred_scan = priv->deferred_scan;
+            scan_private_data = priv->scan_private_data;
+            status = priv->status;
+        }
+        s->sprintf("priv: %p elements: %d (cls: %p, type: %s, valid: %s, refs: %d, rrefs: %d, "
+            "rcount: %d, rset: %p, deferred_scan: %s, tref: %d, scan_private_data: %d, status: %d)",
+            priv, o->size(xsink),
             o->getClass(),
             o->getClass() ? o->getClass()->getName() : "<none>",
-            o->isValid() ? "yes" : "no");
+            o->isValid() ? "yes" : "no", refs, rrefs, rcount, rset, deferred_scan ? "yes" : "no", tref_count,
+            scan_private_data, status);
         if (!shallow) {
             // FIXME: this is inefficient, use copyData and a hashiterator instead
             ReferenceHolder<QoreListNode> l(o->getMemberList(xsink), xsink);

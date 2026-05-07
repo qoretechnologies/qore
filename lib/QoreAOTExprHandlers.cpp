@@ -1032,8 +1032,17 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
     if (closure_sig->argvid) {
         enclosing_locals["argv"] = closure_sig->argvid;
     }
+    LocalVar* captured_selfid = nullptr;
+    auto captured_self_it = enclosing_locals.find("self");
+    if (captured_self_it != enclosing_locals.end()) {
+        captured_selfid = captured_self_it->second;
+    }
     if (closure_sig->selfid) {
-        enclosing_locals["self"] = closure_sig->selfid;
+        if (captured_selfid) {
+            enclosing_locals["self"] = captured_selfid;
+        } else {
+            enclosing_locals["self"] = closure_sig->selfid;
+        }
     }
 
     // Build the locals array used by EXPR_TREE blob deserialization.  Closure
@@ -1086,7 +1095,7 @@ static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
         }
     }
 
-    LocalVar* closure_selfid = closure_sig->selfid;
+    LocalVar* closure_selfid = captured_selfid ? captured_selfid : closure_sig->selfid;
     if (!closure_selfid) {
         auto self_it = enclosing_locals.find("self");
         if (self_it != enclosing_locals.end()) {

@@ -35,6 +35,8 @@
 #include <utility>
 #include <vector>
 
+class LocalVar;
+
 class ThreadLocalVariableData : public ThreadLocalData<LocalVarValue> {
 private:
     // Record of where each frame boundary marker is stored for O(1) lookup at pop time
@@ -125,6 +127,31 @@ public:
                 LocalVarValue* var = &w->var[p];
                 if (var->id == id && !var->frame_boundary)
                     return var;
+            }
+            w = w->prev;
+        }
+        return nullptr;
+    }
+
+    DLLLOCAL LocalVarValue* find(const LocalVar* local) {
+        LocalVarValue* rv = findMaybe(local);
+        assert(rv);
+        return rv;
+    }
+
+    DLLLOCAL LocalVarValue* findMaybe(const LocalVar* local) {
+        if (!local) {
+            return nullptr;
+        }
+        Block* w = curr;
+        while (w) {
+            int p = w->pos;
+            while (p) {
+                --p;
+                LocalVarValue* var = &w->var[p];
+                if (var->local_var == local && !var->frame_boundary) {
+                    return var;
+                }
             }
             w = w->prev;
         }

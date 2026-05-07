@@ -354,6 +354,22 @@ static LocalVar* popMatchingAOTLocal(std::unordered_map<std::string, std::deque<
     return rv;
 }
 
+static void removeAOTLocalCandidate(std::unordered_map<std::string, std::deque<LocalVar*>>& local_map,
+        const char* name, LocalVar* lv) {
+    if (!name || !*name || !lv) {
+        return;
+    }
+    auto it = local_map.find(name);
+    if (it == local_map.end()) {
+        return;
+    }
+    auto& locals = it->second;
+    auto lit = std::find(locals.begin(), locals.end(), lv);
+    if (lit != locals.end()) {
+        locals.erase(lit);
+    }
+}
+
 // ---- Slot Map Context Builder (V2 — no IR re-lowering) ----
 
 // toBitsNB is defined in QoreJITIncludes.h (shared with other JIT files)
@@ -1954,11 +1970,14 @@ static QoreAOTContext* buildContextFromSlotMap(
     };
 
     // Read and resolve local slot identities
+    bool has_local_decl_ordinal = (reader.getHeader().feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0;
     for (int i = 0; i < num_locals; ++i) {
         const char* lname = reader.readStringRef(ptr);
         const char* ltype = reader.readStringRef(ptr);
         uint8_t lflags = QoreAOTBinaryReader::readU8(ptr);
         uint16_t param_idx = QoreAOTBinaryReader::readU16(ptr);
+        uint32_t body_ordinal = has_local_decl_ordinal
+            ? QoreAOTBinaryReader::readU32(ptr) : UINT32_MAX;
 
         LocalVar* lv = nullptr;
         if (lflags & 0x04) {
@@ -1992,10 +2011,25 @@ static QoreAOTContext* buildContextFromSlotMap(
         } else {
             // Body local — try to find the actual LocalVar* from the function's AST
             // first, then fall back to creating a new one (toplevel case).
-            // Match on both name and type when available, consuming in walk order
-            // so duplicate names from nested scopes remain distinguishable.
+            // New AOT records carry the source body-local ordinal so duplicate
+            // names in sibling switch/if blocks resolve by identity instead of
+            // depending on local slot order matching source walk order.
+            if (body_ordinal != UINT32_MAX && body_ordinal < stmt_locals.size()) {
+                LocalVar* candidate = stmt_locals[body_ordinal];
+                if (candidate && candidate->getName()
+                        && strcmp(candidate->getName(), lname ? lname : "") == 0
+                        && aotLocalTypeMatches(candidate, ltype, ctx_type_resolver)) {
+                    lv = candidate;
+                    removeAOTLocalCandidate(stmt_local_deque, lname, lv);
+                }
+            }
+            // Legacy fallback: match on both name and type when available,
+            // consuming in walk order. This is kept only for old blobs without
+            // QORE_AOT_FEAT_LOCAL_DECL_ORDINAL.
             if (lname && *lname && !stmt_local_deque.empty()) {
-                lv = popMatchingAOTLocal(stmt_local_deque, lname, ltype, ctx_type_resolver);
+                if (!lv) {
+                    lv = popMatchingAOTLocal(stmt_local_deque, lname, ltype, ctx_type_resolver);
+                }
             }
             if (!lv) {
                 lv = findTopLevelLocal(lname, ltype);
@@ -3603,8 +3637,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (closure_sig->argvid) {
                     enclosing_locals["argv"] = closure_sig->argvid;
                 }
+                LocalVar* captured_selfid = nullptr;
+                auto captured_self_it = enclosing_locals.find("self");
+                if (captured_self_it != enclosing_locals.end()) {
+                    captured_selfid = captured_self_it->second;
+                }
                 if (closure_sig->selfid) {
-                    enclosing_locals["self"] = closure_sig->selfid;
+                    if (captured_selfid) {
+                        enclosing_locals["self"] = captured_selfid;
+                    } else {
+                        enclosing_locals["self"] = closure_sig->selfid;
+                    }
                 }
 
                 // Build the locals array used by EXPR_TREE blob deserialization.
@@ -3682,7 +3725,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                 }
 
-                LocalVar* closure_selfid = closure_sig->selfid;
+                LocalVar* closure_selfid = captured_selfid ? captured_selfid : closure_sig->selfid;
                 if (!closure_selfid) {
                     auto self_it = enclosing_locals.find("self");
                     if (self_it != enclosing_locals.end()) {
@@ -4087,9 +4130,9 @@ static QoreAOTContext* buildContextFromSlotMap(
             if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
                 if (QoreAOTBinaryReader::readU8(ptr)) {
                     std::string expr_error;
-                    pi->delete_lvalue_expr = readOneExpr(reader, ptr, end, expr_error, pgm,
+                    QoreValue legacy_delete_lvalue_expr = readOneExpr(reader, ptr, end, expr_error, pgm,
                         ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
-                    pi->owns_delete_lvalue_expr = true;
+                    legacy_delete_lvalue_expr.discard(nullptr);
                     if (!expr_error.empty()) {
                         printd(2, "AOT buildCtx: '%s' LValuePath delete expr deser failed: %s\n",
                             name, expr_error.c_str());
@@ -5208,13 +5251,21 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         }
 
         case QoreIRInstGroup::NewObject: {
-            QoreValue expr = readExpr(reader, ptr, end, error);
-            if (!error.empty()) {
-                return nullptr;
+            const char* class_path = reader.readStringRef(ptr);
+            const char* variant_sig = reader.readStringRef(ptr);
+            const QoreClass* qc = nullptr;
+            const AbstractQoreFunctionVariant* variant = nullptr;
+            if (class_path && *class_path) {
+                qc = qore_aot_resolve_class_ref(pgm, class_path, false);
+                if (qc && variant_sig && *variant_sig) {
+                    if (const QoreMethod* cons = qc->getConstructor()) {
+                        const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
+                        variant = findAOTVariantBySignatureText(cf, variant_sig);
+                    }
+                }
             }
-            auto* ni = new QoreIRNewObjectInstruction(nullptr, nullptr, nullptr, expr);
+            auto* ni = new QoreIRNewObjectInstruction(qc, variant);
             ni->opcode = opcode;
-            expr.discard(nullptr);
             inst.reset(ni);
             break;
         }
@@ -5365,8 +5416,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ptr));
             if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
                 if (QoreAOTBinaryReader::readU8(ptr)) {
-                    pi->delete_lvalue_expr = readExpr(reader, ptr, end, error);
-                    pi->owns_delete_lvalue_expr = true;
+                    QoreValue legacy_delete_lvalue_expr = readExpr(reader, ptr, end, error);
+                    legacy_delete_lvalue_expr.discard(nullptr);
                     if (!error.empty()) {
                         delete pi;
                         return nullptr;
@@ -5701,7 +5752,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         error += "': block count is zero";
         return nullptr;
     }
-    const size_t min_local_bytes = static_cast<size_t>(num_local_slots) * 12;
+    bool has_local_decl_ordinal = (reader.getHeader().feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0;
+    const size_t min_local_bytes = static_cast<size_t>(num_local_slots) * (has_local_decl_ordinal ? 16 : 12);
     const size_t min_body_local_bytes = static_cast<size_t>(num_body_locals)
         * (((reader.getHeader().feature_flags & QORE_AOT_FEAT_BODY_LOCAL_SLOT) != 0) ? 12 : 8);
     const size_t min_block_bytes = static_cast<size_t>(num_blocks) * 7;
@@ -5812,12 +5864,14 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         return pp->createLocalVar(lname, ti);
     };
     for (int i = 0; i < num_local_slots; ++i) {
-        if (!need(12, "local slot table entry")) {
+        if (!need(has_local_decl_ordinal ? 16 : 12, "local slot table entry")) {
             return nullptr;
         }
         const char* lname = reader.readStringRef(ptr);
         const char* ltype = reader.readStringRef(ptr);
         uint32_t slot_id = QoreAOTBinaryReader::readU32(ptr);
+        uint32_t body_ordinal = has_local_decl_ordinal
+            ? QoreAOTBinaryReader::readU32(ptr) : UINT32_MAX;
 
         if (!lname || !*lname) {
             continue;
@@ -5886,6 +5940,21 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         if (LocalVar* enclosing_lv = findEnclosingLocal(lname, ltype)) {
             func->local_var_slots[enclosing_lv] = slot_id;
             continue;
+        }
+
+        if (body_ordinal != UINT32_MAX && direct_body_locals
+                && body_ordinal < static_cast<uint32_t>(direct_body_locals->size())) {
+            LocalVar* body_lv = (*direct_body_locals)[body_ordinal];
+            if (body_lv && body_lv->getName()
+                    && strcmp(body_lv->getName(), lname) == 0
+                    && aotLocalTypeMatches(body_lv, ltype, &local_type_resolver)) {
+                func->local_var_slots[body_lv] = slot_id;
+                local_map.emplace(lname, body_lv);
+                if (ltype && *ltype) {
+                    local_map.emplace(makeLocalKey(lname, ltype), body_lv);
+                }
+                continue;
+            }
         }
 
         // Create a new local variable (handler-specific local not in enclosing scope)
@@ -6737,7 +6806,7 @@ static void registerAOTFunctionsFromSlotMaps(
             }
             uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
             ++registered;
-            // Remove from func_map so fallback path won't re-register with wrong LocalVar*
+            // Remove from func_map so any registration gap is reported precisely.
             func_map.erase(func_name);
             printd(2, "AOT slot-reg: registered '%s' from slot map\n", func_name);
         } else if (ctx) {
@@ -6788,10 +6857,14 @@ static void registerAOTFunctionsFromSlotMaps(
     }
 }
 
-//! Walk a namespace tree and register pre-compiled AOT function pointers with context
+//! Walk a source-parsed namespace tree and register pre-compiled AOT function pointers with context
 /** Matches function names from the AOT function table against user function variants
     in the program's namespace tree. For each match, re-lowers to IR to build a
     QoreAOTContext, then registers via registerPrecompiledAOTFunction().
+
+    This is only valid for source-parsed AOT executable/module paths. Source-
+    stripped metadata paths must register from SLOT_MAPS only so missing binary
+    metadata is a hard error rather than a hidden source fallback.
 */
 static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pgm,
         const std::unordered_map<std::string, const QoreAOTFunc*>& func_map,
@@ -9442,8 +9515,8 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init(
     }
 
     // Store per-module state so ns_init can find the correct program.
-    // Also update the global for the fallback path in ns_init (for modules
-    // that call ns_init during their own init before being stored in the map).
+    // Also update globals for modules that call ns_init during their own init
+    // before being stored in the map.
     aot_module_pgm = local_pgm;
     aot_module_name = mod_name;
     aot_module_path = label ? label : "";
@@ -9967,12 +10040,6 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
             return new QoreStringNode(msg.c_str());
         }
 
-        // Fall back to namespace walk for any functions not registered from slot maps
-        // (e.g., functions that had no slot map entry)
-        if (registered < num_functions) {
-            registerAOTFunctionsInNamespace(root_ns, local_pgm, func_map, registered);
-        }
-
         printd(1, "AOT module v2 '%s': registered %d/%d pre-compiled functions\n",
             mod_name, registered, num_functions);
         if (registered < num_functions) {
@@ -9984,7 +10051,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
     }
 
     // Store per-module state so ns_init can find the correct program.
-    // Also update the global for the fallback path in ns_init.
+    // Also update globals for early ns_init entry.
     aot_module_pgm = local_pgm;
     aot_module_name = mod_name;
     aot_module_path = label ? label : "";
@@ -10828,12 +10895,6 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
                         local_pgm, func_map, registered, nullptr, deserializer.getTypeResolver(),
                         &registration_errors);
 
-                    // Fall back to namespace walk for any functions not registered from slot maps
-                    // (e.g., functions that had no slot map entry)
-                    if (registration_errors.empty() && registered < num_functions) {
-                        registerAOTFunctionsInNamespace(root_ns, local_pgm, func_map, registered);
-                    }
-
                     const AbstractStatement* dummy_stmt = nullptr;
                     const QoreProgramLocation* dummy_loc = nullptr;
                     QoreParseOptions dummy_po;
@@ -10904,7 +10965,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     }
 
     // Store per-module state so ns_init can find the correct program.
-    // Also update the global for the fallback path in ns_init.
+    // Also update globals for early ns_init entry.
     aot_module_pgm = local_pgm;
     aot_module_name = mod_name;
     aot_module_path = label ? label : "";
@@ -10988,11 +11049,11 @@ extern "C" DLLEXPORT void qore_aot_register_into_program(QoreProgram* tpgm,
 //   * Non-public classes stay visible to tpgm (the module-merge
 //     public-filter path is bypassed entirely).
 //
-// Runs the standard three-step sequence exactly once:
+// Runs the standard sequence exactly once:
 //   1. deserializeIntoProgram — rebuilds namespace tree + classes +
 //      functions + methods in tpgm.
-//   2. registerAOTFunctionsFromSlotMaps (+ namespace-walk fallback)
-//      — wires pre-compiled function pointers to their variants.
+//   2. registerAOTFunctionsFromSlotMaps — wires pre-compiled function
+//      pointers to their variants; missing slot maps are hard errors.
 //   3. (no init-funcs handling yet — slice 10d MVP; NS/CLASS_CONSTANT /
 //      STATIC_VAR init expressions are deferred to a follow-up).
 //
@@ -11105,11 +11166,11 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             return 3;
         }
 
-        // Register pre-compiled function pointers.  Slot-map + namespace-
-        // walk fallback cover both slice 4-style per-file .qo's (slot-map
-        // only) and plain script .qo's.
+        // Register pre-compiled function pointers from slot maps only.
+        // Missing slot maps are hard errors; source fallback must not hide
+        // incomplete metadata.
         //
-        // Slot-map registration also collects init-function execution
+        // Registration also collects init-function execution
         // contexts (for NS_CONSTANT / CLASS_CONSTANT / STATIC_VAR /
         // MODULE_INIT entries) into `init_func_contexts`, to be
         // consumed below by executeInitFunctions — same pattern as
@@ -11130,10 +11191,6 @@ extern "C" DLLEXPORT int qore_aot_script_register(QoreProgram* tpgm,
             registerAOTFunctionsFromSlotMaps(deserializer.getReader(), root_ns,
                 tpgm, func_map, registered, &init_func_contexts, nullptr,
                 &registration_errors);
-            if (registration_errors.empty() && registered < num_functions) {
-                registerAOTFunctionsInNamespace(root_ns, tpgm, func_map,
-                    registered);
-            }
             printd(1, "qore_aot_script_register(%s): registered %d/%d "
                 "pre-compiled functions (%d init funcs)\n",
                 label ? label : "<script>", registered, num_functions,
@@ -11349,10 +11406,6 @@ extern "C" DLLEXPORT int qore_aot_script_end_batch(QoreProgram* tpgm) {
             registerAOTFunctionsFromSlotMaps(session.getReader(), root_ns,
                 tpgm, func_map, registered, &init_func_contexts,
                 session.getTypeResolver(), &registration_errors);
-            if (registration_errors.empty() && registered < d.num_functions) {
-                registerAOTFunctionsInNamespace(root_ns, tpgm, func_map,
-                    registered);
-            }
             if (time_on) {
                 us_register += now_us() - t0;
             }

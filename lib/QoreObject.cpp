@@ -47,11 +47,81 @@
 #include "qore/intern/qore_type_safe_ref_helper_priv.h"
 #include "qore/intern/qore_program_private.h"
 
+#include <cstdlib>
+#include <cstring>
+
 // Monotonic counter for globally unique object hashes.  Pointer addresses
 // alone are not unique because malloc reuses freed addresses; the counter
 // ensures every object gets a distinct hash even when allocated at a
 // previously-used address.
 static std::atomic<uint64_t> object_id_seq{0};
+
+static bool qore_trace_object_refs_for_class(const char* cls) {
+    const char* filter = getenv("QORE_TRACE_OBJECT_REFS");
+    if (!filter || !*filter || !cls) {
+        return false;
+    }
+    if (!strcmp(filter, "*")) {
+        return true;
+    }
+
+    const size_t cls_len = strlen(cls);
+    const char* pos = filter;
+    while (*pos) {
+        while (*pos == ',' || *pos == ' ' || *pos == '\t') {
+            ++pos;
+        }
+        const char* end = pos;
+        while (*end && *end != ',') {
+            ++end;
+        }
+        const char* token_end = end;
+        while (token_end > pos && (token_end[-1] == ' ' || token_end[-1] == '\t')) {
+            --token_end;
+        }
+        if (static_cast<size_t>(token_end - pos) == cls_len && !strncmp(pos, cls, cls_len)) {
+            return true;
+        }
+        pos = end;
+    }
+    return false;
+}
+
+static bool qore_trace_object_ref_should_backtrace(int before, int after) {
+    if (getenv("QORE_TRACE_OBJECT_REF_BACKTRACE")) {
+        return true;
+    }
+
+    const char* low_refs = getenv("QORE_TRACE_OBJECT_REF_BACKTRACE_LOW_REFS");
+    if (!low_refs || !*low_refs) {
+        return false;
+    }
+
+    int threshold = atoi(low_refs);
+    if (threshold <= 0) {
+        return false;
+    }
+    return before <= threshold || after <= threshold;
+}
+
+static void qore_trace_object_ref(const char* op, const qore_object_private* priv, const QoreObject* obj,
+        const char* cls, int before, int after, bool real) {
+    if (!qore_trace_object_refs_for_class(cls)) {
+        return;
+    }
+    const QoreProgramLocation* loc = get_runtime_location();
+    if (loc) {
+        fprintf(stderr, "[QORE-OBJ-REF] tid=%d op=%s obj=%p priv=%p class=%s refs=%d->%d rrefs=%d real=%d "
+            "loc=%s:%d\n", q_gettid(), op, obj, priv, cls, before, after, priv->rrefs.load(), real ? 1 : 0,
+            loc->getFileValue(), loc->start_line);
+    } else {
+        fprintf(stderr, "[QORE-OBJ-REF] tid=%d op=%s obj=%p priv=%p class=%s refs=%d->%d rrefs=%d real=%d\n",
+            q_gettid(), op, obj, priv, cls, before, after, priv->rrefs.load(), real ? 1 : 0);
+    }
+    if (qore_trace_object_ref_should_backtrace(before, after)) {
+        qore_machine_backtrace();
+    }
+}
 
 qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p, QoreHashNode* n_data) :
         RObject(n_obj->references, true),
@@ -64,6 +134,7 @@ qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc,
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::qore_object_private() this: %p obj: %p pgm: %p class: %s "
         "references 0->1\n", this, obj, p, oc->getName());
 #endif
+    qore_trace_object_ref("new", this, obj, oc->getName(), 0, 1, false);
     /* instead of referencing the class, we reference the program, because the
         program contains the namespace that contains the class, and the class's
         methods may call functions in the program as well that could otherwise
@@ -1076,6 +1147,8 @@ void qore_object_private::customDeref(ExceptionSink* xsink, bool real) {
         printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customDeref() this: %p '%s': references %d->%d "
             "rrefs %d->%d\n", this, status == OS_OK ? getClassName() : "<deleted>", references.load(),
             references.load() - 1, rrefs.load(), rrefs.load() - (real ? 1 : 0));
+        qore_trace_object_ref("deref", this, obj, status == OS_OK ? getClassName() : "<deleted>",
+            references.load(), references.load() - 1, real);
 
         robject_dereference_helper qodh(this, real);
         int ref_copy = qodh.getRefs();
@@ -1546,6 +1619,7 @@ void qore_object_private::customRefIntern(bool real) {
     printd(QORE_DEBUG_OBJ_REFS, "qore_object_private::customRefIntern() this: %p obj: %p '%s' references %d->%d " \
         "rrefs: %d->%d\n", this, obj, getClassName(), references.load(), references.load() + 1, rrefs.load(),
         rrefs.load() + (real ? 1 : 0));
+    qore_trace_object_ref("ref", this, obj, getClassName(), references.load(), references.load() + 1, real);
     ++references;
     if (real)
         ++rrefs;

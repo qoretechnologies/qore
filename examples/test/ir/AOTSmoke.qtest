@@ -46,11 +46,20 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT Phase 5.3 fast-path functions", \testPhase53FastPaths());
         addTestCase("AOT control flow", \testControlFlow());
         addTestCase("AOT functions", \testFunctions());
+        addTestCase("AOT inline NULL semantics", \testInlineNullSemantics());
+        addTestCase("AOT top-level locals visible to functions",
+            \testTopLevelLocalsVisibleToFunctions());
+        addTestCase("AOT top-level local controls function exception",
+            \testTopLevelLocalControlsFunctionException());
         addTestCase("AOT reference arg local reload", \testReferenceArgLocalReload());
         addTestCase("AOT closure-use reference params teardown",
             \testClosureUseReferenceParamsTeardown());
         addTestCase("AOT weak local assignment releases RHS",
             \testWeakLocalAssignmentReleasesRhs());
+        addTestCase("AOT weak hash element assignment releases RHS",
+            \testWeakHashElementAssignmentReleasesRhs());
+        addTestCase("AOT weak diagnostic hash assignment releases object",
+            \testWeakDiagnosticHashAssignmentReleasesObject());
         addTestCase("AOT weak assignment preserves non-weak node values",
             \testWeakAssignmentPreservesNonWeakNodeValues());
         addTestCase("AOT weak call argument releases RHS",
@@ -63,6 +72,82 @@ class AOTSmokeTest inherits QUnit::Test {
             \testWeakBranchConditionReleasesTemp());
         addTestCase("AOT weak dot-eval invoke releases base",
             \testWeakDotEvalInvokeReleasesBase());
+        addTestCase("AOT object member assignment releases values",
+            \testObjectMemberAssignmentReleasesValues());
+        addTestCase("AOT object member assignment with remove argument releases value",
+            \testObjectMemberAssignmentWithRemoveArgumentReleasesValue());
+        addTestCase("AOT self member remove detaches member value",
+            \testSelfMemberRemoveDetachesMemberValue());
+        addTestCase("AOT object remove list-valued dynamic key",
+            \testObjectRemoveListValuedDynamicKey());
+        addTestCase("AOT constructor argument releases temporary value",
+            \testConstructorArgumentReleasesTemporaryValue());
+        addTestCase("AOT inherited object member assignment releases value",
+            \testInheritedObjectMemberAssignmentReleasesValue());
+        addTestCase("AOT object member call argument releases value",
+            \testObjectMemberCallArgumentReleasesValue());
+        addTestCase("AOT base-typed object member optional call argument releases value",
+            \testBaseTypedObjectMemberOptionalCallArgumentReleasesValue());
+        addTestCase("AOT qorus library loader call releases action member argument",
+            \testQorusLibraryLoaderCallReleasesActionMemberArgument());
+        addTestCase("AOT derived base-constructor action argument releases context",
+            \testDerivedBaseConstructorActionArgumentReleasesContext());
+        addTestCase("AOT direct method member argument releases value",
+            \testDirectMethodMemberArgumentReleasesValue());
+        addTestCase("AOT return wrapper releases context object",
+            \testReturnWrapperReleasesContextObject());
+        addTestCase("AOT static return wrapper releases context object",
+            \testStaticReturnWrapperReleasesContextObject());
+        addTestCase("AOT typed REST response wrapper releases context object",
+            \testTypedRestResponseWrapperReleasesContextObject());
+        addTestCase("AOT REST dispatch response subhashes release context object",
+            \testRestDispatchResponseSubhashesReleaseContextObject());
+        addTestCase("AOT Qorus-style REST update releases weak-registered context",
+            \testQorusStyleRestUpdateReleasesWeakRegisteredContext());
+        addTestCase("AOT Qorus RBAC delta releases forwarded optional helper",
+            \testQorusRbacDeltaReleasesForwardedOptionalHelper());
+        addTestCase("AOT return wrapper exception releases context object",
+            \testReturnWrapperExceptionReleasesContextObject());
+        addTestCase("AOT direct method exception releases self and caller locals",
+            \testDirectMethodExceptionReleasesSelfAndCallerLocals());
+        addTestCase("AOT dynamic method call releases callee locals",
+            \testDynamicMethodCallReleasesCalleeLocals());
+        addTestCase("AOT switch case break releases block locals",
+            \testSwitchCaseBreakReleasesBlockLocals());
+        addTestCase("AOT switch case immediate break releases ignored method result",
+            \testSwitchCaseImmediateBreakReleasesIgnoredMethodResult());
+        addTestCase("AOT sibling switch duplicate local names release block locals",
+            \testSiblingSwitchDuplicateLocalNamesReleaseBlockLocals());
+        addTestCase("AOT sibling switch duplicate typed locals release exact active local",
+            \testSiblingSwitchDuplicateTypedLocalsReleaseExactActiveLocal());
+        addTestCase("AOT try switch case break releases block locals",
+            \testTrySwitchCaseBreakReleasesBlockLocals());
+        addTestCase("AOT metadata-style ignored update releases context",
+            \testMetadataStyleIgnoredUpdateReleasesContext());
+        addTestCase("AOT switch context with reporter self releases locals",
+            \testSwitchContextWithReporterSelfReleasesLocals());
+        addTestCase("AOT ignored self-returning method result releases locals",
+            \testIgnoredSelfReturningMethodResultReleasesLocals());
+        addTestCase("AOT background self call releases self",
+            \testBackgroundSelfCallReleasesSelf());
+        addTestCase("AOT background self call releases self argument",
+            \testBackgroundSelfCallReleasesSelfArgument());
+        addTestCase("AOT background argv releases object member argument",
+            \testBackgroundArgvReleasesObjectMemberArgument());
+        addTestCase("AOT background call_function_args releases object member argument",
+            \testBackgroundCallFunctionArgsReleasesObjectMemberArgument());
+        addTestCase("AOT background self argv call_function_args releases self argument",
+            \testBackgroundSelfArgvCallFunctionArgsReleasesSelfArgument());
+        addTestCase("AOT map self argument releases context",
+            \testMapSelfArgumentReleasesContext());
+        addTestCase("AOT map object method self argument releases context",
+            \testMapObjectMethodSelfArgumentReleasesContext());
+        addTestCase("AOT ignored map object method self argument releases context",
+            \testIgnoredMapObjectMethodSelfArgumentReleasesContext());
+        addTestCase("AOT metadata prepare self call releases action context",
+            \testMetadataPrepareSelfCallReleasesActionContext());
+        addTestCase("AOT IR-only local cache releases object on return",
+            \testIrOnlyLocalCacheReleasesObjectOnReturn());
         addTestCase("AOT dot-eval memberGate base",
             \testDotEvalMemberGateBase());
         addTestCase("AOT string operations", \testStringOps());
@@ -94,6 +179,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT on_exit blocks", \testOnExitBlocks());
         addTestCase("AOT handler re-inlining cycle guard",
             \testHandlerRecursionGuard());
+        addTestCase("AOT on_exit return fires once",
+            \testOnExitReturnFiresOnce());
         addTestCase("AOT cross-module same-name dispatch",
             \testCrossModuleSameName());
         addTestCase("AOT qcc stub external constants",
@@ -122,6 +209,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module scalar local coercion", \testAOTModuleScalarLocalCoercion());
         addTestCase("AOT module IR-only local owns invoke result",
             \testAOTModuleIrOnlyLocalOwnsInvokeResult());
+        addTestCase("AOT module weak diagnostic hashes release objects",
+            \testAOTModuleWeakDiagnosticHashesReleaseObjects());
         addTestCase("AOT module pointer NULL coalescing", \testAOTModulePointerNullCoalescing());
         addTestCase("AOT module hashdecl member compound lvalue",
             \testAOTModuleHashdeclMemberCompoundLValue());
@@ -140,6 +229,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT module compile custom output", \testAOTModuleCompileCustomOutput());
         addTestCase("AOT module compile opt levels", \testAOTModuleCompileOptLevels());
         addTestCase("AOT module compile error", \testAOTModuleCompileError());
+        addTestCase("AOT module nested namespace paths", \testAOTModuleNestedNamespacePaths());
         # Split module tests
         addTestCase("AOT split module basic", \testAOTSplitModuleBasic());
         addTestCase("AOT split module nested hash constant init",
@@ -169,6 +259,8 @@ class AOTSmokeTest inherits QUnit::Test {
         # Class inheritance and static member tests
         addTestCase("AOT strip source class inheritance", \testStripSourceClassInheritance());
         addTestCase("AOT strip source static members", \testStripSourceStaticMembers());
+        addTestCase("AOT strip source member default function call",
+            \testStripSourceMemberDefaultFunctionCall());
         # Map optimization opcodes
         addTestCase("AOT map hash key opcodes", \testAOTMapHashKeyOpcodes());
         addTestCase("AOT direct-index map with heap results", \testAOTDirectIndexMapHeapResults());
@@ -229,6 +321,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure strip source call reference call",
             \testClosureStripSourceCallRefCall());
         addTestCase("AOT method closure param", \testAOTMethodClosureParam());
+        addTestCase("AOT method closure thread init self",
+            \testAOTMethodClosureThreadInitSelf());
         addTestCase("AOT regex switch in on_exit", \testRegexSwitchInOnExit());
         addTestCase("AOT nested on_exit", \testNestedOnExit());
         # Closure default value serialization tests
@@ -449,6 +543,16 @@ class AOTSmokeTest inherits QUnit::Test {
         return backquote(cmd);
     }
 
+    private string runExecMode(string code, string mode) {
+        hash<auto> paths = writeTempScript(code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        return backquote(sprintf("%s -b --enable-debug --exec-mode=%s %s 2>&1",
+            qore_bin, mode, paths.src));
+    }
+
     testHelloWorld() {
         string code = "%modern\nprintf(\"Hello, World!\\n\");\n";
         string aot_out = compileAndRun(code);
@@ -582,6 +686,75 @@ printf(\"fib(10): %d\\n\", fibonacci(10));
         assertEq(interp_out, aot_out, "AOT function output matches interpreter");
     }
 
+    testInlineNullSemantics() {
+        string code = "%modern
+sub check(auto v) {
+    printf(\"arg=%y type=%s eq=%y seq=%y exists=%y int=%d\\n\",
+        v, v.type(), v == NULL, v === NULL, exists v, int(v));
+}
+
+printf(\"const=%y type=%s eq=%y seq=%y\\n\",
+    NULL, NULL.type(), NULL == NULL, NULL === NULL);
+hash<auto> h;
+h.valid = NULL;
+printf(\"hash=%y type=%s eq=%y seq=%y exists=%y\\n\",
+    h.valid, h.valid.type(), h.valid == NULL, h.valid === NULL, exists h.valid);
+check(NULL);
+";
+        string ast_out = runExecMode(code, "ast");
+        assertEq(ast_out, runExecMode(code, "ir"), "IR inline NULL semantics match AST");
+        assertEq(ast_out, runExecMode(code, "jit"), "JIT inline NULL semantics match AST");
+        assertEq(ast_out, compileAndRun(code), "AOT inline NULL semantics match AST");
+    }
+
+    testTopLevelLocalsVisibleToFunctions() {
+        string code = "%modern
+bool flag = False;
+int counter = 0;
+
+sub update() {
+    printf(\"seen=%y counter=%d\\n\", flag, counter);
+    flag = False;
+    counter += 1;
+}
+
+flag = True;
+counter = 41;
+update();
+printf(\"after=%y counter=%d\\n\", flag, counter);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "top-level local sync regression fully precompiled: "
+            + result.compile_out);
+        assertEq("seen=True counter=41\nafter=False counter=42\n", result.run_out,
+            "AOT functions must read and write top-level locals through the shared runtime stack");
+    }
+
+    testTopLevelLocalControlsFunctionException() {
+        string code = "%modern
+bool do_throw = False;
+
+sub maybeThrow() {
+    if (do_throw) {
+        throw \"AOT-TOP-LEVEL-FLAG\", \"top-level flag visible\";
+    }
+    printf(\"not thrown\\n\");
+}
+
+do_throw = True;
+try {
+    maybeThrow();
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught=%s\\n\", ex.err);
+}
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "top-level exception flag regression fully precompiled: "
+            + result.compile_out);
+        assertEq("caught=AOT-TOP-LEVEL-FLAG\n", result.run_out,
+            "AOT functions must observe top-level locals before control-flow decisions");
+    }
+
     testReferenceArgLocalReload() {
         string code = "%modern
 class C {
@@ -657,6 +830,95 @@ printf(\"destroyed=%d\\n\", destroyed);
             + result.compile_out);
         assertEq("destroyed=1\n", result.run_out,
             "AOT weak assignment must not retain the consumed RHS object");
+    }
+
+    testWeakHashElementAssignmentReleasesRhs() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> weak_map = {};
+
+class C {
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub run() {
+    C strong();
+    weak_map{\"x\"} := strong;
+    printf(\"inside=%d alive=%y\\n\", destroyed, boolean(weak_map{\"x\"}));
+}
+
+run();
+printf(\"after=%d alive=%y\\n\", destroyed, boolean(weak_map{\"x\"}));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "weak hash element assignment regression fully precompiled: "
+            + result.compile_out);
+        assertEq("inside=0 alive=True\nafter=1 alive=False\n", result.run_out,
+            "AOT weak lvalue assignment to hash elements must not retain the target object");
+    }
+
+    testWeakDiagnosticHashAssignmentReleasesObject() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> live_action_hash = {};
+our hash<auto> live_context_hash = {};
+
+class Registry {
+    public static registerContext(string id, hash<auto> info, auto obj) {
+        info.object := obj;
+        live_context_hash{id} = info;
+    }
+}
+
+class Helper {
+    init() {
+        live_action_hash{self.uniqueHash()} = {\"phase\": \"init\", \"tid\": gettid(), \"stack\": (\"init\")};
+        live_action_hash{self.uniqueHash()}.object := self;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    constructor() {
+        Registry::registerContext(self.uniqueHash(), {\"phase\": \"ctor\", \"tid\": gettid(), \"stack\": (\"ctor\")},
+            self);
+    }
+
+    run() {
+        Helper h();
+        h.init();
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d action=%y context=%y\\n\", destroyed,
+        boolean(live_action_hash.firstValue().object), boolean(live_context_hash.firstValue().object));
+}
+
+launch();
+printf(\"after=%d action=%y context=%y\\n\", destroyed,
+    boolean(live_action_hash.firstValue().object), boolean(live_context_hash.firstValue().object));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "weak diagnostic hash cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=1 action=False context=True\nafter=2 action=False context=False\n", result.run_out,
+            "AOT weak diagnostic hash assignments must not retain helper/context objects");
     }
 
     testWeakAssignmentPreservesNonWeakNodeValues() {
@@ -810,6 +1072,2690 @@ printf(\"after=%d\\n\", destroyed);
             + result.compile_out);
         assertEq("inside=1\nafter=1\n", result.run_out,
             "AOT InvokeDotEvalMethodDirect must release weak-load base before exception branch");
+    }
+
+    testObjectMemberAssignmentReleasesValues() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Tracked {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Holder {
+    private {
+        Tracked tracked;
+    }
+
+    set() {
+        tracked = new Tracked();
+    }
+}
+
+sub run() {
+    Holder h();
+    h.set();
+    h.set();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+run();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object member assignment cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=1\nafter=2\n", result.run_out,
+            "AOT object member assignment must release overwritten values and scope-exit members");
+    }
+
+    testObjectMemberAssignmentWithRemoveArgumentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    private {
+        *hash<string, hash<string, bool>> flags;
+    }
+
+    constructor(*hash<string, hash<string, bool>> flags) {
+        self.flags = flags;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor() {
+        atomic_map{\"svc\"}{15} = True;
+    }
+
+    run() {
+        atomic_action_helper = new AtomicHelper(remove atomic_map);
+        printf(\"inside=%d map=%y\\n\", destroyed, atomic_map);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object member assignment/remove-arg cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 map=null\nafter=1\n", result.run_out,
+            "AOT object member assignment must consume and release constructor results with remove-argument inputs");
+    }
+
+    testSelfMemberRemoveDetachesMemberValue() {
+        string code = "%modern
+%allow-weak-references
+
+our int context_destroyed = 0;
+our int validator_destroyed = 0;
+our int action_destroyed = 0;
+our int helper_destroyed = 0;
+
+class MetadataActionContext {
+    destructor() {
+        ++context_destroyed;
+    }
+}
+
+class MetadataUpdateContext inherits MetadataActionContext {
+}
+
+class InterfaceValidator {
+    public {
+        MetadataActionContext action;
+    }
+
+    constructor(MetadataActionContext action) {
+        self.action = action;
+    }
+
+    validate() {
+    }
+
+    destructor() {
+        ++validator_destroyed;
+    }
+}
+
+class ServiceInterfaceValidator inherits InterfaceValidator {
+    constructor(MetadataActionContext action) : InterfaceValidator(action) {
+    }
+}
+
+class ActionRWLock inherits RWLock {
+    private {
+        list<code> post_actions;
+    }
+
+    writeUnlock() {
+        *list<code> actions = remove self.post_actions;
+        RWLock::writeUnlock();
+        foreach code action in (actions) {
+            action();
+        }
+    }
+
+    addWriteUnlockAction(code action) {
+        @assert(lockOwner(), \"write lock must be held\");
+        post_actions += action;
+    }
+}
+
+class WriteLockHelper {
+    private {
+        RWLock rwl;
+    }
+
+    constructor(RWLock rwl) {
+        if (!rwl.writeLockOwner()) {
+            rwl.writeLock();
+            self.rwl = rwl;
+        }
+    }
+
+    destructor() {
+        ++helper_destroyed;
+        if (rwl) {
+            rwl.writeUnlock();
+        }
+    }
+}
+
+ActionRWLock map_mutex = new ActionRWLock();
+
+sub validateInterfacesLocked(MetadataActionContext action) {
+    WriteLockHelper wlh(map_mutex);
+    list<auto> deferred_validators;
+    {
+        ServiceInterfaceValidator val(action);
+        deferred_validators += val;
+        val.validate();
+    }
+    map_mutex.addWriteUnlockAction(sub () {
+        delete deferred_validators;
+        ++action_destroyed;
+    });
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    validateInterfacesLocked(update);
+}
+
+launch();
+printf(\"context=%d validator=%d action=%d helper=%d\\n\",
+    context_destroyed, validator_destroyed, action_destroyed, helper_destroyed);
+";
+        string expected = "context=1 validator=1 action=1 helper=1\n";
+        assertEq(expected, runExecMode(code, "ast"), "AST self-member remove baseline");
+        assertEq(expected, runExecMode(code, "ir"),
+            "IR self-member remove must detach object member and run deferred actions");
+        assertEq(expected, runExecMode(code, "jit"),
+            "JIT self-member remove must detach object member and run deferred actions");
+
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "self-member remove detach regression fully precompiled: " + result.compile_out);
+        assertEq(expected, result.run_out,
+            "AOT self-member remove must detach object member and run deferred actions");
+    }
+
+    testObjectRemoveListValuedDynamicKey() {
+        string code = "%modern
+class T {
+    public {
+        int a = 1;
+        int b = 2;
+    }
+
+    string clear() {
+        remove self{keys self};
+        return sprintf(\"a=%y b=%y keys=%y\\n\", a, b, keys self);
+    }
+}
+
+T t();
+printf(\"%s\", t.clear());
+";
+        string expected = "a=null b=null keys=[\"a\", \"b\"]\n";
+        assertEq(expected, runExecMode(code, "ast"), "AST object list-valued key remove baseline");
+        assertEq(expected, runExecMode(code, "ir"),
+            "IR object remove must treat list-valued dynamic hash key as a slice");
+        assertEq(expected, runExecMode(code, "jit"),
+            "JIT object remove must treat list-valued dynamic hash key as a slice");
+
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object list-valued key remove regression fully precompiled: " + result.compile_out);
+        assertEq(expected, result.run_out,
+            "AOT object remove must treat list-valued dynamic hash key as a slice");
+    }
+
+    testConstructorArgumentReleasesTemporaryValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Tracked {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Consumer {
+    private {
+        Tracked tracked;
+    }
+
+    constructor(Tracked tracked) {
+        self.tracked = tracked;
+    }
+}
+
+sub run() {
+    {
+        Consumer c(new Tracked());
+    }
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+run();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "constructor argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=1\nafter=1\n", result.run_out,
+            "AOT constructor calls must consume caller-owned temporary argument cleanups");
+    }
+
+    testInheritedObjectMemberAssignmentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    private {
+        *hash<string, hash<string, bool>> flags;
+    }
+
+    constructor(*hash<string, hash<string, bool>> flags) {
+        self.flags = flags;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class BaseContext {
+    public {
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+    }
+}
+
+class MetadataUpdateContext inherits BaseContext {
+    constructor() {
+        atomic_map{\"svc\"}{15} = True;
+    }
+
+    run() {
+        atomic_action_helper = new AtomicHelper(remove atomic_map);
+        printf(\"inside=%d map=%y helper=%y\\n\", destroyed, atomic_map, boolean(atomic_action_helper));
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext ctx();
+    ctx.run();
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "inherited object member assignment cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 map=null helper=True\nafter=1\n", result.run_out,
+            "AOT inherited object member assignment must consume and release constructor results");
+    }
+
+    testObjectMemberCallArgumentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Helper {
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub use(*Helper h) {
+}
+
+class Context {
+    private {
+        Helper helper;
+    }
+
+    constructor() {
+        helper = new Helper();
+    }
+
+    run() {
+        use(helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "object member call argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT call argument ownership must release references loaded from object members");
+    }
+
+    testBaseTypedObjectMemberOptionalCallArgumentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Base {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Derived inherits Base {
+}
+
+sub use(*Base action) {
+}
+
+class Holder {
+    public {
+        Base action;
+    }
+
+    constructor(Base action) {
+        self.action = action;
+    }
+
+    load() {
+        use(action);
+    }
+}
+
+sub launch() {
+    Derived d();
+    Holder h(d);
+    h.load();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "base-typed object member optional argument regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT function calls must release base-typed object-member references passed to optional parameters");
+    }
+
+    testQorusLibraryLoaderCallReleasesActionMemberArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+sub logInfo(string msg) {
+}
+
+class MetadataActionContext {
+    touch() {
+    }
+
+    destructor() {
+        destroyed++;
+    }
+}
+
+class MetadataUpdateContext inherits MetadataActionContext {
+}
+
+class QorusProgram {
+}
+
+sub qorus_load_library(*hash<auto> libh, QorusProgram pgm, *code log,
+        *reference<hash<auto>> mappers, *MetadataActionContext action) {
+    if (log) {
+        log(\"loaded %s\", \"x\");
+    }
+    if (action) {
+        action.touch();
+    }
+}
+
+class InterfaceValidator {
+    public {
+        MetadataActionContext action;
+        hash<auto> info;
+        QorusProgram pgm;
+    }
+
+    constructor(MetadataActionContext action) {
+        self.action = action;
+        info = {\"lib\": {\"functions\": {}}};
+        pgm = new QorusProgram();
+    }
+
+    loadLibrary() {
+        hash<auto> mappers;
+        qorus_load_library(info.lib, pgm, sub (string msg) {
+            logInfo(vsprintf(msg, argv));
+        }, \\mappers, action);
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    InterfaceValidator val(update);
+    val.loadLibrary();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "qorus library loader action argument regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must release optional action member arguments in qorus_load_library-style calls");
+    }
+
+    testDerivedBaseConstructorActionArgumentReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class MetadataActionContext {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class MetadataUpdateContext inherits MetadataActionContext {
+}
+
+class InterfaceValidator {
+    public {
+        MetadataActionContext action;
+    }
+
+    constructor(MetadataActionContext action) {
+        self.action = action;
+    }
+}
+
+class ServiceInterfaceValidator inherits InterfaceValidator {
+    constructor(MetadataActionContext action) : InterfaceValidator(action) {
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    ServiceInterfaceValidator val(update);
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "derived base-constructor action argument regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must release derived-constructor arguments forwarded to base constructors");
+    }
+
+    testDirectMethodMemberArgumentReleasesValue() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Helper {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Receiver {
+    rescanDelta(*Helper h) {
+    }
+}
+
+class Context {
+    private {
+        Helper helper;
+        Receiver receiver;
+    }
+
+    constructor() {
+        helper = new Helper();
+        receiver = new Receiver();
+    }
+
+    run() {
+        receiver.rescanDelta(helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "direct method member argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT direct method calls must consume caller-owned object-member argument cleanups");
+    }
+
+    testReturnWrapperReleasesContextObject() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        hash<auto> rv = {\"service\": {\"15\": {\"id\": 15}}};
+        return rv;
+    }
+
+    *hash<auto> updateSingleObject() {
+        string type = \"service\";
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+hash<auto> sub makeResponse(int status, *hash<auto> body) {
+    printf(\"inwrap=%d\\n\", destroyed);
+    return ({\"code\": status, \"body\": body});
+}
+
+hash<auto> sub endpoint() {
+    Context update();
+    return makeResponse(200, update.updateSingleObject());
+}
+
+hash<auto> response = endpoint();
+printf(\"after=%d code=%d id=%d\\n\", destroyed, response.code, response.body.id);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "return wrapper context cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15\n", result.run_out,
+            "AOT return-expression wrappers must release stack context objects before returning to the caller");
+    }
+
+    testStaticReturnWrapperReleasesContextObject() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor(*hash<auto> ah) {
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper();
+        return {\"service\": {\"15\": {\"id\": 15}}};
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+class RestHandler {
+    public static hash<auto> makeResponse(int status, *hash<auto> body) {
+        printf(\"inwrap=%d\\n\", destroyed);
+        return {\"code\": status, \"body\": body};
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<auto> put(*hash<auto> ah) {
+        MetadataUpdateContext update(ah);
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+hash<auto> response = call_object_method_args(handler, \"put\", ({},));
+printf(\"after=%d code=%d id=%d\\n\", destroyed, response.code, response.body.id);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "static return wrapper context cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15\n", result.run_out,
+            "AOT static return-expression wrappers must release stack context objects before returning to the caller");
+    }
+
+    testTypedRestResponseWrapperReleasesContextObject() {
+        string code = "%modern
+
+hashdecl HttpHandlerResponseInfo {
+    int code;
+    auto body;
+    *hash<auto> hdr;
+}
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor(*hash<auto> ah) {
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper();
+        return {\"service\": {\"15\": {\"id\": 15}}};
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+class RestHandler {
+    public static hash<HttpHandlerResponseInfo> makeResponse(int code, auto body, *hash<auto> hdr) {
+        printf(\"inwrap=%d\\n\", destroyed);
+        return <HttpHandlerResponseInfo>{
+            \"code\": code,
+            \"body\": body,
+            \"hdr\": hdr,
+        };
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<HttpHandlerResponseInfo> put(*hash<auto> ah) {
+        MetadataUpdateContext update(ah);
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+hash<HttpHandlerResponseInfo> response = call_object_method_args(handler, \"put\", ({},));
+printf(\"after=%d code=%d id=%d\\n\", destroyed, response.code, response.body.id);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "typed REST response wrapper context cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15\n", result.run_out,
+            "AOT typed REST response wrappers must release stack context objects before returning to the caller");
+    }
+
+    testRestDispatchResponseSubhashesReleaseContextObject() {
+        string code = "%modern
+
+hashdecl HttpHandlerResponseInfo {
+    int code;
+    auto body;
+    *hash<auto> hdr;
+}
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    private {
+        *hash<string, hash<string, bool>> flags;
+    }
+
+    constructor(*hash<string, hash<string, bool>> flags) {
+        self.flags = flags;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        hash<auto> cx;
+        hash<auto> ah;
+        hash<auto> info;
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) {
+        self.cx = cx;
+        self.ah = ah;
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        addUpdateData(type, id);
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    private addUpdateData(string type, int id) {
+        string key = \"0\";
+        info{type}.new_data{key} = {\"enabled\": True};
+        info{type}.ids{key} = id;
+        info{type}.tags{key} = {\"tag\": \"value\"};
+        info{type}.local{key} = {
+            \"info\": {\"id\": id, \"enabled\": True},
+            \"delta\": {\"enabled\": False},
+        };
+        atomic_map{\"svc\"}{id} = True;
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper(remove atomic_map);
+        hash<auto> rv = map {$1: updateFinalizeUnlocked($1)}, keys info;
+        return rv;
+    }
+
+    private *hash<string, hash<auto>> updateFinalizeUnlocked(string type) {
+        *hash<string, hash<auto>> rv;
+        foreach hash<auto> i in (info{type}.new_data.pairIterator()) {
+            int id = info{type}.ids{i.key};
+            hash<auto> local = info{type}.local{i.key};
+            rv{id} = {
+                \"action\": \"updated\",
+                \"delta\": local.delta,
+                \"obj\": local.info,
+                \"id\": id,
+                \"tags\": info{type}.tags{i.key},
+            };
+        }
+        return rv;
+    }
+}
+
+class RestHandler {
+    public static hash<HttpHandlerResponseInfo> makeResponse(int code, auto body, *hash<auto> hdr) {
+        printf(\"inwrap=%d\\n\", destroyed);
+        return <HttpHandlerResponseInfo>{
+            \"code\": code,
+            \"body\": body,
+            \"hdr\": hdr,
+        };
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<HttpHandlerResponseInfo> dispatch(string mn, *hash<auto> ah, hash<auto> cx) {
+        return cast<hash<HttpHandlerResponseInfo>>(call_object_method_args(self, mn, (cx, ah)));
+    }
+
+    hash<HttpHandlerResponseInfo> put(hash<auto> cx, *hash<auto> ah) {
+        MetadataUpdateContext update(cx, ah);
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+hash<auto> cx = {\"user\": \"%SYS%\", \"request\": {\"path\": \"/api/latest/services/fsm-actions\"}};
+hash<HttpHandlerResponseInfo> response = handler.dispatch(\"put\", {\"enabled\": True}, cx);
+printf(\"after=%d code=%d id=%d enabled=%y tag=%s\\n\", destroyed, response.code, response.body.id,
+    response.body.obj.enabled, response.body.tags.tag);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "REST dispatch subhash cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15 enabled=True tag=value\n", result.run_out,
+            "AOT REST dispatch/cast must release context objects while returning subhashes from context members");
+    }
+
+    testQorusStyleRestUpdateReleasesWeakRegisteredContext() {
+        string code = "%modern
+%allow-weak-references
+
+hashdecl HttpHandlerResponseInfo {
+    int code;
+    auto body;
+    *hash<auto> hdr;
+}
+
+our int destroyed = 0;
+our hash<auto> status_hash = {};
+our hash<auto> live_action_hash = {};
+our hash<auto> live_context_hash = {};
+
+bool sub actionAlive() {
+    if (!live_action_hash.size()) {
+        return False;
+    }
+    return boolean(live_action_hash.firstValue().object);
+}
+
+bool sub contextAlive() {
+    if (!live_context_hash.size()) {
+        return False;
+    }
+    return boolean(live_context_hash.firstValue().object);
+}
+
+bool sub statusBlocked() {
+    return boolean(status_hash{\"svc\"}{\"15\"}.block);
+}
+
+class Registry {
+    public static registerContext(string id, hash<auto> info, auto obj) {
+        info.object := obj;
+        live_context_hash{id} = info;
+    }
+}
+
+class AtomicMultiClassActionHelper {
+    constructor(*hash<string, hash<string, bool>> flags) {
+        string id = self.uniqueHash();
+        status_hash{\"svc\"}{\"15\"} = {\"block\": True, \"tid\": gettid(), \"count\": 1, \"owner\": id};
+        live_action_hash{id} = {\"phase\": \"init\", \"tid\": gettid(), \"flags\": flags};
+        live_action_hash{id}.object := self;
+    }
+
+    destructor() {
+        status_hash{\"svc\"}{\"15\"}.block = False;
+        remove live_action_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+
+    addInterfaces(*hash<string, hash<string, bool>> flags) {
+        if (flags) {
+            touch();
+        }
+    }
+
+    private touch() {
+    }
+}
+
+class Rbac {
+    rescanDelta(*list<auto> wfids, *list<auto> svcids, *list<auto> jobids,
+            *AtomicMultiClassActionHelper atomic_action_helper) {
+        if (!wfids && !svcids && !jobids) {
+            return;
+        }
+        enforceGroupChanges(atomic_action_helper);
+    }
+
+    private enforceGroupChanges(*AtomicMultiClassActionHelper atomic_action_helper) {
+        if (!atomic_action_helper) {
+            atomic_action_helper = new AtomicMultiClassActionHelper({\"svc\": {\"15\": True}});
+        } else {
+            atomic_action_helper.addInterfaces({\"svc\": {\"15\": True}});
+        }
+    }
+}
+
+class ServiceMetadata {
+    updatePrepareUnlocked(MetadataUpdateContext action) {
+        foreach hash<auto> i in (action.info{\"service\"}.new_data.pairIterator()) {
+            int id = action.info{\"service\"}.ids{i.key};
+            action.info{\"service\"}.local{i.key} = {
+                \"info\": {\"id\": id, \"enabled\": i.value.enabled},
+                \"delta\": {\"enabled\": False},
+            };
+            action.touch();
+        }
+    }
+
+    updatePrepareLocked(MetadataUpdateContext action) {
+        foreach hash<auto> i in (action.info{\"service\"}.new_data.pairIterator()) {
+            string key = i.key;
+            hash<auto> new_data = i.value;
+            int id = action.info{\"service\"}.ids{key};
+            reference<hash<auto>> local = \\action.info{\"service\"}.local{key};
+            updatePrepareObjectLocked(action, key, new_data, id, \\local);
+        }
+    }
+
+    private updatePrepareObjectLocked(MetadataUpdateContext action, string key, hash<auto> new_data, int id,
+            reference<hash<auto>> local) {
+        local.old_info = {\"id\": id, \"enabled\": False};
+        updatePrepareObjectLockedImpl(action, key, new_data, id, \\local);
+    }
+
+    private updatePrepareObjectLockedImpl(MetadataUpdateContext action, string key, hash<auto> new_data, int id,
+            reference<hash<auto>> local) {
+        processUpdateTags(action, \\local);
+        local.info.enabled = new_data.enabled;
+        local.info.name = key;
+        action.markValidation(\"service\", id);
+    }
+
+    private processUpdateTags(MetadataUpdateContext action, reference<hash<auto>> local) {
+        local.info.tags = {\"tag\": \"value\"};
+        action.touch();
+    }
+
+    createCloneUpdateCompileLocked(MetadataUpdateContext action) {
+        action.touch();
+    }
+
+    updateCommitCacheLocked(MetadataUpdateContext action) {
+        foreach hash<auto> i in (action.info{\"service\"}.new_data.pairIterator()) {
+            int id = action.info{\"service\"}.ids{i.key};
+            reference<hash<auto>> local = \\action.info{\"service\"}.local{i.key};
+            updateCommitCacheObjectLocked(action, i.key, id, \\local);
+        }
+    }
+
+    private updateCommitCacheObjectLocked(MetadataUpdateContext action, string key, int id,
+            reference<hash<auto>> local) {
+        local.info.committed = True;
+        action.touch();
+    }
+
+    *hash<string, hash<auto>> updateFinalizeUnlocked(MetadataUpdateContext action) {
+        return action.finalizeType(\"service\");
+    }
+}
+
+our hash<auto> TypeMap = {\"service\": {\"meta\": new ServiceMetadata()}};
+
+class MetadataUpdateContext {
+    public {
+        hash<auto> info;
+        hash<string, hash<string, bool>> vmap;
+    }
+
+    private {
+        hash<auto> cx;
+        *hash<auto> ah;
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicMultiClassActionHelper atomic_action_helper;
+        Rbac rbac;
+        list<int> pending_rescan_svcids;
+    }
+
+    constructor(hash<auto> cx, *hash<auto> ah) {
+        self.cx = cx;
+        self.ah = ah;
+        rbac = new Rbac();
+        Registry::registerContext(self.uniqueHash(), {\"phase\": \"ctor\", \"tid\": gettid()}, self);
+    }
+
+    touch() {
+    }
+
+    markValidation(string type, int id) {
+        vmap{type}{id} = True;
+    }
+
+    addUpdateData(string type, int id) {
+        string key = string(id);
+        info{type}.new_data{key} = ah;
+        info{type}.ids{key} = id;
+        info{type}.local{key} = {};
+        atomic_map{\"svc\"}{id} = True;
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        addUpdateData(type, id);
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    *hash<string, hash<auto>> finalizeType(string type) {
+        *hash<string, hash<auto>> rv;
+        foreach hash<auto> i in (info{type}.new_data.pairIterator()) {
+            string key = i.key;
+            int id = info{type}.ids{key};
+            hash<auto> local = info{type}.local{key};
+            pending_rescan_svcids += id;
+            rv{id} = {
+                \"action\": \"updated\",
+                \"delta\": local.delta,
+                \"obj\": local.info,
+                \"id\": id,
+                \"path\": cx.request.path,
+            };
+        }
+        return rv;
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        map TypeMap{$1}.meta.updatePrepareUnlocked(self), keys info;
+        map TypeMap{$1}.meta.updatePrepareLocked(self), keys info;
+        atomic_action_helper = new AtomicMultiClassActionHelper(remove atomic_map);
+        map TypeMap{$1}.meta.createCloneUpdateCompileLocked(self), keys info;
+        map TypeMap{$1}.meta.updateCommitCacheLocked(self), keys info;
+        commitDbUnlocked();
+        hash<auto> rv = map {$1: TypeMap{$1}.meta.updateFinalizeUnlocked(self)}, keys info;
+        flushPendingRescans();
+        invalidateCaches();
+        if (vmap) {
+            resetInterfaces(vmap);
+        }
+        return rv;
+    }
+
+    private commitDbUnlocked() {
+    }
+
+    private flushPendingRescans() {
+        rbac.rescanDelta(NOTHING, pending_rescan_svcids, NOTHING, atomic_action_helper);
+        pending_rescan_svcids = ();
+    }
+
+    private invalidateCaches() {
+    }
+
+    private resetInterfaces(hash<string, hash<string, bool>> vmap) {
+    }
+
+    destructor() {
+        remove live_context_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class RestHandler {
+    public static hash<HttpHandlerResponseInfo> makeResponse(int code, auto body, *hash<auto> hdr) {
+        printf(\"inwrap destroyed=%d action=%y context=%y block=%y\\n\", destroyed, actionAlive(),
+            contextAlive(), statusBlocked());
+        return <HttpHandlerResponseInfo>{
+            \"code\": code,
+            \"body\": body,
+            \"hdr\": hdr,
+        };
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<HttpHandlerResponseInfo> dispatch(string mn, *hash<auto> ah, hash<auto> cx) {
+        return cast<hash<HttpHandlerResponseInfo>>(call_object_method_args(self, mn, (cx, ah)));
+    }
+
+    hash<HttpHandlerResponseInfo> put(hash<auto> cx, *hash<auto> ah) {
+        MetadataUpdateContext update(cx, ah);
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+sub launch() {
+    ServiceDefinitionRestClassV8 handler();
+    hash<auto> cx = {\"user\": \"%SYS%\", \"request\": {\"path\": \"/api/latest/services/fsm-actions\"}};
+    hash<HttpHandlerResponseInfo> response;
+    Counter done(1);
+    ThreadPool handler_pool(1, 0, 0);
+    code request_handler = sub () {
+        on_exit done.dec();
+        response = handler.dispatch(\"put\", {\"enabled\": True}, cx);
+    };
+    handler_pool.submit(request_handler);
+    done.waitForZero();
+    handler_pool.stopWait();
+    printf(\"after destroyed=%d action=%y context=%y block=%y code=%d id=%d path=%s\\n\", destroyed,
+        actionAlive(), contextAlive(), statusBlocked(), response.code, response.body.id, response.body.path);
+}
+
+launch();
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "Qorus-style REST update cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap destroyed=0 action=True context=True block=True\n"
+            + "after destroyed=2 action=False context=False block=False code=200 id=15 "
+            + "path=/api/latest/services/fsm-actions\n", result.run_out,
+            "AOT must release Qorus-style weak-registered update contexts and atomic helpers after handler return");
+    }
+
+    testQorusRbacDeltaReleasesForwardedOptionalHelper() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> status_hash = {};
+our hash<auto> live_action_hash = {};
+our hash<auto> live_context_hash = {};
+
+bool sub actionAlive() {
+    return live_action_hash.size() && boolean(live_action_hash.firstValue().object);
+}
+
+bool sub contextAlive() {
+    return live_context_hash.size() && boolean(live_context_hash.firstValue().object);
+}
+
+bool sub statusBlocked() {
+    return boolean(status_hash{\"svc\"}{\"15\"}.block);
+}
+
+class Registry {
+    public static registerContext(string id, hash<auto> info, auto obj) {
+        info.object := obj;
+        live_context_hash{id} = info;
+    }
+}
+
+class AtomicMultiClassActionHelper {
+    constructor(*hash<string, hash<string, bool>> flags) {
+        string id = self.uniqueHash();
+        status_hash{\"svc\"}{\"15\"} = {\"block\": True, \"tid\": gettid(), \"count\": 1, \"owner\": id};
+        live_action_hash{id} = {\"phase\": \"init\", \"tid\": gettid(), \"flags\": flags};
+        live_action_hash{id}.object := self;
+    }
+
+    string getDebugInfo() {
+        return sprintf(\"%y\", status_hash);
+    }
+
+    addInterfaces(hash<string, hash<string, bool>> flags) {
+        if (flags) {
+            touch();
+        }
+    }
+
+    private touch() {
+    }
+
+    destructor() {
+        status_hash{\"svc\"}{\"15\"}.block = False;
+        remove live_action_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class Group {
+    public {
+        int id;
+        bool enabled;
+        string name;
+        hash<auto> omap;
+    }
+
+    constructor(int id, string name, bool enabled, hash<auto> omap) {
+        self.id = id;
+        self.name = name;
+        self.enabled = enabled;
+        self.omap = omap;
+    }
+}
+
+class Rbac {
+    private {
+        hash<string, Group> groups;
+    }
+
+    constructor() {
+        groups{\"synthetic\"} = new Group(-1, \"synthetic\", True, {
+            \"services\": {\"15\": True},
+            \"jobs\": {},
+            \"workflows\": {},
+        });
+    }
+
+    rescanDelta(*list<auto> wfids, *list<auto> svcids, *list<auto> jobids,
+            *AtomicMultiClassActionHelper atomic_action_helper) {
+        bool wf = wfids.val();
+        bool svc = svcids.val();
+        bool job = jobids.val();
+        if (!wf && !svc && !job) {
+            return;
+        }
+
+        *hash<string, Group> og = groups;
+        foreach Group g in (groups.iterator()) {
+            if (g.id >= 0) {
+                continue;
+            }
+            if (svc && g.omap.services{svcids}) {
+                remove groups{g.name};
+            }
+        }
+
+        createDedicatedGroupsIntern(wf, svc, job);
+        enforceGroupChanges(og, wf, svc, job, atomic_action_helper);
+    }
+
+    private createDedicatedGroupsIntern(bool wf, bool svc, bool job) {
+    }
+
+    private enforceGroupChanges(*hash<string, Group> og, bool wf, bool svc, bool job,
+            *AtomicMultiClassActionHelper atomic_action_helper) {
+        hash<string, hash<string, bool>> ah;
+        hash<string, bool> group_status_hash;
+        hash<string, Group> dis_svc;
+
+        foreach Group g in (og.iterator()) {
+            if (svc) {
+                map ah{\"svc\"}{$1} = True, keys g.omap.services;
+            }
+            group_status_hash.(g.name) = g.enabled;
+            if (g.enabled) {
+                continue;
+            }
+            if (svc) {
+                map dis_svc{$1} = g, keys g.omap.services, !dis_svc{$1};
+            }
+        }
+
+        string dbg = atomic_action_helper ? atomic_action_helper.getDebugInfo() : \"\";
+        if (!dbg.val()) {
+            throw \"TEST-ERROR\", \"missing helper debug info\";
+        }
+
+        if (!atomic_action_helper) {
+            atomic_action_helper = new AtomicMultiClassActionHelper(ah);
+        } else {
+            atomic_action_helper.addInterfaces(ah);
+        }
+
+        foreach string id in (keys dis_svc) {
+            if (id) {
+                atomic_action_helper.addInterfaces({\"svc\": {id: True}});
+            }
+        }
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicMultiClassActionHelper atomic_action_helper;
+        Rbac rbac;
+        list<int> pending_rescan_svcids;
+    }
+
+    constructor() {
+        atomic_map{\"svc\"}{\"15\"} = True;
+        rbac = new Rbac();
+        Registry::registerContext(self.uniqueHash(), {\"phase\": \"ctor\", \"tid\": gettid()}, self);
+    }
+
+    updateObjectsIntern() {
+        atomic_action_helper = new AtomicMultiClassActionHelper(remove atomic_map);
+        pending_rescan_svcids += 15;
+        flushPendingRescans();
+    }
+
+    private flushPendingRescans() {
+        rbac.rescanDelta(NOTHING, pending_rescan_svcids, NOTHING, atomic_action_helper);
+        pending_rescan_svcids = ();
+    }
+
+    destructor() {
+        remove live_context_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    update.updateObjectsIntern();
+    printf(\"inside destroyed=%d action=%y context=%y block=%y\\n\", destroyed, actionAlive(),
+        contextAlive(), statusBlocked());
+}
+
+launch();
+printf(\"after destroyed=%d action=%y context=%y block=%y\\n\", destroyed, actionAlive(), contextAlive(),
+    statusBlocked());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "Qorus RBAC delta optional helper cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside destroyed=0 action=True context=True block=True\n"
+            + "after destroyed=2 action=False context=False block=False\n", result.run_out,
+            "AOT must release optional object arguments forwarded through Qorus-style RBAC delta methods");
+    }
+
+    testReturnWrapperExceptionReleasesContextObject() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        AtomicHelper atomic_action_helper;
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper();
+        throw \"UPDATE-ERROR\", \"forced failure after atomic helper assignment\";
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+class RestHandler {
+    public static hash<auto> makeResponse(int status, *hash<auto> body) {
+        return {\"code\": status, \"body\": body};
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<auto> put() {
+        MetadataUpdateContext update();
+        return RestHandler::makeResponse(200, update.updateSingleObject(\"service\", serviceid));
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+try {
+    call_object_method_args(handler, \"put\", ());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught=%s destroyed=%d\\n\", ex.err, destroyed);
+}
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "return wrapper exception cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("caught=UPDATE-ERROR destroyed=1\nafter=1\n", result.run_out,
+            "AOT exception in return-expression wrapper must release context locals before propagating");
+    }
+
+    testDirectMethodExceptionReleasesSelfAndCallerLocals() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> weak_context = {};
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Registry {
+    public static registerContext(auto obj) {
+        weak_context.object := obj;
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor() {
+        Registry::registerContext(self);
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        atomic_action_helper = new AtomicHelper();
+        throw \"UPDATE-ERROR\", \"forced failure after atomic helper assignment\";
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class ServiceDefinitionRestClassV8 {
+    private {
+        int serviceid = 15;
+    }
+
+    hash<auto> put() {
+        MetadataUpdateContext update();
+        return update.updateSingleObject(\"service\", serviceid);
+    }
+}
+
+ServiceDefinitionRestClassV8 handler();
+try {
+    handler.put();
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"caught=%s destroyed=%d alive=%y\\n\", ex.err, destroyed, boolean(weak_context.object));
+}
+printf(\"after=%d alive=%y\\n\", destroyed, boolean(weak_context.object));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "direct-method exception cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("caught=UPDATE-ERROR destroyed=2 alive=False\nafter=2 alive=False\n", result.run_out,
+            "AOT fast method exception cleanup must release self and caller-owned context locals");
+    }
+
+    testDynamicMethodCallReleasesCalleeLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    *hash<auto> updateObjectsIntern() {
+        hash<auto> rv = {\"service\": {\"15\": {\"id\": 15}}};
+        return rv;
+    }
+
+    *hash<auto> updateSingleObject() {
+        string type = \"service\";
+        return updateObjectsIntern(){type}.firstValue();
+    }
+}
+
+hash<auto> sub makeResponse(int status, *hash<auto> body) {
+    printf(\"inwrap=%d\\n\", destroyed);
+    return ({\"code\": status, \"body\": body});
+}
+
+class Handler {
+    hash<auto> put() {
+        Context update();
+        return makeResponse(200, update.updateSingleObject());
+    }
+}
+
+Handler handler();
+hash<auto> response = call_object_method_args(handler, \"put\");
+printf(\"after=%d code=%d id=%d\\n\", destroyed, response.code, response.body.id);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "dynamic method call cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inwrap=0\nafter=1 code=200 id=15\n", result.run_out,
+            "AOT dynamic method calls must release callee stack locals before returning to the caller");
+    }
+
+    testSwitchCaseBreakReleasesBlockLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    update() {
+    }
+}
+
+sub run(string type) {
+    switch (type) {
+        case \"service\": {
+            Context update();
+            update.update();
+            printf(\"inside=%d\\n\", destroyed);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+run(\"service\");
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "switch case break cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT switch case breaks must run cleanup for locals scoped to the case block");
+    }
+
+    testTrySwitchCaseBreakReleasesBlockLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    hash<auto> updateSingleObject() {
+        return {\"ctx\": self};
+    }
+}
+
+sub run(string type) {
+    try {
+        switch (type) {
+            case \"service\": {
+                Context update();
+                update.updateSingleObject();
+                printf(\"inside=%d\\n\", destroyed);
+                break;
+            }
+            default:
+                break;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+}
+
+run(\"service\");
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "try/switch case break cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT try/switch case breaks must run cleanup for locals scoped to the case block");
+    }
+
+    testSwitchCaseImmediateBreakReleasesIgnoredMethodResult() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    hash<auto> updateSingleObject() {
+        return {\"ctx\": self};
+    }
+}
+
+sub run(string type) {
+    switch (type) {
+        case \"service\": {
+            Context update();
+            update.updateSingleObject();
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+run(\"service\");
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "immediate switch break ignored-result cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("after=1\n", result.run_out,
+            "AOT must discard ignored method-call results before immediate switch break cleanup");
+    }
+
+    testSiblingSwitchDuplicateLocalNamesReleaseBlockLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    hash<auto> updateSingleObject(string type, int id) {
+        return {\"ctx\": self, \"type\": type, \"id\": id};
+    }
+}
+
+class Handler {
+    run(string type) {
+        switch (type) {
+            case \"job\": {
+                hash<auto> ah = {\"replace\": False};
+                Context update();
+                update.updateSingleObject(\"job\", 1);
+                break;
+            }
+            case \"service\": {
+                hash<auto> ah = {\"replace\": False};
+                Context update();
+                update.updateSingleObject(\"service\", 15);
+                break;
+            }
+            case \"sla\": {
+                hash<auto> ah = {\"replace\": False};
+                Context update();
+                update.updateSingleObject(\"sla\", 2);
+                break;
+            }
+            default:
+                break;
+        }
+        printf(\"post=%d\\n\", destroyed);
+    }
+}
+
+Handler h();
+call_object_method_args(h, \"run\", (\"service\",));
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "sibling switch duplicate-local cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("post=1\nafter=1\n", result.run_out,
+            "AOT must release the active duplicate-named switch local at case block exit");
+    }
+
+    testSiblingSwitchDuplicateTypedLocalsReleaseExactActiveLocal() {
+        string code = "%modern
+
+our int destroyed = 0;
+our int live = 0;
+
+class Guard {
+    private {
+        int id;
+    }
+
+    constructor(int id) {
+        self.id = id;
+        ++live;
+    }
+
+    destructor() {
+        --live;
+        ++destroyed;
+    }
+}
+
+class Reporter {
+    private {
+        object owner;
+    }
+
+    constructor(object owner) {
+        self.owner = owner;
+    }
+
+    reportProgress(string fmt, ...) {
+        vsprintf(fmt, argv);
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        Guard guard;
+        Reporter reporter;
+        hash<auto> info;
+    }
+
+    constructor(Reporter reporter, int id) {
+        self.reporter = reporter;
+        guard = new Guard(id);
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        info{type}.ids{\"k\"} = id;
+        reporter.reportProgress(\"update %s %d\", type, id);
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        *hash<auto> rv;
+        foreach string t in (keys info) {
+            int id = info{t}.ids.firstValue();
+            rv{t}{id} = {\"id\": id, \"ctx\": self};
+        }
+        return rv;
+    }
+}
+
+class Handler {
+    run(string type) {
+        Reporter reporter(self);
+        try {
+            switch (type) {
+                case \"job\": {
+                    hash<auto> atomic_map = {\"job\": {\"1\": True}};
+                    MetadataUpdateContext update(reporter, 1);
+                    update.updateSingleObject(\"job\", 1);
+                    break;
+                }
+                case \"queue\": {
+                    hash<auto> atomic_map = {\"queue\": {\"2\": True}};
+                    MetadataUpdateContext update(reporter, 2);
+                    update.updateSingleObject(\"queue\", 2);
+                    break;
+                }
+                case \"service\": {
+                    hash<auto> atomic_map = {\"service\": {\"15\": True}};
+                    MetadataUpdateContext update(reporter, 15);
+                    update.updateSingleObject(\"service\", 15);
+                    printf(\"inside=%d live=%d\\n\", destroyed, live);
+                    break;
+                }
+                case \"workflow\": {
+                    hash<auto> atomic_map = {\"workflow\": {\"4\": True}};
+                    MetadataUpdateContext update(reporter, 4);
+                    update.updateSingleObject(\"workflow\", 4);
+                    break;
+                }
+                default:
+                    break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+        printf(\"post=%d live=%d\\n\", destroyed, live);
+    }
+}
+
+Handler handler();
+call_object_method_args(handler, \"run\", (\"service\",));
+printf(\"after=%d live=%d\\n\", destroyed, live);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "sibling switch duplicate typed-local cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 live=1\npost=1 live=0\nafter=1 live=0\n", result.run_out,
+            "AOT must bind duplicate-named typed locals to the exact active source local for cleanup");
+    }
+
+    testMetadataStyleIgnoredUpdateReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class AtomicHelper {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Reporter {
+    private {
+        object ws;
+    }
+
+    constructor(object ws) {
+        self.ws = ws;
+    }
+
+    reportProgressArgs(string fmt, *softlist<auto> args) {
+        vsprintf(fmt, args);
+    }
+}
+
+class MetadataUpdateContext {
+    private {
+        hash<auto> info;
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+        list<int> pending_rescan_svcids;
+        Reporter reporter;
+    }
+
+    constructor(Reporter reporter) {
+        self.reporter = reporter;
+    }
+
+    reportProgress(string fmt, ...) {
+        reporter.reportProgressArgs(fmt, argv);
+    }
+
+    addUpdateData(string type, int id) {
+        string key = \"k\";
+        info{type}.new_data{key} = {\"enabled\": True};
+        info{type}.ids{key} = id;
+        info{type}.tags{key} = {\"tag\": \"value\"};
+        info{type}.local{key} = {
+            \"info\": {\"id\": id, \"enabled\": True},
+            \"delta\": {\"enabled\": False},
+            \"config_cache_ops\": False,
+        };
+        atomic_map{\"svc\"}{id} = True;
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        addUpdateData(type, id);
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        reportProgress(\"Update objects: %y\", (map {$1.key: $1.value.new_data.size()}, info.pairIterator()));
+        atomic_action_helper = new AtomicHelper();
+
+        hash<auto> rv = map {$1: updateFinalizeUnlocked($1)}, keys info;
+        flushPendingRescans();
+        return rv;
+    }
+
+    private flushPendingRescans() {
+        pending_rescan_svcids = ();
+    }
+
+    private *hash<string, hash<auto>> updateFinalizeUnlocked(string type) {
+        *hash<string, hash<auto>> rv;
+        foreach hash<auto> i in (info{type}.new_data.pairIterator()) {
+            int id = info{type}.ids{i.key};
+            hash<auto> local = info{type}.local{i.key};
+            rv{id} = updateFinalizeObjectUnlockedImpl(type, i.key, id, local);
+        }
+        return rv;
+    }
+
+    private hash<auto> updateFinalizeObjectUnlockedImpl(string type, string key, int id, hash<auto> local) {
+        pending_rescan_svcids += id;
+        return {
+            \"action\": \"updated\",
+            \"delta\": local.delta,
+            \"obj\": local.info,
+            \"id\": id,
+            \"tags\": info{type}.tags{key},
+        };
+    }
+}
+
+class Handler {
+    run(string type) {
+        Reporter reporter(self);
+        try {
+            switch (type) {
+                case \"service\": {
+                    MetadataUpdateContext update(reporter);
+                    update.updateSingleObject(\"service\", 15);
+                    printf(\"inside=%d\\n\", destroyed);
+                    break;
+                }
+                default:
+                    break;
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            rethrow;
+        }
+    }
+}
+
+Handler handler();
+call_object_method_args(handler, \"run\", (\"service\",));
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "metadata-style ignored update cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must release metadata-style ignored update contexts and their helper members");
+    }
+
+    testSwitchContextWithReporterSelfReleasesLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Reporter {
+    private {
+        object ws;
+    }
+
+    constructor(object ws) {
+        self.ws = ws;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+        Reporter reporter;
+    }
+
+    constructor(Reporter reporter) {
+        guard = new Guard();
+        self.reporter = reporter;
+    }
+
+    update() {
+    }
+}
+
+class Handler {
+    run(string type) {
+        Reporter reporter(self);
+        switch (type) {
+            case \"service\": {
+                Context update(reporter);
+                update.update();
+                printf(\"inside=%d\\n\", destroyed);
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+Handler handler();
+call_object_method_args(handler, \"run\", (\"service\",));
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "switch reporter/self cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must release context locals that hold another local object referencing implicit self");
+    }
+
+    testIgnoredSelfReturningMethodResultReleasesLocals() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    hash<auto> updateSingleObject() {
+        return {\"ctx\": self};
+    }
+}
+
+sub run(string type) {
+    switch (type) {
+        case \"service\": {
+            Context update();
+            update.updateSingleObject();
+            printf(\"inside=%d\\n\", destroyed);
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+run(\"service\");
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "ignored self-returning result cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT must discard ignored method-call results before local scope teardown");
+    }
+
+    testBackgroundSelfCallReleasesSelf() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Helper {
+    start(Counter sync) {
+        background worker(sync);
+    }
+
+    private worker(Counter sync) {
+        sync.dec();
+    }
+
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub launch() {
+    Counter sync(1);
+    Helper h();
+    h.start(sync);
+    sync.waitForZero();
+}
+
+launch();
+usleep(100ms);
+printf(\"destroyed=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background self-call cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("destroyed=1\n", result.run_out,
+            "AOT background self calls must release the spawned thread's self reference after thread exit");
+    }
+
+    testBackgroundSelfCallReleasesSelfArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Helper {
+    start(Counter sync) {
+        background worker(sync, self);
+    }
+
+    private worker(Counter sync, Helper h) {
+        sync.dec();
+    }
+
+    destructor() {
+        destroyed++;
+    }
+}
+
+sub launch() {
+    Counter sync(1);
+    Helper h();
+    h.start(sync);
+    sync.waitForZero();
+}
+
+launch();
+usleep(100ms);
+printf(\"destroyed=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background self-argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("destroyed=1\n", result.run_out,
+            "AOT background self calls must release self when self is also passed as an argument");
+    }
+
+    testBackgroundArgvReleasesObjectMemberArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Dispatcher {
+    run(...) {
+        Counter sync(1);
+        background worker(sync, argv);
+        sync.waitForZero();
+    }
+
+    private worker(Counter sync, *list<auto> args) {
+        sync.dec();
+    }
+}
+
+class Context {
+    private {
+        Guard helper;
+        Dispatcher dispatcher;
+    }
+
+    constructor() {
+        helper = new Guard();
+        dispatcher = new Dispatcher();
+    }
+
+    run() {
+        dispatcher.run(helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+usleep(100ms);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background argv object-member cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT background argv handoff must release object-member arguments after the background call exits");
+    }
+
+    testBackgroundCallFunctionArgsReleasesObjectMemberArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+sub use(*Guard helper) {
+}
+
+class Dispatcher {
+    run(code call, ...) {
+        Counter sync(1);
+        background worker(sync, call, argv);
+        sync.waitForZero();
+    }
+
+    private worker(Counter sync, code call, *list<auto> args) {
+        on_exit sync.dec();
+        call_function_args(call, args);
+    }
+}
+
+class Context {
+    private {
+        Guard helper;
+        Dispatcher dispatcher;
+    }
+
+    constructor() {
+        helper = new Guard();
+        dispatcher = new Dispatcher();
+    }
+
+    run() {
+        dispatcher.run(\\use(), helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+usleep(100ms);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background call_function_args object-member cleanup regression fully precompiled: "
+                + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT background call_function_args must release object-member arguments after the background call exits");
+    }
+
+    testBackgroundSelfArgvCallFunctionArgsReleasesSelfArgument() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+sub use(Helper helper) {
+}
+
+class Helper {
+    doBackground(code call, ...) {
+        Counter sync(1);
+        background worker(sync, call, argv);
+        sync.waitForZero();
+    }
+
+    private worker(Counter sync, code call, *list<auto> args) {
+        on_exit sync.dec();
+        call_function_args(call, args);
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Context {
+    private {
+        Helper helper;
+    }
+
+    constructor() {
+        helper = new Helper();
+    }
+
+    run() {
+        helper.doBackground(\\use(), helper);
+    }
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+usleep(100ms);
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "background self argv call_function_args cleanup regression fully precompiled: "
+                + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT background self calls must release self when the same object is passed through argv "
+            "to call_function_args");
+    }
+
+    testMapSelfArgumentReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        destroyed++;
+    }
+}
+
+class Context {
+    private {
+        Guard guard;
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    touch(string key) {
+    }
+
+    run() {
+        hash<auto> h = {\"a\": 1, \"b\": 2};
+        map useContext($1, self), keys h;
+        map touch($1), keys h;
+    }
+}
+
+sub useContext(string key, Context ctx) {
+    ctx.touch(key);
+}
+
+sub launch() {
+    Context ctx();
+    ctx.run();
+}
+
+launch();
+printf(\"destroyed=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "map self-argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("destroyed=1\n", result.run_out,
+            "AOT map expressions must not retain self/context references after the map completes");
+    }
+
+    testMapObjectMethodSelfArgumentReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Meta {
+    hash<auto> updateFinalizeUnlocked(MetadataUpdateContext action) {
+        action.touch();
+        return {\"15\": {\"id\": 15}};
+    }
+}
+
+our hash<auto> TypeMap = {\"service\": {\"meta\": new Meta()}};
+
+class MetadataUpdateContext {
+    private {
+        Guard guard;
+        hash<auto> info = {\"service\": True};
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    touch() {
+    }
+
+    *hash<auto> updateSingleObject(string type, int id) {
+        return updateObjectsIntern(){type}.firstValue();
+    }
+
+    private *hash<auto> updateObjectsIntern() {
+        hash<auto> rv = map {$1: TypeMap{$1}.meta.updateFinalizeUnlocked(self)}, keys info;
+        return rv;
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    hash<auto> rv = update.updateSingleObject(\"service\", 15);
+    printf(\"id=%d inside=%d\\n\", rv.id, destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "map object-method self-argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("id=15 inside=0\nafter=1\n", result.run_out,
+            "AOT map object-method calls must release explicit self/context arguments after the map completes");
+    }
+
+    testIgnoredMapObjectMethodSelfArgumentReleasesContext() {
+        string code = "%modern
+
+our int destroyed = 0;
+
+class Guard {
+    destructor() {
+        ++destroyed;
+    }
+}
+
+class Meta {
+    updatePrepareUnlocked(MetadataUpdateContext action) {
+        action.touch();
+    }
+}
+
+our hash<auto> TypeMap = {\"service\": {\"meta\": new Meta()}};
+
+class MetadataUpdateContext {
+    private {
+        Guard guard;
+        hash<auto> info = {\"service\": True};
+    }
+
+    constructor() {
+        guard = new Guard();
+    }
+
+    touch() {
+    }
+
+    run() {
+        map TypeMap{$1}.meta.updatePrepareUnlocked(self), keys info;
+    }
+}
+
+sub launch() {
+    MetadataUpdateContext update();
+    update.run();
+    printf(\"inside=%d\\n\", destroyed);
+}
+
+launch();
+printf(\"after=%d\\n\", destroyed);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "ignored map object-method self-argument cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0\nafter=1\n", result.run_out,
+            "AOT ignored map object-method calls must release explicit self/context arguments after the map completes");
+    }
+
+    testMetadataPrepareSelfCallReleasesActionContext() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> live_action_hash = {};
+our hash<auto> live_context_hash = {};
+
+class Registry {
+    public static registerContext(string id, hash<auto> info, auto obj) {
+        info.object := obj;
+        live_context_hash{id} = info;
+    }
+}
+
+class AtomicHelper {
+    init() {
+        live_action_hash{self.uniqueHash()} = {\"phase\": \"init\", \"tid\": gettid()};
+        live_action_hash{self.uniqueHash()}.object := self;
+    }
+
+    destructor() {
+        remove live_action_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class AbstractMetadata {
+    updatePrepareLocked(MetadataUpdateContext action) {
+        foreach hash<auto> i in (action.info{\"service\"}.new_data.pairIterator()) {
+            string key = i.key;
+            hash<auto> new_data = i.value;
+            int id = action.info{\"service\"}.ids{key};
+            reference<hash<auto>> local = \\action.info{\"service\"}.local{key};
+            updatePrepareObjectLockedImpl(action, key, new_data, id, \\local);
+        }
+    }
+
+    private abstract updatePrepareObjectLockedImpl(MetadataUpdateContext action, string key,
+        hash<auto> new_data, int id, reference<hash<auto>> local);
+}
+
+class ServiceMetadata inherits AbstractMetadata {
+    private updatePrepareObjectLockedImpl(MetadataUpdateContext action, string key,
+        hash<auto> new_data, int id, reference<hash<auto>> local) {
+        local.info = {\"id\": id, \"enabled\": new_data.enabled};
+        action.touch();
+    }
+}
+
+our hash<auto> TypeMap = {\"service\": {\"meta\": new ServiceMetadata()}};
+
+class MetadataUpdateContext {
+    public {
+        hash<auto> info;
+    }
+
+    private {
+        hash<string, hash<string, bool>> atomic_map;
+        AtomicHelper atomic_action_helper;
+    }
+
+    constructor() {
+        Registry::registerContext(self.uniqueHash(), {\"phase\": \"ctor\", \"tid\": gettid()}, self);
+    }
+
+    touch() {
+    }
+
+    addUpdateData(string type, int id, hash<auto> data) {
+        string key = string(id);
+        info{type}.new_data{key} = data;
+        info{type}.ids{key} = id;
+        info{type}.local{key} = {};
+        atomic_map{\"svc\"}{id} = True;
+    }
+
+    updateSingleObject(string type, int id, hash<auto> data) {
+        addUpdateData(type, id, data);
+        updateObjectsIntern();
+    }
+
+    private updateObjectsIntern() {
+        map TypeMap{$1}.meta.updatePrepareLocked(self), keys info;
+        atomic_action_helper = new AtomicHelper();
+        atomic_action_helper.init();
+    }
+
+    destructor() {
+        remove live_context_hash{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class Handler {
+    run() {
+        MetadataUpdateContext update();
+        update.updateSingleObject(\"service\", 15, {\"enabled\": True});
+        printf(\"inside=%d action=%y context=%y\\n\", destroyed,
+            boolean(live_action_hash.firstValue().object),
+            boolean(live_context_hash.firstValue().object));
+    }
+}
+
+Handler h();
+h.run();
+printf(\"after=%d action=%y context=%y\\n\", destroyed,
+    boolean(live_action_hash.firstValue().object), boolean(live_context_hash.firstValue().object));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "metadata prepare self-call cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 action=True context=True\nafter=2 action=False context=False\n", result.run_out,
+            "AOT metadata prepare self calls must release action contexts after the handler returns");
+    }
+
+    testIrOnlyLocalCacheReleasesObjectOnReturn() {
+        string code = "%modern
+%allow-weak-references
+
+our int destroyed = 0;
+our hash<auto> live = {};
+
+class CachedObject {
+    constructor() {
+        live{self.uniqueHash()}.object := self;
+    }
+
+    bool alive() {
+        return boolean(live{self.uniqueHash()}.object);
+    }
+
+    destructor() {
+        remove live{self.uniqueHash()};
+        ++destroyed;
+    }
+}
+
+class Runner {
+    run() {
+        CachedObject obj();
+        printf(\"inside=%d live=%y\\n\", destroyed, obj.alive());
+    }
+}
+
+Runner r();
+r.run();
+printf(\"after=%d live=%y\\n\", destroyed, boolean(live.firstValue().object));
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "IR-only local cache return cleanup regression fully precompiled: " + result.compile_out);
+        assertEq("inside=0 live=True\nafter=1 live=False\n", result.run_out,
+            "AOT pooled interpreter frames must not retain IR-only local cache refs after a function returns");
     }
 
     testDotEvalMemberGateBase() {
@@ -1625,6 +4571,60 @@ printf(\"d: %d\\n\", run_d());
             "handler-recursion AOT output matches interpreter");
     }
 
+    testOnExitReturnFiresOnce() {
+        # Regression: when an inline-lowered on_exit body returned before the
+        # generated ScopeExit instruction ran, the runtime handler registration
+        # stayed live. Return cleanup then executed the same handler a second
+        # time. The shape mirrors Qorus SegmentManager's typed local from a
+        # hash plus on_exit cleanup after removing the hash entry.
+        string code = "%modern
+
+hash<auto> SWD = {};
+
+class S {
+    bool deref() {
+        printf(\"deref before remove size=%d\\n\", SWD.size());
+        remove SWD{\"wf\"};
+        printf(\"deref after remove size=%d\\n\", SWD.size());
+        return True;
+    }
+
+    bool canDelete() {
+        printf(\"canDelete\\n\");
+        return True;
+    }
+
+    destructor() {
+        printf(\"dtor\\n\");
+    }
+}
+
+*bool sub derefWorkflowIntern(string id) {
+    S swd = cast<S>(SWD{id});
+    on_exit {
+        printf(\"on_exit before canDelete\\n\");
+        if (swd.canDelete()) {
+            printf(\"on_exit after canDelete\\n\");
+            return True;
+        }
+    }
+    if (swd.deref()) {
+        printf(\"after deref\\n\");
+    }
+}
+
+SWD{\"wf\"} = new S();
+derefWorkflowIntern(\"wf\");
+printf(\"done size=%d\\n\", SWD.size());
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "on_exit-return-once regression fully precompiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "AOT must not execute return-producing on_exit handlers twice");
+    }
+
     testTypeConversions() {
         # Test implicit and explicit type conversions
         string code = "%modern
@@ -1820,6 +4820,72 @@ printf(\"sum: %d\\n\", sum);
         };
     }
 
+    testAOTModuleNestedNamespacePaths() {
+        string tmp_dir = sprintf("/tmp/aot_nested_ns_path_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTNestedNsPath {
+    version = \"1.0\";
+    desc = \"Nested namespace qmod path regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace Outer {
+public namespace Inner {
+    public class Base {
+    }
+
+    public class Derived inherits Outer::Inner::Base {
+    }
+}
+}
+";
+        string qm_path = tmp_dir + "/AOTNestedNsPath.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTNestedNsPath.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled,
+            "nested namespace qmod path regression module compiled: " + result.compile_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        {
+            File f();
+            f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%requires AOTNestedNsPath
+%requires reflection
+
+foreach auto c in (Reflection::Class::forName(\"Outer::Inner::Derived\").getClassHierarchy()) {
+    printf(\"%s|%s\\n\", c.getPathName(), c.getNamespace().getPathName());
+}
+");
+            f.close();
+        }
+
+        string out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s 2>&1",
+            libqore_dir, prependModulePath(tmp_dir), qore_bin, script_path));
+        assertTrue(out.regex("Outer::Inner::Base\\|Outer::Inner"),
+            "AOT qmod preserves nested base class namespace path: " + out);
+        assertTrue(out.regex("Outer::Inner::Derived\\|Outer::Inner"),
+            "AOT qmod preserves nested derived class namespace path: " + out);
+        assertFalse(out.regex("(^|\\n)Inner::"),
+            "AOT qmod does not expose local-only class paths: " + out);
+        assertFalse(out.regex("\\|Inner($|\\n)"),
+            "AOT qmod does not expose local-only namespace paths: " + out);
+    }
+
     testAOTModuleSsoAvoidsNumericFastPaths() {
         string tmp_dir = sprintf("/tmp/aot_sso_fastpath_%d_%d", getpid(), rand());
         mkdir(tmp_dir);
@@ -1969,6 +5035,150 @@ public class AOTLocalTempCleanup {
             libqore_dir, tmp_dir, qore_bin));
         assertEq("\"before `code` after\"\n", out,
             "AOT qmod StoreLocal must keep IR-only local value alive after DiscardTemps");
+    }
+
+    testAOTModuleWeakDiagnosticHashesReleaseObjects() {
+        string tmp_dir = sprintf("/tmp/aot_weak_diag_mod_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+%allow-weak-references
+
+module AOTWeakDiagnosticLeak {
+    version = \"1.0\";
+    desc = \"weak diagnostic hash cleanup regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTWeakDiagnosticLeak {
+    public class Meta {
+        public updatePrepareUnlocked(auto action) {
+            action.touch();
+        }
+    }
+
+    public class State {
+        public {
+            static int destroyed = 0;
+            static hash<auto> live_action_hash = {};
+            static hash<auto> live_context_hash = {};
+            static hash<auto> type_map = {\"service\": {\"meta\": new Meta()}};
+        }
+    }
+
+    public class Registry {
+        public static registerContext(string id, hash<auto> info, auto obj) {
+            info.object := obj;
+            State::live_context_hash{id} = info;
+        }
+    }
+
+    public class Helper {
+        public init() {
+            State::live_action_hash{self.uniqueHash()} = {
+                \"phase\": \"init\",
+                \"tid\": gettid(),
+                \"stack\": (\"init\"),
+            };
+            State::live_action_hash{self.uniqueHash()}.object := self;
+        }
+
+        destructor() {
+            ++State::destroyed;
+        }
+    }
+
+    public class BaseContext {
+        public {
+            Helper atomic_action_helper;
+        }
+    }
+
+    public class Context inherits BaseContext {
+        private {
+            hash<auto> info = {\"service\": True};
+        }
+
+        constructor() {
+            Registry::registerContext(self.uniqueHash(), {
+                \"phase\": \"ctor\",
+                \"tid\": gettid(),
+                \"stack\": (\"ctor\"),
+            }, self);
+        }
+
+        public touch() {
+        }
+
+        public run() {
+            map State::type_map{$1}.meta.updatePrepareUnlocked(self), keys info;
+            atomic_action_helper = new Helper();
+            atomic_action_helper.init();
+        }
+
+        destructor() {
+            ++State::destroyed;
+        }
+    }
+
+    public sub launch() {
+        Context ctx();
+        ctx.run();
+        printf(\"inside=%d action=%y context=%y\\n\", State::destroyed,
+            boolean(State::live_action_hash.firstValue().object),
+            boolean(State::live_context_hash.firstValue().object));
+    }
+
+    public int sub getDestroyed() {
+        return State::destroyed;
+    }
+
+    public bool sub actionAlive() {
+        return boolean(State::live_action_hash.firstValue().object);
+    }
+
+    public bool sub contextAlive() {
+        return boolean(State::live_context_hash.firstValue().object);
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTWeakDiagnosticLeak.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTWeakDiagnosticLeak.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path);
+        assertTrue(result.compiled, "weak diagnostic hash module compiled: " + result.compile_out);
+        assertTrue(compileOutputHasCompleteAot(result.compile_out),
+            "weak diagnostic hash module fully precompiled: " + result.compile_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        {
+            File f();
+            f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%requires AOTWeakDiagnosticLeak
+
+AOTWeakDiagnosticLeak::launch();
+printf(\"after=%d action=%y context=%y\\n\", AOTWeakDiagnosticLeak::getDestroyed(),
+    AOTWeakDiagnosticLeak::actionAlive(), AOTWeakDiagnosticLeak::contextAlive());
+");
+            f.close();
+        }
+
+        string out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --exec-mode=ast %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, script_path));
+        assertEq("inside=0 action=True context=True\nafter=2 action=False context=False\n", out,
+            "AOT qmod weak diagnostic hash assignments must not retain helper/context objects");
     }
 
     testCrossModuleSameName() {
@@ -4411,6 +7621,36 @@ exit(0);
             "static members from strip-source module work correctly");
     }
 
+    testStripSourceMemberDefaultFunctionCall() {
+        string code = "%modern
+
+string sub make_name(string n) {
+    return \"proc-\" + n;
+}
+
+class C {
+    public {
+        string name = make_name(\"omq\");
+    }
+
+    string getName() {
+        return name;
+    }
+}
+
+C c();
+printf(\"%s\\n\", c.getName());
+";
+        hash<auto> result = compileWithFlags(code, ("--opt-level=3",));
+        assertTrue(result.compiled, "strip-source member-default function-call executable compiled: "
+            + result.compile_out);
+        assertTrue(compileOutputHasCompleteAot(result.compile_out),
+            "strip-source member-default function-call executable has complete AOT metadata: "
+            + result.compile_out);
+        assertEq("proc-omq\n", result.run_out,
+            "strip-source member default resolves same-program function call");
+    }
+
     testAOTMapHashKeyOpcodes() {
         # MapHashKeyValue: map $1.key, list<hash<auto>>
         string code = "%modern
@@ -5795,6 +9035,42 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "method-closure-param output matches interpreter");
+    }
+
+    testAOTMethodClosureThreadInitSelf() {
+        string code = "%modern
+
+class Target {
+    static check(auto t) {
+        if (!t) {
+            throw \"SELF-ERROR\", \"self was not captured\";
+        }
+        printf(\"captured=%s\\n\", t.className());
+    }
+}
+
+class Holder {
+    run() {
+        Program p = new Program(PO_NEW_STYLE);
+        p.setThreadInit(sub () {Target::check(self);});
+        p.parse(\"%modern
+background sub () {
+}();
+sleep(100ms);
+\", \"child\");
+        p.run();
+    }
+}
+
+Holder h();
+h.run();
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "method-closure-thread-init-self: all pre-compiled: " + result.compile_out);
+        assertEq("captured=Holder\n", result.run_out,
+            "method closure thread init captures lexical self");
     }
 
     testRegexSwitchInOnExit() {

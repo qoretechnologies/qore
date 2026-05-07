@@ -108,7 +108,7 @@ constexpr uint64_t QORE_AOT_FEAT_SIG_LINES       = 1ULL << 11; //!< per-variant 
 constexpr uint64_t QORE_AOT_FEAT_CONTEXT_IR      = 1ULL << 12; //!< native IR lowering of `context` statement (Context carries name+exp+where+sort; ContextMaxPos/SetPos/Destroy opcodes present)
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_SLICE    = 1ULL << 13; //!< LVPathStepKind::HashKeySlice / ListIndexSlice / ListRangeSlice with slice_operand_ids vector (multi-key hash / multi-index/range list remove/delete)
 constexpr uint64_t QORE_AOT_FEAT_MODULE_PATH_LISTS = 1ULL << 14; //!< per-Program %prepend-module-path / %append-module-path lists (MODULE_PATH_PREPEND / MODULE_PATH_APPEND sections)
-constexpr uint64_t QORE_AOT_FEAT_LVPATH_DELETE_EXPR = 1ULL << 15; //!< LValuePath records include optional original delete/remove lvalue expression for detach-then-destroy semantics
+constexpr uint64_t QORE_AOT_FEAT_LVPATH_DELETE_EXPR = 1ULL << 15; //!< Legacy: LValuePath records include an AST delete/remove expression; readers skip it, writers no longer emit it.
 constexpr uint64_t QORE_AOT_FEAT_LVPATH_PATTERN = 1ULL << 16; //!< serialized IR LValuePath records include optional regex/transliteration pattern metadata
 constexpr uint64_t QORE_AOT_FEAT_FUNC_CALL_VARIANT = 1ULL << 17; //!< FUNC_CALL expression slots include parse-time variant signature metadata
 constexpr uint64_t QORE_AOT_FEAT_BACKQUOTE = 1ULL << 18; //!< native IR Backquote opcode
@@ -132,8 +132,10 @@ constexpr uint64_t QORE_AOT_FEAT_TYPED_VALUE_CONTAINERS = 1ULL << 35; //!< Seria
 constexpr uint64_t QORE_AOT_FEAT_MODULE_COMMANDS = 1ULL << 36; //!< `%module-cmd` directives replayed from source-stripped AOT metadata
 constexpr uint64_t QORE_AOT_FEAT_WIDE_IR_OPERANDS = 1ULL << 37; //!< Serialized debug/handler IR instruction operand counts are u16, not legacy u8
 constexpr uint64_t QORE_AOT_FEAT_WIDE_LOC_TABLES = 1ULL << 38; //!< SLOT_MAPS location and statement-location table counts are u32, not legacy u16
+constexpr uint64_t QORE_AOT_FEAT_LOCAL_DECL_ORDINAL = 1ULL << 39; //!< local slot records carry body-local ordinal for duplicate-name disambiguation
+constexpr uint64_t QORE_AOT_FEAT_CLASS_INJECTION = 1ULL << 40; //!< class records preserve import/injection compatibility metadata
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -1165,6 +1167,7 @@ struct AOTLocalSlotId {
     std::string type_path;   //!< type path from QoreTypeInfo::getPath()
     uint8_t flags = 0;       //!< bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv
     uint16_t param_index = 0;//!< parameter index (valid only if is_param flag set)
+    uint32_t body_ordinal = UINT32_MAX; //!< index in all_body_locals when this slot is a body local
     const void* local_var_ptr = nullptr; //!< compile-time only: pointer to LocalVar for identity matching
 };
 
@@ -1225,7 +1228,6 @@ struct AOTLVPathSlotId {
     uint8_t binary_mut_op;     //!< LVBinaryMutOp
     uint8_t ternary_op;        //!< LVTernaryOp
     uint8_t ref_rv = 1;        //!< whether the return value of the operation is used
-    QoreValue delete_lvalue_expr; //!< original lvalue expression for AST-compatible Delete/Remove
     //! For RegexSubst / Transliterate binary_mut ops — the pattern info needed to
     //! reconstruct the QoreRegexSubst / QoreTransliteration runtime object.  Empty
     //! (pattern_empty = true) for opcodes that don't use a pattern expression.
@@ -1406,6 +1408,7 @@ class QoreAOTBinaryDeserializer {
     std::vector<qore_ns_private*> ns_list;
     std::vector<QoreClass*> class_list;
     std::vector<std::string> class_signature_hashes;
+    std::vector<std::string> class_injected_paths;
 
     // Embedded source data (from FUNC_SOURCES section)
     const char* fallback_source = nullptr;       //!< embedded source text
@@ -2156,6 +2159,9 @@ public:
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.deserializeFunctionsAndMethods(error);
                     })) return false;
+            if (!sessions.empty()) {
+                rebuildRootIndexesOnce();
+            }
             if (!runSessionPhase("AOT static member resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.resolveStaticMembersPhase(error);

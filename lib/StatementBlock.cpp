@@ -354,6 +354,7 @@ static bool irBlockHasTerminator(const QoreIRBasicBlock* block) {
 }
 
 static void push_top_level_local_var(LocalVar* lv, const QoreProgramLocation* loc) {
+    lv->setTopLevel();
     new VNode(lv, loc, 1, true);
 }
 
@@ -424,6 +425,9 @@ LocalVar* push_local_var(const char* name, const QoreProgramLocation* loc,
     }
 
     //printd(5, "push_local_var(): pushing var %s\n", name);
+    if (pflag & PF_TOP_LEVEL) {
+        lv->setTopLevel();
+    }
     new VNode(lv, loc, n_refs, pflag & PF_TOP_LEVEL);
     return lv;
 }
@@ -746,6 +750,11 @@ void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
     if (!lv_list) {
         // v2 path: no parse() was called, so lvars was never created.
         // Create an LVList from the AOT context locals so doTopLevelInstantiation() works.
+        for (int i = 0; i < ctx->num_locals; ++i) {
+            if (ctx->locals[i]) {
+                ctx->locals[i]->setTopLevel();
+            }
+        }
         lvars = new LVList(ctx->locals, ctx->num_locals);
         return;
     }
@@ -754,6 +763,9 @@ void TopLevelStatementBlock::setLVarsFromAOTContext(QoreAOTContext* ctx) {
                             static_cast<size_t>(ctx->num_locals));
     for (size_t i = 0; i < count; ++i) {
         // Note: this modifies const data, but it's needed for pointer consistency
+        if (ctx->locals[i]) {
+            ctx->locals[i]->setTopLevel();
+        }
         const_cast<LVList*>(lv_list)->lv[i] = ctx->locals[i];
     }
 }

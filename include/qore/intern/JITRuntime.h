@@ -147,9 +147,8 @@ int64_t qore_rt_has_exception(ExceptionSink* xsink);
 
 // --- Invoke helpers ---
 
-//! Invoke a QoreValue expression node (AST evaluation).
-//! expr_ptr is the raw pointer to the QoreValue::bits field holding the expression.
-//! Returns the NaN-boxed result; sets xsink on exception.
+//! Fail-fast guard for any remaining generic expression invocation path.
+//! Native IR/JIT/AOT lowering must not execute arbitrary AST expressions.
 uint64_t qore_rt_invoke_expr(uint64_t expr_bits, ExceptionSink* xsink);
 
 //! Create a QoreStringNode from a C string and return as NaN-boxed QoreValue.
@@ -224,8 +223,8 @@ int64_t qore_rt_guard_float(uint64_t val);
 uint64_t qore_rt_box_big_int(int64_t val);
 
 // --- Local variable helpers ---
-// These keep the Qore thread-local variable stack in sync so that AST
-// callbacks (via qore_rt_invoke_expr) can resolve local variables.
+// These keep the Qore thread-local variable stack in sync for runtime helpers,
+// closures, reference arguments, and dynamic calls that resolve locals via TLS.
 
 class LocalVar;
 class Var;
@@ -423,8 +422,8 @@ void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink);
 
 struct QoreAOTContext;
 
-//! Register an on_block_exit handler via AOT context slot
-void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type);
+//! Register an on_block_exit handler via AOT context slot; raises if handler IR is missing.
+void qore_rt_push_on_block_exit_aot(QoreAOTContext* ctx, int32_t idx, int type, ExceptionSink* xsink);
 
 //! AOT slot-indexed variant of qore_rt_sync_local().
 void qore_rt_sync_local_aot(QoreAOTContext* ctx, int32_t idx, uint64_t value);
@@ -905,16 +904,32 @@ uint64_t qore_rt_new_object_nb(const QoreClass* qc,
     const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
     ExceptionSink* xsink);
 
+//! Constructor call variant that consumes caller-owned temporary argument cleanup slots
+//! after the constructor argument list has taken any required references.
+uint64_t qore_rt_new_object_nb_consume_args(const QoreClass* qc,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args,
+    uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
 //! AOT variant of qore_rt_new_object_nb: loads qc/variant from the AOT context's
 //! call_targets slot (populated at module load time from serialized class_path
 //! + variant_sig).  Avoids baking stale class pointers into AOT native code.
 uint64_t qore_rt_new_object_nb_aot(QoreAOTContext* ctx, int32_t slot,
     uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! AOT constructor call variant that consumes caller-owned temporary argument cleanup slots.
+uint64_t qore_rt_new_object_nb_aot_consume_args(QoreAOTContext* ctx,
+    int32_t slot, uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    ExceptionSink* xsink);
+
 //! Direct method call for devirtualized calls (final classes) — builds QoreListNode
 //! and calls qore_method_private::eval().
 uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_t* args, int nargs,
     ExceptionSink* xsink);
+
+//! Direct method call variant that consumes caller-owned temporary argument cleanup slots
+//! after the callee has taken any required references.
+uint64_t qore_rt_call_method_direct_consume_args(const QoreMethod* method, uint64_t* args,
+    uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 //! Fast method call — bypasses QoreListNode construction for devirtualized method calls.
 //! Directly instantiates parameters from NaN-boxed args and calls the cached JIT/AOT function.
@@ -922,6 +937,11 @@ uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_t* args, in
 //! Falls back to qore_rt_call_method_direct() if the callee is not JIT-compiled.
 uint64_t qore_rt_call_method_fast(const QoreMethod* method, const AbstractQoreFunctionVariant* variant,
     uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! Fast method call variant that consumes caller-owned temporary argument cleanup slots.
+uint64_t qore_rt_call_method_fast_consume_args(const QoreMethod* method,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, uint64_t** arg_cleanups,
+    int nargs, ExceptionSink* xsink);
 
 //! Fast call reference/closure call — takes the pre-evaluated call reference value and
 //! pre-evaluated args (both NaN-boxed). Calls ResolvedCallReferenceNode::execValue() directly,
@@ -957,18 +977,40 @@ uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* ctx, int32_t opcode, 
 uint64_t qore_rt_dot_eval_method_direct(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
     const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Direct dot-eval method call that consumes caller-owned temporary argument cleanup slots.
+uint64_t qore_rt_dot_eval_method_direct_consume_args(uint64_t base_bits, const QoreMethod* method,
+    const QoreClass* qc, const AbstractQoreFunctionVariant* variant, uint64_t* args,
+    uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
 //! Direct dot-eval pseudo-method call with pre-evaluated base and arguments.
 //! Dispatches to qore_class_private::evalPseudoMethod() with QoreListNode built from args.
 uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
     const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Direct dot-eval pseudo-method call that consumes caller-owned temporary argument cleanup slots.
+uint64_t qore_rt_dot_eval_pseudo_method_direct_consume_args(uint64_t base_bits, const QoreMethod* method,
+    const QoreClass* qc, const AbstractQoreFunctionVariant* variant, uint64_t* args,
+    uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+//! Name-based dot-eval method call that consumes caller-owned temporary argument cleanup slots.
+uint64_t qore_rt_dot_eval_method_by_name_consume_args(uint64_t base_bits, const char* method_name,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
 //! AOT variant of qore_rt_dot_eval_method_direct: resolves method/qc/variant from context slot.
 uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! AOT variant that consumes caller-owned temporary argument cleanup slots.
+uint64_t qore_rt_dot_eval_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
 //! AOT variant of qore_rt_dot_eval_pseudo_method_direct: resolves from context slot.
 uint64_t qore_rt_dot_eval_pseudo_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
     uint64_t* args, int nargs, ExceptionSink* xsink);
+
+//! AOT pseudo-method variant that consumes caller-owned temporary argument cleanup slots.
+uint64_t qore_rt_dot_eval_pseudo_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
+    uint64_t base_bits, uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 //! Direct static method call with pre-evaluated arguments — builds QoreListNode.
 //! Calls qore_method_private::eval() with nullptr for self.
@@ -981,6 +1023,14 @@ uint64_t qore_rt_call_static_method_direct_aot(QoreAOTContext* ctx, int32_t slot
 
 //! AOT static method call with consumed caller temp cleanup slots.
 uint64_t qore_rt_call_static_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+//! AOT direct method call with consumed caller temp cleanup slots.
+uint64_t qore_rt_call_method_direct_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+//! AOT fast method call with consumed caller temp cleanup slots.
+uint64_t qore_rt_call_method_fast_aot_consume_args(QoreAOTContext* ctx, int32_t slot,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 //! Cast operation with pre-evaluated inner value.

@@ -146,8 +146,8 @@ private:
         return runTimeClosureTypeInfo;
     }
 
-    DLLLOCAL QoreClosureNode* evalClosure() const;
-    DLLLOCAL QoreObjectClosureNode* evalObjectClosure() const;
+    DLLLOCAL QoreClosureBase* evalClosure() const;
+    DLLLOCAL QoreClosureBase* evalObjectClosure() const;
 };
 
 #endif

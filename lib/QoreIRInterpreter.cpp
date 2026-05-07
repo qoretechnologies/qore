@@ -308,26 +308,6 @@ static QoreValue getListAssignmentValue(QoreValue value, int64_t index) {
     return index == 0 ? value.refSelf() : QoreValue();
 }
 
-static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
-    if (!expr.hasNode()) {
-        if (xsink) {
-            xsink->raiseException("IR-INTERPRETER-ERROR", "expression opcode requires a parse node");
-        }
-        return QoreValue();
-    }
-    bool needs_deref = true;
-    ValueHolder node(expr.refSelf(), xsink);
-    if (xsink && *xsink) {
-        return QoreValue();
-    }
-    QoreValue result = node->eval(needs_deref, xsink);
-    // Ensure the caller always owns a reference to the result
-    if (!needs_deref && result.hasNode()) {
-        result = result.refSelf();
-    }
-    return result;
-}
-
 // Helper to check if a weak reference's target object is still valid
 // Returns the value if valid, or NOTHING if the weak reference target was deleted
 static QoreValue validateWeakRef(const QoreValue& val) {
@@ -508,86 +488,30 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
     return QoreValue();
 }
 
+static QoreValue raiseIRInterpreterAstFallback(QoreIROpcode op, const QoreValue& expr, ExceptionSink* xsink) {
+    if (xsink) {
+        const AbstractQoreNode* node = expr.getInternalNode();
+        const ParseNode* parse_node = dynamic_cast<const ParseNode*>(node);
+        const QoreProgramLocation* loc = parse_node ? parse_node->loc : nullptr;
+        if (loc) {
+            xsink->raiseException("IR-AST-FALLBACK-ERROR",
+                "IR interpreter executable AST expression fallback is disabled: opcode=%s(%d) "
+                "expr_type=%s node_type=%s source=%s:%d; add native IR lowering instead",
+                getOpcodeName(static_cast<int>(op)), static_cast<int>(op), expr.getTypeName(),
+                node ? typeid(*node).name() : "<null>", loc->getFileValue(), loc->start_line);
+        } else {
+            xsink->raiseException("IR-AST-FALLBACK-ERROR",
+                "IR interpreter executable AST expression fallback is disabled: opcode=%s(%d) "
+                "expr_type=%s node_type=%s; add native IR lowering instead",
+                getOpcodeName(static_cast<int>(op)), static_cast<int>(op), expr.getTypeName(),
+                node ? typeid(*node).name() : "<null>");
+        }
+    }
+    return QoreValue();
+}
+
 QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, ExceptionSink* xsink) {
     switch (op) {
-        case QoreIROpcode::Call:
-        case QoreIROpcode::CallDirect:
-        case QoreIROpcode::CallIndirect:
-        case QoreIROpcode::CallMethod:
-        case QoreIROpcode::CallStatic:
-        case QoreIROpcode::Invoke:
-        case QoreIROpcode::ExtractAny:
-        case QoreIROpcode::ExtractList:
-        case QoreIROpcode::ExtractString:
-        case QoreIROpcode::ExtractBinary:
-        case QoreIROpcode::RemoveAny:
-        case QoreIROpcode::RemoveList:
-        case QoreIROpcode::RemoveHash:
-        case QoreIROpcode::RemoveObject:
-        case QoreIROpcode::RemoveString:
-        case QoreIROpcode::RemoveBinary:
-        case QoreIROpcode::KeysAny:
-        case QoreIROpcode::KeysList:
-        case QoreIROpcode::KeysHash:
-        case QoreIROpcode::RegexMatchAny:
-        case QoreIROpcode::RegexMatchBool:
-        case QoreIROpcode::RegexNMatchBool:
-        case QoreIROpcode::RegexExtractAny:
-        case QoreIROpcode::RegexExtractList:
-        case QoreIROpcode::RegexSubstAny:
-        case QoreIROpcode::RegexSubstString:
-        case QoreIROpcode::InstanceOfBool:
-        case QoreIROpcode::TrimAny:
-        case QoreIROpcode::TrimString:
-        case QoreIROpcode::ChompAny:
-        case QoreIROpcode::ChompString:
-        case QoreIROpcode::TransliterateAny:
-        case QoreIROpcode::TransliterateString:
-        // NOTE: BackgroundInt is handled in main execute() loop, not here
-        case QoreIROpcode::ListAssignAny:
-        case QoreIROpcode::PopAny:
-        case QoreIROpcode::PushAny:
-        case QoreIROpcode::ExistsAny:
-        case QoreIROpcode::ExistsBool:
-        case QoreIROpcode::ElementsAny:
-        case QoreIROpcode::ElementsInt:
-        case QoreIROpcode::DotEvalAny:
-        case QoreIROpcode::DotEvalInt:
-        case QoreIROpcode::DotEvalFloat:
-        case QoreIROpcode::DotEvalString:
-        case QoreIROpcode::DotEvalDate:
-        case QoreIROpcode::DotEvalList:
-        case QoreIROpcode::DotEvalHash:
-        case QoreIROpcode::DotEvalObject:
-        case QoreIROpcode::MapAny:
-        case QoreIROpcode::MapInt:
-        case QoreIROpcode::MapFloat:
-        case QoreIROpcode::SelectAny:
-        case QoreIROpcode::SelectInt:
-        case QoreIROpcode::SelectFloat:
-        case QoreIROpcode::FoldlAny:
-        case QoreIROpcode::FoldlInt:
-        case QoreIROpcode::FoldlFloat:
-        case QoreIROpcode::FoldrAny:
-        case QoreIROpcode::FoldrInt:
-        case QoreIROpcode::FoldrFloat:
-        case QoreIROpcode::FoldrSumInt:
-        case QoreIROpcode::FoldrSumFloat:
-        case QoreIROpcode::FoldrProdInt:
-        case QoreIROpcode::FoldrProdFloat:
-        case QoreIROpcode::FoldrDiffInt:
-        case QoreIROpcode::FoldrDiffFloat:
-        case QoreIROpcode::FoldrMinInt:
-        case QoreIROpcode::FoldrMinFloat:
-        case QoreIROpcode::FoldrMaxInt:
-        case QoreIROpcode::FoldrMaxFloat:
-        case QoreIROpcode::MapSelectAny:
-        case QoreIROpcode::MapSelectList:
-        case QoreIROpcode::HashMapAny:
-        case QoreIROpcode::HashMap:
-        case QoreIROpcode::HashMapSelectAny:
-        case QoreIROpcode::HashMapSelect:
-            return evalExprNode(expr, xsink);
         case QoreIROpcode::InvokeSimError: {
             if (xsink) {
                 xsink->raiseException("IR-INVOKE-SIM-ERROR", "invoke simulated error");
@@ -605,10 +529,7 @@ QoreValue QoreIRInterpreter::evalExpr(QoreIROpcode op, const QoreValue& expr, Ex
             assert(false);
             return QoreValue();
         default:
-            // LValue opcodes (StoreLValue, AddAssignLValue, ShlAssignLValue, etc.)
-            // and any other opcodes not explicitly handled above
-            // are evaluated via the original AST expression
-            return evalExprNode(expr, xsink);
+            return raiseIRInterpreterAstFallback(op, expr, xsink);
     }
 }
 
@@ -660,7 +581,7 @@ void QoreIRInterpreter::dumpLastSilentFail(const char* tag) {
 struct IROnBlockExitHandler {
     obe_type_e type;
     StatementBlock* code;
-    const QoreIRFunction* handler_ir = nullptr;  //!< compiled handler (nullptr = AST fallback)
+    const QoreIRFunction* handler_ir = nullptr;  //!< compiled handler (required for IR/JIT/AOT execution)
 };
 
 // recycling all per-call data structures across function calls.
@@ -706,6 +627,33 @@ struct IRCallFrame {
     // allocation after the first call at each recursion depth.
     // IMPORTANT: QoreValue has no destructor that calls discard(), so we must
     // explicitly discard all reference-counted values before clearing vectors.
+    void releaseReferences(ExceptionSink* xsink) {
+        for (auto it = cleanup.rbegin(); it != cleanup.rend(); ++it) {
+            uint32_t id = *it;
+            if (id < values.size()) {
+                values[id].discard(xsink);
+                values[id] = QoreValue();
+            }
+        }
+        cleanup.clear();
+        for (auto& val : locals_slot_cache) {
+            val.discard(xsink);
+            val = QoreValue();
+        }
+        for (auto& entry : globals) {
+            entry.second.discard(xsink);
+        }
+        globals.clear();
+        for (auto& entry : threadlocals) {
+            entry.second.discard(xsink);
+        }
+        threadlocals.clear();
+        for (auto& entry : closures) {
+            entry.second.discard(xsink);
+        }
+        closures.clear();
+    }
+
     void reset(size_t reserve_size, size_t local_slot_count) {
         // Do NOT iterate values[] and discard — slots may hold borrowed (non-owning)
         // references intentionally stored by opcodes like ListGetInt/HashGetKey. These
@@ -1908,7 +1856,8 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     return res;
                 }
             }
-            // Fall through: no operands or cast failed — direct eval avoids evalExprNode overhead
+            // Fall through: no operands or native call metadata failed — report
+            // unsupported lowering instead of evaluating the original AST.
             // Handle ScopedObjectCallNode (bare "new") directly
             if (inv->expr.hasNode()) {
                 auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(
@@ -1939,7 +1888,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     return dot_eval->evalWithBase(base, xsink);
                 }
             }
-            // Direct eval — avoids evalExprNode() overhead
+            // No supported native dot-eval lowering was available.
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
@@ -2361,11 +2310,11 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
         }
 
-        // Lvalue-modifying opcodes: direct eval() — avoids evalExprNode() overhead.
+        // Lvalue-modifying opcodes without native LValuePath lowering.
         // These fire when tryEmitLValuePathOp rejected the lvalue shape (e.g. an
         // exotic compound lvalue that extractLValuePath doesn't decompose yet).
-        // QORE_IR_TRACE_LVMUT_FALLBACK=1 surfaces every such hit on stderr to
-        // help catalogue remaining shapes needing native IR lowering.
+        // They are errors so remaining shapes are fixed instead of silently
+        // running through AST.
         case QoreIROpcode::ExtractAny:
         case QoreIROpcode::ExtractList:
         case QoreIROpcode::ExtractString:
@@ -2543,8 +2492,14 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     IRCallFrame& frame = tl_frame_pool.push(reserve_size, local_slot_count);
     // RAII guard: return the frame to the pool on any exit path
     struct FrameGuard {
-        ~FrameGuard() { tl_frame_pool.pop(); }
-    } frame_guard;
+        IRCallFrame& frame;
+        ~FrameGuard() {
+            // Pooled frames outlive the call.  Never let a dormant frame retain
+            // refs from IR-only local caches or missed cleanup paths.
+            frame.releaseReferences(nullptr);
+            tl_frame_pool.pop();
+        }
+    } frame_guard{frame};
 
     IRValueSlots values{frame.values};
     auto& cleanup = frame.cleanup;
@@ -2943,7 +2898,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // Also re-instantiates pre-instantiated closure vars that were popped mid-execution
     // (e.g. loop-body closure-capture vars whose CVV was popped by UninstantiateLocal) so that
     // evalTiered's cleanup can pop exactly one CVV per ast_visible_body_locals var.
-    auto cleanupLocalCaches = [&]() {
+    auto cleanupLocalCaches = [&](bool preserve_ir_only = true) {
         // Re-instantiate pre-instantiated closure vars still in locally_uninstantiated.
         // evalTiered pushes exactly one CVV per ast_visible_body_locals var and pops exactly
         // one on cleanup — we must leave one CVV on the cvstack at execute() exit.
@@ -2962,7 +2917,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             if (preserveParentSlotForWriteback(i)) {
                 continue;
             }
-            if (i < locals_ir_only.size() && locals_ir_only[i]) {
+            if (preserve_ir_only && i < locals_ir_only.size() && locals_ir_only[i]) {
                 continue;  // Preserve IR-only locals
             }
             locals_slot_cache[i].discard(xsink);
@@ -3195,6 +3150,8 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         for (auto& step : path_copy) {
             if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
                 QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                step.slice_values.clear();
+                step.slice_values.push_back(key_val);
                 QoreStringValueHelper key_str(key_val);
                 step.name = key_str->c_str();
             } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
@@ -3367,7 +3324,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         if (!values_cleaned) {
             cleanupValues(values, cleanup, xsink, true, cleanup_log);
         }
-        cleanupLocalCaches();
+        cleanupLocalCaches(false);
         if (!xsink || !*xsink) {
             return_value = QoreValue();
             return true;
@@ -4633,7 +4590,7 @@ next_instruction:
                         // out slot's refSelf'd temp ref.
                         bool is_weak_ref_local = false;
                         if (!needs_deref && val.hasNode()) {
-                            LocalVarValue* lvv = thread_try_find_lvar(local_inst->local->getName());
+                            LocalVarValue* lvv = thread_try_find_lvar(local_inst->local);
                             if (lvv) {
                                 qore_type_t raw_type = lvv->val.getType();
                                 if (raw_type == NT_WEAKREF || raw_type == NT_WEAKREF_HASH
@@ -4822,7 +4779,7 @@ load_local_done:
                             // with closureUse() set (captured by inner closures) but the
                             // current execution context is the function's own body, not a
                             // closure. In that case, the variable lives on the local stack.
-                            if (LocalVarValue* lvv = thread_try_find_lvar(local_inst->local->getName())) {
+                            if (LocalVarValue* lvv = thread_try_find_lvar(local_inst->local)) {
                                 bool needs_deref = false;
                                 out = lvv->eval(needs_deref, xsink);
                                 if (xsink && *xsink) {
@@ -5436,7 +5393,7 @@ load_local_done:
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->target_slot_id];
                         if (!lvv) {
-                            lvv = thread_try_find_lvar(fused_inst->target->getName());
+                            lvv = thread_try_find_lvar(fused_inst->target);
                         }
                         if (lvv) {
                             discard(lvv->val.assign(result_val), xsink);
@@ -5495,7 +5452,7 @@ load_local_done:
                         // Use cached LocalVarValue* for direct write-through (avoids TLS lookup)
                         LocalVarValue*& lvv = locals_lvar_cache[fused_inst->slot_id];
                         if (!lvv) {
-                            lvv = thread_try_find_lvar(fused_inst->local->getName());
+                            lvv = thread_try_find_lvar(fused_inst->local);
                         }
                         if (lvv) {
                             discard(lvv->val.assign(result_val), xsink);
@@ -5800,6 +5757,23 @@ load_local_done:
                 auto* no_inst = static_cast<QoreIRNewObjectInstruction*>(inst);
                 const QoreClass* qc = no_inst->qc;
                 const AbstractQoreFunctionVariant* variant = no_inst->variant;
+                if (!qc && no_inst->expr.hasNode()) {
+                    const AbstractQoreNode* node = no_inst->expr.getInternalNode();
+                    if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
+                        qc = no->getClass();
+                        variant = no->getVariant();
+                    } else if (auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(node)) {
+                        qc = scoped->oc;
+                        variant = scoped->getVariant();
+                    } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
+                        qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
+                        variant = vrn->getVariant();
+                    }
+                    if (qc) {
+                        no_inst->qc = qc;
+                        no_inst->variant = variant;
+                    }
+                }
                 if (!qc) {
                     xsink->raiseException("RUNTIME-ERROR",
                         "cannot construct object: class not resolved");
@@ -6415,7 +6389,7 @@ load_local_done:
                             if (local_inst->slot_id < locals_lvar_cache.size()) {
                                 LocalVarValue*& lvv = locals_lvar_cache[local_inst->slot_id];
                                 if (!lvv) {
-                                    lvv = thread_try_find_lvar(local_inst->local->getName());
+                                    lvv = thread_try_find_lvar(local_inst->local);
                                 }
                                 if (lvv) {
                                     qore_type_t vt = val.getType();
@@ -6674,7 +6648,7 @@ load_local_done:
                             }
                             local_inst->local->uninstantiate(xsink);
                         } else {
-                            LocalVarValue* lvar = thread_try_find_lvar(local_inst->local->getName());
+                            LocalVarValue* lvar = thread_try_find_lvar(local_inst->local);
                             if (lvar) {
                                 // Release ALL value slot references to this object
                                 // BEFORE lvar->del() so del() is the final deref and
@@ -8467,33 +8441,40 @@ load_local_done:
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
                                 || path_inst->unary_op == LVUnaryOp::Delete);
-                // AST-compatible path: delegate Delete/Remove to AST's
-                // LValueRemoveHelper when the original AST lvalue expression was
-                // stored during lowering.  LValueRemoveHelper::deleteLValue() uses
-                // detach-then-destroy ordering (remove entry from container FIRST,
-                // then call doDelete on the detached object) which is essential for
-                // object destructors whose C++ member cleanup chains interact with
-                // async I/O controllers.  The in-place setEntry(NOTHING) approach
-                // below deadlocks on such objects (WebSocketH2PerfTest concurrent
-                // cleanup — see session p37).  This path re-evaluates dynamic
-                // operands (hash keys / list indices) via the stored AST expression.
-                if (is_remove && path_inst->delete_lvalue_expr.hasNode()) {
-                    bool is_delete = (path_inst->unary_op == LVUnaryOp::Delete);
-                    LValueRemoveHelper lvrh(path_inst->delete_lvalue_expr, xsink, is_delete);
-                    if (lvrh && !*xsink) {
-                        if (is_delete) {
-                            lvrh.deleteLValue();
-                            res = QoreValue();
+                auto finish_delete_result = [&](QoreValue& value) -> bool {
+                    if (path_inst->unary_op != LVUnaryOp::Delete) {
+                        return true;
+                    }
+                    if (value.getType() == NT_OBJECT) {
+                        QoreObject* o = value.get<QoreObject>();
+                        if (o->isSystemObject()) {
+                            xsink->raiseException("SYSTEM-OBJECT-ERROR",
+                                "cannot delete a system constant object (class '%s')", o->getClassName());
                         } else {
-                            res = lvrh.removeValue();
+                            o->doDelete(xsink);
                         }
                     }
-                    if (xsink && *xsink) {
+                    value.discard(xsink);
+                    value = QoreValue();
+                    return !*xsink;
+                };
+                if (is_remove && path_copy.size() == 1
+                        && path_copy[0].kind == LVPathStepKind::SelfMember) {
+                    QoreObject* obj = runtime_get_stack_object();
+                    if (!obj) {
+                        xsink->raiseException("LVALUE-ERROR",
+                            "no object context for self member remove");
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
                     }
-                    // Skip to common epilogue (cleanupLocalCaches + set result)
+                    res = qore_object_private::takeMember(*obj, xsink,
+                        path_copy[0].name.c_str(), false);
+                    if ((xsink && *xsink) || !finish_delete_result(res)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                     goto lvalue_path_unary_done;
                 }
                 if (is_remove && path_inst->path.size() >= 2) {
@@ -8507,14 +8488,29 @@ load_local_done:
                         const LVPathStep& last_step = path_copy.back();
                         QoreValue container = lvh.getValue();
                         qore_type_t ct = container.getType();
-                        if ((last_step.kind == LVPathStepKind::HashKeyConst
+                        bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
+                                || last_step.kind == LVPathStepKind::HashKey);
+                        bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
+                                && last_step.slice_values[0].getType() == NT_LIST;
+                        if ((last_step.kind == LVPathStepKind::HashKeySlice || last_is_hash_list)
+                                && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                            res = executeLVHashKeySliceRemove(lvh, ct, last_step,
+                                    path_inst->unary_op, xsink);
+                        } else if ((last_step.kind == LVPathStepKind::HashKeyConst
                                 || last_step.kind == LVPathStepKind::HashKey) && ct == NT_HASH) {
                             lvh.ensureUnique();
                             QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                             res = h->takeKeyValue(last_step.name.c_str());
-                            if (path_inst->unary_op == LVUnaryOp::Delete) {
-                                res.discard(xsink);
-                                res = QoreValue();
+                            finish_delete_result(res);
+                        } else if ((last_step.kind == LVPathStepKind::HashKeyConst
+                                || last_step.kind == LVPathStepKind::HashKey)
+                                && (ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                            QoreObject* o = ct == NT_OBJECT
+                                ? lvh.getValue().get<QoreObject>()
+                                : lvh.getValue().get<const WeakReferenceNode>()->get();
+                            if (o) {
+                                res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
+                                finish_delete_result(res);
                             }
                         } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
                             lvh.ensureUnique();
@@ -8527,7 +8523,7 @@ load_local_done:
                                 l->setEntry(idx, QoreValue(), xsink);
                             }
                         } else if (last_step.kind == LVPathStepKind::HashKeySlice
-                                && (ct == NT_HASH || ct == NT_OBJECT)) {
+                                && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
                             res = executeLVHashKeySliceRemove(lvh, ct, last_step,
                                     path_inst->unary_op, xsink);
                         } else if (last_step.kind == LVPathStepKind::ListIndexSlice
@@ -8576,7 +8572,7 @@ load_local_done:
                         ReferenceNode* ref = nullptr;
                         if (lv) {
                             if (!lv->closureUse()) {
-                                LocalVarValue* lvv = thread_try_find_lvar(lv->getName());
+                                LocalVarValue* lvv = thread_try_find_lvar(lv);
                                 if (lvv && lvv->val.getType() == NT_REFERENCE) {
                                     ref = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
                                 }
@@ -10641,7 +10637,7 @@ lvalue_path_unary_done:
                 }
                 // Invalidate all caches BEFORE the lvalue operation to prevent COW inflation
                 cleanupLocalCaches();
-                // Direct eval() — avoids evalExprNode() overhead (refSelf + ValueHolder)
+                // Unsupported expression shape: fail fast instead of evaluating AST.
                 QoreValue res = raiseIRAstFallback(xsink, "expr", &func, block, ip, inst, inst->opcode,
                     expr_inst->expr);
                 if (xsink && *xsink) {
@@ -10738,7 +10734,7 @@ lvalue_path_unary_done:
                 ++ip;
                 break;
             }
-        // Non-modifying AST opcodes: direct eval — no cache invalidation needed
+        // Background operator: only decomposed native call shapes are supported.
         case QoreIROpcode::BackgroundInt: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
                 QoreValue res;
@@ -10751,11 +10747,8 @@ lvalue_path_unary_done:
                 if (matched) {
                     res = bg_result;
                 } else {
-                    // Full AST fallback path — the inner expression wasn't a
-                    // decomposable call shape, so we hand the whole
-                    // QoreBackgroundOperatorNode to do_op_background via the AST
-                    // eval path.  Tracing via QORE_IR_TRACE_BG_FALLBACK=1 surfaces
-                    // which shapes still rely on this.
+                    // The inner expression was not a decomposable call shape.
+                    // Report it so native lowering can be added.
                     if (getenv("QORE_IR_TRACE_BG_FALLBACK")) {
                         const AbstractQoreNode* inner = bg_op ? bg_op->getExp().getInternalNode()
                                                               : nullptr;
@@ -11020,7 +11013,7 @@ lvalue_path_unary_done:
                 }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
-                cleanupLocalCaches();
+                cleanupLocalCaches(false);
                 return true;
             }
             case QoreIROpcode::ReturnNothing: {
@@ -11035,7 +11028,7 @@ lvalue_path_unary_done:
                 }
                 executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
-                cleanupLocalCaches();
+                cleanupLocalCaches(false);
                 return true;
             }
             case QoreIROpcode::Phi: {
@@ -11091,7 +11084,7 @@ lvalue_path_unary_done:
         xsink->raiseException("IR-EXEC-ERROR", "executor reached invalid state");
     }
     cleanupValues(values, cleanup, xsink, true, cleanup_log);
-    cleanupLocalCaches();
+    cleanupLocalCaches(false);
     return false;
 }
 

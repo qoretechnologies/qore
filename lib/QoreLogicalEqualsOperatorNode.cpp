@@ -186,6 +186,14 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
         return ld->isEqual(*rd);
     }
 
+    if (lt == NT_NULL || rt == NT_NULL) {
+        return lt == NT_NULL && rt == NT_NULL;
+    }
+
+    if (lt == NT_NOTHING || rt == NT_NOTHING) {
+        return lt == NT_NOTHING && rt == NT_NOTHING;
+    }
+
     const AbstractQoreNode* ln = l.getInternalNode();
     if (!ln) {
         ln = &Nothing;

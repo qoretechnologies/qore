@@ -184,16 +184,7 @@ struct InstRegistryMethodRef {
 };
 
 static const QoreClass* instRegistryFindClassByPath(QoreProgram* pgm, const char* class_path, bool pseudo) {
-    if (!pgm || !class_path || !*class_path) {
-        return nullptr;
-    }
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
-    if (!qc && pseudo) {
-        qc = instRegistryFindPseudoClassByPath(class_path);
-    }
-    return qc;
+    return qore_aot_resolve_class_ref(pgm, class_path, pseudo);
 }
 
 static const QoreMethod* instRegistryFindMethodByName(const QoreClass* qc, const char* method_name) {
@@ -326,9 +317,7 @@ static StaticClassVarRefNode* instRegistryResolveStaticVarRef(QoreProgram* pgm, 
         return nullptr;
     }
 
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str(), found_ns);
+    const QoreClass* qc = instRegistryFindClassByPath(pgm, class_path.c_str(), false);
     if (!qc) {
         return nullptr;
     }
@@ -1199,9 +1188,7 @@ static std::unique_ptr<QoreIRInstruction> readCallMethodDirect(
     const QoreMethod* method = nullptr;
     const QoreClass* qc = nullptr;
     if (class_path && *class_path) {
-        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-        const qore_ns_private* found_ns = nullptr;
-        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && method_name && *method_name) {
             method = qc->findMethod(method_name);
             if (!method) {
@@ -1270,9 +1257,7 @@ static std::unique_ptr<QoreIRInstruction> readInvokeMethodDirect(
     const QoreMethod* method = nullptr;
     const QoreClass* qc = nullptr;
     if (class_path && *class_path) {
-        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-        const qore_ns_private* found_ns = nullptr;
-        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && method_name && *method_name) {
             method = qc->findMethod(method_name);
             if (!method) {
@@ -1331,9 +1316,7 @@ static std::unique_ptr<QoreIRInstruction> readCallStaticDirect(
 
     const QoreMethod* method = nullptr;
     if (class_path && *class_path) {
-        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-        const qore_ns_private* found_ns = nullptr;
-        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        const QoreClass* qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && method_name && *method_name) {
             method = qc->findStaticMethod(method_name);
         }
@@ -1894,9 +1877,7 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
     const QoreClass* qc = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
     if (class_path && *class_path) {
-        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-        const qore_ns_private* found_ns = nullptr;
-        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        qc = instRegistryFindClassByPath(ctx.pgm, class_path, false);
         if (qc && variant_sig && *variant_sig) {
             // Resolve variant by walking the constructor's variants
             const QoreMethod* cons = qc->getConstructor();
@@ -2943,12 +2924,9 @@ static bool writeLValuePath(AOTInstWriteCtx& ctx) {
     ctx.writer.writeU8(static_cast<uint8_t>(pi->unary_op));
     ctx.writer.writeU8(static_cast<uint8_t>(pi->binary_mut_op));
     ctx.writer.writeU8(static_cast<uint8_t>(pi->ternary_op));
-    if (pi->delete_lvalue_expr.hasNode()) {
-        ctx.writer.writeU8(1);
-        if (!ctx.writeExpr(ctx.writer, pi->delete_lvalue_expr)) {
-            return false;
-        }
-    } else {
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
+        // Legacy reserved byte. New writers do not set this feature; if a
+        // caller does, emit "not present" rather than executable AST fallback.
         ctx.writer.writeU8(0);
     }
     // RegexSubst/Transliterate operators store their compiled pattern on the
@@ -2990,8 +2968,8 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
     if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
         if (QoreAOTBinaryReader::readU8(ctx.ptr)) {
             std::string error;
-            pi->delete_lvalue_expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
-            pi->owns_delete_lvalue_expr = true;
+            QoreValue legacy_delete_lvalue_expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+            legacy_delete_lvalue_expr.discard(nullptr);
             if (!error.empty()) {
                 ctx.error = error;
                 delete pi;

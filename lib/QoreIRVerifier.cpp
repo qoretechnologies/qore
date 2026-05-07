@@ -1485,6 +1485,14 @@ void QoreIRFunction::computeIROnlyLocals() {
             printd(5, "  local '%s' (%p): closure-captured (non-IR-only)\n", lv->getName(), key);
             continue;
         }
+        // Top-level locals are program-wide lexical variables.  A function can
+        // read or write them without an AST subtree in the current function,
+        // so intra-function IR-only analysis cannot prove runtime-stack sync
+        // is unnecessary.
+        if (lv->isTopLevel()) {
+            printd(5, "  local '%s' (%p): top-level (non-IR-only)\n", lv->getName(), key);
+            continue;
+        }
         // Reference-type locals can alias other variables — must stay AST-visible
         if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
             printd(5, "  local '%s' (%p): reference type (non-IR-only)\n", lv->getName(), key);

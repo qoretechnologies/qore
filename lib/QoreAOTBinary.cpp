@@ -997,13 +997,13 @@ static void resolveDeferredExprTreeDefault(std::vector<uint8_t>& blob,
     (void)member_name;
 }
 
-static void resolveDeferredNativeExprDefault(const QoreAOTBinaryReader& reader,
+static bool resolveDeferredNativeExprDefault(const QoreAOTBinaryReader& reader,
         std::vector<uint8_t>& blob, QoreValue& default_val, QoreProgram* pgm,
         const char* kind, const char* owner_name, const char* member_name,
-        bool wrap_const_ref_in_rcr = false, LocalVar** locals = nullptr,
-        int num_locals = 0) {
+        std::string& error, bool wrap_const_ref_in_rcr = false,
+        LocalVar** locals = nullptr, int num_locals = 0) {
     if (blob.empty()) {
-        return;
+        return true;
     }
     if (default_val.hasNode()) {
         default_val.discard(nullptr);
@@ -1014,20 +1014,34 @@ static void resolveDeferredNativeExprDefault(const QoreAOTBinaryReader& reader,
     reader.wrap_const_ref_in_rcr = wrap_const_ref_in_rcr;
     const uint8_t* p = blob.data();
     const uint8_t* end = p + blob.size();
-    std::string error;
-    QoreValue v = readOneExpr(reader, p, end, error, pgm, locals, num_locals, nullptr, 0);
+    std::string expr_error;
+    QoreValue v = readOneExpr(reader, p, end, expr_error, pgm, locals, num_locals, nullptr, 0);
     reader.wrap_const_ref_in_rcr = old_wrap;
 
-    if (!error.empty() || p != end) {
-        printd(0, "AOT deser: native default expression for %s '%s::%s' failed: %s%s\n",
-            kind ? kind : "member", owner_name ? owner_name : "(unknown)",
-            member_name ? member_name : "(unknown)", error.c_str(),
-            p != end ? " (trailing payload bytes)" : "");
+    if (!expr_error.empty() || p != end) {
+        error = "AOT cannot deserialize native default expression for ";
+        error += kind ? kind : "member";
+        error += " '";
+        error += owner_name ? owner_name : "<unknown>";
+        error += "::";
+        error += member_name ? member_name : "<unknown>";
+        error += "'";
+        if (!expr_error.empty()) {
+            error += ": ";
+            error += expr_error;
+        }
+        if (p != end) {
+            error += expr_error.empty() ? ": " : "; ";
+            error += "trailing payload bytes";
+        }
+        printd(0, "AOT deser: %s\n", error.c_str());
         v.discard(nullptr);
-    } else {
-        default_val = v;
+        blob.clear();
+        return false;
     }
+    default_val = v;
     blob.clear();
+    return true;
 }
 
 static constexpr const char* AOT_CONST_PATH_PREFIX = "@qore-aot-const-path:";
@@ -4384,13 +4398,20 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         writer.writeStringRef(priv->path.c_str());
         writer.writeU32(ci.ns_idx);
 
-        // flags: bit 0 = pub, bit 1 = final
+        // flags: bit 0 = pub, bit 1 = final, bit 2 = injected import,
+        // bit 3 = reexported import
         uint16_t flags = 0;
         if (priv->pub) {
             flags |= 0x0001;
         }
         if (priv->final) {
             flags |= 0x0002;
+        }
+        if (priv->inject) {
+            flags |= 0x0004;
+        }
+        if (priv->reexport) {
+            flags |= 0x0008;
         }
         writer.writeU16(flags);
 
@@ -4406,6 +4427,9 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         } else {
             static const uint8_t empty_hash[SH_SIZE] = {};
             writer.writeBytes(empty_hash, SH_SIZE);
+        }
+        if ((writer.feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0) {
+            writer.writeStringRef(priv->injectedClass ? priv->injectedClass->path.c_str() : "");
         }
 
         // base classes
@@ -5279,7 +5303,12 @@ bool qoreAOTWriteClosureCaptures(QoreAOTBinaryWriter& writer, const LVarSet* vli
             (void)slot_id;
             int32_t parent_slot = qoreAOTFindParentLocalSlot(parent_locals, lv);
             bool owned = qoreAOTClosureOwnsLocal(closure_ir, lv);
-            if (parent_slot >= 0 || !owned) {
+            // A closure created in a method has lexical `self` semantics.  Do
+            // not let the closure signature's synthetic selfid make the parent
+            // object look like an owned local; it must be captured so delayed
+            // invocation, for example Program::setThreadInit(), still sees it.
+            bool lexical_self = lv->isSelf() || (lv->getName() && strcmp(lv->getName(), "self") == 0);
+            if (parent_slot >= 0 || !owned || lexical_self) {
                 qoreAOTAppendClosureCapture(captures, const_cast<LocalVar*>(lv), parent_slot);
             }
         }
@@ -6787,6 +6816,9 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeStringRef(local.type_path.c_str());
             writer.writeU8(local.flags);
             writer.writeU16(local.param_index);
+            if ((writer.feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0) {
+                writer.writeU32(local.body_ordinal);
+            }
         }
         traceEntryOffset("after locals");
 
@@ -6903,30 +6935,11 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU8(lvid.binary_mut_op);
             writer.writeU8(lvid.ternary_op);
             writer.writeU8(lvid.ref_rv);
-            // QORE_AOT_FEAT_LVPATH_DELETE_EXPR: preserve the original AST
-            // lvalue expression so runtime Delete/Remove can use
-            // LValueRemoveHelper's detach-then-destroy semantics when needed.
-            writer.writeU8(lvid.delete_lvalue_expr.hasNode() ? 1 : 0);
-            if (lvid.delete_lvalue_expr.hasNode()) {
-                qoreAOTClearExprSerializationError();
-                bool delete_expr_ok = classifyAndWriteExpr(writer, lvid.delete_lvalue_expr,
-                    func.slot_ids.locals, func.slot_ids.globals, func_const_reverse_map);
-                std::string expr_error;
-                bool expr_error_set = qoreAOTTakeExprSerializationError(expr_error);
-                if (!delete_expr_ok || expr_error_set) {
-                    error = "failed to serialize LValuePath delete expression in function '"
-                        + func.name + "'";
-                    if (expr_error_set) {
-                        error += ": ";
-                        error += expr_error;
-                    } else {
-                        error += ": writer returned false without a nested expression diagnostic";
-                    }
-                    error += "; delete-lvalue-expr=";
-                    error += qoreAOTDescribeExpr(lvid.delete_lvalue_expr);
-                    error += "; no fallback marker was emitted";
-                    return false;
-                }
+            if ((writer.feature_flags & QORE_AOT_FEAT_LVPATH_DELETE_EXPR) != 0) {
+                // Legacy reserved byte. New writers never set this feature; if
+                // an embedding path does, emit "not present" so no executable
+                // AST lvalue fallback metadata is serialized.
+                writer.writeU8(0);
             }
             // Pattern info for RegexSubst / Transliterate binary_mut ops.
             // Emitted unconditionally as (present_flag u8) so readers can skip.
@@ -7620,6 +7633,11 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     writer.writeU16(static_cast<uint16_t>(func.all_body_locals.size()));
 
     // 2. Local variable slot table
+    std::unordered_map<const LocalVar*, uint32_t> body_local_ordinals;
+    for (uint32_t i = 0; i < func.all_body_locals.size(); ++i) {
+        body_local_ordinals[func.all_body_locals[i]] = i;
+    }
+
     // Sort by slot_id for deterministic serialization
     std::vector<std::pair<const LocalVar*, uint32_t>> sorted_slots(
         func.local_var_slots.begin(), func.local_var_slots.end());
@@ -7630,6 +7648,10 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
         std::string type_path = getLocalTypePathString(lv);
         writer.writeStringRef(type_path.c_str());
         writer.writeU32(slot_id);
+        if ((writer.feature_flags & QORE_AOT_FEAT_LOCAL_DECL_ORDINAL) != 0) {
+            auto ordinal_it = body_local_ordinals.find(lv);
+            writer.writeU32(ordinal_it != body_local_ordinals.end() ? ordinal_it->second : UINT32_MAX);
+        }
     }
 
     // 3. Body locals
@@ -7842,20 +7864,28 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembersPhase(std::string& error) {
     return resolveStaticMembers(error);
 }
 
+static void rebuildAOTRootIndexes(QoreProgram* pgm) {
+    qore_program_private* pp_idx = qore_program_private::get(*pgm);
+    qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+        qore_ns_private::get(*pp_idx->RootNS));
+    rpriv->rebuildAllIndexes();
+}
+
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
     if (!resolveTypes(error)
             || !resolveConstants(error)
             || !resolveStaticsAndConstants(error)) {
         return false;
     }
-    {
-        qore_program_private* pp_idx = qore_program_private::get(*pgm);
-        qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
-            qore_ns_private::get(*pp_idx->RootNS));
-        rpriv->rebuildAllIndexes();
+    rebuildAOTRootIndexes(pgm);
+    if (!deserializeFunctionsAndMethods(error)) {
+        return false;
     }
-    return deserializeFunctionsAndMethods(error)
-        && resolveStaticMembersPhase(error)
+    // Function deserialization mutates namespace function lists. Rebuild before
+    // materializing member default expression ASTs that resolve through the
+    // root runtime indexes.
+    rebuildAOTRootIndexes(pgm);
+    return resolveStaticMembersPhase(error)
         && resolveMembers(error);
 }
 
@@ -8156,19 +8186,13 @@ bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
     // runtime lookups like runtimeFindFunctionEntry() can find the
     // deserialized functions, classes, etc.
     {
-        qore_program_private* pp_idx = qore_program_private::get(*pgm);
-        qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
-            qore_ns_private::get(*pp_idx->RootNS));
-        rpriv->rebuildAllIndexes();
+        rebuildAOTRootIndexes(pgm);
     }
     return finalizePostIndex(error);
 }
 
 void QoreAOTBinaryMultiDeserializer::rebuildRootIndexesOnce() {
-    qore_program_private* pp_idx = qore_program_private::get(*pgm);
-    qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
-        qore_ns_private::get(*pp_idx->RootNS));
-    rpriv->rebuildAllIndexes();
+    rebuildAOTRootIndexes(pgm);
 }
 
 bool QoreAOTBinaryDeserializer::resolveAll(std::string& error) {
@@ -8210,6 +8234,28 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
+    auto restore_path = [](qore_ns_private* nsp, const char* serialized_path, const qore_ns_private* parent) {
+        std::string path;
+        if (serialized_path && *serialized_path) {
+            path = serialized_path;
+            if (path != "::" && path.rfind("::", 0) != 0) {
+                path.insert(0, "::");
+            }
+        } else if (parent) {
+            path = parent->path;
+            if (path != "::") {
+                path += "::";
+            }
+            path += nsp->name;
+        } else {
+            path = "::";
+        }
+
+        if (nsp->path != path) {
+            nsp->path = std::move(path);
+        }
+    };
+
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
         const char* path = reader.readStringRef(ptr);
@@ -8220,6 +8266,7 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
 
         if (parent_idx == UINT32_MAX) {
             // Root namespace - use existing
+            restore_path(root_ns, path, nullptr);
             ns_list[i] = root_ns;
         } else {
             // Create child namespace and add to parent
@@ -8237,6 +8284,10 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
 
             if (existing) {
                 qore_ns_private* existing_priv = qore_ns_private::get(*existing);
+                restore_path(existing_priv, path, ns_list[parent_idx]);
+                if (flags & 0x0001) {
+                    existing_priv->pub = true;
+                }
                 // Repair from_module attribution when this module is the authoritative owner.
                 // The existing namespace may have been created earlier in this program by a
                 // dependency that extends our namespace (e.g. ConnectionProvider.qmod depends on
@@ -8259,6 +8310,7 @@ bool QoreAOTBinaryDeserializer::deserializeNamespaces(std::string& error) {
                 nsp->pub = (flags & 0x0001) != 0;
                 // Mark as non-builtin so it's treated as user-defined and can be merged
                 nsp->builtin = false;
+                restore_path(nsp, path, ns_list[parent_idx]);
                 ns_list[parent_idx]->ns->addNamespace(ns);
                 ns_list[i] = nsp;
             }
@@ -8283,7 +8335,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
     class_list.resize(count);
     class_signature_hashes.resize(count);
+    class_injected_paths.resize(count);
     const bool has_class_hash = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_HASH) != 0;
+    const bool has_class_injection
+        = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0;
 
     // Populate the root namespace's clmap incrementally as each class is
     // created, so standard lookup paths (runtimeFindClass, findClass,
@@ -8323,6 +8378,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             }
             ptr += SH_SIZE;
         }
+        const char* injected_path = "";
+        if (has_class_injection) {
+            injected_path = reader.readStringRef(ptr);
+        }
 
         // Validate namespace index before creating the class
         if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
@@ -8338,6 +8397,10 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         priv->pub = (flags & 0x0001) != 0;
         if (flags & 0x0002) {
             priv->final = true;
+        }
+        priv->inject = (flags & 0x0004) != 0;
+        if (flags & 0x0008) {
+            priv->reexport = true;
         }
         bool class_already_existed = false;
         int add_rv = ns_list[ns_idx]->classList.add(qc);
@@ -8396,6 +8459,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         // — they already have their bases, members, etc. set up
         if (class_already_existed) {
             bases.clear();
+        } else if (injected_path && *injected_path) {
+            class_injected_paths[i] = injected_path;
         }
         pending_bases.push_back(std::move(bases));
 
@@ -8509,6 +8574,47 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             }
         }
         pending_class_constants.push_back(std::move(class_constants));
+    }
+
+    if (has_class_injection) {
+        std::unordered_map<std::string, QoreClass*> all_class_map;
+        for (uint32_t i = 0; i < class_list.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class injection map build")) {
+                error = "AOT class injection map build cancelled";
+                return false;
+            }
+            if (!class_list[i]) {
+                continue;
+            }
+            const char* cpath = class_list[i]->getPath();
+            if (!cpath || !*cpath) {
+                continue;
+            }
+            all_class_map[cpath] = class_list[i];
+            if (!strncmp(cpath, "::", 2)) {
+                all_class_map[std::string(cpath + 2)] = class_list[i];
+            } else {
+                all_class_map[std::string("::") + cpath] = class_list[i];
+            }
+        }
+
+        for (uint32_t i = 0; i < class_injected_paths.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT class injection resolution")) {
+                error = "AOT class injection resolution cancelled";
+                return false;
+            }
+            if (preexisting_classes.count(i) || !class_list[i] || class_injected_paths[i].empty()) {
+                continue;
+            }
+            const QoreClass* injected = qoreAOTResolveClassRefForDeserialization(
+                pgm, class_injected_paths[i].c_str(), &all_class_map);
+            if (!injected) {
+                error = "cannot resolve injected target class '" + class_injected_paths[i] + "' for class '"
+                    + std::string(class_list[i]->getName()) + "'";
+                return false;
+            }
+            qore_class_private::get(*class_list[i])->injectedClass = qore_class_private::get(*injected);
+        }
     }
 
     return true;
@@ -8800,9 +8906,11 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                 pim.default_val, getProgram(), "class", qc->getName(),
                 pim.name.c_str());
             LocalVar* self_local = qore_class_private::getSelfId(*qc);
-            resolveDeferredNativeExprDefault(reader, pim.pending_expr_native_blob,
-                pim.default_val, getProgram(), "class", qc->getName(),
-                pim.name.c_str(), false, &self_local, 1);
+            if (!resolveDeferredNativeExprDefault(reader, pim.pending_expr_native_blob,
+                    pim.default_val, getProgram(), "class", qc->getName(),
+                    pim.name.c_str(), error, false, &self_local, 1)) {
+                return false;
+            }
 
             // Transfer ownership of the default value to the class member
             QoreValue default_val = pim.default_val;
@@ -9008,9 +9116,11 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             resolveDeferredExprTreeDefault(psm.pending_expr_tree_blob,
                 psm.default_val, getProgram(), "class", qc->getName(),
                 psm.name.c_str());
-            resolveDeferredNativeExprDefault(reader, psm.pending_expr_native_blob,
-                psm.default_val, getProgram(), "class", qc->getName(),
-                psm.name.c_str());
+            if (!resolveDeferredNativeExprDefault(reader, psm.pending_expr_native_blob,
+                    psm.default_val, getProgram(), "class", qc->getName(),
+                    psm.name.c_str(), error)) {
+                return false;
+            }
 
             // Create the static variable info. The default value is
             // installed via assignInit() below (after construction) so the
@@ -9386,9 +9496,11 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
             resolveDeferredExprTreeDefault(phm.pending_expr_tree_blob,
                 phm.default_val, getProgram(), "hashdecl", hd->getName(),
                 phm.name.c_str());
-            resolveDeferredNativeExprDefault(reader, phm.pending_expr_native_blob,
-                phm.default_val, getProgram(), "hashdecl", hd->getName(),
-                phm.name.c_str(), true);
+            if (!resolveDeferredNativeExprDefault(reader, phm.pending_expr_native_blob,
+                    phm.default_val, getProgram(), "hashdecl", hd->getName(),
+                    phm.name.c_str(), error, true)) {
+                return false;
+            }
 
             const QoreTypeInfo* mti = type_resolver->resolve(phm.type_path.c_str(), error);
             if (!error.empty()) {

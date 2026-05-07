@@ -99,6 +99,7 @@ protected:
 public:
     QoreLValueGeneric val;
     const char* id;
+    const void* local_var;
     // declaration order for proper cleanup ordering (issue #5168)
     uint64_t decl_order = 0;
     int frame_marker_id = -1;  // frame count value at time of pushFrameBoundary(), -1 if not a marker
@@ -106,13 +107,13 @@ public:
     bool frame_boundary : 1;
     bool block_cleared : 1;  // set by del() when block-scoped var is cleared at block exit
 
-    DLLLOCAL VarValueBase(const char* n_id, valtype_t t = QV_Node) : val(t), id(n_id), finalized(false), frame_boundary(false), block_cleared(false) {
+    DLLLOCAL VarValueBase(const char* n_id, valtype_t t = QV_Node) : val(t), id(n_id), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
     }
 
-    DLLLOCAL VarValueBase(const char* n_id, const QoreTypeInfo* varTypeInfo) : val(varTypeInfo), id(n_id), finalized(false), frame_boundary(false), block_cleared(false) {
+    DLLLOCAL VarValueBase(const char* n_id, const QoreTypeInfo* varTypeInfo) : val(varTypeInfo), id(n_id), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
     }
 
-    DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
+    DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), local_var(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
     }
 
     DLLLOCAL void setDeclOrder(uint64_t order) {
@@ -155,7 +156,7 @@ public:
 
 class LocalVarValue : public VarValueBase {
 public:
-    DLLLOCAL void set(const char* n_id, const QoreTypeInfo* varTypeInfo, QoreValue nval, bool assign,
+    DLLLOCAL void set(const char* n_id, const void* n_local_var, const QoreTypeInfo* varTypeInfo, QoreValue nval, bool assign,
             bool static_assignment) {
         //printd(5, "LocalVarValue::set() this: %p id: '%s' type: '%s' code: %d static_assignment: %d\n", this, n_id,
         //    QoreTypeInfo::getName(typeInfo), nval.getType(), static_assignment);
@@ -186,6 +187,7 @@ public:
         }
 
         id = n_id;
+        local_var = n_local_var;
         block_cleared = false;
 
         // try to set an optimized value type for the value holder if possible
@@ -429,8 +431,9 @@ public:
     }
 
     DLLLOCAL LocalVar(const LocalVar& old) : name(old.name), closure_use(old.closure_use),
-            parse_assigned(old.parse_assigned), is_self(old.is_self), is_auto_type(old.is_auto_type),
-            no_narrowing(old.no_narrowing), typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
+            parse_assigned(old.parse_assigned), is_self(old.is_self), is_top_level(old.is_top_level),
+            is_auto_type(old.is_auto_type), no_narrowing(old.no_narrowing),
+            typeInfo(old.typeInfo), refTypeInfo(old.refTypeInfo),
             narrowedTypeInfo(old.narrowedTypeInfo) {
     }
 
@@ -466,7 +469,7 @@ public:
     DLLLOCAL void instantiateIntern(QoreValue nval, bool assign) {
         if (!closure_use) {
             LocalVarValue* val = thread_instantiate_lvar();
-            val->set(name.c_str(), typeInfo, nval, assign, false);
+            val->set(name.c_str(), this, typeInfo, nval, assign, false);
         } else {
             thread_instantiate_closure_var(name.c_str(), typeInfo, nval, assign);
         }
@@ -476,7 +479,7 @@ public:
         printd(5, "LocalVar::instantiateSelf(%p) this: %p '%s'\n", value, this, name.c_str());
         if (!closure_use) {
             LocalVarValue* val = thread_instantiate_lvar();
-            val->set(name.c_str(), typeInfo, value, true, true);
+            val->set(name.c_str(), this, typeInfo, value, true, true);
         } else {
             QoreValue val(value->refSelf());
             thread_instantiate_closure_var(name.c_str(), typeInfo, val, true);
@@ -500,6 +503,13 @@ public:
     }
 
     DLLLOCAL QoreValue eval(bool& needs_deref, ExceptionSink* xsink) const {
+        if (is_self || (name == "self")) {
+            if (QoreObject* obj = runtime_get_stack_object()) {
+                needs_deref = true;
+                return QoreValue(obj->refSelf());
+            }
+        }
+
         if (!closure_use) {
             LocalVarValue* val = get_var();
             if (!val) {
@@ -737,6 +747,14 @@ public:
         is_self = true;
     }
 
+    DLLLOCAL void setTopLevel() {
+        is_top_level = true;
+    }
+
+    DLLLOCAL bool isTopLevel() const {
+        return is_top_level;
+    }
+
     //! Returns true if the variable has an auto type that can be narrowed
     DLLLOCAL bool isAutoType() const {
         return is_auto_type;
@@ -793,6 +811,7 @@ private:
     bool closure_use = false,
         parse_assigned = false,
         is_self = false,
+        is_top_level = false,
         is_auto_type = false,       // true if declared type is an auto type (hash<auto>, list<auto>, etc.)
         no_narrowing = false;       // true if declared with auto! to disable type narrowing
     const QoreTypeInfo* typeInfo = nullptr;
@@ -801,7 +820,7 @@ private:
     const QoreProgramLocation* narrowedLoc = nullptr;  // location where narrowing occurred (parse-time only)
 
     DLLLOCAL LocalVarValue* get_var() const {
-        return thread_try_find_lvar(name.c_str());
+        return thread_try_find_lvar(this);
     }
 
     //! Helper to detect if a type is an auto type that can be narrowed
