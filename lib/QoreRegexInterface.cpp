@@ -87,6 +87,9 @@ QoreRegexSubstInterface::QoreRegexSubstInterface(ExceptionSink* xsink, const Qor
 
 QoreRegexSubstInterface::QoreRegexSubstInterface(ExceptionSink* xsink, const QoreString& pattern, int64 opts)
         : priv(new qore_regex_subst_private(pattern, opts, xsink)) {
+    if (opts & QRE_GLOBAL) {
+        priv->setGlobal();
+    }
 }
 
 QoreRegexSubstInterface::QoreRegexSubstInterface(ExceptionSink* xsink, const char* pattern)
@@ -95,10 +98,17 @@ QoreRegexSubstInterface::QoreRegexSubstInterface(ExceptionSink* xsink, const cha
 
 QoreRegexSubstInterface::QoreRegexSubstInterface(ExceptionSink* xsink, const char* pattern, int64 opts)
         : priv(new qore_regex_subst_private(pattern, opts, xsink)) {
+    if (opts & QRE_GLOBAL) {
+        priv->setGlobal();
+    }
 }
 
 QoreRegexSubstInterface::~QoreRegexSubstInterface() {
     delete priv;
+}
+
+void QoreRegexSubstInterface::setGlobal() {
+    priv->setGlobal();
 }
 
 QoreStringNode* QoreRegexSubstInterface::subst(const QoreString& target, const QoreString& newstr,

@@ -863,7 +863,8 @@ public class DpqlCompletionProvider {
             case ">=": return DP_SEARCH_OP_GE;
             case "between": return DP_SEARCH_OP_BETWEEN;
             case "in": return DP_SEARCH_OP_IN;
-            case "=~": return DP_SEARCH_OP_REGEX;
+            case "=~": return DP_OP_REGEX_MATCH;
+            case "!~": return DP_OP_REGEX_NMATCH;
         }
         return NOTHING;
     }

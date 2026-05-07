@@ -83,6 +83,8 @@ public class DpqlSerializer {
             DP_SEARCH_OP_IN: DPQL_PREC_COMPARISON,
             DP_OP_NOT_IN: DPQL_PREC_COMPARISON,
             DP_SEARCH_OP_REGEX: DPQL_PREC_COMPARISON,
+            DP_OP_REGEX_MATCH: DPQL_PREC_COMPARISON,
+            DP_OP_REGEX_NMATCH: DPQL_PREC_COMPARISON,
             DP_SEARCH_OP_NOT: DPQL_PREC_UNARY,
             DP_OP_PLUS: DPQL_PREC_ADDITIVE,
             DP_OP_MINUS: DPQL_PREC_ADDITIVE,
@@ -195,7 +197,12 @@ public class DpqlSerializer {
                 break;
 
             case DP_SEARCH_OP_REGEX:
-                result = serializeRegexOp(exp.args);
+            case DP_OP_REGEX_MATCH:
+                result = serializeRegexOp(exp.args, "=~");
+                break;
+
+            case DP_OP_REGEX_NMATCH:
+                result = serializeRegexOp(exp.args, "!~");
                 break;
 
             case DP_OP_PLUS:
@@ -325,7 +332,10 @@ public class DpqlSerializer {
     }
 
     #! Serializes the REGEX operator
-    private string serializeRegexOp(list<auto> args) {
+    /** @param args the operator argument list (left, pattern[, flags-list])
+        @param op_sym the source-level operator symbol (\"=~\" or \"!~\")
+    */
+    private string serializeRegexOp(list<auto> args, string op_sym = "=~") {
         if (args.size() < 2) {
             return "";
         }
@@ -391,7 +401,7 @@ public class DpqlSerializer {
             }
         }
 
-        return field + " =~ /" + pattern + "/" + flags;
+        return field + " " + op_sym + " /" + pattern + "/" + flags;
     }
 
     #! Serializes a function call using the DPQL symbol

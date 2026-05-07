@@ -72,6 +72,8 @@ public const DPQL_TOK_OP_NOT = 18;
 public const DPQL_TOK_OP_REGEX = 19;
 #! Regex pattern (/pattern/flags)
 public const DPQL_TOK_REGEX = 20;
+#! Regex non-match operator (!~)
+public const DPQL_TOK_OP_NMATCH = 21;
 #! Addition operator (+)
 public const DPQL_TOK_OP_PLUS = 23;
 #! Subtraction operator (-)
@@ -135,6 +137,7 @@ public const DpqlTokenTypeNames = {
     DPQL_TOK_OP_OR: "||",
     DPQL_TOK_OP_NOT: "!",
     DPQL_TOK_OP_REGEX: "=~",
+    DPQL_TOK_OP_NMATCH: "!~",
     DPQL_TOK_REGEX: "regex",
     DPQL_TOK_OP_PLUS: "+",
     DPQL_TOK_OP_MINUS: "-",
@@ -596,6 +599,10 @@ public class DpqlTokenizer {
             if (peekChar() == "=") {
                 advance(2);
                 return makeToken(DPQL_TOK_OP_NE, "!=", start_line, start_column);
+            }
+            if (peekChar() == "~") {
+                advance(2);
+                return makeToken(DPQL_TOK_OP_NMATCH, "!~", start_line, start_column);
             }
             # Single ! is logical NOT
             advance();
