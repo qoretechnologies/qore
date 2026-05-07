@@ -82,6 +82,8 @@ public class ConnectionSchemeCache {
 
             "baselinkerrest": "BaseLinkerRestClient",
 
+            "bge-m3": "BgeM3RestClient",
+
             "huggingface": "HuggingFaceRestClient",
 
             "bigcommerceres": "BigCommerceRestClient",

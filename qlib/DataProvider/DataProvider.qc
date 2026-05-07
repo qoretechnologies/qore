@@ -90,6 +90,7 @@ public class DataProvider {
             "baselinker": "BaseLinkerDataProvider",
 
             "bcrest": "CdsRestDataProvider",
+            "bge-m3-fastapi": "BgeM3FastApiDataProvider",
             "bigcommerce": "BigCommerceDataProvider",
             "bitly": "BitlyDataProvider",
             "circle": "CircleDataProvider",

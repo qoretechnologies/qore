@@ -21,7 +21,7 @@ class TestEmbedder inherits AbstractEmbedder {
         Mutex m();
     }
 
-    list<float> encode(string text) {
+    list<float> encode(string text, *hash<auto> opts) {
         m.lock();
         on_exit m.unlock();
         ++encode_calls;
@@ -29,10 +29,10 @@ class TestEmbedder inherits AbstractEmbedder {
         return vectorFor(text);
     }
 
-    list<list<float>> encodeBatch(list<string> texts) {
+    list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts) {
         list<list<float>> rv = ();
         foreach string t in (texts) {
-            push rv, encode(t);
+            push rv, encode(t, opts);
         }
         return rv;
     }

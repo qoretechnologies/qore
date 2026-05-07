@@ -1,0 +1,166 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore BgeM3FastApiDataProvider module definition
+
+/*  BgeM3FastApiDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) BgeM3RestClient
+%requires RestClientIo
+
+module BgeM3FastApiDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for BGE-M3 FastAPI sidecar services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new BgeM3FastApiDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": BgeM3FastApiDataProvider::AppName,
+            "display_name": "BGE-M3 FastAPI",
+            "short_desc": "BGE-M3 multilingual embeddings via the FastAPI sidecar",
+            "desc": "Provides integration with the [BGE-M3](https://huggingface.co/BAAI/bge-m3) "
+                "multilingual embedding model served via a FastAPI sidecar.\n\n"
+                "BGE-M3 supports dense, sparse, and multi-vector representations "
+                "in a single model, enabling hybrid retrieval pipelines that combine "
+                "semantic similarity with BM25-style lexical matching.\n\n"
+                "**Supported operations**:\n"
+                "- **Embeddings**: dense and/or sparse vector generation with optional "
+                "batch sizing\n"
+                "- **Health**: liveness and host memory pressure inspection\n"
+                "- **Metrics**: Prometheus text-format runtime metrics",
+            "scheme": "bge-m3",
+            "logo": BgeM3FastApiLogo,
+            "logo_file_name": "bge-m3-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register create-embeddings action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BgeM3FastApiDataProvider::AppName,
+            "path": "/create-embeddings",
+            "action": "create-embeddings",
+            "display_name": "Create Embeddings",
+            "short_desc": "Generate embedding vectors via the BGE-M3 FastAPI sidecar",
+            "desc": "Converts a list of input texts into embedding vectors using the "
+                "[BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI sidecar's native "
+                "`/embed` endpoint.\n\n"
+                "The sidecar can produce dense vectors (for semantic similarity), "
+                "sparse vectors (for BM25-style lexical matching), or both — set "
+                "`return_dense` and `return_sparse` accordingly.\n\n"
+                "**Example use cases**:\n"
+                "- RAG vector index population with hybrid retrieval support\n"
+                "- On-prem multilingual semantic search\n"
+                "- Reranking candidate retrieval with sparse + dense fusion",
+            "action_code": DPAT_API,
+            "groups": ("Embeddings",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BgeM3FastApiEmbeddingsRequestDataType::Fields{"texts",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BgeM3FastApiEmbeddingsRequestDataType::Fields{"return_dense", "return_sparse",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                BgeM3FastApiEmbeddingsRequestDataType::Fields - (
+                    "texts", "return_dense", "return_sparse",
+                )
+            ),
+            "output_type": BgeM3FastApiEmbeddingsDataProvider::ResponseType,
+        });
+
+        # register health action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BgeM3FastApiDataProvider::AppName,
+            "path": "/health",
+            "action": "health",
+            "display_name": "Get Health",
+            "short_desc": "Liveness and host memory pressure inspection",
+            "desc": "Returns the sidecar's liveness status (typically `\"ok\"`) and "
+                "host memory pressure data.  Upstream routers can use the `pressure` "
+                "field to drive backoff escalation between local and cloud routing.",
+            "action_code": DPAT_API,
+            "groups": ("Admin",),
+            "options": {},
+            "output_type": BgeM3FastApiHealthDataProvider::ResponseType,
+        });
+
+        # register metrics action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BgeM3FastApiDataProvider::AppName,
+            "path": "/metrics",
+            "action": "metrics",
+            "display_name": "Get Metrics",
+            "short_desc": "Prometheus text-format runtime metrics",
+            "desc": "Returns the sidecar's Prometheus text-exposition-format metrics "
+                "in the `text` field of the response.  Suitable for scraping by "
+                "Prometheus, Loki, Alloy, or any other tool that consumes the "
+                "Prometheus text exposition format.",
+            "action_code": DPAT_API,
+            "groups": ("Admin",),
+            "options": {},
+            "output_type": BgeM3FastApiMetricsDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage BgeM3FastApiDataProvider Module
+
+    @tableofcontents
+
+    @section bgem3fastapidataproviderintro BgeM3FastApiDataProvider Introduction
+
+    The %BgeM3FastApiDataProvider module provides a data provider API for
+    [BGE-M3](https://huggingface.co/BAAI/bge-m3) FastAPI sidecar services —
+    multilingual text embeddings (dense + sparse) suitable for hybrid
+    retrieval pipelines.
+
+    The following data providers are exposed:
+    - @ref BgeM3FastApiDataProvider::BgeM3FastApiDataProvider "BgeM3FastApiDataProvider" — the root provider
+    - @ref BgeM3FastApiDataProvider::BgeM3FastApiEmbeddingsDataProvider "BgeM3FastApiEmbeddingsDataProvider" — `/embed` (dense + sparse vectors)
+    - @ref BgeM3FastApiDataProvider::BgeM3FastApiHealthDataProvider "BgeM3FastApiHealthDataProvider" — `/health` liveness probe
+    - @ref BgeM3FastApiDataProvider::BgeM3FastApiMetricsDataProvider "BgeM3FastApiMetricsDataProvider" — `/metrics` Prometheus exposition
+
+    The sidecar serves a single embedding model (\c bge-m3); the \c model
+    option defaults to \c "bge-m3" and is reported back via \c getModel() so
+    downstream collection metadata can record the model name without an
+    extra round trip.
+
+    @section BgeM3FastApiDataProviderRelnotes Release Notes
+
+    @subsection BgeM3FastApiDataProviderv1_0 BgeM3FastApiDataProvider v1.0
+    - the initial version of the %BgeM3FastApiDataProvider module
+*/
+
+#! App logo loaded from file
+public const BgeM3FastApiLogo = File::readTextFile(get_script_dir() + "/bge-m3-logo.svg");

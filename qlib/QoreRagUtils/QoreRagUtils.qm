@@ -34,6 +34,7 @@
 %requires(reexport) OpenAiRestClient
 %requires(reexport) VoyageRestClient
 %requires(reexport) SGLangRestClient
+%requires(reexport) BgeM3RestClient
 
 module QoreRagUtils {
     version = "1.0.1";
@@ -81,7 +82,8 @@ module QoreRagUtils {
     - Embedders: @ref QoreRagUtils::LocalOnnxEmbedder "LocalOnnxEmbedder",
       @ref QoreRagUtils::OpenAiEmbedder "OpenAiEmbedder",
       @ref QoreRagUtils::VoyageEmbedder "VoyageEmbedder",
-      @ref QoreRagUtils::SGLangEmbedder "SGLangEmbedder"
+      @ref QoreRagUtils::SGLangEmbedder "SGLangEmbedder",
+      @ref QoreRagUtils::BgeM3FastApiEmbedder "BgeM3FastApiEmbedder"
     - Rerankers: @ref QoreRagUtils::LocalOnnxReranker "LocalOnnxReranker",
       @ref QoreRagUtils::VoyageReranker "VoyageReranker",
       @ref QoreRagUtils::HttpGatewayReranker "HttpGatewayReranker"
@@ -160,6 +162,21 @@ public hashdecl EmbedderConfig {
     *int dimension;
     #! Batch size for bulk encoding
     int batch_size = 32;
+    #! Default request timeout for HTTP-based embedders (per-call \c opts override takes precedence)
+    /** Forwarded to the underlying REST client at construction; ignored by
+        non-HTTP backends.  Use Qore's \c timeout type literals (e.g. \c 10s,
+        \c 5000ms).  See @ref AbstractEmbedder::encodeBatch() "encodeBatch()"
+        for per-call override semantics.
+    */
+    *timeout timeout;
+    #! Default connection timeout for HTTP-based embedders (per-call \c opts override takes precedence)
+    /** Forwarded to the underlying REST client at construction; ignored by
+        non-HTTP backends.  Note: @ref RestClientIo only applies a connection
+        timeout to NEW connections, so a per-call \c connect_timeout in
+        @ref AbstractEmbedder::encodeBatch() "encodeBatch()" causes the
+        embedder to use a transient REST client for that call.
+    */
+    *timeout connect_timeout;
     #! Free-form backend-specific options
     *hash<auto> options;
 }
