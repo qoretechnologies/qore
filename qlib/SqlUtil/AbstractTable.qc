@@ -1252,7 +1252,7 @@ AbstractColumn col = table.renameColumn("name", "family_name");
 
         @note if any primary key or foreign table constraints refer to the column, the internal representations are also renamed, however check constraints are not updated and will be invalid if they refer to the renamed column
     */
-    AbstractColumn renameColumn(string old_name, string new_name, reference<string> sql) {
+    AbstractColumn renameColumn(string old_name, string new_name, *reference<string> sql) {
         l.lock();
         on_exit l.unlock();
         getColumnsUnlocked();
