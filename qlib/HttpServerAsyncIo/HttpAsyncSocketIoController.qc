@@ -278,6 +278,16 @@ public class HttpAsyncSocketIoController {
         *list<string> listener_keys;
         *list<Socket> conn_sockets;
         *list<string> conn_keys;
+        # Snapshot stream_ops separately so we can call abort() on H2/H3 stream
+        # poll operations whose handler-thread closure still holds a reference
+        # (the controller's cancelByOwner / cancelAndClose below cancels only
+        # ops that are currently in the controller cache; an op that has been
+        # Phase3-REMOVE'd after a headers-only dispatch is not in the cache,
+        # so without an explicit abort() its clearStreamQueues() never runs
+        # until the handler closure releases its ref — which happens only
+        # after the handler's body_queue.get() times out 30s later, blocking
+        # handler_pool.stopWait() for that full duration).
+        *list<AbstractPollOperation> stream_ops_to_abort;
         {
             AutoWriteLock al(m);
             stopping = True;
@@ -286,6 +296,7 @@ public class HttpAsyncSocketIoController {
             if (connections) {
                 conn_keys = keys connections;
                 conn_sockets = ();
+                stream_ops_to_abort = ();
                 foreach string uh in (conn_keys) {
                     hash<HttpActiveConnectionInfo> cinfo =
                         cast<hash<HttpActiveConnectionInfo>>(connections{uh});
@@ -293,11 +304,27 @@ public class HttpAsyncSocketIoController {
                             && cinfo.state != HttpConnectionState::Http3Sending) {
                         push conn_sockets, cinfo.sock;
                     }
+                    if (cinfo.stream_op) {
+                        push stream_ops_to_abort, cinfo.stream_op;
+                    }
                 }
             }
             listeners = {};
             connections = {};
             accept_counts = {};
+        }
+        # Abort each stream_op so its clearStreamQueues() fires immediately,
+        # pushing NOTHING sentinels onto any registered body_queue and
+        # unblocking handler threads stuck in body_queue.get(timeout).
+        # Wrapped in try/catch because abort() on an already-aborted op
+        # raises HTTP2-STATE-ERROR / HTTP3-STATE-ERROR.
+        if (stream_ops_to_abort) {
+            foreach AbstractPollOperation sop in (stream_ops_to_abort) {
+                try {
+                    sop.abort();
+                } catch () {
+                }
+            }
         }
         # Signal persistent queues to exit their dedicated loops
         signalPersistentQueuesToClose();

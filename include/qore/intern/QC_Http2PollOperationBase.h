@@ -287,6 +287,16 @@ private:
     //! Pending stream queue registrations from app threads (under sq_lock)
     std::vector<std::pair<int32_t, StreamQueueInfo>> pending_stream_registrations;
 
+    //! Set under sq_lock at the start of clearStreamQueues so any concurrent
+    //! @ref registerStreamQueue / @ref registerStreamFrameState call from a
+    //! handler thread that races shutdown can short-circuit and push a
+    //! NOTHING sentinel directly to the caller's Queue (instead of leaving
+    //! the queue stranded in pending_stream_registrations after shutdown
+    //! has already drained the live entries — observed as a 30s body-read
+    //! timeout in HttpServer.stop() for in-flight requests whose body
+    //! arrives after server.stop() began).
+    bool stream_queues_closed = false;
+
     // --- I/O-thread-only data (no lock needed) ---
 
     //! Registered stream queues — I/O-thread-only
