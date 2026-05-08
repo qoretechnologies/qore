@@ -53,7 +53,7 @@
 
     @since %Qore 2.3
 */
-class ChannelAction : public AbstractAsyncAction {
+class DLLLOCAL ChannelAction : public AbstractAsyncAction {
 public:
     DLLLOCAL ChannelAction(QoreChannel* channel, QoreEventNotifier* notifier = nullptr,
             QoreObject* notifier_obj = nullptr) : channel(channel), notifier(notifier), notifier_obj(notifier_obj) {
@@ -572,7 +572,7 @@ inline void ChannelAction::installSseState(Queue* queue, QoreEventNotifier* noti
 
     @since %Qore 2.3
 */
-class FrameStateAction : public AbstractAsyncAction {
+class DLLLOCAL FrameStateAction : public AbstractAsyncAction {
 public:
     //! Creates a frame-state action owning a freshly-built WebSocketStreamFrameState
     /** @param frame_state the WebSocketStreamFrameState (ownership transferred)

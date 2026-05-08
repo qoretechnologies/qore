@@ -68,7 +68,7 @@ class Http2ClientPollOperationPriv;
 
     @since %Qore 2.3
 */
-class Http2ClientConnection : public HttpClientConnectionBase {
+class DLLLOCAL Http2ClientConnection : public HttpClientConnectionBase {
 public:
     //! Creates a new HTTP/2 client connection.
     /** Creates a socket (with ALPN @c "h2" set if SSL), a

@@ -72,7 +72,7 @@ class WebSocketStreamFrameState;
 
     @since %Qore 2.3
 */
-class Http2PollOperationPriv : public SocketPollOperationBase {
+class DLLLOCAL Http2PollOperationPriv : public SocketPollOperationBase {
 public:
     //! HTTP/2 server poll operation states
     enum class H2ServerState {
@@ -186,7 +186,7 @@ public:
     }
 
     //! Information for a registered CONNECT stream queue
-    struct StreamQueueInfo {
+    struct DLLLOCAL StreamQueueInfo {
         Queue* queue;                       //!< ref'd Queue for data delivery
         QoreObject* queue_obj;              //!< ref'd QoreObject wrapping queue (for DGC)
         QoreEventNotifier* notifier;        //!< ref'd EventNotifier for wake-up, or nullptr

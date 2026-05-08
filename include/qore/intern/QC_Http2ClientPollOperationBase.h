@@ -63,7 +63,7 @@
 
     @since %Qore 2.3
 */
-class Http2ClientPollOperationPriv : public SocketPollOperationBase {
+class DLLLOCAL Http2ClientPollOperationPriv : public SocketPollOperationBase {
 public:
     //! HTTP/2 client connection states
     enum class H2State {

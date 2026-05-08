@@ -65,7 +65,7 @@ class QoreSSLPrivateKey;
 
     @since %Qore 2.3
 */
-class Http3ClientConnection : public HttpClientConnectionBase {
+class DLLLOCAL Http3ClientConnection : public HttpClientConnectionBase {
 public:
     //! Creates a new HTTP/3 (QUIC) client connection.
     /** @param target_host target hostname
@@ -239,6 +239,17 @@ private:
     bool ssl_accept_all_certs_ = false;
     QoreSSLCertificate* client_cert_ = nullptr;
     QoreSSLPrivateKey* client_key_ = nullptr;
+
+    //! Per-attempt QUIC handshake deadline in nanoseconds, captured at
+    //! construction time from the manager's @c connect_timeout_ms option.
+    //! Forwarded to each @ref SocketQuicClientPollOperation in @c buildAttempt
+    //! so the QUIC transport bounds the handshake itself instead of relying
+    //! solely on the application-layer @c waitForReadyOrError.  Without this,
+    //! a closed peer UDP port (e.g., a fake @c Alt-Svc target) burns the full
+    //! @c connect_timeout retransmitting Initials before the outer wait
+    //! eventually unblocks and surfaces a generic @c HTTPCLIENT-CONNECT-ERROR.
+    //! 0 means no deadline (matches the H3 manual-construction path).
+    int64_t handshake_timeout_ns_ = 0;
 
     //! Stream ID for the active streaming send request (-1 = none)
     int64_t streaming_send_stream_id = -1;
