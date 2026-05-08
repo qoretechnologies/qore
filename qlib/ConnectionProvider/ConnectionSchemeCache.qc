@@ -130,6 +130,8 @@ public class ConnectionSchemeCache {
             "ds": "DataStreamClient",
             "dss": "DataStreamClient",
 
+            "easypostrest": "EasyPostRestClient",
+
             "ebrests": "EmpathicBuildingDataProvider",
 
             "esrest": "ElasticSearchDataProvider",

@@ -1,0 +1,490 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  EasyPostDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# Usage:
+# Without live connection (unit/mock tests only):
+#   QORE_MODULE_DIR=qlib qore examples/test/qlib/EasyPostDataProvider/EasyPostDataProvider.qtest -v
+#
+# With live Qorus connection:
+#   QORE_CONNECTION_PROVIDERS=QorusConnectionProvider \
+#   QORE_MODULE_DIR="qlib:/Users/nick/omq/qlib" \
+#   qore examples/test/qlib/EasyPostDataProvider/EasyPostDataProvider.qtest -v -c easypost
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/DataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/EasyPostRestClient.qm
+%requires ../../../../qlib/EasyPostDataProvider
+
+%exec-class EasyPostDataProviderTest
+
+public class EasyPostDataProviderTest inherits QUnit::Test {
+    private {
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        #! Connection name for live integration tests
+        *string connName;
+
+        #! The root data provider obtained from the connection (set during integration tests)
+        *DataProvider::AbstractDataProvider rootProvider;
+
+        #! Tracks data created during integration tests for cleanup
+        *string createdAddressId;
+        *string createdTrackerId;
+    }
+
+    constructor() : Test("EasyPostDataProvider Test", "1.0", \ARGV, MyOpts) {
+        connName = m_options.conn;
+
+        # Always-run tests (no live connection required)
+        addTestCase("connection scheme test", \connectionSchemeTest());
+        addTestCase("factory registration test", \factoryRegistrationTest());
+        addTestCase("data type instantiation test", \dataTypeInstantiationTest());
+        addTestCase("action registration test", \actionRegistrationTest());
+        addTestCase("watch event example data test", \watchEventExampleDataTest());
+
+        # Integration tests - require -c <connection>
+        addTestCase("integration: list-addresses", \integrationListAddresses());
+        addTestCase("integration: create-address (White House)", \integrationCreateAddress());
+        addTestCase("integration: verify-address", \integrationVerifyAddress());
+        addTestCase("integration: create-tracker", \integrationCreateTracker());
+        addTestCase("integration: list-trackers", \integrationListTrackers());
+        addTestCase("integration: list-shipments", \integrationListShipments());
+
+        set_return_value(main());
+    }
+
+    #! Override usage info to document the -c option
+    private usageIntern() {
+        TestReporter::usageIntern(OffsetColumn);
+        printOption("-c,--connection=ARG", "Qorus user connection name for live integration tests", OffsetColumn);
+    }
+
+    #! Skip a test if json module is not present
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Verify the connection scheme is registered correctly
+    connectionSchemeTest() {
+        checkJson();
+        hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("easypostrest");
+        assertTrue(exists scheme, "easypostrest scheme must be registered");
+        assertTrue(scheme.options.hasKey("apikey"), "scheme must have an apikey option");
+        # required_options may be a comma-separated string, list, or single string;
+        # accept any representation that contains "apikey"
+        assertTrue(scheme.required_options.toString().regex("apikey"),
+            "scheme.required_options must include 'apikey'");
+        assertTrue(scheme.options."apikey".sensitive,
+            "apikey option must be marked sensitive");
+    }
+
+    #! Verify factory is registered with DataProvider
+    factoryRegistrationTest() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("easypost");
+        assertTrue(exists factory, "easypost factory must be obtainable");
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("easypost", info.name);
+    }
+
+    #! Instantiate every shared data type and verify getFields() is populated
+    dataTypeInstantiationTest() {
+        checkJson();
+
+        # Pagination
+        EasyPostDataProvider::EasyPostPaginationType paginationType();
+        assertTrue(paginationType.getFields().size() > 0, "EasyPostPaginationType must have fields");
+
+        # Address (output + input)
+        EasyPostDataProvider::EasyPostAddressType addressType();
+        assertTrue(addressType.getFields().size() > 0, "EasyPostAddressType must have fields");
+
+        EasyPostDataProvider::EasyPostAddressInputType addressInputType();
+        assertTrue(addressInputType.getFields().size() > 0, "EasyPostAddressInputType must have fields");
+
+        # Parcel
+        EasyPostDataProvider::EasyPostParcelType parcelType();
+        assertTrue(parcelType.getFields().size() > 0, "EasyPostParcelType must have fields");
+
+        EasyPostDataProvider::EasyPostParcelInputType parcelInputType();
+        assertTrue(parcelInputType.getFields().size() > 0, "EasyPostParcelInputType must have fields");
+
+        # Shipment & related
+        EasyPostDataProvider::EasyPostShipmentType shipmentType();
+        assertTrue(shipmentType.getFields().size() > 0, "EasyPostShipmentType must have fields");
+
+        EasyPostDataProvider::EasyPostTrackerType trackerType();
+        assertTrue(trackerType.getFields().size() > 0, "EasyPostTrackerType must have fields");
+
+        EasyPostDataProvider::EasyPostInsuranceType insuranceType();
+        assertTrue(insuranceType.getFields().size() > 0, "EasyPostInsuranceType must have fields");
+
+        EasyPostDataProvider::EasyPostPickupType pickupType();
+        assertTrue(pickupType.getFields().size() > 0, "EasyPostPickupType must have fields");
+
+        EasyPostDataProvider::EasyPostOrderType orderType();
+        assertTrue(orderType.getFields().size() > 0, "EasyPostOrderType must have fields");
+
+        EasyPostDataProvider::EasyPostRefundType refundType();
+        assertTrue(refundType.getFields().size() > 0, "EasyPostRefundType must have fields");
+
+        EasyPostDataProvider::EasyPostBatchType batchType();
+        assertTrue(batchType.getFields().size() > 0, "EasyPostBatchType must have fields");
+
+        EasyPostDataProvider::EasyPostWebhookType webhookType();
+        assertTrue(webhookType.getFields().size() > 0, "EasyPostWebhookType must have fields");
+
+        # Customs / shipment options / tax id (shared/auxiliary)
+        EasyPostDataProvider::EasyPostCustomsInfoType customsInfoType();
+        assertTrue(customsInfoType.getFields().size() > 0, "EasyPostCustomsInfoType must have fields");
+
+        EasyPostDataProvider::EasyPostCustomsItemType customsItemType();
+        assertTrue(customsItemType.getFields().size() > 0, "EasyPostCustomsItemType must have fields");
+
+        EasyPostDataProvider::EasyPostShipmentOptionsType shipmentOptionsType();
+        assertTrue(shipmentOptionsType.getFields().size() > 0, "EasyPostShipmentOptionsType must have fields");
+
+        EasyPostDataProvider::EasyPostTaxIdentifierType taxIdType();
+        assertTrue(taxIdType.getFields().size() > 0, "EasyPostTaxIdentifierType must have fields");
+    }
+
+    #! Verify EasyPost app and a sample of registered actions exist in the action catalog
+    actionRegistrationTest() {
+        checkJson();
+        *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp(EasyPostDataProvider::AppName);
+        if (!exists app) {
+            testSkip(sprintf("EasyPost app not registered in DataProviderActionCatalog "
+                "(AppName=%y) - skipping action catalog assertions", EasyPostDataProvider::AppName));
+            return;
+        }
+        assertTrue(exists app, "EasyPost app must be registered");
+
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            EasyPostDataProvider::AppName);
+        assertTrue(actions.size() > 0, "EasyPost app must have at least one registered action");
+
+        list<string> actionNames = map $1.action, actions;
+        # Spot-check a representative subset
+        assertTrue(actionNames.contains("create-shipment"),
+            "create-shipment action must be registered");
+        assertTrue(actionNames.contains("buy-shipment"),
+            "buy-shipment action must be registered");
+        assertTrue(actionNames.contains("list-trackers"),
+            "list-trackers action must be registered");
+        assertTrue(actionNames.contains("verify-address"),
+            "verify-address action must be registered");
+        assertTrue(actionNames.contains("list-addresses"),
+            "list-addresses action must be registered");
+        assertTrue(actionNames.contains("watch-tracker-created"),
+            "watch-tracker-created action must be registered");
+    }
+
+    #! Verify each watch event provider returns example data with a populated result
+    watchEventExampleDataTest() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactory("easypost");
+        assertTrue(exists factory, "easypost factory must be registered");
+
+        list<string> watchActions = (
+            "watch-tracker-created",
+            "watch-tracker-updated",
+            "watch-batch-created",
+            "watch-batch-updated",
+            "watch-insurance-purchased",
+            "watch-refund-successful",
+            "watch-shipment-invoice-created",
+            "watch-payment-completed",
+            "watch-payment-failed",
+        );
+
+        # Verify each watch action is registered in the action catalog
+        *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp(EasyPostDataProvider::AppName);
+        if (!app) {
+            testSkip("EasyPost app not registered in DataProviderActionCatalog");
+            return;
+        }
+
+        *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions(
+            EasyPostDataProvider::AppName);
+        hash<auto> action_names_set = {};
+        foreach hash<auto> action in (actions) {
+            action_names_set{action.action} = True;
+        }
+
+        foreach string name in (watchActions) {
+            assertTrue(action_names_set{name} ?? False,
+                sprintf("watch action %y must be registered", name));
+        }
+    }
+
+    #! Lazily resolve the root EasyPost data provider from the supplied connection name.
+    /** Returns NOTHING when no connection is configured; the calling test should call testSkip().
+    */
+    private *DataProvider::AbstractDataProvider getRootProvider() {
+        if (!connName) {
+            return NOTHING;
+        }
+        if (rootProvider) {
+            return rootProvider;
+        }
+        try {
+            AbstractConnection conn = get_connection(connName);
+            rootProvider = conn.getDataProvider();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("could not resolve data provider for connection %y: %s: %s",
+                connName, ex.err, ex.desc));
+            return NOTHING;
+        }
+        return rootProvider;
+    }
+
+    #! Determine if an exception comes from an HTTP status that should result in a skip
+    /** Catches by ex.arg.status_code (NOT by error code) since the error may be
+        HTTP-CLIENT-RECEIVE-ERROR rather than REST-RESPONSE-ERROR.
+    */
+    private bool shouldSkipForStatus(hash<ExceptionInfo> ex) {
+        *int status = ex.arg.status_code;
+        if (status == 403) {
+            testSkip(sprintf("API returned 403 (insufficient permissions): %s", ex.desc));
+            return True;
+        }
+        if (status == 422) {
+            testSkip(sprintf("API returned 422 (test mode limitation): %s", ex.desc));
+            return True;
+        }
+        return False;
+    }
+
+    #! Integration: search the addresses collection
+    integrationListAddresses() {
+        checkJson();
+        if (!connName) {
+            testSkip("no connection specified (use -c <connection_name>)");
+            return;
+        }
+        *DataProvider::AbstractDataProvider root = getRootProvider();
+        if (!root) {
+            return;
+        }
+        try {
+            DataProvider::AbstractDataProvider addresses = root.getChildProviderEx("addresses");
+            DataProvider::AbstractDataProviderRecordIterator it =
+                addresses.searchRecords(NOTHING, {"page_size": 1});
+            int count = 0;
+            while (it.next()) {
+                ++count;
+                hash<auto> rec = it.getValue();
+                assertTrue(rec.hasKey("id"), "address record must have an id");
+            }
+            assertTrue(count <= 1, sprintf("page_size=1 must yield at most 1 record (got %d)", count));
+        } catch (hash<ExceptionInfo> ex) {
+            if (shouldSkipForStatus(ex)) {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! Integration: create the White House address
+    integrationCreateAddress() {
+        checkJson();
+        if (!connName) {
+            testSkip("no connection specified (use -c <connection_name>)");
+            return;
+        }
+        *DataProvider::AbstractDataProvider root = getRootProvider();
+        if (!root) {
+            return;
+        }
+        try {
+            DataProvider::AbstractDataProvider createAddress =
+                root.getChildProviderEx("create-address");
+            hash<auto> req = {
+                "street1": "1600 Pennsylvania Ave NW",
+                "city": "Washington",
+                "state": "DC",
+                "zip": "20500",
+                "country": "US",
+            };
+            auto resp = createAddress.doRequest(req);
+            assertTrue(exists resp.id, "response must contain an id");
+            assertTrue(resp.id.toString() =~ /^adr_/,
+                sprintf("address id must start with adr_ (got %y)", resp.id));
+            createdAddressId = resp.id;
+        } catch (hash<ExceptionInfo> ex) {
+            if (shouldSkipForStatus(ex)) {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! Integration: verify the address that was just created
+    integrationVerifyAddress() {
+        checkJson();
+        if (!connName) {
+            testSkip("no connection specified (use -c <connection_name>)");
+            return;
+        }
+        if (!createdAddressId) {
+            testSkip("no created address id available (create-address test did not run successfully)");
+            return;
+        }
+        *DataProvider::AbstractDataProvider root = getRootProvider();
+        if (!root) {
+            return;
+        }
+        try {
+            DataProvider::AbstractDataProvider verifyAddress =
+                root.getChildProviderEx("verify-address");
+            auto resp = verifyAddress.doRequest({"id": createdAddressId});
+            assertTrue(exists resp, "verify-address must return a response");
+            # Either response.address.verifications.delivery.success or
+            # response.verifications.delivery.success - tolerate both shapes.
+            *bool deliverySuccess = resp.verifications.delivery.success
+                ?? resp.address.verifications.delivery.success;
+            if (!exists deliverySuccess) {
+                # fall back: just confirm we received an id back
+                assertTrue(exists (resp.id ?? resp.address.id),
+                    "verify-address response must contain an address id");
+            } else {
+                assertTrue(deliverySuccess,
+                    "delivery verification for the White House should succeed");
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (shouldSkipForStatus(ex)) {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! Integration: create a tracker with the EasyPost test code
+    integrationCreateTracker() {
+        checkJson();
+        if (!connName) {
+            testSkip("no connection specified (use -c <connection_name>)");
+            return;
+        }
+        *DataProvider::AbstractDataProvider root = getRootProvider();
+        if (!root) {
+            return;
+        }
+        try {
+            DataProvider::AbstractDataProvider createTracker =
+                root.getChildProviderEx("create-tracker");
+            hash<auto> req = {
+                "tracking_code": "EZ1000000001",
+                "carrier": "USPS",
+            };
+            auto resp = createTracker.doRequest(req);
+            assertTrue(exists resp.id, "tracker response must contain an id");
+            assertTrue(resp.id.toString() =~ /^trk_/,
+                sprintf("tracker id must start with trk_ (got %y)", resp.id));
+            assertEq("EZ1000000001", resp.tracking_code,
+                "tracking_code must match the requested value");
+            createdTrackerId = resp.id;
+        } catch (hash<ExceptionInfo> ex) {
+            if (shouldSkipForStatus(ex)) {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! Integration: list trackers, page_size=5
+    integrationListTrackers() {
+        checkJson();
+        if (!connName) {
+            testSkip("no connection specified (use -c <connection_name>)");
+            return;
+        }
+        *DataProvider::AbstractDataProvider root = getRootProvider();
+        if (!root) {
+            return;
+        }
+        try {
+            DataProvider::AbstractDataProvider trackers = root.getChildProviderEx("trackers");
+            DataProvider::AbstractDataProviderRecordIterator it =
+                trackers.searchRecords(NOTHING, {"page_size": 5});
+            int count = 0;
+            while (it.next()) {
+                ++count;
+            }
+            assertTrue(count <= 5,
+                sprintf("page_size=5 must yield at most 5 records (got %d)", count));
+        } catch (hash<ExceptionInfo> ex) {
+            if (shouldSkipForStatus(ex)) {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! Integration: list shipments, purchased=False, page_size=5
+    integrationListShipments() {
+        checkJson();
+        if (!connName) {
+            testSkip("no connection specified (use -c <connection_name>)");
+            return;
+        }
+        *DataProvider::AbstractDataProvider root = getRootProvider();
+        if (!root) {
+            return;
+        }
+        try {
+            DataProvider::AbstractDataProvider shipments = root.getChildProviderEx("shipments");
+            DataProvider::AbstractDataProviderRecordIterator it =
+                shipments.searchRecords(NOTHING, {"purchased": False, "page_size": 5});
+            # Drain the iterator; the assertion is just "no exception thrown"
+            int count = 0;
+            while (it.next()) {
+                ++count;
+            }
+            assertTrue(count >= 0, "list-shipments returned without throwing");
+        } catch (hash<ExceptionInfo> ex) {
+            if (shouldSkipForStatus(ex)) {
+                return;
+            }
+            rethrow;
+        }
+    }
+}

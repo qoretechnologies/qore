@@ -1578,6 +1578,20 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://www.deel.com/">Deel</a>'s global workforce management API
       - supports API key (Bearer token) authentication
       - provides DeelRestConnection for connection management with \c deel:// URL scheme
+    - @ref easypostdataproviderintro "EasyPostDataProvider" module
+      - new module providing a data provider API for <a href="https://www.easypost.com/">EasyPost</a> multi-carrier shipping
+      - address creation and verification, parcel definition, shipment lifecycle (create, buy, refund, label retrieval)
+      - tracker creation and real-time tracking status retrieval
+      - insurance, pickup scheduling, order/batch management, customs info and items, refunds
+      - webhook management (create, update, delete, list, retry, event polling) and carrier account management
+      - 9 webhook-based event triggers (tracker updates, batch status, shipment purchased, refund updates, etc.)
+      - HMAC-SHA256 webhook signature verification helper
+      - action catalog integration covering 14 resource types and ~60 actions
+      - connection support with \c easypostrest:// URL scheme
+    - @ref easypostrestclientintro "EasyPostRestClient" module
+      - new module providing a REST client for <a href="https://www.easypost.com/">EasyPost</a>'s shipping REST API
+      - supports HTTP Basic authentication using the EasyPost API key
+      - provides EasyPostRestConnection for connection management with \c easypostrest:// URL scheme
     - @ref edifactutilintro "EdifactUtil" module
       - new module for parsing and generating UN/EDIFACT electronic data interchange messages
       - automatic UNA segment detection and custom delimiter support
