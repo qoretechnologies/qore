@@ -77,6 +77,9 @@ public class MigrationExecutor {
 
         #! Schema info passed through to migration scripts
         *hash<auto> schema_info;
+
+        #! Local cache for tables referenced by migration steps without an external alignment cache
+        SqlUtil::Tables migration_table_cache;
     }
 
     #! Creates the executor
@@ -91,6 +94,7 @@ public class MigrationExecutor {
         access_level = al;
         verbose = v;
         log_callback = log;
+        migration_table_cache = new SqlUtil::Tables();
     }
 
     #! Executes migration steps for the given version transition
@@ -395,7 +399,8 @@ public class MigrationExecutor {
         validateStepField(step, "from");
         validateStepField(step, "to");
         AbstractTable table = getTable(step.table, table_cache);
-        table.renameColumn(step.from, step.to);
+        string sql;
+        table.renameColumn(step.from, step.to, \sql);
     }
 
     #! Executes an ADD INDEX action
@@ -428,7 +433,13 @@ public class MigrationExecutor {
         validateStepField(step, "table");
         validateStepField(step, "to");
         AbstractTable table = getTable(step.table, table_cache);
-        table.rename(step.to);
+        table.cache();
+        string sql;
+        if (table_cache) {
+            table.rename(step.to, \sql, table_cache);
+        } else {
+            table.rename(step.to, \sql, migration_table_cache);
+        }
     }
 
     #! Executes an ADD TRIGGER action
@@ -536,13 +547,18 @@ public class MigrationExecutor {
     #! Gets a table from the cache or creates one from the datasource
     private AbstractTable getTable(string table_name, *SqlUtil::Tables table_cache) {
         if (table_cache) {
-            *AbstractTable t = table_cache{table_name};
-            if (t) {
-                return t;
+            if (table_cache.hasKey(table_name)) {
+                return table_cache{table_name};
             }
+        } else if (migration_table_cache.hasKey(table_name)) {
+            return migration_table_cache{table_name};
         }
         # Fall back to creating table from datasource
-        return (new SqlUtil::Table(ds, table_name)).getTable();
+        AbstractTable table = (new SqlUtil::Table(ds, table_name)).getTable();
+        if (!table_cache) {
+            migration_table_cache.add(table_name, table);
+        }
+        return table;
     }
 
     #! Validates that a required field exists in a migration step
