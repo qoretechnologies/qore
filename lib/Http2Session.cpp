@@ -1647,6 +1647,32 @@ bool Http2Session::hasStreamingData(int32_t& out_stream_id) {
     return false;
 }
 
+bool Http2Session::takeStreamingEndStream(int32_t& out_stream_id, QoreHashNode** trailers_out) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (auto& [id, info] : streams) {
+        // Surface end-of-stream once peer END_STREAM has arrived (marked_complete) AND
+        // - the multiplex op headers-dispatched the stream (CONNECT tunnel via
+        //   takeHeadersReadyStreamCopy → dispatched=true), and
+        // - all buffered body bytes have been delivered via takeStreamData()
+        //   (body.empty()) — body must precede the end marker on the wire.
+        // markStreamComplete() returns early for dispatched streams without invoking the
+        // per-stream completion callback, so without this path the multiplex op never
+        // emits an `end_stream=true` output for them.
+        if (info->dispatched && info->marked_complete && !info->end_stream_emitted
+                && info->body.empty()) {
+            info->end_stream_emitted = true;
+            out_stream_id = id;
+            if (trailers_out) {
+                *trailers_out = info->trailers.empty()
+                    ? nullptr
+                    : httpMultiHeadersToQoreHash(info->trailers, true);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 bool Http2Session::wantRead() const {
     std::lock_guard<std::recursive_mutex> lg(m);
     return nghttp2_session_want_read(session) != 0;

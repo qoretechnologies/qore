@@ -122,6 +122,10 @@ struct Http2StreamInfo {
                                    //!< response.  Separate from @c dispatched because we do NOT want to inhibit
                                    //!< markStreamComplete's callback (which still needs to fire on END_STREAM to
                                    //!< deliver the terminal event with trailers).
+    bool end_stream_emitted = false; //!< True after the multiplex client poll op has surfaced an
+                                   //!< `end_stream=true` output for this stream.  Used to surface peer END_STREAM
+                                   //!< on dispatched CONNECT / streaming streams where markStreamComplete() returns
+                                   //!< early without invoking the per-stream completion callback.
     uint32_t error_code = 0;
 
     //! Returns true if this is a WebSocket over HTTP/2 stream (RFC 8441)
@@ -520,6 +524,25 @@ public:
         @since %Qore 2.3
     */
     DLLLOCAL bool hasStreamingData(int32_t& stream_id);
+
+    //! Take an end-of-stream notification for a dispatched streaming stream
+    /** Used by the client multiplex poll op to surface peer END_STREAM for streams that
+        markStreamComplete() returns early for (i.e. @c dispatched=true streams — RFC 8441
+        extended-CONNECT tunnels and other dispatched streaming streams).  Without this,
+        the multiplex op never produces an `end_stream=true` output hash for those streams,
+        and the async-API consumer (ChannelAction → readHttp2StreamData) waits on its
+        deadline instead of detecting closure.
+
+        Caller invariant: drain pending body data via takeStreamData()/hasStreamingData()
+        first; this method only signals end-of-stream once @c body is empty so the body /
+        end-marker order is preserved on the wire to the consumer.
+        @param stream_id [out] set to the stream ID whose end-of-stream is pending, if found
+        @param trailers_out [out] set to a heap-allocated copy of the trailers hash, or nullptr
+            if no trailers were sent
+        @return true if a stream with pending end-of-stream was found and marked
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool takeStreamingEndStream(int32_t& stream_id, QoreHashNode** trailers_out);
 
     //! Take a copy of a non-CONNECT streaming stream whose headers are ready but have not yet
     //! been dispatched via a headers-only event.  Marks the original stream

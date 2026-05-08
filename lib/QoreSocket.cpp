@@ -17752,6 +17752,33 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     }
                 }
 
+                // Surface peer END_STREAM for dispatched streaming streams (RFC 8441
+                // extended-CONNECT tunnels and other dispatched streaming responses).
+                // markStreamComplete() returns early for these without invoking the
+                // per-stream completion callback, so without this drain the multiplex
+                // op never produces an `end_stream=true` output and async-API consumers
+                // (ChannelAction → readHttp2StreamData) wait on their deadline instead
+                // of detecting closure.  Runs after the body drain so the body chunks
+                // are delivered before the end marker.
+                {
+                    int32_t end_id = 0;
+                    QoreHashNode* trailers = nullptr;
+                    while (h2_session->takeStreamingEndStream(end_id, &trailers)) {
+                        ReferenceHolder<QoreHashNode> resp(new QoreHashNode(autoTypeInfo), xsink);
+                        resp->setKeyValue("stream_id", end_id, xsink);
+                        resp->setKeyValue("end_stream", true, xsink);
+                        if (trailers) {
+                            resp->setKeyValue("trailers", trailers, xsink);
+                            trailers = nullptr;
+                        }
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                        AutoLocker rl(response_lock);
+                        completed_responses.push_back(resp.release());
+                    }
+                }
+
                 // No completed streams yet - check if we're past the preface stage
                 if (h2_state == H2C_RECV_PREFACE) {
                     h2_state = H2C_READING;
