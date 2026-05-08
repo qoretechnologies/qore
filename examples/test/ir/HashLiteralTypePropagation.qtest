@@ -13,6 +13,14 @@ hashdecl QorusDraftMap {
     *hash<string, hash<auto>> latest_draft;
 }
 
+hashdecl HeterogeneousListA {
+    string s;
+}
+
+hashdecl HeterogeneousListB {
+    int i;
+}
+
 class HashLiteralTypePropagationTest inherits QUnit::Test {
     private {
         string qore_bin;
@@ -32,18 +40,24 @@ class HashLiteralTypePropagationTest inherits QUnit::Test {
             \testOptionalContainerSlotsAcceptNothing());
         addTestCase("optional hashdecl slots accept unassigned typed locals",
             \testOptionalHashdeclSlotsAcceptNothing());
+        addTestCase("heterogeneous list literals keep compatible common types",
+            \testHeterogeneousListCommonTypes());
         addTestCase("typed hash literal rejects unassigned typed local in exec modes",
             \testTypedHashRejectsNothingInExecModes());
         addTestCase("optional container literal slots accept unassigned typed locals in exec modes",
             \testOptionalContainerSlotsAcceptNothingInExecModes());
         addTestCase("optional hashdecl slots accept unassigned typed locals in exec modes",
             \testOptionalHashdeclSlotsAcceptNothingInExecModes());
+        addTestCase("heterogeneous list literals keep compatible common types in exec modes",
+            \testHeterogeneousListCommonTypesInExecModes());
         addTestCase("typed hash literal rejects unassigned typed local in source-stripped AOT",
             \testTypedHashRejectsNothingInAOT());
         addTestCase("optional container literal slots accept unassigned typed locals in source-stripped AOT",
             \testOptionalContainerSlotsAcceptNothingInAOT());
         addTestCase("optional hashdecl slots accept unassigned typed locals in source-stripped AOT",
             \testOptionalHashdeclSlotsAcceptNothingInAOT());
+        addTestCase("heterogeneous list literals keep compatible common types in source-stripped AOT",
+            \testHeterogeneousListCommonTypesInAOT());
         addTestCase("nested empty hash literal works in source-stripped AOT",
             \testNestedEmptyHashLiteralAOT());
 
@@ -103,6 +117,19 @@ class HashLiteralTypePropagationTest inherits QUnit::Test {
         assertTrue(!result.latest_draft, "optional hashdecl member keeps NOTHING");
     }
 
+    testHeterogeneousListCommonTypes() {
+        auto api = ("a", {"import": "x"});
+        auto combined = ("b",) + api + ({"import": "y"},);
+        auto hashdecls = (
+            <HeterogeneousListA>{"s": "x"},
+            <HeterogeneousListB>{"i": 1},
+        );
+
+        assertEq("list<auto>", combined.fullType(), "populated list<auto> concatenation must not narrow");
+        assertEq("list<hash<auto>>", hashdecls.fullType(), "unrelated hashdecls share hash<auto>, not first hashdecl");
+        assertEq("hash<HeterogeneousListB>", hashdecls[1].fullType(), "second hashdecl value is preserved");
+    }
+
     testTypedHashRejectsNothingInExecModes() {
         TmpDir tmp("qore-hash-literal-type-propagation-");
         string src = writeScript(tmp.path, "reject-nothing.q", "%modern
@@ -141,6 +168,40 @@ printf(\"result=%y list=%y\\n\", result, optional_list);
                 sprintf("%s mode preserves optional hash slot NOTHING: %s", mode, out));
             assertTrue(out.regex("list=\\[null\\]"),
                 sprintf("%s mode preserves optional list slot NOTHING: %s", mode, out));
+            assertTrue(out.regex("EXIT=0"),
+                sprintf("%s mode exits cleanly: %s", mode, out));
+        }
+    }
+
+    testHeterogeneousListCommonTypesInExecModes() {
+        TmpDir tmp("qore-hash-literal-type-propagation-heterogeneous-list-");
+        string src = writeScript(tmp.path, "heterogeneous-list-common-type.q", "%modern
+hashdecl A {
+    string s;
+}
+
+hashdecl B {
+    int i;
+}
+
+auto api = (\"a\", {\"import\": \"x\"});
+auto combined = (\"b\",) + api + ({\"import\": \"y\"},);
+auto hashdecls = (
+    <A>{\"s\": \"x\"},
+    <B>{\"i\": 1},
+);
+
+printf(\"combined=%s hashdecls=%s second=%s\\n\", combined.fullType(), hashdecls.fullType(), hashdecls[1].fullType());
+");
+
+        foreach string mode in (("ast", "ir", "jit")) {
+            string out = runScript(src, mode);
+            assertTrue(out.regex("combined=list<auto>"),
+                sprintf("%s mode keeps populated list<auto> concatenation: %s", mode, out));
+            assertTrue(out.regex("hashdecls=list<hash<auto>>"),
+                sprintf("%s mode degrades unrelated hashdecl common type to hash<auto>: %s", mode, out));
+            assertTrue(out.regex("second=hash<B>"),
+                sprintf("%s mode preserves the second hashdecl value: %s", mode, out));
             assertTrue(out.regex("EXIT=0"),
                 sprintf("%s mode exits cleanly: %s", mode, out));
         }
@@ -239,6 +300,42 @@ printf(\"latest_draft=%y\\n\", result.latest_draft);
             "source-stripped AOT preserves optional hashdecl member NOTHING: " + run_out);
         assertTrue(run_out.regex("EXIT=0"),
             "source-stripped AOT optional hashdecl script exits cleanly: " + run_out);
+    }
+
+    testHeterogeneousListCommonTypesInAOT() {
+        TmpDir tmp("qore-hash-literal-type-propagation-heterogeneous-list-aot-");
+        string src = writeScript(tmp.path, "heterogeneous-list-common-type-aot.q", "%modern
+hashdecl A {
+    string s;
+}
+
+hashdecl B {
+    int i;
+}
+
+auto api = (\"a\", {\"import\": \"x\"});
+auto combined = (\"b\",) + api + ({\"import\": \"y\"},);
+auto hashdecls = (
+    <A>{\"s\": \"x\"},
+    <B>{\"i\": 1},
+);
+
+printf(\"combined=%s hashdecls=%s second=%s\\n\", combined.fullType(), hashdecls.fullType(), hashdecls[1].fullType());
+");
+        string exe = tmp.path + "/heterogeneous-list-common-type-aot";
+        string compile_out = compileScript(src, exe);
+        assertTrue(compile_out.regex("EXIT=0"), "AOT compile succeeds: " + compile_out);
+        assertTrue(is_file(exe), "AOT executable exists");
+
+        string run_out = runCompiled(exe);
+        assertTrue(run_out.regex("combined=list<auto>"),
+            "source-stripped AOT keeps populated list<auto> concatenation: " + run_out);
+        assertTrue(run_out.regex("hashdecls=list<hash<auto>>"),
+            "source-stripped AOT degrades unrelated hashdecl common type to hash<auto>: " + run_out);
+        assertTrue(run_out.regex("second=hash<B>"),
+            "source-stripped AOT preserves the second hashdecl value: " + run_out);
+        assertTrue(run_out.regex("EXIT=0"),
+            "source-stripped AOT heterogeneous list script exits cleanly: " + run_out);
     }
 
     testNestedEmptyHashLiteralAOT() {

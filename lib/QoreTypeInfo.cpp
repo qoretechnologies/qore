@@ -3595,9 +3595,19 @@ bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInf
             const TypedHashDecl* hd1 = ctype->return_vec[0].spec.getHashDecl();
             const TypedHashDecl* hd2 = ntype->return_vec[0].spec.getHashDecl();
             if (hd1 && hd2) {
-                // Both are hashdecls - preserve the typed structure instead of degrading to auto
-                // Structural equality will be checked at runtime if needed
-                return true;
+                const typed_hash_decl_private* thd1 = typed_hash_decl_private::get(*hd1);
+                const typed_hash_decl_private* thd2 = typed_hash_decl_private::get(*hd2);
+                // Preserve hashdecl structure only when both types describe
+                // the same declaration or a parent/child hierarchy.  Unrelated
+                // hashdecls must fall back to hash<auto>; otherwise the first
+                // element's hashdecl is incorrectly applied to later elements.
+                if (thd1->equal(*thd2) || thd2->isDescendantOf(*thd1)) {
+                    return true;
+                }
+                if (thd1->isDescendantOf(*thd2)) {
+                    ctype = ntype;
+                    return true;
+                }
             }
             ctype = autoHashTypeInfo;
         } else if (bti == listTypeInfo) {

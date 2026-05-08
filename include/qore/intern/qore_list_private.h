@@ -123,9 +123,11 @@ struct qore_list_private {
     DLLLOCAL void setListTypeFromNewElementType(const QoreTypeInfo* newElementType) {
         const QoreTypeInfo* orig_ctype, * ctype;
         orig_ctype = ctype = QoreTypeInfo::getUniqueReturnComplexList(complexTypeInfo);
-        // Treat 'auto' as unset for first-element initialization — auto means
-        // "no specific type yet", same as null/anyTypeInfo
-        if (ctype == autoTypeInfo) {
+        // Treat 'auto' as unset only for true first-element initialization.
+        // An already-populated list<auto> may contain heterogeneous values;
+        // appending or concatenating a typed value must not retroactively
+        // narrow the whole list to the new element's type.
+        if (ctype == autoTypeInfo && !length) {
             ctype = newElementType;
             if (ctype && ctype != autoTypeInfo && ctype != anyTypeInfo) {
                 complexTypeInfo = qore_get_complex_list_type(ctype);
