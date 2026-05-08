@@ -541,9 +541,13 @@ uint64_t qore_rt_create_object_method_ref_aot_throwing(uint64_t object_bits, con
 
 //! Create a parse reference (\var); returns NaN-boxed QoreValue
 uint64_t qore_rt_create_parse_ref(const ParseReferenceNode* node, ExceptionSink* xsink);
+uint64_t qore_rt_create_parse_ref_resolved_hash_key(const ParseReferenceNode* node, uint64_t key_bits,
+    ExceptionSink* xsink);
 
 //! Create a parse reference via AOT context slot
 uint64_t qore_rt_create_parse_ref_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+uint64_t qore_rt_create_parse_ref_aot_resolved_hash_key(QoreAOTContext* ctx, int32_t idx, uint64_t key_bits,
+    ExceptionSink* xsink);
 
 //! Create a local-variable parse reference via an AOT local slot.
 uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, int32_t local_slot, ExceptionSink* xsink);

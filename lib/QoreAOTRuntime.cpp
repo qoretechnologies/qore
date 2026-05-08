@@ -1392,7 +1392,7 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         skipOneExpr(rdr, p, e);  // right operand
         return;
     }
-    if (ek == AOTExprKind::LOG_NOT) {
+    if (ek == AOTExprKind::LOG_NOT || ek == AOTExprKind::UNARY_MINUS) {
         skipOneExpr(rdr, p, e);  // operand
         return;
     }
@@ -3352,6 +3352,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreLogicalNotOperatorNode(&loc_builtin, operand)));
+                }
+                continue;
+            }
+            case AOTExprKind::UNARY_MINUS: {
+                std::string operand_err;
+                QoreValue operand = readOneExpr(reader, ptr, end, operand_err, pgm,
+                    ctx->locals, num_locals, ctx->globals, num_globals);
+                if (!operand_err.empty()) {
+                    operand.discard(nullptr);
+                    has_unsupported = true;
+                } else {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreUnaryMinusOperatorNode(&loc_builtin, operand)));
                 }
                 continue;
             }

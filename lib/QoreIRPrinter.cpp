@@ -413,6 +413,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::ToString: return "to.string";
         case QoreIROpcode::Sprintf: return "sprintf";
         case QoreIROpcode::DebugBlock: return "debug.block";
+        case QoreIROpcode::CheckException: return "check.exception";
     }
     return "unknown";
 }

@@ -108,6 +108,7 @@
 #include "qore/intern/QoreShiftOperatorNode.h"
 #include "qore/intern/QorePushOperatorNode.h"
 #include "qore/intern/QoreUnshiftOperatorNode.h"
+#include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreAssignmentOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
@@ -5970,6 +5971,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* minus = dynamic_cast<const QoreMinusOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::MINUS));
         return write_inline_expr(minus->getLeft()) && write_inline_expr(minus->getRight());
+    }
+    if (auto* unary_minus = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::UNARY_MINUS));
+        return write_inline_expr(unary_minus->getExp());
     }
     if (auto* multiply = dynamic_cast<const QoreMultiplicationOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::MULTIPLY));

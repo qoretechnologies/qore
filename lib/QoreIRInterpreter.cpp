@@ -71,7 +71,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 369,
+static_assert(QORE_IR_MAX_OPCODE == 370,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -2080,6 +2080,10 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 
         case QoreIROpcode::CreateParseRef: {
             if (auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(inv->expr.getInternalNode())) {
+                if (!inv->operands.empty()) {
+                    QoreValue key = getIRValue(values, inv->operands[0]);
+                    return fromBits(qore_rt_create_parse_ref_resolved_hash_key(parse_ref, toBits(key), xsink));
+                }
                 return fromBits(qore_rt_create_parse_ref(parse_ref, xsink));
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
@@ -5962,22 +5966,33 @@ load_local_done:
             }
             case QoreIROpcode::CreateParseRef: {
                 auto* pr_inst = static_cast<QoreIRCreateParseRefInstruction*>(inst);
-                bool needs_deref = true;
                 QoreValue out;
+                RuntimeConfig& rc = rc_get_current_ref();
                 if (pr_inst->node) {
                     prepareParseReferenceLocal(pr_inst->node);
-                    out = const_cast<ParseReferenceNode*>(pr_inst->node)->eval(needs_deref, xsink);
-                    if (!needs_deref && out.hasNode()) {
-                        out = out.refSelf();
+                    if (!pr_inst->operands.empty()) {
+                        QoreValue key = getIRValue(values, pr_inst->operands[0]);
+                        out = const_cast<ParseReferenceNode*>(pr_inst->node)->evalToRefWithResolvedHashKey(
+                            rc, key, xsink);
+                    } else {
+                        out = const_cast<ParseReferenceNode*>(pr_inst->node)->evalToRef(rc, xsink);
                     }
                 } else if (pr_inst->expr.hasNode()) {
                     // AOT mode: node is null; expr holds the reconstructed ParseReferenceNode
                     const ParseReferenceNode* prn = dynamic_cast<const ParseReferenceNode*>(
                         pr_inst->expr.getInternalNode());
+                    if (!prn) {
+                        xsink->raiseException("RUNTIME-ERROR", "parse reference expression has invalid type in AOT mode");
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                     prepareParseReferenceLocal(prn);
-                    out = pr_inst->expr.getInternalNode()->eval(needs_deref, xsink);
-                    if (!needs_deref && out.hasNode()) {
-                        out = out.refSelf();
+                    if (!pr_inst->operands.empty() && prn) {
+                        QoreValue key = getIRValue(values, pr_inst->operands[0]);
+                        out = const_cast<ParseReferenceNode*>(prn)->evalToRefWithResolvedHashKey(rc, key, xsink);
+                    } else {
+                        out = const_cast<ParseReferenceNode*>(prn)->evalToRef(rc, xsink);
                     }
                 } else {
                     xsink->raiseException("RUNTIME-ERROR", "parse reference not resolved in AOT mode");
@@ -7491,6 +7506,21 @@ load_local_done:
                             debug_break_loop = true;
                         }
                     }
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::CheckException: {
+                if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 ++ip;
                 break;

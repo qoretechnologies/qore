@@ -9230,11 +9230,13 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
                     return true;
                 }
             }
-            // Complex hash member access: \member{key} with pre-evaluated key operand
+            // Self-member hash access can be reconstructed without an expr slot.
+            // Other hash lvalue references still need the ParseReferenceNode slot;
+            // their final key operand is only used to avoid implicit-arg lookup.
             if (!ii->operands.empty() && lv_expr.hasNode()) {
                 auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
                     lv_expr.getInternalNode());
-                if (hd) {
+                if (hd && hd->getLeft().hasNode() && hd->getLeft().getType() == NT_SELF_VARREF) {
                     return true;
                 }
             }
@@ -9608,11 +9610,12 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                                 break;
                             }
                         }
-                        // Skip expr slot for complex hash member access with pre-evaluated key
+                        // Skip expr slot only for self-member hash references that
+                        // qore_rt_create_member_hash_ref_aot can reconstruct.
                         if (!pri->operands.empty() && lv_expr.hasNode()) {
                             auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
                                 lv_expr.getInternalNode());
-                            if (hd) {
+                            if (hd && hd->getLeft().hasNode() && hd->getLeft().getType() == NT_SELF_VARREF) {
                                 break;
                             }
                         }
@@ -12467,6 +12470,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (dynamic_cast<const QoreLogicalNotOperatorNode*>(node)) {
         id.kind = AOTExprKind::LOG_NOT;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreUnaryMinusOperatorNode*>(node)) {
+        id.kind = AOTExprKind::UNARY_MINUS;
         id.child_expr = v;
         return id;
     }

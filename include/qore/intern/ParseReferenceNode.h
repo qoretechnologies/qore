@@ -98,6 +98,8 @@ public:
     // returns a runtime reference
     DLLLOCAL virtual ReferenceNode* evalToRef(ExceptionSink* xsink) const;
     DLLLOCAL virtual ReferenceNode* evalToRef(RuntimeConfig& rc, ExceptionSink* xsink) const;
+    DLLLOCAL ReferenceNode* evalToRefWithResolvedHashKey(QoreValue key, ExceptionSink* xsink) const;
+    DLLLOCAL ReferenceNode* evalToRefWithResolvedHashKey(RuntimeConfig& rc, QoreValue key, ExceptionSink* xsink) const;
 
     //! Returns the lvalue expression (for IR local variable analysis)
     DLLLOCAL const QoreValue& getLVExp() const {

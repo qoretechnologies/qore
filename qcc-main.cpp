@@ -1679,6 +1679,7 @@ static bool dump_skip_expr_payload(const QoreAOTBinaryReader& reader,
         case AOTExprKind::DELETE:
         case AOTExprKind::REMOVE:
         case AOTExprKind::BACKGROUND:
+        case AOTExprKind::UNARY_MINUS:
             return dump_skip_inline_expr(reader, p, end, summary, func_name, child_ctx);
 
         case AOTExprKind::QUESTION:

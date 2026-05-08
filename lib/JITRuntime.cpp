@@ -256,6 +256,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_create_object_method_ref_aot_throwing",
         reinterpret_cast<void*>(&qore_rt_create_object_method_ref_aot_throwing) },
     { "qore_rt_create_parse_ref_aot", reinterpret_cast<void*>(&qore_rt_create_parse_ref_aot) },
+    { "qore_rt_create_parse_ref_aot_resolved_hash_key",
+        reinterpret_cast<void*>(&qore_rt_create_parse_ref_aot_resolved_hash_key) },
     { "qore_rt_create_local_ref_aot", reinterpret_cast<void*>(&qore_rt_create_local_ref_aot) },
     { "qore_rt_create_member_hash_ref_aot", reinterpret_cast<void*>(&qore_rt_create_member_hash_ref_aot) },
     { "qore_rt_new_hash_decl_aot", reinterpret_cast<void*>(&qore_rt_new_hash_decl_aot) },
@@ -2417,12 +2419,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_object_method_ref_aot(uint64_t obje
 // --- Parse reference creation helper ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_parse_ref(const ParseReferenceNode* node, ExceptionSink* xsink) {
-    bool needs_deref = true;
-    QoreValue result = const_cast<ParseReferenceNode*>(node)->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
-        result = result.refSelf();
-    }
-    return toBits(result);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return toBits(QoreValue(const_cast<ParseReferenceNode*>(node)->evalToRef(rc, xsink)));
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_create_parse_ref_resolved_hash_key(const ParseReferenceNode* node,
+        uint64_t key_bits, ExceptionSink* xsink) {
+    QoreValue key = fromBits(key_bits);
+    RuntimeConfig& rc = rc_get_current_ref();
+    return toBits(QoreValue(node
+        ? const_cast<ParseReferenceNode*>(node)->evalToRefWithResolvedHashKey(rc, key, xsink)
+        : nullptr));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_parse_ref_aot(QoreAOTContext* ctx, int32_t idx,
@@ -2435,6 +2442,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_parse_ref_aot(QoreAOTContext* ctx, 
         return toBits(QoreValue());
     }
     return qore_rt_create_parse_ref(node, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_create_parse_ref_aot_resolved_hash_key(QoreAOTContext* ctx, int32_t idx,
+        uint64_t key_bits, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_exprs);
+    QoreValue expr = fromBits(ctx->exprs[idx]);
+    auto* node = dynamic_cast<const ParseReferenceNode*>(expr.getInternalNode());
+    if (!node) {
+        xsink->raiseException("AOT-ERROR", "invalid expression for parse reference AOT call");
+        return toBits(QoreValue());
+    }
+    return qore_rt_create_parse_ref_resolved_hash_key(node, key_bits, xsink);
 }
 
 static const QoreTypeInfo* get_local_parse_ref_type(LocalVar* lv) {
@@ -12353,6 +12372,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_parse_ref
     return result;
 }
 
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_parse_ref_resolved_hash_key_throwing(
+        const ParseReferenceNode* node, uint64_t key_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_parse_ref_resolved_hash_key(node, key_bits, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_object_method_ref_aot_throwing(
         uint64_t object_bits, const char* method_name, ExceptionSink* xsink) {
     uint64_t result = qore_rt_create_object_method_ref_aot(object_bits, method_name, xsink);
@@ -12365,6 +12393,15 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_object_me
 extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_parse_ref_aot_throwing(
         QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     uint64_t result = qore_rt_create_parse_ref_aot(ctx, idx, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_create_parse_ref_aot_resolved_hash_key_throwing(
+        QoreAOTContext* ctx, int32_t idx, uint64_t key_bits, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_create_parse_ref_aot_resolved_hash_key(ctx, idx, key_bits, xsink);
     if (xsink && *xsink) {
         throw QoreJITException();
     }

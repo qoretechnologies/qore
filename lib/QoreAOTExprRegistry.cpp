@@ -314,7 +314,7 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
         "Range subscript operator"},
     {"DOT_EVAL_EXPR", 103, true, write_expr_dot_eval_expr, read_expr_dot_eval_expr,
         "Full dot-eval expression slot payload"},
-    {nullptr, 104, false, nullptr, nullptr, nullptr},
+    {"UNARY_MINUS", 104, true, write_expr_unary_minus, read_expr_unary_minus, "Unary minus operator"},
     {nullptr, 105, false, nullptr, nullptr, nullptr},
     {nullptr, 106, false, nullptr, nullptr, nullptr},
     {nullptr, 107, false, nullptr, nullptr, nullptr},

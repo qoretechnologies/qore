@@ -102,6 +102,7 @@
 #include "qore/intern/QoreShiftOperatorNode.h"
 #include "qore/intern/QorePushOperatorNode.h"
 #include "qore/intern/QoreUnshiftOperatorNode.h"
+#include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/QoreRangeOperatorNode.h"
 #include "qore/intern/QoreAssignmentOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
@@ -3449,6 +3450,33 @@ static QoreValue read_expr_log_not(AOTExprReadCtx& ctx) {
         return QoreValue();
     }
     return QoreValue(new QoreLogicalNotOperatorNode(&loc_builtin, operand));
+}
+
+// ============================================================================
+// UNARY_MINUS (104)
+// ============================================================================
+
+static bool write_expr_unary_minus(AOTExprWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::UNARY_MINUS));
+    return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals,
+        ctx.parent_globals, ctx.const_reverse_map);
+}
+
+static QoreValue read_expr_unary_minus(AOTExprReadCtx& ctx) {
+    std::string operand_err;
+    QoreValue operand = readOneExpr(ctx.reader, ctx.ptr, ctx.end, operand_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    if (!operand_err.empty()) {
+        operand.discard(nullptr);
+        ctx.error = operand_err;
+        return QoreValue();
+    }
+    return QoreValue(new QoreUnaryMinusOperatorNode(&loc_builtin, operand));
 }
 
 // ============================================================================

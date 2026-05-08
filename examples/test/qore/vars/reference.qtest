@@ -101,9 +101,26 @@ class RefArgHolder {
     }
 }
 
+class ReferenceMemberHolder {
+    public {
+        static hash<auto> h();
+        reference<hash<auto>> r;
+    }
+
+    constructor() {
+        r = \h;
+    }
+
+    *hash<auto> getHashViaMemberReference() {
+        reference<auto> rr = \self.r;
+        return rr;
+    }
+}
+
 class ReferenceTest inherits QUnit::Test {
     constructor() : Test("Reference Test", "1.0") {
         addTestCase("member ref", \memberReferenceTest());
+        addTestCase("reference-typed member parse ref", \referenceTypedMemberParseReferenceTest());
         addTestCase("dot-eval self-member reference arg", \dotEvalSelfMemberReferenceArgTest());
         addTestCase("issue 3417", \issue3417());
         addTestCase("issue 2891", \issue2891());
@@ -119,6 +136,11 @@ class ReferenceTest inherits QUnit::Test {
         T t();
         assertEq({}, t.test());
         assertEq({}, t.testStatic());
+    }
+
+    referenceTypedMemberParseReferenceTest() {
+        ReferenceMemberHolder h();
+        assertEq({}, h.getHashViaMemberReference());
     }
 
     dotEvalSelfMemberReferenceArgTest() {

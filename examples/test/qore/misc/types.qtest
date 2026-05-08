@@ -4790,6 +4790,26 @@ class TypeTest inherits QUnit::Test {
             }
 
             {
+                Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+                p.parse("softint sub t(softint i = 7) { return i; }\nsoftint sub u() { return t(NULL); }", "");
+                assertEq(7, p.callFunction("t", NULL));
+                assertEq(7, p.callFunction("u"));
+            }
+
+            {
+                Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+                p.parse("softlist<int> sub t(softlist<int> i = (7,)) { return i; }\nsoftlist<int> sub u() { return t(NULL); }", "");
+                assertEq((7,), p.callFunction("t", NULL));
+                assertEq((7,), p.callFunction("u"));
+            }
+
+            {
+                Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+                assertThrows("PARSE-TYPE-ERROR", \p.parse(),
+                    ("softint sub t(softint i) { return i; }\nsoftint sub u() { return t(NULL); }", ""));
+            }
+
+            {
                 Program p(PO_NEW_STYLE);
                 p.parse("sub t() { any x = {}; softint i = x; }", "");
                 assertThrows("RUNTIME-TYPE-ERROR", \p.callFunction(), "t");

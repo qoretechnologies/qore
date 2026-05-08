@@ -40,7 +40,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 369,
+static_assert(QORE_IR_MAX_OPCODE == 370,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
@@ -8459,14 +8459,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         uint64_t expr_bits;
                         std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                        auto ft = llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, ptr_type}, false);
-                        auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref_aot", ft);
-                        auto helper_throwing = module.getOrInsertFunction(
-                                "qore_rt_create_parse_ref_aot_throwing", ft);
-                        result = emitMaybeInvoke(helper, helper_throwing,
-                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
-                                module, llvm_func, inst);
+                        if (!inv->operands.empty()) {
+                            auto* key_val = getVal(inv->operands[0].id, error);
+                            if (!key_val) {
+                                return false;
+                            }
+                            llvm::Value* key_boxed = boxValue(key_val, inv->operands[0].id);
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, ptr_type}, false);
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_create_parse_ref_aot_resolved_hash_key", ft);
+                            auto helper_throwing = module.getOrInsertFunction(
+                                    "qore_rt_create_parse_ref_aot_resolved_hash_key_throwing", ft);
+                            result = emitMaybeInvoke(helper, helper_throwing,
+                                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), key_boxed, xsink_arg},
+                                    module, llvm_func, inst);
+                        } else {
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, ptr_type}, false);
+                            auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref_aot", ft);
+                            auto helper_throwing = module.getOrInsertFunction(
+                                    "qore_rt_create_parse_ref_aot_throwing", ft);
+                            result = emitMaybeInvoke(helper, helper_throwing,
+                                    {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                                    module, llvm_func, inst);
+                        }
                     }
                 } else {
                     const auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(
@@ -8475,9 +8492,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                                 reinterpret_cast<uint64_t>(parse_ref));
                         llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
-                        auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref",
-                                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                        result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                        if (!inv->operands.empty()) {
+                            auto* key_val = getVal(inv->operands[0].id, error);
+                            if (!key_val) {
+                                return false;
+                            }
+                            llvm::Value* key_boxed = boxValue(key_val, inv->operands[0].id);
+                            auto ft = llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i64_type, ptr_type}, false);
+                            auto helper = module.getOrInsertFunction(
+                                    "qore_rt_create_parse_ref_resolved_hash_key", ft);
+                            auto helper_throwing = module.getOrInsertFunction(
+                                    "qore_rt_create_parse_ref_resolved_hash_key_throwing", ft);
+                            result = emitMaybeInvoke(helper, helper_throwing,
+                                    {node_as_ptr, key_boxed, xsink_arg}, module, llvm_func, inst);
+                        } else {
+                            auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref",
+                                    llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                            result = builder->CreateCall(helper, {node_as_ptr, xsink_arg});
+                        }
                     } else {
                         return setExpressionFallbackError(error, inst,
                                 "CreateParseRef invoke expression is not a ParseReferenceNode");
@@ -12087,27 +12120,60 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     uint64_t expr_bits;
                     std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto pr_ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, ptr_type}, false);
-                    auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref_aot", pr_ft);
-                    auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_create_parse_ref_aot_throwing", pr_ft);
-                    result = emitMaybeInvoke(helper, helper_throwing,
-                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
-                            module, llvm_func, inst);
+                    if (!prinst->operands.empty()) {
+                        auto* key_val = getVal(prinst->operands[0].id, error);
+                        if (!key_val) {
+                            return false;
+                        }
+                        llvm::Value* key_boxed = boxValue(key_val, prinst->operands[0].id);
+                        auto pr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_create_parse_ref_aot_resolved_hash_key", pr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_parse_ref_aot_resolved_hash_key_throwing", pr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), key_boxed, xsink_arg},
+                                module, llvm_func, inst);
+                    } else {
+                        auto pr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref_aot", pr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_parse_ref_aot_throwing", pr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg},
+                                module, llvm_func, inst);
+                    }
                 }
             } else {
                 if (prinst->node) {
                     llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(prinst->node));
                     llvm::Value* node_as_ptr = builder->CreateIntToPtr(node_ptr, ptr_type);
-                    auto pr_ft = llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type}, false);
-                    auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref", pr_ft);
-                    auto helper_throwing = module.getOrInsertFunction(
-                            "qore_rt_create_parse_ref_throwing", pr_ft);
-                    result = emitMaybeInvoke(helper, helper_throwing,
-                            {node_as_ptr, xsink_arg}, module, llvm_func, inst);
+                    if (!prinst->operands.empty()) {
+                        auto* key_val = getVal(prinst->operands[0].id, error);
+                        if (!key_val) {
+                            return false;
+                        }
+                        llvm::Value* key_boxed = boxValue(key_val, prinst->operands[0].id);
+                        auto pr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction(
+                                "qore_rt_create_parse_ref_resolved_hash_key", pr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_parse_ref_resolved_hash_key_throwing", pr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {node_as_ptr, key_boxed, xsink_arg}, module, llvm_func, inst);
+                    } else {
+                        auto pr_ft = llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type}, false);
+                        auto helper = module.getOrInsertFunction("qore_rt_create_parse_ref", pr_ft);
+                        auto helper_throwing = module.getOrInsertFunction(
+                                "qore_rt_create_parse_ref_throwing", pr_ft);
+                        result = emitMaybeInvoke(helper, helper_throwing,
+                                {node_as_ptr, xsink_arg}, module, llvm_func, inst);
+                    }
                 } else {
                     return setExpressionFallbackError(error, inst,
                             "CreateParseRef instruction has no ParseReferenceNode metadata");
@@ -14755,6 +14821,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::DebugBlock: {
+            return true;
+        }
+        case QoreIROpcode::CheckException: {
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::DiscardTemps: {

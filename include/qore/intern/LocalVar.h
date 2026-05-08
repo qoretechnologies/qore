@@ -236,7 +236,21 @@ public:
 
             lvalue_ref* lr = lvalue_ref::get(ref);
             ValueEvalOptimizedRefHolder erh(lr->vexp, xsink);
-            return erh.takeValue(needs_deref);
+            if (*xsink) {
+                return QoreValue();
+            }
+            QoreValue rv = erh.takeValue(needs_deref);
+            if (rv.needsEval()) {
+                bool ref_needs_deref = needs_deref;
+                bool eval_needs_deref = true;
+                QoreValue resolved = rv.eval(eval_needs_deref, xsink);
+                if (ref_needs_deref) {
+                    rv.discard(xsink);
+                }
+                needs_deref = eval_needs_deref;
+                return *xsink ? QoreValue() : resolved;
+            }
+            return rv;
         }
 
         if (val.getType() == NT_WEAKREF) {
@@ -265,7 +279,11 @@ public:
                 return QoreValue();
 
             ValueEvalOptimizedRefHolder erh(lvalue_ref::get(ref)->vexp, xsink);
-            return *xsink ? QoreValue() : erh.takeReferencedValue();
+            if (*xsink) {
+                return QoreValue();
+            }
+            ValueHolder rv(erh.takeReferencedValue(), xsink);
+            return rv && rv->needsEval() ? rv->eval(xsink) : rv.release();
         }
 
         if (val.getType() == NT_WEAKREF) {
@@ -361,7 +379,25 @@ public:
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
             sl.unlock();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
-            return helper ? lvalue_ref::get(*ref)->vexp.eval(needs_deref, xsink) : QoreValue();
+            if (!helper) {
+                return QoreValue();
+            }
+            ValueEvalOptimizedRefHolder erh(lvalue_ref::get(*ref)->vexp, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            QoreValue rv = erh.takeValue(needs_deref);
+            if (rv.needsEval()) {
+                bool ref_needs_deref = needs_deref;
+                bool eval_needs_deref = true;
+                QoreValue resolved = rv.eval(eval_needs_deref, xsink);
+                if (ref_needs_deref) {
+                    rv.discard(xsink);
+                }
+                needs_deref = eval_needs_deref;
+                return *xsink ? QoreValue() : resolved;
+            }
+            return rv;
         }
 
         if (val.getType() == NT_WEAKREF) {
@@ -388,7 +424,15 @@ public:
             ReferenceHolder<ReferenceNode> ref(val.get<ReferenceNode>()->refRefSelf(), xsink);
             sl.unlock();
             LocalRefHelper<ClosureVarValue> helper(this, **ref, xsink);
-            return helper ? lvalue_ref::get(*ref)->vexp.eval(xsink) : QoreValue();
+            if (!helper) {
+                return QoreValue();
+            }
+            ValueEvalOptimizedRefHolder erh(lvalue_ref::get(*ref)->vexp, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+            ValueHolder rv(erh.takeReferencedValue(), xsink);
+            return rv && rv->needsEval() ? rv->eval(xsink) : rv.release();
         }
 
         if (val.getType() == NT_WEAKREF) {

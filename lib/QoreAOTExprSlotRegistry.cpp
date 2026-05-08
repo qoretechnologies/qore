@@ -89,6 +89,7 @@
 #include "qore/intern/QoreShiftOperatorNode.h"
 #include "qore/intern/QorePushOperatorNode.h"
 #include "qore/intern/QoreUnshiftOperatorNode.h"
+#include "qore/intern/QoreUnaryMinusOperatorNode.h"
 #include "qore/intern/ContextrefNode.h"
 #include "qore/intern/ContextRowNode.h"
 #include "qore/intern/ComplexContextrefNode.h"
@@ -436,9 +437,10 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 102: SQUARE_BRACKET_RANGE
     {"SQUARE_BRACKET_RANGE", 102, true, write_slot_SQUARE_BRACKET_RANGE, "Range subscript operator"},
 
-    // 103-253: Unused
+    // 103: DOT_EVAL_EXPR
     {"DOT_EVAL_EXPR", 103, true, write_slot_DOT_EVAL_EXPR, "Full dot-eval expression slot payload"},
-    {nullptr, 104, false, nullptr, nullptr},
+    // 104: UNARY_MINUS
+    {"UNARY_MINUS", 104, true, write_slot_UNARY_MINUS, "Unary minus operator"},
     {nullptr, 105, false, nullptr, nullptr},
     {nullptr, 106, false, nullptr, nullptr},
     {nullptr, 107, false, nullptr, nullptr},

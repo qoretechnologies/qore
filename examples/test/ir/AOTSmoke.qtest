@@ -221,6 +221,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testAOTModuleBcaHashdeclClassConstants());
         addTestCase("AOT module computed member defaults",
             \testAOTModuleComputedMemberDefaults());
+        addTestCase("AOT module unary minus hashdecl init",
+            \testAOTModuleUnaryMinusHashdeclInit());
         addTestCase("AOT module closure-captured loop condition",
             \testAOTModuleClosureCapturedLoopCondition());
         addTestCase("AOT module recursive closure local frame isolation",
@@ -300,6 +302,16 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source constructor args", \testStripSourceConstructorArgs());
         addTestCase("AOT strip source default args", \testStripSourceDefaultArgs());
         addTestCase("AOT strip source cast parse hash", \testStripSourceCastParseHash());
+        addTestCase("AOT strip source dynamic hash-key parse reference",
+            \testStripSourceDynamicHashKeyParseReference());
+        addTestCase("AOT strip source reference member parse reference",
+            \testStripSourceReferenceMemberParseReference());
+        addTestCase("AOT strip source cleanup exception catch",
+            \testStripSourceCleanupExceptionCatch());
+        addTestCase("AOT block local exception cleanup before catch",
+            \testBlockLocalExceptionCleanupBeforeCatch());
+        addTestCase("AOT on_exit exception cleanup before catch",
+            \testOnExitExceptionCleanupBeforeCatch());
         # Closure and regex handler serialization tests
         addTestCase("AOT closure in function", \testClosureInFunction());
         addTestCase("AOT closure lambda", \testClosureLambda());
@@ -6217,6 +6229,101 @@ printf(\"%s\\n\", AOTComputedMemberDefault::run());
             "compiled module evaluates computed member default: " + aot_out);
     }
 
+    testAOTModuleUnaryMinusHashdeclInit() {
+        string tmp_dir = sprintf("/tmp/aot_unary_minus_hashdecl_%d", getpid());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+module AOTUnaryMinusHashdecl {
+    version = \"1.0\";
+    desc = \"AOT unary minus hashdecl init regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace AOTUnaryMinusHashdecl {
+    public hashdecl Conversion {
+        string from_unit;
+        string to_unit;
+        float factor;
+        float offset;
+    }
+
+    public class Converter {
+        private {
+            hash<string, hash<string, hash<Conversion>>> conversions;
+        }
+
+        constructor() {
+            conversions = {};
+        }
+
+        registerConversion(string from_unit, string to_unit, float factor, float offset) {
+            if (!exists conversions{from_unit}) {
+                conversions{from_unit} = {};
+            }
+            conversions{from_unit}{to_unit} = <Conversion>{
+                \"from_unit\": from_unit,
+                \"to_unit\": to_unit,
+                \"factor\": factor,
+                \"offset\": offset,
+            };
+
+            if (factor != 0.0) {
+                if (!exists conversions{to_unit}) {
+                    conversions{to_unit} = {};
+                }
+                conversions{to_unit}{from_unit} = <Conversion>{
+                    \"from_unit\": to_unit,
+                    \"to_unit\": from_unit,
+                    \"factor\": 1.0 / factor,
+                    \"offset\": -offset / factor,
+                };
+            }
+        }
+
+        float inverseOffset() {
+            registerConversion(\"a\", \"b\", 2.0, 6.0);
+            return conversions{\"b\"}{\"a\"}.offset;
+        }
+    }
+
+    public string sub run() {
+        Converter c();
+        return sprintf(\"%.1f\", c.inverseOffset());
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTUnaryMinusHashdecl.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTUnaryMinusHashdecl.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "unary-minus hashdecl module compiled: " + result.compile_out);
+
+        string test_code = "%modern
+%requires AOTUnaryMinusHashdecl
+printf(\"%s\\n\", AOTUnaryMinusHashdecl::run());
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+        assertEq("-3.0\n", aot_out,
+            "compiled module preserves unary minus in hashdecl initializer: " + aot_out);
+    }
+
     testAOTModuleClosureCapturedLoopCondition() {
         string tmp_dir = sprintf("/tmp/aot_closure_loop_%d", getpid());
         mkdir(tmp_dir);
@@ -8428,14 +8535,14 @@ int sub large() {
         hash<auto> paths = writeTempScript("%modern
 %require-types
 
-hash<auto> sub f(int i) {
-    hash<auto> h;
-    h.(cast<string>(i & 3)) = i << 1;
-    h.(cast<string>(i ^ 2)) = i >> 1;
-    return h;
+int sub refprobe(int i) {
+    hash<auto> h = {};
+    reference<auto> r = \\h.(cast<string>(-i));
+    r = i;
+    return h.(cast<string>(-i));
 }
 
-printf(\"%y\\n\", f(3));
+printf(\"%d\\n\", refprobe(3));
 ");
         on_exit {
             unlink(paths.src);
@@ -8448,13 +8555,15 @@ printf(\"%y\\n\", f(3));
         assertTrue(compile_out.regex("EXIT=0"),
             "modern slot expression probe compiles: " + compile_out);
 
-        string dump_out = dumpQccInfo(paths.out, False);
+        string dump_out = dumpQccSections(paths.out);
         assertTrue(dump_out.regex("expr-slots=[1-9]"),
             "probe generated slot expressions: " + dump_out);
         assertTrue(dump_out.regex("malformed=0"),
             "qcc dump parses modern slot expression payloads: " + dump_out);
         assertTrue(!dump_out.regex("malformed=[1-9]"),
             "qcc dump reports no malformed slot expression payloads: " + dump_out);
+        assertTrue(dump_out.regex("UNARY_MINUS\\s+\\(104\\)"),
+            "qcc dump reports unary-minus expression kind from the slot registry: " + dump_out);
     }
 
     testStripSourceStaticVarrefModule() {
@@ -8724,6 +8833,181 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "cast-parse-hash strip-source output matches interpreter");
+    }
+
+    testStripSourceDynamicHashKeyParseReference() {
+        string code = "%modern
+public list<auto> sub remove_value(reference list, auto val) {
+    return list = (select list, $1 != val);
+}
+
+hash<auto> h = {\"a\": (), \"b\": (2,), \"c\": (1, 2, 3)};
+map remove_value(\\h{$1}, 2), h.keyIterator();
+printf(\"%d:%d:%d:%d\\n\", h.a.size(), h.b.size(), h.c.size(), h.c[1]);
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "dynamic hash-key parse-ref strip-source compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "dynamic hash-key parse-ref strip-source all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "dynamic hash-key parse-ref strip-source output matches interpreter");
+    }
+
+    testStripSourceReferenceMemberParseReference() {
+        string code = "%modern
+class Holder {
+    public {
+        static hash<auto> h();
+        reference<hash<auto>> r;
+    }
+
+    constructor() {
+        r = \\h;
+    }
+
+    *hash<auto> getHashViaMemberReference() {
+        reference<auto> rr = \\self.r;
+        return rr;
+    }
+}
+
+Holder holder();
+printf(\"%y\\n\", holder.getHashViaMemberReference());
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "reference member parse-ref strip-source compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "reference member parse-ref strip-source all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "reference member parse-ref strip-source output matches interpreter");
+        assertEq("{}\n", result.run_out,
+            "reference member parse-ref strip-source dereferences reference-typed member");
+    }
+
+    testStripSourceCleanupExceptionCatch() {
+        # A cleanup exception from a local destructor must complete the whole
+        # block cleanup sequence before being routed to the active catch block.
+        string code = "%modern
+our list<string> events = ();
+
+class Boom {
+    private {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+    }
+
+    destructor() {
+        events += n;
+        if (n == \"b\") {
+            throw \"BOOM\", \"boom\";
+        }
+    }
+}
+
+sub f() {
+    try {
+        Boom a(\"a\");
+        Boom b(\"b\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"caught %s events=%s\\n\", ex.err, events.join(\",\"));
+    }
+    printf(\"after=%s\\n\", events.join(\",\"));
+}
+
+f();
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.compiled,
+            "cleanup exception catch strip-source compiled: " + result.compile_out);
+        assertTrue(result.all_precompiled,
+            "cleanup exception catch strip-source all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "cleanup exception catch strip-source output matches interpreter");
+    }
+
+    testBlockLocalExceptionCleanupBeforeCatch() {
+        string code = "%modern
+class LockCleanup {
+    private {
+        static Mutex m();
+    }
+
+    private fail() {
+        throw \"ORIGINAL\", \"original\";
+    }
+
+    private release() {
+        AutoLock l(m);
+        printf(\"release-ok\\n\");
+    }
+
+    run() {
+        try {
+            {
+                AutoLock l(m);
+                fail();
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            release();
+            printf(\"caught %s\\n\", ex.err);
+        }
+    }
+}
+
+LockCleanup t();
+t.run();
+exit(0);
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled,
+            "block local exception cleanup all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "block local exception cleanup output matches interpreter");
+        assertEq("release-ok\ncaught ORIGINAL\n", result.run_out,
+            "block local exception cleanup releases lock before catch");
+    }
+
+    testOnExitExceptionCleanupBeforeCatch() {
+        string code = "%modern
+our int active = 0;
+
+sub f() {
+    try {
+        int local = 1;
+        ++active;
+        on_exit {
+            active -= local;
+        }
+        throw \"ORIGINAL\", \"original\";
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"catch active=%d err=%s\\n\", active, ex.err);
+    }
+    printf(\"after active=%d\\n\", active);
+}
+
+f();
+exit(0);
+";
+        hash<auto> result = compileStripSourceAndRun(code);
+        assertTrue(result.all_precompiled,
+            "on_exit exception cleanup all pre-compiled: " + result.compile_out);
+        string interp_out = runInterpreted(code);
+        assertEq(interp_out, result.run_out,
+            "on_exit exception cleanup output matches interpreter");
+        assertEq("catch active=0 err=ORIGINAL\nafter active=0\n", result.run_out,
+            "on_exit exception cleanup fires before catch");
     }
 
     testClosureInFunction() {

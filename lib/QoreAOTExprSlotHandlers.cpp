@@ -678,6 +678,16 @@ static bool write_slot_LOG_NOT(AOTExprSlotWriteCtx& ctx) {
         ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
 }
 
+static bool write_slot_UNARY_MINUS(AOTExprSlotWriteCtx& ctx) {
+    const AbstractQoreNode* node = ctx.expr.child_expr.getInternalNode();
+    auto* op = dynamic_cast<const QoreUnaryMinusOperatorNode*>(node);
+    if (!op) {
+        return false;
+    }
+    return classifyAndWriteExpr(ctx.writer, op->getExp(),
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+}
+
 static bool write_slot_NULL_COAL(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreNullCoalescingOperatorNode>(ctx);
 }

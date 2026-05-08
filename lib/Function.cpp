@@ -71,6 +71,23 @@
 #include <unordered_map>
 #include <unordered_set>
 
+static bool qore_is_non_optional_soft_type(const QoreTypeInfo* ti) {
+    return ti == softBigIntTypeInfo
+        || ti == softFloatTypeInfo
+        || ti == softNumberTypeInfo
+        || ti == softBoolTypeInfo
+        || ti == softStringTypeInfo
+        || ti == softDateTypeInfo
+        || ti == softBinaryTypeInfo
+        || ti == softListTypeInfo
+        || ti == softAutoListTypeInfo
+        || QoreTypeInfo::getUniqueReturnComplexSoftList(ti);
+}
+
+static bool qore_is_defaulted_null_soft_arg(const QoreTypeInfo* ti, const QoreValue& arg, bool has_default) {
+    return has_default && arg.isNull() && qore_is_non_optional_soft_type(ti);
+}
+
 static void duplicateSignatureException(const char* cname, const char* name, const UserSignature* sig) {
     parseException(*sig->getParseLocation(), "DUPLICATE-SIGNATURE", "%s%s%s(%s) has already been declared",
         cname ? cname : "", cname ? "::" : "", name, sig->getSignatureText());
@@ -413,7 +430,17 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
     OptionalObjectOnlySubstitutionHelper self_helper;
     bool self_set = false;
     for (unsigned i = 0; i < max; ++i) {
-        if (i < defaultArgList.size() && defaultArgList[i] && (!tmp || tmp->retrieveEntry(i).isNothing())) {
+        const QoreTypeInfo* paramTypeInfo = i < typeList.size() ? sig->getParamTypeInfo(i) : nullptr;
+        bool use_default_arg = false;
+        if (i < defaultArgList.size() && defaultArgList[i]) {
+            if (!tmp) {
+                use_default_arg = true;
+            } else {
+                QoreValue arg = tmp->retrieveEntry(i);
+                use_default_arg = arg.isNothing() || qore_is_defaulted_null_soft_arg(paramTypeInfo, arg, true);
+            }
+        }
+        if (use_default_arg) {
             if (arg_type & ARG_DEF) {
                 QoreValue& p = tmp.getEntryReference(i);
 
@@ -431,7 +458,6 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                 }
 
                 // process default argument with accepting type's filter if necessary
-                const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
                 if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, p)) {
                     QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), p, xsink);
                     if (*xsink) {
@@ -1327,7 +1353,8 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
                 }
 
                 int rc;
-                if (n.isNothing() && sig->hasDefaultArg(pi)) {
+                if ((n.isNothing() || qore_is_defaulted_null_soft_arg(t, n, sig->hasDefaultArg(pi)))
+                        && sig->hasDefaultArg(pi)) {
                     rc = QTI_IGNORE;
                 } else {
                     rc = QoreTypeInfo::runtimeAcceptsValue(t, n);
@@ -1851,7 +1878,12 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                     qore_type_result_e rc = QTI_UNASSIGNED;
                     qore_type_result_e max_rc = QTI_UNASSIGNED;
                     if (QoreTypeInfo::hasType(t)) {
-                        if (!QoreTypeInfo::hasType(a)) {
+                        if (sig->hasDefaultArg(pi)
+                                && (QoreTypeInfo::isType(a, NT_NOTHING)
+                                    || (QoreTypeInfo::isType(a, NT_NULL)
+                                        && qore_is_non_optional_soft_type(t)))) {
+                            rc = max_rc = QTI_IDENT;
+                        } else if (!QoreTypeInfo::hasType(a)) {
                             if (pi < num_args) {
                                 // we are missing parse-time type information, we need to match at runtime (HARD)
                                 variant_runtime_match = true;
@@ -1862,8 +1894,6 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                             } else {
                                 a = nothingTypeInfo;
                             }
-                        } else if (QoreTypeInfo::isType(a, NT_NOTHING) && sig->hasDefaultArg(pi)) {
-                            rc = max_rc = QTI_IDENT;
                         }
                     }
 

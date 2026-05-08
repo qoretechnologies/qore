@@ -213,6 +213,55 @@ ReferenceNode* ParseReferenceNode::evalToRef(RuntimeConfig& rc, ExceptionSink* x
         : nullptr;
 }
 
+ReferenceNode* ParseReferenceNode::evalToRefWithResolvedHashKey(QoreValue key, ExceptionSink* xsink) const {
+    auto* hd = lvexp.hasNode()
+        ? dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(lvexp.getInternalNode())
+        : nullptr;
+    if (!hd) {
+        return evalToRef(xsink);
+    }
+    if (hd->getRight().getType() == NT_STRING) {
+        return evalToRef(xsink);
+    }
+
+    QoreObject* self = nullptr;
+    const void* lvalue_id = nullptr;
+    const qore_class_private* qc = nullptr;
+    QoreValue left = doPartialEval(hd->getLeft(), self, lvalue_id, qc, xsink);
+    if (*xsink || !left) {
+        assert(!left);
+        return nullptr;
+    }
+
+    QoreValue nv(new QoreHashObjectDereferenceOperatorNode(loc, left, key.refSelf()));
+    return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
+}
+
+ReferenceNode* ParseReferenceNode::evalToRefWithResolvedHashKey(RuntimeConfig& rc, QoreValue key,
+        ExceptionSink* xsink) const {
+    auto* hd = lvexp.hasNode()
+        ? dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(lvexp.getInternalNode())
+        : nullptr;
+    if (!hd) {
+        return evalToRef(rc, xsink);
+    }
+    if (hd->getRight().getType() == NT_STRING) {
+        return evalToRef(rc, xsink);
+    }
+
+    QoreObject* self = nullptr;
+    const void* lvalue_id = nullptr;
+    const qore_class_private* qc = nullptr;
+    QoreValue left = doPartialEval(hd->getLeft(), rc, self, lvalue_id, qc, xsink);
+    if (*xsink || !left) {
+        assert(!left);
+        return nullptr;
+    }
+
+    QoreValue nv(new QoreHashObjectDereferenceOperatorNode(loc, left, key.refSelf()));
+    return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
+}
+
 IntermediateParseReferenceNode* ParseReferenceNode::evalToIntermediate(ExceptionSink* xsink) const {
     //printd(5, "ParseReferenceNode::evalToIntermediate() '%s'\n", QoreTypeInfo::getName(typeInfo));
     QoreObject* self = nullptr;
@@ -302,12 +351,10 @@ int ParseReferenceNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_co
     }
 
     if (argTypeInfo) {
-        // if argTypeInfo is already a reference type (including *reference<T>), extract the
-        // inner type to avoid creating nested reference types like reference<*reference<T>>
-        // (e.g., \info where info is *reference<hash<auto>>)
-        const QoreTypeInfo* ref_target = QoreTypeInfo::getReferenceTarget(argTypeInfo);
-        // use the actual type info for the reference type, including autoTypeInfo
-        // reference<auto> is different from bare reference
+        // Direct variable references to reference-typed variables follow the referenced
+        // target. Complex lvalues such as \self.member must preserve the outer reference
+        // layer because the lvalue is the member itself.
+        const QoreTypeInfo* ref_target = direct_var_ref ? QoreTypeInfo::getReferenceTarget(argTypeInfo) : nullptr;
         parse_context.typeInfo = typeInfo = qore_get_complex_hard_reference_type(
             ref_target ? ref_target : argTypeInfo);
     } else {

@@ -263,6 +263,8 @@ public:
     //! Emit a debug-only StatementBlock entry marker.  It is a no-op outside
     //! the IR interpreter's DebugProgram hook path.
     QoreIRInstruction* createDebugBlock(const QoreProgramLocation* loc = nullptr);
+    //! Emit a pending-exception check after cleanup code that can run destructors.
+    QoreIRInstruction* createCheckException(const QoreProgramLocation* loc = nullptr);
 
     //! Emit a call to an AOT-emitted helper function by LLVM symbol name.
     //! Only appears in AOT-compiled IR produced by the init-expression

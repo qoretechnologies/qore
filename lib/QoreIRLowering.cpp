@@ -2159,6 +2159,39 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         builder.createScopeEnter(scope_id);
     }
 
+    QoreIRBasicBlock* lvar_exception_cleanup_block = nullptr;
+    QoreIRBasicBlock* lvar_exception_cleanup_continue_block = nullptr;
+    QoreIRBasicBlock* saved_exception_target = nullptr;
+    bool pushed_lvar_exception_target = false;
+    if (lvars && getCurrentExceptionTarget()) {
+        // Exceptions raised inside this lexical block must destroy its block-scoped
+        // locals before control reaches the enclosing catch.  Normal fall-through
+        // cleanup below only handles non-exception exits.
+        saved_exception_target = getCurrentExceptionTarget();
+        lvar_exception_cleanup_block = createBlock("block.lvars.exception.cleanup");
+        if (!lvar_exception_cleanup_block) {
+            error = "IR builder failed to create block local exception cleanup block";
+            if (has_on_block_exit) {
+                scope_stack.pop_back();
+                cleanup_stack.pop_back();
+            }
+            cleanup_stack.pop_back();
+            return false;
+        }
+        if (has_on_block_exit) {
+            lvar_exception_cleanup_continue_block = createBlock("block.lvars.exception.cleanup.cont");
+            if (!lvar_exception_cleanup_continue_block) {
+                error = "IR builder failed to create block local exception cleanup continuation block";
+                scope_stack.pop_back();
+                cleanup_stack.pop_back();
+                cleanup_stack.pop_back();
+                return false;
+            }
+        }
+        exception_stack.push_back(lvar_exception_cleanup_block);
+        pushed_lvar_exception_target = true;
+    }
+
     if (!root_statement_block) {
         builder.createDebugBlock(block->loc);
     }
@@ -2180,6 +2213,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         // lives in the cleanup vector across every body-statement boundary.
         builder.createPushTempMark((*it)->loc);
         if (!lowerStatement(*it, error)) {
+            if (pushed_lvar_exception_target) {
+                exception_stack.pop_back();
+            }
             if (has_on_block_exit) {
                 scope_stack.pop_back();
                 cleanup_stack.pop_back();
@@ -2196,6 +2232,10 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             break;
         }
         builder.createDiscardTemps((*it)->loc);
+    }
+
+    if (pushed_lvar_exception_target) {
+        exception_stack.pop_back();
     }
 
     // Pop handler stack
@@ -2295,9 +2335,34 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             // scope exits where CVV values should be cleared unconditionally.
             ui->is_block_exit = (loop_depth == 0);
         }
+        auto* check_inst = builder.createCheckException(block->loc);
+        check_inst->exception_target = getCurrentExceptionTarget();
     }
     if (lvars) {
         cleanup_stack.pop_back();
+    }
+
+    if (lvar_exception_cleanup_block) {
+        QoreIRBasicBlock* after_block = builder.getBlock();
+        builder.getFunction()->moveBlockToEnd(lvar_exception_cleanup_block);
+        builder.setBlock(lvar_exception_cleanup_block);
+        if (has_on_block_exit) {
+            // Exception unwinds through this synthetic block instead of the
+            // try LandingPad, so fire this lexical scope's on_exit/on_error
+            // handlers here while its locals are still alive.
+            auto* se_inst = builder.createScopeExit(scope_id, true, block->loc, /*inline_lowered=*/false);
+            se_inst->exception_target = lvar_exception_cleanup_continue_block;
+            builder.createBranch(lvar_exception_cleanup_continue_block, block->loc);
+            builder.setBlock(lvar_exception_cleanup_continue_block);
+        }
+        for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
+            auto* ui = builder.createUninstantiateLocal(lvars->lv[i], block->loc);
+            ui->is_block_exit = true;
+        }
+        auto* check_inst = builder.createCheckException(block->loc);
+        check_inst->exception_target = saved_exception_target;
+        builder.createBranch(saved_exception_target, block->loc);
+        builder.setBlock(after_block);
     }
 
     return true;
@@ -5394,13 +5459,6 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
     if (left_var && left_var->getType() == VT_IMMEDIATE) {
-        left_var = nullptr;
-    }
-    // Force lvalue path for reference-typed variables.
-    // Same pattern used by all compound operators (+=, -=, etc.).
-    // StoreLValue delegates to AST's LValueHelper which correctly handles both
-    // initial reference binding and subsequent write-through assignment.
-    if (left_var && left_var->getTypeInfo() && QoreTypeInfo::isReference(left_var->getTypeInfo())) {
         left_var = nullptr;
     }
     if (left_var) {
@@ -10744,28 +10802,6 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
         return QoreIRValue();
     }
 
-    // Single-value path: when the input (e[1]) is a single value (not a list or
-    // iterator), delegate to AST evaluation which correctly handles single-element
-    // map-select by returning the result directly (not wrapped in a list).
-    {
-        const QoreTypeInfo* list_type = getExprTypeInfo(map_select->get(1));
-        bool is_iterator = false;
-        if (list_type) {
-            const QoreClass* obj_class = QoreTypeInfo::getUniqueReturnClass(list_type);
-            if (obj_class && qore_class_private::parseCheckCompatibleClass(obj_class, QC_ABSTRACTITERATOR)) {
-                is_iterator = true;
-            }
-        }
-        const QoreTypeInfo* elem_type = list_type
-            ? QoreTypeInfo::getUniqueReturnComplexList(list_type)
-            : nullptr;
-        if (!elem_type && list_type && !is_iterator
-                && !QoreTypeInfo::parseReturns(list_type, NT_LIST)) {
-            std::vector<QoreIRValue> operands;
-            return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, map_select->loc, error);
-        }
-    }
-
     // Native IR lowering with implicit argument context
     return lowerMapSelectNative(map_select, expr, error);
 }
@@ -11057,6 +11093,20 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     // Fallback: iterator-based loop for untyped lists
 
+    // If the source type is unknown (for example an auto-typed local), runtime
+    // scalar inputs must preserve AST semantics: map returns the mapped scalar,
+    // not a single-element list. Lists and iterator objects still return lists.
+    bool is_known_collection = list_type
+        && (QoreTypeInfo::isListType(list_type)
+            || QoreTypeInfo::getUniqueReturnClass(list_type) != nullptr);
+    bool needs_runtime_unwrap_check = !is_known_collection;
+
+    QoreIRValue is_collection_val;
+    if (needs_runtime_unwrap_check) {
+        is_collection_val = builder.createUnaryOp(QoreIROpcode::IsCollectionType,
+                input_list, map->loc)->result;
+    }
+
     // Create iterator from input list
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, map->loc);
     QoreIRValue iter_val = iter_inst->result;
@@ -11066,13 +11116,27 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     QoreIRBasicBlock* preheader_block = createBlock("map.preheader");
     QoreIRBasicBlock* header_block = createBlock("map.header");
     QoreIRBasicBlock* body_block = createBlock("map.body");
-    QoreIRBasicBlock* exit_block = createBlock("map.exit");
+    QoreIRBasicBlock* loop_exit_block = createBlock("map.loop_exit");
     QoreIRBasicBlock* nothing_block = createBlock("map.nothing");
-    if (!preheader_block || !header_block || !body_block || !exit_block || !nothing_block) {
+    QoreIRBasicBlock* final_block = createBlock("map.final");
+    if (!preheader_block || !header_block || !body_block || !loop_exit_block || !nothing_block || !final_block) {
         error = "IR builder failed to create blocks for map";
         return QoreIRValue();
     }
     header_block->is_loop_header = true;
+
+    QoreIRBasicBlock* unwrap_check_block = nullptr;
+    QoreIRBasicBlock* unwrap_get_block = nullptr;
+    QoreIRBasicBlock* unwrap_nothing_block = nullptr;
+    if (needs_runtime_unwrap_check) {
+        unwrap_check_block = createBlock("map.unwrap_check");
+        unwrap_get_block = createBlock("map.unwrap_get");
+        unwrap_nothing_block = createBlock("map.unwrap_nothing");
+        if (!unwrap_check_block || !unwrap_get_block || !unwrap_nothing_block) {
+            error = "IR builder failed to create blocks for map unwrap";
+            return QoreIRValue();
+        }
+    }
 
     // Check if iterator is null (input was NOTHING) — return NOTHING in that case
     QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
@@ -11097,7 +11161,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator (branches to exit if done, body if has element)
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, map->loc);
+    auto* next_inst = builder.createIteratorNext(iter_val, loop_exit_block, body_block, map->loc);
     QoreIRValue element_val = next_inst->result;
 
     // Body block: set up context, evaluate expression, append result
@@ -11174,13 +11238,44 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     // Nothing block: input was NOTHING → return NOTHING
     builder.setBlock(nothing_block);
     QoreIRValue nothing_val = builder.createConstNothing(map->loc)->result;
-    builder.createBranch(exit_block, map->loc);
+    builder.createBranch(final_block, map->loc);
 
-    // Exit block: PHI between result_list (from loop) and NOTHING (from null check)
-    builder.setBlock(exit_block);
+    builder.setBlock(loop_exit_block);
+    if (needs_runtime_unwrap_check) {
+        builder.createBranchIf(is_collection_val, final_block, unwrap_check_block, map->loc);
+
+        builder.setBlock(unwrap_check_block);
+        QoreIRValue list_size = builder.createListSize(result_list, map->loc)->result;
+        builder.createBranchIf(list_size, unwrap_get_block, unwrap_nothing_block, map->loc);
+
+        builder.setBlock(unwrap_get_block);
+        QoreIRValue zero_idx = builder.createConstInt(0, map->loc)->result;
+        QoreIRValue unwrapped = builder.createBinaryOp(QoreIROpcode::ListGetValue,
+                result_list, zero_idx, map->loc)->result;
+        builder.createBranch(final_block, map->loc);
+
+        builder.setBlock(unwrap_nothing_block);
+        QoreIRValue unwrap_nothing_val = builder.createConstNothing(map->loc)->result;
+        builder.createBranch(final_block, map->loc);
+
+        builder.setBlock(final_block);
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({result_list, loop_exit_block});
+        result_incoming.push_back({unwrapped, unwrap_get_block});
+        result_incoming.push_back({unwrap_nothing_val, unwrap_nothing_block});
+        result_incoming.push_back({nothing_val, nothing_block});
+        auto* result_phi = builder.createPhi(result_incoming, map->loc);
+
+        return result_phi->result;
+    }
+
+    builder.createBranch(final_block, map->loc);
+
+    // Final block: PHI between result_list (from loop) and NOTHING (from null check)
+    builder.setBlock(final_block);
 
     std::vector<QoreIRPhiIncoming> result_incoming;
-    result_incoming.push_back({result_list, header_block});   // Normal loop exit
+    result_incoming.push_back({result_list, loop_exit_block}); // Normal loop exit
     result_incoming.push_back({nothing_val, nothing_block});  // NOTHING input
     auto* result_phi = builder.createPhi(result_incoming, map->loc);
 
@@ -12076,6 +12171,20 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     // Fallback: iterator-based loop for untyped lists
 
+    // Match AST semantics for scalar sources with unknown static type: a
+    // map-select over a scalar returns the mapped scalar when selected, or
+    // NOTHING when filtered out. Collections still return lists.
+    bool is_known_collection = list_type
+        && (QoreTypeInfo::isListType(list_type)
+            || QoreTypeInfo::getUniqueReturnClass(list_type) != nullptr);
+    bool needs_runtime_unwrap_check = !is_known_collection;
+
+    QoreIRValue is_collection_val;
+    if (needs_runtime_unwrap_check) {
+        is_collection_val = builder.createUnaryOp(QoreIROpcode::IsCollectionType,
+                input_list, ms->loc)->result;
+    }
+
     // Create iterator from input list
     auto* iter_inst = builder.createIteratorCreate(input_list, nullptr, ms->loc);
     QoreIRValue iter_val = iter_inst->result;
@@ -12086,14 +12195,28 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     QoreIRBasicBlock* body_block = createBlock("mapselect.body");
     QoreIRBasicBlock* append_block = createBlock("mapselect.append");
     QoreIRBasicBlock* cont_block = createBlock("mapselect.cont");
-    QoreIRBasicBlock* exit_block = createBlock("mapselect.exit");
+    QoreIRBasicBlock* loop_exit_block = createBlock("mapselect.loop_exit");
     QoreIRBasicBlock* nothing_block = createBlock("mapselect.nothing");
+    QoreIRBasicBlock* final_block = createBlock("mapselect.final");
     if (!preheader_block || !header_block || !body_block || !append_block
-            || !cont_block || !exit_block || !nothing_block) {
+            || !cont_block || !loop_exit_block || !nothing_block || !final_block) {
         error = "IR builder failed to create blocks for map+select";
         return QoreIRValue();
     }
     header_block->is_loop_header = true;
+
+    QoreIRBasicBlock* unwrap_check_block = nullptr;
+    QoreIRBasicBlock* unwrap_get_block = nullptr;
+    QoreIRBasicBlock* unwrap_nothing_block = nullptr;
+    if (needs_runtime_unwrap_check) {
+        unwrap_check_block = createBlock("mapselect.unwrap_check");
+        unwrap_get_block = createBlock("mapselect.unwrap_get");
+        unwrap_nothing_block = createBlock("mapselect.unwrap_nothing");
+        if (!unwrap_check_block || !unwrap_get_block || !unwrap_nothing_block) {
+            error = "IR builder failed to create blocks for map+select unwrap";
+            return QoreIRValue();
+        }
+    }
 
     // Check if iterator is null (input was NOTHING) → return NOTHING
     QoreIRValue zero = builder.createConstInt(0, ms->loc)->result;
@@ -12116,7 +12239,7 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     QoreIRValue index_val = index_phi->result;
 
     // Get next element from iterator
-    auto* next_inst = builder.createIteratorNext(iter_val, exit_block, body_block, ms->loc);
+    auto* next_inst = builder.createIteratorNext(iter_val, loop_exit_block, body_block, ms->loc);
     QoreIRValue element_val = next_inst->result;
 
     // Body block: push implicit args, evaluate select predicate
@@ -12182,13 +12305,44 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
     // Nothing block: input was NOTHING → return NOTHING
     builder.setBlock(nothing_block);
     QoreIRValue nothing_val = builder.createConstNothing(ms->loc)->result;
-    builder.createBranch(exit_block, ms->loc);
+    builder.createBranch(final_block, ms->loc);
 
-    // Exit block: PHI between result_list and NOTHING
-    builder.setBlock(exit_block);
+    builder.setBlock(loop_exit_block);
+    if (needs_runtime_unwrap_check) {
+        builder.createBranchIf(is_collection_val, final_block, unwrap_check_block, ms->loc);
+
+        builder.setBlock(unwrap_check_block);
+        QoreIRValue list_size = builder.createListSize(result_list, ms->loc)->result;
+        builder.createBranchIf(list_size, unwrap_get_block, unwrap_nothing_block, ms->loc);
+
+        builder.setBlock(unwrap_get_block);
+        QoreIRValue zero_idx = builder.createConstInt(0, ms->loc)->result;
+        QoreIRValue unwrapped = builder.createBinaryOp(QoreIROpcode::ListGetValue,
+                result_list, zero_idx, ms->loc)->result;
+        builder.createBranch(final_block, ms->loc);
+
+        builder.setBlock(unwrap_nothing_block);
+        QoreIRValue unwrap_nothing_val = builder.createConstNothing(ms->loc)->result;
+        builder.createBranch(final_block, ms->loc);
+
+        builder.setBlock(final_block);
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({result_list, loop_exit_block});
+        result_incoming.push_back({unwrapped, unwrap_get_block});
+        result_incoming.push_back({unwrap_nothing_val, unwrap_nothing_block});
+        result_incoming.push_back({nothing_val, nothing_block});
+        auto* result_phi = builder.createPhi(result_incoming, ms->loc);
+
+        return result_phi->result;
+    }
+
+    builder.createBranch(final_block, ms->loc);
+
+    // Final block: PHI between result_list and NOTHING
+    builder.setBlock(final_block);
 
     std::vector<QoreIRPhiIncoming> result_incoming;
-    result_incoming.push_back({result_list, header_block});
+    result_incoming.push_back({result_list, loop_exit_block});
     result_incoming.push_back({nothing_val, nothing_block});
     auto* result_phi = builder.createPhi(result_incoming, ms->loc);
 

@@ -110,6 +110,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("native foldl with function call", \testNativeFoldlWithFunctionCall());
         addTestCase("on_block_exit handlers", \testOnBlockExitHandlers());
         addTestCase("on_block_exit in try-catch with invoke", \testOnBlockExitTryCatchInvoke());
+        addTestCase("cleanup exception catch", \testCleanupExceptionCatch());
         addTestCase("on_block_exit top-level local update", \testOnBlockExitTopLevelLocalUpdate());
         addTestCase("invoke method direct", \testInvokeMethodDirect());
         addTestCase("big int loop correctness", \testBigIntLoopCorrectness());
@@ -3960,6 +3961,51 @@ printf(\"%d\\n\", val);
             assertEq("99", result,
                     sprintf("parse reference invoke %s", mode));
         }
+
+        # Parse reference with a dynamic hash key lowered from map's implicit
+        # $1 operand. IR/JIT must not re-evaluate the original parse-ref AST
+        # without the map iterator context.
+        code = "%modern
+public list<auto> sub remove_value(reference list, auto val) {
+    return list = (select list, $1 != val);
+}
+hash<auto> h = {\"a\": (), \"b\": (2,), \"c\": (1, 2, 3)};
+map remove_value(\\h{$1}, 2), h.keyIterator();
+printf(\"%d:%d:%d:%d\\n\", h.a.size(), h.b.size(), h.c.size(), h.c[1]);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("0:0:2:3", result,
+                    sprintf("parse reference dynamic hash key %s", mode));
+        }
+
+        # Parse reference to a reference-typed member must dereference through
+        # the member target in IR/JIT, matching AST/develop behavior.
+        code = "%modern
+class Holder {
+    public {
+        static hash<auto> h();
+        reference<hash<auto>> r;
+    }
+
+    constructor() {
+        r = \\h;
+    }
+
+    *hash<auto> getHashViaMemberReference() {
+        reference<auto> rr = \\self.r;
+        return rr;
+    }
+}
+
+Holder holder();
+printf(\"%y\\n\", holder.getHashViaMemberReference());
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("{}", result,
+                    sprintf("parse reference member reference %s", mode));
+        }
     }
 
     testReferenceWriteThrough() {
@@ -4913,6 +4959,48 @@ printf(\"%d\\n\", test_loop_on_exit());
         }
     }
 
+    testCleanupExceptionCatch() {
+        # A cleanup exception from a local destructor must complete the whole
+        # block cleanup sequence before being routed to the active catch block.
+        string code = "%modern
+our list<string> events = ();
+
+class Boom {
+    private {
+        string n;
+    }
+
+    constructor(string n) {
+        self.n = n;
+    }
+
+    destructor() {
+        events += n;
+        if (n == \"b\") {
+            throw \"BOOM\", \"boom\";
+        }
+    }
+}
+
+sub f() {
+    try {
+        Boom a(\"a\");
+        Boom b(\"b\");
+    } catch (hash<ExceptionInfo> ex) {
+        printf(\"caught %s events=%s\\n\", ex.err, events.join(\",\"));
+    }
+    printf(\"after=%s\\n\", events.join(\",\"));
+}
+
+f();
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("caught BOOM events=b,a\nafter=b,a", result,
+                    sprintf("cleanup exception catch %s", mode));
+        }
+    }
+
     testBatchCompilation() {
         # Test 1: Basic multi-function batch compilation — caller calls callee
         string code = "%modern
@@ -5501,6 +5589,45 @@ printf(\"%d\\n\", result);
             string result = trim(runScript(code, mode));
             assertEq("50", result,
                     sprintf("map single int value %s", mode));
+        }
+
+        # Map over an unknown-runtime-type scalar value must return the scalar
+        # mapped result, not a one-element list.
+        code = "%modern
+hash<auto> h = {};
+h.workflow_instanceid = 166;
+if (h.workflow_instanceid =~ /,/) {
+    h.workflow_instanceid = h.workflow_instanceid.split(\",\");
+}
+if (h.workflow_instanceid) {
+    h.workflow_instanceid = map $1.toInt(), h.workflow_instanceid;
+}
+if (h.workflow_instanceid.type() != \"integer\" || h.workflow_instanceid != 166) {
+    printf(\"FAIL:%s:%N\\n\", h.workflow_instanceid.type(), h.workflow_instanceid);
+    exit(1);
+}
+printf(\"OK\\n\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("OK", result,
+                    sprintf("map unknown scalar value %s", mode));
+        }
+
+        code = "%modern
+hash<auto> h = {\"value\": 166};
+auto selected = map $1.toInt(), h.value, $1 > 0;
+auto filtered = map $1.toInt(), h.value, $1 < 0;
+if (selected.type() != \"integer\" || selected != 166 || filtered.type() != \"nothing\") {
+    printf(\"FAIL:%s:%N:%s:%N\\n\", selected.type(), selected, filtered.type(), filtered);
+    exit(1);
+}
+printf(\"OK\\n\");
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("OK", result,
+                    sprintf("map-select unknown scalar value %s", mode));
         }
 
         # Map over single string value
