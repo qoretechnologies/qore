@@ -613,6 +613,17 @@ class DataProviderExpressionsTest inherits QUnit::Test {
     }
 
     mapTests() {
+        # map and hash_map are operators because body/filter/key/value arguments are evaluated per element
+        hash<auto> map_impl = AbstractDataProvider::GenericExpressionImplementations{DP_OP_MAP};
+        assertEq(DET_Operator, map_impl.exp.type);
+        assertEq(DP_OP_MAP, map_impl.exp.name);
+        assertEq("map", map_impl.exp.symbol);
+
+        hash<auto> hash_map_impl = AbstractDataProvider::GenericExpressionImplementations{DP_OP_HASH_MAP};
+        assertEq(DET_Operator, hash_map_impl.exp.type);
+        assertEq(DP_OP_HASH_MAP, hash_map_impl.exp.name);
+        assertEq("hash_map", hash_map_impl.exp.symbol);
+
         # map over list of hashes - extract field values
         list<hash<auto>> users = (
             {"name": "Alice", "age": 30},
@@ -623,8 +634,8 @@ class DataProviderExpressionsTest inherits QUnit::Test {
             <DataProvider::DataProviderExpression>{
                 "exp": "map",
                 "args": (
-                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                     <DataProvider::DataProviderFieldReference>{"field": "name"},
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                 ),
             });
         assertEq(("Alice", "Bob", "Carol"), result);
@@ -634,8 +645,8 @@ class DataProviderExpressionsTest inherits QUnit::Test {
             <DataProvider::DataProviderExpression>{
                 "exp": "map",
                 "args": (
-                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                     <DataProvider::DataProviderFieldReference>{"field": "name"},
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                     <DataProvider::DataProviderExpression>{
                         "exp": ">",
                         "args": (
@@ -652,13 +663,13 @@ class DataProviderExpressionsTest inherits QUnit::Test {
             <DataProvider::DataProviderExpression>{
                 "exp": "map",
                 "args": (
-                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                     <DataProvider::DataProviderExpression>{
                         "exp": "upr",
                         "args": (
                             <DataProvider::DataProviderFieldReference>{"field": "name"},
                         ),
                     },
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                 ),
             });
         assertEq(("ALICE", "BOB", "CAROL"), result);
@@ -668,7 +679,6 @@ class DataProviderExpressionsTest inherits QUnit::Test {
             <DataProvider::DataProviderExpression>{
                 "exp": "map",
                 "args": (
-                    <DataProvider::DataProviderFieldReference>{"field": "nums"},
                     <DataProvider::DataProviderExpression>{
                         "exp": "*",
                         "args": (
@@ -676,6 +686,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
                             2,
                         ),
                     },
+                    <DataProvider::DataProviderFieldReference>{"field": "nums"},
                 ),
             });
         assertEq((2, 4, 6, 8, 10), result);
@@ -685,9 +696,9 @@ class DataProviderExpressionsTest inherits QUnit::Test {
             <DataProvider::DataProviderExpression>{
                 "exp": "hash_map",
                 "args": (
-                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                     <DataProvider::DataProviderFieldReference>{"field": "name"},
                     <DataProvider::DataProviderFieldReference>{"field": "age"},
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                 ),
             });
         assertEq({"Alice": 30, "Bob": 25, "Carol": 35}, result);
@@ -697,9 +708,9 @@ class DataProviderExpressionsTest inherits QUnit::Test {
             <DataProvider::DataProviderExpression>{
                 "exp": "hash_map",
                 "args": (
-                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                     <DataProvider::DataProviderFieldReference>{"field": "name"},
                     <DataProvider::DataProviderFieldReference>{"field": "age"},
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
                     <DataProvider::DataProviderExpression>{
                         "exp": ">=",
                         "args": (
@@ -716,8 +727,8 @@ class DataProviderExpressionsTest inherits QUnit::Test {
             <DataProvider::DataProviderExpression>{
                 "exp": "map",
                 "args": (
-                    <DataProvider::DataProviderFieldReference>{"field": "items"},
                     <DataProvider::DataProviderFieldReference>{"field": "value"},
+                    <DataProvider::DataProviderFieldReference>{"field": "items"},
                 ),
             });
         assertEq((), result);

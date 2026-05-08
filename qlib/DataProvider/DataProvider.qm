@@ -862,6 +862,14 @@ class MyDebugCollector inherits AbstractDebugInfoCollector {
     @par Function Calls
     Custom functions can be used: <tt>calculate(\@score, 100)</tt> \c > \c 50
 
+    @par Expression Operators
+    Operators that evaluate subexpressions in an operator-controlled context use Qore-style operator syntax
+    instead of function-call syntax:
+    - <tt>map \@name, \@users, \@age &gt; 28</tt> - evaluates the body expression against each element
+      of the source list and optionally filters elements
+    - <tt>hash_map \@name, \@age, \@users</tt> - evaluates key and value expressions against each
+      element of the source list and returns a hash
+
     @subsection dpql_examples DPQL Examples
 
     @par Simple Comparison
@@ -1033,6 +1041,8 @@ if (errors) {
       side-effect-free dry-run execution
     - added @ref DataProvider::AbstractDataProvider::getSimulationVolatileFields()
       "AbstractDataProvider::getSimulationVolatileFields()" for simulation signature hashing
+    - updated the DPQL \c map and \c hash_map expressions to be operators with Qore-style prefix syntax,
+      allowing their body, key, value, and filter subexpressions to be evaluated per source element
 
     @subsection dataprovider_v3_3 DataProvider v3.3
     - added 67 generic DPQL expressions for use in data-driven contexts (arithmetic, string
