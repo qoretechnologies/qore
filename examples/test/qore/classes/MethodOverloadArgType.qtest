@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%require-types
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class MethodOverloadArgTypeTest
+
+hashdecl ResponseInfo {
+    int code;
+    *string body;
+}
+
+class BaseRequestHandler {
+    hash<ResponseInfo> handleRequest(int listener, string socket, hash<auto> cx, hash<auto> hdr, *data body) {
+        return <ResponseInfo>{
+            "code": 200,
+            "body": sprintf("%y:%y", listener, socket),
+        };
+    }
+}
+
+class WebSocketLikeHandler inherits BaseRequestHandler {
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return {
+            "code": 101,
+        };
+    }
+}
+
+class QorusLikeHandler inherits WebSocketLikeHandler {
+    hash<ResponseInfo> handleRequest(int listener, string socket, hash<auto> cx, hash<auto> hdr, *data body) {
+        return WebSocketLikeHandler::handleRequest(listener, socket, cx, hdr, body);
+    }
+}
+
+class MethodOverloadArgTypeTest inherits QUnit::Test {
+    constructor() : QUnit::Test("MethodOverloadArgTypeTest", "1.0", \ARGV) {
+        addTestCase("inherited overload selected with parameter args", \testInheritedOverloadWithParameterArgs());
+        set_return_value(main());
+    }
+
+    testInheritedOverloadWithParameterArgs() {
+        QorusLikeHandler h();
+        hash<ResponseInfo> rv = h.handleRequest(1, "socket", {}, {}, NOTHING);
+
+        assertEq(200, rv.code, "the inherited five-argument overload should be selected");
+        assertEq("1:\"socket\"", rv.body);
+        assertEq("hash<ResponseInfo>", rv.fullType());
+    }
+}

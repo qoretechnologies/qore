@@ -33,6 +33,22 @@
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/typed_hash_decl_private.h"
+
+static bool qore_parse_hash_literal_varref_may_be_nothing(const QoreValue& v) {
+    if (v.getType() != NT_VARREF) {
+        return false;
+    }
+    const VarRefNode* vr = v.get<const VarRefNode>();
+    qore_var_t vt = vr->getType();
+    if ((vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS) && vr->ref.id) {
+        return true;
+    }
+    if ((vt == VT_GLOBAL || vt == VT_THREAD_LOCAL) && vr->ref.var) {
+        return true;
+    }
+    return false;
+}
 
 void QoreParseHashNode::finalizeBlock(int sline, int eline) {
     QoreProgramLocation tl(sline, eline);
@@ -59,11 +75,23 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     // try to find a common value type, if any
     bool vcommon = false;
 
+    const QoreTypeInfo* expected_hash_type = parse_context.expected_type_info;
+    const QoreTypeInfo* expected_hash_value_type = expected_hash_type
+        ? QoreTypeInfo::getUniqueReturnComplexHash(expected_hash_type)
+        : nullptr;
+    if (!expected_hash_value_type && expected_hash_type) {
+        expected_hash_value_type = QoreTypeInfo::getReturnComplexHashOrNothing(expected_hash_type);
+    }
+    const TypedHashDecl* expected_hash_decl = expected_hash_type
+        ? QoreTypeInfo::getTypedHash(expected_hash_type)
+        : nullptr;
+
     int err = 0;
 
     for (size_t i = 0; i < keys.size(); ++i) {
         QoreValue p = keys[i];
         parse_context.typeInfo = nullptr;
+        parse_context.expected_type_info = nullptr;
         if (parse_init_value(keys[i], parse_context) && !err) {
             err = -1;
         }
@@ -81,23 +109,37 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
             argTypeInfo->doNonStringWarning(lvec[i], str.c_str());
         }
 
+        const QoreTypeInfo* expected_value_type = expected_hash_value_type;
+        if (expected_hash_decl && keys[i].getType() == NT_STRING) {
+            QoreStringValueHelper key(keys[i]);
+            const HashDeclMemberInfo* m = typed_hash_decl_private::get(*expected_hash_decl)->findMember(key->c_str());
+            if (m) {
+                expected_value_type = m->getTypeInfo();
+            }
+        }
+
+        bool typed_varref_may_be_nothing = false;
+        typed_varref_may_be_nothing = qore_parse_hash_literal_varref_may_be_nothing(values[i]);
+
         parse_context.typeInfo = nullptr;
+        parse_context.expected_type_info = expected_value_type;
         if (parse_init_value(values[i], parse_context) && !err) {
             err = -1;
         }
         vtypes[i] = parse_context.typeInfo;
+        typed_varref_may_be_nothing = typed_varref_may_be_nothing
+            || qore_parse_hash_literal_varref_may_be_nothing(values[i]);
 
-        // For unassigned non-auto typed variables, clear type info to prevent
-        // baking the declared type into the hash literal; the actual runtime value
-        // may be NOTHING, so the type must be determined at runtime
-        if (vtypes[i] && values[i].getType() == NT_VARREF) {
-            VarRefNode* vr = values[i].get<VarRefNode>();
-            qore_var_t vt = vr->getType();
-            if ((vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS)
-                && vr->ref.id && !vr->ref.id->isAutoType()
-                && !vr->ref.id->isAssigned()) {
-                vtypes[i] = nullptr;
-            }
+        // For variable refs, clear type info to prevent baking declared or
+        // narrowed types into the hash literal; the actual runtime value may
+        // be NOTHING, so the type must be determined at runtime.
+        if (vtypes[i] && typed_varref_may_be_nothing) {
+            vtypes[i] = nullptr;
+        }
+        if (vtypes[i] && expected_value_type
+                && QoreTypeInfo::parseAcceptsReturns(expected_value_type, NT_NOTHING)
+                && values[i].needsEval()) {
+            vtypes[i] = nullptr;
         }
 
         //printd(5, "QoreParseHashNode::parseInitImpl() this: %p i: %d key type '%s': value type '%s'\n",
@@ -118,24 +160,24 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
     }
 
     kmap.clear();
+    parse_context.expected_type_info = expected_hash_type;
 
     // issue #2791: when performing type folding, do not set to type "any" but rather use "auto"
     if (vtype && vtype != anyTypeInfo) {
         typeInfo = parse_context.typeInfo = qore_get_complex_hash_type(vtype);
-    } else if (parse_context.expected_type_info
-            && QoreTypeInfo::getComplexHashValueType(parse_context.expected_type_info)) {
+    } else if (expected_hash_value_type) {
         // Inference would otherwise lock to autoHashTypeInfo; use the
         // lvalue's expected hash value-type as the narrowing target
         // when the caller supplied a hint.  Runtime coercion (softint,
         // softstring, per-value acceptInputKey softening) happens
         // during the hash store path, so adopting the expected type
         // is safe: if values don't fit at runtime, the existing accept
-        // logic raises.  `getComplexHashValueType` peels the or-nothing
-        // wrapper so `*hash<K,V>` lvalues narrow too.
+        // logic raises.  Keep the full hash value type, including
+        // or-nothing element types such as `hash<string, *hash<auto>>`;
+        // otherwise valid optional hash slots reject NOTHING.
         // See design/parser-lvalue-type-propagation.md.
-        const QoreTypeInfo* hv = QoreTypeInfo::getComplexHashValueType(parse_context.expected_type_info);
-        vtype = hv;
-        typeInfo = parse_context.typeInfo = qore_get_complex_hash_type(hv);
+        vtype = expected_hash_value_type;
+        typeInfo = parse_context.typeInfo = qore_get_complex_hash_type(expected_hash_value_type);
     } else {
         typeInfo = autoHashTypeInfo;
         // issue #3740: must set to auto type info to avoid type stripping

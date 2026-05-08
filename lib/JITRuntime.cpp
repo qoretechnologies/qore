@@ -3077,31 +3077,40 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_ternary(int opcode, uint64_t lvalue
 // --- Container construction helpers ---
 
 static const QoreTypeInfo* qore_rt_get_declared_list_value_type(const QoreTypeInfo* typeInfo) {
-    const QoreTypeInfo* vtype = QoreTypeInfo::getComplexListValueType(typeInfo);
+    const QoreTypeInfo* vtype = QoreTypeInfo::getUniqueReturnComplexList(typeInfo);
+    if (!vtype) {
+        vtype = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
+    }
     return vtype && vtype != anyTypeInfo ? vtype : nullptr;
 }
 
 static const QoreTypeInfo* qore_rt_get_declared_hash_value_type(const QoreTypeInfo* typeInfo) {
-    const QoreTypeInfo* vtype = QoreTypeInfo::getComplexHashValueType(typeInfo);
+    const QoreTypeInfo* vtype = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
+    if (!vtype) {
+        vtype = QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
+    }
     return vtype && vtype != anyTypeInfo ? vtype : nullptr;
 }
 
 static bool qore_rt_has_declared_container_value_type(const QoreTypeInfo* vtype) {
-    return vtype && vtype != autoTypeInfo && vtype != anyTypeInfo
-        && vtype != listTypeInfo && vtype != listOrNothingTypeInfo
-        && vtype != hashTypeInfo && vtype != hashOrNothingTypeInfo;
+    return vtype && vtype != autoTypeInfo && vtype != anyTypeInfo;
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
     const QoreTypeInfo* declared_vtype = qore_rt_get_declared_list_value_type(typeInfo);
-    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+    bool declared_type = qore_rt_has_declared_container_value_type(declared_vtype);
+    ReferenceHolder<QoreListNode> list(
+        new QoreListNode(declared_type ? declared_vtype : autoTypeInfo), xsink);
     qore_list_private* priv = qore_list_private::get(**list);
     priv->reserve(count);
     // Track common value type for proper list typing (e.g., list<string> vs list<auto>)
     const QoreTypeInfo* vtype = nullptr;
     bool vcommon = false;
     for (int i = 0; i < count; i++) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "list literal construction")) {
+            return toBits(QoreValue());
+        }
         QoreValue v = fromBits(vals[i]);
         if (v.hasNode()) {
             v.refSelf();
@@ -3113,9 +3122,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list(uint64_t* vals, int count, const
         } else if (vcommon && !QoreTypeInfo::matchCommonType(vtype, vt)) {
             vcommon = false;
         }
-        priv->pushIntern(v);
+        if (list->push(v, xsink)) {
+            return toBits(QoreValue());
+        }
     }
-    if (qore_rt_has_declared_container_value_type(declared_vtype)) {
+    if (declared_type) {
         priv->complexTypeInfo = qore_get_complex_list_type(declared_vtype);
     } else {
         if (!vtype || vtype == anyTypeInfo || !vcommon) {
@@ -3137,12 +3148,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_list_by_type_path(uint64_t* vals, int
 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     const QoreTypeInfo* declared_vtype = qore_rt_get_declared_hash_value_type(typeInfo);
-    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+    bool declared_type = qore_rt_has_declared_container_value_type(declared_vtype);
+    ReferenceHolder<QoreHashNode> hash(
+        new QoreHashNode(declared_type ? declared_vtype : autoTypeInfo), xsink);
     // count is the number of key-value pairs; kv_pairs has 2*count elements
     // Track common value type for proper hash typing (e.g., hash<string, string> vs hash<string, auto>)
     const QoreTypeInfo* vtype = nullptr;
     bool vcommon = false;
     for (int i = 0; i < count; i++) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "hash literal construction")) {
+            return toBits(QoreValue());
+        }
         QoreValue key = fromBits(kv_pairs[i * 2]);
         QoreValue val = fromBits(kv_pairs[i * 2 + 1]);
         QoreStringValueHelper key_str(key);
@@ -3161,7 +3177,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash(uint64_t* kv_pairs, int count, c
             return toBits(QoreValue());
         }
     }
-    if (qore_rt_has_declared_container_value_type(declared_vtype)) {
+    if (declared_type) {
         qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(declared_vtype);
     } else {
         if (!vtype || vtype == anyTypeInfo || !vcommon) {
@@ -3231,12 +3247,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_sprintf(uint64_t val_bits, ExceptionSink* 
 extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys(const char** keys, uint64_t* vals,
         int count, const QoreTypeInfo* typeInfo, ExceptionSink* xsink) {
     const QoreTypeInfo* declared_vtype = qore_rt_get_declared_hash_value_type(typeInfo);
-    ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+    bool declared_type = qore_rt_has_declared_container_value_type(declared_vtype);
+    ReferenceHolder<QoreHashNode> hash(
+        new QoreHashNode(declared_type ? declared_vtype : autoTypeInfo), xsink);
     qore_hash_private* hp = qore_hash_private::get(*hash);
     hp->hm.reserve(count);
     const QoreTypeInfo* vtype = nullptr;
     bool vcommon = false;
     for (int i = 0; i < count; i++) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "hash literal construction")) {
+            return toBits(QoreValue());
+        }
         QoreValue val = fromBits(vals[i]);
         if (val.hasNode()) {
             val.refSelf();
@@ -3253,7 +3274,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_hash_const_keys(const char** keys, ui
             return toBits(QoreValue());
         }
     }
-    if (qore_rt_has_declared_container_value_type(declared_vtype)) {
+    if (declared_type) {
         hp->complexTypeInfo = qore_get_complex_hash_type(declared_vtype);
     } else {
         if (!vtype || vtype == anyTypeInfo || !vcommon) {

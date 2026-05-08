@@ -3690,14 +3690,25 @@ next_instruction:
             }
             case QoreIROpcode::MakeList: {
                 const auto* ml = static_cast<const QoreIRMakeListInstruction*>(inst);
-                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getComplexListValueType(ml->typeInfo);
+                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexList(ml->typeInfo);
+                if (!declared_vtype) {
+                    declared_vtype = QoreTypeInfo::getReturnComplexListOrNothing(ml->typeInfo);
+                }
                 if (declared_vtype == anyTypeInfo) {
                     declared_vtype = nullptr;
                 }
-                ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+                bool declared_type = declared_vtype && declared_vtype != autoTypeInfo;
+                ReferenceHolder<QoreListNode> list(
+                    new QoreListNode(declared_type ? declared_vtype : autoTypeInfo), xsink);
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
-                for (const auto& operand : inst->operands) {
+                for (size_t i = 0; i < inst->operands.size(); ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "IR list literal construction")) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    const auto& operand = inst->operands[i];
                     QoreValue value = getIRValue(values, operand);
                     QoreValue stored = value.hasNode() ? value.refSelf() : value;
                     const QoreTypeInfo* vt = stored.getTypeInfo();
@@ -3713,7 +3724,7 @@ next_instruction:
                         return false;
                     }
                 }
-                if (declared_vtype && declared_vtype != autoTypeInfo) {
+                if (declared_type) {
                     qore_list_private::get(*list)->complexTypeInfo = qore_get_complex_list_type(declared_vtype);
                 } else {
                     if (!vtype || vtype == anyTypeInfo || !vcommon) {
@@ -3728,11 +3739,16 @@ next_instruction:
             }
             case QoreIROpcode::MakeHash: {
                 const auto* mh = static_cast<const QoreIRMakeHashInstruction*>(inst);
-                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getComplexHashValueType(mh->typeInfo);
+                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexHash(mh->typeInfo);
+                if (!declared_vtype) {
+                    declared_vtype = QoreTypeInfo::getReturnComplexHashOrNothing(mh->typeInfo);
+                }
                 if (declared_vtype == anyTypeInfo) {
                     declared_vtype = nullptr;
                 }
-                ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+                bool declared_type = declared_vtype && declared_vtype != autoTypeInfo;
+                ReferenceHolder<QoreHashNode> hash(
+                    new QoreHashNode(declared_type ? declared_vtype : autoTypeInfo), xsink);
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
                 if (inst->operands.size() % 2 != 0) {
@@ -3744,6 +3760,11 @@ next_instruction:
                     return false;
                 }
                 for (size_t i = 0; i < inst->operands.size(); i += 2) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "IR hash literal construction")) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                     QoreValue key_val = getIRValue(values, inst->operands[i]);
                     QoreValue value = getIRValue(values, inst->operands[i + 1]);
                     QoreValue stored = value.hasNode() ? value.refSelf() : value;
@@ -3762,7 +3783,7 @@ next_instruction:
                         return false;
                     }
                 }
-                if (declared_vtype && declared_vtype != autoTypeInfo) {
+                if (declared_type) {
                     qore_hash_private::get(*hash)->complexTypeInfo = qore_get_complex_hash_type(declared_vtype);
                 } else {
                     if (!vtype || vtype == anyTypeInfo || !vcommon) {
@@ -3779,16 +3800,26 @@ next_instruction:
                 const auto& ckeys = mhck->keys;
                 size_t n = ckeys.size();
                 assert(n == inst->operands.size());
-                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getComplexHashValueType(mhck->typeInfo);
+                const QoreTypeInfo* declared_vtype = QoreTypeInfo::getUniqueReturnComplexHash(mhck->typeInfo);
+                if (!declared_vtype) {
+                    declared_vtype = QoreTypeInfo::getReturnComplexHashOrNothing(mhck->typeInfo);
+                }
                 if (declared_vtype == anyTypeInfo) {
                     declared_vtype = nullptr;
                 }
-                ReferenceHolder<QoreHashNode> hash(new QoreHashNode(autoTypeInfo), xsink);
+                bool declared_type = declared_vtype && declared_vtype != autoTypeInfo;
+                ReferenceHolder<QoreHashNode> hash(
+                    new QoreHashNode(declared_type ? declared_vtype : autoTypeInfo), xsink);
                 qore_hash_private* hp = qore_hash_private::get(*hash);
                 hp->hm.reserve(n);
                 const QoreTypeInfo* vtype = nullptr;
                 bool vcommon = false;
                 for (size_t i = 0; i < n; ++i) {
+                    if (i && !(i % 100) && qore_check_cancel(xsink, "IR hash literal construction")) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                     QoreValue value = getIRValue(values, inst->operands[i]);
                     QoreValue stored = value.hasNode() ? value.refSelf() : value;
                     const QoreTypeInfo* vt = stored.getFullTypeInfo();
@@ -3805,7 +3836,7 @@ next_instruction:
                         return false;
                     }
                 }
-                if (declared_vtype && declared_vtype != autoTypeInfo) {
+                if (declared_type) {
                     hp->complexTypeInfo = qore_get_complex_hash_type(declared_vtype);
                 } else {
                     if (!vtype || vtype == anyTypeInfo || !vcommon) {

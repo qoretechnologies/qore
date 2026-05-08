@@ -184,7 +184,11 @@ int typed_hash_decl_private::parseInitHashDeclInitialization(const QoreProgramLo
     parse_context.typeInfo = nullptr;
     QoreValue arg{};
     int err = 0;
-    if (!qore_hash_private::parseInitHashInitialization(loc, parse_context, args, arg, err)) {
+    const QoreTypeInfo* prev_expected = parse_context.expected_type_info;
+    parse_context.expected_type_info = getTypeInfo();
+    int init_rc = qore_hash_private::parseInitHashInitialization(loc, parse_context, args, arg, err);
+    parse_context.expected_type_info = prev_expected;
+    if (!init_rc) {
         if (parseCheckHashDeclInitialization(loc, parse_context.typeInfo, arg, "initializer value", runtime_check,
             false) && !err) {
             err = -1;

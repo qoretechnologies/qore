@@ -190,7 +190,8 @@ public:
         return n;
     }
 
-    DLLLOCAL int parseInitIntern(bool& needs_eval, QoreParseContext& parse_context);
+    DLLLOCAL int parseInitIntern(bool& needs_eval, QoreParseContext& parse_context,
+        bool preserve_varref_types = false);
 
 protected:
     typedef std::deque<const QoreProgramLocation*> lvec_t;

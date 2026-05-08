@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires FsUtil
+
+%exec-class HashLiteralTypePropagationTest
+
+hashdecl QorusDraftMap {
+    *hash<string, hash<auto>> latest_draft;
+}
+
+class HashLiteralTypePropagationTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("HashLiteralTypePropagationTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("nested empty hash literal uses value-type hint",
+            \testNestedEmptyHashLiteralHint());
+        addTestCase("optional container literal slots accept unassigned typed locals",
+            \testOptionalContainerSlotsAcceptNothing());
+        addTestCase("optional hashdecl slots accept unassigned typed locals",
+            \testOptionalHashdeclSlotsAcceptNothing());
+        addTestCase("typed hash literal rejects unassigned typed local in exec modes",
+            \testTypedHashRejectsNothingInExecModes());
+        addTestCase("optional container literal slots accept unassigned typed locals in exec modes",
+            \testOptionalContainerSlotsAcceptNothingInExecModes());
+        addTestCase("optional hashdecl slots accept unassigned typed locals in exec modes",
+            \testOptionalHashdeclSlotsAcceptNothingInExecModes());
+        addTestCase("typed hash literal rejects unassigned typed local in source-stripped AOT",
+            \testTypedHashRejectsNothingInAOT());
+        addTestCase("optional container literal slots accept unassigned typed locals in source-stripped AOT",
+            \testOptionalContainerSlotsAcceptNothingInAOT());
+        addTestCase("optional hashdecl slots accept unassigned typed locals in source-stripped AOT",
+            \testOptionalHashdeclSlotsAcceptNothingInAOT());
+        addTestCase("nested empty hash literal works in source-stripped AOT",
+            \testNestedEmptyHashLiteralAOT());
+
+        set_return_value(main());
+    }
+
+    private string writeScript(string dir, string name, string code) {
+        string path = dir + "/" + name;
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(code);
+        f.close();
+        return path;
+    }
+
+    private string runScript(string path, string mode) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin, mode, path));
+    }
+
+    private string compileScript(string src, string out) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O3 --strip-source -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, out, src));
+    }
+
+    private string runCompiled(string path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, path));
+    }
+
+    testNestedEmptyHashLiteralHint() {
+        hash<string, hash<string, bool>> result = {
+            "classes": {},
+        };
+        assertEq({}, result.classes, "nested empty hash literal is hash<string, bool>");
+    }
+
+    testOptionalContainerSlotsAcceptNothing() {
+        hash<auto> optional_hash;
+        hash<string, *hash<auto>> result = {
+            "draftmap": optional_hash,
+        };
+        list<*hash<auto>> optional_list = (optional_hash,);
+
+        assertTrue(result.hasKey("draftmap"), "optional hash slot key exists");
+        assertTrue(!result.draftmap, "optional hash slot keeps NOTHING");
+        assertEq(1, optional_list.size(), "optional list slot exists");
+        assertTrue(!optional_list[0], "optional list slot keeps NOTHING");
+    }
+
+    testOptionalHashdeclSlotsAcceptNothing() {
+        hash<string, hash<auto>> latest_draft;
+        QorusDraftMap result += {
+            "latest_draft": latest_draft,
+        };
+
+        assertTrue(!result.latest_draft, "optional hashdecl member keeps NOTHING");
+    }
+
+    testTypedHashRejectsNothingInExecModes() {
+        TmpDir tmp("qore-hash-literal-type-propagation-");
+        string src = writeScript(tmp.path, "reject-nothing.q", "%modern
+hash<string, bool> empty_bool;
+hash<string, hash<string, bool>> result = {
+    \"classes\": empty_bool,
+};
+printf(\"unexpected=%y\\n\", result);
+");
+
+        foreach string mode in (("ast", "ir", "jit")) {
+            string out = runScript(src, mode);
+            assertTrue(out.regex("RUNTIME-TYPE-ERROR"),
+                sprintf("%s mode rejects unassigned typed local: %s", mode, out));
+            assertTrue(out.regex("key 'classes' expects type 'hash<string, bool>'"),
+                sprintf("%s mode reports the typed hash value slot: %s", mode, out));
+            assertTrue(out.regex("EXIT=3"),
+                sprintf("%s mode exits with runtime error: %s", mode, out));
+        }
+    }
+
+    testOptionalContainerSlotsAcceptNothingInExecModes() {
+        TmpDir tmp("qore-hash-literal-type-propagation-optional-");
+        string src = writeScript(tmp.path, "optional-container-nothing.q", "%modern
+hash<auto> optional_hash;
+hash<string, *hash<auto>> result = {
+    \"draftmap\": optional_hash,
+};
+list<*hash<auto>> optional_list = (optional_hash,);
+printf(\"result=%y list=%y\\n\", result, optional_list);
+");
+
+        foreach string mode in (("ast", "ir", "jit")) {
+            string out = runScript(src, mode);
+            assertTrue(out.regex("draftmap: null"),
+                sprintf("%s mode preserves optional hash slot NOTHING: %s", mode, out));
+            assertTrue(out.regex("list=\\[null\\]"),
+                sprintf("%s mode preserves optional list slot NOTHING: %s", mode, out));
+            assertTrue(out.regex("EXIT=0"),
+                sprintf("%s mode exits cleanly: %s", mode, out));
+        }
+    }
+
+    testOptionalHashdeclSlotsAcceptNothingInExecModes() {
+        TmpDir tmp("qore-hash-literal-type-propagation-optional-hashdecl-");
+        string src = writeScript(tmp.path, "optional-hashdecl-nothing.q", "%modern
+hashdecl QorusDraftMap {
+    *hash<string, hash<auto>> latest_draft;
+}
+
+hash<string, hash<auto>> latest_draft;
+QorusDraftMap result += {
+    \"latest_draft\": latest_draft,
+};
+printf(\"latest_draft=%y\\n\", result.latest_draft);
+");
+
+        foreach string mode in (("ast", "ir", "jit")) {
+            string out = runScript(src, mode);
+            assertTrue(out.regex("latest_draft=null"),
+                sprintf("%s mode preserves optional hashdecl member NOTHING: %s", mode, out));
+            assertTrue(out.regex("EXIT=0"),
+                sprintf("%s mode exits cleanly: %s", mode, out));
+        }
+    }
+
+    testTypedHashRejectsNothingInAOT() {
+        TmpDir tmp("qore-hash-literal-type-propagation-aot-");
+        string src = writeScript(tmp.path, "reject-nothing-aot.q", "%modern
+hash<string, bool> empty_bool;
+hash<string, hash<string, bool>> result = {
+    \"classes\": empty_bool,
+};
+printf(\"unexpected=%y\\n\", result);
+");
+        string exe = tmp.path + "/reject-nothing-aot";
+        string compile_out = compileScript(src, exe);
+        assertTrue(compile_out.regex("EXIT=0"), "AOT compile succeeds: " + compile_out);
+        assertTrue(is_file(exe), "AOT executable exists");
+
+        string run_out = runCompiled(exe);
+        assertTrue(run_out.regex("RUNTIME-TYPE-ERROR"),
+            "source-stripped AOT rejects unassigned typed local: " + run_out);
+        assertTrue(run_out.regex("key 'classes' expects type 'hash<string, bool>'"),
+            "source-stripped AOT reports the typed hash value slot: " + run_out);
+        assertTrue(run_out.regex("EXIT=3"),
+            "source-stripped AOT exits with runtime error: " + run_out);
+    }
+
+    testOptionalContainerSlotsAcceptNothingInAOT() {
+        TmpDir tmp("qore-hash-literal-type-propagation-optional-aot-");
+        string src = writeScript(tmp.path, "optional-container-nothing-aot.q", "%modern
+hash<auto> optional_hash;
+hash<string, *hash<auto>> result = {
+    \"draftmap\": optional_hash,
+};
+list<*hash<auto>> optional_list = (optional_hash,);
+printf(\"result=%y list=%y\\n\", result, optional_list);
+");
+        string exe = tmp.path + "/optional-container-nothing-aot";
+        string compile_out = compileScript(src, exe);
+        assertTrue(compile_out.regex("EXIT=0"), "AOT compile succeeds: " + compile_out);
+        assertTrue(is_file(exe), "AOT executable exists");
+
+        string run_out = runCompiled(exe);
+        assertTrue(run_out.regex("draftmap: null"),
+            "source-stripped AOT preserves optional hash slot NOTHING: " + run_out);
+        assertTrue(run_out.regex("list=\\[null\\]"),
+            "source-stripped AOT preserves optional list slot NOTHING: " + run_out);
+        assertTrue(run_out.regex("EXIT=0"),
+            "source-stripped AOT optional script exits cleanly: " + run_out);
+    }
+
+    testOptionalHashdeclSlotsAcceptNothingInAOT() {
+        TmpDir tmp("qore-hash-literal-type-propagation-optional-hashdecl-aot-");
+        string src = writeScript(tmp.path, "optional-hashdecl-nothing-aot.q", "%modern
+hashdecl QorusDraftMap {
+    *hash<string, hash<auto>> latest_draft;
+}
+
+hash<string, hash<auto>> latest_draft;
+QorusDraftMap result += {
+    \"latest_draft\": latest_draft,
+};
+printf(\"latest_draft=%y\\n\", result.latest_draft);
+");
+        string exe = tmp.path + "/optional-hashdecl-nothing-aot";
+        string compile_out = compileScript(src, exe);
+        assertTrue(compile_out.regex("EXIT=0"), "AOT compile succeeds: " + compile_out);
+        assertTrue(is_file(exe), "AOT executable exists");
+
+        string run_out = runCompiled(exe);
+        assertTrue(run_out.regex("latest_draft=null"),
+            "source-stripped AOT preserves optional hashdecl member NOTHING: " + run_out);
+        assertTrue(run_out.regex("EXIT=0"),
+            "source-stripped AOT optional hashdecl script exits cleanly: " + run_out);
+    }
+
+    testNestedEmptyHashLiteralAOT() {
+        TmpDir tmp("qore-hash-literal-type-propagation-valid-aot-");
+        string src = writeScript(tmp.path, "valid-empty-aot.q", "%modern
+hash<string, hash<string, bool>> result = {
+    \"classes\": {},
+};
+printf(\"%y\\n\", result);
+");
+        string exe = tmp.path + "/valid-empty-aot";
+        string compile_out = compileScript(src, exe);
+        assertTrue(compile_out.regex("EXIT=0"), "AOT compile succeeds: " + compile_out);
+        assertTrue(is_file(exe), "AOT executable exists");
+
+        string run_out = runCompiled(exe);
+        assertTrue(run_out.regex("classes: \\{\\}"),
+            "source-stripped AOT preserves the nested empty hash: " + run_out);
+        assertTrue(run_out.regex("EXIT=0"),
+            "source-stripped AOT valid script exits cleanly: " + run_out);
+    }
+}

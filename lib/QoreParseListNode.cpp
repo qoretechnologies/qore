@@ -34,6 +34,21 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/qore_program_private.h"
 
+static bool qore_parse_list_literal_varref_may_be_nothing(const QoreValue& v) {
+    if (v.getType() != NT_VARREF) {
+        return false;
+    }
+    const VarRefNode* vr = v.get<const VarRefNode>();
+    qore_var_t vt = vr->getType();
+    if ((vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS) && vr->ref.id) {
+        return true;
+    }
+    if ((vt == VT_GLOBAL || vt == VT_THREAD_LOCAL) && vr->ref.var) {
+        return true;
+    }
+    return false;
+}
+
 void QoreParseListNode::finalizeBlock(int sline, int eline) {
     QoreProgramLocation tl(sline, eline);
     if (tl.getFile() == loc->getFile()
@@ -43,7 +58,8 @@ void QoreParseListNode::finalizeBlock(int sline, int eline) {
     }
 }
 
-int QoreParseListNode::parseInitIntern(bool& needs_eval, QoreParseContext& parse_context) {
+int QoreParseListNode::parseInitIntern(bool& needs_eval, QoreParseContext& parse_context,
+        bool preserve_varref_types) {
     assert(!needs_eval);
     // turn off "return value ignored" flag before performing parse init
     QoreParseContextFlagHelper fh(parse_context);
@@ -58,24 +74,22 @@ int QoreParseListNode::parseInitIntern(bool& needs_eval, QoreParseContext& parse
     int err = 0;
 
     for (size_t i = 0; i < values.size(); ++i) {
+        bool typed_varref_may_be_nothing = qore_parse_list_literal_varref_may_be_nothing(values[i]);
+
         parse_context.typeInfo = nullptr;
         int e = parse_init_value(values[i], parse_context);
         vtypes[i] = parse_context.typeInfo;
+        typed_varref_may_be_nothing = typed_varref_may_be_nothing
+            || qore_parse_list_literal_varref_may_be_nothing(values[i]);
         if (e && !err) {
             err = e;
         }
 
-        // For unassigned non-auto typed variables, clear type info to prevent
-        // baking the declared type into the list literal; the actual runtime value
-        // may be NOTHING, so the type must be determined at runtime
-        if (vtypes[i] && values[i].getType() == NT_VARREF) {
-            VarRefNode* vr = values[i].get<VarRefNode>();
-            qore_var_t vt = vr->getType();
-            if ((vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS)
-                && vr->ref.id && !vr->ref.id->isAutoType()
-                && !vr->ref.id->isAssigned()) {
-                vtypes[i] = nullptr;
-            }
+        // For list literals, clear variable-ref type info to avoid baking
+        // declared or narrowed types into the constructed container. Function
+        // call argument lists must keep declared types for overload resolution.
+        if (!preserve_varref_types && vtypes[i] && typed_varref_may_be_nothing) {
+            vtypes[i] = nullptr;
         }
 
         //printd(5, "QoreParseListNode::parseInitIntern() this: %p %d: vcommon: %d vt: %p '%s' vtype: %p '%s'\n",
@@ -206,7 +220,7 @@ int QoreParseListNode::initArgs(QoreParseContext& parse_context, type_vec_t& arg
         args = nullptr;
     }
     bool v_needs_eval = false;
-    int err = parseInitIntern(v_needs_eval, parse_context);
+    int err = parseInitIntern(v_needs_eval, parse_context, true);
     arg_types = std::move(vtypes);
 
     ReferenceHolder<QoreListNode> l(qore_list_private::newList(needs_eval()), nullptr);
