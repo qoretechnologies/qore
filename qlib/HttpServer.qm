@@ -799,8 +799,19 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Async I/O controller
         *HttpServerAsyncIo::HttpAsyncSocketIoController asyncIo;
 
-        #! Native async target for callback-based async I/O
-        *Priv::HttpServerNativeAsyncTarget asyncTarget;
+        #! Async target for callback-based async I/O
+        /** Defaults to a @ref Priv::HttpServerNativeAsyncTarget instance constructed
+            in the @ref HttpServer::HttpServer() constructor.  Subclasses may
+            replace this in their own constructor (after calling the base
+            constructor) with any other @ref HttpServerAsyncIo::HttpAsyncTarget —
+            for example a wrapper that adds per-dispatch save/restore of
+            framework-specific thread-local data via
+            @ref HttpServerAsyncIo::HttpAsyncTarget::saveDispatchContext() /
+            @ref HttpServerAsyncIo::HttpAsyncTarget::restoreDispatchContext().
+            Listener registration must happen after any such replacement so the
+            controller captures the replacement target.
+        */
+        *HttpServerAsyncIo::HttpAsyncTarget asyncTarget;
 
         #! Cached HTTP date header value
         static string cached_date_header;

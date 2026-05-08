@@ -395,6 +395,37 @@ public class HttpAsyncSocketIoController {
         controller.waitStop();
     }
 
+    #! Submits a user-code body to the handler thread pool, wrapped in the target's
+    #! per-dispatch context save/restore hooks
+    /** All controller dispatches that may run user code (regular request handling,
+        SSE disconnect notification, WebSocket close notification, WebSocket frame
+        dispatch) MUST go through this method rather than calling
+        @ref handler_pool.submit() directly.  This guarantees that
+        @ref HttpAsyncTarget::saveDispatchContext() runs immediately before the
+        user-code body and that @ref HttpAsyncTarget::restoreDispatchContext()
+        runs immediately after, on the same handler-pool thread, so that
+        thread reuse cannot leak per-dispatch state from one callback into
+        the next.
+
+        The default \c saveDispatchContext()/\c restoreDispatchContext() are
+        no-ops; subclasses such as the HttpServer integration override them to
+        capture and restore framework-specific thread-local data.
+
+        Exceptions raised by \a body are not caught here; callers may add their
+        own try/catch inside \a body for dispatch-specific error handling.
+
+        @param target the async target whose dispatch hooks should wrap the call
+        @param body the user-code closure to run on a handler-pool thread
+        @throw any exception raised by ThreadPool::submit() (e.g. when stopping)
+    */
+    submitToHandlerPool(HttpAsyncTarget target, code body) {
+        handler_pool.submit(sub () {
+            auto save = target.saveDispatchContext();
+            on_exit target.restoreDispatchContext(save);
+            body();
+        });
+    }
+
     #! Registers a persistent queue for a connection
     /** Called by a handler pool thread when entering dedicated persistent mode.
         Subsequent requests on the same connection will be routed to the Queue
@@ -1647,7 +1678,7 @@ public class HttpAsyncSocketIoController {
         #   - error paths during framework body reading (timeout, max_body, etc.)
         # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
-            handler_pool.submit(sub () {
+            submitToHandlerPool(target, sub () {
                 # Clean up dispatched stream state after handler completes
                 # (applies to all headers-only dispatched streams, not just body_streaming)
                 # NOTE: on_exit must be at closure scope (not inside if-block), otherwise
@@ -2161,7 +2192,8 @@ public class HttpAsyncSocketIoController {
             # wrap C++ operations (startPollReadHttpHeader) in DelegatingPollOperation
             AbstractPollOperation submit_op;
             if (op instanceof HttpConnectionPollOperationBase) {
-                cast<HttpConnectionPollOperationBase>(op).setCompletionContext(self, uh, cinfo.state);
+                cast<HttpConnectionPollOperationBase>(op).setCompletionContext(self, uh, cinfo.state,
+                    cinfo.target);
                 submit_op = op;
             } else if (op instanceof Http3ServerPollOperation) {
                 # Http3ServerPollOperation manages its own completion via
@@ -2660,7 +2692,7 @@ public class HttpAsyncSocketIoController {
         };
 
         try {
-            handler_pool.submit(request_handler);
+            submitToHandlerPool(cinfo.target, request_handler);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s", uh, ex.err, ex.desc);
             if (cinfo.state != HttpConnectionState::Http3
@@ -2722,7 +2754,7 @@ public class HttpAsyncSocketIoController {
         };
 
         try {
-            handler_pool.submit(request_handler);
+            submitToHandlerPool(cinfo.target, request_handler);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit handler after body read for %y: %s: %s",
                 uh, ex.err, ex.desc);
@@ -3146,6 +3178,12 @@ public class HttpAsyncSocketIoController {
     }
 
     #! Handles SSE disconnect
+    /** Controller bookkeeping (state removal, socket close) runs synchronously on
+        the calling thread; the user-visible \c onSseDisconnect callback is hopped
+        onto a handler-pool thread via @ref submitToHandlerPool() so that user
+        code never runs on the AsyncSocketIo callback dispatcher worker (which
+        would risk deadlocks and bypass per-dispatch context setup).
+    */
     private handleSseDisconnect(string uh, hash<HttpActiveConnectionInfo> cinfo) {
         log(LoggerLevel::INFO, "SSE disconnect: %y", uh);
 
@@ -3164,16 +3202,35 @@ public class HttpAsyncSocketIoController {
         }
 
         try {
-            cinfo.target.onSseDisconnect(cinfo.sock, cinfo.listener, cinfo.cx);
+            submitToHandlerPool(cinfo.target, sub () {
+                try {
+                    cinfo.target.onSseDisconnect(cinfo.sock, cinfo.listener, cinfo.cx);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "onSseDisconnect callback threw for %s: %s: %s",
+                        uh, ex.err, ex.desc);
+                }
+            });
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "onSseDisconnect callback threw for %s: %s: %s", uh, ex.err, ex.desc);
+            log(LoggerLevel::ERROR, "Failed to submit onSseDisconnect for %y: %s: %s",
+                uh, ex.err, ex.desc);
         }
     }
 
     #! Handles WebSocket close
+    /** Controller bookkeeping (state removal, poll-operation cancel) runs
+        synchronously on the calling thread; the user-visible \c onWebSocketClose
+        callback is hopped onto a handler-pool thread via
+        @ref submitToHandlerPool() so that user code never runs on the
+        AsyncSocketIo callback dispatcher worker (which would risk deadlocks
+        and bypass per-dispatch context setup).  The close code/reason are
+        captured before the submission so they remain available even if \c op
+        is recycled before the handler runs.
+    */
     private handleWebSocketClose(string uh, hash<HttpActiveConnectionInfo> cinfo,
             HttpWebSocketPollOperation op) {
-        log(LoggerLevel::INFO, "WebSocket close: %y (code: %d)", uh, op.getCloseCode());
+        int close_code = op.getCloseCode();
+        string close_reason = op.getCloseReason();
+        log(LoggerLevel::INFO, "WebSocket close: %y (code: %d)", uh, close_code);
 
         {
             AutoWriteLock al(m);
@@ -3188,10 +3245,18 @@ public class HttpAsyncSocketIoController {
         }
 
         try {
-            cinfo.target.onWebSocketClose(cinfo.sock, op.getCloseCode(),
-                op.getCloseReason(), cinfo.listener, cinfo.cx);
+            submitToHandlerPool(cinfo.target, sub () {
+                try {
+                    cinfo.target.onWebSocketClose(cinfo.sock, close_code, close_reason,
+                        cinfo.listener, cinfo.cx);
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "onWebSocketClose callback threw for %s: %s: %s",
+                        uh, ex.err, ex.desc);
+                }
+            });
         } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::ERROR, "onWebSocketClose callback threw for %s: %s: %s", uh, ex.err, ex.desc);
+            log(LoggerLevel::ERROR, "Failed to submit onWebSocketClose for %y: %s: %s",
+                uh, ex.err, ex.desc);
         }
     }
 
@@ -3415,7 +3480,7 @@ public class HttpAsyncSocketIoController {
         #   - error paths during framework body reading (timeout, max_body, etc.)
         # resumeMultiplexedReading() silently handles double-resume (catches STATE-ERROR).
         try {
-            handler_pool.submit(sub () {
+            submitToHandlerPool(cinfo.target, sub () {
                 try {
                     hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
                     if (body_streaming) {
@@ -3605,7 +3670,7 @@ public class HttpAsyncSocketIoController {
 
         # Dispatch to handler thread pool
         try {
-            handler_pool.submit(sub () {
+            submitToHandlerPool(cinfo.target, sub () {
                 try {
                     hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
                     handleHttp2MultiplexedResult(uh, cinfo, stream_id, result);

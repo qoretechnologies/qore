@@ -155,6 +155,39 @@ public class HttpAsyncTarget {
         return NOTHING;
     }
 
+    #! Saves per-thread dispatch state before invoking user code on a handler-pool thread
+    /** Called by @ref HttpAsyncSocketIoController on a handler-pool thread immediately
+        before invoking any user-code callback (\c onHttpRequest(),
+        \c onSseDisconnect(), \c onWebSocketClose(), and the WebSocket frame
+        dispatch into \c WebSocketConnection::gotMessage()).  The return value is
+        opaque to the controller; whatever this method returns is passed back to
+        @ref restoreDispatchContext() after the user code returns or throws, on
+        the same handler-pool thread.
+
+        Subclasses can use this hook to capture and overwrite framework-specific
+        thread-local data that handler code expects to find populated for the
+        duration of the dispatch (for example a server-context or request-context
+        global), so that handler-pool thread reuse never leaks state from one
+        dispatch into the next.  The default implementation is a no-op and
+        returns @ref nothing.
+
+        @return opaque save data to be passed to @ref restoreDispatchContext() at dispatch end
+    */
+    auto saveDispatchContext() {
+        return NOTHING;
+    }
+
+    #! Restores per-thread dispatch state after invoking user code on a handler-pool thread
+    /** Called by @ref HttpAsyncSocketIoController on the same handler-pool thread
+        that invoked the corresponding user-code callback, after the callback
+        returns or throws.  Subclasses must restore whatever state
+        @ref saveDispatchContext() captured.  The default implementation is a
+        no-op.
+
+        @param save_data whatever @ref saveDispatchContext() returned
+    */
+    restoreDispatchContext(auto save_data) {
+    }
 }
 
 } # namespace HttpServerAsyncIo

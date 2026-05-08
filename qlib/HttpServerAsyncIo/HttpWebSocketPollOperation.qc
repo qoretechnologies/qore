@@ -67,14 +67,27 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         #! Counter to signal when the connection closes
         *Counter done;
 
-        #! Mutex to serialize onPollComplete and onComplete
+        #! Mutex to serialize frame-dispatch state (dispatching flag, onComplete,
+        #! and the inline-drain fallback)
         Mutex dispatch_mutex();
 
-        #! Counter tracking active onPollComplete dispatches
+        #! Counter tracking handler-pool drainers in flight
+        /** onComplete() blocks on @ref Counter::waitForZero() so that no
+            handler-pool drainer is still running when it finally clears
+            @ref wsc/@ref handler.
+        */
         Counter active_dispatches();
 
         #! True when onComplete has run — prevents new onPollComplete dispatches
         bool completed = False;
+
+        #! True while a handler-pool drainer is running for this connection
+        /** Protected by @ref dispatch_mutex.  When True, additional
+            @ref onPollComplete() calls observe the flag and return without
+            submitting a duplicate handler-pool task; the running drainer
+            picks up any newly arrived frames before it clears the flag.
+        */
+        bool dispatching = False;
     }
 
     #! Creates the poll operation
@@ -97,30 +110,10 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         # The I/O thread may dispatch onPollComplete before setConnection
         # is called; those dispatches return immediately (!wsc check).
         # Drain the queue here to handle any frames that were dropped.
-        {
-            AutoLock al(dispatch_mutex);
-            while (hasReceivedFrames()) {
-                *hash<auto> frame = getReceivedFrame();
-                if (!frame) {
-                    break;
-                }
-                try {
-                    processServerFrame(frame);
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "OBJECT-ALREADY-DELETED") {
-                        return;
-                    }
-                    if (handler) {
-                        try {
-                            handler.logError("frame processing error: %s: %s", ex.err, ex.desc);
-                        } catch () {}
-                    }
-                }
-            }
-        }
-        if (wsc) {
-            wsc.notifyIo();
-        }
+        # drainInlineLocked() also wakes the controller for any echoes
+        # processServerFrame() pushed to send_queue.
+        AutoLock al(dispatch_mutex);
+        drainInlineLocked();
     }
 
     #! Sets the done counter for lifecycle signaling
@@ -137,47 +130,138 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         }
     }
 
-    #! Called by the I/O controller on a worker thread when frames have been pushed
-    /** Drains the C++ recv_queue, applies extension transforms, and dispatches
-        to the WebSocketConnection's gotMessage() callback.
+    #! Called by the AsyncSocketIo controller when frames have been pushed
+    /** Hops frame processing from the AsyncSocketIo callback dispatcher worker
+        onto a handler-pool thread via
+        @ref HttpAsyncSocketIoController::submitForConnection() so that user
+        code (\c WebSocketConnection::gotMessage(),
+        \c WebSocketConnection::gotRawMessage(), and any per-dispatch hooks
+        installed by the target) never runs on the AsyncSocketIo callback
+        dispatcher worker — that thread is reserved for short, non-blocking
+        callbacks and running user code there risks deadlocks and bypasses
+        the @ref HttpAsyncTarget::saveDispatchContext() /
+        @ref HttpAsyncTarget::restoreDispatchContext() hooks.
 
-        Runs on a WORKER thread (never on the I/O thread).
+        Re-entrant onPollComplete() calls while a drainer is running observe
+        the @ref dispatching flag and return; the in-flight drainer drains
+        any newly arrived frames before clearing the flag.
+
+        If the completion context has not been wired yet (the narrow window
+        between op construction and @c registerH1WebSocketConnection), this
+        method falls back to an inline drain that matches the legacy
+        @ref setConnection() behavior.
     */
     public onPollComplete() {
+        *HttpAsyncSocketIoController c;
+        *HttpAsyncTarget t;
         {
             AutoLock al(dispatch_mutex);
             if (completed || !wsc) {
                 return;
             }
-            active_dispatches.inc();
-        }
-        on_exit active_dispatches.dec();
-        {
-            AutoLock al(dispatch_mutex);
-            if (!wsc) {
+            if (dispatching) {
+                # An already-running handlerPoolDrain() will pick up new
+                # frames before it clears the dispatching flag.
                 return;
             }
-            while (hasReceivedFrames()) {
-                *hash<auto> frame = getReceivedFrame();
-                if (!frame) {
-                    break;
+            if (!completion_controller || !completion_target) {
+                # Pre-completionContext fallback: drain inline under the
+                # mutex.  Mirrors @ref setConnection()'s upgrade-window drain.
+                drainInlineLocked();
+                return;
+            }
+            c = completion_controller;
+            t = completion_target;
+            dispatching = True;
+            active_dispatches.inc();
+        }
+        try {
+            c.submitToHandlerPool(t, \handlerPoolDrain());
+        } catch (hash<ExceptionInfo> ex) {
+            # Pool stopping or otherwise rejected the submission — clear the
+            # flags so that future onPollComplete() calls (or onComplete()'s
+            # final drain) can make progress.  A stopping pool means the
+            # connection is going down anyway.
+            {
+                AutoLock al(dispatch_mutex);
+                dispatching = False;
+            }
+            active_dispatches.dec();
+        }
+    }
+
+    #! Drains queued frames on a handler-pool thread, serialized by dispatch_mutex
+    /** Runs as the body submitted by @ref onPollComplete() to the controller.
+        Must clear the @ref dispatching flag and decrement
+        @ref active_dispatches before returning, on every code path, so
+        @ref onComplete() can proceed.
+    */
+    private handlerPoolDrain() {
+        bool wsc_alive = False;
+        {
+            AutoLock al(dispatch_mutex);
+            if (!completed && wsc) {
+                while (hasReceivedFrames()) {
+                    *hash<auto> frame = getReceivedFrame();
+                    if (!frame) {
+                        break;
+                    }
+                    try {
+                        processServerFrame(frame);
+                    } catch (hash<ExceptionInfo> ex) {
+                        if (ex.err == "OBJECT-ALREADY-DELETED") {
+                            # Connection torn down mid-dispatch; skip the
+                            # notifyIo() and exit cleanly.
+                            dispatching = False;
+                            active_dispatches.dec();
+                            return;
+                        }
+                        if (handler) {
+                            try {
+                                handler.logError("frame processing error: %s",
+                                    get_exception_string(ex));
+                            } catch () {}
+                        }
+                    }
                 }
-                try {
-                    processServerFrame(frame);
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "OBJECT-ALREADY-DELETED") {
-                        return;
-                    }
-                    if (handler) {
-                        try {
-                            handler.logError("frame processing error: %s: %s", ex.err, ex.desc);
-                        } catch () {}
-                    }
+                wsc_alive = exists wsc;
+            }
+            dispatching = False;
+        }
+        # Wake the controller to send any queued data (echo responses,
+        # close echoes) that processServerFrame() pushed to send_queue.
+        if (wsc_alive) {
+            wsc.notifyIo();
+        }
+        active_dispatches.dec();
+    }
+
+    #! Drains queued frames inline under dispatch_mutex; caller must hold the mutex
+    /** Used by @ref setConnection() during the upgrade-handshake window and by
+        @ref onPollComplete()'s pre-completionContext fallback path.  Does not
+        touch @ref dispatching or @ref active_dispatches — those are reserved
+        for handler-pool drainers and for @ref onComplete() coordination.
+    */
+    private drainInlineLocked() {
+        while (hasReceivedFrames()) {
+            *hash<auto> frame = getReceivedFrame();
+            if (!frame) {
+                break;
+            }
+            try {
+                processServerFrame(frame);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "OBJECT-ALREADY-DELETED") {
+                    return;
+                }
+                if (handler) {
+                    try {
+                        handler.logError("frame processing error: %s",
+                            get_exception_string(ex));
+                    } catch () {}
                 }
             }
         }
-        # Wake the controller to send any queued data (echo responses,
-        # close echoes) that processServerFrame pushed to send_queue
         if (wsc) {
             wsc.notifyIo();
         }

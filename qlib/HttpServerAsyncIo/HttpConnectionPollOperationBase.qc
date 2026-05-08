@@ -42,6 +42,14 @@ public class HttpConnectionPollOperationBase inherits AbstractPollOperation {
 
         #! Connection state when the operation was submitted
         *string completion_state;
+
+        #! Async target for the connection — used by subclasses that hop user-code
+        #! dispatch onto handler_pool via @ref HttpAsyncSocketIoController::submitToHandlerPool()
+        /** Captured at @ref setCompletionContext() time so subclasses do not have
+            to re-look-up the connection in the controller's connections map and
+            do not race with connection removal at close time.
+        */
+        *HttpAsyncTarget completion_target;
     }
 
     #! Sets the completion context for onComplete() dispatch
@@ -49,11 +57,17 @@ public class HttpConnectionPollOperationBase inherits AbstractPollOperation {
         @param controller the controller to call handleConnectionResult() on
         @param uh the connection unique hash
         @param state the connection state when submitted
+        @param target the async target whose dispatch hooks should wrap any
+            handler-pool dispatch the subclass performs (e.g. WebSocket frame
+            processing); may be @ref nothing for poll operations that never
+            dispatch user code
     */
-    setCompletionContext(HttpAsyncSocketIoController controller, string uh, string state) {
+    setCompletionContext(HttpAsyncSocketIoController controller, string uh, string state,
+            *HttpAsyncTarget target) {
         completion_controller = controller;
         completion_uh = uh;
         completion_state = state;
+        completion_target = target;
     }
 
     #! Called when the operation completes; dispatches result to the controller
