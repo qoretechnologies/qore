@@ -292,6 +292,8 @@ class AOTSmokeTest inherits QUnit::Test {
             \testBatchFragmentStatementLocFilter());
         addTestCase("AOT qcc dump modern slot expressions",
             \testQccDumpModernSlotExprKinds());
+        addTestCase("AOT qcc dump class injection metadata",
+            \testQccDumpClassInjectionMetadata());
         # Strip source: static class variable access (module)
         addTestCase("AOT strip source static varref module", \testStripSourceStaticVarrefModule());
         addTestCase("AOT strip source module init function ref",
@@ -8564,6 +8566,40 @@ printf(\"%d\\n\", refprobe(3));
             "qcc dump reports no malformed slot expression payloads: " + dump_out);
         assertTrue(dump_out.regex("UNARY_MINUS\\s+\\(104\\)"),
             "qcc dump reports unary-minus expression kind from the slot registry: " + dump_out);
+    }
+
+    testQccDumpClassInjectionMetadata() {
+        # qcc --dump-info has its own lightweight CLASSES parser. It must stay
+        # byte-for-byte aligned with the writer/runtime class record layout.
+        hash<auto> paths = writeTempScript("%modern
+%require-types
+
+class DumpInfoInjectedLayout {
+    public {
+        string marker = \"marker\";
+    }
+}
+
+printf(\"ok\\n\");
+");
+        on_exit {
+            unlink(paths.src);
+            unlink(paths.out);
+        }
+
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -b --compile --output %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, qore_bin, paths.out, paths.src));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "class injection metadata probe compiles: " + compile_out);
+
+        string dump_out = dumpQccSections(paths.out);
+        assertTrue(dump_out.regex("class-injection"),
+            "qcc dump reports class-injection from the feature registry: " + dump_out);
+        assertTrue(dump_out.regex("serialized defaults: total=[1-9]"),
+            "qcc dump scans class member defaults after class injection metadata: " + dump_out);
+        assertTrue(!dump_out.regex("serialized defaults: error"),
+            "qcc dump reports no serialized-default scanner error: " + dump_out);
     }
 
     testStripSourceStaticVarrefModule() {

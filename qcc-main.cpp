@@ -1270,6 +1270,7 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_WIDE_IR_OPERANDS, "wide-ir-operands"},
         {QORE_AOT_FEAT_WIDE_LOC_TABLES, "wide-loc-tables"},
         {QORE_AOT_FEAT_LOCAL_DECL_ORDINAL, "local-decl-ordinal"},
+        {QORE_AOT_FEAT_CLASS_INJECTION, "class-injection"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -2343,6 +2344,8 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
     const bool has_class_hash =
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_HASH) != 0;
+    const bool has_class_injection =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0;
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = nullptr;
@@ -2356,6 +2359,10 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
         std::string owner = dump_owner_name(path, name);
         if (has_class_hash && !dump_skip_bytes(p, end, 1 + SH_SIZE)) {
             error = "truncated class signature hash";
+            return false;
+        }
+        if (has_class_injection && !dump_skip_string_ref(reader, p, end)) {
+            error = "truncated class injection target";
             return false;
         }
 
