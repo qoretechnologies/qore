@@ -3755,7 +3755,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
 
 // primary function for executing user code
 QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
-        const qore_class_private* qc) const {
+        const qore_class_private* qc, bool ref_obj) const {
     QORE_TRACE("UserVariantBase::eval()");
 
     assert(!self || (ceh ? ceh->getClass() : qc));
@@ -3765,12 +3765,12 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
         return QoreValue();
     }
 
-    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr));
+    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr), ref_obj);
     return evalIntern(name, uveh.getArgv(), self, xsink);
 }
 
 QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreClosureBase& closure_base,
-        QoreObject* self, ExceptionSink* xsink) const {
+        QoreObject* self, ExceptionSink* xsink, bool ref_obj) const {
     QORE_TRACE("UserClosureVariant::evalClosure()");
 
     assert(!self || ceh.getClass());
@@ -3780,7 +3780,7 @@ QoreValue UserClosureVariant::evalClosure(CodeEvaluationHelper& ceh, const QoreC
         return QoreValue();
     }
 
-    CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass());
+    CodeContextHelper cch(xsink, CT_USER, "<anonymous closure>", self, ceh.getClass(), ref_obj);
 
     // UserVariantExecHelper above selects the final program/TLPD used by evalIntern().
     // Captured CVVs must be installed after that point so VT_LOCAL_TS reference/lvalue
@@ -4152,7 +4152,7 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     }
 
     //printd(5, "UserClosureFunction::evalClosure() this: %p (%s) variant: %p args: %p self: %p\n", this, getName(), variant, args, self);
-    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink);
+    return UCLOV_const(variant)->evalClosure(ceh, closure_base, self, xsink, !self || self->isValid());
 }
 
 int UserFunctionVariant::parseInit(QoreFunction* f) {

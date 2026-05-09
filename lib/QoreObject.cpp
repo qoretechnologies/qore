@@ -1268,6 +1268,29 @@ int qore_object_private::startCall(const char* mname, ExceptionSink* xsink) {
     return 0;
 }
 
+int qore_object_private::checkClosureSelfValid(ExceptionSink* xsink) {
+    AutoLocker al(rlck);
+    if (status == OS_DELETED) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED", "closure invocation failed because captured 'self' "
+            "(class '%s') has already been destroyed", getClassName());
+        return -1;
+    }
+
+    return 0;
+}
+
+int qore_object_private::refClosureSelfForBackground(ExceptionSink* xsink) {
+    AutoLocker al(rlck);
+    if (status != OS_OK || in_destructor) {
+        xsink->raiseException("BACKGROUND-CLOSURE-INVALID-CAPTURE", "background closure captured 'self' "
+            "of class '%s' which has already been destroyed or is being destroyed", getClassName());
+        return -1;
+    }
+
+    customRefIntern(true);
+    return 0;
+}
+
 void qore_object_private::endCall(ExceptionSink* xsink) {
     //printd(5, "qore_object_private::endCall() this: %p obj: %p '%s' calling customDeref()\n", this, obj,
     //    theclass->getName());

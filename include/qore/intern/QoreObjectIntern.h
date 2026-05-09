@@ -631,6 +631,10 @@ public:
 
     DLLLOCAL void endCall(ExceptionSink* xsink);
 
+    DLLLOCAL int checkClosureSelfValid(ExceptionSink* xsink);
+
+    DLLLOCAL int refClosureSelfForBackground(ExceptionSink* xsink);
+
     // increments the real reference count without incrementing the actual reference count
     // (i.e. turns the current not real reference into a "real" reference; one that cannot
     // participate in recursive graphs)

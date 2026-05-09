@@ -33,9 +33,34 @@
 #define _QORE_QOREOPERATORNODE_H
 
 #include <cstdarg>
+#include <utility>
+#include <vector>
 #include "qore/intern/qore_string_private.h"
 
 class RuntimeConfig;
+class QoreObject;
+
+class BackgroundClosureCaptureHelper {
+private:
+   ExceptionSink* xsink;
+   std::vector<QoreObject*> objects;
+   BackgroundClosureCaptureHelper* prev;
+   bool release = false;
+
+public:
+   DLLLOCAL BackgroundClosureCaptureHelper(ExceptionSink* xsink);
+   DLLLOCAL ~BackgroundClosureCaptureHelper();
+
+   DLLLOCAL void add(QoreObject* obj) {
+      objects.push_back(obj);
+   }
+
+   DLLLOCAL std::vector<QoreObject*> takeObjects() {
+      std::vector<QoreObject*> rv(std::move(objects));
+      release = true;
+      return rv;
+   }
+};
 
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, ExceptionSink* xsink);
 DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n, ExceptionSink* xsink);

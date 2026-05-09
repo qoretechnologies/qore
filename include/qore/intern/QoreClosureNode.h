@@ -63,6 +63,17 @@ public:
     }
 };
 
+class QoreClosureSelfContextHelper {
+private:
+    const QoreObject* prev;
+
+public:
+    DLLLOCAL QoreClosureSelfContextHelper(const QoreObject* obj);
+    DLLLOCAL ~QoreClosureSelfContextHelper();
+};
+
+DLLLOCAL bool qore_closure_self_context(const QoreObject* obj);
+
 class CVecInstantiator {
 protected:
     cvv_vec_t* cvec;
@@ -211,6 +222,10 @@ public:
         return nullptr;
     }
 
+    DLLLOCAL virtual QoreObject* refSelfForBackground(ExceptionSink* xsink) const {
+        return nullptr;
+    }
+
     //! Returns the full typed code type info (e.g., code<int(string)>) from the closure's signature
     DLLLOCAL const QoreTypeInfo* getCallTypeInfo() const;
 };
@@ -291,6 +306,8 @@ public:
     DLLLOCAL virtual QoreProgram* getProgram() const {
         return obj->getProgram();
     }
+
+    DLLLOCAL virtual QoreObject* refSelfForBackground(ExceptionSink* xsink) const;
 
     DLLLOCAL virtual int getAsString(QoreString& str, int foff, ExceptionSink* xsink) const {
         str.sprintf("function closure (%slambda, in object of class '%s', %p)",

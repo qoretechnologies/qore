@@ -31,6 +31,21 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreTypeInfo.h"
 
+static thread_local const QoreObject* closure_self_context = nullptr;
+
+QoreClosureSelfContextHelper::QoreClosureSelfContextHelper(const QoreObject* obj)
+        : prev(closure_self_context) {
+    closure_self_context = obj;
+}
+
+QoreClosureSelfContextHelper::~QoreClosureSelfContextHelper() {
+    closure_self_context = prev;
+}
+
+bool qore_closure_self_context(const QoreObject* obj) {
+    return closure_self_context == obj;
+}
+
 const QoreTypeInfo* QoreClosureBase::getCallTypeInfo() const {
     UserClosureFunction* f = closure->getFunction();
     if (f) {
@@ -138,9 +153,18 @@ bool QoreObjectClosureNode::derefImpl(ExceptionSink* xsink) {
 }
 
 QoreValue QoreObjectClosureNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
+    QoreClosureSelfContextHelper csch(obj);
     // See QoreClosureNode::execValue above — capture CVVs are pushed after program-context
     // selection in UserClosureFunction::evalClosure().
     QoreProgram* pgm = obj->getProgram();
     ClosureTlpdEnsureHelper tlpd_helper(xsink, pgm);
     return closure->exec(*this, pgm, args, obj, class_ctx, xsink);
+}
+
+QoreObject* QoreObjectClosureNode::refSelfForBackground(ExceptionSink* xsink) const {
+    if (qore_object_private::get(*obj)->refClosureSelfForBackground(xsink)) {
+        return nullptr;
+    }
+
+    return obj;
 }

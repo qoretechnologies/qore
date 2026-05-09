@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 
+#include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/RuntimeConfig.h"
 
 // get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
@@ -63,6 +64,10 @@ QoreValue SelfVarrefNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excepti
     QoreObject* obj = rc.getObject() ? rc.getObject() : runtime_get_stack_object();
     assert(obj);
     assert(needs_deref);
+    if (qore_closure_self_context(obj) && qore_object_private::get(*obj)->checkClosureSelfValid(xsink)) {
+        return QoreValue();
+    }
+
     // issue 3523: evaluate in case the value is a reference
     ValueHolder val(obj->getReferencedMemberNoMethod(str, xsink), xsink);
     // the value here must always require a dereference
