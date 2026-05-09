@@ -11815,9 +11815,16 @@ SocketRecvPollOperationBase::SocketRecvPollOperationBase(QoreSocketObject* sock,
 }
 
 void SocketPollSocketOperationBase::abort(ExceptionSink* xsink) {
+    // Serialize against I/O-thread continuePoll(): every continuePoll override
+    // takes sock->priv->m and may dereference poll_state under it.  Resetting
+    // poll_state without the lock would free a SocketSendPollState (or other
+    // PollState) out from under an in-flight continuePoll on the AsyncIo
+    // controller's I/O thread, leading to a use-after-free where the freed
+    // object's `sock` member reads back as a malloc poison value (e.g. crash
+    // at sock->ssl with sock = small integer on macOS arm64).
+    AutoLocker al(sock->priv->m);
     poll_state.reset();
     if (set_non_block) {
-        AutoLocker al(sock->priv->m);
         sock->priv->clearNonBlock(non_block_direction);
         if (abortNeedsClose()) {
             qore_socket_close_from_controller(sock->priv->socket);
