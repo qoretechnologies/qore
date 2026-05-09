@@ -318,23 +318,25 @@ l50Xb2GWQesIt9k5jF5IOw==
     }
 
     #! Test callback exception mid-stream over HTTP/3.
-    /** Analogue of testH2CallbackException for HTTP/3 — guards against an
-        H3 version of the H2 shutdown race fixed in af761a3d9.  Empirically
-        H3 does NOT have this race because the H3 server poll operation
+    /** Analogue of testH2CallbackException for HTTP/3.  Today the H3 server
         defaults to @c quic_headers_only=False
-        (HttpAsyncSocketIoController.qc:1341) and so dispatches the handler
-        only after END_STREAM has been received — for this scenario the
-        client throws before sending END_STREAM and disconnects, the H3
-        server never reaches the handler-dispatch path, and the QUIC
-        CONNECTION_CLOSE cleans the request stream up cleanly with no body
-        queue ever registered.  This test pins that contract: if a future
-        change flips the default to headers-only dispatch on H3 (mirroring
-        H2), the same shutdown race could arise and the test would stall
-        ~30s in `delete server` — at which point the analogous fix needs
-        to be ported to Http3ServerPollOperationPriv (extend abort() to
-        signal the QUIC stream-data CV / push close sentinels to any
-        registered Queues, plus a registerStreamQueue-side closed-flag
-        guard mirroring Http2PollOperationPriv::stream_queues_closed).
+        (HttpAsyncSocketIoController.qc:1341), so the framework waits for
+        END_STREAM before dispatching the handler — the client throws first,
+        QUIC CONNECTION_CLOSE follows, and the server never reaches the
+        handler-dispatch path.  This makes the test trivially fast.
+
+        The Phase 1 (commit a66b7d9ee) and Phase 3 (commit af07f1235)
+        shutdown-race fixes for H3 are now in place, so when the default
+        flips to @c quic_headers_only=True (planned Phase 2) this test will
+        actively exercise the headers-only dispatch path.  The dedicated
+        body-streaming validation lives in @c HttpServerH3Streaming.qtest:
+          - testH3ClientStreaming — wantsBodyStreaming + headers_only POST
+          - testH3OversizedBody — max_request_body_size enforcement
+          - testH3ShutdownDuringStreaming — server.stop() < 5s with an
+            in-flight body-streaming handler
+          - testH3ConcurrentStreaming — N concurrent streaming uploads
+        Those tests are the Phase 2 validation harness; this test is just
+        the matched H3-side regression assertion that mirrors the H2 case.
 
         Skipped if QUIC is unavailable in this build.
     */
