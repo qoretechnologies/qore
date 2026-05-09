@@ -92,6 +92,11 @@ bool HttpWebSocketPollOperationPriv::goalReached() const {
 }
 
 QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    // Serialize against user-thread abort()/cleanup() that may concurrently
+    // null + deref send_op / recv_op.  Held for the entire body so the inner
+    // op pointers we read at the top stay valid through the dispatched
+    // continuePoll()/getOutput() calls below.
+    AutoLocker al(m);
     printd(5, "HttpWebSocketPollOp::continuePoll() state: %s send_op=%p recv_op=%p\n",
         getWsState(), send_op, recv_op);
     frames_pushed_in_cycle = 0;
@@ -344,6 +349,13 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
 }
 
 void HttpWebSocketPollOperationPriv::abort(ExceptionSink* xsink) {
+    // Serialize against the I/O-thread continuePoll() which may be mid-way
+    // through dispatching to send_op->continuePoll() / recv_op->continuePoll().
+    // Without this, the non-atomic check+deref+null in releaseSendOp() /
+    // releaseRecvOp() races with continuePoll's own release calls and can
+    // double-deref the inner op (refcount 0 -> -1 trips
+    // QoreReferenceCounter::ROdereference()).
+    AutoLocker al(m);
     ws_state = WsState::CLOSED;
     releaseSendOp(xsink);
     releaseRecvOp(xsink);
@@ -701,17 +713,24 @@ int HttpWebSocketPollOperationPriv::startSendOp(ExceptionSink* xsink) {
 }
 
 void HttpWebSocketPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
-    if (send_op) {
-        send_op->deref(xsink);
-        send_op = nullptr;
-        send_op_start_ms = 0;
+    // Caller must hold m (continuePoll/abort/cleanup-from-dtor).  Capture-then-
+    // null-then-deref makes the helper idempotent and safe to call from any
+    // path that holds the mutex: even if the deref() itself is lengthy, no
+    // other caller can observe a non-null send_op pointing at a freed object.
+    SocketSendPollOperation* op = send_op;
+    send_op = nullptr;
+    send_op_start_ms = 0;
+    if (op) {
+        op->deref(xsink);
     }
 }
 
 void HttpWebSocketPollOperationPriv::releaseRecvOp(ExceptionSink* xsink) {
-    if (recv_op) {
-        recv_op->deref(xsink);
-        recv_op = nullptr;
+    // Caller must hold m; see releaseSendOp() for the rationale.
+    SocketRecvDataPollOperation* op = recv_op;
+    recv_op = nullptr;
+    if (op) {
+        op->deref(xsink);
     }
 }
 
@@ -745,6 +764,11 @@ void HttpWebSocketPollOperationPriv::setClosed(uint16_t code, const char* reason
 }
 
 void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {
+    // Serialize against the I/O-thread continuePoll().  Called from the
+    // QPP destructor (where the user thread races the I/O thread) and from
+    // ~HttpWebSocketPollOperationPriv() (where refcount is already 0 and the
+    // acquisition is uncontended); both paths are safe.
+    AutoLocker al(m);
     releaseSendOp(xsink);
     releaseRecvOp(xsink);
     reassembler.clear(xsink);

@@ -37,6 +37,7 @@
 #include "qore/SocketPollOperation.h"
 #include "qore/QoreSocketObject.h"
 #include "qore/QoreQueue.h"
+#include "qore/QoreThreadLock.h"
 #include "qore/WebSocketFrameCodec.h"
 
 //! Abstract callback for processing WebSocket frames on the I/O thread
@@ -340,6 +341,20 @@ protected:
     DLLLOCAL const char* getStateImpl() const override;
 
 private:
+    //! Serializes continuePoll() (I/O thread) against abort() / cleanup() (user threads).
+    /** Without this, two threads can race the non-atomic check+deref+null
+        pattern in releaseSendOp() / releaseRecvOp() and double-deref the
+        inner operation, tripping a QoreReferenceCounter::ROdereference()
+        assertion (refcount goes 0 -> -1).
+
+        Held across the entire continuePoll() body and across abort(); the
+        private releaseSendOp() / releaseRecvOp() helpers assume the caller
+        holds it.  The destructor's cleanup() path runs at refcount=0 where
+        no other thread can hold a reference, so locking is not required
+        there.
+    */
+    mutable QoreThreadLock m;
+
     QoreSocketObject* sock;                 //!< ref'd WebSocket socket
     Queue* recv_queue;                      //!< ref'd, for pushing received frames
     QoreObject* recv_queue_obj;             //!< ref'd QoreObject wrapping recv_queue (for DGC)
@@ -349,10 +364,10 @@ private:
     WebSocketFrameDecoder decoder;          //!< stateful frame decoder
     WebSocketFrameReassembler reassembler;  //!< fragment reassembler
 
-    //! Current send inner operation (nullptr when not sending)
+    //! Current send inner operation (nullptr when not sending); guarded by @ref m
     SocketSendPollOperation* send_op = nullptr;
 
-    //! Current recv inner operation (recreated each read cycle)
+    //! Current recv inner operation (recreated each read cycle); guarded by @ref m
     SocketRecvDataPollOperation* recv_op = nullptr;
 
     WsState ws_state = WsState::CONNECTED;
