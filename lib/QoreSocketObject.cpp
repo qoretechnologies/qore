@@ -6091,6 +6091,15 @@ bool QoreSocketObject::isQuic() const {
     return priv->hasQuicSession();
 }
 
+void QoreSocketObject::shutdownAllQuicStreamReads() {
+    // No priv->m here: shutdownStreamReads only touches per-session state
+    // (streams_ map under each session's mtx_, plus the stream-data waiter
+    // wake), and we deliberately don't want to serialize the broadcast
+    // behind every other socket-method caller.  my_socket_priv::quic_sessions
+    // is itself protected by its own quic_sessions_lock.
+    priv->shutdownAllQuicStreamReads();
+}
+
 static int64_t qore_socket_object_submit_quic_request(QoreSocketObject* s, const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len, ExceptionSink* xsink,
         bool streaming, bool wake_controller, const char* owner_name) {
@@ -6531,4 +6540,24 @@ bool my_socket_priv::hasQuicSession() const {
     qore_socket_private* sp = qore_socket_private::get(*socket);
     AutoLocker al(sp->quic_sessions_lock);
     return !sp->quic_sessions.empty();
+}
+
+void my_socket_priv::shutdownAllQuicStreamReads() {
+    // Snapshot the live sessions under the map lock, then call
+    // shutdownStreamReads() on each without holding the map lock — the call
+    // takes the per-session mtx_ to set per-stream flags and broadcasts the
+    // stream-data wake, and we don't want to block the map for that.
+    std::vector<std::shared_ptr<QuicSession>> sessions;
+    qore_socket_private* sp = qore_socket_private::get(*socket);
+    {
+        AutoLocker al(sp->quic_sessions_lock);
+        sessions.reserve(sp->quic_sessions.size());
+        for (auto& [id, sess] : sp->quic_sessions) {
+            (void)id;
+            sessions.push_back(sess);
+        }
+    }
+    for (auto& sess : sessions) {
+        sess->shutdownStreamReads();
+    }
 }

@@ -395,6 +395,18 @@ void Http3ServerPollOperationPriv::setError(const char* err, const char* desc,
 }
 
 void Http3ServerPollOperationPriv::abort(ExceptionSink* xsink) {
+    // Break any handler thread blocked in Socket::readQuicStreamDataBlock()
+    // BEFORE we tear down inner ops or transition to CLOSED — this is what
+    // unblocks HttpServer.stop()'s handler_pool.stopWait() when an
+    // in-flight headers-only request is still waiting on body data.  Done
+    // outside op_lock because shutdownAllQuicStreamReads only takes the
+    // session-map lock + per-session mtx_, and those must not be ordered
+    // under op_lock (the I/O thread holds session locks while it calls back
+    // into the op).  See QuicSession::shutdownStreamReads for the full
+    // rationale.
+    if (sock_obj) {
+        sock_obj->shutdownAllQuicStreamReads();
+    }
     AutoLocker al(op_lock);
     h3_state.store(H3State::CLOSED, std::memory_order_release);
     if (read_op) {

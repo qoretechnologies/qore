@@ -2346,6 +2346,19 @@ void QuicSession::wakeStreamDataWaiters() {
     quicWakeSocketWaiters(stream_data_waiters_mtx_, stream_data_waiters_);
 }
 
+void QuicSession::shutdownStreamReads() {
+    {
+        std::lock_guard<std::recursive_mutex> lock(mtx_);
+        for (auto& [id, info] : streams_) {
+            (void)id;
+            info->stream_data_shutdown = true;
+        }
+    }
+    // Wake every controller-backed readQuicStreamDataBlock() poll op so it
+    // re-runs continuePoll → takeStreamData and observes the shutdown flag.
+    notifyStreamData();
+}
+
 void QuicSession::notifyDatagramData() {
     wakeDatagramWaiters();
 }
@@ -2906,8 +2919,14 @@ QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
         return QoreValue();
     }
 
-    // Atomic: extract data AND check completion under one lock
-    complete = it->second->body_complete;
+    // Atomic: extract data AND check completion under one lock.
+    // stream_data_shutdown is treated as EOF (clean complete) so a handler
+    // blocked in readQuicStreamDataBlock unblocks with NOTHING when the
+    // owning H3 op aborts during HttpServer.stop() — see
+    // QuicSession::shutdownStreamReads().  Already-buffered body bytes are
+    // still returned on this call; the next call (with empty body) reports
+    // complete=true.
+    complete = it->second->body_complete || it->second->stream_data_shutdown;
 
     if (it->second->body.empty()) {
         return QoreValue();  // NOTHING — caller checks 'complete' to decide next step
