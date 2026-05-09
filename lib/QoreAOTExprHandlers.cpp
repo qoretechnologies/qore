@@ -35,6 +35,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <qore/QoreRegexInterface.h>
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
@@ -3074,7 +3075,7 @@ static bool write_regex_match_payload(AOTExprWriteCtx& ctx, const QoreRegexMatch
     }
     ctx.writer.writeU8(static_cast<uint8_t>(kind));
     ctx.writer.writeStringRef(pattern);
-    ctx.writer.writeI64(re->getOptions());
+    ctx.writer.writeI64(re->getOptions() | (re->isGlobal() ? QRE_GLOBAL : 0));
     return classifyAndWriteExpr(ctx.writer, op->getExp(), ctx.parent_locals,
         ctx.parent_globals, ctx.const_reverse_map);
 }

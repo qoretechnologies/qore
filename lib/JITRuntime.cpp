@@ -1728,9 +1728,18 @@ extern "C" DLLEXPORT void qore_rt_store_thread_local_eval_weak(Var* var, uint64_
 
 // --- Self member access helper ---
 
+static int qore_rt_check_closure_self_valid(QoreObject* obj, ExceptionSink* xsink) {
+    return (obj && qore_closure_self_context(obj))
+        ? qore_object_private::get(*obj)->checkClosureSelfValid(xsink)
+        : 0;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_self_member(const char* member_name, ExceptionSink* xsink) {
     QoreObject* obj = runtime_get_stack_object();
     assert(obj);
+    if (qore_rt_check_closure_self_valid(obj, xsink)) {
+        return toBits(QoreValue());
+    }
     // issue 3523: evaluate in case the value is a reference
     ValueHolder val(obj->getReferencedMemberNoMethod(member_name, xsink), xsink);
     if (*xsink) {
@@ -1748,6 +1757,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member(const char* member_name, 
 extern "C" DLLEXPORT uint64_t qore_rt_load_self_member_for_call(const char* member_name, ExceptionSink* xsink) {
     QoreObject* obj = runtime_get_stack_object();
     assert(obj);
+    if (qore_rt_check_closure_self_valid(obj, xsink)) {
+        return toBits(QoreValue());
+    }
     ValueHolder val(obj->getReferencedMemberNoMethod(member_name, xsink), xsink);
     if (*xsink) {
         return toBits(QoreValue());
@@ -6466,6 +6478,10 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
 
     // Handle self for object closures (closures defined inside methods)
     QoreObject* self = const_cast<QoreObject*>(cb->getObject());
+    std::optional<QoreClosureSelfContextHelper> csch;
+    if (self) {
+        csch.emplace(self);
+    }
 
     // For object closures, establish the captured self in both TLS stores so that
     // implicit method calls (SelfFunctionCallNode) and LoadSelfMember resolve
@@ -8750,6 +8766,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         if (!obj) {
             xsink->raiseException("LVALUE-ERROR",
                 "no object context for self member remove");
+            return toBits(QoreValue());
+        }
+        if (qore_rt_check_closure_self_valid(obj, xsink)) {
             return toBits(QoreValue());
         }
         res = qore_object_private::takeMember(*obj, xsink,

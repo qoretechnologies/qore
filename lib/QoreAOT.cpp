@@ -34,6 +34,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreDir.h"
+#include <qore/QoreRegexInterface.h>
 #include <qore/QoreObject.h>
 #include <qore/Qore.h>
 #include <iostream>
@@ -11434,7 +11435,7 @@ class ExprTreeSerializer {
                 return false;
             }
             writeStr(pattern);
-            writeI64(re->getOptions());
+            writeI64(re->getOptions() | (re->isGlobal() ? QRE_GLOBAL : 0));
             writeU16(1);
             return serializeValue(op->getExp());
         }
@@ -12397,7 +12398,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.kind = AOTExprKind::REGEX_MATCH;
             }
             id.ref1 = pattern;
-            id.ref2 = std::to_string(re->getOptions());
+            id.ref2 = std::to_string(re->getOptions() | (re->isGlobal() ? QRE_GLOBAL : 0));
             id.child_expr = v;
             return id;
         }

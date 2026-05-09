@@ -52,8 +52,12 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT top-level local controls function exception",
             \testTopLevelLocalControlsFunctionException());
         addTestCase("AOT reference arg local reload", \testReferenceArgLocalReload());
+        addTestCase("AOT parse reference map selector uses inner implicit index",
+            \testParseRefMapSelectorUsesInnerImplicitIndex());
         addTestCase("AOT closure-use reference params teardown",
             \testClosureUseReferenceParamsTeardown());
+        addTestCase("AOT stale closure self member access fails",
+            \testStaleClosureSelfMemberAccessFails());
         addTestCase("AOT weak local assignment releases RHS",
             \testWeakLocalAssignmentReleasesRhs());
         addTestCase("AOT weak hash element assignment releases RHS",
@@ -153,6 +157,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT string operations", \testStringOps());
         addTestCase("AOT soft string switch case", \testSoftStringSwitchCase());
         addTestCase("AOT regex switch", \testSwitchRegex());
+        addTestCase("AOT .qo debugger regex extract keeps global flag",
+            \testQoDebuggerRegexExtractGlobal());
         addTestCase("AOT exit code", \testExitCode());
         addTestCase("AOT ARGV passthrough", \testArgvPassthrough());
         addTestCase("AOT error handling", \testErrorHandling());
@@ -794,6 +800,36 @@ printf(\"value=%d\\n\", C::test());
         assertEq("value=2\n", result.run_out, "AOT reloads locals mutated through reference args");
     }
 
+    testParseRefMapSelectorUsesInnerImplicitIndex() {
+        string code = "%modern
+sub verify(reference<hash<auto>> h) {
+    if (!exists h.name) {
+        throw \"MISSING-NAME\", sprintf(\"missing name: %y\", h);
+    }
+}
+
+sub convert(hash<auto> new_data) {
+    map verify(\\new_data.errors[$#]), new_data.errors;
+}
+
+int sub callConvert(int i) {
+    hash<auto> one = {
+        \"errors\": ({\"name\": \"x\"},),
+    };
+    convert(one);
+    return i;
+}
+
+map callConvert($#) + (exists {\"a\": 1}.a ? 0 : 0), (0, 1);
+printf(\"ok\\n\");
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "parse-ref selector regression fully precompiled: "
+            + result.compile_out);
+        assertEq("ok\n", result.run_out,
+            "AOT parse references resolve map selector $# from the inner map context");
+    }
+
     testClosureUseReferenceParamsTeardown() {
         string code = "%modern
 class C {
@@ -823,6 +859,61 @@ printf(\"ok\\n\");
         assertTrue(result.all_precompiled, "closure-use param teardown regression fully precompiled: "
             + result.compile_out);
         assertEq("ok\n", result.run_out, "AOT does not pop caller-owned closure-use parameters");
+    }
+
+    testStaleClosureSelfMemberAccessFails() {
+        string code = "%modern
+class C {
+    private {
+        string value;
+    }
+
+    constructor(string v) {
+        value = v;
+    }
+
+    code<string()> getReadClosure() {
+        return string sub () {
+            return value;
+        };
+    }
+
+    code<auto()> getRemoveClosure() {
+        return auto sub () {
+            return remove value;
+        };
+    }
+}
+
+code<string()> read_closure;
+{
+    C c(\"read\");
+    read_closure = c.getReadClosure();
+}
+
+try {
+    printf(\"read=%s\\n\", read_closure());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"read=%s\\n\", ex.err);
+}
+
+code<auto()> remove_closure;
+{
+    C c(\"remove\");
+    remove_closure = c.getRemoveClosure();
+}
+
+try {
+    printf(\"remove=%y\\n\", remove_closure());
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"remove=%s\\n\", ex.err);
+}
+";
+        hash<auto> result = compileCheckAndRun(code);
+        assertTrue(result.all_precompiled, "stale closure self member regression fully precompiled: "
+            + result.compile_out);
+        assertEq("read=OBJECT-ALREADY-DELETED\nremove=OBJECT-ALREADY-DELETED\n", result.run_out,
+            "AOT closure self member access must match AST stale-self checks");
     }
 
     testWeakLocalAssignmentReleasesRhs() {
@@ -3861,6 +3952,52 @@ switch (s) {
         string aot_out = compileAndRun(code);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, aot_out, "AOT regex switch output matches interpreter");
+    }
+
+    testQoDebuggerRegexExtractGlobal() {
+        string tmp_dir = sprintf("/tmp/aot_regex_global_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string src_path = tmp_dir + "/RegexGlobal.qr";
+        string qo_path = qo_dir + "/RegexGlobal.qo";
+        string app_path = tmp_dir + "/regex-global";
+
+        {
+            File f();
+            f.open2(src_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern
+%require-types
+
+sub main() {
+    string value = \"$local:a && $local:b\";
+    list<*string> matches = value =~ x/(?:[^\\\\]|^)(\\$[a-z][-a-z]+:(?:{.*}|[a-zA-Z0-9_]+|'.*'|\".*\"))/g;
+    printf(\"%y\\n\", matches);
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 --strip-source -c --parse-option=PO_ALLOW_DEBUGGER --output-dir=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, src_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc compiles debugger-enabled .qo regex global probe: " + compile_out);
+
+        string link_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -O0 --strip-source -o %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, qo_path));
+        assertTrue(link_out.regex("EXIT=0"),
+            "qcc links debugger-enabled .qo regex global probe: " + link_out);
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("[\"$local:a\", \"$local:b\"]\nEXIT=0\n", run_out,
+            "source-stripped debugger IR preserves regex extract /g");
     }
 
     testExitCode() {

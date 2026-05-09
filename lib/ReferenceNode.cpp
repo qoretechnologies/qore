@@ -213,53 +213,98 @@ ReferenceNode* ParseReferenceNode::evalToRef(RuntimeConfig& rc, ExceptionSink* x
         : nullptr;
 }
 
-ReferenceNode* ParseReferenceNode::evalToRefWithResolvedHashKey(QoreValue key, ExceptionSink* xsink) const {
+ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(QoreValue selector, ExceptionSink* xsink) const {
     auto* hd = lvexp.hasNode()
         ? dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(lvexp.getInternalNode())
         : nullptr;
-    if (!hd) {
-        return evalToRef(xsink);
-    }
-    if (hd->getRight().getType() == NT_STRING) {
-        return evalToRef(xsink);
+    if (hd) {
+        if (hd->getRight().getType() == NT_STRING) {
+            return evalToRef(xsink);
+        }
+
+        QoreObject* self = nullptr;
+        const void* lvalue_id = nullptr;
+        const qore_class_private* qc = nullptr;
+        QoreValue left = doPartialEval(hd->getLeft(), self, lvalue_id, qc, xsink);
+        if (*xsink || !left) {
+            assert(!left);
+            return nullptr;
+        }
+
+        QoreValue nv(new QoreHashObjectDereferenceOperatorNode(loc, left, selector.refSelf()));
+        return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
     }
 
-    QoreObject* self = nullptr;
-    const void* lvalue_id = nullptr;
-    const qore_class_private* qc = nullptr;
-    QoreValue left = doPartialEval(hd->getLeft(), self, lvalue_id, qc, xsink);
-    if (*xsink || !left) {
-        assert(!left);
-        return nullptr;
+    auto* sb = lvexp.hasNode()
+        ? dynamic_cast<const QoreSquareBracketsOperatorNode*>(lvexp.getInternalNode())
+        : nullptr;
+    if (sb) {
+        QoreObject* self = nullptr;
+        const void* lvalue_id = nullptr;
+        const qore_class_private* qc = nullptr;
+        QoreValue left = doPartialEval(sb->getLeft(), self, lvalue_id, qc, xsink);
+        if (*xsink || !left) {
+            assert(!left);
+            return nullptr;
+        }
+
+        QoreValue nv(new QoreSquareBracketsOperatorNode(loc, left, selector.refSelf()));
+        return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
     }
 
-    QoreValue nv(new QoreHashObjectDereferenceOperatorNode(loc, left, key.refSelf()));
-    return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
+    return evalToRef(xsink);
 }
 
-ReferenceNode* ParseReferenceNode::evalToRefWithResolvedHashKey(RuntimeConfig& rc, QoreValue key,
+ReferenceNode* ParseReferenceNode::evalToRefWithResolvedSelector(RuntimeConfig& rc, QoreValue selector,
         ExceptionSink* xsink) const {
     auto* hd = lvexp.hasNode()
         ? dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(lvexp.getInternalNode())
         : nullptr;
-    if (!hd) {
-        return evalToRef(rc, xsink);
-    }
-    if (hd->getRight().getType() == NT_STRING) {
-        return evalToRef(rc, xsink);
+    if (hd) {
+        if (hd->getRight().getType() == NT_STRING) {
+            return evalToRef(rc, xsink);
+        }
+
+        QoreObject* self = nullptr;
+        const void* lvalue_id = nullptr;
+        const qore_class_private* qc = nullptr;
+        QoreValue left = doPartialEval(hd->getLeft(), rc, self, lvalue_id, qc, xsink);
+        if (*xsink || !left) {
+            assert(!left);
+            return nullptr;
+        }
+
+        QoreValue nv(new QoreHashObjectDereferenceOperatorNode(loc, left, selector.refSelf()));
+        return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
     }
 
-    QoreObject* self = nullptr;
-    const void* lvalue_id = nullptr;
-    const qore_class_private* qc = nullptr;
-    QoreValue left = doPartialEval(hd->getLeft(), rc, self, lvalue_id, qc, xsink);
-    if (*xsink || !left) {
-        assert(!left);
-        return nullptr;
+    auto* sb = lvexp.hasNode()
+        ? dynamic_cast<const QoreSquareBracketsOperatorNode*>(lvexp.getInternalNode())
+        : nullptr;
+    if (sb) {
+        QoreObject* self = nullptr;
+        const void* lvalue_id = nullptr;
+        const qore_class_private* qc = nullptr;
+        QoreValue left = doPartialEval(sb->getLeft(), rc, self, lvalue_id, qc, xsink);
+        if (*xsink || !left) {
+            assert(!left);
+            return nullptr;
+        }
+
+        QoreValue nv(new QoreSquareBracketsOperatorNode(loc, left, selector.refSelf()));
+        return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
     }
 
-    QoreValue nv(new QoreHashObjectDereferenceOperatorNode(loc, left, key.refSelf()));
-    return new ReferenceNode(nv, QoreTypeInfo::getUniqueReturnComplexReference(typeInfo), self, lvalue_id, qc);
+    return evalToRef(rc, xsink);
+}
+
+ReferenceNode* ParseReferenceNode::evalToRefWithResolvedHashKey(QoreValue key, ExceptionSink* xsink) const {
+    return evalToRefWithResolvedSelector(key, xsink);
+}
+
+ReferenceNode* ParseReferenceNode::evalToRefWithResolvedHashKey(RuntimeConfig& rc, QoreValue key,
+        ExceptionSink* xsink) const {
+    return evalToRefWithResolvedSelector(rc, key, xsink);
 }
 
 IntermediateParseReferenceNode* ParseReferenceNode::evalToIntermediate(ExceptionSink* xsink) const {

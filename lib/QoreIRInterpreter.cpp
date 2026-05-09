@@ -96,6 +96,12 @@ static_assert(QORE_IR_MAX_OPCODE == 370,
 extern "C" uint64_t qore_rt_list_index_selectors(uint64_t left_bits, const uint8_t* kinds,
         int32_t count, const uint64_t* selector_bits, ExceptionSink* xsink);
 
+static int qore_ir_check_closure_self_valid(QoreObject* obj, ExceptionSink* xsink) {
+    return (obj && qore_closure_self_context(obj))
+        ? qore_object_private::get(*obj)->checkClosureSelfValid(xsink)
+        : 0;
+}
+
 static const TypedHashDecl* resolveNewHashDeclFromHashTarget(
         const QoreIRNewHashDeclFromHashInstruction& inst, ExceptionSink* xsink) {
     if (inst.hd) {
@@ -5724,6 +5730,11 @@ load_local_done:
                 auto* sm_inst = static_cast<QoreIRSelfMemberInstruction*>(inst);
                 QoreObject* obj = runtime_get_stack_object();
                 assert(obj);
+                if (qore_ir_check_closure_self_valid(obj, xsink)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 ValueHolder val(obj->getReferencedMemberNoMethod(sm_inst->member_name.c_str(), xsink), xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -8525,6 +8536,11 @@ load_local_done:
                     if (!obj) {
                         xsink->raiseException("LVALUE-ERROR",
                             "no object context for self member remove");
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    if (qore_ir_check_closure_self_valid(obj, xsink)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;

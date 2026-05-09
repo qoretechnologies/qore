@@ -33,6 +33,7 @@
 #include "qore/intern/QoreIR.h"
 
 #include "qore/intern/QoreJITIncludes.h"
+#include <qore/QoreRegexInterface.h>
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/qore_program_private.h"
@@ -6053,7 +6054,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (pattern) {
             writer.writeU8(static_cast<uint8_t>(regex_kind));
             writer.writeStringRef(pattern);
-            writer.writeI64(re->getOptions());
+            writer.writeI64(re->getOptions() | (re->isGlobal() ? QRE_GLOBAL : 0));
             return classifyAndWriteExpr(writer, regex->getExp(), parent_locals,
                 parent_globals, const_reverse_map);
         }

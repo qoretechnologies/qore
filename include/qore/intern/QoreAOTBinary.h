@@ -953,9 +953,9 @@ enum class AOTExprKind : uint8_t {
     MODULO             = 51,  //!< Modulo operator: left(AOTExprKind) + right(AOTExprKind)
     IMPLICIT_ELEM      = 52,  //!< Implicit element reference ($#): no data
     INSTANCEOF         = 53,  //!< Instanceof operator: ref1=type_path + operand(AOTExprKind)
-    REGEX_MATCH        = 54,  //!< Regex match operator: pattern(stringref) + options(i64) + operand(AOTExprKind)
-    REGEX_NMATCH       = 55,  //!< Regex negative match operator: pattern(stringref) + options(i64) + operand(AOTExprKind)
-    REGEX_EXTRACT      = 56,  //!< Regex extract operator: pattern(stringref) + options(i64) + operand(AOTExprKind)
+    REGEX_MATCH        = 54,  //!< Regex match operator: pattern(stringref) + options(i64, incl. QRE_GLOBAL) + operand(AOTExprKind)
+    REGEX_NMATCH       = 55,  //!< Regex negative match operator: pattern(stringref) + options(i64, incl. QRE_GLOBAL) + operand(AOTExprKind)
+    REGEX_EXTRACT      = 56,  //!< Regex extract operator: pattern(stringref) + options(i64, incl. QRE_GLOBAL) + operand(AOTExprKind)
     PRE_INC            = 57,  //!< Pre-increment operator: lvalue(AOTExprKind)
     PRE_DEC            = 58,  //!< Pre-decrement operator: lvalue(AOTExprKind)
     POST_INC           = 59,  //!< Post-increment operator: lvalue(AOTExprKind)
@@ -1095,9 +1095,9 @@ enum class AOTExprNodeKind : uint8_t {
     EN_RANGE         = 87,  //!< 3 children: [start, stop, step]
 
     // Regex operators (1 child = operand)
-    EN_REGEX_MATCH   = 90,  //!< u16 pattern_len + bytes + i64 options
-    EN_REGEX_NMATCH  = 91,  //!< u16 pattern_len + bytes + i64 options
-    EN_REGEX_EXTRACT = 92,  //!< u16 pattern_len + bytes + i64 options
+    EN_REGEX_MATCH   = 90,  //!< u16 pattern_len + bytes + i64 options (incl. QRE_GLOBAL)
+    EN_REGEX_NMATCH  = 91,  //!< u16 pattern_len + bytes + i64 options (incl. QRE_GLOBAL)
+    EN_REGEX_EXTRACT = 92,  //!< u16 pattern_len + bytes + i64 options (incl. QRE_GLOBAL)
     EN_REGEX_SUBST   = 93,  //!< u16 pat_len + bytes + u16 repl_len + bytes + i64 options + u8 global
     EN_TRANSLIT      = 94,  //!< u16 src_len + bytes + u16 tgt_len + bytes
 

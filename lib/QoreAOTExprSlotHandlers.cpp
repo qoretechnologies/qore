@@ -477,7 +477,7 @@ static bool write_regex_match_slot_payload(AOTExprSlotWriteCtx& ctx, const QoreR
         return false;
     }
     ctx.writer.writeStringRef(pattern);
-    ctx.writer.writeI64(re->getOptions());
+    ctx.writer.writeI64(re->getOptions() | (re->isGlobal() ? QRE_GLOBAL : 0));
     return classifyAndWriteExpr(ctx.writer, op->getExp(),
         ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
 }

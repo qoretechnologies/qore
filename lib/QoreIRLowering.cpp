@@ -3926,9 +3926,11 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return rv;
     }
     if (auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(node)) {
-        // Try to pre-evaluate the hash key for \member{key} patterns
-        // This enables native AOT lowering without EXPR_TREE serialization
-        std::vector<QoreIRValue> key_operands;
+        // Pre-evaluate dynamic top-level lvalue selectors in parse references.
+        // This keeps virtual implicit values such as $# bound to the current IR
+        // map/select context instead of letting the AST reference evaluator read
+        // stale thread-local implicit state at runtime.
+        std::vector<QoreIRValue> selector_operands;
         const QoreValue& lv_expr = parse_ref->getLVExp();
         if (lv_expr.hasNode()) {
             auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
@@ -3936,7 +3938,13 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             if (hd) {
                 QoreIRValue key_val = lowerExpression(hd->getRight(), error);
                 if (key_val.isValid()) {
-                    key_operands.push_back(key_val);
+                    selector_operands.push_back(key_val);
+                }
+            } else if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(
+                    lv_expr.getInternalNode())) {
+                QoreIRValue index_val = lowerExpression(sb->getRight(), error);
+                if (index_val.isValid()) {
+                    selector_operands.push_back(index_val);
                 }
             }
         }
@@ -3947,15 +3955,15 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, key_operands, normal_block, handler, parse_ref->loc);
+            auto* inst = builder.createInvoke(expr, selector_operands, normal_block, handler, parse_ref->loc);
             inst->invoke_opcode = QoreIROpcode::CreateParseRef;
             builder.setBlock(normal_block);
             return inst->result;
         }
         // Non-exception path: use the specialized CreateParseRef instruction
         auto* cpr_inst = builder.createCreateParseRef(parse_ref, expr, parse_ref->loc);
-        // Add key operands for complex hash member access
-        for (auto& op : key_operands) {
+        // Add selector operands for complex hash/list member access.
+        for (auto& op : selector_operands) {
             cpr_inst->operands.push_back(op);
         }
         return cpr_inst->result;

@@ -54,6 +54,7 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreIR.h"
+#include "qore/intern/QoreClosureNode.h"
 
 typedef std::set<int64, std::greater<int64>> ind_set_t;
 
@@ -1229,6 +1230,10 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
             if (!obj) {
                 vl.xsink->raiseException("LVALUE-ERROR",
                     "no object context for self member access");
+                return -1;
+            }
+            if (qore_closure_self_context(obj)
+                    && qore_object_private::get(*obj)->checkClosureSelfValid(vl.xsink)) {
                 return -1;
             }
             ocvec.clear();
