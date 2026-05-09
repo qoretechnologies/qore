@@ -1336,9 +1336,21 @@ public class HttpAsyncSocketIoController {
         }
         string op_key = sprintf("quic-accept:%s:%d", owner, seq);
 
+        # quic_headers_only defaults to True for parity with the H2 server
+        # (HttpServerAsyncIo always-on at :1257/1949) and to match enterprise
+        # expectations: dispatch the handler on HEADERS so wantsBodyStreaming()
+        # handlers receive incremental body reads, large uploads don't buffer
+        # the full body in memory before dispatch, and max_request_body_size
+        # rejects mid-stream rather than after a full buffer-up.
+        # The Phase 1 (commit a66b7d9ee, shutdownStreamReads) and Phase 3
+        # (commit af07f1235, closeStreamQueues) shutdown-race fixes are the
+        # prerequisites for this flip — without them an in-flight headers-only
+        # handler waiting on body data would block HttpServer.stop() for the
+        # full body-read timeout in the future graceful-drain or per-stream-
+        # cancel scenarios that keep the session alive across an H3 op cancel.
         Http3ServerPollOperation h3op(listener, pool_opts.quic_drain_timeout
             ?? Http3ServerPollOperation::DefaultDrainTimeout,
-            pool_opts.quic_headers_only ?? False,
+            pool_opts.quic_headers_only ?? True,
             pool_opts.max_request_body_size ?? 0);
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);

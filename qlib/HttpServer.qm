@@ -579,17 +579,21 @@ public hashdecl HttpServerOptionInfo {
         This enables bidirectional streaming for gRPC-style, Connect protocol, and
         chunked upload use cases where processing should begin before the full body arrives.
 
+        Default: @ref True "True" (since HttpServer 1.6).  This brings H3 to parity
+        with the H2 server, which dispatches handlers on HEADERS unconditionally.
+        Set explicitly to @ref False "False" to restore the legacy behavior of
+        buffering the full request body server-side before handler dispatch — this
+        is rarely useful and trades latency, memory, and early-reject semantics for
+        no functional benefit.
+
         @par Example
         @code{.py}
+        # Default: H3 dispatches on HEADERS, handlers can stream body
+        HttpServer server();
+
+        # Opt out (legacy buffer-then-dispatch):
         HttpServer server(<HttpServerOptionInfo>{
-            "quic_headers_only": True,
-        });
-        server.setHandler("upload", "/upload", NOTHING, new MyStreamingHandler());
-        server.addListener(<HttpListenerOptionInfo>{
-            "service": 8443,
-            "cert": cert,
-            "key": key,
-            "enable_h3": True,
+            "quic_headers_only": False,
         });
         @endcode
 
@@ -597,7 +601,7 @@ public hashdecl HttpServerOptionInfo {
 
         @since HttpServer 1.6
     */
-    bool quic_headers_only = False;
+    bool quic_headers_only = True;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
