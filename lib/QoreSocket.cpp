@@ -17762,14 +17762,18 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                 // are delivered before the end marker.
                 {
                     int32_t end_id = 0;
-                    QoreHashNode* trailers = nullptr;
-                    while (h2_session->takeStreamingEndStream(end_id, &trailers)) {
+                    QoreHashNode* trailers_raw = nullptr;
+                    while (h2_session->takeStreamingEndStream(end_id, &trailers_raw)) {
+                        // Wrap trailers immediately so a `new` bad_alloc or any
+                        // setKeyValue throw between takeStreamingEndStream and
+                        // resp->setKeyValue("trailers", ...) doesn't leak it.
+                        ReferenceHolder<QoreHashNode> trailers(trailers_raw, xsink);
+                        trailers_raw = nullptr;
                         ReferenceHolder<QoreHashNode> resp(new QoreHashNode(autoTypeInfo), xsink);
                         resp->setKeyValue("stream_id", end_id, xsink);
                         resp->setKeyValue("end_stream", true, xsink);
-                        if (trailers) {
-                            resp->setKeyValue("trailers", trailers, xsink);
-                            trailers = nullptr;
+                        if (*trailers) {
+                            resp->setKeyValue("trailers", trailers.release(), xsink);
                         }
                         if (*xsink) {
                             return nullptr;
