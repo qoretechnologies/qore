@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -2141,7 +2141,7 @@ QoreValue UserVariantBase::evalIntern(ReferenceHolder<QoreListNode>& argv, QoreO
 
 // primary function for executing user code
 QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
-        const qore_class_private* qc) const {
+        const qore_class_private* qc, bool ref_obj) const {
     QORE_TRACE("UserVariantBase::eval()");
     //printd(5, "UserVariantBase::eval() this: %p '%s()' args: %p (size: %d) self: %p class: %p '%s' cctx: %p\n", this,
     //    name, ceh ? ceh->getArgs() : 0, ceh && ceh->getArgs() ? ceh->getArgs()->size() : 0, self, qc,
@@ -2155,7 +2155,7 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
         return QoreValue();
     }
 
-    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr));
+    CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr), ref_obj);
     return evalIntern(uveh.getArgv(), self, xsink);
 }
 
@@ -2481,7 +2481,7 @@ QoreValue UserClosureFunction::evalClosure(const QoreClosureBase& closure_base, 
     ThreadSafeLocalVarRuntimeEnvironmentHelper ch(&closure_base);
 
     //printd(5, "UserClosureFunction::evalClosure() this: %p (%s) variant: %p args: %p self: %p\n", this, getName(), variant, args, self);
-    return UCLOV_const(variant)->evalClosure(ceh, self, xsink);
+    return UCLOV_const(variant)->evalClosure(ceh, self, xsink, !self || self->isValid());
 }
 
 int UserFunctionVariant::parseInit(QoreFunction* f) {

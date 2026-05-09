@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -45,6 +45,66 @@
 #if TRACK_REFS
 #define REF_LVL (type!=NT_HASH)
 #endif
+
+static thread_local BackgroundClosureCaptureHelper* background_closure_capture_helper = nullptr;
+
+BackgroundClosureCaptureHelper::BackgroundClosureCaptureHelper(ExceptionSink* n_xsink)
+        : xsink(n_xsink), prev(background_closure_capture_helper) {
+    background_closure_capture_helper = this;
+}
+
+BackgroundClosureCaptureHelper::~BackgroundClosureCaptureHelper() {
+    assert(background_closure_capture_helper == this);
+    background_closure_capture_helper = prev;
+
+    if (release) {
+        return;
+    }
+
+    for (QoreObject* obj : objects) {
+        obj->realDeref(xsink);
+    }
+}
+
+class BackgroundClosureRefHolder {
+private:
+    QoreObject* obj;
+    ExceptionSink* xsink;
+
+public:
+    DLLLOCAL BackgroundClosureRefHolder(QoreObject* obj, ExceptionSink* xsink) : obj(obj), xsink(xsink) {
+    }
+
+    DLLLOCAL ~BackgroundClosureRefHolder() {
+        if (obj) {
+            obj->realDeref(xsink);
+        }
+    }
+
+    DLLLOCAL void release() {
+        obj = nullptr;
+    }
+};
+
+static QoreValue check_background_closure_capture(QoreValue v, ExceptionSink* xsink) {
+    if (!background_closure_capture_helper || v.getType() != NT_RUNTIME_CLOSURE) {
+        return v;
+    }
+
+    QoreObject* obj = v.get<const QoreClosureBase>()->refSelfForBackground(xsink);
+    if (*xsink) {
+        v.discard(xsink);
+        return QoreValue();
+    }
+
+    if (obj) {
+        BackgroundClosureRefHolder holder(obj, xsink);
+        background_closure_capture_helper->add(obj);
+        holder.release();
+    }
+
+    return v;
+}
 
 AbstractQoreNode::AbstractQoreNode(qore_type_t t, bool n_value, bool n_needs_eval, bool n_there_can_be_only_one, bool n_custom_reference_handlers) : type(t), value(n_value), needs_eval_flag(n_needs_eval), there_can_be_only_one(n_there_can_be_only_one), custom_reference_handlers(n_custom_reference_handlers) {
 #if TRACK_REFS
@@ -569,7 +629,7 @@ QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n
         case NT_SELF_VARREF:
             {
                 ValueEvalRefHolder vh(rc, n, xsink);
-                return *xsink ? QoreValue() : vh.takeReferencedValue();
+                return *xsink ? QoreValue() : check_background_closure_capture(vh.takeReferencedValue(), xsink);
             }
 
         case NT_FUNCTION_CALL:
@@ -579,14 +639,14 @@ QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n
         case NT_FIND:
             {
                 ValueEvalRefHolder vh(rc, n, xsink);
-                return *xsink ? QoreValue() : vh.takeReferencedValue();
+                return *xsink ? QoreValue() : check_background_closure_capture(vh.takeReferencedValue(), xsink);
             }
 
         case NT_VARREF: {
             const VarRefNode* var_ref = n.get<const VarRefNode>();
             if (var_ref->getType() != VT_GLOBAL) {
                 ValueEvalRefHolder vh(rc, n, xsink);
-                return *xsink ? QoreValue() : vh.takeReferencedValue();
+                return *xsink ? QoreValue() : check_background_closure_capture(vh.takeReferencedValue(), xsink);
             }
             break;
         }
@@ -601,10 +661,15 @@ QoreValue copy_value_and_resolve_lvar_refs(RuntimeConfig& rc, const QoreValue& n
             return crlr_smcall_copy(rc, n.get<const StaticMethodCallNode>(), xsink);
 
         case NT_PARSEREFERENCE:
-            return n.get<const ParseReferenceNode>()->evalToIntermediate(rc, xsink);
+            return check_background_closure_capture(n.get<const ParseReferenceNode>()->evalToIntermediate(rc, xsink),
+                xsink);
 
         case NT_CLOSURE:
-            return n.get<const QoreClosureParseNode>()->evalBackground(xsink);
+            return check_background_closure_capture(n.get<const QoreClosureParseNode>()->evalBackground(xsink),
+                xsink);
+
+        case NT_RUNTIME_CLOSURE:
+            return check_background_closure_capture(n.refSelf(), xsink);
     }
 
     return n.refSelf();

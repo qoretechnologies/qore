@@ -42,6 +42,7 @@
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 #include "qore/intern/Variable.h"
 
@@ -78,6 +79,8 @@
 #include <cassert>
 #include <map>
 #include <pthread.h>
+#include <utility>
+#include <vector>
 #include <set>
 #include <string>
 #include <sys/time.h>
@@ -852,13 +855,14 @@ public:
 
     QoreValue fc;
     QoreProgram* pgm;
+    std::vector<QoreObject*> closure_objs;
     int tid;
     const QoreProgramLocation* loc;
     bool registered = false,
         started = false;
 
-    DLLLOCAL BGThreadParams(QoreValue f, int t, ExceptionSink* xsink)
-        : fc(f), pgm(getProgram()), tid(t) {
+    DLLLOCAL BGThreadParams(QoreValue f, int t, std::vector<QoreObject*>&& n_closure_objs, ExceptionSink* xsink)
+        : fc(f), pgm(getProgram()), closure_objs(std::move(n_closure_objs)), tid(t) {
         assert(xsink);
         {
             ThreadData* td = thread_data.get();
@@ -908,8 +912,9 @@ public:
             }
         }
 
-        if (call_obj)
+        if (call_obj) {
             call_obj->tRef();
+        }
     }
 
     DLLLOCAL void del() {
@@ -918,8 +923,9 @@ public:
             qore_program_private::decThreadCount(*pgm, tid);
             //printd(5, "BGThreadParams::del() this: %p pgm: %p\n", this, pgm);
             pgm->depDeref();
-        } else if (registered)
+        } else if (registered) {
             qore_program_private::cancelPreregistration(*pgm);
+        }
 
         delete this;
     }
@@ -946,8 +952,16 @@ public:
 
     DLLLOCAL void cleanup(ExceptionSink* xsink) {
         fc.discard(xsink);
+        derefClosureObjs(xsink);
         derefObj(xsink);
         derefCallObj();
+    }
+
+    DLLLOCAL void derefClosureObjs(ExceptionSink* xsink) {
+        for (QoreObject* obj : closure_objs) {
+            obj->realDeref(xsink);
+        }
+        closure_objs.clear();
     }
 
     DLLLOCAL void derefCallObj() {
@@ -970,6 +984,7 @@ public:
         QoreValue rv = fc.eval(xsink);
         fc.discard(xsink);
         fc = QoreValue();
+        derefClosureObjs(xsink);
         return rv;
     }
 };
@@ -3022,12 +3037,15 @@ QoreValue do_op_background(const QoreValue left, ExceptionSink* xsink) {
 }
 
 QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSink* xsink) {
-    if (!left)
+    if (!left) {
         return QoreValue();
+    }
 
+    BackgroundClosureCaptureHelper closure_capture(xsink);
     ValueHolder nl(copy_value_and_resolve_lvar_refs(rc, left, xsink), xsink);
-    if (*xsink || !nl)
+    if (*xsink || !nl) {
         return QoreValue();
+    }
 
     int tid = get_thread_entry();
     if (tid == -1) {
@@ -3035,8 +3053,10 @@ QoreValue do_op_background(RuntimeConfig& rc, const QoreValue left, ExceptionSin
         return QoreValue();
     }
 
-    BGThreadParams* tp = new BGThreadParams(nl.release(), tid, xsink);
+    BGThreadParams* tp = new BGThreadParams(nl.release(), tid, closure_capture.takeObjects(), xsink);
     if (*xsink) {
+        tp->cleanup(xsink);
+        tp->del();
         deregister_thread(tid);
         return QoreValue();
     }

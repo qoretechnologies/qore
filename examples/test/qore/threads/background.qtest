@@ -14,6 +14,42 @@ class BGTest {
     }
 }
 
+class StaleSelfCaptureTest {
+    private {
+        string value;
+        *Queue queue;
+    }
+
+    constructor(string v, *Queue q = NOTHING) {
+        value = v;
+        queue = q;
+    }
+
+    code<string()> getSyncClosure() {
+        return string sub () {
+            return value;
+        };
+    }
+
+    code<string()> getIndependentClosure(string local_value) {
+        return string sub () {
+            return local_value;
+        };
+    }
+
+    code<nothing()> getBackgroundClosure() {
+        return sub () {
+            queue.push(value);
+        };
+    }
+
+    runInlineBackground() {
+        background sub () {
+            queue.push(value);
+        }();
+    }
+}
+
 class Test inherits QUnit::Test {
     public {
         BGTest test();
@@ -38,6 +74,7 @@ class T {
         addTestCase("issue 2653", \issue2653());
         addTestCase("issue 2701", \issue2701());
         addTestCase("issue 2444", \issue2444());
+        addTestCase("stale self capture", \staleSelfCapture());
         set_return_value(main());
     }
 
@@ -158,6 +195,52 @@ class T {
         assertEq("qore/" + gettid(), get_thread_name());
         set_thread_name(ThreadName);
         assertEq(ThreadName, get_thread_name());
+    }
+
+    staleSelfCapture() {
+        code sync_closure;
+        {
+            StaleSelfCaptureTest t("sync");
+            sync_closure = t.getSyncClosure();
+        }
+
+        assertThrows("OBJECT-ALREADY-DELETED",
+            "closure invocation failed because captured 'self' \\(class 'StaleSelfCaptureTest'\\) has already been destroyed",
+            sync_closure);
+
+        code independent_closure;
+        {
+            StaleSelfCaptureTest t("unused");
+            independent_closure = t.getIndependentClosure("local");
+        }
+
+        assertEq("local", independent_closure());
+
+        code bg_closure;
+        Queue q();
+        {
+            StaleSelfCaptureTest t("background", q);
+            bg_closure = t.getBackgroundClosure();
+        }
+
+        assertThrows("BACKGROUND-CLOSURE-INVALID-CAPTURE",
+            "background closure captured 'self' of class 'StaleSelfCaptureTest' "
+            "which has already been destroyed or is being destroyed",
+            sub () {
+                background bg_closure();
+            });
+
+        assertThrows("QUEUE-TIMEOUT", sub () {
+            q.get(-1);
+        });
+
+        Queue inline_q();
+        {
+            StaleSelfCaptureTest t("inline", inline_q);
+            t.runInlineBackground();
+        }
+
+        assertEq("inline", inline_q.get(5s));
     }
 
     private static checkStackSize(Queue q) {

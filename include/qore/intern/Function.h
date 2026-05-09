@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -614,7 +614,7 @@ protected:
 
     DLLLOCAL QoreValue evalIntern(ReferenceHolder<QoreListNode>& argv, QoreObject* self, ExceptionSink* xsink) const;
     DLLLOCAL QoreValue eval(const char* name, CodeEvaluationHelper* ceh, QoreObject* self, ExceptionSink* xsink,
-            const qore_class_private* qc = nullptr) const;
+            const qore_class_private* qc = nullptr, bool ref_obj = true) const;
     DLLLOCAL int setupCall(CodeEvaluationHelper* ceh, ReferenceHolder<QoreListNode>& argv, ExceptionSink* xsink)
             const;
 
@@ -1409,8 +1409,9 @@ public:
 
     DLLLOCAL virtual int parseInit(QoreFunction* f);
 
-    DLLLOCAL QoreValue evalClosure(CodeEvaluationHelper& ceh, QoreObject* self, ExceptionSink* xsink) const {
-        return eval("<anonymous closure>", &ceh, self, xsink);
+    DLLLOCAL QoreValue evalClosure(CodeEvaluationHelper& ceh, QoreObject* self, ExceptionSink* xsink,
+            bool ref_obj) const {
+        return eval("<anonymous closure>", &ceh, self, xsink, nullptr, ref_obj);
     }
 };
 

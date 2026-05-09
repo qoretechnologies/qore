@@ -400,6 +400,8 @@ list<int> l1 = new list<int>(2);
     - it is illegal to make changes to a local variable anywhere in a background expression (a parse exception will be thrown)
     - local variables and find expressions are evaluated before the new thread is started and the result of the evaluation is used in the expression in the new thread
     - it is not possible to pass local variables by reference anywhere in a background expression (a parse exception will be thrown)
+    - closure values created in object scope are checked before the new thread is started; if the captured object is valid,
+      its scope is prolonged until the background expression has finished executing
 
     @par Syntax
     <tt><b>background</b></tt> <em>@ref expressions "expression"</em>
@@ -415,6 +417,8 @@ list<int> l1 = new list<int>(2);
     |<em>@ref expressions "expression"</em>|The <em>@ref expressions "expression"</em> given as an argument will be executed in a new thread. The TID of the new thread will be returned as the return value of the operator
 
     @throw THREAD-CREATION-FAILURE If the thread table is full or if the operating system returns an error while starting the thread, this exception is thrown
+    @throw BACKGROUND-CLOSURE-INVALID-CAPTURE If a closure value used by the background expression captures an object
+    scope that has already been destroyed or is being destroyed, this exception is thrown before the new thread is started
 
     <hr>
     @subsection delete Delete Operator (delete)
