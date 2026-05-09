@@ -671,6 +671,10 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // target class path so class hierarchy checks keep source-parse
     // compatibility after source-stripped AOT load.
     flags |= QORE_AOT_FEAT_CLASS_INJECTION;
+    // Source-stripped user variants do not retain executable AST statement
+    // bodies, so preserve the parse options from the original body block for
+    // runtime domain checks such as PO_ALLOW_INJECTION-gated APIs.
+    flags |= QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS;
     // Function and method records preserve synchronized gates so source-stripped
     // AOT dispatch takes the same lock/deadlock paths as source execution.
     flags |= QORE_AOT_FEAT_METHOD_SYNC;

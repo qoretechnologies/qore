@@ -201,6 +201,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT static link not built", \testAOTStaticLinkNotBuilt());
         # Module compilation tests
         addTestCase("AOT module compile", \testAOTModuleCompile());
+        addTestCase("AOT module preserves variant parse options",
+            \testAOTModuleVariantParseOptions());
         addTestCase("AOT module no-narrow member types", \testAOTModuleNoNarrowMemberTypes());
         addTestCase("AOT module no-narrow reference signatures",
             \testAOTModuleNoNarrowReferenceSignatures());
@@ -5618,6 +5620,89 @@ printf(\"%d\\n\", AOTTestMod::factorial(10));
 
         assertEq(interp_out, aot_out, "compiled module output matches interpreted module");
         assertEq("Hello, World!\n30\n3628800\n", aot_out, "module functions produce correct results");
+    }
+
+    testAOTModuleVariantParseOptions() {
+        string tmp_dir = sprintf("/tmp/aot_variant_po_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string dep_code = "%modern
+module AOTVariantParseOptionsDep {
+    version = \"1.0\";
+    desc = \"dependency loaded through an injected Program\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+public namespace AOTVariantParseOptionsDep {
+    public string sub value() {
+        return \"dep\";
+    }
+}
+";
+        string dep_path = tmp_dir + "/AOTVariantParseOptionsDep.qm";
+        {
+            File f();
+            f.open2(dep_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(dep_code);
+            f.close();
+        }
+
+        string mod_code = "%modern
+module AOTVariantParseOptionsMod {
+    version = \"1.0\";
+    desc = \"variant parse options regression\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+%allow-injection
+public namespace AOTVariantParseOptionsMod {
+    public class Loader {
+        static string test(string dep_path) {
+            Program p(PO_NO_USER_API | PO_ALLOW_INJECTION | PO_NEW_STYLE);
+            p.loadApplyToUserModule(dep_path, True, WARN_MODULES, True);
+            return \"loaded\";
+        }
+    }
+}
+";
+        string qm_path = tmp_dir + "/AOTVariantParseOptionsMod.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+
+        string qmod_path = tmp_dir + "/AOTVariantParseOptionsMod.qmod";
+        hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
+        assertTrue(result.compiled, "variant parse options module compiled: " + result.compile_out);
+
+        string dump_out = dumpQccInfo(qmod_path, False);
+        assertTrue(dump_out.regex("variant-parse-options"),
+            "qcc dump reports variant parse option metadata: " + dump_out);
+
+        string script_code = sprintf("%%modern
+%%requires AOTVariantParseOptionsMod
+printf(\"%%s\\n\", AOTVariantParseOptionsMod::Loader::test(\"%s\"));
+", dep_path);
+        hash<auto> paths = writeTempScript(script_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string aot_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        unlink(qmod_path);
+        string interp_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, tmp_dir, qore_bin, paths.src));
+
+        assertEq(interp_out, aot_out,
+            "source-stripped qmod preserves %allow-injection on method bodies: " + aot_out);
+        assertEq("loaded\n", aot_out, "injection-domain method call succeeds from qmod");
     }
 
     testAOTModuleNoNarrowMemberTypes() {

@@ -134,8 +134,9 @@ constexpr uint64_t QORE_AOT_FEAT_WIDE_IR_OPERANDS = 1ULL << 37; //!< Serialized 
 constexpr uint64_t QORE_AOT_FEAT_WIDE_LOC_TABLES = 1ULL << 38; //!< SLOT_MAPS location and statement-location table counts are u32, not legacy u16
 constexpr uint64_t QORE_AOT_FEAT_LOCAL_DECL_ORDINAL = 1ULL << 39; //!< local slot records carry body-local ordinal for duplicate-name disambiguation
 constexpr uint64_t QORE_AOT_FEAT_CLASS_INJECTION = 1ULL << 40; //!< class records preserve import/injection compatibility metadata
+constexpr uint64_t QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS = 1ULL << 41; //!< variant signatures carry original body parse options for source-stripped domain checks
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

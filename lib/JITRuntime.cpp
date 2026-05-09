@@ -6037,8 +6037,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     const std::vector<LocalVar*>& body_locals = uvb->hasCachedAOT()
         ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
         : uvb->getASTVisibleBodyLocals();  // IR: use filtered ast_visible_body_locals
+    QoreParseOptions po = uvb->getParseOptions(uvb->pgm->getParseOptions());
     if (!skip_body_locals) {
-        const QoreParseOptions& po = uvb->pgm->getParseOptions();
         for (LocalVar* lv : body_locals) {
             // Closure-use vars must not be pre-instantiated here: doing so creates
             // empty CVVs in the current frame and shadows captured closure variables.
@@ -6061,7 +6061,7 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     QoreJITStackLocation jit_stack_loc(call_name, call_loc ? call_loc : parse_loc, uvb->getStatementBlock(),
         caller_pgm ? caller_pgm : uvb->pgm);
 
-    // Swap in the callee's program parse options and set runtime_loc to the
+    // Swap in the callee variant's parse options and set runtime_loc to the
     // function's parse location.  This is critical for correctness: when the
     // caller's program has different parse options than the callee's (e.g. the
     // caller is a restricted sandbox but the callee is a module method), the
@@ -6075,7 +6075,6 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     QoreParseOptions old_po;
     bool swapped_runtime_ctx = false;
     if (parse_loc) {
-        const QoreParseOptions& po = uvb->pgm->getParseOptions();
         swap_runtime_statement_location(xsink, nullptr, parse_loc, po, old_stmt, old_loc, old_po);
         swapped_runtime_ctx = true;
     }
@@ -6094,7 +6093,6 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     if (!*xsink && (qore_jit_deopt_requested() || fn_invalidated)) {
         // Ensure body locals are on thread stack for AST execution
         if (skip_body_locals) {
-            const QoreParseOptions& po = uvb->pgm->getParseOptions();
             for (LocalVar* lv : body_locals) {
                 lv->instantiate(po);
             }
@@ -10199,8 +10197,8 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
     // marks every body local IR-only.
     bool skip_body_locals = false;
     const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
+    QoreParseOptions po = uvb->getParseOptions(uvb->pgm->getParseOptions());
     if (!skip_body_locals) {
-        const QoreParseOptions& po = uvb->pgm->getParseOptions();
         for (LocalVar* lv : body_locals) {
             if (lv->closureUse()) {
                 continue;

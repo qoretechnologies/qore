@@ -514,10 +514,11 @@ int CodeEvaluationHelper::processDefaultArgs(ExceptionSink* xsink, const QoreFun
         // use the target program (if different than the current pgm) to check for argument errors
         const UserVariantBase* uvb = variant->getUserVariantBase();
         QoreParseOptions po;
-        if (uvb)
-            po = uvb->pgm->getParseOptions();
-        else
+        if (uvb) {
+            po = uvb->getParseOptions(uvb->pgm->getParseOptions());
+        } else {
             po = runtime_get_parse_options();
+        }
 
         if (po & (PO_REQUIRE_TYPES | PO_STRICT_ARGS)) {
             int64 flags = variant->getFlags();
@@ -2351,7 +2352,13 @@ void UserVariantBase::setAOTEntryStatementBlock(StatementBlock* b) {
 }
 
 QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) const {
-    return statements ? statements->pwo.parse_options : po;
+    if (statements) {
+        return statements->pwo.parse_options;
+    }
+    if (aot_entry_statement) {
+        return aot_entry_statement->pwo.parse_options;
+    }
+    return po;
 }
 
 const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
@@ -3263,6 +3270,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     assert(pgm);
     // Note: statements can be null for AOT-only functions (deserialized from binary metadata)
     // assert(statements);
+    QoreParseOptions po = getParseOptions(pgm->getParseOptions());
 
     ExecutionTier tier = current_tier.load(std::memory_order_acquire);
 
@@ -3271,7 +3279,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // so dispatch-time "currently attached" checks are insufficient.  Prefer AST
     // when available; source-stripped AOT variants have no AST body, so use the
     // serialized IR debug representation.
-    bool debugger_may_run = (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)
+    bool debugger_may_run = (po & PO_ALLOW_DEBUGGER)
         || qore_program_private::get(*pgm)->hasDebuggerAttached();
     if (tier != TIER_AST && debugger_may_run) {
         if (statements) {
@@ -3325,7 +3333,6 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // can find them on the thread-local stack.  Closure-use vars must
                 // not be pre-instantiated here: doing so creates empty CVVs in the
                 // current frame and shadows captured closure variables.
-                const QoreParseOptions& po = pgm->getParseOptions();
                 if (!body_locals.empty()) {
                     for (LocalVar* lv : body_locals) {
                         if (lv->closureUse()) {
@@ -3335,9 +3342,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 }
 
-                // Swap in the program's parse options and set runtime_loc to the function's
-                // parse location so that nested function/method calls (via CodeEvaluationHelper)
-                // report this function's source location as the caller.
+                // Swap in the variant's parse options and set runtime_loc to the
+                // function's parse location so that nested function/method calls
+                // (via CodeEvaluationHelper) report this function's source
+                // location as the caller.
                 const AbstractStatement* old_stmt;
                 const QoreProgramLocation* old_loc;
                 QoreParseOptions old_po;
@@ -3475,7 +3483,6 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Instantiate AST-visible body locals (excludes IR-only locals that
                 // are never accessed by AST callbacks) so that AST Invoke callbacks
                 // can find them on the thread-local variable stack.
-                const QoreParseOptions& po = pgm->getParseOptions();
                 for (LocalVar* lv : cached_ir->ast_visible_body_locals) {
                     // Skip closure-use vars: the cvstack is LIFO and pre-instantiating
                     // all closure-use vars at once breaks block-scope cleanup ordering.
@@ -3485,9 +3492,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                     }
                 }
 
-                // Swap in the program's parse options and set runtime_loc to the function's
-                // parse location for the duration of IR execution. The IR interpreter updates
-                // runtime_loc per-instruction, but this ensures correct location from the start.
+                // Swap in the variant's parse options and set runtime_loc to the
+                // function's parse location for the duration of IR execution. The
+                // IR interpreter updates runtime_loc per-instruction, but this
+                // ensures correct location from the start.
                 const AbstractStatement* old_stmt;
                 const QoreProgramLocation* old_loc;
                 QoreParseOptions old_po;
@@ -3683,7 +3691,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             // have stale expression slots when called outside tiered mode.
             if (statements && !has_aot
                     && (mode == QEM_TIERED || mode == QEM_JIT || mode == QEM_IR)) {
-                const QoreParseOptions& po = pgm->getParseOptions();
+                QoreParseOptions po = getParseOptions(pgm->getParseOptions());
                 if ((po & QoreParseOptions(PO_MODERN)) == QoreParseOptions(PO_MODERN)) {
                     return evalTiered(name, argv, self, xsink, true);
                 }

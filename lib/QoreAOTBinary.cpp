@@ -3892,6 +3892,20 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
     writer.writeU16(static_cast<uint16_t>(entry_first));
     writer.writeU16(static_cast<uint16_t>(entry_last));
 
+    // Source-stripped variants do not keep executable AST statement bodies.
+    // Preserve the body block parse options so runtime dispatch still applies
+    // the same domain gates as source execution.
+    QoreParseOptions variant_po;
+    if (uvb) {
+        if (StatementBlock* sb = uvb->getStatementBlock()) {
+            variant_po = sb->pwo.parse_options;
+        } else {
+            variant_po = v->getParseOptions(QoreParseOptions());
+        }
+    }
+    writer.writeI64(variant_po.getLo());
+    writer.writeI64(variant_po.getHi());
+
     // params
     const arg_vec_t& defaults = sig->getDefaultArgList();
     auto write_native_expr_default = [&writer](const QoreValue& dv) -> bool {
@@ -10123,6 +10137,7 @@ static bool readAndSetupVariantSignature(
         bool& needs_extra_args_flag,
         int16_t& entry_first_line,
         int16_t& entry_last_line,
+        QoreParseOptions& variant_parse_options,
         std::string& error,
         const QoreClass* classTypeInfo = nullptr,
         const std::vector<const QoreTypeInfo*>* type_table = nullptr) {
@@ -10185,6 +10200,13 @@ static bool readAndSetupVariantSignature(
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
         entry_first_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
         entry_last_line  = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
+    }
+    if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS) != 0) {
+        int64_t po_lo = QoreAOTBinaryReader::readI64(ptr);
+        int64_t po_hi = QoreAOTBinaryReader::readI64(ptr);
+        variant_parse_options = QoreParseOptions(po_lo, po_hi);
+    } else {
+        variant_parse_options = pgm ? pgm->getParseOptions() : QoreParseOptions();
     }
 
     // Read params — reserve+emplace rather than resize+assign so we
@@ -10439,7 +10461,8 @@ static bool readAndSetupVariantSignature(
 }
 
 static void attachAOTEntryStatementBlock(QoreProgram* pgm, UserVariantBase* uvb,
-        int16_t entry_first_line, int16_t entry_last_line) {
+        int16_t entry_first_line, int16_t entry_last_line,
+        const QoreParseOptions& variant_parse_options) {
     assert(pgm);
     assert(uvb);
 
@@ -10460,6 +10483,7 @@ static void attachAOTEntryStatementBlock(QoreProgram* pgm, UserVariantBase* uvb,
         }
 
         entry = new StatementBlock(pp, loc);
+        entry->pwo.parse_options = variant_parse_options;
         // Function-entry metadata is resolved through findFunctionStatementId().
         // Do not add it to the file/line index, or findStatementId() can
         // resolve the first executable statement line to the function entry.
@@ -10522,6 +10546,11 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                 if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
                     QoreAOTBinaryReader::readU16(ptr);
                     QoreAOTBinaryReader::readU16(ptr);
+                }
+                // 3c. variant parse options (2x I64)
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS) != 0) {
+                    QoreAOTBinaryReader::readI64(ptr);
+                    QoreAOTBinaryReader::readI64(ptr);
                 }
                 // 4. For each param: name, type, has_default, and optionally value
                 for (uint32_t p = 0; p < num_params; ++p) {
@@ -10589,18 +10618,20 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
             bool needs_extra_args_flag = false;
             int16_t entry_first_line = 0;
             int16_t entry_last_line = 0;
+            QoreParseOptions variant_parse_options;
             const std::vector<const QoreTypeInfo*>* tt =
                 uses_type_table ? &type_table_resolved : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
                     ufv, sig_has_ellipsis, needs_extra_args_flag, entry_first_line,
-                    entry_last_line, error, nullptr, tt)) {
+                    entry_last_line, variant_parse_options, error, nullptr, tt)) {
                 // variant ownership transfers to addPendingVariant or cleanup
                 ufv->deref();
                 // function can't be deleted directly; add it to namespace empty
                 ns_list[ns_idx]->func_list.add(func, ns_list[ns_idx]);
                 return false;
             }
-            attachAOTEntryStatementBlock(pgm, ufv, entry_first_line, entry_last_line);
+            attachAOTEntryStatementBlock(pgm, ufv, entry_first_line, entry_last_line,
+                variant_parse_options);
 
             // Set QCF_USES_EXTRA_ARGS on the variant.  This flag is
             // independent of signature.varargs (which was already set
@@ -10727,6 +10758,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
             bool needs_extra_args_flag = false;
             int16_t entry_first_line = 0;
             int16_t entry_last_line = 0;
+            QoreParseOptions variant_parse_options;
             uint64_t t_sig0 = time_on ? now_us() : 0;
             if (time_on) {
                 local_alloc_us += t_sig0 - t_alloc0;
@@ -10735,7 +10767,7 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                 uses_type_table ? &type_table_resolved : nullptr;
             if (!readAndSetupVariantSignature(reader, type_resolver, pgm, ptr, end,
                     umv, sig_has_ellipsis, needs_extra_args_flag, entry_first_line,
-                    entry_last_line, error, qc, tt)) {
+                    entry_last_line, variant_parse_options, error, qc, tt)) {
                 delete mvb;
                 return false;
             }
@@ -10841,7 +10873,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
 
             // Note: QCF_USES_EXTRA_ARGS flag is handled by the overridden hasVarargs()
             // method which checks signature.hasVarargs() directly
-            attachAOTEntryStatementBlock(pgm, umv, entry_first_line, entry_last_line);
+            attachAOTEntryStatementBlock(pgm, umv, entry_first_line, entry_last_line,
+                variant_parse_options);
 
             // Add method to class
             uint64_t t_add0 = time_on ? now_us() : 0;

@@ -1271,6 +1271,7 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_WIDE_LOC_TABLES, "wide-loc-tables"},
         {QORE_AOT_FEAT_LOCAL_DECL_ORDINAL, "local-decl-ordinal"},
         {QORE_AOT_FEAT_CLASS_INJECTION, "class-injection"},
+        {QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS, "variant-parse-options"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
