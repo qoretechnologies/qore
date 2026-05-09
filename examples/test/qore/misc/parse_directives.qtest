@@ -33,6 +33,7 @@ public class ParseDirectiveTest inherits QUnit::Test {
         addTestCase("ignored text before '(' in %try-module", \ignoredTextTryModule());
         addTestCase("correct %try-module", \correctTryModule());
         addTestCase("correct %requires", \correctRequires());
+        addTestCase("PO_NO_FILESYSTEM path directive test", \noFilesystemPathDirectiveTest());
         addTestCase("%exec-class tests", \execClass());
         addTestCase("%exec-class crlf", \execClassCrlf());
         addTestCase("%strong-encapsulation", \strongEncapsulation());
@@ -617,6 +618,53 @@ $y = 9;
         Program p();
         p.replaceParseOptions(PO_DEFAULT);
         p.parse("%requires \t Util  \t   \nprint();\n", "");
+    }
+
+    noFilesystemPathDirectiveTest() {
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            p.parse("%requires Util\nsub t() {}\n", "");
+        }
+
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            p.parse("%try-module Util\n%endtry\nsub t() {}\n", "");
+        }
+
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            assertThrows("PARSE-EXCEPTION", "path argument.*%requires.*PO_NO_FILESYSTEM",
+                \p.parse(), ("%requires ./x.qm\nsub t() {}\n", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            assertThrows("PARSE-EXCEPTION", "path argument.*%try-module.*PO_NO_FILESYSTEM",
+                \p.parse(), ("%try-module ./x.qm\n%endtry\nsub t() {}\n", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            assertThrows("PARSE-EXCEPTION", "path argument.*%try-reexport-module.*PO_NO_FILESYSTEM",
+                \p.parse(), ("%try-reexport-module ./x.qm\n%endtry\nsub t() {}\n", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            assertThrows("PARSE-EXCEPTION", "%append-include-path.*PO_NO_FILESYSTEM",
+                \p.parse(), ("%append-include-path .\nsub t() {}\n", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            assertThrows("PARSE-EXCEPTION", "%append-module-path.*PO_NO_FILESYSTEM",
+                \p.parse(), ("%append-module-path .\nsub t() {}\n", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM);
+            assertThrows("LOAD-MODULE-ERROR", "PO_NO_FILESYSTEM", \p.loadModule(), "./x.qm");
+        }
     }
 
     execClass() {

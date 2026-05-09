@@ -738,6 +738,18 @@ public:
     */
     DLLEXPORT bool isQuic() const;
 
+    //! Mark every stream on every QUIC session bound to this socket as read-shut-down
+    /** Forwards to @c my_socket_priv::shutdownAllQuicStreamReads().  Used by
+        @c Http3ServerPollOperationPriv::abort() to break handler threads out
+        of @c Socket::readQuicStreamDataBlock() during HttpServer shutdown —
+        without this signal an in-flight handler that arrived headers-only
+        and is waiting on body data blocks the full caller-side timeout,
+        blocking @c HttpServer.stop() for the same duration.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void shutdownAllQuicStreamReads();
+
     //! Submits an HTTP/3 request on an active QUIC client connection
     /** @param method HTTP method (GET, POST, etc.)
         @param path request path

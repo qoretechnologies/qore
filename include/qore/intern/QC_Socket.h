@@ -446,6 +446,15 @@ public:
     //! Check if the socket has an active QUIC session
     DLLLOCAL bool hasQuicSession() const;
 
+    //! Mark every stream on every QUIC session bound to this socket as read-shut-down
+    /** Iterates @c quic_sessions and calls @ref QuicSession::shutdownStreamReads()
+        on each.  Used by @ref Http3ServerPollOperationPriv::abort() to break
+        handler threads out of @c readQuicStreamDataBlock() during HttpServer
+        shutdown — see @ref QuicSession::shutdownStreamReads for the full
+        rationale.
+    */
+    DLLLOCAL void shutdownAllQuicStreamReads();
+
     //! sets backwards-compatible members on accept in a new object - will be removed in a future version of qore
     DLLLOCAL void setAccept(QoreObject* o) {
         socket->setAccept(o);

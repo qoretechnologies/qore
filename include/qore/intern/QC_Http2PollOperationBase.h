@@ -72,7 +72,7 @@ class WebSocketStreamFrameState;
 
     @since %Qore 2.3
 */
-class Http2PollOperationPriv : public SocketPollOperationBase {
+class DLLLOCAL Http2PollOperationPriv : public SocketPollOperationBase {
 public:
     //! HTTP/2 server poll operation states
     enum class H2ServerState {
@@ -186,7 +186,7 @@ public:
     }
 
     //! Information for a registered CONNECT stream queue
-    struct StreamQueueInfo {
+    struct DLLLOCAL StreamQueueInfo {
         Queue* queue;                       //!< ref'd Queue for data delivery
         QoreObject* queue_obj;              //!< ref'd QoreObject wrapping queue (for DGC)
         QoreEventNotifier* notifier;        //!< ref'd EventNotifier for wake-up, or nullptr
@@ -286,6 +286,16 @@ private:
 
     //! Pending stream queue registrations from app threads (under sq_lock)
     std::vector<std::pair<int32_t, StreamQueueInfo>> pending_stream_registrations;
+
+    //! Set under sq_lock at the start of clearStreamQueues so any concurrent
+    //! @ref registerStreamQueue / @ref registerStreamFrameState call from a
+    //! handler thread that races shutdown can short-circuit and push a
+    //! NOTHING sentinel directly to the caller's Queue (instead of leaving
+    //! the queue stranded in pending_stream_registrations after shutdown
+    //! has already drained the live entries — observed as a 30s body-read
+    //! timeout in HttpServer.stop() for in-flight requests whose body
+    //! arrives after server.stop() began).
+    bool stream_queues_closed = false;
 
     // --- I/O-thread-only data (no lock needed) ---
 

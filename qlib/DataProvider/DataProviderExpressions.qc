@@ -2679,28 +2679,24 @@ public const ExtendedExpressionImplementations = {
         },
     },
 
-    # --- Map functions ---
-    DP_FUNC_MAP: {
+    # --- Map operators ---
+    DP_OP_MAP: {
         "exp": <DataProviderExpressionInfo>{
-            "type": DET_Function,
+            "type": DET_Operator,
             "role": ER_All,
-            "name": DP_FUNC_MAP,
+            "name": DP_OP_MAP,
             "display_name": "map",
             "short_desc": "Applies an expression to each element of a list, returning a new list",
             "desc": "Applies the body expression to each element of the source list and returns a new list "
                 "of results. Within the body expression, field references (`@field`) resolve against the "
                 "current iteration element. An optional filter expression can be provided to skip elements "
                 "that do not match",
-            "symbol": "map()",
+            "symbol": "map",
+            "render_template": "$symbol $args",
             "groups": "Data Manipulation",
             "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
                 DataProviderSignatureOptionalAnyType),
             "arg_info": (
-                <DataProviderArgInfo>{
-                    "display_name": "Source List",
-                    "short_desc": "The list to iterate over",
-                    "desc": "The list to iterate over; each element becomes the context for the body expression",
-                },
                 <DataProviderArgInfo>{
                     "display_name": "Body Expression",
                     "short_desc": "Expression applied to each element",
@@ -2708,17 +2704,23 @@ public const ExtendedExpressionImplementations = {
                         "current element",
                 },
                 <DataProviderArgInfo>{
+                    "display_name": "Source List",
+                    "short_desc": "The list to iterate over",
+                    "desc": "The list to iterate over; each element becomes the context for the body expression",
+                },
+                <DataProviderArgInfo>{
                     "display_name": "Filter Expression",
                     "short_desc": "Optional filter condition",
                     "desc": "Optional boolean expression; only elements where this evaluates to True are included",
+                    "default_value": True,
                 },
             ),
 
             "return_type": AbstractDataProviderTypeMap."list",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            softlist<auto> source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], tc);
-            auto body = exp.args[1];
+            auto body = exp.args[0];
+            softlist<auto> source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], tc);
             *auto filter = exp.args.size() > 2 ? exp.args[2] : NOTHING;
             list<auto> result = ();
             foreach auto elem in (source) {
@@ -2733,26 +2735,22 @@ public const ExtendedExpressionImplementations = {
             return result;
         },
     },
-    DP_FUNC_HASH_MAP: {
+    DP_OP_HASH_MAP: {
         "exp": <DataProviderExpressionInfo>{
-            "type": DET_Function,
+            "type": DET_Operator,
             "role": ER_All,
-            "name": DP_FUNC_HASH_MAP,
+            "name": DP_OP_HASH_MAP,
             "display_name": "hash_map",
             "short_desc": "Maps a list to a hash by applying key and value expressions to each element",
             "desc": "Applies key and value expressions to each element of the source list and returns a hash. "
                 "Within the expressions, field references (`@field`) resolve against the current iteration "
                 "element. An optional filter expression can be provided to skip elements that do not match",
-            "symbol": "hash_map()",
+            "symbol": "hash_map",
+            "render_template": "$symbol $args",
             "groups": "Data Manipulation",
             "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
                 DataProviderSignatureAnyType, DataProviderSignatureOptionalAnyType),
             "arg_info": (
-                <DataProviderArgInfo>{
-                    "display_name": "Source List",
-                    "short_desc": "The list to iterate over",
-                    "desc": "The list to iterate over; each element becomes the context for the expressions",
-                },
                 <DataProviderArgInfo>{
                     "display_name": "Key Expression",
                     "short_desc": "Expression for the hash key",
@@ -2766,18 +2764,24 @@ public const ExtendedExpressionImplementations = {
                         "against the current element",
                 },
                 <DataProviderArgInfo>{
+                    "display_name": "Source List",
+                    "short_desc": "The list to iterate over",
+                    "desc": "The list to iterate over; each element becomes the context for the expressions",
+                },
+                <DataProviderArgInfo>{
                     "display_name": "Filter Expression",
                     "short_desc": "Optional filter condition",
                     "desc": "Optional boolean expression; only elements where this evaluates to True are included",
+                    "default_value": True,
                 },
             ),
 
             "return_type": AbstractDataProviderTypeMap."hash",
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
-            softlist<auto> source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], tc);
-            auto key_expr = exp.args[1];
-            auto val_expr = exp.args[2];
+            auto key_expr = exp.args[0];
+            auto val_expr = exp.args[1];
+            softlist<auto> source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2], tc);
             *auto filter = exp.args.size() > 3 ? exp.args[3] : NOTHING;
             hash<auto> result = {};
             foreach auto elem in (source) {

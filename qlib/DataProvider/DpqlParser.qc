@@ -122,6 +122,17 @@ public class DpqlParser {
         }
     }
 
+    #! Resolves a DPQL surface symbol to the internal expression name
+    private string resolveExpressionName(string token_name) {
+        if (symbol_to_name{token_name}) {
+            return symbol_to_name{token_name};
+        }
+        if (expressions{token_name}) {
+            return token_name;
+        }
+        return token_name;
+    }
+
     #! Parses a DPQL expression string
     /** @param text the DPQL expression to parse
         @return the parsed DataProviderExpression
@@ -454,6 +465,16 @@ public class DpqlParser {
         # Check for provider-specific comparison operators (e.g. "like")
         if (expressions{exp_name} && inlist("Comparison", expressions{exp_name}.groups)) {
             return True;
+        }
+        return False;
+    }
+
+    #! Returns True if the expression uses DPQL prefix-operator syntax
+    private bool isPrefixExpressionOperator(string exp_name) {
+        switch (exp_name) {
+            case DP_OP_MAP:
+            case DP_OP_HASH_MAP:
+                return True;
         }
         return False;
     }
@@ -1141,6 +1162,15 @@ public class DpqlParser {
             case DPQL_TOK_IDENTIFIER: {
                 hash<DpqlTokenInfo> id_tok = nextToken();
                 skipWhitespace();
+                string name = resolveExpressionName(id_tok.value);
+                if (isPrefixExpressionOperator(name)) {
+                    if (!atEnd() && peek().type == DPQL_TOK_LPAREN) {
+                        addError(sprintf("Operator '%s' uses prefix syntax, not function-call syntax",
+                            id_tok.value), "DPQL-E001", id_tok);
+                        throw "DPQL-PARSE-ERROR", "Invalid operator syntax";
+                    }
+                    return parsePrefixExpressionOperator(id_tok, name);
+                }
                 # Check for function call
                 if (!atEnd() && peek().type == DPQL_TOK_LPAREN) {
                     return parseFunctionCall(id_tok);
@@ -1659,14 +1689,7 @@ public class DpqlParser {
         # Resolve symbol to internal expression name
         # 1. Try symbol→name lookup (new symbol-based syntax)
         # 2. Fall back to direct expression map key lookup (backward compat)
-        string name;
-        if (symbol_to_name{token_name}) {
-            name = symbol_to_name{token_name};
-        } else if (expressions{token_name}) {
-            name = token_name;
-        } else {
-            name = token_name;
-        }
+        string name = resolveExpressionName(token_name);
 
         expect(DPQL_TOK_LPAREN, "'('");
         skipWhitespace();
@@ -1721,6 +1744,65 @@ public class DpqlParser {
 
             # Type-aware argument validation
             validateFunctionArgTypes(token_name, info, args, arg_tokens);
+        }
+
+        return <DataProviderExpression>{
+            "exp": name,
+            "args": args,
+        };
+    }
+
+    #! Parses prefix expression operators such as \c map and \c hash_map
+    /** Prefix expression operators evaluate one or more argument expressions later
+        in an operator-controlled context. They therefore use Qore-like operator
+        syntax instead of function-call syntax.
+    */
+    private hash<DataProviderExpression> parsePrefixExpressionOperator(hash<DpqlTokenInfo> name_tok, string name) {
+        int required_args = name == DP_OP_MAP ? 2 : 3;
+        int max_args = required_args + 1;
+        list<auto> args = ();
+        list<hash<DpqlTokenInfo>> arg_tokens = ();
+
+        for (int i = 0; i < required_args; ++i) {
+            skipWhitespace();
+            if (atEnd()) {
+                addError(sprintf("Unexpected end of input in operator '%s'", name_tok.value),
+                    "DPQL-E001", name_tok);
+                throw "DPQL-PARSE-ERROR", "Unexpected end of input";
+            }
+
+            hash<DpqlTokenInfo> start_tok = peek();
+            args += parseOrExpr();
+            arg_tokens += start_tok;
+            skipWhitespace();
+
+            if (i < required_args - 1) {
+                expect(DPQL_TOK_COMMA, "','");
+            }
+        }
+
+        if (!atEnd() && peek().type == DPQL_TOK_COMMA) {
+            nextToken();
+            skipWhitespace();
+            if (atEnd()) {
+                addError(sprintf("Missing optional argument for operator '%s'", name_tok.value),
+                    "DPQL-E001", name_tok);
+                throw "DPQL-PARSE-ERROR", "Missing optional argument";
+            }
+            hash<DpqlTokenInfo> start_tok = peek();
+            args += parseOrExpr();
+            arg_tokens += start_tok;
+            skipWhitespace();
+        }
+
+        if (args.size() > max_args) {
+            addError(sprintf("Operator '%s' expects at most %d arguments, got %d",
+                name_tok.value, max_args, args.size()), "DPQL-E001", name_tok);
+            throw "DPQL-PARSE-ERROR", "Too many arguments";
+        }
+
+        if (expressions && expressions{name}) {
+            validateFunctionArgTypes(name_tok.value, expressions{name}, args, arg_tokens);
         }
 
         return <DataProviderExpression>{

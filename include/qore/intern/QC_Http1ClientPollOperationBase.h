@@ -58,7 +58,7 @@
 
     @since %Qore 2.3
 */
-class Http1ClientPollOperationPriv : public SocketPollOperationBase {
+class DLLLOCAL Http1ClientPollOperationPriv : public SocketPollOperationBase {
 public:
     //! HTTP/1.1 connection states
     enum class H1State {

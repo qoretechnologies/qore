@@ -116,6 +116,22 @@ struct QuicStreamInfo {
     bool peer_stop_sending = false;
     //! Application error code accompanying STOP_SENDING/RESET_STREAM from the peer
     uint64_t peer_close_error_code = 0;
+
+    //! Local-side shutdown signal for blocked @ref QuicSession::takeStreamData callers
+    /** Set by @ref QuicSession::shutdownStreamReads() when the owning
+        @c Http3ServerPollOperation is aborted (typically from
+        @c HttpAsyncSocketIoController.stop() iterating active stream_ops).
+        @c takeStreamData treats this as an EOF — returns any buffered body
+        already accumulated, then reports @c complete=true on the next call so
+        @c Socket::readQuicStreamDataBlock unblocks with @c NOTHING instead of
+        waiting the full caller-side timeout.
+
+        Stream-local rather than session-local because one QUIC session hosts
+        many concurrent streams and only the H3 listener-op being aborted
+        owns the read side; closing the session would break unrelated
+        sessions sharing the listener UDP socket.
+    */
+    bool stream_data_shutdown = false;
 };
 
 //! Per-stream body data for sending via nghttp3 data reader callback
@@ -1473,6 +1489,26 @@ public:
 
     //! Unregister a controller socket operation waiting for QUIC stream data notifications
     DLLLOCAL void unregisterStreamDataWaiter(QoreObject* sock_obj, ExceptionSink* xsink);
+
+    //! Marks every live stream as locally shut-down for read and wakes any pending @ref
+    //! readQuicStreamDataBlock() callers
+    /** Used by @ref Http3ServerPollOperationPriv::abort() during HttpServer shutdown
+        to break handler threads out of @c readQuicStreamDataBlock() — without this
+        signal a handler that arrived headers-only and is waiting on body data
+        blocks the full caller-side timeout, blocking @c HttpServer.stop() for the
+        same duration.
+
+        Sets @ref QuicStreamInfo::stream_data_shutdown on every entry in @c streams_,
+        then broadcasts the stream-data waiter wake-up.  Already-buffered body
+        bytes still drain on the final @c takeStreamData() call before
+        @c complete=true is reported (clean EOF semantics).
+
+        Per-stream rather than per-session: a single QUIC listener UDP socket
+        hosts many concurrent sessions, and only the streams owned by the H3
+        op being aborted should be unblocked — closing the session would
+        break unrelated sessions that share the listener.
+    */
+    DLLLOCAL void shutdownStreamReads();
 
     //! Register a controller socket operation waiting for QUIC datagram notifications
     DLLLOCAL void registerDatagramWaiter(QoreObject* sock_obj, ExceptionSink* xsink);

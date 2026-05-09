@@ -398,6 +398,33 @@ static void set_include_path(const char* path) {
     getProgram()->parseSetIncludePath(npath.c_str());
 }
 
+static bool parse_check_no_filesystem_path_directive(YYLTYPE* yylloc, const char* directive) {
+    if (getProgram()->getParseOptions() & PO_NO_FILESYSTEM) {
+        parse_error(*get_loc(yylloc), "cannot use the %%%s parse directive when PO_NO_FILESYSTEM is in force",
+            directive);
+        return true;
+    }
+    return false;
+}
+
+static bool module_arg_is_path(const char* arg) {
+    for (const char* p = arg; *p && !qore_isblank(*p) && *p != '<' && *p != '>' && *p != '='; ++p) {
+        if (*p == '.' || *p == '/' || *p == '\\') {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool parse_check_no_filesystem_module_path(YYLTYPE* yylloc, const char* directive, const char* arg) {
+    if ((getProgram()->getParseOptions() & PO_NO_FILESYSTEM) && module_arg_is_path(arg)) {
+        parse_error(*get_loc(yylloc), "cannot use a path argument in the %%%s parse directive when "
+            "PO_NO_FILESYSTEM is in force", directive);
+        return true;
+    }
+    return false;
+}
+
 static char* remove_quotes(char* str) {
     str[strlen(str) - 1] = '\0';
     return str + 1;
@@ -1126,7 +1153,10 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%append-include-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%append-include-path"); }
 ^%append-include-path{WS}+              BEGIN(append_path_state);
 <append_path_state>[^\n\r]+             {
-                                           set_include_path(yytext);
+                                           if (!parse_check_no_filesystem_path_directive(yylloc,
+                                                   "append-include-path")) {
+                                              set_include_path(yytext);
+                                           }
                                            BEGIN(INITIAL);
                                         }
 <append_path_state><<EOF>>              {
@@ -1135,30 +1165,32 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%append-module-path{WS}*$              { parse_error(*get_loc(yylloc), "missing argument to %%append-module-path"); }
 ^%append-module-path{WS}+               BEGIN(append_module_state);
 <append_module_state>[^\n\r]+           {
-                                           if (getProgram()->getParseOptions()
-                                                 & QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) {
-                                              parse_error(*get_loc(yylloc),
-                                                 "%%append-module-path is not allowed when "
-                                                 "'%%no-module-path-directives' "
-                                                 "(PO_NO_MODULE_PATH_DIRECTIVES) is set");
-                                              BEGIN(INITIAL);
-                                           } else {
-                                              // New-style ("path") — single quoted path with ${NAME} macro
-                                              // expansion, applied to the per-Program appended list.
-                                              // Legacy form (no surrounding quotes, colon-separated, $NAME
-                                              // substitution) continues to write the process-global
-                                              // QMM.moduleDirList — preserving backward compatibility for
-                                              // pre-2.3 scripts.  Detection: peek at the first non-WS char.
-                                              const char* p = yytext;
-                                              while (*p == ' ' || *p == '\t') ++p;
-                                              if (*p == '"') {
-                                                 qore_program_private::get(*getProgram())
-                                                     ->applyModulePathDirective(false, yytext, *get_loc(yylloc));
+                                           if (!parse_check_no_filesystem_path_directive(yylloc,
+                                                   "append-module-path")) {
+                                              if (getProgram()->getParseOptions()
+                                                    & QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) {
+                                                 parse_error(*get_loc(yylloc),
+                                                    "%%append-module-path is not allowed when "
+                                                    "'%%no-module-path-directives' "
+                                                    "(PO_NO_MODULE_PATH_DIRECTIVES) is set");
                                               } else {
-                                                 append_module_path(yytext);
+                                                 // New-style ("path") — single quoted path with ${NAME} macro
+                                                 // expansion, applied to the per-Program appended list.
+                                                 // Legacy form (no surrounding quotes, colon-separated, $NAME
+                                                 // substitution) continues to write the process-global
+                                                 // QMM.moduleDirList — preserving backward compatibility for
+                                                 // pre-2.3 scripts.  Detection: peek at the first non-WS char.
+                                                 const char* p = yytext;
+                                                 while (*p == ' ' || *p == '\t') ++p;
+                                                 if (*p == '"') {
+                                                    qore_program_private::get(*getProgram())
+                                                        ->applyModulePathDirective(false, yytext, *get_loc(yylloc));
+                                                 } else {
+                                                    append_module_path(yytext);
+                                                 }
                                               }
-                                              BEGIN(INITIAL);
                                            }
+                                           BEGIN(INITIAL);
                                         }
 <append_module_state><<EOF>>            {
                                            QORE_FLEX_DO_EOF
@@ -1166,18 +1198,21 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 ^%prepend-module-path{WS}*$             { parse_error(*get_loc(yylloc), "missing argument to %%prepend-module-path"); }
 ^%prepend-module-path{WS}+              BEGIN(prepend_module_state);
 <prepend_module_state>[^\n\r]+          {
-                                           if (getProgram()->getParseOptions()
-                                                 & QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) {
-                                              parse_error(*get_loc(yylloc),
-                                                 "%%prepend-module-path is not allowed when "
-                                                 "'%%no-module-path-directives' "
-                                                 "(PO_NO_MODULE_PATH_DIRECTIVES) is set");
-                                           } else {
-                                              // %prepend-module-path is always new-style: single quoted
-                                              // path with ${NAME} macro expansion, applied to the
-                                              // per-Program prepended list.
-                                              qore_program_private::get(*getProgram())
-                                                  ->applyModulePathDirective(true, yytext, *get_loc(yylloc));
+                                           if (!parse_check_no_filesystem_path_directive(yylloc,
+                                                   "prepend-module-path")) {
+                                              if (getProgram()->getParseOptions()
+                                                    & QoreParseOptions::NO_MODULE_PATH_DIRECTIVES) {
+                                                 parse_error(*get_loc(yylloc),
+                                                    "%%prepend-module-path is not allowed when "
+                                                    "'%%no-module-path-directives' "
+                                                    "(PO_NO_MODULE_PATH_DIRECTIVES) is set");
+                                              } else {
+                                                 // %prepend-module-path is always new-style: single quoted
+                                                 // path with ${NAME} macro expansion, applied to the
+                                                 // per-Program prepended list.
+                                                 qore_program_private::get(*getProgram())
+                                                     ->applyModulePathDirective(true, yytext, *get_loc(yylloc));
+                                              }
                                            }
                                            BEGIN(INITIAL);
                                         }
@@ -1327,6 +1362,10 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                                     else
                                                        parse_error(*get_loc(yylloc), "%%try-module not in format %%try-module (%svarname) <module>; missing module name; text given: '%%try-module %s'", require_dollar ? "$" : "", str.c_str());
                                                     BEGIN(INITIAL);
+                                                 } else if (parse_check_no_filesystem_module_path(yylloc,
+                                                       parse_get_try_reexport() ? "try-reexport-module" : "try-module",
+                                                       str.c_str())) {
+                                                    BEGIN(p_skip_to_endtry);
                                                  } else {
                                                     //printd(5, "scanner requesting feature: '%s'\n", cn);
                                                     QoreProgram* pgm = getProgram();
@@ -1398,10 +1437,12 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                            } else {
                                               bool reexport = false;
                                               if (!check_reexport(yylloc, "requires", cn, reexport)) {
-                                                 //printd(5, "scanner requesting feature: '%s'\n", cn);
-                                                 ExceptionSink xsink;
-                                                 QMM.parseLoadModule(xsink, xsink, cn, pgm, reexport);
-                                                 pgm->getParseExceptionSink()->assimilate(xsink);
+                                                 if (!parse_check_no_filesystem_module_path(yylloc, "requires", cn)) {
+                                                    //printd(5, "scanner requesting feature: '%s'\n", cn);
+                                                    ExceptionSink xsink;
+                                                    QMM.parseLoadModule(xsink, xsink, cn, pgm, reexport);
+                                                    pgm->getParseExceptionSink()->assimilate(xsink);
+                                                 }
                                               }
                                            }
                                            BEGIN(INITIAL);

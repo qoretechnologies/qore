@@ -170,6 +170,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("sendChunked InputStream POST over HTTP/2", \testH2InputStream());
         addTestCase("empty body via sendWithSendCallback over HTTP/2", \testH2EmptyCallback());
         addTestCase("callback exception over HTTP/2", \testH2CallbackException());
+        addTestCase("callback exception over HTTP/3", \testH3CallbackException());
         addTestCase("H2 body_streaming resume enables multiplexing during slow handler",
             \testH2BodyStreamingResumeMultiplexing());
         addTestCase("H3 body_streaming resume enables multiplexing during slow handler",
@@ -316,6 +317,88 @@ l50Xb2GWQesIt9k5jF5IOw==
                 "callback exception should preserve the callback error");
         }
         assertTrue(caught, "callback exception should propagate to caller");
+    }
+
+    #! Test callback exception mid-stream over HTTP/3.
+    /** Analogue of testH2CallbackException for HTTP/3.  Today the H3 server
+        defaults to @c quic_headers_only=False
+        (HttpAsyncSocketIoController.qc:1341), so the framework waits for
+        END_STREAM before dispatching the handler — the client throws first,
+        QUIC CONNECTION_CLOSE follows, and the server never reaches the
+        handler-dispatch path.  This makes the test trivially fast.
+
+        The Phase 1 (commit a66b7d9ee) and Phase 3 (commit af07f1235)
+        shutdown-race fixes for H3 are now in place, so when the default
+        flips to @c quic_headers_only=True (planned Phase 2) this test will
+        actively exercise the headers-only dispatch path.  The dedicated
+        body-streaming validation lives in @c HttpServerH3Streaming.qtest:
+          - testH3ClientStreaming — wantsBodyStreaming + headers_only POST
+          - testH3OversizedBody — max_request_body_size enforcement
+          - testH3ShutdownDuringStreaming — server.stop() < 5s with an
+            in-flight body-streaming handler
+          - testH3ConcurrentStreaming — N concurrent streaming uploads
+        Those tests are the Phase 2 validation harness; this test is just
+        the matched H3-side regression assertion that mirrors the H2 case.
+
+        Skipped if QUIC is unavailable in this build.
+    */
+    testH3CallbackException() {
+        # H3 requires its own server setup with addQuicListener — createServer()
+        # only configures an H2 listener.
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        on_exit delete server;
+
+        server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        server.waitForAsyncIo();
+
+        int port;
+        try {
+            port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            }).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("QUIC listener not available: %s: %s", ex.err, ex.desc));
+        }
+        server.waitForAsyncIo();
+
+        HTTPClient client({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "ssl_verify_cert": False,
+            "http_version": "3",
+        });
+        on_exit client.disconnect();
+
+        # Force a connection so we can verify the negotiated protocol
+        client.connect();
+        string ver = client.getHttpVersion();
+        if (ver != "HTTP/3") {
+            testSkip(sprintf("H3 not negotiated (got %y) — HTTPClient likely "
+                "fell back to H2/H1; cannot reproduce the H3-specific race", ver));
+        }
+
+        # Callback sends one chunk then throws on the second invocation,
+        # without ever signalling END_STREAM.  Mirrors testH2CallbackException.
+        int call_count = 0;
+        code send_cb = auto sub () {
+            if (call_count++ == 0) {
+                return "partial data";
+            }
+            throw "TEST-CALLBACK-ERROR", "intentional error in send_callback";
+        };
+
+        bool caught = False;
+        try {
+            client.sendWithSendCallback(send_cb, "POST", "/echo",
+                {"Content-Type": MimeTypeText});
+        } catch (hash<ExceptionInfo> ex) {
+            caught = True;
+            @debug(printf("Expected H3 callback exception: %s: %s\n", ex.err, ex.desc));
+        }
+        assertTrue(caught, "H3 callback exception should propagate to caller");
     }
 
     #! Verify that multiplexed HTTP/2 requests work while a body_streaming handler is processing.

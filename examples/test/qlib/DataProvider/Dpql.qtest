@@ -658,6 +658,33 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(("i",), exp.args[2]);
         }
 
+        # Test map prefix operator
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'map @name, @users, @age > 28');
+            assertEq(DP_OP_MAP, exp.exp);
+            assertEq(3, exp.args.size());
+            assertEq("name", exp.args[0].field);
+            assertEq("users", exp.args[1].field);
+            assertEq(DP_SEARCH_OP_GT, exp.args[2].exp);
+            assertEq("age", exp.args[2].args[0].field);
+            assertEq(28, exp.args[2].args[1]);
+        }
+
+        # Test hash_map prefix operator
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'hash_map @name, @age, @users, @age >= 30');
+            assertEq(DP_OP_HASH_MAP, exp.exp);
+            assertEq(4, exp.args.size());
+            assertEq("name", exp.args[0].field);
+            assertEq("age", exp.args[1].field);
+            assertEq("users", exp.args[2].field);
+            assertEq(DP_SEARCH_OP_GE, exp.args[3].exp);
+            assertEq("age", exp.args[3].args[0].field);
+            assertEq(30, exp.args[3].args[1]);
+        }
+
         # Test scientific notation
         {
             hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
@@ -895,6 +922,15 @@ public class DpqlTest inherits QUnit::Test {
             }
             assertTrue(caught);
         }
+
+        # Test map rejects function-call syntax
+        {
+            hash<DpqlParseResult> result = DataProvider::parseDpqlExpressionWithInfo(
+                'map(@users, @name)');
+            assertFalse(result.success);
+            assertTrue(result.diagnostics.size() > 0);
+            assertTrue(result.diagnostics[0].message =~ /prefix syntax/);
+        }
     }
 
     serializerTests() {
@@ -1032,6 +1068,41 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("@value != null", dpql);
         }
 
+        # Test map prefix operator serialization
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_MAP,
+                "args": (
+                    <DataProviderFieldReference>{"field": "name"},
+                    <DataProviderFieldReference>{"field": "users"},
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GT,
+                        "args": (<DataProviderFieldReference>{"field": "age"}, 28),
+                    },
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("map @name, @users, @age > 28", dpql);
+        }
+
+        # Test hash_map prefix operator serialization
+        {
+            hash<DataProviderExpression> exp = <DataProviderExpression>{
+                "exp": DP_OP_HASH_MAP,
+                "args": (
+                    <DataProviderFieldReference>{"field": "name"},
+                    <DataProviderFieldReference>{"field": "age"},
+                    <DataProviderFieldReference>{"field": "users"},
+                    <DataProviderExpression>{
+                        "exp": DP_SEARCH_OP_GE,
+                        "args": (<DataProviderFieldReference>{"field": "age"}, 30),
+                    },
+                ),
+            };
+            string dpql = DataProvider::serializeDpqlExpression(exp);
+            assertEq("hash_map @name, @age, @users, @age >= 30", dpql);
+        }
+
         # Test serializer uses symbol for function calls
         {
             hash<string, hash<DataProviderExpressionInfo>> expmap = {
@@ -1092,6 +1163,9 @@ public class DpqlTest inherits QUnit::Test {
             '@value != null',
             '@score >= 75.5',
             '@temp < -10',
+            'map @name, @users',
+            'map @name, @users, @age > 28',
+            'hash_map @name, @age, @users, @age >= 30',
             # Quoted field names with special characters
             '@"field with spaces" == "value"',
             '@"items[0]" == 1',

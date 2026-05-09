@@ -1015,6 +1015,12 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
         return nullptr;
     }
 
+    if (raw_path && !src && pgm && (pgm->getParseOptions() & PO_NO_FILESYSTEM)) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name), "cannot load module '%s' from "
+            "path '%s' because PO_NO_FILESYSTEM is set", name, raw_path);
+        return nullptr;
+    }
+
     // check for recursive loads
     while (true) {
         module_load_map_t::iterator i = module_load_map.find(name);

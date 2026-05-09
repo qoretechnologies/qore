@@ -151,9 +151,24 @@ public:
     //! Registers a Queue for stream data delivery
     /** @param stream_key composite key "session_id:stream_id"
         @param queue the C++ QoreQueue pointer (not ref'd — QoreObject ref held in QPP layer)
+
+        Closes the H3 op's shutdown race for extended-CONNECT (RFC 9220) tunnels:
+        if the H3 op was already aborted (so @c stream_queues_closed is set) the
+        caller's Queue would otherwise be stranded with no I/O thread to drain
+        it.  In that case we push a NOTHING sentinel directly to the Queue so
+        the caller's read loop unblocks immediately, and skip the map insert
+        (the closed Queue won't receive any more data).
     */
     DLLLOCAL void registerStreamQueue(const std::string& stream_key, Queue* queue) {
         AutoLocker al(op_lock);
+        if (stream_queues_closed) {
+            // Push the NOTHING sentinel so the handler thread's read loop
+            // exits cleanly.  Don't deref the Queue — the QoreObject ref is
+            // held in the QPP layer's `stream_queue_objs` member hash and
+            // is released by the standard internal_members deref path.
+            queue->pushAndTakeRef(QoreValue());
+            return;
+        }
         stream_queues[stream_key] = queue;
     }
 
@@ -215,6 +230,21 @@ public:
 
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
+
+    //! Close all registered stream queues and reject future registrations
+    /** Sets @c stream_queues_closed=true under op_lock and pushes a NOTHING
+        sentinel to every entry in @c stream_queues so handler threads
+        blocked in @c Queue::get() on RFC 9220 extended-CONNECT tunnels
+        unblock immediately.  Mirrors @c Http2PollOperationPriv::clearStreamQueues
+        — the H2 fix in commit @c af761a3d9 closes the same race for the H2
+        side, this is the H3 analogue.
+
+        Called from @ref abort() and @ref cleanup() so any subsequent
+        @ref registerStreamQueue() call from a handler thread that races
+        the shutdown observes the closed flag and pushes the sentinel
+        directly to its caller's Queue (without inserting into the map).
+    */
+    DLLLOCAL void closeStreamQueues();
 
     //! Starts the read request operation (creates a new SocketQuicServerPollOperation)
     /** Called from the QPP constructor and from startReadNextRequest().
@@ -287,6 +317,12 @@ private:
         without Qore interpreter overhead.
     */
     std::unordered_map<std::string, Queue*> stream_queues;
+
+    //! Set under @c op_lock at the start of @ref closeStreamQueues() so any concurrent
+    //! @ref registerStreamQueue() call from a handler thread that races shutdown
+    //! short-circuits and pushes the NOTHING sentinel directly to the caller's
+    //! Queue.  Mirrors @c Http2PollOperationPriv::stream_queues_closed.
+    bool stream_queues_closed = false;
 
     //! Stream data notifications that arrived before listener registration
     std::unordered_set<std::string> pending_stream_data;

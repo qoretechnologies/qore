@@ -1721,6 +1721,21 @@ private:
     uint16_t port_ = 0;
     int family_ = AF_UNSPEC;
 
+    //! Soft deadline (ngtcp2 timestamp, ns) after which a handshake that has
+    //! seen at least one ICMP port-unreachable (ECONNREFUSED on a connected
+    //! UDP recv) is failed with QUIC-CONNECT-REFUSED.  Set on the first
+    //! ECONNREFUSED in @ref recvAndProcessPacket; checked at the top of
+    //! @ref continuePoll.  0 = no ECONNREFUSED observed yet.
+    //!
+    //! Linux rate-limits ICMP destination-unreachable to ~1 per second per
+    //! peer, so a "consecutive count" approach can't distinguish a permanently
+    //! closed UDP port from a transient bind race — only the first refusal
+    //! reliably surfaces.  The grace window (@c QUIC_ECONNREFUSED_GRACE_NS)
+    //! preserves resilience to a tight server-startup race while still failing
+    //! fast on a closed port: if PTO retransmits manage to handshake within
+    //! the window, recvmsg() returns data and we never check this deadline.
+    int64_t econnrefused_deadline_ns_ = 0;
+
     //! Absolute ngtcp2 timestamp (ns) before which no UDP datagrams may be
     //! emitted; 0 means disabled.  Enforced in sendPendingPackets(): while
     //! now < not_before_ns_, the send path is a no-op and returns the deadline

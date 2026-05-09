@@ -63,7 +63,7 @@ class Http3ClientConnection;
 
     @since %Qore 2.3
 */
-class Http3ClientPollOperationPriv : public SocketPollOperationBase {
+class DLLLOCAL Http3ClientPollOperationPriv : public SocketPollOperationBase {
 public:
     //! HTTP/3 client connection states
     enum class H3State {

@@ -337,8 +337,11 @@ public class DpqlCompletionProvider {
                     if (in_search) {
                         items += getFunctionCompletions(analysis.prefix,
                             ctx.server_expressions);
+                        items += getPrefixExpressionOperatorCompletions(analysis.prefix,
+                            ctx.server_expressions);
                     } else {
                         items += getFunctionCompletions(analysis.prefix);
+                        items += getPrefixExpressionOperatorCompletions(analysis.prefix);
                     }
                 }
                 items += getTemplateCompletions(analysis.prefix, ctx.template_context);
@@ -931,6 +934,67 @@ public class DpqlCompletionProvider {
         return items;
     }
 
+    #! Returns True if the expression uses prefix-operator syntax in DPQL
+    private bool isPrefixExpressionOperator(string ename) {
+        switch (ename) {
+            case DP_OP_MAP:
+            case DP_OP_HASH_MAP:
+                return True;
+        }
+        return False;
+    }
+
+    #! Gets prefix expression operator completions
+    private list<hash<DpqlCompletionItem>> getPrefixExpressionOperatorCompletions(string prefix,
+            *hash<string, hash<DataProviderExpressionInfo>> filter_expressions) {
+        if (!expressions) {
+            return ();
+        }
+
+        list<hash<DpqlCompletionItem>> items = ();
+        string lwr_prefix = prefix.lwr();
+
+        foreach string ename in ((DP_OP_MAP, DP_OP_HASH_MAP)) {
+            if (!expressions{ename}) {
+                continue;
+            }
+            if (filter_expressions && !filter_expressions{ename}) {
+                continue;
+            }
+            hash<DataProviderExpressionInfo> info = expressions{ename};
+            if (info.type != DET_Operator) {
+                continue;
+            }
+            string sym = name_to_symbol{ename} ?? ename;
+            if (prefix && index(sym.lwr(), lwr_prefix) != 0) {
+                continue;
+            }
+
+            list<string> placeholders = ();
+            for (int i = 0; i < info.args.size(); ++i) {
+                string pname;
+                if (info.arg_info[i].display_name) {
+                    pname = info.arg_info[i].display_name;
+                } else {
+                    pname = "arg" + string(i);
+                }
+                placeholders += sprintf("${%d:%s}", i + 1, pname);
+            }
+
+            items += <DpqlCompletionItem>{
+                "label": sym,
+                "kind": "operator",
+                "insert_text": sym + " ",
+                "snippet_text": sym + " " + placeholders.join(", ") + "$0",
+                "documentation": info.short_desc ?? info.desc,
+                "detail": info.return_type ? "-> " + info.return_type.getName() : NOTHING,
+                "sort_priority": 35,
+            };
+        }
+
+        return items;
+    }
+
     #! Resolves function argument context from analysis data
     /** Looks up the enclosing function and determines the expected type,
         type constraint code, and allowed values for the current argument position.
@@ -1082,6 +1146,9 @@ public class DpqlCompletionProvider {
             # Operators with symbolic names (==, &&, !) are handled by getOperatorCompletions().
             # Skip infix comparison operators (e.g. "like") — they are offered
             # by getInfixComparisonCompletions() in infix form, not function-call form
+            if (isPrefixExpressionOperator(ename)) {
+                continue;
+            }
             if (info.type == DET_Operator && inlist("Comparison", info.groups)
                     && info.args.size() == 2 && sym =~ /^[a-zA-Z]/) {
                 continue;

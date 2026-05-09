@@ -223,6 +223,11 @@ public class DpqlSerializer {
                 result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY);
                 break;
 
+            case DP_OP_MAP:
+            case DP_OP_HASH_MAP:
+                result = serializePrefixOperator(op, exp.args);
+                break;
+
             case DP_FUNC_INDEX:
                 # Render as sugar: base[n] only if index arg is a literal
                 if (isAccessorArgLiteral(exp.args[1])) {
@@ -270,6 +275,16 @@ public class DpqlSerializer {
             return "(" + result + ")";
         }
         return result;
+    }
+
+    #! Serializes a prefix expression operator
+    private string serializePrefixOperator(string name, list<auto> args) {
+        string sym = name_to_symbol{name} ?? name;
+        list<string> arg_strs = ();
+        foreach auto arg in (args) {
+            arg_strs += serializeArg(arg, DPQL_PREC_OR + 1);
+        }
+        return sym + " " + arg_strs.join(", ");
     }
 
     #! Serializes a binary operator with multiple arguments (&&, ||)

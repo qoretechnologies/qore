@@ -68,6 +68,18 @@ static constexpr int64_t QUIC_NO_TIMER_POLL_MS = 1000;
 */
 static constexpr int QUIC_CLIENT_RECV_BUDGET = 32;
 
+//! Grace period (nanoseconds) after the first ICMP "port unreachable" during
+//! a QUIC client handshake before failing the operation with
+//! QUIC-CONNECT-REFUSED.  Linux rate-limits destination-unreachable ICMPs
+//! (~1 per second per peer), so a "consecutive count" approach can't tell a
+//! permanently closed UDP port from a transient bind race — only the first
+//! refusal reliably surfaces.  This grace window lets ngtcp2's PTO retransmits
+//! succeed if the peer's UDP listener was just briefly missing (e.g., a server
+//! restart that races with our Initial), while still failing fast on a closed
+//! port instead of burning the entire connect_timeout.  1.5 s comfortably
+//! covers a couple of PTO retransmits at the typical 333 ms initial RTT.
+static constexpr int64_t QUIC_ECONNREFUSED_GRACE_NS = 1500000000LL;
+
 static int quic_input_stream_pollable_descriptor(InputStream* is, const char* err, ExceptionSink* xsink) {
     if (!is->supportsNonBlockingIo()) {
         return -1;
@@ -698,10 +710,26 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
             return 0;  // truncated datagram discarded; continue draining
         }
         if (errno == ECONNREFUSED) {
-            // ICMP "port unreachable" on a connected UDP socket — the server's
-            // UDP listener was not ready when the Initial was sent.  Treat as
-            // transient: return SOCK_POLLIN so the QUIC PTO timer retransmits.
-            return SOCK_POLLIN;
+            // ICMP "port unreachable" on a connected UDP socket.  Linux
+            // rate-limits ICMP unreachable messages (~1/sec/peer), so a closed
+            // UDP port produces exactly one ECONNREFUSED on recv even though
+            // every retransmit triggers a fresh ICMP — counting consecutive
+            // refusals therefore can't distinguish a permanently closed port
+            // from a momentary bind race.  Instead, on the first refusal
+            // arm a short grace deadline; if the handshake hasn't progressed
+            // by then, continuePoll() fails the op with QUIC-CONNECT-REFUSED.
+            // A successful recv (handshake response from a peer that recovered)
+            // disarms the deadline.  Without this, a closed peer port (e.g.,
+            // Alt-Svc h3=":1" with nothing listening) burns the entire
+            // connect_timeout retransmitting Initials that will never be
+            // answered.
+            if (econnrefused_deadline_ns_ == 0
+                && (qcs_state == QCS::HANDSHAKE_SEND
+                    || qcs_state == QCS::HANDSHAKE_RECV)) {
+                econnrefused_deadline_ns_ =
+                    QuicSession::timestamp() + QUIC_ECONNREFUSED_GRACE_NS;
+            }
+            return SOCK_POLLIN;  // need to wait for read
         }
         xsink->raiseErrnoException("QUIC-RECV-ERROR", errno, "recvmsg() failed");
         return -1;
@@ -710,6 +738,9 @@ int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     if (nread == 0) {
         return 0;
     }
+
+    // Successful recv: peer is responsive — disarm the unreachable deadline.
+    econnrefused_deadline_ns_ = 0;
 
     // Use the cached getsockname() address directly — the client socket is
     // connect()ed, so the local address is always local_addr_.  Do NOT call
@@ -845,6 +876,22 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
         return nullptr;
     }
 
+    // Fast-fail a handshake whose peer has signalled ICMP port-unreachable
+    // and not recovered within the grace window — see
+    // @ref econnrefused_deadline_ns_ for the rate-limit rationale.
+    if (econnrefused_deadline_ns_ > 0
+        && (qcs_state == QCS::HANDSHAKE_SEND || qcs_state == QCS::HANDSHAKE_RECV)
+        && QuicSession::timestamp() >= econnrefused_deadline_ns_) {
+        qcs_state = QCS::CLOSED;
+        xsink->raiseException("QUIC-CONNECT-REFUSED",
+            "QUIC handshake target %s:%u refused datagrams (ICMP port "
+            "unreachable) and did not recover within %lld ms; peer UDP port "
+            "appears closed",
+            host.c_str(), static_cast<unsigned>(port_),
+            (long long)(QUIC_ECONNREFUSED_GRACE_NS / 1000000LL));
+        return nullptr;
+    }
+
     while (true) {
         switch (qcs_state) {
             case QCS::HANDSHAKE_SEND: {
@@ -859,6 +906,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                         clampPollTimeoutToDeadline(poll_info, handshake_deadline_ns_, xsink);
+                        clampPollTimeoutToDeadline(poll_info, econnrefused_deadline_ns_, xsink);
                     }
                     return poll_info;
                 }
@@ -937,6 +985,7 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                     if (poll_info) {
                         setPollTimeoutFromExpiry(poll_info, next_expiry, xsink);
                         clampPollTimeoutToDeadline(poll_info, handshake_deadline_ns_, xsink);
+                        clampPollTimeoutToDeadline(poll_info, econnrefused_deadline_ns_, xsink);
                     }
                     return poll_info;
                 }

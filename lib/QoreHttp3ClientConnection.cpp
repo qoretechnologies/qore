@@ -33,6 +33,7 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
+#include <qore/HttpClientConnectionManager.h>
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
@@ -113,6 +114,15 @@ Http3ClientConnection::Http3ClientConnection(const char* target_host, int target
     }
     if (mgr) {
         setManager(mgr);
+        // Snapshot the manager's connect_timeout once at construction time so
+        // the inner QUIC handshake op can enforce a transport-level deadline.
+        // The manager_ back-pointer is protected by onclose_lock and may be
+        // nulled by setManager(nullptr) during teardown — capturing the value
+        // up-front avoids racing with that nulling on the I/O thread.
+        int64_t connect_timeout_ms = mgr->getOptions().connect_timeout_ms;
+        if (connect_timeout_ms > 0) {
+            handshake_timeout_ns_ = connect_timeout_ms * 1000000LL;
+        }
     }
     if (buildAndSubmit(xsink)) {
         return;
@@ -199,7 +209,7 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     ReferenceHolder<SocketQuicClientPollOperation> inner_op(
         new SocketQuicClientPollOperation(xsink, sock_priv_raw,
             target_host.c_str(), static_cast<uint16_t>(target_port), family,
-            /* handshake_timeout_ns */ 0,
+            handshake_timeout_ns_,
             /* not_before_ns_abs */ not_before_ns_abs),
         xsink);
     if (*xsink) {

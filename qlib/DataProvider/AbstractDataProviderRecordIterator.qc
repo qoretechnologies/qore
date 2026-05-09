@@ -365,10 +365,10 @@ public const DP_FUNC_GET_MINUTE = "get_minute";
 public const DP_FUNC_GET_SECOND = "get_second";
 
 #! Maps a list by applying an expression to each element, returning a new list
-public const DP_FUNC_MAP = "map";
+public const DP_OP_MAP = "map";
 
 #! Maps a list by applying key and value expressions to each element, returning a hash
-public const DP_FUNC_HASH_MAP = "hash_map";
+public const DP_OP_HASH_MAP = "hash_map";
 #/@}
 
 /** @defgroup dpql_extended_operator_ops2 DPQL Extended Operator Constants (Part 2)

@@ -419,6 +419,34 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
     // any buffered DATA into the queue and pushes NOTHING on END_STREAM.
     {
         AutoLocker al(sq_lock);
+        // Race with shutdown: HttpServer.stop() → asyncIo.stop() iterates
+        // active connections and calls abort() on each stream_op → C++
+        // Http2PollOperationPriv::abort() → clearStreamQueues() which sets
+        // @c stream_queues_closed=true under sq_lock.  An in-flight handler
+        // thread that reaches register_body_queue (here) AFTER that point
+        // would otherwise leave its Queue stranded in
+        // pending_stream_registrations — no I/O thread will drain it, so
+        // the handler's body_queue.get(30s) blocks the full body-read
+        // timeout and HttpServer.stop() waits 30s for the handler_pool to
+        // drain.  Push the NOTHING sentinel directly to the caller's Queue
+        // so the handler unblocks immediately and exits with an empty body
+        // (the subsequent submitHttp2Response will fail cleanly with
+        // HTTP2-ERROR: no HTTP/2 session active — the connection is gone).
+        if (stream_queues_closed) {
+            queue->push(nullptr, QoreValue());
+            if (notifier) {
+                notifier->notify();
+            }
+            queue->deref(nullptr);
+            queue_obj->deref(nullptr);
+            if (notifier) {
+                notifier->deref(nullptr);
+            }
+            if (notifier_obj) {
+                notifier_obj->deref(nullptr);
+            }
+            return;
+        }
         pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj, {}}});
     }
 
@@ -466,6 +494,17 @@ void Http2PollOperationPriv::registerStreamFrameState(int32_t stream_id, Queue* 
 
     {
         AutoLocker al(sq_lock);
+        // See registerStreamQueue for the shutdown-race rationale.  Same race
+        // here for WS-CONNECT tunnels: if asyncIo.stop() ran before this
+        // handler thread reached us, push CLOSE-sentinel and skip enqueue.
+        if (stream_queues_closed) {
+            frame_state->pushCloseSentinel();
+            // The frame_state owns the one queue reference taken above, so it
+            // releases it on destruction.  queue_obj is held separately for
+            // DGC; deref it here since we never installed the StreamQueueInfo.
+            queue_obj->deref(nullptr);
+            return;
+        }
         pending_stream_registrations.push_back({stream_id, info});
     }
 
@@ -614,9 +653,14 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
 }
 
 void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
-    // Drain pending registrations so we clean up everything
+    // Drain pending registrations so we clean up everything.  Set
+    // @c stream_queues_closed under sq_lock so any concurrent
+    // registerStreamQueue / registerStreamFrameState call from a handler
+    // thread observes it and short-circuits to a NOTHING sentinel — see
+    // those methods for the shutdown-race rationale.
     {
         AutoLocker al(sq_lock);
+        stream_queues_closed = true;
         for (auto& [sid, info] : pending_stream_registrations) {
             stream_queues[sid] = info;
         }
