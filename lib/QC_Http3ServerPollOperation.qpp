@@ -92,7 +92,7 @@ void Http3ServerPollOperationPriv::cleanup(ExceptionSink* xsink) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
     }
-    stream_queues.clear();
+    closeStreamQueues();
     pending_stream_data.clear();
     data_ready_streams.clear();
     // Drain any unconsumed pending cert/key staged for swap
@@ -108,6 +108,26 @@ void Http3ServerPollOperationPriv::cleanup(ExceptionSink* xsink) {
             pending_pk = nullptr;
         }
     }
+}
+
+void Http3ServerPollOperationPriv::closeStreamQueues() {
+    AutoLocker al(op_lock);
+    // Set the closed flag FIRST so any concurrent registerStreamQueue()
+    // call observes it under the same lock and short-circuits to a
+    // sentinel push instead of inserting into the map after we've cleared
+    // it (the H2 commit af761a3d9 closes the analogous race for H2).
+    stream_queues_closed = true;
+    for (auto& [skey, queue] : stream_queues) {
+        (void)skey;
+        if (queue) {
+            // NOTHING sentinel — handler thread's read loop exits clean.
+            // Don't deref the Queue: the QoreObject ref is held in the
+            // QPP layer's `stream_queue_objs` member hash, which is
+            // released by the standard internal_members deref path.
+            queue->pushAndTakeRef(QoreValue());
+        }
+    }
+    stream_queues.clear();
 }
 
 void Http3ServerPollOperationPriv::setPendingCertificate(QoreSSLCertificate* cert,
@@ -407,6 +427,12 @@ void Http3ServerPollOperationPriv::abort(ExceptionSink* xsink) {
     if (sock_obj) {
         sock_obj->shutdownAllQuicStreamReads();
     }
+    // Close registered RFC 9220 extended-CONNECT stream queues so handler
+    // threads blocked in Queue::get() unblock immediately.  Mirrors the H2
+    // path in commit af761a3d9.  Must happen BEFORE we transition the H3
+    // state to CLOSED so any concurrent registerStreamQueue() observes a
+    // consistent picture (closed flag + cleared map) and short-circuits.
+    closeStreamQueues();
     AutoLocker al(op_lock);
     h3_state.store(H3State::CLOSED, std::memory_order_release);
     if (read_op) {
