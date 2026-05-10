@@ -218,13 +218,13 @@ cd ${QORE_SRC_DIR}
 
 export QORE_DEBUG_BINARY="${QORE_SRC_DIR}/build/qore"
 export QORE_LIBDIR="${QORE_SRC_DIR}/build"
-TEST_LD_LIBRARY_PATH="${QORE_SRC_DIR}/build/lib:${QORE_SRC_DIR}/build/lib/.libs"
+TEST_LD_LIBRARY_PATH="${QORE_SRC_DIR}/build:${QORE_SRC_DIR}/build/lib:${QORE_SRC_DIR}/build/lib/.libs"
 if [ "$NEED_RELEASE_BUILD" = "1" ]; then
     # Set up binary selector that uses Release for performance-sensitive tests
     chmod +x ./test/docker_test/qore_binary_selector.sh
     export QORE_RELEASE_BINARY="${QORE_SRC_DIR}/build-release/qore"
     export QORE_BINARY="${QORE_SRC_DIR}/test/docker_test/qore_binary_selector.sh"
-    TEST_LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${QORE_SRC_DIR}/build-release/lib:${QORE_SRC_DIR}/build-release/lib/.libs"
+    TEST_LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${QORE_SRC_DIR}/build-release:${QORE_SRC_DIR}/build-release/lib:${QORE_SRC_DIR}/build-release/lib/.libs"
 else
     export QORE_RELEASE_BINARY=""
     export QORE_BINARY="${QORE_DEBUG_BINARY}"
@@ -251,6 +251,8 @@ gosu qore:qore env \
     QORE_BINARY="${QORE_BINARY}" \
     QORE_LIBDIR="${QORE_LIBDIR}" \
     QORE_MODULE_DIR="${QORE_MODULE_DIR}" \
+    QORE_EXCLUDE_PERF_TESTS="${QORE_EXCLUDE_PERF_TESTS}" \
+    QORE_PERF_TESTS_ONLY="${QORE_PERF_TESTS_ONLY}" \
     LIBQORE_BINARY="${LIBQORE_BINARY}" \
     LD_LIBRARY_PATH="${TEST_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}" \
     ./run_tests.sh

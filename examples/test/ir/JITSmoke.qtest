@@ -93,6 +93,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("regex extract invoke single eval", \testJitRegexExtractInvokeSingleEval());
         addTestCase("IR-only condition local regex loop", \testIrOnlyConditionLocalRegexLoop());
         addTestCase("IR-only maybe-NOTHING condition local", \testIrOnlyConditionLocalMaybeNothing());
+        addTestCase("IR-only optional hash local missing member", \testIrOnlyOptionalHashLocalMissingMember());
         # Optimized higher-order function tests
         addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
         addTestCase("optimized foldl diff/min/max", \testJitFoldlDiffMinMax());
@@ -1472,6 +1473,35 @@ f();
             string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
             string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
             assertEq(expected, result, sprintf("condition-local maybe-NOTHING %s", mode));
+        }
+    }
+
+    testIrOnlyOptionalHashLocalMissingMember() {
+        string code = "%modern
+int sub count(*hash<auto> h) {
+    int depth = 0;
+    while (h) {
+        depth++;
+        h = h.parent;
+    }
+    return depth;
+}
+
+hash<auto> h = {
+    \"range\": {},
+    \"parent\": {
+        \"range\": {},
+        \"parent\": {
+            \"range\": {},
+        },
+    },
+};
+printf(\"%d\\n\", count(h));
+";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            assertEq("3", result, sprintf("optional hash local missing member %s", mode));
         }
     }
 

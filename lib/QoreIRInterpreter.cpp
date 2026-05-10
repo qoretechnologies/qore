@@ -4653,7 +4653,11 @@ next_instruction:
                     uint32_t sid = local_inst->slot_id;
                     if (sid != UINT32_MAX && sid < locals_slot_cache.size()) {
                         QoreValue cached_val = locals_slot_cache[sid];
-                        if (!cached_val.isNothing() && cached_val.getType() != NT_REFERENCE) {
+                        bool is_ir_only_local = sid < locals_ir_only.size() && locals_ir_only[sid];
+                        bool cache_has_value = !cached_val.isNothing()
+                            || (is_ir_only_local && sid < locals_instantiated.size()
+                                && locals_instantiated[sid]);
+                        if (cache_has_value && cached_val.getType() != NT_REFERENCE) {
                             // Cache hit: one refSelf, no hash lookups, no instantiation check
                             out = cached_val.hasNode() ? cached_val.refSelf() : cached_val;
                             result_slot_owned = out.hasNode();
@@ -6382,6 +6386,12 @@ load_local_done:
                     }
                     locals_slot_cache[local_inst->slot_id].discard(xsink);
                     locals_slot_cache[local_inst->slot_id] = stored;
+                    if (local_inst->slot_id < locals_instantiated.size()) {
+                        // For IR-only locals, this bit also records that the slot
+                        // cache contains a valid value; QoreValue() is both
+                        // NOTHING and the historical cache-miss sentinel.
+                        locals_instantiated[local_inst->slot_id] = true;
+                    }
                     if (local_inst->slot_id < locals_lvar_cache.size()) {
                         locals_lvar_cache[local_inst->slot_id] = nullptr;
                     }
