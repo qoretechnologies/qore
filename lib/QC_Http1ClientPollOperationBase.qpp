@@ -2007,6 +2007,29 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
     }
 }
 
+bool Http1ClientPollOperationPriv::getStoredError(std::string& err, std::string& desc) const {
+    AutoLocker al(stream_lock);
+    if (!error_info) {
+        return false;
+    }
+
+    QoreValue ev = error_info->getKeyValue("err");
+    QoreValue dv = error_info->getKeyValue("desc");
+    if (ev.getType() == NT_STRING) {
+        QoreStringValueHelper ev_str(ev);
+        err = ev_str->c_str();
+    } else {
+        err = "HTTP1-CONNECTION-CLOSED";
+    }
+    if (dv.getType() == NT_STRING) {
+        QoreStringValueHelper dv_str(dv);
+        desc = dv_str->c_str();
+    } else {
+        desc = "connection closed before request could be submitted";
+    }
+    return true;
+}
+
 void Http1ClientPollOperationPriv::notifyPendingStreams(const char* err, const char* desc,
         ExceptionSink* xsink) {
     AbstractAsyncAction* action = nullptr;
@@ -2059,6 +2082,12 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
     H1State cur_state = h1_state.load(std::memory_order_acquire);
     if (cur_state != H1State::READING && cur_state != H1State::WAIT_READ) {
         action->deref(xsink);
+        std::string err_str;
+        std::string desc_str;
+        if (cur_state == H1State::CLOSED && getStoredError(err_str, desc_str)) {
+            xsink->raiseException(err_str.c_str(), "%s", desc_str.c_str());
+            return -1;
+        }
         xsink->raiseException("HTTP1-STATE-ERROR",
             "cannot submit request in state: %s", getStateImpl());
         return -1;

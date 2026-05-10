@@ -1216,6 +1216,54 @@ static void ut_http1_connection_connect_refused(UnitTestCounters& c) {
     xsink.clear();
 }
 
+static void ut_http1_submit_after_ssl_error_preserves_error(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    // Accept the TCP connection and close without speaking TLS.  The client
+    // records the SSL error before submitRequest() is called below.
+    server.serveOnce([](int) {});
+
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", server_port, true, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds (TLS connect is async)");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !ready, "TLS connection is not ready");
+    UT_ASSERT(c, xsink.isException(), "waitForReadyOrError raises on TLS failure");
+    QoreStringValueHelper initial_err(xsink.getExceptionErr());
+    std::string stored_err = initial_err && initial_err->c_str()
+        ? initial_err->c_str() : "";
+    UT_ASSERT(c, !stored_err.empty(), "TLS failure has an exception code");
+    xsink.clear();
+
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequest("GET", "/", nullptr, nullptr, 0, &xsink), &xsink);
+    UT_ASSERT(c, !submit_result, "submitRequest on failed TLS connection returns no result");
+    UT_ASSERT(c, xsink.isException(), "submitRequest raises on failed TLS connection");
+    QoreStringValueHelper submit_err(xsink.getExceptionErr());
+    UT_ASSERT(c, submit_err && strcmp(submit_err->c_str(), "HTTP1-STATE-ERROR") != 0,
+        "submitRequest preserves stored connection error instead of HTTP1-STATE-ERROR");
+    if (!stored_err.empty() && submit_err) {
+        UT_ASSERT(c, !strcmp(stored_err.c_str(), submit_err->c_str()),
+            "submitRequest error matches original TLS failure");
+    }
+    xsink.clear();
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
 // --- HttpClientConnectionManagerBase (Phase P3) tests ---
 //
 // Exercise the C++ pool, per-key creation serialization, eviction via
@@ -2876,6 +2924,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http1_connection_simple_request(c);
     ut_http1_connection_timeout(c);
     ut_http1_connection_connect_refused(c);
+    ut_http1_submit_after_ssl_error_preserves_error(c);
     ut_http1_onclosed_hook_one_shot(c);
     ut_http1_onclosed_hook_app_thread_close(c);
     ut_manager_acquire_first_request(c);

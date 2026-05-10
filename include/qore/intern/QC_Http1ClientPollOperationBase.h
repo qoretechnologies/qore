@@ -444,6 +444,7 @@ private:
     DLLLOCAL void resetResponseState(ExceptionSink* xsink);
 
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
+    DLLLOCAL bool getStoredError(std::string& err, std::string& desc) const;
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
 
