@@ -283,6 +283,21 @@ struct UnitTestCounters {
     } \
 } while (0)
 
+static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
+    QoreValue nothing;
+    QoreValue null_value = QoreValue::makeNull();
+    QoreValue zero(0);
+    QoreValue false_value(false);
+
+    UT_ASSERT(c, !(bool)nothing, "QoreValue NOTHING is false in C++ bool context");
+    UT_ASSERT(c, !(bool)null_value, "QoreValue NULL is false in C++ bool context");
+    UT_ASSERT(c, (bool)zero, "QoreValue int zero remains a present value in C++ bool context");
+    UT_ASSERT(c, (bool)false_value, "QoreValue False remains a present value in C++ bool context");
+
+    QoreSimpleValue simple_null(null_value);
+    UT_ASSERT(c, !(bool)simple_null, "QoreSimpleValue NULL is false in C++ bool context");
+}
+
 static void ut_asyncio_construction(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(true, &xsink);
@@ -2836,6 +2851,7 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
+    ut_qorevalue_operator_bool_null(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
 }
@@ -2843,6 +2859,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
 
+    ut_qorevalue_operator_bool_null(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_asyncio_construction(c);
     ut_asyncio_autostop(c);
