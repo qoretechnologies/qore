@@ -1244,32 +1244,74 @@ ws.connect();
     /** @return True if the reconnect was started
     */
     bool reconnect() {
-        AutoLock al(m);
+        bool async_reconnect = False;
+        bool notify_closed = False;
 
-        if (!tid) {
-            return False;
-        }
+        {
+            AutoLock al(m);
 
-        if (!reconnect) {
-            reconnect = True;
-        }
+            if (!tid) {
+                return False;
+            }
 
-        # check if already reconnecting
-        if (!stop && !do_reconnect) {
-            do_reconnect = True;
-            # wake up any sleeping threads
-            sleep_cond.broadcast();
-            if (poll_op) {
-                # Send close frame for async mode
-                if (!async_close_sent && !poll_op.goalReached()) {
-                    async_close_sent = True;
-                    poll_op.sendClose(WSCC_NormalClosure);
+            if (!reconnect) {
+                reconnect = True;
+            }
+
+            # check if already reconnecting
+            if (!stop && !do_reconnect) {
+                do_reconnect = True;
+                # wake up any sleeping threads
+                sleep_cond.broadcast();
+                if (poll_op) {
+                    # Send close frame for async mode
+                    if (!async_close_sent && !poll_op.goalReached()) {
+                        async_close_sent = True;
+                        sendClose(WSCC_NormalClosure);
+                    }
+                    wakeAsyncIo();
                 }
-                wakeAsyncIo();
+            }
+
+            if (tid == -1) {
+                # Async mode has no event thread; -1 is only a sentinel.  Clean
+                # up directly instead of waiting for a thread termination signal
+                # that might never be produced if no delivery task is active.
+                stopAsyncIo();
+                shutdownAndCloseUnlocked();
+                {
+                    AutoLock dal(delivery_mutex);
+                    delivery_active = False;
+                }
+                clearTid();
+                cid = -1;
+                async_reconnect = True;
+                notify_closed = True;
+            } else {
+                # wait for the event thread to terminate
+                waitTidCleared(tid);
             }
         }
-        # wait for the event thread to terminate
-        waitTidCleared(tid);
+
+        if (notify_closed) {
+            try {
+                closingConnection();
+            } catch (hash<ExceptionInfo> ex) {
+                try {
+                    logError("Exception in closing WebSocketClient callback: %s",
+                        get_exception_string(ex));
+                } catch () {
+                    # ignore
+                }
+            }
+            if (!self) {
+                return True;
+            }
+        }
+
+        if (async_reconnect) {
+            startReconnect();
+        }
 
         return True;
     }
