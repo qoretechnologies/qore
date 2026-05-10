@@ -26,11 +26,14 @@ public class BaseLinkerSetOrderReturnRefundRequestDataType inherits HashDataType
             },
             "refund_date": {
                 "display_name": "Refund Date",
-                "short_desc": "Refund timestamp (Unix seconds)",
-                "type": SoftIntType,
+                "short_desc": "Refund timestamp",
+                "type": DateType,
                 "required": True,
-                "desc": "Date the refund was issued, as Unix seconds.",
-                "example_value": 1745280000,
+                "desc": "When the refund was issued. Sent to the BaseLinker "
+                    "`setOrderReturnRefund` API as Unix seconds (the conversion is performed "
+                    "inside `doRequestImpl()`); the field is exposed as a date so the UI "
+                    "can render a date/time picker rather than asking the user for a "
+                    "raw epoch number.",
             },
             "refund_comment": {
                 "display_name": "Refund Comment",

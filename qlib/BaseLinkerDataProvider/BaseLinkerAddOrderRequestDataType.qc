@@ -49,15 +49,13 @@ public class BaseLinkerAddOrderRequestDataType inherits HashDataType {
             "payment_method_cod": {
                 "display_name": "Cash On Delivery",
                 "short_desc": "Whether this is a COD order",
-                "type": SoftBoolType,
-                "required": True,
+                "type": SoftBoolOrNothingType,
                 "desc": "`True` marks the order as cash-on-delivery.",
             },
             "paid": {
                 "display_name": "Paid",
                 "short_desc": "Whether the order is fully paid",
-                "type": SoftBoolType,
-                "required": True,
+                "type": SoftBoolOrNothingType,
                 "desc": "`True` marks the order as paid in full at creation time.",
             },
             "user_comments": {

@@ -39,7 +39,13 @@ public class BaseLinkerSetOrderPaymentDataProvider inherits BaseLinkerDataProvid
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return callMethod("setOrderPayment", req);
+        hash<auto> body = req;
+        # payment_date is a DateType in the request schema (so the UI gets a date picker);
+        # the BaseLinker setOrderPayment API expects Unix seconds, so convert here.
+        if (body.payment_date instanceof date) {
+            body.payment_date = int(get_epoch_seconds(body.payment_date));
+        }
+        return callMethod("setOrderPayment", body);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

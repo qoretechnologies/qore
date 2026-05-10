@@ -25,11 +25,14 @@ public class BaseLinkerSetOrderPaymentRequestDataType inherits HashDataType {
             },
             "payment_date": {
                 "display_name": "Payment Date",
-                "short_desc": "Payment timestamp (Unix seconds)",
-                "type": SoftIntType,
+                "short_desc": "Payment timestamp",
+                "type": DateType,
                 "required": True,
-                "desc": "Payment timestamp as Unix seconds.",
-                "example_value": 1745280000,
+                "desc": "When the payment was received. Sent to the BaseLinker "
+                    "`setOrderPayment` API as Unix seconds (the conversion is performed "
+                    "inside `doRequestImpl()`); the field is exposed as a date so the UI "
+                    "can render a date/time picker rather than asking the user for a "
+                    "raw epoch number.",
             },
             "payment_comment": {
                 "display_name": "Payment Comment",

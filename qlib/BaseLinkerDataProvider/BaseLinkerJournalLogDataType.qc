@@ -33,9 +33,10 @@ public class BaseLinkerJournalLogDataType inherits HashDataType {
             },
             "date": {
                 "display_name": "Date",
-                "short_desc": "Event timestamp (Unix seconds)",
-                "type": SoftIntOrNothingType,
-                "desc": "Event timestamp as Unix seconds since epoch.",
+                "short_desc": "Event timestamp",
+                "type": DateOrNothingType,
+                "desc": "Event timestamp; converted from the API's Unix-seconds payload to a "
+                    "date/time value before observers are notified.",
             },
         };
     }

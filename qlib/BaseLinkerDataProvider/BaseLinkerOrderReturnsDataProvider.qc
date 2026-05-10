@@ -45,6 +45,7 @@ public class BaseLinkerOrderReturnsDataProvider inherits BaseLinkerDataProviderB
                 "short_desc": "Fetch a single order return by ID",
                 "type": AbstractDataProviderType::get(SoftIntOrNothingType),
                 "desc": "If supplied, only the matching return is returned.",
+                "ref_data": "order_returns",
             },
             "order_id": <DataProviderOptionInfo>{
                 "display_name": "Order ID",
@@ -53,17 +54,12 @@ public class BaseLinkerOrderReturnsDataProvider inherits BaseLinkerDataProviderB
                 "desc": "Only returns created from the given BaseLinker order ID are returned.",
                 "ref_data": "orders",
             },
-            "date_confirmed_from": <DataProviderOptionInfo>{
-                "display_name": "Date Confirmed From",
-                "short_desc": "Filter by confirmation time (Unix seconds)",
-                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
-                "desc": "Return order returns confirmed at or after this Unix timestamp.",
-            },
             "date_from": <DataProviderOptionInfo>{
                 "display_name": "Date From",
-                "short_desc": "Filter by creation time (Unix seconds)",
-                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
-                "desc": "Return order returns created at or after this Unix timestamp.",
+                "short_desc": "Filter by creation date/time",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Return order returns created at or after this date/time. The date "
+                    "is converted to Unix seconds before being passed to the BaseLinker API.",
             },
             "id_from": <DataProviderOptionInfo>{
                 "display_name": "ID From",
@@ -78,13 +74,6 @@ public class BaseLinkerOrderReturnsDataProvider inherits BaseLinkerDataProviderB
                 "type": AbstractDataProviderType::get(SoftIntOrNothingType),
                 "desc": "Only return returns in the given status.",
                 "ref_data": "order_return_statuses",
-            },
-            "get_unconfirmed": <DataProviderOptionInfo>{
-                "display_name": "Include Unconfirmed Returns",
-                "short_desc": "Return unconfirmed order returns too",
-                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
-                "desc": "When `True`, unconfirmed returns are included.",
-                "preselected": True,
             },
             "include_custom_extra_fields": <DataProviderOptionInfo>{
                 "display_name": "Include Custom Extra Fields",
@@ -174,17 +163,11 @@ public class BaseLinkerOrderReturnsDataProvider inherits BaseLinkerDataProviderB
         if (exists search_options.order_id) {
             base_params.order_id = int(search_options.order_id);
         }
-        if (exists search_options.date_confirmed_from) {
-            base_params.date_confirmed_from = int(search_options.date_confirmed_from);
-        }
         if (exists search_options.date_from) {
-            base_params.date_from = int(search_options.date_from);
+            base_params.date_from = int(get_epoch_seconds(search_options.date_from));
         }
         if (exists search_options.status_id) {
             base_params.status_id = int(search_options.status_id);
-        }
-        if (exists search_options.get_unconfirmed) {
-            base_params.get_unconfirmed = boolean(search_options.get_unconfirmed);
         }
         if (exists search_options.include_custom_extra_fields) {
             base_params.include_custom_extra_fields =
@@ -205,7 +188,7 @@ public class BaseLinkerOrderReturnsDataProvider inherits BaseLinkerDataProviderB
         # Single-return fast path
         if (exists search_options.return_id) {
             hash<auto> response = callMethod("getOrderReturns", base_params);
-            records = response.returns ?? ();
+            records = map convertEpochFields($1), (response.returns ?? ());
             return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
                 search_options, (new BaseLinkerOrderReturnDataType()).getFields());
         }
@@ -221,7 +204,7 @@ public class BaseLinkerOrderReturnsDataProvider inherits BaseLinkerDataProviderB
                 break;
             }
             foreach hash<auto> ret in (page) {
-                records += ret;
+                records += convertEpochFields(ret);
                 --remaining;
                 if (!remaining) {
                     break;
@@ -235,6 +218,16 @@ public class BaseLinkerOrderReturnsDataProvider inherits BaseLinkerDataProviderB
 
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerOrderReturnDataType()).getFields());
+    }
+
+    #! Converts BaseLinker epoch-seconds fields in a record to absolute dates
+    private static hash<auto> convertEpochFields(hash<auto> ret) {
+        foreach string key in (("date_add", "date_in_status")) {
+            if (exists ret{key} && ret{key}.typeCode() == NT_INT) {
+                ret{key} = 1970-01-01Z + seconds(ret{key});
+            }
+        }
+        return ret;
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {
