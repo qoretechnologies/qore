@@ -288,13 +288,14 @@ class AssertDebugTest inherits QUnit::Test {
         }
         on_exit unlink(tmpfile);
 
-        # Find qore executable - ENV._ points to the current interpreter
-        # Skip test if running under valgrind or other wrappers
-        string qore_bin = ENV._;
-        if (qore_bin !~ /\/qore$/) {
+        # Find qore executable.  run_tests.sh exports QORE_BINARY; ENV._ is
+        # shell-dependent and may be missing under gosu/env in CI.
+        *string qore_bin_opt = ENV.QORE_BINARY ?? ENV._;
+        if (!qore_bin_opt || qore_bin_opt !~ /\/qore$/) {
             testSkip("skipping command-line test: running under wrapper (valgrind, etc.)");
             return;
         }
+        string qore_bin = qore_bin_opt;
 
         # Test without --enable-debug: @debug should be skipped, counter stays 0
         string output = backquote(sprintf("%s '%s' 2>&1", qore_bin, tmpfile));
@@ -346,12 +347,14 @@ public namespace TestDebugModule {
 ");
         }
 
-        # Find qore executable
-        string qore_bin = ENV._;
-        if (qore_bin !~ /\/qore$/) {
+        # Find qore executable.  run_tests.sh exports QORE_BINARY; ENV._ is
+        # shell-dependent and may be missing under gosu/env in CI.
+        *string qore_bin_opt = ENV.QORE_BINARY ?? ENV._;
+        if (!qore_bin_opt || qore_bin_opt !~ /\/qore$/) {
             testSkip("skipping module debug test: running under wrapper (valgrind, etc.)");
             return;
         }
+        string qore_bin = qore_bin_opt;
 
         # Test 1: Without --enable-debug, @debug in module should NOT execute
         string script1 = tmpdir + "/test_without_debug.q";
