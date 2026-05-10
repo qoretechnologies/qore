@@ -2844,6 +2844,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
                     locals_slot_cache[sid] = val;
                     locals_instantiated[sid] = true;
+                    if (sid < locals_ir_only.size()) {
+                        // Direct params intentionally bypass the runtime local
+                        // stack.  Preserve their slot-cache values across
+                        // generic call/scope invalidation; there is no TLS
+                        // value to reload on a later LoadLocal miss.
+                        locals_ir_only[sid] = true;
+                    }
                 }
             }
         }
@@ -5457,6 +5464,9 @@ load_local_done:
                         return false;
                     }
                     target_val = tv.getAsBigInt();
+                    if (fused_inst->target_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache[fused_inst->target_slot_id] = QoreValue(target_val);
+                    }
                     if (nd && tv.hasNode()) {
                         tv.getInternalNode()->deref(xsink);
                     }
@@ -5480,6 +5490,9 @@ load_local_done:
                         return false;
                     }
                     source_val = sv.getAsBigInt();
+                    if (fused_inst->source_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache[fused_inst->source_slot_id] = QoreValue(source_val);
+                    }
                     if (nd && sv.hasNode()) {
                         sv.getInternalNode()->deref(xsink);
                     }
@@ -5539,6 +5552,9 @@ load_local_done:
                         return false;
                     }
                     local_val = lv.getAsBigInt();
+                    if (fused_inst->slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache[fused_inst->slot_id] = QoreValue(local_val);
+                    }
                     if (nd && lv.hasNode()) {
                         lv.getInternalNode()->deref(xsink);
                     }
@@ -5598,6 +5614,9 @@ load_local_done:
                         return false;
                     }
                     lhs_val = lv.getAsBigInt();
+                    if (fused_inst->lhs_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache[fused_inst->lhs_slot_id] = QoreValue(lhs_val);
+                    }
                     if (nd && lv.hasNode()) {
                         lv.getInternalNode()->deref(xsink);
                     }
@@ -5620,6 +5639,9 @@ load_local_done:
                         return false;
                     }
                     rhs_val = rv.getAsBigInt();
+                    if (fused_inst->rhs_slot_id < locals_slot_cache.size()) {
+                        locals_slot_cache[fused_inst->rhs_slot_id] = QoreValue(rhs_val);
+                    }
                     if (nd && rv.hasNode()) {
                         rv.getInternalNode()->deref(xsink);
                     }

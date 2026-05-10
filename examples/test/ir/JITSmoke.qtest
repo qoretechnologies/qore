@@ -94,6 +94,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("IR-only condition local regex loop", \testIrOnlyConditionLocalRegexLoop());
         addTestCase("IR-only maybe-NOTHING condition local", \testIrOnlyConditionLocalMaybeNothing());
         addTestCase("IR-only optional hash local missing member", \testIrOnlyOptionalHashLocalMissingMember());
+        addTestCase("direct params survive scoped loop locals", \testDirectParamsSurviveScopedLoopLocals());
         # Optimized higher-order function tests
         addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
         addTestCase("optimized foldl diff/min/max", \testJitFoldlDiffMinMax());
@@ -1502,6 +1503,22 @@ printf(\"%d\\n\", count(h));
             string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
             string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
             assertEq("3", result, sprintf("optional hash local missing member %s", mode));
+        }
+    }
+
+    testDirectParamsSurviveScopedLoopLocals() {
+        string code = "%modern
+sub preserve(int n) {
+    for (int i = 0; i < n; i++) {
+    }
+    printf(\"%y:%s\\n\", n, type(n));
+}
+preserve(2);
+";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            assertEq("2:integer", result, sprintf("direct params survive scoped loop locals %s", mode));
         }
     }
 

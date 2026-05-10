@@ -2804,6 +2804,21 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
         return;
     }
 
+    // Reserve stable slot-cache entries for signature-owned locals before the
+    // generic slot pass assigns body locals.  Direct-param IR calls may keep
+    // parameters only in the slot cache; scoped locals such as `for (int i...)`
+    // must never reuse and clear those parameter slots at scope exit.
+    auto seed_signature_slot = [func, next_slot = uint32_t(0)](LocalVar* lv) mutable {
+        if (lv && func->local_var_slots.find(lv) == func->local_var_slots.end()) {
+            func->local_var_slots[lv] = next_slot++;
+        }
+    };
+    for (unsigned i = 0; i < signature.numParams(); ++i) {
+        seed_signature_slot(signature.lv[i]);
+    }
+    seed_signature_slot(signature.argvid);
+    seed_signature_slot(signature.selfid);
+
     // Compute slot IDs, max_value_id, and embed pre-computed fields in instructions
     // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated
     func->computeSlotIdsAndEmbed();

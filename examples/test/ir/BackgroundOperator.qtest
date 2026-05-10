@@ -44,6 +44,7 @@ class BackgroundOperatorTest inherits QUnit::Test {
         addTestCase("call-ref / closure call", \testCallRefCall());
         addTestCase("call-ref / closure call (zero args)", \testCallRefCallZeroArgs());
         addTestCase("nested background calls", \testNestedBackground());
+        addTestCase("background params after loop local cleanup", \testParamsAfterLoopLocalCleanup());
         addTestCase("background returns TID", \testReturnsTid());
 
         set_return_value(main());
@@ -238,6 +239,23 @@ sub main() {
 }
 main();";
         runAndExpect(code, "deep", "nested background");
+    }
+
+    testParamsAfterLoopLocalCleanup() {
+        string code = "
+our Qore::Thread::Queue q();
+sub produce(Qore::Thread::Queue out, int count) {
+    for (int i = 0; i < count; i++) {
+    }
+    out.push({\"completed\": count});
+}
+sub main() {
+    background produce(q, 10);
+    hash<auto> result = q.get();
+    printf(\"%y:%s\\n\", result.completed, type(result.completed));
+}
+main();";
+        runAndExpect(code, "10:integer", "background params after loop local cleanup");
     }
 
     testReturnsTid() {
