@@ -777,8 +777,8 @@ public:
     //! Assignment operator (trivial - just copies bits)
     QoreValue& operator=(const QoreValue& n) noexcept = default;
 
-    //! Returns true if the value is not NOTHING
-    DLLLOCAL explicit operator bool() const { return !isNothing(); }
+    //! Returns true if the value is neither NOTHING nor NULL
+    DLLLOCAL explicit operator bool() const { return bits != VAL_NOTHING && bits != VAL_NULL; }
 
     // ========================================================================
     // Raw access (for debugging and low-level operations)
@@ -918,7 +918,7 @@ public:
         return v;
     }
 
-    //! returns true if the value is not NOTHING
+    //! returns true if the value is neither NOTHING nor NULL
     DLLLOCAL operator bool() const {
         return (bool)v;
     }
@@ -954,7 +954,7 @@ public:
             needs_deref = false;
     }
 
-    //! returns true if the value is not NOTHING
+    //! returns true if the value is neither NOTHING nor NULL
     DLLLOCAL operator bool() const {
         return (bool)v;
     }
