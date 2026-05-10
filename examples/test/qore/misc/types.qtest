@@ -4791,9 +4791,14 @@ class TypeTest inherits QUnit::Test {
 
             {
                 Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
-                p.parse("softint sub t(softint i = 7) { return i; }\nsoftint sub u() { return t(NULL); }", "");
+                p.parse("softint sub t(softint i = 7) { return i; }\n"
+                    "softint sub u() { return t(NULL); }\n"
+                    "softint sub v() { any x = NULL; return t(x); }\n"
+                    "softint sub r(softint i) { return i; }", "");
                 assertEq(7, p.callFunction("t", NULL));
                 assertEq(7, p.callFunction("u"));
+                assertEq(7, p.callFunction("v"));
+                assertThrows("RUNTIME-OVERLOAD-ERROR", \p.callFunction(), "r", NULL);
             }
 
             {

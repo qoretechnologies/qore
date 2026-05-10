@@ -12443,6 +12443,17 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.child_expr = v;
         return id;
     }
+    // QoreLogicalAbsoluteNotEquals inherits from QoreLogicalAbsoluteEquals; check ANE first.
+    if (dynamic_cast<const QoreLogicalAbsoluteNotEqualsOperatorNode*>(node)) {
+        id.kind = AOTExprKind::LOG_ANE;
+        id.child_expr = v;
+        return id;
+    }
+    if (dynamic_cast<const QoreLogicalAbsoluteEqualsOperatorNode*>(node)) {
+        id.kind = AOTExprKind::LOG_AEQ;
+        id.child_expr = v;
+        return id;
+    }
     if (dynamic_cast<const QoreLogicalNotEqualsOperatorNode*>(node)) {
         id.kind = AOTExprKind::LOG_NE;
         id.child_expr = v;

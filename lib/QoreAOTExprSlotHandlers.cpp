@@ -598,6 +598,18 @@ static bool write_slot_LOG_NE(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreLogicalNotEqualsOperatorNode>(ctx);
 }
 
+static bool write_slot_LOG_AEQ(AOTExprSlotWriteCtx& ctx) {
+    if (dynamic_cast<const QoreLogicalAbsoluteNotEqualsOperatorNode*>(
+            ctx.expr.child_expr.getInternalNode())) {
+        return false;
+    }
+    return write_binary_slot_payload<QoreLogicalAbsoluteEqualsOperatorNode>(ctx);
+}
+
+static bool write_slot_LOG_ANE(AOTExprSlotWriteCtx& ctx) {
+    return write_binary_slot_payload<QoreLogicalAbsoluteNotEqualsOperatorNode>(ctx);
+}
+
 static bool write_slot_LOG_LT(AOTExprSlotWriteCtx& ctx) {
     return write_binary_slot_payload<QoreLogicalLessThanOperatorNode>(ctx);
 }

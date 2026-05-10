@@ -44,6 +44,12 @@ static_assert(QORE_IR_MAX_OPCODE == 370,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 
+// Pseudo dot-eval helpers such as size()/className() cannot be blindly inlined:
+// AST semantics first check object methods and hash member callrefs, then fall
+// back to pseudo-method dispatch.  The generic runtime helper preserves that
+// precedence; the qore_rt_pseudo_* helpers intentionally do not.
+static constexpr bool InlinePseudoDotEvalFastPath = false;
+
 static bool isFastFunctionCallEligible(const AbstractQoreFunctionVariant* variant) {
     const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
     return uvb && uvb->isStaticallyFastCallEligible();
@@ -9846,7 +9852,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* call_result;
 
             // Check for optimizable pseudo-methods (no arguments, known fast paths)
-            if (direct_inst->pseudo && nargs == 0 && direct_inst->method) {
+            if (InlinePseudoDotEvalFastPath && direct_inst->pseudo && nargs == 0 && direct_inst->method) {
                 const char* method_name = direct_inst->method->getName();
 
                 if (!strcmp(method_name, "typeCode")) {
@@ -10080,7 +10086,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* call_result;
 
             // Check for optimizable pseudo-methods (no arguments, known fast paths)
-            if (invoke_inst->pseudo && nargs == 0 && invoke_inst->method) {
+            if (InlinePseudoDotEvalFastPath && invoke_inst->pseudo && nargs == 0 && invoke_inst->method) {
                 const char* method_name = invoke_inst->method->getName();
 
                 if (!strcmp(method_name, "typeCode")) {

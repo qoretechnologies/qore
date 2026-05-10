@@ -79,6 +79,8 @@
 #include "qore/intern/QoreLogicalOrOperatorNode.h"
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteNotEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalLessThanOperatorNode.h"
 #include "qore/intern/QoreLogicalGreaterThanOperatorNode.h"
 #include "qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h"
@@ -3347,12 +3349,31 @@ static bool write_expr_log_ne(AOTExprWriteCtx& ctx) {
     return write_binary_expr<QoreLogicalNotEqualsOperatorNode>(ctx, AOTExprKind::LOG_NE);
 }
 
+static bool write_expr_log_aeq(AOTExprWriteCtx& ctx) {
+    if (dynamic_cast<const QoreLogicalAbsoluteNotEqualsOperatorNode*>(ctx.expr.getInternalNode())) {
+        return false;
+    }
+    return write_binary_expr<QoreLogicalAbsoluteEqualsOperatorNode>(ctx, AOTExprKind::LOG_AEQ);
+}
+
+static bool write_expr_log_ane(AOTExprWriteCtx& ctx) {
+    return write_binary_expr<QoreLogicalAbsoluteNotEqualsOperatorNode>(ctx, AOTExprKind::LOG_ANE);
+}
+
 static QoreValue read_expr_log_eq(AOTExprReadCtx& ctx) {
     return read_binary_expr<QoreLogicalEqualsOperatorNode>(ctx);
 }
 
 static QoreValue read_expr_log_ne(AOTExprReadCtx& ctx) {
     return read_binary_expr<QoreLogicalNotEqualsOperatorNode>(ctx);
+}
+
+static QoreValue read_expr_log_aeq(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreLogicalAbsoluteEqualsOperatorNode>(ctx);
+}
+
+static QoreValue read_expr_log_ane(AOTExprReadCtx& ctx) {
+    return read_binary_expr<QoreLogicalAbsoluteNotEqualsOperatorNode>(ctx);
 }
 
 static bool write_expr_range(AOTExprWriteCtx& ctx) {

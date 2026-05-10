@@ -5836,6 +5836,25 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
+    #! Resumes queued HTTP/2 or HTTP/3 reads after the persistent handler has
+    #! consumed a queued request
+    private resumeQueuedPersistentEntry(hash<auto> entry) {
+        if (!entry.hasKey("resume_reading")) {
+            return;
+        }
+
+        *code resume_reading = entry{"resume_reading"};
+        if (!resume_reading) {
+            return;
+        }
+
+        try {
+            resume_reading();
+        } catch () {
+            # already resumed — ignore
+        }
+    }
+
     #! Handles persistent connections via a dedicated handler pool thread
     /** This method is called when a handler opts into persistence.  It enters a loop reading
         subsequent requests from a Queue (populated by the I/O controller) and processes them
@@ -5950,13 +5969,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                     } else {
                         sendResponseSync(s, end_response);
                     }
-                    if (entry.resume_reading) {
-                        try {
-                            entry.resume_reading();
-                        } catch () {
-                            # already resumed — ignore
-                        }
-                    }
+                    resumeQueuedPersistentEntry(entry);
                     deregister_fn(sock_key);
                     drainOrphanedPersistentRequests(request_helper, pq, s,
                         \cx, cx_listener, phi, info);
@@ -6034,13 +6047,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # Ensure h2op is resumed even if handleRequest() or response
                 # sending throws — otherwise the connection is stuck.
                 on_exit {
-                    if (entry.resume_reading) {
-                        try {
-                            entry.resume_reading();
-                        } catch () {
-                            # already resumed — ignore
-                        }
-                    }
+                    resumeQueuedPersistentEntry(entry);
                 }
                 handleRequest(request_helper, self, s, \cx, req_hdr,
                     req_hdr.method == "HEAD", phi, info, \async_response);
@@ -6245,13 +6252,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # Process request
             hash<HttpAsyncResponseInfo> async_response = <HttpAsyncResponseInfo>{};
             on_exit {
-                if (entry.resume_reading) {
-                    try {
-                        entry.resume_reading();
-                    } catch () {
-                        # already resumed — ignore
-                    }
-                }
+                resumeQueuedPersistentEntry(entry);
             }
 
             try {

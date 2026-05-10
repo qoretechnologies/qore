@@ -85,6 +85,8 @@
 #include "qore/intern/QoreLogicalOrOperatorNode.h"
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteNotEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalLessThanOperatorNode.h"
 #include "qore/intern/QoreLogicalGreaterThanOperatorNode.h"
 #include "qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h"
@@ -6098,6 +6100,20 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     }
     if (auto* op = dynamic_cast<const QoreLogicalAndOperatorNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_AND));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalAbsoluteNotEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_ANE));
+        return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
+                parent_globals, const_reverse_map)
+            && classifyAndWriteExpr(writer, op->getRight(), parent_locals,
+                parent_globals, const_reverse_map);
+    }
+    if (auto* op = dynamic_cast<const QoreLogicalAbsoluteEqualsOperatorNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOG_AEQ));
         return classifyAndWriteExpr(writer, op->getLeft(), parent_locals,
                 parent_globals, const_reverse_map)
             && classifyAndWriteExpr(writer, op->getRight(), parent_locals,

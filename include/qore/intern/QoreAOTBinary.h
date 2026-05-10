@@ -1004,6 +1004,8 @@ enum class AOTExprKind : uint8_t {
     SQUARE_BRACKET_RANGE = 102, //!< Range subscript operator: source + start + stop
     DOT_EVAL_EXPR      = 103, //!< Slot wrapper for a full dot-eval expression payload
     UNARY_MINUS        = 104, //!< Unary minus operator: operand(AOTExprKind)
+    LOG_AEQ            = 105, //!< Logical absolute equality operator: left(AOTExprKind) + right(AOTExprKind)
+    LOG_ANE            = 106, //!< Logical absolute not-equals operator: left(AOTExprKind) + right(AOTExprKind)
     EXPR_TREE          = 0xFE, //!< Legacy recursive expression tree marker; rejected for new AOT output
     GENERIC_EVAL       = 0xFF //!< Legacy unsupported expression marker; rejected for new AOT output
 };

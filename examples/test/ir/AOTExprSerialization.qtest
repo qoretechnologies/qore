@@ -100,6 +100,15 @@ public namespace AOTExprSerializationMod {
         }
     }
 
+    public class AOTPseudoBase {
+    }
+
+    public class AOTPseudoWrapper inherits AOTPseudoBase {
+        public string className() {
+            return \"wrapped\";
+        }
+    }
+
     public list<string> sub head(list<string> xs, int n) {
         return xs[0..n - 1];
     }
@@ -166,6 +175,33 @@ public namespace AOTExprSerializationMod {
         }
     }
 
+    public string sub strictCompare(any lhs, any rhs) {
+        if (lhs === rhs) {
+            return \"same\";
+        }
+        if (lhs !== rhs) {
+            return \"different\";
+        }
+        return \"bad strict compare\";
+    }
+
+    public bool sub strictNotNull(any arg) {
+        return arg !== NULL;
+    }
+
+    public string sub pseudoDotEvalDispatch() {
+        AOTPseudoBase obj = new AOTPseudoWrapper();
+        if (obj.className() != \"wrapped\") {
+            return \"bad object pseudo dispatch\";
+        }
+
+        hash<auto> h = {\"size\": string sub () { return \"callref\"; }};
+        if (h.size() != \"callref\") {
+            return \"bad hash pseudo dispatch\";
+        }
+        return \"pseudo dispatch ok\";
+    }
+
     public string sub verify() {
         AOTIssueProgram p(0);
         AOTIssueRestrictedProgram p2(0);
@@ -197,6 +233,14 @@ public namespace AOTExprSerializationMod {
         if (invokeNewComplexList() != \"0\") {
             return \"bad typed list invoke\";
         }
+        if (strictCompare(NULL, NULL) != \"same\" || strictCompare(NULL, False) != \"different\"
+                || strictNotNull(NULL)) {
+            return \"bad strict compare\";
+        }
+        string pseudo_result = pseudoDotEvalDispatch();
+        if (pseudo_result != \"pseudo dispatch ok\") {
+            return pseudo_result;
+        }
         return \"ok\";
     }
 }
@@ -226,6 +270,10 @@ public namespace AOTExprSerializationMod {
         File script();
         script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
         script.write("%modern\n%requires AOTExprSerializationMod\n"
+            "any v = NULL;\n"
+            "if (!(NULL === NULL) || (v !== NULL) || !(NULL !== False)) {\n"
+            "    throw \"BAD-STRICT-COMPARE\";\n"
+            "}\n"
             "printf(\"%s\\n\", AOTExprSerializationMod::verify());\n");
         script.close();
 

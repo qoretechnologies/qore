@@ -10228,6 +10228,8 @@ lvalue_path_unary_done:
                         ? direct_inst->method->getName()
                         : direct_inst->fallback_method_name;
                     qore_type_t base_type = base.getType();
+                    bool name_dispatch_first = base_type == NT_OBJECT || base_type == NT_WEAKREF
+                        || base_type == NT_HASH || base_type == NT_WEAKREF_HASH;
 
                     // Resolve pseudo-method at runtime if not resolved at
                     // deserialization time (e.g. pseudo-class not found)
@@ -10241,7 +10243,11 @@ lvalue_path_unary_done:
                         }
                     }
 
-                    if (method_name && !strcmp(method_name, "typeCode") && nargs == 0) {
+                    if (name_dispatch_first && method_name) {
+                        called_external = true;
+                        res = fromBits(dot_eval_fallback_with_args(base, method_name,
+                            nanboxed_args, nargs, xsink));
+                    } else if (method_name && !strcmp(method_name, "typeCode") && nargs == 0) {
                         // Inline: return type code constant
                         res = QoreValue(static_cast<int64_t>(base_type));
                     } else if (method_name && !strcmp(method_name, "size") && nargs == 0) {
@@ -10389,6 +10395,8 @@ lvalue_path_unary_done:
                         ? de_invoke_inst->method->getName()
                         : de_invoke_inst->fallback_method_name;
                     qore_type_t base_type = base.getType();
+                    bool name_dispatch_first = base_type == NT_OBJECT || base_type == NT_WEAKREF
+                        || base_type == NT_HASH || base_type == NT_WEAKREF_HASH;
 
                     // Resolve pseudo-method at runtime if not resolved at
                     // deserialization time
@@ -10402,7 +10410,11 @@ lvalue_path_unary_done:
                         }
                     }
 
-                    if (method_name && !strcmp(method_name, "typeCode") && nargs == 0) {
+                    if (name_dispatch_first && method_name) {
+                        called_external = true;
+                        res = fromBits(dot_eval_fallback_with_args(base, method_name,
+                            nanboxed_args, nargs, xsink));
+                    } else if (method_name && !strcmp(method_name, "typeCode") && nargs == 0) {
                         // Inline: return type code constant
                         res = QoreValue(static_cast<int64_t>(base_type));
                     } else if (method_name && !strcmp(method_name, "size") && nargs == 0) {

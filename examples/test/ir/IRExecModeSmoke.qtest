@@ -3179,10 +3179,17 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
+        script.file.write("class Base {\n");
+        script.file.write("}\n");
+        script.file.write("class Wrapper inherits Base {\n");
+        script.file.write("    string className() { return \"WrapperOverride\"; }\n");
+        script.file.write("}\n");
+        script.file.write("Base b = new Wrapper();\n");
         script.file.write("hash h = {};\n");
         script.file.write("h.f = int sub () { return 7; };\n");
+        script.file.write("h.size = string sub () { return \"closure\"; };\n");
         script.file.write("int result = h.f();\n");
-        script.file.write("printf(\"doteval:%d\\n\", result);\n");
+        script.file.write("printf(\"doteval:%d:%s:%s\\n\", result, b.className(), h.size());\n");
         script.file.close();
 
         TmpFile out();
@@ -3201,7 +3208,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
 
         string stdout_output = ReadOnlyFile::readTextFile(out.path);
-        assertEq("doteval:7\n", stdout_output, "Unexpected IR dot-eval output");
+        assertEq("doteval:7:WrapperOverride:closure\n", stdout_output, "Unexpected IR dot-eval output");
     }
 
     testIrNestedExceptionSmoke() {

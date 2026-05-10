@@ -3211,6 +3211,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             }
             case AOTExprKind::LOG_EQ:
             case AOTExprKind::LOG_NE:
+            case AOTExprKind::LOG_AEQ:
+            case AOTExprKind::LOG_ANE:
             case AOTExprKind::LOG_LT:
             case AOTExprKind::LOG_GT:
             case AOTExprKind::LOG_LE:
@@ -3258,6 +3260,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                 } else if (kind == AOTExprKind::LOG_NE) {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreLogicalNotEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::LOG_AEQ) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalAbsoluteEqualsOperatorNode(&loc_builtin, left, right)));
+                } else if (kind == AOTExprKind::LOG_ANE) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new QoreLogicalAbsoluteNotEqualsOperatorNode(&loc_builtin, left, right)));
                 } else if (kind == AOTExprKind::LOG_LT) {
                     ctx->exprs[i] = toBitsNB(QoreValue(
                         new QoreLogicalLessThanOperatorNode(&loc_builtin, left, right)));

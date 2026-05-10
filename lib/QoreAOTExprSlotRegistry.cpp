@@ -63,6 +63,8 @@
 #include "qore/intern/QoreLogicalOrOperatorNode.h"
 #include "qore/intern/QoreLogicalEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalNotEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteEqualsOperatorNode.h"
+#include "qore/intern/QoreLogicalAbsoluteNotEqualsOperatorNode.h"
 #include "qore/intern/QoreLogicalLessThanOperatorNode.h"
 #include "qore/intern/QoreLogicalGreaterThanOperatorNode.h"
 #include "qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h"
@@ -441,8 +443,12 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     {"DOT_EVAL_EXPR", 103, true, write_slot_DOT_EVAL_EXPR, "Full dot-eval expression slot payload"},
     // 104: UNARY_MINUS
     {"UNARY_MINUS", 104, true, write_slot_UNARY_MINUS, "Unary minus operator"},
-    {nullptr, 105, false, nullptr, nullptr},
-    {nullptr, 106, false, nullptr, nullptr},
+    // 105: LOG_AEQ
+    {"LOG_AEQ", 105, true, write_slot_LOG_AEQ, "Logical absolute equality operator"},
+
+    // 106: LOG_ANE
+    {"LOG_ANE", 106, true, write_slot_LOG_ANE, "Logical absolute not-equals operator"},
+
     {nullptr, 107, false, nullptr, nullptr},
     {nullptr, 108, false, nullptr, nullptr},
     {nullptr, 109, false, nullptr, nullptr},

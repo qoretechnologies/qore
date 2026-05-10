@@ -11351,6 +11351,20 @@ static uint64_t qore_rt_dot_eval_pseudo_method_direct_impl(uint64_t base_bits, c
         return toBits(QoreValue());
     }
 
+    // Match QoreDotEvalOperatorNode::evalWithBase(): objects and hashes get
+    // normal name-based dispatch before pseudo-method dispatch.  This preserves
+    // user method overrides such as className() and hash member callrefs such as
+    // h.size().
+    switch (base.getType()) {
+        case NT_OBJECT:
+        case NT_WEAKREF:
+        case NT_HASH:
+        case NT_WEAKREF_HASH:
+            return dot_eval_fallback_with_args(base, method->getName(), args, arg_cleanups, nargs, xsink);
+        default:
+            break;
+    }
+
     // Unwrap weak references — pseudo method handlers expect the underlying value
     if (base.getType() == NT_WEAKREF) {
         QoreObject* o = base.get<const WeakReferenceNode>()->get();
