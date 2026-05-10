@@ -57,7 +57,7 @@ public class WooCommerceCreateOrderRequestDataType inherits HashDataType {
             },
             "line_items": {
                 "display_name": "Line Items",
-                "type": new ListDataType("LineItems", AutoHashType, True),
+                "type": new ListDataType("LineItems", new WooCommerceLineItemDataType(), True),
                 "desc": "List of line items (products) for the order",
                 "preselected": True,
             },
@@ -87,17 +87,17 @@ public class WooCommerceCreateOrderRequestDataType inherits HashDataType {
             },
             "shipping_lines": {
                 "display_name": "Shipping Lines",
-                "type": new ListDataType("ShippingLines", AutoHashType, True),
+                "type": new ListDataType("ShippingLines", new WooCommerceShippingLineDataType(), True),
                 "desc": "List of shipping lines for the order",
             },
             "fee_lines": {
                 "display_name": "Fee Lines",
-                "type": new ListDataType("FeeLines", AutoHashType, True),
+                "type": new ListDataType("FeeLines", new WooCommerceFeeLineDataType(), True),
                 "desc": "List of fee lines for the order",
             },
             "coupon_lines": {
                 "display_name": "Coupon Lines",
-                "type": new ListDataType("CouponLines", AutoHashType, True),
+                "type": new ListDataType("CouponLines", new WooCommerceCouponLineDataType(), True),
                 "desc": "List of coupon lines for the order",
             },
             "customer_note": {
@@ -106,9 +106,28 @@ public class WooCommerceCreateOrderRequestDataType inherits HashDataType {
                 "desc": "Note left by the customer during checkout",
                 "example_value": "Please deliver before noon.",
             },
+            "parent_id": {
+                "display_name": "Parent Order ID",
+                "type": IntOrNothingType,
+                "desc": "Parent order ID (`0` for orders with no parent)",
+                "ref_data": "orders",
+            },
+            "transaction_id": {
+                "display_name": "Transaction ID",
+                "type": StringOrNothingType,
+                "desc": "Unique payment provider transaction ID for the order",
+                "example_value": "ch_1ABCD2EFGH3IJKL4",
+            },
+            "created_via": {
+                "display_name": "Created Via",
+                "type": StringOrNothingType,
+                "desc": "Identifier showing where the order originated (e.g. `rest-api`, `checkout`); can only be "
+                    "set when creating the order",
+                "example_value": "rest-api",
+            },
             "meta_data": {
                 "display_name": "Meta Data",
-                "type": new ListDataType("MetaData", AutoHashType, True),
+                "type": new ListDataType("MetaData", new WooCommerceMetaDataType(), True),
                 "desc": "List of metadata key-value pairs for the order",
             },
         };

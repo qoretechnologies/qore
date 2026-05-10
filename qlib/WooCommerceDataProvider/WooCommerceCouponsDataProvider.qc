@@ -63,14 +63,14 @@ public class WooCommerceCouponsDataProvider inherits WooCommerceDataProviderBase
             "after": <DataProviderOptionInfo>{
                 "display_name": "After",
                 "short_desc": "Filter by date (after)",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Limit response to coupons created after a given ISO8601 date string",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to coupons created after the given date",
             },
             "before": <DataProviderOptionInfo>{
                 "display_name": "Before",
                 "short_desc": "Filter by date (before)",
-                "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Limit response to coupons created before a given ISO8601 date string",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to coupons created before the given date",
             },
             "per_page": <DataProviderOptionInfo>{
                 "display_name": "Per Page",
@@ -149,6 +149,12 @@ public class WooCommerceCouponsDataProvider inherits WooCommerceDataProviderBase
         hash<auto> params = {} + search_options;
         if (!params.per_page) {
             params.per_page = DefaultPageSize;
+        }
+        if (params.after) {
+            params.after = format_date("YYYY-MM-DDTHH:mm:SS", params.after);
+        }
+        if (params.before) {
+            params.before = format_date("YYYY-MM-DDTHH:mm:SS", params.before);
         }
         auto result = doGet("coupons", params);
         return new DefaultRecordIterator(new ListHashIterator(result.typeCode() == NT_LIST ? result : ()),

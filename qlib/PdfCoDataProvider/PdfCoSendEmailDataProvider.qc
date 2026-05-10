@@ -30,10 +30,11 @@ public class PdfCoSendEmailRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "url": {
-                "type": StringOrNothingType,
+                "type": StringType,
                 "display_name": "Attachment URL",
                 "short_desc": "URL to the file to attach to the email",
                 "desc": "URL to the file to attach to the email",
+                "required": True,
             },
             "from": {
                 "type": StringType,
@@ -41,7 +42,7 @@ public class PdfCoSendEmailRequestDataType inherits HashDataType {
                 "short_desc": "Sender name and email address",
                 "desc": "Sender name and email address (e.g., `John Doe <john@example.com>`)",
                 "required": True,
-                "preselected": True,
+                "example_value": "John Doe <john@example.com>",
             },
             "to": {
                 "type": StringType,
@@ -49,7 +50,7 @@ public class PdfCoSendEmailRequestDataType inherits HashDataType {
                 "short_desc": "Recipient name and email address",
                 "desc": "Recipient name and email address (e.g., `Jane Doe <jane@example.com>`)",
                 "required": True,
-                "preselected": True,
+                "example_value": "Jane Doe <jane@example.com>",
             },
             "subject": {
                 "type": StringType,
@@ -57,7 +58,7 @@ public class PdfCoSendEmailRequestDataType inherits HashDataType {
                 "short_desc": "Email subject line",
                 "desc": "Email subject line",
                 "required": True,
-                "preselected": True,
+                "example_value": "Your invoice is ready",
             },
             "smtpserver": {
                 "type": StringType,
@@ -65,7 +66,7 @@ public class PdfCoSendEmailRequestDataType inherits HashDataType {
                 "short_desc": "SMTP server address",
                 "desc": "SMTP server address (e.g., `smtp.gmail.com`)",
                 "required": True,
-                "preselected": True,
+                "example_value": "smtp.gmail.com",
             },
             "smtpport": {
                 "type": SoftIntType,
@@ -73,7 +74,6 @@ public class PdfCoSendEmailRequestDataType inherits HashDataType {
                 "short_desc": "SMTP server port number",
                 "desc": "SMTP server port number (e.g., `587` for TLS, `465` for SSL)",
                 "required": True,
-                "preselected": True,
                 "example_value": 587,
             },
             "smtpusername": {
@@ -112,13 +112,7 @@ public class PdfCoSendEmailRequestDataType inherits HashDataType {
                 "short_desc": "Send the email as a background job",
                 "desc": "Set to `True` to send the email as a background job",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

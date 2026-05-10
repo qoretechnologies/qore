@@ -246,7 +246,7 @@ public class BaseLinkerDataProviderTest inherits QUnit::Test {
         hash<string, int> expected_fields = {
             "log_id": NT_INT,
             "log_type": NT_INT,
-            "date": NT_INT,
+            "date": NT_DATE,
         };
 
         foreach string log_type_key in (keys BaseLinkerDataProvider::JournalLogTypeMap) {

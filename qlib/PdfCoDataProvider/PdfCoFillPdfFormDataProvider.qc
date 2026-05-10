@@ -51,7 +51,6 @@ public class PdfCoFillPdfFormRequestDataType inherits HashDataType {
                 "short_desc": "Form field name/value pairs to fill",
                 "desc": "Form field name/value pairs to fill in the PDF form",
                 "required": True,
-                "preselected": True,
             },
             "fieldsString": {
                 "type": StringOrNothingType,
@@ -86,13 +85,7 @@ public class PdfCoFillPdfFormRequestDataType inherits HashDataType {
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

@@ -35,6 +35,7 @@ public class WooCommerceUpdateCustomerRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the customer to update",
                 "required": True,
                 "example_value": 25,
+                "ref_data": "customers",
             },
             "email": {
                 "display_name": "Email",
@@ -77,7 +78,7 @@ public class WooCommerceUpdateCustomerRequestDataType inherits HashDataType {
             },
             "meta_data": {
                 "display_name": "Meta Data",
-                "type": new ListDataType("MetaData", AutoHashType, True),
+                "type": new ListDataType("MetaData", new WooCommerceMetaDataType(), True),
                 "desc": "List of metadata key-value pairs",
             },
         };

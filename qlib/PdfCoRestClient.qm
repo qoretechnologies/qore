@@ -206,8 +206,8 @@ public class PdfCoRestConnection inherits RestClient::RestConnection {
                     "short_desc": "PDF.co API key",
                     "type": "string",
                     "desc": "The PDF.co API key used for authentication.\n\n"
-                        "Get your API key from your PDF.co dashboard at "
-                        "https://app.pdf.co/",
+                        "Get your API key from your "
+                        "[PDF.co dashboard](https://app.pdf.co/).",
                     "sensitive": True,
                     "preselected": True,
                 },

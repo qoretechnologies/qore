@@ -33,20 +33,11 @@ public class PdfCoGenerateBarcodeRequestDataType inherits HashDataType {
                 "type": StringType,
                 "display_name": "Barcode Type",
                 "short_desc": "Barcode type to generate",
-                "desc": "Barcode type to generate",
+                "desc": "Barcode type to generate. PDF.co supports a wide range of linear, "
+                    "two-dimensional, and postal barcode formats.",
                 "required": True,
-                "preselected": True,
-                "allowed_values": (
-                    <AllowedValueInfo>{"value": "QRCode", "desc": "QR Code"},
-                    <AllowedValueInfo>{"value": "Code128", "desc": "Code 128"},
-                    <AllowedValueInfo>{"value": "Code39", "desc": "Code 39"},
-                    <AllowedValueInfo>{"value": "Datamatrix", "desc": "Data Matrix"},
-                    <AllowedValueInfo>{"value": "PDF417", "desc": "PDF417"},
-                    <AllowedValueInfo>{"value": "EAN13", "desc": "EAN-13"},
-                    <AllowedValueInfo>{"value": "EAN8", "desc": "EAN-8"},
-                    <AllowedValueInfo>{"value": "UPCA", "desc": "UPC-A"},
-                    <AllowedValueInfo>{"value": "UPCE", "desc": "UPC-E"},
-                ),
+                "example_value": "QRCode",
+                "allowed_values": PdfCoBarcodeTypeAllowedValues,
             },
             "value": {
                 "type": StringType,
@@ -54,7 +45,7 @@ public class PdfCoGenerateBarcodeRequestDataType inherits HashDataType {
                 "short_desc": "String value to encode",
                 "desc": "String value to encode inside the barcode",
                 "required": True,
-                "preselected": True,
+                "example_value": "https://qoretechnologies.com",
             },
             "decorationImage": {
                 "type": StringOrNothingType,
@@ -86,13 +77,7 @@ public class PdfCoGenerateBarcodeRequestDataType inherits HashDataType {
                 "short_desc": "Return the barcode image inline",
                 "desc": "Set to `True` to return the barcode image inline",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

@@ -49,6 +49,7 @@ public class PdfCoParseDocumentRequestDataType inherits HashDataType {
                 "display_name": "Template ID",
                 "short_desc": "Document parser template ID",
                 "desc": "Document parser template ID to use",
+                "ref_data": "document_parser_templates",
             },
             "template": {
                 "type": StringOrNothingType,
@@ -65,9 +66,18 @@ public class PdfCoParseDocumentRequestDataType inherits HashDataType {
                 "short_desc": "Output format for results",
                 "desc": "Output format for results",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "JSON", "desc": "JSON format (default)"},
-                    <AllowedValueInfo>{"value": "CSV", "desc": "CSV format"},
-                    <AllowedValueInfo>{"value": "XML", "desc": "XML format"},
+                    <AllowedValueInfo>{
+                        "value": "JSON", "display_name": "JSON",
+                        "desc": "JSON format (default)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "CSV", "display_name": "CSV",
+                        "desc": "CSV format",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "XML", "display_name": "XML",
+                        "desc": "XML format",
+                    },
                 ),
             },
             "pages": {
@@ -107,13 +117,7 @@ public class PdfCoParseDocumentRequestDataType inherits HashDataType {
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

@@ -35,6 +35,7 @@ public class WooCommerceCreateRefundRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the order to refund",
                 "example_value": 1234,
                 "required": True,
+                "ref_data": "orders",
             },
             "amount": {
                 "display_name": "Amount",
@@ -50,7 +51,7 @@ public class WooCommerceCreateRefundRequestDataType inherits HashDataType {
             },
             "line_items": {
                 "display_name": "Line Items",
-                "type": new ListDataType("LineItems", AutoHashType, True),
+                "type": new ListDataType("LineItems", new WooCommerceLineItemDataType(), True),
                 "desc": "List of line items to refund",
             },
             "api_refund": {

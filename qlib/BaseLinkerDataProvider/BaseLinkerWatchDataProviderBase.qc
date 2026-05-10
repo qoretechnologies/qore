@@ -26,7 +26,7 @@
 public namespace BaseLinkerDataProvider {
 
 #! Shared constructor-option hash for BaseLinker watch providers
-/** Adds a polling-interval option and a `since` cursor (Unix seconds) on top of
+/** Adds a polling-interval option and a `since` cursor (date/time) on top of
     the base client/connection options inherited from @ref BaseLinkerDataProviderBase.
 */
 public const WatchConstructorOptions = BaseLinkerDataProviderBase::BaseConstructorOptions + {
@@ -41,11 +41,12 @@ public const WatchConstructorOptions = BaseLinkerDataProviderBase::BaseConstruct
         "default_value": DefaultPollInterval,
     },
     "since": <DataProviderOptionInfo>{
-        "display_name": "Since (Unix Seconds)",
-        "short_desc": "Only return journal entries after this timestamp",
-        "type": AbstractDataProviderType::get(SoftIntOrNothingType),
-        "desc": "Journal cursor start, as Unix seconds since epoch. If not provided, polling "
-            "starts from now (no historical backfill).",
+        "display_name": "Since",
+        "short_desc": "Only return journal entries after this date/time",
+        "type": AbstractDataProviderType::get(DateOrNothingType),
+        "desc": "Journal cursor start as a date/time value. If not provided, polling starts "
+            "from now (no historical backfill). The date is converted to Unix seconds before "
+            "being passed to the BaseLinker `getJournalList` API.",
     },
 };
 
@@ -63,8 +64,8 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
         #! Last journal `log_id` seen; BaseLinker returns entries strictly after this value
         softint last_log_id = 0;
 
-        #! Optional Unix-seconds lower bound (inclusive) for the first poll
-        *softint since;
+        #! Optional date/time lower bound (inclusive) for the first poll
+        *date since;
     }
 
     #! Creates the object with an async REST client
@@ -110,7 +111,7 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
             if (last_log_id > 0) {
                 params.last_log_id = last_log_id;
             } else if (exists since) {
-                params.date_from = since;
+                params.date_from = int(get_epoch_seconds(since));
             }
             hash<auto> response = callMethod("getJournalList", params);
             list<auto> logs = response.logs ?? ();
@@ -122,7 +123,7 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
                 if (lid > last_log_id) {
                     last_log_id = lid;
                 }
-                notifyObservers(getEventName(), entry);
+                notifyObservers(getEventName(), convertEpochFields(entry));
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "BaseLinker watch %s: poll failed: %s: %s",
@@ -149,7 +150,7 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
             });
             list<auto> logs = response.logs ?? ();
             if (logs) {
-                return logs[0];
+                return convertEpochFields(logs[0]);
             }
         } catch (hash<ExceptionInfo> ex) {
             # Fall through to fake example data on API error
@@ -159,8 +160,16 @@ public class BaseLinkerWatchDataProviderBase inherits BaseLinkerDataProviderBase
             "log_type": getLogType(),
             "order_id": 123456,
             "object_id": NOTHING,
-            "date": int(get_epoch_seconds(now_us())),
+            "date": now_us(),
         };
+    }
+
+    #! Converts BaseLinker journal-log epoch-seconds fields to absolute dates
+    private static hash<auto> convertEpochFields(hash<auto> entry) {
+        if (exists entry.date && entry.date.typeCode() == NT_INT) {
+            entry.date = 1970-01-01Z + seconds(entry.date);
+        }
+        return entry;
     }
 
     #! Returns the BaseLinker numeric log_type code for this watch provider

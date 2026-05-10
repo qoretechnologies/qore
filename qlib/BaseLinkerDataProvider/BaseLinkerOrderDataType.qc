@@ -50,18 +50,21 @@ public class BaseLinkerOrderDataType inherits HashDataType {
             },
             "date_confirmed": {
                 "display_name": "Date Confirmed",
-                "short_desc": "Confirmation timestamp (Unix seconds)",
-                "type": SoftIntOrNothingType,
+                "short_desc": "Confirmation timestamp",
+                "type": DateOrNothingType,
+                "desc": "Converted from the API's Unix-seconds payload to a date/time value.",
             },
             "date_add": {
                 "display_name": "Date Added",
-                "short_desc": "Creation timestamp (Unix seconds)",
-                "type": SoftIntOrNothingType,
+                "short_desc": "Creation timestamp",
+                "type": DateOrNothingType,
+                "desc": "Converted from the API's Unix-seconds payload to a date/time value.",
             },
             "date_in_status": {
                 "display_name": "Date In Status",
-                "short_desc": "Time the current status was entered (Unix seconds)",
-                "type": SoftIntOrNothingType,
+                "short_desc": "Time the current status was entered",
+                "type": DateOrNothingType,
+                "desc": "Converted from the API's Unix-seconds payload to a date/time value.",
             },
             "user_login": {
                 "display_name": "User Login",

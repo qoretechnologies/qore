@@ -30,7 +30,7 @@ public class WooCommerceProductsTotalsDataProvider inherits WooCommerceDataProvi
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
-            "name": "products-totals",
+            "name": "get-products-totals",
             "desc": "Retrieves WooCommerce product totals by type",
             "type": "WooCommerceProductsTotalsDataProvider",
             "supports_request": True,
@@ -59,7 +59,7 @@ public class WooCommerceProductsTotalsDataProvider inherits WooCommerceDataProvi
 
     #! Returns the provider name
     string getName() {
-        return "products-totals";
+        return "get-products-totals";
     }
 
     #! Returns the provider description

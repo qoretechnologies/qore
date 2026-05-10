@@ -29,7 +29,7 @@ public class InsightlyWatchNewLeadsDataProvider inherits InsightlyWatchDataProvi
     }
 
     list<hash<auto>> fetchRecords(date since) {
-        return fetchAllPages("Leads");
+        return fetchRecordsUpdatedAfter("Leads", since);
     }
 
     hash<auto> getFakeExampleData() {
@@ -37,8 +37,22 @@ public class InsightlyWatchNewLeadsDataProvider inherits InsightlyWatchDataProvi
             "LEAD_ID": 100001,
             "FIRST_NAME": "Robert",
             "LAST_NAME": "Johnson",
+            "TITLE": "VP Engineering",
             "EMAIL": "robert.johnson@example.com",
+            "PHONE": "+1-555-0142",
+            "MOBILE": "+1-555-0143",
+            "ORGANISATION_NAME": "Example Corp",
+            "WEBSITE": "https://example.com",
+            "INDUSTRY": "Technology",
+            "EMPLOYEE_COUNT": 250,
+            "LEAD_RATING": 4,
+            "LEAD_SOURCE_ID": 1,
+            "LEAD_STATUS_ID": 1,
+            "RESPONSIBLE_USER_ID": 12345,
+            "OWNER_USER_ID": 12345,
+            "VISIBLE_TO": "EVERYONE",
             "DATE_CREATED_UTC": "2026-04-01T10:30:00Z",
+            "DATE_UPDATED_UTC": "2026-04-01T10:30:00Z",
         };
     }
 

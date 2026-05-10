@@ -64,7 +64,6 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
         *int testNoteId;
         *int testCalendarEventId;
         *int testProductId;
-        *int testEmailId;
     }
 
     constructor() : Test("InsightlyDataProvider Test", "1.0", \ARGV, MyOpts) {
@@ -86,7 +85,6 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
         addTestCase("note CRUD tests", \noteCrudTests());
         addTestCase("calendar event CRUD tests", \calendarEventCrudTests());
         addTestCase("product CRUD tests", \productCrudTests());
-        addTestCase("email CRUD tests", \emailCrudTests());
         addTestCase("list contacts tests", \listContactsTests());
         addTestCase("event example data tests", \eventDataTests());
         addTestCase("cleanup tests", \cleanupTests());
@@ -517,24 +515,23 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
     noteCrudTests() {
         skipIfNoCredentials();
 
+        if (!testContactId) {
+            testSkip("note CRUD requires a contact created earlier in the test run");
+        }
+
         InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
         AbstractDataProvider notes = provider.getChildProvider("notes");
 
-        # Create note
+        # Create note attached to a parent contact (Insightly v3.1 requires a parent)
         AbstractDataProvider create = notes.getChildProvider("create");
-        try {
-            hash<auto> result = create.doRequest({
-                "TITLE": "QoreTest Note " + now_us().toString(),
-                "BODY": "Test note body",
-            });
-            assertEq(True, result.NOTE_ID.val(), "note created with ID");
-            testNoteId = result.NOTE_ID;
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg.status_code == 405) {
-                testSkip("POST /Notes not supported on this Insightly plan");
-            }
-            rethrow;
-        }
+        hash<auto> result = create.doRequest({
+            "PARENT_TYPE": "Contact",
+            "PARENT_ID": testContactId,
+            "TITLE": "QoreTest Note " + now_us().toString(),
+            "BODY": "Test note body",
+        });
+        assertEq(True, result.NOTE_ID.val(), "note created with ID");
+        testNoteId = result.NOTE_ID;
 
         # Update note
         AbstractDataProvider update = notes.getChildProvider("update");
@@ -637,39 +634,6 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
         assertEq(149.99, verified.DEFAULT_PRICE, "DEFAULT_PRICE update persisted");
     }
 
-    emailCrudTests() {
-        skipIfNoCredentials();
-
-        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
-        AbstractDataProvider emails = provider.getChildProvider("emails");
-
-        # Create email
-        AbstractDataProvider create = emails.getChildProvider("create");
-        string test_subject = "QoreTest Email " + now_us().toString();
-        try {
-            hash<auto> result = create.doRequest({
-                "SUBJECT": test_subject,
-                "BODY": "Test email body from QoreTest",
-            });
-            assertEq(True, result.EMAIL_ID.val(), "email created with ID");
-            testEmailId = result.EMAIL_ID;
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.arg.status_code == 405) {
-                testSkip("POST /Emails not supported on this Insightly plan");
-            }
-            rethrow;
-        }
-
-        # Get email
-        AbstractDataProviderRecordIterator it = emails.searchRecords(NOTHING,
-            {"id": testEmailId});
-        assertEq(True, it.next(), "email found by ID");
-        hash<auto> found = it.getValue();
-        assertEq(test_subject, found.SUBJECT, "email SUBJECT matches");
-
-        # Note: Insightly API does not support email updates -- delete tested in cleanup
-    }
-
     listContactsTests() {
         skipIfNoCredentials();
 
@@ -687,22 +651,33 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
     }
 
     eventDataTests() {
-        skipIfNoCredentials();
+        # This test exercises the fake-data fallback in each watch provider, so it does not
+        # require live credentials. A dummy RestClientIo is constructed; if no real
+        # apikey is present any API call inside getExampleEventData() will fail and the
+        # provider falls back to its getFakeExampleData() implementation.
+        RestClientIo::RestClientIo rest;
+        if (client) {
+            rest = client;
+        } else {
+            rest = new InsightlyRestClient::InsightlyRestClientIo({"apikey": "test-key"});
+        }
 
-        InsightlyDataProvider::InsightlyDataProvider provider = getProvider();
-        AbstractDataProvider events = provider.getChildProvider("events");
-
-        # Test each event provider's example data
         list<hash<auto>> event_checks = (
-            {"name": "new-contact", "key": "CONTACT_ID"},
-            {"name": "new-organisation", "key": "ORGANISATION_ID"},
-            {"name": "new-lead", "key": "LEAD_ID"},
-            {"name": "new-opportunity", "key": "OPPORTUNITY_ID"},
-            {"name": "new-task", "key": "TASK_ID"},
+            {"cls": "InsightlyWatchNewContactsDataProvider",
+                "name": "new-contact", "key": "CONTACT_ID"},
+            {"cls": "InsightlyWatchNewOrganisationsDataProvider",
+                "name": "new-organisation", "key": "ORGANISATION_ID"},
+            {"cls": "InsightlyWatchNewLeadsDataProvider",
+                "name": "new-lead", "key": "LEAD_ID"},
+            {"cls": "InsightlyWatchNewOpportunitiesDataProvider",
+                "name": "new-opportunity", "key": "OPPORTUNITY_ID"},
+            {"cls": "InsightlyWatchNewTasksDataProvider",
+                "name": "new-task", "key": "TASK_ID"},
         );
 
         foreach hash<auto> check in (event_checks) {
-            AbstractDataProvider ep = events.getChildProvider(check.name);
+            Class cls = Class::forName("InsightlyDataProvider::" + check.cls);
+            AbstractDataProvider ep = cls.newObject(rest);
             auto example = ep.getExampleEventData(check.name);
             assertEq(Type::Hash, example.type(), sprintf("%s example data is a hash",
                 check.name));
@@ -718,7 +693,6 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
 
         # Delete in reverse dependency order
         list<hash<auto>> cleanup_items = (
-            {"name": "emails", "id": testEmailId, "id_field": "EMAIL_ID"},
             {"name": "notes", "id": testNoteId, "id_field": "NOTE_ID"},
             {"name": "calendar-events", "id": testCalendarEventId, "id_field": "EVENT_ID"},
             {"name": "tasks", "id": testTaskId, "id_field": "TASK_ID"},

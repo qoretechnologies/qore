@@ -48,6 +48,26 @@ public class WooCommerceCreateTaxRateRequestDataType inherits HashDataType {
                 "desc": "The state code",
                 "example_value": "CA",
             },
+            "postcode": {
+                "display_name": "Postcode",
+                "type": StringOrNothingType,
+                "desc": "Single postcode this rate applies to (use `postcodes` for multiple)",
+            },
+            "city": {
+                "display_name": "City",
+                "type": StringOrNothingType,
+                "desc": "Single city this rate applies to (use `cities` for multiple)",
+            },
+            "postcodes": {
+                "display_name": "Postcodes",
+                "type": new ListDataType("Postcodes", SoftStringType, True),
+                "desc": "List of postcodes this rate applies to",
+            },
+            "cities": {
+                "display_name": "Cities",
+                "type": new ListDataType("Cities", SoftStringType, True),
+                "desc": "List of cities this rate applies to",
+            },
             "name": {
                 "display_name": "Name",
                 "type": StringOrNothingType,
@@ -59,6 +79,12 @@ public class WooCommerceCreateTaxRateRequestDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "desc": "The priority of this tax rate",
                 "example_value": 1,
+            },
+            "order": {
+                "display_name": "Display Order",
+                "type": IntOrNothingType,
+                "desc": "Display order of this tax rate",
+                "example_value": 0,
             },
             "compound": {
                 "display_name": "Compound",

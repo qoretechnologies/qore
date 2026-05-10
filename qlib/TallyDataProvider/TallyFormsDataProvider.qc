@@ -43,7 +43,7 @@ public const TallyFormsSearchOptions = {
     "workspaceIds": <DataProviderOptionInfo>{
         "display_name": "Workspace IDs",
         "short_desc": "Filter by workspace IDs",
-        "type": AbstractDataProviderType::get(SoftListOrNothingType),
+        "type": new ListDataType(AbstractDataProviderTypeMap."string", True),
         "desc": "List of workspace IDs to filter results",
     },
 };

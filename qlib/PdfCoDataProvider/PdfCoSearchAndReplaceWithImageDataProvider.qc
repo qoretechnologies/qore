@@ -50,7 +50,6 @@ public class PdfCoSearchAndReplaceWithImageRequestDataType inherits HashDataType
                 "short_desc": "The text string to search for",
                 "desc": "The text string to search for",
                 "required": True,
-                "preselected": True,
             },
             "replaceImage": {
                 "type": StringType,
@@ -58,7 +57,26 @@ public class PdfCoSearchAndReplaceWithImageRequestDataType inherits HashDataType
                 "short_desc": "URL to the replacement image",
                 "desc": "URL to the replacement image",
                 "required": True,
-                "preselected": True,
+            },
+            "regex": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Regex",
+                "short_desc": "Interpret search string as a regular expression",
+                "desc": "Set to `True` to interpret `searchString` as a regular expression "
+                    "(default: `False`)",
+            },
+            "caseSensitive": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Case Sensitive",
+                "short_desc": "Use case-sensitive matching",
+                "desc": "Set to `False` to disable case-sensitive matching (default: `True`)",
+            },
+            "replacementLimit": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Replacement Limit",
+                "short_desc": "Maximum number of replacements",
+                "desc": "Maximum number of replacements to perform. `0` means unlimited "
+                    "(default: `0`).",
             },
             "pages": {
                 "type": StringOrNothingType,
@@ -91,13 +109,7 @@ public class PdfCoSearchAndReplaceWithImageRequestDataType inherits HashDataType
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

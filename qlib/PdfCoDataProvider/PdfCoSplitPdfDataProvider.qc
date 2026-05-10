@@ -50,7 +50,7 @@ public class PdfCoSplitPdfRequestDataType inherits HashDataType {
                 "short_desc": "Page indices or ranges to split by",
                 "desc": "Page indices or ranges to split by (e.g., `1-3, 4-6, 7-`)",
                 "required": True,
-                "preselected": True,
+                "example_value": "1-3, 4-6",
             },
             "password": {
                 "type": StringOrNothingType,
@@ -77,13 +77,7 @@ public class PdfCoSplitPdfRequestDataType inherits HashDataType {
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

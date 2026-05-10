@@ -47,6 +47,7 @@ public class WooCommerceCreateCategoryRequestDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "desc": "The parent category ID",
                 "example_value": 0,
+                "ref_data": "categories",
             },
             "description": {
                 "display_name": "Description",

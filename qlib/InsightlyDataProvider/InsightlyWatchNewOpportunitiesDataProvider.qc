@@ -29,15 +29,29 @@ public class InsightlyWatchNewOpportunitiesDataProvider inherits InsightlyWatchD
     }
 
     list<hash<auto>> fetchRecords(date since) {
-        return fetchAllPages("Opportunities");
+        return fetchRecordsUpdatedAfter("Opportunities", since);
     }
 
     hash<auto> getFakeExampleData() {
         return {
             "OPPORTUNITY_ID": 100001,
             "OPPORTUNITY_NAME": "New Enterprise Deal",
+            "OPPORTUNITY_DETAILS": "Multi-year enterprise license deal with Acme Corp",
             "OPPORTUNITY_STATE": "Open",
+            "PROBABILITY": 60,
+            "BID_AMOUNT": 75000.00,
+            "BID_CURRENCY": "USD",
+            "BID_TYPE": "Fixed Bid",
+            "BID_DURATION": 12,
+            "FORECAST_CLOSE_DATE": "2026-09-30",
+            "PIPELINE_ID": 1,
+            "STAGE_ID": 1,
+            "CATEGORY_ID": 1,
+            "RESPONSIBLE_USER_ID": 12345,
+            "OWNER_USER_ID": 12345,
+            "VISIBLE_TO": "EVERYONE",
             "DATE_CREATED_UTC": "2026-04-01T10:30:00Z",
+            "DATE_UPDATED_UTC": "2026-04-01T10:30:00Z",
         };
     }
 

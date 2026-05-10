@@ -151,13 +151,14 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
 
     #! Returns fake example data when no real records are available
     private hash<auto> getFakeExampleData() {
+        date ts = 2026-04-07T12:00:00Z;
         return {
             "id": "abc123def456",
             "formId": form_id,
             "isCompleted": True,
-            "submittedAt": "2026-04-07T12:00:00.000Z",
-            "createdAt": "2026-04-07T12:00:00.000Z",
-            "updatedAt": "2026-04-07T12:00:00.000Z",
+            "submittedAt": ts,
+            "createdAt": ts,
+            "updatedAt": ts,
             "responses": (
                 {
                     "id": "resp_001",
@@ -168,8 +169,8 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
                     "sessionUuid": "550e8400-e29b-41d4-a716-446655440000",
                     "answer": "Example answer",
                     "formattedAnswer": "Example answer",
-                    "createdAt": "2026-04-07T12:00:00.000Z",
-                    "updatedAt": "2026-04-07T12:00:00.000Z",
+                    "createdAt": ts,
+                    "updatedAt": ts,
                 },
             ),
         };

@@ -50,7 +50,41 @@ public class PdfCoSearchTextRequestDataType inherits HashDataType {
                 "short_desc": "The text string to search for in the PDF",
                 "desc": "The text string to search for in the PDF",
                 "required": True,
-                "preselected": True,
+                "example_value": "invoice",
+            },
+            "regexSearch": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Regex Search",
+                "short_desc": "Treat searchString as a regular expression",
+                "desc": "Set to `True` to interpret `searchString` as a regular expression "
+                    "(default: `False`)",
+            },
+            "wordMatchingMode": {
+                "type": StringOrNothingType,
+                "display_name": "Word Matching Mode",
+                "short_desc": "Word boundary matching mode",
+                "desc": "Word boundary matching mode for the search",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "None", "display_name": "Substring",
+                        "desc": "Exact substring match (default)",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "SmartMatch", "display_name": "Smart Match",
+                        "desc": "Flexible word boundary match",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "ExactMatch", "display_name": "Exact Match",
+                        "desc": "Strict whole-word match",
+                    },
+                ),
+            },
+            "inline": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Inline",
+                "short_desc": "Include results directly in the response",
+                "desc": "Set to `True` to include results directly in the response instead of "
+                    "uploading them to a URL",
             },
             "pages": {
                 "type": StringOrNothingType,
@@ -83,13 +117,7 @@ public class PdfCoSearchTextRequestDataType inherits HashDataType {
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

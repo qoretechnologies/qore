@@ -45,6 +45,64 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
                     "provided directly",
             },
         };
+
+        #! Common search options for all list/find collection providers
+        /** Pagination, brief/count_total, and Search-endpoint filters
+            (`updated_after_utc`, `field_name`, `field_value`).
+            Resource-specific id options are added per-collection.
+        */
+        const CommonSearchOptions = {
+            "skip": <DataProviderOptionInfo>{
+                "display_name": "Skip",
+                "short_desc": "Number of records to skip",
+                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
+                "desc": "Number of records to skip for pagination",
+                "preselected": True,
+            },
+            "top": <DataProviderOptionInfo>{
+                "display_name": "Top",
+                "short_desc": "Maximum number of records to return",
+                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
+                "desc": "Maximum number of records to return (max " + MaxPageSize + ")",
+                "preselected": True,
+            },
+            "brief": <DataProviderOptionInfo>{
+                "display_name": "Brief",
+                "short_desc": "Return brief results",
+                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
+                "desc": "If `True`, returns only a subset of fields for each record",
+            },
+            "count_total": <DataProviderOptionInfo>{
+                "display_name": "Count Total",
+                "short_desc": "Include total count in response",
+                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
+                "desc": "If `True`, includes the total count of matching records in the "
+                    "`X-Total-Count` response header",
+            },
+            "updated_after_utc": <DataProviderOptionInfo>{
+                "display_name": "Updated After (UTC)",
+                "short_desc": "Only return records updated after this UTC timestamp",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Only return records that were updated after the given UTC timestamp. "
+                    "Routes the request through Insightly's `/Search` endpoint. "
+                    "Format: ISO 8601, e.g. `2026-04-09T16:58:14Z`",
+            },
+            "field_name": <DataProviderOptionInfo>{
+                "display_name": "Field Name",
+                "short_desc": "Filter by a standard or custom field name",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Standard field name (e.g. `LEAD_RATING`) or custom field name "
+                    "(e.g. `MyCustomField__c`) to filter on. Must be paired with `field_value`. "
+                    "Routes the request through Insightly's `/Search` endpoint.",
+            },
+            "field_value": <DataProviderOptionInfo>{
+                "display_name": "Field Value",
+                "short_desc": "Value to match for the named field",
+                "type": AbstractDataProviderType::get(SoftStringOrNothingType),
+                "desc": "Value to match against `field_name`. Must be paired with `field_name`. "
+                    "Routes the request through Insightly's `/Search` endpoint.",
+            },
+        };
     }
 
     private {
@@ -290,6 +348,111 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
         return False;
     }
 
+    #! Formats a date value as an ISO 8601 UTC string for use with Insightly's `updated_after_utc`
+    /** @param d the date value (treated as UTC; Insightly accepts ISO 8601 with `Z` suffix)
+        @return a string in the form \c "YYYY-MM-DDTHH:mm:SSZ"
+    */
+    static string formatUtcIso8601(date d) {
+        return d.format("YYYY-MM-DDTHH:mm:SS") + "Z";
+    }
+
+    #! Builds list/search query parameters from a SearchOptions hash
+    /** Translates SearchOptions keys to Insightly's expected query string parameters.
+        Booleans are stringified to \c "true"/\c "false"; \c updated_after_utc is formatted
+        as ISO 8601.
+    */
+    static hash<auto> buildListParams(*hash<auto> search_options) {
+        hash<auto> params = {};
+        if (search_options.skip) {
+            params.skip = search_options.skip;
+        }
+        if (search_options.top) {
+            params.top = search_options.top;
+        }
+        if (search_options.brief) {
+            params.brief = search_options.brief ? "true" : "false";
+        }
+        if (search_options.count_total) {
+            params.count_total = search_options.count_total ? "true" : "false";
+        }
+        if (search_options.field_name) {
+            params.field_name = search_options.field_name;
+        }
+        if (search_options.field_value) {
+            params.field_value = search_options.field_value;
+        }
+        if (search_options.updated_after_utc) {
+            params.updated_after_utc = InsightlyDataProviderBase::formatUtcIso8601(
+                search_options.updated_after_utc);
+        }
+        return params;
+    }
+
+    #! Returns whether the search options require routing through Insightly's `/Search` endpoint
+    /** The `/Search` endpoint is required for any of \c field_name, \c field_value, or
+        \c updated_after_utc filters; the plain list endpoint only supports pagination and
+        \c brief / \c count_total.
+    */
+    static bool requiresSearchEndpoint(*hash<auto> search_options) {
+        return exists search_options.field_name
+            || exists search_options.field_value
+            || exists search_options.updated_after_utc;
+    }
+
+    #! Runs a list/search request and returns a record iterator
+    /** Centralises the id-fetch, pagination, and `/Search`-endpoint routing logic so each
+        collection provider's \c searchRecordsImpl() boils down to a single call.
+
+        @param resource the API resource path (e.g. \c "Contacts")
+        @param where_cond the where condition (passed through to the iterator)
+        @param search_options the SearchOptions hash from the caller; the resource-specific
+        id field name is read via \a id_field
+        @param id_field the SearchOptions key holding the resource id (defaults to \c "id")
+        @return a record iterator over the matching records
+    */
+    private AbstractDataProviderRecordIterator runListSearch(string resource,
+            *hash<auto> where_cond, *hash<auto> search_options, string id_field = "id") {
+        if (search_options{id_field}) {
+            hash<auto> result = doGet(resource + "/" + string(search_options{id_field}));
+            return new DefaultRecordIterator(new ListHashIterator((result,)),
+                where_cond, search_options);
+        }
+        bool use_search = InsightlyDataProviderBase::requiresSearchEndpoint(search_options);
+        string path = use_search ? resource + "/Search" : resource;
+        hash<auto> params = InsightlyDataProviderBase::buildListParams(search_options);
+        list<hash<auto>> records;
+        if (search_options.top || search_options.skip || use_search) {
+            records = doGetList(path, params);
+        } else {
+            records = fetchAllPages(path);
+        }
+        return new DefaultRecordIterator(new ListHashIterator(records),
+            where_cond, search_options);
+    }
+
+    #! Fetches records updated after the given timestamp via the `/Search` endpoint
+    /** Used by polling watch providers; returns up to \a max_records records sorted by
+        Insightly's default ordering. Falls back to the plain list endpoint if the
+        \c /Search endpoint returns an error.
+    */
+    list<hash<auto>> fetchRecordsUpdatedAfter(string resource, date since,
+            int max_records = MaxPageSize) {
+        try {
+            return doGetList(resource + "/Search", {
+                "updated_after_utc": InsightlyDataProviderBase::formatUtcIso8601(since),
+                "top": max_records,
+                "skip": 0,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::WARN,
+                "Failed to fetch %s/Search?updated_after_utc=%s: %s: %s -- "
+                "falling back to plain list",
+                resource, InsightlyDataProviderBase::formatUtcIso8601(since),
+                ex.err, ex.desc);
+            return fetchAllPages(resource);
+        }
+    }
+
     #! Returns supported reference data types
     *hash<string, bool> getSupportedReferenceData() {
         return {
@@ -313,6 +476,7 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
             "task_categories": True,
             "project_categories": True,
             "teams": True,
+            "note_parent": True,
         };
     }
 
@@ -351,6 +515,27 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
             case "project_categories": return getReferenceSimple("ProjectCategories",
                 "CATEGORY_ID", "CATEGORY_NAME");
             case "teams": return getReferenceSimple("Teams", "TEAM_ID", "TEAM_NAME");
+            case "note_parent": return getReferenceNoteParent(action_opts);
+        }
+    }
+
+    #! Returns parent records of the kind selected by `PARENT_TYPE` (cascading reference data)
+    /** @param action_opts must contain \c PARENT_TYPE set to one of:
+        \c Contact, \c Lead, \c Opportunity, \c Organisation, \c Project
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceNoteParent(*hash<auto> action_opts) {
+        *string parent_type = action_opts.PARENT_TYPE;
+        if (!parent_type) {
+            return ();
+        }
+        switch (parent_type) {
+            case "Contact": return getReferenceContacts();
+            case "Organisation": return getReferenceOrganisations();
+            case "Lead": return getReferenceSimple("Leads", "LEAD_ID", "LAST_NAME");
+            case "Opportunity": return getReferenceSimple("Opportunities", "OPPORTUNITY_ID",
+                "OPPORTUNITY_NAME");
+            case "Project": return getReferenceSimple("Projects", "PROJECT_ID",
+                "PROJECT_NAME");
         }
     }
 

@@ -58,7 +58,7 @@ public class PdfCoUploadFileRequestDataType inherits HashDataType {
                 "short_desc": "Uploaded file expiration time in minutes",
                 "desc": "Uploaded file expiration time in minutes (default: `60`)",
             },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

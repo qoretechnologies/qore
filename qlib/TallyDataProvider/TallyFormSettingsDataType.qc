@@ -61,14 +61,18 @@ public class TallyFormSettingsDataType inherits HashDataType {
             "closeDate": {
                 "display_name": "Close Date",
                 "short_desc": "Scheduled close date",
-                "desc": "The date when the form will automatically close",
+                "desc": "The date when the form will automatically close, in `YYYY-MM-DD` format "
+                    "(for example `2025-12-31`)",
                 "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "2025-12-31",
             },
             "closeTime": {
                 "display_name": "Close Time",
                 "short_desc": "Scheduled close time",
-                "desc": "The time when the form will automatically close",
+                "desc": "The time when the form will automatically close, in 24-hour `HH:mm` format "
+                    "(for example `23:59`)",
                 "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "23:59",
             },
             "submissionsLimit": {
                 "display_name": "Submissions Limit",

@@ -53,6 +53,8 @@ public class TallyDataProvider inherits TallyDataProviderBase {
             "submissions": Class::forName("TallyDataProvider::TallySubmissionsDataProvider"),
             "questions": Class::forName("TallyDataProvider::TallyQuestionsDataProvider"),
             "webhooks": Class::forName("TallyDataProvider::TallyWebhooksDataProvider"),
+            "webhook-events": Class::forName("TallyDataProvider::TallyWebhookEventsDataProvider"),
+            "workspaces": Class::forName("TallyDataProvider::TallyWorkspacesDataProvider"),
             # Action providers (DPAT_API)
             "create-form": Class::forName("TallyDataProvider::TallyCreateFormDataProvider"),
             "get-form": Class::forName("TallyDataProvider::TallyGetFormDataProvider"),
@@ -63,6 +65,12 @@ public class TallyDataProvider inherits TallyDataProviderBase {
             "create-webhook": Class::forName("TallyDataProvider::TallyCreateWebhookDataProvider"),
             "update-webhook": Class::forName("TallyDataProvider::TallyUpdateWebhookDataProvider"),
             "delete-webhook": Class::forName("TallyDataProvider::TallyDeleteWebhookDataProvider"),
+            "retry-webhook-event": Class::forName(
+                "TallyDataProvider::TallyRetryWebhookEventDataProvider"),
+            "create-workspace": Class::forName("TallyDataProvider::TallyCreateWorkspaceDataProvider"),
+            "get-workspace": Class::forName("TallyDataProvider::TallyGetWorkspaceDataProvider"),
+            "update-workspace": Class::forName("TallyDataProvider::TallyUpdateWorkspaceDataProvider"),
+            "delete-workspace": Class::forName("TallyDataProvider::TallyDeleteWorkspaceDataProvider"),
             "get-current-user": Class::forName("TallyDataProvider::TallyGetCurrentUserDataProvider"),
             # Events
             "events": Class::forName("TallyDataProvider::TallyEventsDataProvider"),

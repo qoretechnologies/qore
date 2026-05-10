@@ -75,10 +75,15 @@ public class WooCommerceDataProvider inherits WooCommerceDataProviderBase {
             "update-stock-quantity": Class::forName("WooCommerceUpdateStockQuantityDataProvider"),
             "create-variation": Class::forName("WooCommerceCreateVariationDataProvider"),
             "update-variation": Class::forName("WooCommerceUpdateVariationDataProvider"),
+            "delete-variation": Class::forName("WooCommerceDeleteVariationDataProvider"),
+            "get-variation": Class::forName("WooCommerceGetVariationDataProvider"),
             "list-variations": Class::forName("WooCommerceListVariationsDataProvider"),
             "create-category": Class::forName("WooCommerceCreateCategoryDataProvider"),
             "update-category": Class::forName("WooCommerceUpdateCategoryDataProvider"),
+            "delete-category": Class::forName("WooCommerceDeleteCategoryDataProvider"),
             "create-tag": Class::forName("WooCommerceCreateTagDataProvider"),
+            "update-tag": Class::forName("WooCommerceUpdateTagDataProvider"),
+            "delete-tag": Class::forName("WooCommerceDeleteTagDataProvider"),
 
             # Action providers - Customers
             "create-customer": Class::forName("WooCommerceCreateCustomerDataProvider"),
@@ -98,19 +103,22 @@ public class WooCommerceDataProvider inherits WooCommerceDataProviderBase {
             "delete-webhook": Class::forName("WooCommerceDeleteWebhookDataProvider"),
 
             # Action providers - Reports
-            "sales-report": Class::forName("WooCommerceSalesReportDataProvider"),
-            "top-sellers-report": Class::forName("WooCommerceTopSellersReportDataProvider"),
-            "orders-totals": Class::forName("WooCommerceOrdersTotalsDataProvider"),
-            "products-totals": Class::forName("WooCommerceProductsTotalsDataProvider"),
-            "customers-totals": Class::forName("WooCommerceCustomersTotalsDataProvider"),
+            "get-sales-report": Class::forName("WooCommerceSalesReportDataProvider"),
+            "get-top-sellers-report": Class::forName("WooCommerceTopSellersReportDataProvider"),
+            "get-orders-totals": Class::forName("WooCommerceOrdersTotalsDataProvider"),
+            "get-products-totals": Class::forName("WooCommerceProductsTotalsDataProvider"),
+            "get-customers-totals": Class::forName("WooCommerceCustomersTotalsDataProvider"),
 
             # Action providers - Shipping/Tax/Settings/System
             "list-shipping-zones": Class::forName("WooCommerceListShippingZonesDataProvider"),
             "list-shipping-methods": Class::forName("WooCommerceListShippingMethodsDataProvider"),
             "create-tax-rate": Class::forName("WooCommerceCreateTaxRateDataProvider"),
+            "get-tax-rate": Class::forName("WooCommerceGetTaxRateDataProvider"),
+            "update-tax-rate": Class::forName("WooCommerceUpdateTaxRateDataProvider"),
+            "delete-tax-rate": Class::forName("WooCommerceDeleteTaxRateDataProvider"),
             "get-setting": Class::forName("WooCommerceGetSettingDataProvider"),
             "update-setting": Class::forName("WooCommerceUpdateSettingDataProvider"),
-            "system-status": Class::forName("WooCommerceSystemStatusDataProvider"),
+            "get-system-status": Class::forName("WooCommerceSystemStatusDataProvider"),
 
             # Event providers
             "events": Class::forName("WooCommerceEventsDataProvider"),

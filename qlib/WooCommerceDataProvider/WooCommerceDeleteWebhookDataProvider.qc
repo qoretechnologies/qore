@@ -35,6 +35,7 @@ public class WooCommerceDeleteWebhookRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the webhook to delete",
                 "required": True,
                 "example_value": 142,
+                "ref_data": "webhooks",
             },
             "force": {
                 "display_name": "Force",

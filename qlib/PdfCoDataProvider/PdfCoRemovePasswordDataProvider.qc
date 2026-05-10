@@ -50,7 +50,6 @@ public class PdfCoRemovePasswordRequestDataType inherits HashDataType {
                 "short_desc": "Current password of the PDF document",
                 "desc": "The current password of the PDF document",
                 "required": True,
-                "preselected": True,
                 "sensitive": True,
             },
             "async": {
@@ -71,13 +70,7 @@ public class PdfCoRemovePasswordRequestDataType inherits HashDataType {
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

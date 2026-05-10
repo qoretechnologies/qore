@@ -35,6 +35,7 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the coupon to update",
                 "required": True,
                 "example_value": 789,
+                "ref_data": "coupons",
             },
             "code": {
                 "display_name": "Code",
@@ -76,11 +77,13 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
                 "display_name": "Product IDs",
                 "type": new ListDataType("ProductIdList", SoftIntType, True),
                 "desc": "List of product IDs the coupon can be applied to",
+                "ref_data": "products",
             },
             "excluded_product_ids": {
                 "display_name": "Excluded Product IDs",
                 "type": new ListDataType("ExcludedProductIdList", SoftIntType, True),
                 "desc": "List of product IDs excluded from the coupon",
+                "ref_data": "products",
             },
             "usage_limit_per_user": {
                 "display_name": "Usage Limit Per User",
@@ -90,9 +93,14 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
             },
             "date_expires": {
                 "display_name": "Date Expires",
-                "type": StringOrNothingType,
-                "desc": "The date the coupon expires in ISO8601 format",
-                "example_value": "2026-12-31",
+                "type": DateOrNothingType,
+                "desc": "The date the coupon expires",
+            },
+            "limit_usage_to_x_items": {
+                "display_name": "Limit Usage To X Items",
+                "type": IntOrNothingType,
+                "desc": "Maximum number of items in the cart the coupon will apply to",
+                "example_value": 5,
             },
             "free_shipping": {
                 "display_name": "Free Shipping",
@@ -104,11 +112,13 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
                 "display_name": "Product Categories",
                 "type": new ListDataType("CategoryIdList", SoftIntType, True),
                 "desc": "List of category IDs the coupon applies to",
+                "ref_data": "categories",
             },
             "excluded_product_categories": {
                 "display_name": "Excluded Product Categories",
                 "type": new ListDataType("ExcludedCategoryIdList", SoftIntType, True),
                 "desc": "List of category IDs excluded from the coupon",
+                "ref_data": "categories",
             },
             "exclude_sale_items": {
                 "display_name": "Exclude Sale Items",
@@ -135,7 +145,7 @@ public class WooCommerceUpdateCouponRequestDataType inherits HashDataType {
             },
             "meta_data": {
                 "display_name": "Meta Data",
-                "type": new ListDataType("MetaData", AutoHashType, True),
+                "type": new ListDataType("MetaData", new WooCommerceMetaDataType(), True),
                 "desc": "List of metadata key-value pairs",
             },
         };
@@ -194,7 +204,11 @@ public class WooCommerceUpdateCouponDataProvider inherits WooCommerceDataProvide
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         int id = remove req.id;
-        return doPut(sprintf("coupons/%d", id), {} + req);
+        hash<auto> body = {} + req;
+        if (body.date_expires) {
+            body.date_expires = format_date("YYYY-MM-DDTHH:mm:SS", body.date_expires);
+        }
+        return doPut(sprintf("coupons/%d", id), body);
     }
 
     #! Returns the request type

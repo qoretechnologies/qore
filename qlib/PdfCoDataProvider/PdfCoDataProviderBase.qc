@@ -53,6 +53,9 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
 
         #! The connection object, if applicable
         *PdfCoRestClient::PdfCoRestConnection conn;
+
+        #! Lazily-built REST client targeting the /v2 base for v2-only endpoints
+        *PdfCoRestClient::PdfCoRestClient rest_v2;
     }
 
     #! Creates the object with no arguments for child classes
@@ -93,6 +96,49 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
     #! Sets the logger for the data provider
     setLogger(*LoggerInterface logger) {
         rest.setLogger(logger);
+    }
+
+    #! Returns the supported reference data types for this provider
+    *hash<string, bool> getSupportedReferenceData() {
+        return {
+            "document_parser_templates": True,
+        };
+    }
+
+    #! Returns reference data of the given kind if available
+    /** @param type the unique type name of the reference data
+        @param action_opts an optional hash of action options when working with an app action
+
+        @return a list of allowed values for this data
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        switch (type) {
+            case "document_parser_templates":
+                return getReferenceDocumentParserTemplates();
+        }
+    }
+
+    #! Returns available document parser templates as reference data
+    private *list<hash<AllowedValueInfo>> getReferenceDocumentParserTemplates() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doGet("pdf/documentparser/templates");
+            if (response.templates) {
+                foreach hash<auto> tpl in (response.templates) {
+                    string display_name = tpl.title ?? sprintf("Template %s", tpl.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": tpl.description ?? display_name,
+                        "desc": sprintf("%s (ID: %s, type: %s)", display_name, tpl.id,
+                            tpl.type ?? "unknown"),
+                        "value": int(tpl.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Silently ignore errors when fetching reference data
+        }
+        return rv;
     }
 
     #! Uploads file content if provided, replacing it with a temporary URL
@@ -173,6 +219,49 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
         return waitForJobIfNeeded(resp);
     }
 
+    #! Makes a POST request to a PDF.co \c /v2 endpoint
+    /** PDF.co's primary REST client targets \c /v1; the \c /v2 base hosts only a
+        handful of newer endpoints (e.g. \c pdf/compress). This helper lazily builds
+        a sibling REST client rooted at \c /v2 reusing the same API key.
+
+        @param path the API path (relative to /v2, without leading slash)
+        @param body the request body
+        @return the response body
+
+        @throw PDFCO-API-ERROR if the response indicates an error
+        @throw PDFCO-JOB-TIMEOUT if the job does not complete within the polling limit
+    */
+    hash<auto> doPostV2(string path, *hash<auto> body) {
+        PdfCoRestClient::PdfCoRestClient v2 = getRestClientV2();
+        hash<auto> resp = doRestRequestWith(v2, "POST", path, body);
+        if (body."async") {
+            return resp;
+        }
+        return waitForJobIfNeeded(resp);
+    }
+
+    #! Returns (lazily creating) a REST client whose base URL targets PDF.co \c /v2
+    private PdfCoRestClient::PdfCoRestClient getRestClientV2() {
+        if (rest_v2) {
+            return rest_v2;
+        }
+        *string apikey = rest.getDefaultHeaders()."x-api-key";
+        if (!apikey) {
+            throw "PDFCO-ERROR", "cannot construct v2 REST client: API key is not "
+                "available on the v1 client";
+        }
+        string v1_url = rest.getURL();
+        string v2_url = regex_subst(v1_url, "/v1$", "/v2");
+        if (v2_url == v1_url) {
+            v2_url += (v1_url =~ /\/$/ ? "v2" : "/v2");
+        }
+        rest_v2 = new PdfCoRestClient::PdfCoRestClient({
+            "url": v2_url,
+            "apikey": apikey,
+        });
+        return rest_v2;
+    }
+
     #! Makes a GET request to the PDF.co API
     /** @param path the API path (relative to /v1)
         @return the response body
@@ -226,7 +315,7 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
             resp.jobId, MaxJobPollAttempts);
     }
 
-    #! Makes a REST request with retry handling
+    #! Makes a REST request with retry handling on the primary v1 client
     /** @param method the HTTP method
         @param path the API path
         @param body optional request body
@@ -235,6 +324,20 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
         @throw PDFCO-API-ERROR if the response indicates an error
     */
     private hash<auto> doRestRequest(string method, string path, auto body = NOTHING) {
+        return doRestRequestWith(rest, method, path, body);
+    }
+
+    #! Makes a REST request against the supplied client with retry handling
+    /** @param client the REST client to use
+        @param method the HTTP method
+        @param path the API path
+        @param body optional request body
+        @return the response body hash
+
+        @throw PDFCO-API-ERROR if the response indicates an error
+    */
+    private hash<auto> doRestRequestWith(PdfCoRestClient::PdfCoRestClient client, string method,
+            string path, auto body = NOTHING) {
         int retries = 0;
         while (True) {
             try {
@@ -242,10 +345,10 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
                 hash<auto> response;
                 switch (method) {
                     case "GET":
-                        response = rest.get(path, NOTHING, \info);
+                        response = client.get(path, NOTHING, \info);
                         break;
                     case "POST":
-                        response = rest.post(path, body, \info);
+                        response = client.post(path, body, \info);
                         break;
                     default:
                         throw "PDFCO-ERROR", sprintf("unsupported HTTP method: %s", method);

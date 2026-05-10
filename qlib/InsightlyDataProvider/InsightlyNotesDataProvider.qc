@@ -19,28 +19,7 @@ public class InsightlyNotesDataProvider inherits InsightlyDataProviderBase {
                 "type": AbstractDataProviderType::get(SoftIntOrNothingType),
                 "desc": "The note ID to retrieve",
             },
-            "skip": <DataProviderOptionInfo>{
-                "display_name": "Skip", "short_desc": "Number of records to skip",
-                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
-                "desc": "Number of records to skip for OData pagination", "preselected": True,
-            },
-            "top": <DataProviderOptionInfo>{
-                "display_name": "Top", "short_desc": "Maximum number of records to return",
-                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
-                "desc": "Maximum number of records to return (max " + MaxPageSize + ")",
-                "preselected": True,
-            },
-            "brief": <DataProviderOptionInfo>{
-                "display_name": "Brief", "short_desc": "Return brief results",
-                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
-                "desc": "If `True`, returns only a subset of fields for each record",
-            },
-            "count_total": <DataProviderOptionInfo>{
-                "display_name": "Count Total", "short_desc": "Include total count in response",
-                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
-                "desc": "If `True`, includes the total count of matching records",
-            },
-        };
+        } + CommonSearchOptions;
         const ChildMap = {
             "create": Class::forName("InsightlyCreateNoteDataProvider"),
             "update": Class::forName("InsightlyUpdateNoteDataProvider"),
@@ -59,26 +38,7 @@ public class InsightlyNotesDataProvider inherits InsightlyDataProviderBase {
     }
     private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
-        if (search_options.id) {
-            hash<auto> result = doGet("Notes/" + string(search_options.id));
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
-                where_cond, search_options);
-        }
-        hash<auto> params;
-        if (search_options.skip) { params.skip = search_options.skip; }
-        if (search_options.top) { params.top = search_options.top; }
-        if (search_options.brief) { params.brief = search_options.brief ? "true" : "false"; }
-        if (search_options.count_total) {
-            params.count_total = search_options.count_total ? "true" : "false";
-        }
-        list<hash<auto>> records;
-        if (search_options.top || search_options.skip) {
-            records = doGetList("Notes", params);
-        } else {
-            records = fetchAllPages("Notes");
-        }
-        return new DefaultRecordIterator(new ListHashIterator(records),
-            where_cond, search_options);
+        return runListSearch("Notes", where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

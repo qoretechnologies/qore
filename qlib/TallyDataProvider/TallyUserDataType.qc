@@ -85,14 +85,14 @@ public class TallyUserDataType inherits HashDataType {
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Account creation timestamp",
-                "desc": "ISO 8601 timestamp when the user account was created",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the user account was created",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "updatedAt": {
                 "display_name": "Updated At",
                 "short_desc": "Last update timestamp",
-                "desc": "ISO 8601 timestamp when the user account was last updated",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the user account was last updated",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "subscriptionPlan": {
                 "display_name": "Subscription Plan",

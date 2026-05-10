@@ -73,14 +73,14 @@ public class TallyQuestionDataType inherits HashDataType {
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",
-                "desc": "ISO 8601 timestamp when the question was created",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the question was created",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "updatedAt": {
                 "display_name": "Updated At",
                 "short_desc": "Last update timestamp",
-                "desc": "ISO 8601 timestamp when the question was last updated",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the question was last updated",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "fields": {
                 "display_name": "Fields",

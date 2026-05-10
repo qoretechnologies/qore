@@ -35,7 +35,6 @@ public class PdfCoJobCheckRequestDataType inherits HashDataType {
                 "short_desc": "The job identifier returned by an async API call",
                 "desc": "The job identifier returned by an async API call",
                 "required": True,
-                "preselected": True,
             },
             "force": {
                 "type": SoftBoolOrNothingType,

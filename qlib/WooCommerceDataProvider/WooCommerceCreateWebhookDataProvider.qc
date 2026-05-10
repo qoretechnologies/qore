@@ -32,9 +32,12 @@ public class WooCommerceCreateWebhookRequestDataType inherits HashDataType {
             "topic": {
                 "display_name": "Topic",
                 "type": StringType,
-                "desc": "The webhook topic (e.g., `order.created`, `product.updated`)",
+                "desc": "The webhook topic; pick a built-in topic (e.g. `order.created`, `product.updated`) "
+                    "or supply a custom `action.<hook>` topic",
                 "example_value": "order.created",
                 "required": True,
+                "allowed_values": WebhookTopicAllowedValues,
+                "allowed_values_creatable": True,
             },
             "delivery_url": {
                 "display_name": "Delivery URL",
