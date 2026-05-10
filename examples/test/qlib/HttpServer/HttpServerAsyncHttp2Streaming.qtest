@@ -46,6 +46,57 @@ class StringStreamHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that emits N chunks with `sleep_ms` sleep between them, via
+#! `send_callback`.  Used to verify that each chunk reaches the wire
+#! immediately rather than being held in nghttp2 / async I/O until the
+#! response closes (the SSE per-event-flush bug).
+class H2StaggeredCallbackHandler inherits AbstractHttpRequestHandler {
+    private {
+        int chunk_count;
+        int sleep_ms;
+        # Recorded server-side emit times so the test can compare against
+        # client-side receive times.
+        list<date> emit_times = ();
+        Mutex emit_mtx();
+    }
+
+    constructor(int chunk_count = 5, int sleep_ms = 250) {
+        self.chunk_count = chunk_count;
+        self.sleep_ms = sleep_ms;
+    }
+
+    list<date> getEmitTimes() {
+        AutoLock al(emit_mtx);
+        return emit_times;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int idx = 0;
+        return <HttpResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "text/event-stream; charset=utf-8",
+                "Cache-Control": "no-cache",
+            },
+            "send_callback": *string sub () {
+                if (idx >= chunk_count) {
+                    return NOTHING;
+                }
+                if (idx > 0) {
+                    usleep(sleep_ms * 1000);
+                }
+                {
+                    AutoLock al(emit_mtx);
+                    emit_times += now_us();
+                }
+                string chunk = sprintf("data: event-%d\n\n", idx);
+                ++idx;
+                return chunk;
+            },
+        };
+    }
+}
+
 #! Handler that returns an empty BinaryInputStream
 class EmptyStreamHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -387,6 +438,7 @@ class HttpServerAsyncHttp2StreamingTest inherits QUnit::Test {
         int mSslPort;
         string mSslUrl;
         string mTmpDir;
+        H2StaggeredCallbackHandler mStaggeredHandler;
 
         const CertPem = "-----BEGIN CERTIFICATE-----
 MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
@@ -470,6 +522,10 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("H2 non-pollable InputStream read() runs on worker thread",
             \testH2NonPollableStreamReadsOnWorker());
 
+        # SSE / send_callback per-chunk flush regression test
+        addTestCase("H2 send_callback chunks reach wire per emit (SSE flush)",
+            \testH2SendCallbackPerChunkFlush());
+
         set_return_value(main());
     }
 
@@ -502,6 +558,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             new H2CallbackStreamResponseHandler(16, 32 * 1024), NOTHING, False);
         mServer.setHandler("bidi-interleave", "/bidi-interleave", NOTHING,
             new H2BidiInterleaveHandler(), NOTHING, False);
+        mStaggeredHandler = new H2StaggeredCallbackHandler(5, 250);
+        mServer.setHandler("staggered-cb", "/staggered-cb", NOTHING,
+            mStaggeredHandler, NOTHING, False);
 
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
             "service": 0,
@@ -919,5 +978,85 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         string body_str = body_bin.toString();
         assertTrue(body_str.find("ALPHA") >= 0, "bidi: ALPHA present");
         assertTrue(body_str.find("EPSILON") >= 0, "bidi: EPSILON present");
+    }
+
+    #! Each chunk emitted by a `send_callback` response over HTTP/2 must reach
+    #! the wire as its callback returns — not be buffered in nghttp2 / the
+    #! async I/O controller until response close.  Pre-fix, the H2
+    #! `Action::StreamData` handler enqueued the chunk and signaled `io_wake`
+    #! but did not synchronously call `sendPendingData`, so DATA frames sat
+    #! in nghttp2's send buffer until the next I/O loop iteration that
+    #! happened to process the wake — for SSE-style flows emitting one
+    #! event per multi-second interval, this manifested as a 30+ minute
+    #! "all events delivered on close" symptom.
+    testH2SendCallbackPerChunkFlush() {
+        # Server emits 5 chunks with 250ms between them = total 1s+.  If
+        # chunks are flushed per-emit (post-fix), the client's recv_callback
+        # sees them at staggered times.  If chunks are buffered (pre-fix),
+        # all five callbacks fire near the end (after ~1s).
+        HTTPClient hc({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "http_version": "2.0",
+        });
+        hc.setHttp2Mode("required");
+
+        list<date> recv_times = ();
+        binary accumulated = binary();
+        bool got_terminator = False;
+        *int status_code;
+        code cb = sub (hash<auto> h) {
+            if (h.hasKey("hdr") && exists h.hdr) {
+                status_code = h.hdr."status-code" ?? h.hdr.status_code;
+            } else if (h.hasKey("data") && exists h."data") {
+                recv_times += now_us();
+                if (h."data".typeCode() == NT_STRING) {
+                    accumulated += binary(h."data");
+                } else {
+                    accumulated += h."data";
+                }
+            } else if (h.hasKey("hdr") && !exists h.hdr) {
+                got_terminator = True;
+            }
+        };
+        hc.sendWithRecvCallback(cb, binary(), "GET",
+            "/staggered-cb", {"Accept": "text/event-stream"});
+        assertEq(200, status_code, "staggered SSE status");
+        assertTrue(got_terminator, "staggered SSE: terminator callback fired");
+
+        # Body content sanity
+        string body_str = accumulated.toString();
+        assertTrue(body_str.find("data: event-0") >= 0,
+            "staggered SSE: event-0 received");
+        assertTrue(body_str.find("data: event-4") >= 0,
+            "staggered SSE: event-4 received");
+
+        # Per-chunk flush: each chunk should arrive within a generous bound
+        # of its server-side emit time.  Use the server-recorded emit times
+        # for ground truth.  Allow up to 1500ms slack per chunk (CI runners
+        # can be slow); the bug we're testing manifests as ~5×250ms = 1s+
+        # of late-bound delivery, well outside the slack.
+        list<date> emit_times = mStaggeredHandler.getEmitTimes();
+        assertEq(5, emit_times.size(),
+            "server emitted 5 chunks");
+        # The `data` callback may be invoked once per recv_callback
+        # iteration on the qore client; assert at least 5 invocations.
+        assertTrue(recv_times.size() >= 5,
+            sprintf("client received >= 5 data callbacks (got %d)",
+                recv_times.size()));
+
+        # The pre-fix bug compresses ALL recv_times into a tight cluster
+        # near t1.  Post-fix, recv_times[i] should be close to emit_times[i]
+        # for each i.  Compute spread of recv_times relative to t0 and
+        # assert it covers most of the 1s emit window.
+        date last_recv = recv_times[recv_times.size() - 1];
+        int recv_window_ms = (last_recv - recv_times[0]).durationMilliseconds();
+        # Expected: ~4 × 250ms = 1000ms span between first and last chunk.
+        # Pre-fix: chunks arrive within milliseconds of each other (all on
+        # close), so window collapses to <100ms.
+        assertTrue(recv_window_ms >= 600,
+            sprintf("staggered SSE: chunks must arrive over time; "
+                "first→last span only %d ms (pre-fix bug compresses to <100ms)",
+                recv_window_ms));
     }
 }
