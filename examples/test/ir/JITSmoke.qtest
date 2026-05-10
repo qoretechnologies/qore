@@ -95,6 +95,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("IR-only maybe-NOTHING condition local", \testIrOnlyConditionLocalMaybeNothing());
         addTestCase("IR-only optional hash local missing member", \testIrOnlyOptionalHashLocalMissingMember());
         addTestCase("direct params survive scoped loop locals", \testDirectParamsSurviveScopedLoopLocals());
+        addTestCase("on_block_exit preserves parameter slots", \testOnBlockExitPreservesParameterSlots());
         # Optimized higher-order function tests
         addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
         addTestCase("optimized foldl diff/min/max", \testJitFoldlDiffMinMax());
@@ -1519,6 +1520,45 @@ preserve(2);
             string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
             string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
             assertEq("2:integer", result, sprintf("direct params survive scoped loop locals %s", mode));
+        }
+    }
+
+    testOnBlockExitPreservesParameterSlots() {
+        string code = "%modern
+class SlotScopeRegression {
+    private {
+        Mutex m();
+    }
+
+    public string bodyUse(int a, int b, int c) {
+        m.lock();
+        {
+            on_exit m.unlock();
+            c.toString();
+        }
+        return sprintf(\"%d/%d/%d\", a, b, c);
+    }
+
+    public string handlerUse(int a, int b) {
+        m.lock();
+        {
+            on_exit {
+                b.toString();
+                m.unlock();
+            }
+        }
+        return sprintf(\"%d/%d\", a, b);
+    }
+}
+
+SlotScopeRegression t();
+printf(\"%s\\n%s\\n\", t.bodyUse(2, 10000, 42), t.handlerUse(2, 10000));
+";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string opts = mode == "tiered" ? "--jit-ir-threshold=1 --jit-jit-threshold=2" : "";
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            assertEq("2/10000/42\n2/10000", result,
+                sprintf("on_block_exit preserves parameter slots %s", mode));
         }
     }
 

@@ -2204,6 +2204,22 @@ public:
     // Used by the IR interpreter to convert unordered_map lookups to direct array access
     std::unordered_map<const LocalVar*, uint32_t> local_var_slots;
 
+    //! Reserve a stable local slot before full IR lowering is complete.
+    /** Block-level on_exit handler compilation can compute and inherit parent
+        slot IDs while the parent function is still being lowered.  Signature
+        locals and other pre-instantiated locals must therefore have stable
+        slots before nested block lowering can trigger handler compilation.
+        @param lv the local variable to reserve a slot for; ignored if null or
+        already reserved */
+    void reserveLocalSlot(const LocalVar* lv) {
+        if (!lv || local_var_slots.find(lv) != local_var_slots.end()) {
+            return;
+        }
+        uint32_t next_slot = local_var_slots.empty() ? 0 : max_local_slot_id + 1;
+        local_var_slots[lv] = next_slot;
+        max_local_slot_id = next_slot;
+    }
+
     // Mapping of param index → slot_id (built during IR lowering).
     // Used by IRDirectParams to pre-populate the slot cache from caller-provided
     // values, bypassing TLS instantiate/eval/uninstantiate round-trip.

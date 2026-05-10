@@ -872,10 +872,12 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                     removeBlockLocalsFromBodyLocals(this, func->all_body_locals);
                     for (LocalVar* lv : func->all_body_locals) {
                         func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+                        func->reserveLocalSlot(lv);
                     }
                     if (const LVList* top_lvars = getLVList()) {
                         for (unsigned i = 0; i < top_lvars->size(); ++i) {
                             func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(top_lvars->lv[i]));
+                            func->reserveLocalSlot(top_lvars->lv[i]);
                         }
                     }
 

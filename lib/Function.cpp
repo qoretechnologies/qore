@@ -2765,6 +2765,17 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
         func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
         func->pre_instantiated_cache.insert(lv);
     }
+    // Reserve stable slot-cache entries before lowering.  Nested on_exit handler
+    // compilation can compute parent slots while this function is still being
+    // lowered, so signature/body locals must not be assigned later from slot 0.
+    for (unsigned i = 0; i < signature.numParams(); ++i) {
+        func->reserveLocalSlot(signature.lv[i]);
+    }
+    func->reserveLocalSlot(signature.argvid);
+    func->reserveLocalSlot(signature.selfid);
+    for (LocalVar* lv : func->all_body_locals) {
+        func->reserveLocalSlot(lv);
+    }
     QoreIRBuilder builder(func);
     auto* entry = func->createBlock("entry");
     builder.setBlock(entry);
@@ -2804,20 +2815,14 @@ void UserVariantBase::attemptIRLowering(const char* name, bool raise_on_failure)
         return;
     }
 
-    // Reserve stable slot-cache entries for signature-owned locals before the
-    // generic slot pass assigns body locals.  Direct-param IR calls may keep
-    // parameters only in the slot cache; scoped locals such as `for (int i...)`
-    // must never reuse and clear those parameter slots at scope exit.
-    auto seed_signature_slot = [func, next_slot = uint32_t(0)](LocalVar* lv) mutable {
-        if (lv && func->local_var_slots.find(lv) == func->local_var_slots.end()) {
-            func->local_var_slots[lv] = next_slot++;
-        }
-    };
+    // Keep signature-owned slots reserved after lowering as well.  This is
+    // normally a no-op because the slots were reserved before lowering, but it
+    // is deliberately safe if another partial slot pass has already run.
     for (unsigned i = 0; i < signature.numParams(); ++i) {
-        seed_signature_slot(signature.lv[i]);
+        func->reserveLocalSlot(signature.lv[i]);
     }
-    seed_signature_slot(signature.argvid);
-    seed_signature_slot(signature.selfid);
+    func->reserveLocalSlot(signature.argvid);
+    func->reserveLocalSlot(signature.selfid);
 
     // Compute slot IDs, max_value_id, and embed pre-computed fields in instructions
     // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated

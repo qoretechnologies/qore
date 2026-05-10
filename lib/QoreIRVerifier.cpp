@@ -1559,11 +1559,20 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     // Preserve any slots assigned before this pass.  Function signatures seed
     // parameter/argv/self slots here so direct-parameter calls cannot collide
     // with scoped body locals; handler IR uses the same path for parent slots.
+    std::unordered_set<uint32_t> used_local_slots;
     for (const auto& [lvar, slot_id] : local_var_slots) {
         if (lvar) {
-            slot_map[lvar] = slot_id;
-            if (slot_id >= next_local_slot) {
-                next_local_slot = slot_id + 1;
+            uint32_t sid = slot_id;
+            if (!used_local_slots.insert(sid).second) {
+                while (used_local_slots.find(next_local_slot) != used_local_slots.end()) {
+                    ++next_local_slot;
+                }
+                sid = next_local_slot++;
+                used_local_slots.insert(sid);
+            }
+            slot_map[lvar] = sid;
+            if (sid >= next_local_slot) {
+                next_local_slot = sid + 1;
             }
         }
     }
@@ -1584,6 +1593,7 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
             auto assign_slot = [&](const LocalVar* lv) {
                 if (lv && slot_map.find(lv) == slot_map.end()) {
                     slot_map[lv] = next_local_slot++;
+                    used_local_slots.insert(slot_map[lv]);
                 }
             };
             auto assign_expr_slots = [&](const QoreValue& expr) {
