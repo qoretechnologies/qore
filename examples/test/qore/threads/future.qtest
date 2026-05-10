@@ -14,6 +14,7 @@ class FutureTest inherits QUnit::Test {
         addTestCase("Promise set/Future get roundtrip", \testBasicSetGet());
         addTestCase("Promise setError/Future get throws", \testErrorPropagation());
         addTestCase("Future get timeout", \testTimeout());
+        addTestCase("Future get timeout is wall-clock deadline", \testTimeoutIsDeadline());
         addTestCase("Multiple getters on same Future", \testMultipleGetters());
         addTestCase("Promise destroyed without set", \testPromiseDestroyedPending());
         addTestCase("Promise double set throws", \testDoubleSet());
@@ -74,6 +75,28 @@ class FutureTest inherits QUnit::Test {
         Future f = p.getFuture();
         # Use a short timeout
         assertThrows("FUTURE-TIMEOUT", sub() { f.get(100ms); });
+    }
+
+    testTimeoutIsDeadline() {
+        # Regression test for the per-iteration-restart bug: get(timeout)
+        # must enforce a wall-clock deadline, not a fresh window each time
+        # the cond fires.  Pre-fix, a get(500ms) under heavy threading load
+        # could be extended indefinitely by spurious pthread wakeups (Qorus
+        # issue 1704: 120s request_timeout failed to fire; thread parked in
+        # FutureImpl::get() for 30+ minutes against slow LLM endpoints).
+        Promise p();
+        Future f = p.getFuture();
+        date t0 = now_us();
+        assertThrows("FUTURE-TIMEOUT", sub() { f.get(500ms); });
+        int elapsed_ms = (now_us() - t0).durationMilliseconds();
+        # Generous upper bound: 500ms timeout should not stretch past 1500ms
+        # even on a heavily loaded test runner.  Lower bound asserts we did
+        # actually wait, not return spuriously early.
+        assertTrue(elapsed_ms >= 450,
+            sprintf("get(500ms) returned too early: %d ms", elapsed_ms));
+        assertTrue(elapsed_ms < 1500,
+            sprintf("get(500ms) took too long (deadline not enforced?): %d ms",
+                elapsed_ms));
     }
 
     testMultipleGetters() {

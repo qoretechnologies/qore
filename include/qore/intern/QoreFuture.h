@@ -123,13 +123,51 @@ public:
         @return the result value
     */
     DLLLOCAL QoreValue get(int64 timeout_ms, ExceptionSink* xsink) {
-        // Convention: timeout_ms <= 0 means infinite; waitWithInterrupt uses -1 for infinite
-        int64 cond_timeout = (timeout_ms <= 0) ? -1 : timeout_ms;
+        // The timeout is a wall-clock deadline, not a per-wait window.
+        //
+        // Earlier versions passed `timeout_ms` directly to waitWithInterrupt
+        // on every loop iteration.  If the cond fired (signal OR pthread
+        // spurious wake) but state was still PENDING, the loop re-entered
+        // the wait with the FULL ORIGINAL timeout — restarting the
+        // countdown.  Empirically this caused HTTPCLIENT-TIMEOUT failures
+        // observed in Qorus issue 1704 (120s request_timeout failed to
+        // fire; thread parked in FutureImpl::get() for 30+ minutes against
+        // slow-streaming LLM endpoints).  Compute an absolute deadline in
+        // microseconds and recompute `remaining` per iteration so the
+        // timeout fires at the intended wall-clock time regardless of
+        // spurious wakes.  Mirrors the deadline pattern in
+        // include/qore/AbstractHttpPollConnection.h:109-111.
+        const bool has_deadline = (timeout_ms > 0);
+        int64 deadline_us = 0;
+        if (has_deadline) {
+            int us;
+            deadline_us = q_epoch_us(us) * 1000000LL + us + timeout_ms * 1000LL;
+        }
 
         AutoLocker al(&lock);
         ++waiting;
         while (state == PENDING) {
-            int rc = cond.waitWithInterrupt(&lock, cond_timeout, xsink);
+            int64 cond_timeout_ms;
+            if (has_deadline) {
+                int us;
+                int64 now_us = q_epoch_us(us) * 1000000LL + us;
+                int64 remaining_us = deadline_us - now_us;
+                if (remaining_us <= 0) {
+                    --waiting;
+                    xsink->raiseException("FUTURE-TIMEOUT",
+                        "timed out after " QLLD "ms waiting for future result",
+                        timeout_ms);
+                    return QoreValue();
+                }
+                // Round up sub-millisecond remainder so we never pass 0
+                // (which waitWithInterrupt treats as poll-don't-wait at
+                // some sites; here ms < 0 means infinite, but 0 would be
+                // a no-wait that consumes CPU until the deadline).
+                cond_timeout_ms = (remaining_us + 999) / 1000;
+            } else {
+                cond_timeout_ms = -1;  // infinite
+            }
+            int rc = cond.waitWithInterrupt(&lock, cond_timeout_ms, xsink);
             if (rc == QORE_COND_RESULT_INTERRUPTED) {
                 --waiting;
                 return QoreValue();
@@ -143,6 +181,9 @@ public:
                     "timed out after " QLLD "ms waiting for future result", timeout_ms);
                 return QoreValue();
             }
+            // Spurious wake or unrelated broadcast: the loop re-enters
+            // waitWithInterrupt with a freshly-computed `remaining` so the
+            // overall wait still respects the wall-clock deadline.
         }
         --waiting;
 

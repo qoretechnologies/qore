@@ -550,6 +550,21 @@ public:
     //! Check if the connection is closed or closing
     DLLLOCAL bool isClosed() const;
 
+    //! Reason for which @ref isClosed() returns true.
+    /** Distinguishes the three QUIC close paths so callers can surface
+        a specific error code instead of a single misleading
+        "closed by peer during read" string for all of them.
+    */
+    enum class CloseReason {
+        Open       = 0,  //!< not closed
+        Idle       = 1,  //!< local NGTCP2_ERR_IDLE_CLOSE — our own idle timer expired
+        LocalClose = 2,  //!< we sent CONNECTION_CLOSE (in_closing_period)
+        PeerClose  = 3,  //!< peer sent CONNECTION_CLOSE (in_draining_period)
+    };
+
+    //! Returns the close cause; @ref CloseReason::Open if still open.
+    DLLLOCAL CloseReason getCloseReason() const;
+
     //! Mark session as closed — wakes all handler threads waiting for stream data/drain
     /** Called by abort() before removing the session from the socket map.
         Thread-safe: uses atomic store + signals all CVs.

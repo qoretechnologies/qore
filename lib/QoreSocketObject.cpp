@@ -1603,6 +1603,34 @@ public:
                 if (rv > 0 && !*xsink) {
                     xsink->raiseException("HTTP2-FLOW-CONTROL", "stream %d buffer full: data dropped", stream_id);
                     output = -1;
+                } else if (rv == 0) {
+                    // Synchronously drive nghttp2 to serialize the just-enqueued
+                    // chunk and push the bytes onto the socket BEFORE this
+                    // poll-op completes.  Without this, sendStreamData() only
+                    // appends to pending_body_data + flips the data provider
+                    // out of the deferred state — the actual DATA frame isn't
+                    // emitted until the next I/O loop iteration that processes
+                    // the wakeSocket() command.  For SSE / event-stream flows
+                    // emitting one event per multi-second interval, that
+                    // round-trip latency was empirically observed as a 30+
+                    // minute "all events dump on response close" symptom: each
+                    // chunk waits for the next event to provoke a wake.
+                    // Driving sendPendingData here matches the H1 chunked-body
+                    // sender's per-chunk synchronous flush
+                    // (lib/QoreSocketObject.cpp:4031 path).
+                    //
+                    // Safe lock-wise: sendPendingData acquires the same
+                    // recursive Http2Session mutex that sendStreamData just
+                    // released.  Safe I/O-wise: the inner socket write uses
+                    // the existing OptionalNonBlockingHelper, so a partial
+                    // write on a blocked socket leaves the remainder in
+                    // send_buffer for the next I/O loop drain — the wake the
+                    // caller eventually issues will still flush it.
+                    if (h2->sendPendingData(0, xsink) < 0) {
+                        output = -1;
+                    } else {
+                        output = 0;
+                    }
                 } else {
                     output = rv;
                 }

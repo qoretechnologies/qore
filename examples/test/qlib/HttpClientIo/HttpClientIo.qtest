@@ -732,6 +732,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     testConnectionErrorClassification() {
         assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
             "HTTP3-CONNECTION-CLOSED"), "HTTP3 close must be retried before wrapping");
+        # The H3 close error is split into three subcodes by cause; all
+        # three must classify as retry-eligible like the legacy umbrella.
+        assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
+            "HTTP3-IDLE-CLOSE"), "HTTP3 idle close must be retried before wrapping");
+        assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
+            "HTTP3-LOCAL-CLOSE"), "HTTP3 local close must be retried before wrapping");
+        assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
+            "HTTP3-PEER-CLOSE"), "HTTP3 peer close must be retried before wrapping");
         assertTrue(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(
             "HTTP3-READ-ERROR"), "HTTP3 read errors must be retried before wrapping");
         assertFalse(HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(

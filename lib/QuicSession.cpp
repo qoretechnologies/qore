@@ -59,6 +59,28 @@ std::atomic<int64_t> QuicSession::next_session_id_{1};
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 
+// ngtcp2 verbose frame log, gated by QORE_QUIC_NGTCP2_LOG=1.  Wired into
+// ngtcp2_settings::log_printf so we see PING tx/rx, ACK, CONNECTION_CLOSE
+// codes, etc. — without packet capture.  Compile-time-on so it works in
+// Release builds for production triage; one cached env-var read at startup.
+static bool quic_ngtcp2_log_enabled() {
+    static int cached = -1;
+    if (cached < 0) {
+        const char* v = getenv("QORE_QUIC_NGTCP2_LOG");
+        cached = (v && *v && strcmp(v, "0") != 0) ? 1 : 0;
+    }
+    return cached != 0;
+}
+
+static void quic_ngtcp2_log_printf(void* /*user_data*/, const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[ngtcp2] ");
+    vfprintf(stderr, fmt, ap);
+    fputc('\n', stderr);
+    va_end(ap);
+}
+
 static void quicRegisterSocketWaiter(std::mutex& waiters_mtx,
         std::unordered_map<QoreObject*, size_t>& waiters, QoreObject* sock_obj) {
     assert(sock_obj);
@@ -727,6 +749,9 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     ngtcp2_settings settings;
     ngtcp2_settings_default(&settings);
     settings.initial_ts = timestamp();
+    if (quic_ngtcp2_log_enabled()) {
+        settings.log_printf = quic_ngtcp2_log_printf;
+    }
 
     // Transport parameters
     ngtcp2_transport_params params;
@@ -2965,19 +2990,30 @@ bool QuicSession::isHandshakeComplete() const {
 }
 
 bool QuicSession::isClosed() const {
+    return getCloseReason() != CloseReason::Open;
+}
+
+QuicSession::CloseReason QuicSession::getCloseReason() const {
     // idle_closed_ is checked first without acquiring the recursive mutex: it is
     // set by handleExpiryLocked() when ngtcp2 reports NGTCP2_ERR_IDLE_CLOSE, which
     // does NOT transition conn->state to CLOSING/DRAINING (see ngtcp2_conn.c:11221).
     // Without this check, idle H3 client connections would leak their UDP socket
     // forever because the controller's isClosed()-driven close path never fires.
     if (idle_closed_.load(std::memory_order_acquire)) {
-        return true;
+        return CloseReason::Idle;
     }
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (!conn_) {
-        return true;
+        // No conn — treat as a local-side teardown for caller error-code purposes.
+        return CloseReason::LocalClose;
     }
-    return ngtcp2_conn_in_closing_period(conn_) || ngtcp2_conn_in_draining_period(conn_);
+    if (ngtcp2_conn_in_closing_period(conn_)) {
+        return CloseReason::LocalClose;
+    }
+    if (ngtcp2_conn_in_draining_period(conn_)) {
+        return CloseReason::PeerClose;
+    }
+    return CloseReason::Open;
 }
 
 void QuicSession::markClosed() {
@@ -3433,19 +3469,49 @@ void QuicSession::updateKeepAliveLocked() {
         return;
     }
     const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params(conn_);
-    if (!rp || !rp->max_idle_timeout) {
-        // Peer announced no idle timeout — keepalive is meaningless; disable
-        // it so we never wake up just to ping.
+
+    // Compute the EFFECTIVE idle timeout per RFC 9000 §10.1.2:
+    //   "Each endpoint advertises a max_idle_timeout, but the effective value
+    //    at an endpoint is computed as the minimum of the two advertised
+    //    values (or the sole advertised value, if only one endpoint
+    //    advertises a non-zero value)."
+    // ngtcp2 enforces idle close on each side using the effective value, so
+    // PINGs must fire often enough to refresh BOTH sides' timers.  We always
+    // advertise QUIC_IDLE_TIMEOUT_NS, so when peer's value is longer (or
+    // absent), our local one wins and that's the figure we must beat.
+    //
+    // The earlier code used `peer_max_idle / 2` directly — wrong: when the
+    // peer advertises a longer idle than we do (e.g., OpenAI/Cloudflare
+    // advertises 180s, we advertise 75s), keep-alive would fire at 90s but
+    // our own ngtcp2 idle timer expires at 75s, surfacing as a misleading
+    // "HTTP3-CONNECTION-CLOSED ... by peer during read".
+    const ngtcp2_duration peer_idle = (rp && rp->max_idle_timeout)
+        ? rp->max_idle_timeout : UINT64_MAX;
+    const ngtcp2_duration effective_idle = std::min<ngtcp2_duration>(
+        QUIC_IDLE_TIMEOUT_NS, peer_idle);
+    if (effective_idle == UINT64_MAX) {
+        // Neither side advertises an idle timeout (we always advertise
+        // QUIC_IDLE_TIMEOUT_NS, so this is unreachable; guard anyway):
+        // keepalive is meaningless.
         ngtcp2_conn_set_keep_alive_timeout(conn_, UINT64_MAX);
         keepalive_cooldown_until_ = 0;
         return;
     }
+    const ngtcp2_duration keep_ns =
+        (effective_idle > 1) ? (effective_idle / 2) : 1;
+
     if (!streams_.empty()) {
-        // Streams are active — keep the connection alive at half the peer's
-        // idle timeout so a dead peer is detected promptly.  Mirrors curl's
-        // cf_ngtcp2_setup_keep_alive (lib/vquic/curl_ngtcp2.c:180-215).
-        ngtcp2_duration keep_ns =
-            (rp->max_idle_timeout > 1) ? (rp->max_idle_timeout / 2) : 1;
+        // Streams are active — keep both sides' idle timers refreshed by
+        // PINGing every effective_idle/2.  Mirrors curl's
+        // cf_ngtcp2_setup_keep_alive (lib/vquic/curl_ngtcp2.c:180-215) but
+        // uses the effective value rather than peer's only.
+        ASYNC_IO_TRACE("QuicSession::updateKeepAlive ACTIVE session=%lld "
+            "peer_max_idle_ns=%llu effective_idle_ns=%llu keep_ns=%llu "
+            "streams=%zu\n",
+            (long long)session_id_,
+            (unsigned long long)(rp ? rp->max_idle_timeout : 0),
+            (unsigned long long)effective_idle,
+            (unsigned long long)keep_ns, streams_.size());
         ngtcp2_conn_set_keep_alive_timeout(conn_, keep_ns);
         // Active streams cancel any prior cooldown.
         keepalive_cooldown_until_ = 0;
@@ -3457,14 +3523,12 @@ void QuicSession::updateKeepAliveLocked() {
     // pattern).  Without the cooldown, we'd disable keepalive immediately,
     // and a new request submitted within a few seconds could land on a
     // session the peer has already silently closed.
-    ngtcp2_tstamp now = timestamp();
+    const ngtcp2_tstamp now = timestamp();
     if (keepalive_cooldown_until_ && now < keepalive_cooldown_until_) {
         // Still within cooldown — keep keepalive enabled.  PINGs continue
-        // firing every peer_max_idle/2; each fire eventually re-enters
+        // firing every effective_idle/2; each fire eventually re-enters
         // handleExpiryLocked which calls back into this method to re-check
         // whether the cooldown has expired.
-        ngtcp2_duration keep_ns =
-            (rp->max_idle_timeout > 1) ? (rp->max_idle_timeout / 2) : 1;
         ngtcp2_conn_set_keep_alive_timeout(conn_, keep_ns);
         return;
     }
