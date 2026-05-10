@@ -1218,9 +1218,13 @@ static void ut_http1_submit_after_ssl_error_preserves_error(UnitTestCounters& c)
     bool ready = conn->waitForReadyOrError(5000, &xsink);
     UT_ASSERT(c, !ready, "TLS connection is not ready");
     UT_ASSERT(c, xsink.isException(), "waitForReadyOrError raises on TLS failure");
+    // QoreStringValueHelper::setup() guarantees the internal QoreString* is
+    // non-null after construction (NT_STRING points at the real value,
+    // NT_NOTHING/NT_NULL fall back to the static NullString), so c_str() is
+    // always a valid pointer — possibly to "" — and the helper has no
+    // operator bool() to legitimize an `if (helper)` check.  Just copy.
     QoreStringValueHelper initial_err(xsink.getExceptionErr());
-    std::string stored_err = initial_err && initial_err->c_str()
-        ? initial_err->c_str() : "";
+    std::string stored_err = initial_err->c_str();
     UT_ASSERT(c, !stored_err.empty(), "TLS failure has an exception code");
     xsink.clear();
 
@@ -1229,9 +1233,9 @@ static void ut_http1_submit_after_ssl_error_preserves_error(UnitTestCounters& c)
     UT_ASSERT(c, !submit_result, "submitRequest on failed TLS connection returns no result");
     UT_ASSERT(c, xsink.isException(), "submitRequest raises on failed TLS connection");
     QoreStringValueHelper submit_err(xsink.getExceptionErr());
-    UT_ASSERT(c, submit_err && strcmp(submit_err->c_str(), "HTTP1-STATE-ERROR") != 0,
+    UT_ASSERT(c, strcmp(submit_err->c_str(), "HTTP1-STATE-ERROR") != 0,
         "submitRequest preserves stored connection error instead of HTTP1-STATE-ERROR");
-    if (!stored_err.empty() && submit_err) {
+    if (!stored_err.empty()) {
         UT_ASSERT(c, !strcmp(stored_err.c_str(), submit_err->c_str()),
             "submitRequest error matches original TLS failure");
     }
