@@ -117,7 +117,7 @@ public class WooCommerceVariationDataType inherits HashDataType {
             "attributes": {
                 "display_name": "Attributes",
                 "short_desc": "Variation attributes",
-                "type": new ListDataType("Attributes", AutoHashType, True),
+                "type": new ListDataType("Attributes", new WooCommerceVariationAttributeDataType(), True),
                 "desc": "List of attributes that define this variation (e.g., `color`, `size`)",
             },
             "image": {
@@ -129,7 +129,7 @@ public class WooCommerceVariationDataType inherits HashDataType {
             "meta_data": {
                 "display_name": "Meta Data",
                 "short_desc": "Variation metadata",
-                "type": new ListDataType("MetaData", AutoHashType, True),
+                "type": new ListDataType("MetaData", new WooCommerceMetaDataType(), True),
                 "desc": "List of metadata key-value pairs associated with the variation",
             },
         };

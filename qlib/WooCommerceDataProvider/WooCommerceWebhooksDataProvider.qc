@@ -55,6 +55,36 @@ public class WooCommerceWebhooksDataProvider inherits WooCommerceDataProviderBas
                 "desc": "Filter webhooks by status",
                 "allowed_values": WebhookStatusAllowedValues,
             },
+            "search": <DataProviderOptionInfo>{
+                "display_name": "Search",
+                "short_desc": "Search webhooks",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "desc": "Limit results to those matching a search string",
+            },
+            "after": <DataProviderOptionInfo>{
+                "display_name": "After",
+                "short_desc": "Filter by creation date (after)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to webhooks created after the given date",
+            },
+            "before": <DataProviderOptionInfo>{
+                "display_name": "Before",
+                "short_desc": "Filter by creation date (before)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to webhooks created before the given date",
+            },
+            "include": <DataProviderOptionInfo>{
+                "display_name": "Include",
+                "short_desc": "Include only specific webhook IDs",
+                "type": new ListDataType("WebhookIncludeIds", SoftIntType, True),
+                "desc": "Limit results to the specified webhook IDs",
+            },
+            "exclude": <DataProviderOptionInfo>{
+                "display_name": "Exclude",
+                "short_desc": "Exclude specific webhook IDs",
+                "type": new ListDataType("WebhookExcludeIds", SoftIntType, True),
+                "desc": "Exclude the specified webhook IDs from the result set",
+            },
             "per_page": <DataProviderOptionInfo>{
                 "display_name": "Per Page",
                 "short_desc": "Results per page",
@@ -66,6 +96,27 @@ public class WooCommerceWebhooksDataProvider inherits WooCommerceDataProviderBas
                 "short_desc": "Page number",
                 "type": AbstractDataProviderType::get(IntOrNothingType),
                 "desc": "Current page of the collection (starting at 1)",
+            },
+            "order": <DataProviderOptionInfo>{
+                "display_name": "Order",
+                "short_desc": "Sort order",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "desc": "Sort ascending or descending",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "asc", "desc": "Ascending"},
+                    <AllowedValueInfo>{"value": "desc", "desc": "Descending"},
+                ),
+            },
+            "orderby": <DataProviderOptionInfo>{
+                "display_name": "Order By",
+                "short_desc": "Sort by field",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "desc": "Sort collection by the given attribute",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "date", "desc": "Sort by date"},
+                    <AllowedValueInfo>{"value": "id", "desc": "Sort by ID"},
+                    <AllowedValueInfo>{"value": "title", "desc": "Sort by title"},
+                ),
             },
         };
     }
@@ -109,6 +160,11 @@ public class WooCommerceWebhooksDataProvider inherits WooCommerceDataProviderBas
         hash<auto> params = {} + search_options;
         if (!params.per_page) {
             params.per_page = DefaultPageSize;
+        }
+        foreach string key in (("after", "before")) {
+            if (params{key}) {
+                params{key} = format_date("YYYY-MM-DDTHH:mm:SS", params{key});
+            }
         }
         auto result = doGet("webhooks", params);
         return new DefaultRecordIterator(new ListHashIterator(result.typeCode() == NT_LIST ? result : ()),

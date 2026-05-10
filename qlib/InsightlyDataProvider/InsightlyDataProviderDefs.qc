@@ -86,6 +86,72 @@ public namespace InsightlyDataProvider {
         <AllowedValueInfo>{"value": "Project", "display_name": "Project"},
     );
 
+    #! Common DPAT_FIND action options shared across list-* actions
+    /** Pagination, filter and brief/count_total options shared by every list action.
+        Resource-specific id options are added per-action.
+    */
+    public const CommonListActionOptions = {
+        "skip": <ActionOptionInfo>{
+            "display_name": "Skip",
+            "short_desc": "Number of records to skip",
+            "type": AbstractDataProviderTypeMap."*int",
+            "desc": "Number of records to skip for pagination",
+            "preselected": True,
+        },
+        "top": <ActionOptionInfo>{
+            "display_name": "Top",
+            "short_desc": "Maximum number of records to return",
+            "type": AbstractDataProviderTypeMap."*int",
+            "desc": "Maximum number of records to return per response (max 500)",
+            "preselected": True,
+        },
+        "brief": <ActionOptionInfo>{
+            "display_name": "Brief",
+            "short_desc": "Return brief results",
+            "type": AbstractDataProviderTypeMap."*bool",
+            "desc": "If `True`, returns only a subset of fields for each record",
+        },
+        "count_total": <ActionOptionInfo>{
+            "display_name": "Count Total",
+            "short_desc": "Include total count in response",
+            "type": AbstractDataProviderTypeMap."*bool",
+            "desc": "If `True`, returns the total number of matching records in an "
+                "`X-Total-Count` response header",
+        },
+        "updated_after_utc": <ActionOptionInfo>{
+            "display_name": "Updated After (UTC)",
+            "short_desc": "Only return records updated after this UTC timestamp",
+            "type": AbstractDataProviderTypeMap."*date",
+            "desc": "Only return records that were updated after the given UTC timestamp. "
+                "Routes the request through Insightly's `/Search` endpoint. "
+                "Format: ISO 8601, e.g. `2026-04-09T16:58:14Z`",
+            "example_value": "2026-04-09T16:58:14Z",
+        },
+        "field_name": <ActionOptionInfo>{
+            "display_name": "Field Name",
+            "short_desc": "Filter by a standard or custom field name",
+            "type": AbstractDataProviderTypeMap."*string",
+            "desc": "Standard field name (e.g. `LEAD_RATING`) or custom field name "
+                "(e.g. `MyCustomField__c`) to filter on. Must be paired with `field_value`. "
+                "Routes the request through Insightly's `/Search` endpoint.",
+            "example_value": "LEAD_RATING",
+        },
+        "field_value": <ActionOptionInfo>{
+            "display_name": "Field Value",
+            "short_desc": "Value to match for the named field",
+            "type": AbstractDataProviderTypeMap."*string",
+            "desc": "Value to match against `field_name`. Must be paired with `field_name`. "
+                "Routes the request through Insightly's `/Search` endpoint.",
+            "example_value": "5",
+        },
+    };
+
+    #! Common DPAT_FIND_SINGLE action options shared across get-* actions
+    /** Resource-specific id options are added per-action; this hash is empty by design --
+        kept for symmetry with #CommonListActionOptions.
+    */
+    public const CommonSingleActionOptions = {};
+
     #! Allowed values for OBJECT_NAME field (links)
     public const ObjectNameAllowedValues = (
         <AllowedValueInfo>{"value": "Contact", "display_name": "Contact"},

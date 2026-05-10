@@ -39,7 +39,13 @@ public class BaseLinkerSetOrderReturnRefundDataProvider inherits BaseLinkerDataP
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return callMethod("setOrderReturnRefund", req);
+        hash<auto> body = req;
+        # refund_date is a DateType in the request schema (so the UI gets a date picker);
+        # the BaseLinker setOrderReturnRefund API expects Unix seconds, so convert here.
+        if (body.refund_date instanceof date) {
+            body.refund_date = int(get_epoch_seconds(body.refund_date));
+        }
+        return callMethod("setOrderReturnRefund", body);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

@@ -56,7 +56,7 @@ public class PdfCoJobCheckResponseDataType inherits HashDataType {
                 "desc": "The number of pages in the output document",
             },
             "outputLinkValidTill": {
-                "type": StringOrNothingType,
+                "type": SoftDateOrNothingType,
                 "display_name": "Output Link Valid Till",
                 "short_desc": "Expiration timestamp for the output link",
                 "desc": "The expiration timestamp for the output URL; the link will not be accessible "

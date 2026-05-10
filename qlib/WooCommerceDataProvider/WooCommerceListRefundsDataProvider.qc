@@ -35,6 +35,7 @@ public class WooCommerceListRefundsRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the order",
                 "required": True,
                 "example_value": 1234,
+                "ref_data": "orders",
             },
             "per_page": {
                 "display_name": "Per Page",

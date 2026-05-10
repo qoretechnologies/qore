@@ -51,7 +51,6 @@ public class PdfCoCreateFillableFormRequestDataType inherits HashDataType {
                 "short_desc": "Form field definitions to add",
                 "desc": "Form field definitions to add to the PDF",
                 "required": True,
-                "preselected": True,
             },
             "password": {
                 "type": StringOrNothingType,
@@ -78,13 +77,7 @@ public class PdfCoCreateFillableFormRequestDataType inherits HashDataType {
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

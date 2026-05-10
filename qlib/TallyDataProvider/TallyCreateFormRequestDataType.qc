@@ -35,6 +35,7 @@ public class TallyCreateFormRequestDataType inherits HashDataType {
                     "`FORM_TITLE` block as the first block",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "example_value": "Customer Feedback Survey",
             },
             "blocks": {
                 "display_name": "Blocks",

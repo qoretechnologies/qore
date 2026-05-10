@@ -35,6 +35,7 @@ public class WooCommerceDeleteCustomerRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the customer to delete",
                 "required": True,
                 "example_value": 25,
+                "ref_data": "customers",
             },
             "force": {
                 "display_name": "Force",

@@ -44,6 +44,14 @@ public class PdfCoCompressPdfRequestDataType inherits HashDataType {
                 "desc": "URL to the source PDF file",
                 "required_groups": ("source",),
             },
+            "config": {
+                "type": StringOrNothingType,
+                "display_name": "Config",
+                "short_desc": "Compression configuration as a JSON string",
+                "desc": "Compression configuration options serialized as a JSON string. Use this "
+                    "to fine-tune the compression process.\n\n"
+                    "**Example**: `{\"compressionLevel\": 4, \"imageQuality\": 75}`",
+            },
             "pages": {
                 "type": StringOrNothingType,
                 "display_name": "Pages",
@@ -61,7 +69,8 @@ public class PdfCoCompressPdfRequestDataType inherits HashDataType {
                 "type": SoftBoolOrNothingType,
                 "display_name": "Async",
                 "short_desc": "Run as a background job",
-                "desc": "Set to `True` to run as a background job",
+                "desc": "Set to `True` to run as a background job and return a `jobId` immediately. "
+                    "Use the `job-check` action to poll for results.",
             },
             "name": {
                 "type": StringOrNothingType,
@@ -75,19 +84,27 @@ public class PdfCoCompressPdfRequestDataType inherits HashDataType {
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
+            "outputDataFormat": {
+                "type": StringOrNothingType,
+                "display_name": "Output Data Format",
+                "short_desc": "Set to base64 to receive base64-encoded output content",
+                "desc": "Set to `base64` to receive the compressed file as base64-encoded content "
+                    "in the response instead of as a URL",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "base64",
+                        "display_name": "Base64",
+                        "desc": "Return the compressed file as base64-encoded content",
+                    },
+                ),
+            },
             "JPEGQuality": {
                 "type": SoftIntOrNothingType,
                 "display_name": "JPEG Quality",
                 "short_desc": "JPEG quality for image compression",
                 "desc": "JPEG quality for image compression (`1`-`100`, default: `25`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {
@@ -138,7 +155,7 @@ public class PdfCoCompressPdfDataProvider inherits PdfCoDataProviderBase {
     #! Performs the request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         req = uploadFileIfNeeded(req);
-        return doPost("pdf/optimize", req);
+        return doPostV2("pdf/compress", req);
     }
 
     #! Returns static provider info

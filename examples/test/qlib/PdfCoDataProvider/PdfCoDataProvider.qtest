@@ -479,7 +479,7 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         assertEq("PdfCo", appInfo.name);
         assertEq("pdfco", appInfo.scheme);
 
-        # Verify all 27 actions are registered
+        # Verify all 26 actions are registered
         *list<hash<DataProviderActionInfo>> actions = DataProviderActionCatalog::getActions("PdfCo");
         hash<string, bool> actionMap;
         map actionMap{$1.action} = True, actions;
@@ -607,6 +607,34 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         testAddTextToPdf();
     }
 
+    #! Fetches the body of a PDF.co output URL so callers can inspect the produced artifact
+    private *binary fetchOutputUrl(string url) {
+        try {
+            HTTPClient httpClient({"url": url});
+            on_exit httpClient.disconnect();
+            hash<auto> info;
+            *data body = httpClient.send(NOTHING, "GET", "/", NOTHING, False, \info).body;
+            if (info."response-code" != 200) {
+                return NOTHING;
+            }
+            return body.typeCode() == NT_BINARY ? body : binary(body);
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("WARN: could not fetch %s: %s: %s\n", url, ex.err, ex.desc);
+            }
+        }
+    }
+
+    #! Asserts the fetched bytes start with the expected magic prefix
+    private assertMagicBytes(binary actual, binary expected_prefix, string label) {
+        if (actual.size() < expected_prefix.size()) {
+            fail(sprintf("%s: fetched %d bytes, expected at least %d for magic prefix",
+                label, actual.size(), expected_prefix.size()));
+        }
+        binary head = actual.substr(0, expected_prefix.size());
+        assertEq(expected_prefix, head, label);
+    }
+
     #! Test credit balance (lightweight API call)
     private testCreditBalance() {
         if (m_options.verbose) {
@@ -614,6 +642,9 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         }
         hash<auto> result = client.get("account/credit/balance");
         assertTrue(result.body.hasKey("remainingCredits"));
+        # Credit balance must be a non-negative integer; a zero or absent value would
+        # render every other integration test useless
+        assertGe(0, result.body.remainingCredits, "remainingCredits should be non-negative");
         if (m_options.verbose) {
             printf("Remaining credits: %y\n", result.body.remainingCredits);
         }
@@ -682,8 +713,14 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         assertTrue(result.url.val());
         # Verify URL points to a valid resource
         assertRegex("^https?://", result.url, "barcode URL should be a valid HTTP URL");
+        # Fetch the produced barcode and confirm it is a valid PNG image
+        *binary content = fetchOutputUrl(result.url);
+        if (content) {
+            assertMagicBytes(content, <89504e470d0a1a0a>, "generated barcode should be a PNG");
+        }
         if (m_options.verbose) {
-            printf("Generated barcode URL: %s\n", result.url);
+            printf("Generated barcode URL: %s (fetched %d bytes)\n", result.url,
+                content ? content.size() : 0);
         }
     }
 
@@ -835,8 +872,14 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         assertTrue(result.hasKey("url"));
         assertTrue(result.url.val());
         assertRegex("^https?://", result.url, "output URL should be a valid HTTP URL");
+        # Fetch the produced PDF and confirm the magic bytes
+        *binary content = fetchOutputUrl(result.url);
+        if (content) {
+            assertMagicBytes(content, <255044462d>, "convert-html-to-pdf output should be a PDF");
+        }
         if (m_options.verbose) {
-            printf("Converted HTML to PDF URL: %s\n", result.url);
+            printf("Converted HTML to PDF URL: %s (fetched %d bytes)\n", result.url,
+                content ? content.size() : 0);
         }
     }
 
@@ -908,8 +951,14 @@ public class PdfCoDataProviderTest inherits QUnit::Test {
         assertFalse(result.error ?? False);
         assertTrue(result.hasKey("url"));
         assertTrue(result.url.val());
+        # Fetch the compressed output and verify the PDF magic bytes
+        *binary content = fetchOutputUrl(result.url);
+        if (content) {
+            assertMagicBytes(content, <255044462d>, "compress-pdf output should be a PDF");
+        }
         if (m_options.verbose) {
-            printf("Compressed PDF URL: %s\n", result.url);
+            printf("Compressed PDF URL: %s (fetched %d bytes)\n", result.url,
+                content ? content.size() : 0);
         }
     }
 }

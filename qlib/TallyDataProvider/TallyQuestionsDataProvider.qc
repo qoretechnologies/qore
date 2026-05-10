@@ -32,7 +32,6 @@ public const TallyQuestionsSearchOptions = {
         "type": AbstractDataProviderTypeMap."string",
         "desc": "The ID of the form to retrieve questions from",
         "required": True,
-        "preselected": True,
     },
 };
 

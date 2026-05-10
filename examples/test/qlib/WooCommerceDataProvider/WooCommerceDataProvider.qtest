@@ -95,6 +95,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("action catalog tests", \actionCatalogTests());
+        addTestCase("event fake example data", \eventFakeExampleDataTests());
 
         # Integration tests (require WC_STORE_URL, WC_CONSUMER_KEY, WC_CONSUMER_SECRET)
         addTestCase("integration tests", \integrationTests());
@@ -209,7 +210,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
         assertTrue(inlist("events", children), "has events child");
         assertTrue(inlist("create-order", children), "has create-order child");
         assertTrue(inlist("get-order", children), "has get-order child");
-        assertTrue(inlist("system-status", children), "has system-status child");
+        assertTrue(inlist("get-system-status", children), "has system-status child");
     }
 
     #! Data type tests
@@ -345,6 +346,34 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! Verify every event provider can produce fake example data without a live API
+    eventFakeExampleDataTests() {
+        checkJson();
+        # Use a mock-disconnected REST client; the base provider falls back to fake data
+        # when the live request fails, so this test runs without credentials.
+        WooCommerceRestClient::WooCommerceRestClient mockClient(
+            {"store_url": "https://invalid.example.invalid",
+             "consumer_key": "ck_test",
+             "consumer_secret": "cs_test"}, True);
+        WooCommerceDataProvider::WooCommerceDataProvider prov(mockClient);
+        AbstractDataProvider events = prov.getChildProvider("events");
+        # Every concrete event type defined in WooCommerceDataProviderDefs must produce
+        # a non-empty example payload via fake-data fallback.
+        foreach string eventName in (AllEventTypes) {
+            AbstractDataProvider eventProv = events.getChildProvider(eventName);
+            assertTrue(exists eventProv,
+                sprintf("%s event provider exists", eventName));
+            *hash<string, hash<DataProviderMessageInfo>> eventTypes = eventProv.getEventTypes();
+            assertTrue(exists eventTypes && eventTypes.size() > 0,
+                sprintf("%s declares at least one event type", eventName));
+            foreach string eventType in (keys eventTypes) {
+                auto example = eventProv.getExampleEventData(eventType);
+                assertTrue(exists example,
+                    sprintf("%s produces example data for %s", eventName, eventType));
+            }
+        }
+    }
+
     #! Integration tests (require real credentials)
     integrationTests() {
         checkJson();
@@ -375,7 +404,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
     private testSystemStatus() {
         WooCommerceDataProvider::WooCommerceDataProvider prov(client);
         try {
-            auto result = prov.getChildProvider("system-status").doRequest({});
+            auto result = prov.getChildProvider("get-system-status").doRequest({});
             assertTrue(exists result, "system-status returned data");
             assertTrue(result.hasKey("environment") || result.hasKey("database"),
                 "system-status has expected fields");
@@ -767,12 +796,12 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
             "get-setting returns setting data");
 
         # Sales report
-        hash<auto> salesReport = prov.getChildProvider("sales-report").doRequest({});
+        hash<auto> salesReport = prov.getChildProvider("get-sales-report").doRequest({});
         assertTrue(exists salesReport, "sales-report returned data");
 
         # Top sellers report
         try {
-            hash<auto> topSellers = prov.getChildProvider("top-sellers-report").doRequest({});
+            hash<auto> topSellers = prov.getChildProvider("get-top-sellers-report").doRequest({});
             assertTrue(exists topSellers, "top-sellers-report returned data");
         } catch (hash<ExceptionInfo> ex) {
             # May be empty on fresh stores
@@ -782,13 +811,13 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
         }
 
         # Totals
-        hash<auto> ordersTotals = prov.getChildProvider("orders-totals").doRequest({});
+        hash<auto> ordersTotals = prov.getChildProvider("get-orders-totals").doRequest({});
         assertTrue(exists ordersTotals, "orders-totals returned data");
 
-        hash<auto> productsTotals = prov.getChildProvider("products-totals").doRequest({});
+        hash<auto> productsTotals = prov.getChildProvider("get-products-totals").doRequest({});
         assertTrue(exists productsTotals, "products-totals returned data");
 
-        hash<auto> customersTotals = prov.getChildProvider("customers-totals").doRequest({});
+        hash<auto> customersTotals = prov.getChildProvider("get-customers-totals").doRequest({});
         assertTrue(exists customersTotals, "customers-totals returned data");
 
         # Shipping zones

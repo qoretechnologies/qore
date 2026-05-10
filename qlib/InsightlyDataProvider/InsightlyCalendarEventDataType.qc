@@ -86,9 +86,10 @@ public class InsightlyCreateCalendarEventRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "TITLE": {
-                "type": SoftStringType, "display_name": "Title",
-                "required": True, "short_desc": "Event title",
-                "desc": "The title of the calendar event (required)",
+                "type": SoftStringOrNothingType, "display_name": "Title",
+                "short_desc": "Event title",
+                "desc": "The title of the calendar event",
+                "preselected": True,
                 "example_value": "Team Meeting",
             },
             "LOCATION": {
@@ -103,16 +104,16 @@ public class InsightlyCreateCalendarEventRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "START_DATE_UTC": {
-                "type": SoftDateOrNothingType, "display_name": "Start Date",
+                "type": SoftDateType, "display_name": "Start Date",
+                "required": True,
                 "short_desc": "Event start date/time (UTC)",
-                "desc": "The UTC start date and time of the event",
-                "preselected": True,
+                "desc": "The UTC start date and time of the event (required)",
             },
             "END_DATE_UTC": {
-                "type": SoftDateOrNothingType, "display_name": "End Date",
+                "type": SoftDateType, "display_name": "End Date",
+                "required": True,
                 "short_desc": "Event end date/time (UTC)",
-                "desc": "The UTC end date and time of the event",
-                "preselected": True,
+                "desc": "The UTC end date and time of the event (required)",
             },
             "ALL_DAY": {
                 "type": SoftBoolOrNothingType, "display_name": "All Day",

@@ -29,7 +29,7 @@ public class InsightlyWatchNewContactsDataProvider inherits InsightlyWatchDataPr
     }
 
     list<hash<auto>> fetchRecords(date since) {
-        return fetchAllPages("Contacts");
+        return fetchRecordsUpdatedAfter("Contacts", since);
     }
 
     hash<auto> getFakeExampleData() {

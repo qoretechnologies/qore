@@ -156,6 +156,34 @@ public const WebhookStatusAllowedValues = map <AllowedValueInfo>{
     "value": $1,
 }, AllWebhookStatuses;
 
+# ---- Built-in Webhook Topics ----
+
+#! All built-in webhook topics supported by WooCommerce
+public const AllWebhookTopics = (
+    "order.created",
+    "order.updated",
+    "order.deleted",
+    "order.restored",
+    "product.created",
+    "product.updated",
+    "product.deleted",
+    "product.restored",
+    "customer.created",
+    "customer.updated",
+    "customer.deleted",
+    "coupon.created",
+    "coupon.updated",
+    "coupon.deleted",
+    "coupon.restored",
+);
+
+#! Allowed values for built-in webhook topics; use `allowed_values_creatable` to allow custom `action.*` topics
+public const WebhookTopicAllowedValues = map <AllowedValueInfo>{
+    "display_name": $1,
+    "short_desc": sprintf("Webhook topic: %s", $1),
+    "value": $1,
+}, AllWebhookTopics;
+
 # ---- Event Types (Built-in Webhook Topics) ----
 
 public const EVENT_ORDER_CREATED = "order-created";

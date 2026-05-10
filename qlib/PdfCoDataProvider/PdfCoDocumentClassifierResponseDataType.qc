@@ -25,17 +25,53 @@
 #! Contains all public definitions in the PdfCoDataProvider module
 public namespace PdfCoDataProvider {
 
+#! Single classification entry returned by the document classifier
+public class PdfCoClassificationDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "class": {
+                "type": StringOrNothingType,
+                "display_name": "Class",
+                "short_desc": "Detected document class name",
+                "desc": "The detected document class name (e.g., `invoice`, `finance`)",
+            },
+        };
+    }
+
+    constructor() : HashDataType("Classification") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Body payload returned by the document classifier
+public class PdfCoDocumentClassifierBodyDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "classes": {
+                "type": new SoftListDataType("Classes", new PdfCoClassificationDataType(), True),
+                "display_name": "Classes",
+                "short_desc": "List of detected document classes",
+                "desc": "List of detected document classes",
+            },
+        };
+    }
+
+    constructor() : HashDataType("DocumentClassifierBody") {
+        addQoreFields(Fields);
+    }
+}
+
 #! Response data type for PDF.co document classifier operations
 public class PdfCoDocumentClassifierResponseDataType inherits HashDataType {
     public {
         #! Field definitions for the document classifier response
         const Fields = {
             "body": {
-                "type": AutoHashOrNothingType,
+                "type": (new PdfCoDocumentClassifierBodyDataType()).getOrNothingType(),
                 "display_name": "Body",
                 "short_desc": "Classification results with detected document types",
                 "desc": "Classification results containing a `classes` array with detected document "
-                    "types and their confidence scores",
+                    "types",
             },
             "pageCount": {
                 "type": SoftIntOrNothingType,

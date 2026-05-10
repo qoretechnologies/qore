@@ -41,14 +41,19 @@ public class TallyCreateWebhookRequestDataType inherits HashDataType {
                 "desc": "The destination URL where webhook events will be delivered",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "example_value": "https://example.com/webhook",
             },
             "eventTypes": {
                 "display_name": "Event Types",
                 "short_desc": "Event types to subscribe to",
                 "desc": "List of event types to subscribe to; the only valid value is "
                     "`FORM_RESPONSE`",
-                "type": AbstractDataProviderType::get(SoftListType),
+                "type": new ListDataType(AbstractDataProviderTypeMap."string"),
                 "required": True,
+                "element_allowed_values": (
+                    <AllowedValueInfo>{"value": "FORM_RESPONSE", "display_name": "Form Response"},
+                ),
+                "example_value": ("FORM_RESPONSE",),
             },
             "signingSecret": {
                 "display_name": "Signing Secret",

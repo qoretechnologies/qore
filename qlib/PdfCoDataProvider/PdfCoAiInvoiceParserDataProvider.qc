@@ -52,11 +52,15 @@ public class PdfCoAiInvoiceParserRequestDataType inherits HashDataType {
                     "(e.g., `purchaseOrderNumber`, `taxId`, `vendorAddress`)",
             },
             "lineItemStructure": {
-                "type": new ListDataType("LineItemColumns", SoftStringType, True),
+                "type": AutoHashOrNothingType,
                 "display_name": "Line Item Structure",
-                "short_desc": "Custom line item column names",
-                "desc": "Column names defining the line item structure "
-                    "(e.g., `description`, `quantity`, `unitPrice`, `amount`)",
+                "short_desc": "JSON object defining the custom line-item schema",
+                "desc": "JSON object whose keys are camelCase field names and whose values are "
+                    "either `\"string\"` or `\"number\"`. Each key/value pair declares one column "
+                    "to extract for every line item.\n\n"
+                    "**Example**: "
+                    "`{\"description\": \"string\", \"quantity\": \"number\", "
+                    "\"unitPrice\": \"number\", \"totalPrice\": \"number\"}`",
             },
             "async": {
                 "type": SoftBoolOrNothingType,
@@ -64,19 +68,7 @@ public class PdfCoAiInvoiceParserRequestDataType inherits HashDataType {
                 "short_desc": "Run as a background job",
                 "desc": "Set to `True` to run as a background job",
             },
-            "callback": {
-                "type": StringOrNothingType,
-                "display_name": "Callback URL",
-                "short_desc": "Webhook URL for results",
-                "desc": "Webhook URL to receive results when processing is complete",
-            },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {
@@ -131,9 +123,6 @@ public class PdfCoAiInvoiceParserDataProvider inherits PdfCoDataProviderBase {
         req = uploadFileIfNeeded(req);
         if (req.customField.typeCode() == NT_LIST) {
             req.customField = (foldl $1 + "," + $2, req.customField);
-        }
-        if (req.lineItemStructure.typeCode() == NT_LIST) {
-            req.lineItemStructure = (foldl $1 + "," + $2, req.lineItemStructure);
         }
         return doPost("ai-invoice-parser", req);
     }

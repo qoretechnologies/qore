@@ -62,9 +62,9 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
             "refunded": {
                 "display_name": "Refunded",
                 "short_desc": "Whether the return has been refunded",
-                "type": SoftBoolType,
-                "required": True,
+                "type": SoftBoolOrNothingType,
                 "desc": "`True` marks the return as refunded.",
+                "example_value": False,
             },
             "admin_comments": {
                 "display_name": "Admin Comments",
@@ -142,7 +142,9 @@ public class BaseLinkerAddOrderReturnRequestDataType inherits HashDataType {
                 "short_desc": "Map of custom extra field ID to value",
                 "type": AutoHashOrNothingType,
                 "desc": "Map of `{\"<extra_field_id>\": <value>}` for custom order-return extra "
-                    "fields configured in BaseLinker.",
+                    "fields configured in BaseLinker. Text fields take strings; file fields "
+                    "take a `{\"title\": \"<filename>\", \"file\": \"<base64>\"}` hash where the "
+                    "base64-encoded file must not exceed 2 MB.",
             },
             "refund_account_number": {
                 "display_name": "Refund Account Number",

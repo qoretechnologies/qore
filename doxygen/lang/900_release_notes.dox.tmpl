@@ -2100,7 +2100,12 @@ cargo install tree-sitter-cli@0.26.5
       - provides TableauRestConnection for connection management with \c tableaures:// URL scheme
     - @ref tallydataproviderintro "TallyDataProvider" module
       - new module providing a data provider API for <a href="https://tally.so/">Tally.so</a> form management services
-      - supports form CRUD, submission management, webhook configuration, and event polling
+      - form CRUD (create, get, update, delete, search) with workspace selection
+      - submission management (search, get, delete) with cascading submission lookup per form
+      - workspace CRUD (create, get, update, delete, search)
+      - webhook CRUD plus webhook delivery event introspection (search events, retry failed events)
+      - polling-based form-submission event trigger
+      - reference data for forms, workspaces, webhooks, and submissions enables in-UI dropdown selection
     - @ref tallyrestclientintro "TallyRestClient" module
       - new module providing a REST client for <a href="https://tally.so/">Tally.so</a>'s form management API
       - provides TallyRestConnection for connection management with \c tally:// URL scheme

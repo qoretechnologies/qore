@@ -67,6 +67,24 @@ public class InsightlyNoteDataType inherits HashDataType {
 public class InsightlyCreateNoteRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "PARENT_TYPE": {
+                "type": SoftStringType, "display_name": "Parent Type",
+                "required": True, "short_desc": "Parent record type",
+                "desc": "The type of record this note will be attached to. Insightly v3.1 "
+                    "requires notes to be created under a parent record.",
+                "allowed_values": LinkSubjectTypeAllowedValues,
+                "example_value": "Contact",
+                "has_dependents": True,
+                "on_change": ("refetch",),
+            },
+            "PARENT_ID": {
+                "type": SoftIntType, "display_name": "Parent ID",
+                "required": True, "short_desc": "Parent record identifier",
+                "desc": "The ID of the parent record (contact, lead, opportunity, organisation, "
+                    "or project) this note is attached to",
+                "depends_on": ("PARENT_TYPE",),
+                "ref_data": "note_parent",
+            },
             "TITLE": {
                 "type": SoftStringType, "display_name": "Title",
                 "required": True, "short_desc": "Note title",
@@ -78,19 +96,6 @@ public class InsightlyCreateNoteRequestDataType inherits HashDataType {
                 "short_desc": "Note body content",
                 "desc": "The body content of the note",
                 "preselected": True,
-            },
-            "LINK_SUBJECT_ID": {
-                "type": SoftIntOrNothingType, "display_name": "Link Subject ID",
-                "short_desc": "Linked subject identifier",
-                "desc": "The ID of the object to link this note to",
-                "preselected": True,
-            },
-            "LINK_SUBJECT_TYPE": {
-                "type": SoftStringOrNothingType, "display_name": "Link Subject Type",
-                "short_desc": "Linked subject type",
-                "desc": "The type of object to link this note to",
-                "preselected": True,
-                "allowed_values": LinkSubjectTypeAllowedValues,
             },
             "OWNER_USER_ID": {
                 "type": SoftIntOrNothingType, "display_name": "Owner User ID",

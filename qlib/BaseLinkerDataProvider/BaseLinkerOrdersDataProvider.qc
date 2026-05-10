@@ -58,18 +58,21 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
                 "short_desc": "Fetch a single order by ID",
                 "type": AbstractDataProviderType::get(SoftIntOrNothingType),
                 "desc": "If supplied, only the matching order is returned.",
+                "ref_data": "orders",
             },
             "date_confirmed_from": <DataProviderOptionInfo>{
                 "display_name": "Date Confirmed From",
-                "short_desc": "Filter by confirmation time (Unix seconds)",
-                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
-                "desc": "Return orders confirmed at or after this Unix timestamp.",
+                "short_desc": "Filter by confirmation date/time",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Return orders confirmed at or after this date/time. The date is "
+                    "converted to Unix seconds before being passed to the BaseLinker API.",
             },
             "date_from": <DataProviderOptionInfo>{
                 "display_name": "Date From",
-                "short_desc": "Filter by creation time (Unix seconds)",
-                "type": AbstractDataProviderType::get(SoftIntOrNothingType),
-                "desc": "Return orders created at or after this Unix timestamp.",
+                "short_desc": "Filter by creation date/time",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Return orders created at or after this date/time. The date is "
+                    "converted to Unix seconds before being passed to the BaseLinker API.",
             },
             "id_from": <DataProviderOptionInfo>{
                 "display_name": "ID From",
@@ -215,10 +218,11 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
             base_params.order_id = int(search_options.order_id);
         }
         if (exists search_options.date_confirmed_from) {
-            base_params.date_confirmed_from = int(search_options.date_confirmed_from);
+            base_params.date_confirmed_from =
+                int(get_epoch_seconds(search_options.date_confirmed_from));
         }
         if (exists search_options.date_from) {
-            base_params.date_from = int(search_options.date_from);
+            base_params.date_from = int(get_epoch_seconds(search_options.date_from));
         }
         if (exists search_options.get_unconfirmed_orders) {
             base_params.get_unconfirmed_orders = boolean(search_options.get_unconfirmed_orders);
@@ -256,7 +260,7 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
         # Single-order fast path: one call, no pagination
         if (exists search_options.order_id) {
             hash<auto> response = callMethod("getOrders", base_params);
-            records = response.orders ?? ();
+            records = map convertEpochFields($1), (response.orders ?? ());
             return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
                 search_options, (new BaseLinkerOrderDataType()).getFields());
         }
@@ -272,7 +276,7 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
                 break;
             }
             foreach hash<auto> order in (page) {
-                records += order;
+                records += convertEpochFields(order);
                 --remaining;
                 if (!remaining) {
                     break;
@@ -287,6 +291,16 @@ public class BaseLinkerOrdersDataProvider inherits BaseLinkerDataProviderBase {
 
         return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerOrderDataType()).getFields());
+    }
+
+    #! Converts BaseLinker epoch-seconds fields in a record to absolute dates
+    private static hash<auto> convertEpochFields(hash<auto> order) {
+        foreach string key in (("date_confirmed", "date_add", "date_in_status")) {
+            if (exists order{key} && order{key}.typeCode() == NT_INT) {
+                order{key} = 1970-01-01Z + seconds(order{key});
+            }
+        }
+        return order;
     }
 
     #! Returns static provider info

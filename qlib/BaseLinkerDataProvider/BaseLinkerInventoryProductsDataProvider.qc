@@ -44,6 +44,8 @@ public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProv
                 "desc": "The catalog to list products from.",
                 "required": True,
                 "ref_data": "inventories",
+                "has_dependents": True,
+                "on_change": ("refetch",),
             },
             "product_id": <DataProviderOptionInfo>{
                 "display_name": "Product ID",
@@ -51,18 +53,24 @@ public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProv
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "If supplied, only the matching product is returned (via "
                     "`getInventoryProductsData`).",
+                "ref_data": "inventory_products",
+                "depends_on": ("inventory_id",),
             },
             "filter_id": <DataProviderOptionInfo>{
                 "display_name": "Filter ID",
                 "short_desc": "Filter by product identifier",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Only return the product with this identifier.",
+                "ref_data": "inventory_products",
+                "depends_on": ("inventory_id",),
             },
             "filter_category_id": <DataProviderOptionInfo>{
                 "display_name": "Filter Category",
                 "short_desc": "Filter by category identifier",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Only return products in the given category.",
+                "ref_data": "inventory_categories",
+                "depends_on": ("inventory_id",),
             },
             "filter_ean": <DataProviderOptionInfo>{
                 "display_name": "Filter EAN",
@@ -111,17 +119,10 @@ public class BaseLinkerInventoryProductsDataProvider inherits BaseLinkerDataProv
                 "short_desc": "Result ordering expression",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "Result sort expression accepted by BaseLinker "
-                    "`getInventoryProductsList` (e.g. `id [ASC|DESC]`, `name [ASC|DESC]`, "
-                    "`quantity [ASC|DESC]`, `price [ASC|DESC]`).",
+                    "`getInventoryProductsList`. The API documents `id [ASC|DESC]`.",
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "id ASC",       "desc": "ID ascending"},
-                    <AllowedValueInfo>{"value": "id DESC",      "desc": "ID descending"},
-                    <AllowedValueInfo>{"value": "name ASC",     "desc": "Name A-Z"},
-                    <AllowedValueInfo>{"value": "name DESC",    "desc": "Name Z-A"},
-                    <AllowedValueInfo>{"value": "quantity ASC", "desc": "Stock ascending"},
-                    <AllowedValueInfo>{"value": "quantity DESC","desc": "Stock descending"},
-                    <AllowedValueInfo>{"value": "price ASC",    "desc": "Price ascending"},
-                    <AllowedValueInfo>{"value": "price DESC",   "desc": "Price descending"},
+                    <AllowedValueInfo>{"value": "id ASC",  "display_name": "ID ascending"},
+                    <AllowedValueInfo>{"value": "id DESC", "display_name": "ID descending"},
                 ),
             },
             "filter_locations": <DataProviderOptionInfo>{

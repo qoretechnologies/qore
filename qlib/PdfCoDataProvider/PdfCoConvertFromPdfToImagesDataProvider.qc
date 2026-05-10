@@ -50,10 +50,9 @@ public class PdfCoConvertFromPdfToImagesRequestDataType inherits HashDataType {
                 "short_desc": "Image output format",
                 "desc": "Image output format",
                 "required": True,
-                "preselected": True,
                 "allowed_values": (
-                    <AllowedValueInfo>{"value": "jpg", "desc": "JPEG format"},
-                    <AllowedValueInfo>{"value": "png", "desc": "PNG format"},
+                    <AllowedValueInfo>{"value": "jpg", "display_name": "JPEG", "desc": "JPEG image format"},
+                    <AllowedValueInfo>{"value": "png", "display_name": "PNG", "desc": "PNG image format"},
                 ),
             },
             "pages": {
@@ -87,13 +86,7 @@ public class PdfCoConvertFromPdfToImagesRequestDataType inherits HashDataType {
                 "short_desc": "Output link expiration time in minutes",
                 "desc": "Output link expiration time in minutes (default: `60`)",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {

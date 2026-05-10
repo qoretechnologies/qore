@@ -150,6 +150,72 @@ public class WooCommerceProductsDataProvider inherits WooCommerceDataProviderBas
                     <AllowedValueInfo>{"value": "rating", "desc": "Sort by rating"},
                 ),
             },
+            "after": <DataProviderOptionInfo>{
+                "display_name": "After",
+                "short_desc": "Filter by creation date (after)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to products created after the given date",
+            },
+            "before": <DataProviderOptionInfo>{
+                "display_name": "Before",
+                "short_desc": "Filter by creation date (before)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to products created before the given date",
+            },
+            "modified_after": <DataProviderOptionInfo>{
+                "display_name": "Modified After",
+                "short_desc": "Filter by modification date (after)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to products modified after the given date",
+            },
+            "modified_before": <DataProviderOptionInfo>{
+                "display_name": "Modified Before",
+                "short_desc": "Filter by modification date (before)",
+                "type": AbstractDataProviderType::get(DateOrNothingType),
+                "desc": "Limit response to products modified before the given date",
+            },
+            "dates_are_gmt": <DataProviderOptionInfo>{
+                "display_name": "Dates Are GMT",
+                "short_desc": "Interpret date filters as GMT",
+                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
+                "desc": "If `True`, the date filters are interpreted as GMT timestamps",
+            },
+            "on_sale": <DataProviderOptionInfo>{
+                "display_name": "On Sale",
+                "short_desc": "Filter on-sale products",
+                "type": AbstractDataProviderType::get(SoftBoolOrNothingType),
+                "desc": "If `True`, return only products currently on sale",
+            },
+            "slug": <DataProviderOptionInfo>{
+                "display_name": "Slug",
+                "short_desc": "Filter by product slug",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "desc": "Limit results to a single product matching this slug",
+            },
+            "include": <DataProviderOptionInfo>{
+                "display_name": "Include",
+                "short_desc": "Include only specific product IDs",
+                "type": new ListDataType("ProductIncludeIds", SoftIntType, True),
+                "desc": "Limit results to the specified product IDs",
+            },
+            "exclude": <DataProviderOptionInfo>{
+                "display_name": "Exclude",
+                "short_desc": "Exclude specific product IDs",
+                "type": new ListDataType("ProductExcludeIds", SoftIntType, True),
+                "desc": "Exclude the specified product IDs from the result set",
+            },
+            "parent": <DataProviderOptionInfo>{
+                "display_name": "Parent",
+                "short_desc": "Include only products with these parent IDs",
+                "type": new ListDataType("ProductParentIds", SoftIntType, True),
+                "desc": "Limit results to products whose `parent_id` is in this list",
+            },
+            "parent_exclude": <DataProviderOptionInfo>{
+                "display_name": "Parent Exclude",
+                "short_desc": "Exclude products with these parent IDs",
+                "type": new ListDataType("ProductParentExcludeIds", SoftIntType, True),
+                "desc": "Exclude products whose `parent_id` is in this list",
+            },
         };
     }
 
@@ -192,6 +258,11 @@ public class WooCommerceProductsDataProvider inherits WooCommerceDataProviderBas
         hash<auto> params = {} + search_options;
         if (!params.per_page) {
             params.per_page = DefaultPageSize;
+        }
+        foreach string key in (("after", "before", "modified_after", "modified_before")) {
+            if (params{key}) {
+                params{key} = format_date("YYYY-MM-DDTHH:mm:SS", params{key});
+            }
         }
         auto result = doGet("products", params);
         return new DefaultRecordIterator(new ListHashIterator(result.typeCode() == NT_LIST ? result : ()),

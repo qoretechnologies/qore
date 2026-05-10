@@ -161,25 +161,25 @@ public class WooCommerceOrderDataType inherits HashDataType {
             "line_items": {
                 "display_name": "Line Items",
                 "short_desc": "Order line items",
-                "type": new ListDataType("LineItems", AutoHashType, True),
+                "type": new ListDataType("LineItems", new WooCommerceLineItemDataType(), True),
                 "desc": "List of line items (products) in the order",
             },
             "shipping_lines": {
                 "display_name": "Shipping Lines",
                 "short_desc": "Shipping line items",
-                "type": new ListDataType("ShippingLines", AutoHashType, True),
+                "type": new ListDataType("ShippingLines", new WooCommerceShippingLineDataType(), True),
                 "desc": "List of shipping lines applied to the order",
             },
             "fee_lines": {
                 "display_name": "Fee Lines",
                 "short_desc": "Fee line items",
-                "type": new ListDataType("FeeLines", AutoHashType, True),
+                "type": new ListDataType("FeeLines", new WooCommerceFeeLineDataType(), True),
                 "desc": "List of fee lines applied to the order",
             },
             "coupon_lines": {
                 "display_name": "Coupon Lines",
                 "short_desc": "Coupon line items",
-                "type": new ListDataType("CouponLines", AutoHashType, True),
+                "type": new ListDataType("CouponLines", new WooCommerceCouponLineDataType(), True),
                 "desc": "List of coupon lines applied to the order",
             },
             "refunds": {
@@ -191,7 +191,7 @@ public class WooCommerceOrderDataType inherits HashDataType {
             "meta_data": {
                 "display_name": "Meta Data",
                 "short_desc": "Order metadata",
-                "type": new ListDataType("MetaData", AutoHashType, True),
+                "type": new ListDataType("MetaData", new WooCommerceMetaDataType(), True),
                 "desc": "List of metadata key-value pairs associated with the order",
             },
         };

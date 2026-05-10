@@ -35,6 +35,7 @@ public class WooCommerceDeleteProductRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the product to delete",
                 "required": True,
                 "example_value": 456,
+                "ref_data": "products",
             },
             "force": {
                 "display_name": "Force",

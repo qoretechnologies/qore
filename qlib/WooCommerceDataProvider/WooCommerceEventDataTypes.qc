@@ -72,7 +72,7 @@ public class WooCommerceOrderEventDataType inherits HashDataType {
             },
             "line_items": {
                 "display_name": "Line Items",
-                "type": new ListDataType("LineItems", AutoHashType, True),
+                "type": new ListDataType("LineItems", new WooCommerceLineItemDataType(), True),
                 "desc": "Order line items",
             },
             "payment_method": {

@@ -274,6 +274,12 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
             "customers": True,
             "products": True,
             "shipping_zones": True,
+            "orders": True,
+            "coupons": True,
+            "webhooks": True,
+            "tax_rates": True,
+            "variations": True,
+            "order_notes": True,
         };
     }
 
@@ -291,6 +297,12 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
             case "customers": return getReferenceCustomers();
             case "products": return getReferenceProducts();
             case "shipping_zones": return getReferenceShippingZones();
+            case "orders": return getReferenceOrders();
+            case "coupons": return getReferenceCoupons();
+            case "webhooks": return getReferenceWebhooks();
+            case "tax_rates": return getReferenceTaxRates();
+            case "variations": return getReferenceVariations(action_opts);
+            case "order_notes": return getReferenceOrderNotes(action_opts);
         }
     }
 
@@ -402,6 +414,157 @@ public class WooCommerceDataProviderBase inherits DataProvider::AbstractDataProv
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "getReferenceShippingZones: error fetching zones: %s", ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available orders for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceOrders() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            auto response = doGet("orders", {"per_page": "100"});
+            if (response.typeCode() == NT_LIST) {
+                foreach hash<auto> order in (response) {
+                    string display_name = sprintf("Order #%d", order.id);
+                    string status = order.status ?? "unknown";
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": status,
+                        "desc": sprintf("%s — status: %s, total: %s %s", display_name, status,
+                            order.total ?? "0", order.currency ?? ""),
+                        "value": int(order.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceOrders: error fetching orders: %s", ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available coupons for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceCoupons() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            auto response = doGet("coupons", {"per_page": "100"});
+            if (response.typeCode() == NT_LIST) {
+                foreach hash<auto> coupon in (response) {
+                    string display_name = coupon.code ?? sprintf("Coupon %d", coupon.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": coupon.discount_type ?? "",
+                        "desc": sprintf("%s — %s: %s", display_name, coupon.discount_type ?? "discount",
+                            coupon.amount ?? "0"),
+                        "value": int(coupon.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceCoupons: error fetching coupons: %s", ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available webhooks for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceWebhooks() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            auto response = doGet("webhooks", {"per_page": "100"});
+            if (response.typeCode() == NT_LIST) {
+                foreach hash<auto> webhook in (response) {
+                    string display_name = webhook.name ?? sprintf("Webhook %d", webhook.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": webhook.topic ?? "",
+                        "desc": sprintf("%s — topic: %s, status: %s", display_name,
+                            webhook.topic ?? "unknown", webhook.status ?? "unknown"),
+                        "value": int(webhook.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceWebhooks: error fetching webhooks: %s", ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available tax rates for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceTaxRates() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            auto response = doGet("taxes", {"per_page": "100"});
+            if (response.typeCode() == NT_LIST) {
+                foreach hash<auto> tax in (response) {
+                    string display_name = tax.name ?? sprintf("Tax Rate %d", tax.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": tax.rate ?? "",
+                        "desc": sprintf("%s — rate: %s%%, country: %s", display_name,
+                            tax.rate ?? "0", tax.country ?? "*"),
+                        "value": int(tax.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceTaxRates: error fetching tax rates: %s", ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available product variations for reference data (cascading: requires product_id in action_opts)
+    private *list<hash<AllowedValueInfo>> getReferenceVariations(*hash<auto> action_opts) {
+        list<hash<AllowedValueInfo>> rv = ();
+        # variations are scoped to a product; without product_id we cannot enumerate
+        *softint product_id = action_opts.product_id;
+        if (!product_id) {
+            return rv;
+        }
+        try {
+            auto response = doGet(sprintf("products/%d/variations", product_id), {"per_page": "100"});
+            if (response.typeCode() == NT_LIST) {
+                foreach hash<auto> variation in (response) {
+                    string display_name = variation.sku ? sprintf("Variation %s", variation.sku)
+                        : sprintf("Variation %d", variation.id);
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": variation.sku ?? "",
+                        "desc": sprintf("%s — price: %s", display_name, variation.price ?? "0"),
+                        "value": int(variation.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceVariations: error fetching variations: %s", ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available order notes for reference data (cascading: requires order_id in action_opts)
+    private *list<hash<AllowedValueInfo>> getReferenceOrderNotes(*hash<auto> action_opts) {
+        list<hash<AllowedValueInfo>> rv = ();
+        *softint order_id = action_opts.order_id;
+        if (!order_id) {
+            return rv;
+        }
+        try {
+            auto response = doGet(sprintf("orders/%d/notes", order_id));
+            if (response.typeCode() == NT_LIST) {
+                foreach hash<auto> note in (response) {
+                    string display_name = sprintf("Note %d", note.id);
+                    string preview = note.note ?? "";
+                    if (preview.length() > 40) {
+                        preview = preview.substr(0, 37) + "...";
+                    }
+                    rv += <AllowedValueInfo>{
+                        "display_name": display_name,
+                        "short_desc": preview,
+                        "desc": sprintf("%s — %s", display_name, preview),
+                        "value": int(note.id),
+                    };
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceOrderNotes: error fetching notes: %s", ex.desc);
         }
         return rv;
     }

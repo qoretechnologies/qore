@@ -81,13 +81,7 @@ public class PdfCoMergePdfRequestDataType inherits HashDataType {
                 "short_desc": "Custom title for the merged document",
                 "desc": "Custom title for the merged document",
             },
-            "profiles": {
-                "type": StringOrNothingType,
-                "display_name": "Profiles",
-                "short_desc": "Advanced processing profiles",
-                "desc": "Advanced processing profiles as a JSON string",
-            },
-        };
+        } + PdfCoRemoteSourceFields;
     }
 
     constructor() {
@@ -139,7 +133,20 @@ public class PdfCoMergePdfDataProvider inherits PdfCoDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         req = uploadFileIfNeeded(req);
         if (req.url.typeCode() == NT_LIST) {
-            req.url = (foldl $1 + "," + $2, req.url);
+            req.url = req.url ? join(",", req.url) : NOTHING;
+        }
+        # PDF.co documents RenameMatchingFieldsDuringMerge, GenerateBookmarks, and
+        # MergedDocumentTitle as nested under the `profiles` JSON object. Merge them
+        # into any user-supplied `profiles` string (or build a fresh one) before sending.
+        hash<auto> profile_overrides = {};
+        foreach string key in (("RenameMatchingFieldsDuringMerge", "GenerateBookmarks", "MergedDocumentTitle")) {
+            if (exists req{key}) {
+                profile_overrides{key} = remove req{key};
+            }
+        }
+        if (profile_overrides) {
+            hash<auto> existing = req.profiles.val() ? parse_json(req.profiles) : {};
+            req.profiles = make_json(existing + profile_overrides);
         }
         return doPost("pdf/merge2", req);
     }

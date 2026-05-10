@@ -40,7 +40,7 @@ public class FirecrawlMapResponseDataType inherits HashDataType {
                 "display_name": "Links",
                 "short_desc": "Discovered URLs",
                 "desc": "List of discovered URLs from the website map",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("links", SoftStringType, True),
             },
         };
     }

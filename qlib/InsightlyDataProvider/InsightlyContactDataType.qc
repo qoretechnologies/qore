@@ -197,14 +197,6 @@ public class InsightlyCreateContactRequestDataType inherits HashDataType {
     public {
         #! Field definitions for creating a contact
         const Fields = {
-            "LAST_NAME": {
-                "type": SoftStringType,
-                "display_name": "Last Name",
-                "required": True,
-                "short_desc": "Contact's last name",
-                "desc": "The last name of the contact (required)",
-                "example_value": "Smith",
-            },
             "FIRST_NAME": {
                 "type": SoftStringType,
                 "display_name": "First Name",
@@ -212,6 +204,14 @@ public class InsightlyCreateContactRequestDataType inherits HashDataType {
                 "short_desc": "Contact's first name",
                 "desc": "The first name of the contact (required)",
                 "example_value": "Jane",
+            },
+            "LAST_NAME": {
+                "type": SoftStringOrNothingType,
+                "display_name": "Last Name",
+                "short_desc": "Contact's last name",
+                "desc": "The last name of the contact",
+                "preselected": True,
+                "example_value": "Smith",
             },
             "SALUTATION": {
                 "type": SoftStringOrNothingType,

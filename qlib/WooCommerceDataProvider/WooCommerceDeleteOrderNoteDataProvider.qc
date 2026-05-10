@@ -35,6 +35,9 @@ public class WooCommerceDeleteOrderNoteRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the order",
                 "required": True,
                 "example_value": 1234,
+                "ref_data": "orders",
+                "has_dependents": True,
+                "on_change": ("refetch",),
             },
             "id": {
                 "display_name": "Note ID",
@@ -42,6 +45,8 @@ public class WooCommerceDeleteOrderNoteRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the note to delete",
                 "required": True,
                 "example_value": 56,
+                "ref_data": "order_notes",
+                "depends_on": ("order_id",),
             },
             "force": {
                 "display_name": "Force",

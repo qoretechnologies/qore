@@ -49,20 +49,20 @@ public class TallySubmissionDataType inherits HashDataType {
             "submittedAt": {
                 "display_name": "Submitted At",
                 "short_desc": "Submission timestamp",
-                "desc": "ISO 8601 timestamp when the submission was submitted",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the submission was submitted",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",
-                "desc": "ISO 8601 timestamp when the submission was created",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the submission was created",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "updatedAt": {
                 "display_name": "Updated At",
                 "short_desc": "Last update timestamp",
-                "desc": "ISO 8601 timestamp when the submission was last updated",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "Timestamp when the submission was last updated",
+                "type": AbstractDataProviderTypeMap."*date",
             },
             "responses": {
                 "display_name": "Responses",

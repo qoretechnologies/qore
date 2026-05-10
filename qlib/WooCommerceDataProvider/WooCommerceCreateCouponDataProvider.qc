@@ -36,6 +36,12 @@ public class WooCommerceCreateCouponRequestDataType inherits HashDataType {
                 "example_value": "SUMMER2026",
                 "required": True,
             },
+            "description": {
+                "display_name": "Description",
+                "type": StringOrNothingType,
+                "desc": "Coupon description for store admins",
+                "example_value": "Summer sale 10% off",
+            },
             "discount_type": {
                 "display_name": "Discount Type",
                 "type": StringOrNothingType,
@@ -58,11 +64,37 @@ public class WooCommerceCreateCouponRequestDataType inherits HashDataType {
                 "display_name": "Product IDs",
                 "type": new ListDataType("ProductIdList", SoftIntType, True),
                 "desc": "List of product IDs the coupon can be applied to",
+                "ref_data": "products",
             },
             "excluded_product_ids": {
                 "display_name": "Excluded Product IDs",
                 "type": new ListDataType("ExcludedProductIdList", SoftIntType, True),
                 "desc": "List of product IDs excluded from the coupon",
+                "ref_data": "products",
+            },
+            "product_categories": {
+                "display_name": "Product Categories",
+                "type": new ListDataType("ProductCategoryList", SoftIntType, True),
+                "desc": "List of category IDs the coupon applies to",
+                "ref_data": "categories",
+            },
+            "excluded_product_categories": {
+                "display_name": "Excluded Product Categories",
+                "type": new ListDataType("ExcludedProductCategoryList", SoftIntType, True),
+                "desc": "List of category IDs excluded from the coupon",
+                "ref_data": "categories",
+            },
+            "exclude_sale_items": {
+                "display_name": "Exclude Sale Items",
+                "type": SoftBoolOrNothingType,
+                "desc": "If `True`, the coupon will not apply to items on sale",
+                "example_value": False,
+            },
+            "email_restrictions": {
+                "display_name": "Email Restrictions",
+                "type": new ListDataType("EmailRestrictions", SoftStringType, True),
+                "desc": "List of email addresses (or domain wildcards like `*@example.com`) "
+                    "that can use this coupon",
             },
             "usage_limit": {
                 "display_name": "Usage Limit",
@@ -76,11 +108,16 @@ public class WooCommerceCreateCouponRequestDataType inherits HashDataType {
                 "desc": "Maximum number of times the coupon can be used per customer",
                 "example_value": 1,
             },
+            "limit_usage_to_x_items": {
+                "display_name": "Limit Usage To X Items",
+                "type": IntOrNothingType,
+                "desc": "Maximum number of items in the cart the coupon will apply to",
+                "example_value": 5,
+            },
             "date_expires": {
                 "display_name": "Date Expires",
-                "type": StringOrNothingType,
-                "desc": "The date the coupon expires in ISO8601 format",
-                "example_value": "2026-12-31",
+                "type": DateOrNothingType,
+                "desc": "The date the coupon expires",
             },
             "free_shipping": {
                 "display_name": "Free Shipping",
@@ -102,7 +139,7 @@ public class WooCommerceCreateCouponRequestDataType inherits HashDataType {
             },
             "meta_data": {
                 "display_name": "Meta Data",
-                "type": new ListDataType("MetaData", AutoHashType, True),
+                "type": new ListDataType("MetaData", new WooCommerceMetaDataType(), True),
                 "desc": "List of metadata key-value pairs",
             },
         };
@@ -160,7 +197,11 @@ public class WooCommerceCreateCouponDataProvider inherits WooCommerceDataProvide
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doPost("coupons", {} + req);
+        hash<auto> body = {} + req;
+        if (body.date_expires) {
+            body.date_expires = format_date("YYYY-MM-DDTHH:mm:SS", body.date_expires);
+        }
+        return doPost("coupons", body);
     }
 
     #! Returns the request type

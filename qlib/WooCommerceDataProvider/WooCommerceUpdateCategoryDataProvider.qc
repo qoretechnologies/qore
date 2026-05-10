@@ -35,6 +35,7 @@ public class WooCommerceUpdateCategoryRequestDataType inherits HashDataType {
                 "desc": "The unique identifier for the category to update",
                 "required": True,
                 "example_value": 15,
+                "ref_data": "categories",
             },
             "name": {
                 "display_name": "Name",
@@ -53,6 +54,7 @@ public class WooCommerceUpdateCategoryRequestDataType inherits HashDataType {
                 "type": IntOrNothingType,
                 "desc": "The parent category ID",
                 "example_value": 0,
+                "ref_data": "categories",
             },
             "description": {
                 "display_name": "Description",

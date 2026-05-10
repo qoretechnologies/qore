@@ -35,6 +35,7 @@ public class WooCommerceUpdateStockQuantityRequestDataType inherits HashDataType
                 "desc": "The unique identifier for the product",
                 "required": True,
                 "example_value": 456,
+                "ref_data": "products",
             },
             "stock_quantity": {
                 "display_name": "Stock Quantity",
