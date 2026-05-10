@@ -1087,6 +1087,66 @@ static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, Exceptio
     helper.assign(value);
 }
 
+static void applyNoNarrowContainerType(const QoreTypeInfo* ti, QoreValue& val, ExceptionSink* xsink) {
+    if (ti == anyTypeInfo || ti == autoNoNarrowTypeInfo) {
+        if (val.getType() == NT_HASH) {
+            map_get_plain_hash(val, xsink);
+        } else if (val.getType() == NT_LIST) {
+            map_get_plain_list(val, xsink);
+        }
+    } else if (ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo) {
+        if (val.getType() != NT_HASH) {
+            return;
+        }
+        QoreHashNode* h = val.get<QoreHashNode>();
+        qore_hash_private* hp = qore_hash_private::get(*h);
+        if (hp->getHashDecl() || hp->complexTypeInfo == autoHashTypeInfo) {
+            return;
+        }
+        if (!h->is_unique()) {
+            QoreHashNode* copy = h->copy();
+            qore_hash_private::get(*copy)->complexTypeInfo = autoHashTypeInfo;
+            AbstractQoreNode* old = val.assign(copy);
+            discard(old, xsink);
+        } else {
+            hp->complexTypeInfo = autoHashTypeInfo;
+        }
+    } else if (ti == autoNoNarrowListTypeInfo || ti == autoNoNarrowListOrNothingTypeInfo) {
+        if (val.getType() != NT_LIST) {
+            return;
+        }
+        QoreListNode* l = val.get<QoreListNode>();
+        qore_list_private* lp = qore_list_private::get(*l);
+        if (lp->complexTypeInfo == autoListTypeInfo) {
+            return;
+        }
+        if (!l->is_unique()) {
+            QoreListNode* copy = l->copy();
+            qore_list_private::get(*copy)->complexTypeInfo = autoListTypeInfo;
+            AbstractQoreNode* old = val.assign(copy);
+            discard(old, xsink);
+        } else {
+            lp->complexTypeInfo = autoListTypeInfo;
+        }
+    }
+}
+
+static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
+    QoreValue stored = value.hasNode() ? value.refSelf() : value;
+    const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
+    QoreTypeInfo::acceptAssignment(ti, "<lvalue>", stored, xsink);
+    if (xsink && *xsink) {
+        stored.discard(xsink);
+        return QoreValue();
+    }
+    applyNoNarrowContainerType(ti, stored, xsink);
+    if (xsink && *xsink) {
+        stored.discard(xsink);
+        return QoreValue();
+    }
+    return stored;
+}
+
 // Write-through for closure variable stores: writes the value to the actual
 // ClosureVarValue so that changes are visible outside the IR interpreter.
 static void assignClosureVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
@@ -6285,8 +6345,10 @@ load_local_done:
                     return false;
                 }
                 // Fast path: skip hash lookups if already instantiated (bitset check)
-                if (local_inst->slot_id >= locals_instantiated.size()
-                        || !locals_instantiated[local_inst->slot_id]) {
+                bool is_ir_only_local = local_inst->slot_id < locals_ir_only.size()
+                    && locals_ir_only[local_inst->slot_id];
+                if (!is_ir_only_local && (local_inst->slot_id >= locals_instantiated.size()
+                        || !locals_instantiated[local_inst->slot_id])) {
                     ensureLocalInstantiated(local_inst->local, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                             function_own_locals, &locally_uninstantiated);
                     if (local_inst->slot_id < locals_instantiated.size()) {
@@ -6302,6 +6364,33 @@ load_local_done:
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
+                }
+                if (is_ir_only_local && !local_inst->weak
+                        && local_inst->slot_id != UINT32_MAX
+                        && local_inst->slot_id < locals_slot_cache.size()) {
+                    QoreValue stored = coerceIRLocalValue(local_inst->local, val, xsink);
+                    if (xsink && *xsink) {
+                        if (inst->exception_target) {
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    locals_slot_cache[local_inst->slot_id].discard(xsink);
+                    locals_slot_cache[local_inst->slot_id] = stored;
+                    if (local_inst->slot_id < locals_lvar_cache.size()) {
+                        locals_lvar_cache[local_inst->slot_id] = nullptr;
+                    }
+                    if (local_inst->slot_id < local_init_slots.size()) {
+                        local_init_slots[local_inst->slot_id] = UINT32_MAX;
+                    }
+                    markParentLocalStoreDirty(local_inst);
+                    ++ip;
+                    break;
                 }
                 bool transfer_owned_operand = !normalized_weak_ref
                     && operand.isValid()

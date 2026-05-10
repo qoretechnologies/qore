@@ -1239,6 +1239,12 @@ static bool isCallOrInvoke(QoreIROpcode op) {
 static void collectLocalsFromIRFunction(const QoreIRFunction& func,
         std::unordered_set<const void*>& ast_locals,
         bool& unknown_node_found) {
+    auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
+        collectLocalsFromExpr(ctx_inst->exp, ast_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->where_exp, ast_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->sort_exp, ast_locals, unknown_node_found);
+    };
+
     for (const auto& block : func.blocks) {
         for (const auto& inst : block->instructions) {
             if (inst->opcode == QoreIROpcode::LoadLocal ||
@@ -1294,6 +1300,10 @@ static void collectLocalsFromIRFunction(const QoreIRFunction& func,
                 collectLocalsFromExpr(*expr, ast_locals, unknown_node_found);
             }
 
+            if (inst->opcode == QoreIROpcode::Context) {
+                collect_context_exprs(static_cast<const QoreIRContextInstruction*>(inst.get()));
+            }
+
             if (inst->opcode == QoreIROpcode::OnBlockExit) {
                 auto* obe_inst = static_cast<const QoreIROnBlockExitInstruction*>(inst.get());
                 if (obe_inst->stmt) {
@@ -1326,6 +1336,11 @@ void QoreIRFunction::computeIROnlyLocals() {
     // If the AST walker encounters an unknown node type, we conservatively
     // mark ALL locals as AST-visible.
     bool unknown_node_found = false;
+    auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
+        collectLocalsFromExpr(ctx_inst->exp, ast_referenced_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->where_exp, ast_referenced_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->sort_exp, ast_referenced_locals, unknown_node_found);
+    };
 
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
@@ -1423,6 +1438,14 @@ void QoreIRFunction::computeIROnlyLocals() {
             if (const QoreValue* expr = getInstructionExpr(inst.get())) {
                 collectLocalsFromExpr(*expr, ast_referenced_locals,
                         unknown_node_found);
+            }
+
+            // ContextInit evaluates its context data, where, and sort
+            // expressions through the AST runtime helper; locals referenced by
+            // those expressions must therefore remain visible on the runtime
+            // local stack and cannot be classified as IR-only.
+            if (inst->opcode == QoreIROpcode::Context) {
+                collect_context_exprs(static_cast<const QoreIRContextInstruction*>(inst.get()));
             }
 
             if (isDelegateToASTStatement(inst->opcode)) {

@@ -91,6 +91,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("regex match invoke single eval", \testJitRegexMatchInvokeSingleEval());
         addTestCase("regex extract single eval", \testJitRegexExtractSingleEval());
         addTestCase("regex extract invoke single eval", \testJitRegexExtractInvokeSingleEval());
+        addTestCase("IR-only condition local regex loop", \testIrOnlyConditionLocalRegexLoop());
+        addTestCase("IR-only maybe-NOTHING condition local", \testIrOnlyConditionLocalMaybeNothing());
         # Optimized higher-order function tests
         addTestCase("optimized foldl sum/prod", \testJitFoldlSumProd());
         addTestCase("optimized foldl diff/min/max", \testJitFoldlDiffMinMax());
@@ -186,13 +188,18 @@ class JITSmokeTest inherits QUnit::Test {
     }
 
     private string runScript(string code, *string exec_mode, *string suffix) {
+        return runScriptWithOpts(code, exec_mode, NOTHING, suffix);
+    }
+
+    private string runScriptWithOpts(string code, *string exec_mode, *string extra_opts, *string suffix) {
         string mode = exec_mode ?? "jit";
         # .qr implies %modern for standalone smoke scripts.
         TmpFile tmp(NOTHING, suffix ?? ".qr");
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;
-        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s 2>&1", qore_bin, mode, path);
+        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s 2>&1",
+            qore_bin, mode, extra_opts ?? "", path);
         return backquote(cmd);
     }
 
@@ -1411,6 +1418,60 @@ printf(\"%s:%d\\n\", r[0], counter);
         foreach string mode in ("ast", "ir", "jit") {
             string result = trim(runScript(code, mode));
             assertEq("789:1", result, sprintf("regex extract invoke single eval %s", mode));
+        }
+    }
+
+    testIrOnlyConditionLocalRegexLoop() {
+        string code = "%modern
+sub f() {
+    list<string> lines = (
+        \"0010   UNH, Message header\",
+        \"0020   BGM, Beginning of message\"
+    );
+    foreach string line in (lines) {
+        *list m = (line =~ x/^\\s*(\\d{4})(\\s+)(.+)$/);
+        if (!m) {
+            continue;
+        }
+        string rest = m[2];
+        if (rest =~ /^Segment group/) {
+            printf(\"group\\n\");
+        } else if (*list sm = (rest =~ x/^([A-Z0-9]{3})\\s*,\\s*(.+)$/)) {
+            printf(\"%s:%s\\n\", sm[0], sm[1]);
+        } else {
+            printf(\"none\\n\");
+        }
+    }
+}
+f();
+";
+        string expected = "UNH:Message header\nBGM:Beginning of message";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            assertEq(expected, result, sprintf("condition-local regex loop %s", mode));
+        }
+    }
+
+    testIrOnlyConditionLocalMaybeNothing() {
+        string code = "%modern
+hash<string, string> TypeMap = {\"int\": \"integer\"};
+sub f() {
+    foreach string type in ((\"int\", \"string\", \"bool\")) {
+        string resolved = type;
+        if (*string nt = TypeMap{resolved}) {
+            resolved = nt;
+        }
+        printf(\"%s\\n\", resolved);
+    }
+}
+f();
+";
+        string expected = "integer\nstring\nbool";
+        foreach string mode in ("ast", "ir", "jit", "tiered") {
+            string opts = mode == "tiered" ? "--jit-ir-threshold=3 --jit-jit-threshold=10" : "";
+            string result = trim(runScriptWithOpts(code, mode, opts, NOTHING));
+            assertEq(expected, result, sprintf("condition-local maybe-NOTHING %s", mode));
         }
     }
 
