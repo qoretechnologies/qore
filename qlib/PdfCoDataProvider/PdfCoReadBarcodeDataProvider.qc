@@ -125,7 +125,7 @@ public class PdfCoReadBarcodeDataProvider inherits PdfCoDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         req = uploadFileIfNeeded(req);
         if (req.types.typeCode() == NT_LIST) {
-            req.types = (foldl $1 + "," + $2, req.types);
+            req.types = req.types ? join(",", req.types) : NOTHING;
         }
         return doPost("barcode/read/from/url", req);
     }

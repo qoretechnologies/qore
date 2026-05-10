@@ -133,7 +133,7 @@ public class PdfCoMergePdfDataProvider inherits PdfCoDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         req = uploadFileIfNeeded(req);
         if (req.url.typeCode() == NT_LIST) {
-            req.url = (foldl $1 + "," + $2, req.url);
+            req.url = req.url ? join(",", req.url) : NOTHING;
         }
         # PDF.co documents RenameMatchingFieldsDuringMerge, GenerateBookmarks, and
         # MergedDocumentTitle as nested under the `profiles` JSON object. Merge them
@@ -145,7 +145,7 @@ public class PdfCoMergePdfDataProvider inherits PdfCoDataProviderBase {
             }
         }
         if (profile_overrides) {
-            hash<auto> existing = exists req.profiles ? parse_json(req.profiles) : {};
+            hash<auto> existing = req.profiles.val() ? parse_json(req.profiles) : {};
             req.profiles = make_json(existing + profile_overrides);
         }
         return doPost("pdf/merge2", req);
