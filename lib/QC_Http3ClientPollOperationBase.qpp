@@ -55,10 +55,31 @@ Http3ClientPollOperationPriv::Http3ClientPollOperationPriv(QoreObject* self,
         AbstractHttpPollConnectionPriv* conn_priv)
     : SocketPollOperationBase(self), inner_op(inner), sock_obj(sock),
       connection_priv(conn_priv) {
-    // Both sock and inner are already ref'd by the caller; ownership transferred
-    // connection_priv is a raw (unrefed) pointer to the C++ priv data;
-    // the strong QoreObject ref (for DGC cycle detection) is held in the
-    // Qore-level connection_ref member (private, stored in the data hash)
+    // Both sock and inner are already ref'd by the caller; ownership transferred.
+    //
+    // connection_priv lifetime: the Qore-level connection_ref member (a
+    // private data-hash slot) holds the strong QoreObject ref for DGC cycle
+    // detection.  That guarantees the connection's QoreObject outlives this
+    // poll op as far as user code can observe — but it is NOT enough on its
+    // own.  The I/O thread's continuePoll path can call
+    // @c connection_priv->setClosed() (via @c handleConnecting →
+    // @c setError → @c Http3ClientConnection::onInnerHandshakeFailed) on
+    // its own raw pointer.  If the connection's last refcounted reference
+    // drops between the broadcast inside the FIRST setClosed and the I/O
+    // thread reaching its NEXT mutex acquisition (e.g., a happy-eyeballs
+    // peer attempt also calling setClosed, or the manager's
+    // createConnection timeout path doing closeConnection+deref after
+    // waitForReadyOrError returns false), the AbstractHttpPollConnectionPriv
+    // mutex is destroyed under us and the next pthread_mutex_lock returns
+    // EINVAL → assert.
+    //
+    // Hold an explicit reference on the connection priv for the lifetime of
+    // this poll op so the I/O thread's raw back-pointer stays valid.  The
+    // ref is released in @ref cleanup (or the destructor's defensive
+    // cleanup path).
+    if (connection_priv) {
+        connection_priv->ref();
+    }
 }
 
 Http3ClientPollOperationPriv::~Http3ClientPollOperationPriv() {
@@ -112,7 +133,14 @@ void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         error_info->deref(xsink);
         error_info = nullptr;
     }
-    connection_priv = nullptr;  // raw pointer — Qore data member (connection_ref) holds the ref
+    // Release the explicit reference taken in the constructor.  See the
+    // constructor comment for why a raw pointer alone is unsafe — the I/O
+    // thread can still be inside @c connection_priv->setClosed() while the
+    // last user-visible reference drops.
+    if (connection_priv) {
+        connection_priv->deref(xsink);
+        connection_priv = nullptr;
+    }
     if (inner_op) {
         inner_op->deref(xsink);
         inner_op = nullptr;
@@ -465,12 +493,15 @@ void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {
         inner_op->abort(xsink);
     }
     notifyPendingStreams("HTTP3-ABORT", "connection aborted", xsink);
+    AbstractHttpPollConnectionPriv* cp = nullptr;
     {
         AutoLocker al(stream_lock);
-        if (connection_priv) {
-            connection_priv->setClosed();
-        }
+        cp = connection_priv;
         connection_priv = nullptr;
+    }
+    if (cp) {
+        cp->setClosed();
+        cp->deref(xsink);  // release the ref taken in the constructor
     }
     cleanupPendingState();
     // Note: do NOT close socket or delete inner_op here to avoid
@@ -504,16 +535,26 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
     }
     if (owner) {
         owner->onInnerHandshakeFailed(this, err, desc);
-        AutoLocker al(stream_lock);
-        connection_priv = nullptr;
+        AbstractHttpPollConnectionPriv* cp = nullptr;
+        {
+            AutoLocker al(stream_lock);
+            cp = connection_priv;
+            connection_priv = nullptr;
+        }
+        if (cp) {
+            cp->deref(xsink);  // release the ref taken in the constructor
+        }
         return;
     }
+    AbstractHttpPollConnectionPriv* cp = nullptr;
     {
         AutoLocker al(stream_lock);
-        if (connection_priv) {
-            connection_priv->setClosed();
-        }
+        cp = connection_priv;
         connection_priv = nullptr;
+    }
+    if (cp) {
+        cp->setClosed();
+        cp->deref(xsink);  // release the ref taken in the constructor
     }
 }
 
