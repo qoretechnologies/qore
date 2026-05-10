@@ -89,9 +89,20 @@ public:
         @since %Qore 2.3
     */
     DLLLOCAL void disarmConnectionPriv() {
-        AutoLocker al(stream_lock);
-        connection_priv = nullptr;
-        h3_owner_ = nullptr;
+        // Release the explicit reference taken in the constructor; see the
+        // ctor comment in QC_Http3ClientPollOperationBase.qpp for why.
+        AbstractHttpPollConnectionPriv* cp = nullptr;
+        {
+            AutoLocker al(stream_lock);
+            cp = connection_priv;
+            connection_priv = nullptr;
+            h3_owner_ = nullptr;
+        }
+        if (cp) {
+            ExceptionSink xs;
+            cp->deref(&xs);
+            xs.clear();
+        }
     }
 
     //! Arms a handshake-phase observer for happy-eyeballs coordination.
