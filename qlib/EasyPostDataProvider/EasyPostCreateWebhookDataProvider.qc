@@ -14,7 +14,7 @@ public class EasyPostCreateWebhookRequestDataType inherits HashDataType {
                 "desc": "URL to receive webhook callbacks",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "example_value": "https://example.com/easypost-webhook",
             },
             "webhook_secret": {
                 "display_name": "Webhook Secret",

@@ -14,16 +14,17 @@ public class EasyPostBuyPickupRequestDataType inherits HashDataType {
                 "desc": "Pickup to confirm/buy",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "pickups",
             },
             "carrier": {
                 "display_name": "Carrier",
-                "short_desc": "Carrier reference",
-                "desc": "Carrier name or carrier account ID",
+                "short_desc": "Carrier name",
+                "desc": "Carrier name (e.g. `UPS`, `FedEx`) — must match a `carrier` returned in the "
+                    "Pickup's `pickup_rates`",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
-                "ref_data": "carrier_accounts",
+                "ref_data": "pickup_carriers",
+                "depends_on": ("pickup_id",),
             },
             "service": {
                 "display_name": "Service",
@@ -31,7 +32,6 @@ public class EasyPostBuyPickupRequestDataType inherits HashDataType {
                 "desc": "Pickup service code returned in `pickup_rates`",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
         };
     }

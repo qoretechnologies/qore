@@ -14,16 +14,16 @@ public class EasyPostBuyOrderRequestDataType inherits HashDataType {
                 "desc": "Order to buy",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
             "carrier": {
                 "display_name": "Carrier",
-                "short_desc": "Carrier reference",
-                "desc": "Carrier name or carrier account ID",
+                "short_desc": "Carrier name",
+                "desc": "Carrier name (e.g. `FedEx`, `UPS`) — must match a `carrier` returned in the "
+                    "Order's `rates`",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
-                "ref_data": "carrier_accounts",
+                "ref_data": "order_carriers",
+                "depends_on": ("order_id",),
             },
             "service": {
                 "display_name": "Service",
@@ -31,7 +31,6 @@ public class EasyPostBuyOrderRequestDataType inherits HashDataType {
                 "desc": "Carrier service code",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
         };
     }

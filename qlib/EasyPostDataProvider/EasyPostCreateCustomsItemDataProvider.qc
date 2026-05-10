@@ -14,7 +14,6 @@ public class EasyPostCreateCustomsItemRequestDataType inherits HashDataType {
                 "desc": "Description of the item being shipped",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
             "quantity": {
                 "display_name": "Quantity",
@@ -22,7 +21,6 @@ public class EasyPostCreateCustomsItemRequestDataType inherits HashDataType {
                 "desc": "Number of units being shipped",
                 "type": SoftIntType,
                 "required": True,
-                "preselected": True,
             },
             "value": {
                 "display_name": "Value",
@@ -30,7 +28,6 @@ public class EasyPostCreateCustomsItemRequestDataType inherits HashDataType {
                 "desc": "Total value of all items as a string (e.g. `\"12.50\"`)",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
             "weight": {
                 "display_name": "Weight",
@@ -38,7 +35,6 @@ public class EasyPostCreateCustomsItemRequestDataType inherits HashDataType {
                 "desc": "Total weight in ounces",
                 "type": SoftFloatType,
                 "required": True,
-                "preselected": True,
             },
             "hs_tariff_number": {
                 "display_name": "HS Tariff Number",
@@ -46,7 +42,6 @@ public class EasyPostCreateCustomsItemRequestDataType inherits HashDataType {
                 "desc": "Six-digit Harmonized System tariff number",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
             "origin_country": {
                 "display_name": "Origin Country",
@@ -54,7 +49,6 @@ public class EasyPostCreateCustomsItemRequestDataType inherits HashDataType {
                 "desc": "ISO 2-letter country code of origin",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
             "code": {
                 "display_name": "Code",

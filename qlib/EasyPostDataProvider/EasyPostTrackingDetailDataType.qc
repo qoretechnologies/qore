@@ -4,6 +4,26 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
+#! EasyPost tracking location (city/state/country/zip of a scan event)
+public class EasyPostTrackingLocationType inherits HashDataType {
+    public {
+        const Fields = {
+            "object": {"display_name": "Object Type", "type": SoftStringOrNothingType, "desc": "Always `TrackingLocation`"},
+            "city": {"display_name": "City", "type": SoftStringOrNothingType, "desc": "City of the scan"},
+            "state": {"display_name": "State", "type": SoftStringOrNothingType, "desc": "State or province code"},
+            "country": {"display_name": "Country", "type": SoftStringOrNothingType, "desc": "ISO 2-letter country code"},
+            "zip": {"display_name": "ZIP / Postal Code", "type": SoftStringOrNothingType, "desc": "ZIP or postal code"},
+        };
+    }
+    constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
+        addQoreFields(Fields);
+    }
+}
+
 #! EasyPost tracking detail (single scan event)
 public class EasyPostTrackingDetailType inherits HashDataType {
     public {
@@ -32,7 +52,7 @@ public class EasyPostTrackingDetailType inherits HashDataType {
             "datetime": {"display_name": "Datetime", "type": SoftDateOrNothingType, "desc": "Scan datetime"},
             "source": {"display_name": "Source", "type": SoftStringOrNothingType, "desc": "Source of the tracking data"},
             "carrier_code": {"display_name": "Carrier Code", "type": SoftStringOrNothingType, "desc": "Carrier code"},
-            "tracking_location": {"display_name": "Tracking Location", "type": AutoHashOrNothingType, "desc": "Hash with `city`, `state`, `country`, `zip`"},
+            "tracking_location": {"display_name": "Tracking Location", "type": new EasyPostTrackingLocationType(AutoHashOrNothingType), "desc": "Hash with `city`, `state`, `country`, `zip`"},
         };
     }
     constructor() {

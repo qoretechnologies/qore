@@ -4,6 +4,12 @@
 #! Contains all public definitions in the EasyPostDataProvider module
 public namespace EasyPostDataProvider {
 
+#! Allowed values for the `sort` query parameter on the batches list endpoint
+const BatchesSortAllowedValues = (
+    <AllowedValueInfo>{"value": "asc", "desc": "Sort ascending"},
+    <AllowedValueInfo>{"value": "desc", "desc": "Sort descending"},
+);
+
 #! EasyPost batches collection data provider
 public class EasyPostBatchesDataProvider inherits EasyPostDataProviderBase {
     public {
@@ -24,6 +30,13 @@ public class EasyPostBatchesDataProvider inherits EasyPostDataProviderBase {
                 "short_desc": "Filter to a single batch by ID",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "If supplied, retrieves the single batch with this ID.",
+            },
+            "sort": <DataProviderOptionInfo>{
+                "display_name": "Sort Order",
+                "short_desc": "Sort order for results",
+                "type": AbstractDataProviderType::get(StringOrNothingType),
+                "desc": "Sort order: `asc` or `desc`. Defaults to `desc`.",
+                "allowed_values": BatchesSortAllowedValues,
             },
         };
     }
@@ -57,7 +70,7 @@ public class EasyPostBatchesDataProvider inherits EasyPostDataProviderBase {
             }
         } else {
             hash<auto> params = {};
-            foreach string k in (("page_size", "before_id", "after_id", "start_datetime", "end_datetime")) {
+            foreach string k in (("page_size", "before_id", "after_id", "start_datetime", "end_datetime", "sort")) {
                 if (exists search_options{k}) {
                     params{k} = search_options{k};
                 }

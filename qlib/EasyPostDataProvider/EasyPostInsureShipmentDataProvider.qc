@@ -14,7 +14,7 @@ public class EasyPostInsureShipmentRequestDataType inherits HashDataType {
                 "desc": "Shipment to insure",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "shipments",
             },
             "amount": {
                 "display_name": "Amount",
@@ -22,7 +22,6 @@ public class EasyPostInsureShipmentRequestDataType inherits HashDataType {
                 "desc": "Amount to insure the shipment for, as a string (e.g. `\"100.00\"`)",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
         };
     }

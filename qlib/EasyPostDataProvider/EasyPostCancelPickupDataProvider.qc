@@ -14,7 +14,7 @@ public class EasyPostCancelPickupRequestDataType inherits HashDataType {
                 "desc": "Pickup to cancel",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "pickups",
             },
         };
     }

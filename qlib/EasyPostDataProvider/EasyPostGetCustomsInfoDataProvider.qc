@@ -14,7 +14,6 @@ public class EasyPostGetCustomsInfoRequestDataType inherits HashDataType {
                 "desc": "Customs info ID to retrieve",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
         };
     }

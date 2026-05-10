@@ -20,6 +20,7 @@ public class EasyPostBulkTrackerEntryType inherits HashDataType {
                 "short_desc": "Carrier name",
                 "desc": "Carrier name (e.g. `USPS`, `UPS`)",
                 "type": SoftStringOrNothingType,
+                "ref_data": "carrier_names",
             },
         };
     }
@@ -42,7 +43,6 @@ public class EasyPostBulkCreateTrackersRequestDataType inherits HashDataType {
                 "desc": "List of tracker entries to create in a single batch",
                 "type": new ListDataType("EasyPostBulkTrackerList", new EasyPostBulkTrackerEntryType(), False),
                 "required": True,
-                "preselected": True,
             },
         };
     }
@@ -85,7 +85,7 @@ public class EasyPostBulkCreateTrackersDataProvider inherits EasyPostDataProvide
     }
 
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
-        return AbstractDataProviderType::get(AutoHashType);
+        return AbstractDataProviderType::get(AutoHashOrNothingType);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

@@ -14,7 +14,7 @@ public class EasyPostBatchBuyRequestDataType inherits HashDataType {
                 "desc": "Batch to buy (purchase labels for all shipments)",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "batches",
             },
         };
     }

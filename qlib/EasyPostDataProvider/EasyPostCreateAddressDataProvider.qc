@@ -10,6 +10,12 @@ const VerifyAllowedValues = (
     <AllowedValueInfo>{"value": "zip4", "desc": "ZIP+4 verification (USPS)"},
 );
 
+#! Allowed values for verify_carrier
+const VerifyCarrierAllowedValues = (
+    <AllowedValueInfo>{"value": "ups", "desc": "UPS"},
+    <AllowedValueInfo>{"value": "fedex", "desc": "FedEx"},
+);
+
 #! Request type for creating an address
 public class EasyPostCreateAddressRequestDataType inherits HashDataType {
     public {
@@ -20,7 +26,7 @@ public class EasyPostCreateAddressRequestDataType inherits HashDataType {
                 "desc": "First line of the street address",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "example_value": "1600 Pennsylvania Ave NW",
             },
             "street2": {
                 "display_name": "Street 2",
@@ -34,7 +40,7 @@ public class EasyPostCreateAddressRequestDataType inherits HashDataType {
                 "desc": "City name",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "example_value": "Washington",
             },
             "state": {
                 "display_name": "State",
@@ -42,7 +48,7 @@ public class EasyPostCreateAddressRequestDataType inherits HashDataType {
                 "desc": "State or province code (e.g. `CA`, `NY`)",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "example_value": "DC",
             },
             "zip": {
                 "display_name": "ZIP / Postal Code",
@@ -50,7 +56,7 @@ public class EasyPostCreateAddressRequestDataType inherits HashDataType {
                 "desc": "ZIP / postal code",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "example_value": "20500",
             },
             "country": {
                 "display_name": "Country",
@@ -59,7 +65,7 @@ public class EasyPostCreateAddressRequestDataType inherits HashDataType {
                 "type": SoftStringType,
                 "required": True,
                 "default_value": "US",
-                "preselected": True,
+                "example_value": "US",
             },
             "name": {
                 "display_name": "Name",
@@ -67,6 +73,14 @@ public class EasyPostCreateAddressRequestDataType inherits HashDataType {
                 "desc": "Recipient name",
                 "type": SoftStringOrNothingType,
                 "preselected": True,
+                "example_value": "Jane Doe",
+            },
+            "verify_carrier": {
+                "display_name": "Verify Carrier",
+                "short_desc": "Carrier-specific address verification",
+                "desc": "Optional carrier name for carrier-specific verification",
+                "type": SoftStringOrNothingType,
+                "allowed_values": VerifyCarrierAllowedValues,
             },
             "company": {
                 "display_name": "Company",

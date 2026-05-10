@@ -21,7 +21,7 @@ public class EasyPostBatchLabelRequestDataType inherits HashDataType {
                 "desc": "Batch to generate combined labels for",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "batches",
             },
             "file_format": {
                 "display_name": "File Format",
@@ -29,7 +29,6 @@ public class EasyPostBatchLabelRequestDataType inherits HashDataType {
                 "desc": "Output format for the combined label file",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
                 "allowed_values": BatchLabelFormatAllowedValues,
             },
         };

@@ -14,7 +14,6 @@ public class EasyPostRateRefType inherits HashDataType {
                 "desc": "ID of one of the rates returned by `create-shipment`",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
         };
     }
@@ -37,7 +36,7 @@ public class EasyPostBuyShipmentRequestDataType inherits HashDataType {
                 "desc": "Shipment to purchase a label for",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "shipments",
             },
             "rate": {
                 "display_name": "Rate",
@@ -45,7 +44,6 @@ public class EasyPostBuyShipmentRequestDataType inherits HashDataType {
                 "desc": "Rate to purchase - select one of the rates returned by `create-shipment`",
                 "type": new EasyPostRateRefType(),
                 "required": True,
-                "preselected": True,
             },
             "insurance": {
                 "display_name": "Insurance",

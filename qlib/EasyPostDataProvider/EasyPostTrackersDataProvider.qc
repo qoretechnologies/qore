@@ -28,15 +28,15 @@ public class EasyPostTrackersDataProvider inherits EasyPostDataProviderBase {
             "tracking_codes": <DataProviderOptionInfo>{
                 "display_name": "Tracking Codes",
                 "short_desc": "Tracking codes to filter by",
-                "type": AbstractDataProviderType::get(SoftAutoListOrNothingType),
+                "type": new ListDataType("EasyPostTrackingCodesList", SoftStringType, True),
                 "desc": "Filter trackers by carrier tracking codes (list of strings)",
             },
             "carrier": <DataProviderOptionInfo>{
                 "display_name": "Carrier",
-                "short_desc": "Filter by carrier",
+                "short_desc": "Filter by carrier name",
                 "type": AbstractDataProviderType::get(StringOrNothingType),
-                "desc": "Filter trackers by carrier",
-                "ref_data": "carrier_accounts",
+                "desc": "Filter trackers by carrier name (e.g. `USPS`, `UPS`, `FedEx`)",
+                "ref_data": "carrier_names",
             },
         };
     }

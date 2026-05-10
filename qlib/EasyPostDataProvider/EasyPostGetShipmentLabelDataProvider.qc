@@ -22,7 +22,7 @@ public class EasyPostGetShipmentLabelRequestDataType inherits HashDataType {
                 "desc": "Shipment to fetch the label for",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "shipments",
             },
             "file_format": {
                 "display_name": "File Format",
@@ -30,7 +30,6 @@ public class EasyPostGetShipmentLabelRequestDataType inherits HashDataType {
                 "desc": "Format of the label file to retrieve",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
                 "allowed_values": ShipmentLabelFormatAllowedValues,
             },
         };

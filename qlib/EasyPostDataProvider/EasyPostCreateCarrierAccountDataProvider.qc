@@ -11,10 +11,13 @@ public class EasyPostCreateCarrierAccountRequestDataType inherits HashDataType {
             "type": {
                 "display_name": "Type",
                 "short_desc": "Carrier account type",
-                "desc": "Carrier account type (e.g. `UpsAccount`, `FedExAccount`, `DhlExpressAccount`)",
+                "desc": "Carrier account type (e.g. `UpsAccount`, `FedExAccount`, `DhlExpressAccount`). "
+                    "Selecting a carrier type updates the `credentials` and `test_credentials` fields "
+                    "to match that carrier's schema. See "
+                    "[carrier types](https://docs.easypost.com/docs/carrier-types) for the full list.",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "carrier_types",
             },
             "description": {
                 "display_name": "Description",
@@ -32,13 +35,17 @@ public class EasyPostCreateCarrierAccountRequestDataType inherits HashDataType {
             "credentials": {
                 "display_name": "Credentials",
                 "short_desc": "Production credentials hash",
-                "desc": "Carrier-specific credentials hash for production",
+                "desc": "Carrier-specific credentials hash for production. Required for most carrier types "
+                    "(except `custom_workflow`). The shape varies per carrier - select a `type` to populate "
+                    "this field with the carrier's specific schema.\n\n"
+                    "**Example (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\", \"password\": \"...\"}`",
                 "type": AutoHashOrNothingType,
             },
             "test_credentials": {
                 "display_name": "Test Credentials",
                 "short_desc": "Test credentials hash",
-                "desc": "Carrier-specific credentials hash for the test environment",
+                "desc": "Carrier-specific credentials hash for the test environment. Same shape as `credentials` - "
+                    "select a `type` to populate this field with the carrier's specific schema.",
                 "type": AutoHashOrNothingType,
             },
         };
@@ -80,6 +87,70 @@ public class EasyPostCreateCarrierAccountDataProvider inherits EasyPostDataProvi
 
     private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {
         return RequestType;
+    }
+
+    #! Returns the request type with carrier-specific credential fields based on the selected `type` option
+    private *DataProvider::AbstractDataProviderType getRequestTypeWithOptionsImpl(*hash<auto> options) {
+        *string carrier_type = options."type".value ?? options."type";
+        if (!carrier_type) {
+            return RequestType;
+        }
+        return buildDynamicRequestType(carrier_type);
+    }
+
+    #! Returns the request type with carrier-specific credential fields based on the request data
+    private *DataProvider::AbstractDataProviderType getRequestTypeWithDataImpl(auto req) {
+        *string carrier_type;
+        if (req.typeCode() == NT_HASH) {
+            carrier_type = req."type".value ?? req."type";
+        }
+        if (!carrier_type) {
+            return RequestType;
+        }
+        return buildDynamicRequestType(carrier_type);
+    }
+
+    #! Builds a request type whose `credentials`/`test_credentials` fields are typed for the selected carrier
+    private AbstractDataProviderType buildDynamicRequestType(string carrier_type) {
+        *list<hash<auto>> carrier_types = fetchCarrierTypes();
+        *hash<auto> ct;
+        foreach hash<auto> entry in (carrier_types) {
+            if (entry."type" == carrier_type) {
+                ct = entry;
+                break;
+            }
+        }
+        if (!ct || !ct.fields) {
+            return RequestType;
+        }
+
+        hash<string, AbstractDataField> dyn_fields = RequestType.getFields();
+        if (ct.fields.credentials) {
+            *AbstractDataProviderType cred_type = buildCarrierCredentialsType(carrier_type, ct.fields.credentials);
+            if (cred_type) {
+                dyn_fields."credentials" = new QoreDataField({
+                    "name": "credentials",
+                    "display_name": "Credentials",
+                    "short_desc": sprintf("%s production credentials", ct.readable ?? carrier_type),
+                    "desc": sprintf("Production credentials for `%s`", carrier_type),
+                    "type": cred_type,
+                });
+            }
+        }
+        if (ct.fields.test_credentials) {
+            *AbstractDataProviderType cred_type = buildCarrierCredentialsType(carrier_type + "Test",
+                    ct.fields.test_credentials);
+            if (cred_type) {
+                dyn_fields."test_credentials" = new QoreDataField({
+                    "name": "test_credentials",
+                    "display_name": "Test Credentials",
+                    "short_desc": sprintf("%s test credentials", ct.readable ?? carrier_type),
+                    "desc": sprintf("Test credentials for `%s`", carrier_type),
+                    "type": cred_type,
+                });
+            }
+        }
+        return new HashDataType(sprintf("EasyPostCreate%sRequest", carrier_type), dyn_fields);
     }
 
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {

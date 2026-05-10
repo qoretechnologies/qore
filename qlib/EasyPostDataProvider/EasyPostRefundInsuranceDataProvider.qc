@@ -14,7 +14,7 @@ public class EasyPostRefundInsuranceRequestDataType inherits HashDataType {
                 "desc": "Insurance ID to refund",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "insurances",
             },
         };
     }

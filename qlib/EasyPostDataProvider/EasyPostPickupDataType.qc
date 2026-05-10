@@ -49,13 +49,17 @@ public class EasyPostPickupType inherits HashDataType {
             "messages": {"display_name": "Messages", "type": new ListDataType("EasyPostPickupMessageList", new EasyPostMessageType(), True), "desc": "Carrier messages"},
             "confirmation": {"display_name": "Confirmation", "type": SoftStringOrNothingType, "desc": "Confirmation number from the carrier"},
             "address": {"display_name": "Address", "type": new EasyPostAddressType(), "desc": "Pickup address"},
-            "carrier_accounts": {"display_name": "Carrier Accounts", "type": SoftAutoListOrNothingType, "desc": "List of carrier accounts considered for the pickup"},
+            "carrier_accounts": {"display_name": "Carrier Accounts", "type": new ListDataType("EasyPostPickupCarrierAccountIdList", SoftStringType, True), "desc": "List of carrier accounts considered for the pickup"},
             "pickup_rates": {"display_name": "Pickup Rates", "type": new ListDataType("EasyPostPickupRateList", new EasyPostPickupRateType(), True), "desc": "Available pickup rates"},
             "created_at": {"display_name": "Created At", "type": SoftDateOrNothingType, "desc": "Creation timestamp"},
             "updated_at": {"display_name": "Updated At", "type": SoftDateOrNothingType, "desc": "Last-update timestamp"},
         };
     }
     constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
         addQoreFields(Fields);
     }
 }

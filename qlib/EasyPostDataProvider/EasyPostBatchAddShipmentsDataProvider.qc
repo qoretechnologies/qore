@@ -14,7 +14,7 @@ public class EasyPostBatchAddShipmentsRequestDataType inherits HashDataType {
                 "desc": "Batch to add shipments to",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "batches",
             },
             "shipments": {
                 "display_name": "Shipments",
@@ -22,7 +22,7 @@ public class EasyPostBatchAddShipmentsRequestDataType inherits HashDataType {
                 "desc": "List of shipment references to add to the batch (each `{id: shp_xxx}`)",
                 "type": new ListDataType("EasyPostBatchAddShipmentList", new EasyPostIdRefType(), False),
                 "required": True,
-                "preselected": True,
+                "ref_data": "shipments",
             },
         };
     }

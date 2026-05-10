@@ -14,6 +14,7 @@ public class EasyPostCreateParcelRequestDataType inherits HashDataType {
                 "desc": "Parcel length in inches",
                 "type": SoftFloatOrNothingType,
                 "preselected": True,
+                "example_value": 10.2,
             },
             "width": {
                 "display_name": "Width",
@@ -21,6 +22,7 @@ public class EasyPostCreateParcelRequestDataType inherits HashDataType {
                 "desc": "Parcel width in inches",
                 "type": SoftFloatOrNothingType,
                 "preselected": True,
+                "example_value": 7.5,
             },
             "height": {
                 "display_name": "Height",
@@ -28,6 +30,7 @@ public class EasyPostCreateParcelRequestDataType inherits HashDataType {
                 "desc": "Parcel height in inches",
                 "type": SoftFloatOrNothingType,
                 "preselected": True,
+                "example_value": 4.5,
             },
             "weight": {
                 "display_name": "Weight",
@@ -35,7 +38,7 @@ public class EasyPostCreateParcelRequestDataType inherits HashDataType {
                 "desc": "Parcel weight in ounces",
                 "type": SoftFloatType,
                 "required": True,
-                "preselected": True,
+                "example_value": 14.4,
             },
             "predefined_package": {
                 "display_name": "Predefined Package",

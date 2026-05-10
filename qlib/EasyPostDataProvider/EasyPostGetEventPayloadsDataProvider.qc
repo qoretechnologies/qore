@@ -14,7 +14,7 @@ public class EasyPostGetEventPayloadsRequestDataType inherits HashDataType {
                 "desc": "Event to list payloads for",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "events",
             },
         };
     }
@@ -27,7 +27,7 @@ public class EasyPostGetEventPayloadsRequestDataType inherits HashDataType {
 public class EasyPostGetEventPayloadsDataProvider inherits EasyPostDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
-            "name": "get-event-payloads",
+            "name": "list-event-payloads",
             "desc": "List webhook delivery payloads for an event",
             "type": "EasyPostGetEventPayloadsDataProvider",
             "supports_request": True,
@@ -35,13 +35,14 @@ public class EasyPostGetEventPayloadsDataProvider inherits EasyPostDataProviderB
         };
         const ConstructorOptions = BaseConstructorOptions;
         static EasyPostGetEventPayloadsRequestDataType RequestType();
+        static EasyPostEventPayloadsResponseType ResponseType();
     }
 
     constructor(*RestClientIo::RestClientIo rest) : EasyPostDataProviderBase(rest) {
     }
 
     string getName() {
-        return "get-event-payloads";
+        return "list-event-payloads";
     }
 
     *string getDesc() {
@@ -57,7 +58,7 @@ public class EasyPostGetEventPayloadsDataProvider inherits EasyPostDataProviderB
     }
 
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
-        return AbstractDataProviderType::get(AutoHashType);
+        return ResponseType;
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

@@ -14,7 +14,7 @@ public class EasyPostBatchRemoveShipmentsRequestDataType inherits HashDataType {
                 "desc": "Batch to remove shipments from",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "batches",
             },
             "shipments": {
                 "display_name": "Shipments",
@@ -22,7 +22,7 @@ public class EasyPostBatchRemoveShipmentsRequestDataType inherits HashDataType {
                 "desc": "List of shipment references to remove from the batch (each `{id: shp_xxx}`)",
                 "type": new ListDataType("EasyPostBatchRemoveShipmentList", new EasyPostIdRefType(), False),
                 "required": True,
-                "preselected": True,
+                "ref_data": "shipments",
             },
         };
     }

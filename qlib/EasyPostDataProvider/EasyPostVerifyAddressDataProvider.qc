@@ -14,7 +14,7 @@ public class EasyPostVerifyAddressRequestDataType inherits HashDataType {
                 "desc": "Existing EasyPost address ID to verify",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "addresses",
             },
         };
     }

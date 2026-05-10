@@ -56,7 +56,6 @@ public class EasyPostBaseEventDataProvider inherits EasyPostDataProviderBase, Da
             hash<auto> body = {
                 "url": webhook_info.url,
                 "webhook_secret": webhook_secret,
-                "mode": "production",
                 "custom_headers": (),
             };
 
@@ -93,7 +92,28 @@ public class EasyPostBaseEventDataProvider inherits EasyPostDataProviderBase, Da
     }
 
     #! Returns example event data
+    /** Tries to fetch a real event of this type from the EasyPost API; on any failure
+        falls back to the static fake event envelope.
+    */
     private auto getExampleEventDataImpl(string event_id) {
+        if (rest) {
+            try {
+                auto response = doGet("events", {"page_size": 10});
+                *list<auto> evts = response.events ?? (response.typeCode() == NT_LIST ? response : ());
+                foreach hash<auto> evt in (evts) {
+                    if (evt.description == getWebhookEventType()) {
+                        return evt;
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # silently fall through to fake data
+            }
+        }
+        return getFakeEventData();
+    }
+
+    #! Returns hardcoded fake example event data; subclasses override to populate `result`
+    private hash<auto> getFakeEventData() {
         return {
             "id": "evt_example",
             "object": "Event",

@@ -11,9 +11,10 @@ public class EasyPostCreateBatchRequestDataType inherits HashDataType {
             "shipments": {
                 "display_name": "Shipments",
                 "short_desc": "Shipments to include in the batch",
-                "desc": "List of shipments to include. Each entry can be a full shipment object (same fields as `create-shipment`), or a reference like `{id: shp_xxx}`.",
-                "type": SoftAutoListOrNothingType,
+                "desc": "List of shipment references (each `{id: shp_xxx}`) to include in the new batch",
+                "type": new ListDataType("EasyPostCreateBatchShipmentList", new EasyPostIdRefType(), True),
                 "preselected": True,
+                "ref_data": "shipments",
             },
             "reference": {
                 "display_name": "Reference",

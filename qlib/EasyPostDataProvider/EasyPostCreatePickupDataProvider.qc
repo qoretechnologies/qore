@@ -36,15 +36,23 @@ public class EasyPostCreatePickupRequestDataType inherits HashDataType {
                 "desc": "Pickup address - full address or address reference",
                 "type": new EasyPostAddressInputType(),
                 "required": True,
-                "preselected": True,
             },
             "shipment": {
                 "display_name": "Shipment",
                 "short_desc": "Shipment to pick up ({id: shp_xxx})",
-                "desc": "Shipment to pick up - reference by `id`",
-                "type": new EasyPostIdRefType(),
-                "required": True,
+                "desc": "Shipment to pick up - reference by `id`. Provide either `shipment` or `batch`, "
+                    "but not both.",
+                "type": new EasyPostIdRefType(AutoHashOrNothingType),
                 "preselected": True,
+                "ref_data": "shipments",
+            },
+            "batch": {
+                "display_name": "Batch",
+                "short_desc": "Batch to pick up ({id: batch_xxx})",
+                "desc": "Fully-purchased batch to pick up - reference by `id`. Provide either `shipment` "
+                    "or `batch`, but not both.",
+                "type": new EasyPostIdRefType(AutoHashOrNothingType),
+                "ref_data": "batches",
             },
             "min_datetime": {
                 "display_name": "Min Datetime",
@@ -52,7 +60,6 @@ public class EasyPostCreatePickupRequestDataType inherits HashDataType {
                 "desc": "Earliest acceptable pickup datetime (ISO 8601)",
                 "type": SoftDateType,
                 "required": True,
-                "preselected": True,
             },
             "max_datetime": {
                 "display_name": "Max Datetime",
@@ -60,7 +67,6 @@ public class EasyPostCreatePickupRequestDataType inherits HashDataType {
                 "desc": "Latest acceptable pickup datetime (ISO 8601)",
                 "type": SoftDateType,
                 "required": True,
-                "preselected": True,
             },
             "is_account_address": {
                 "display_name": "Is Account Address",

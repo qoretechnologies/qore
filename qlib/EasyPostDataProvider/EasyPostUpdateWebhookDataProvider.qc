@@ -14,14 +14,7 @@ public class EasyPostUpdateWebhookRequestDataType inherits HashDataType {
                 "desc": "Webhook to update",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
                 "ref_data": "webhooks",
-            },
-            "url": {
-                "display_name": "URL",
-                "short_desc": "Webhook target URL",
-                "desc": "New webhook target URL",
-                "type": SoftStringOrNothingType,
             },
             "webhook_secret": {
                 "display_name": "Webhook Secret",
@@ -71,7 +64,7 @@ public class EasyPostUpdateWebhookDataProvider inherits EasyPostDataProviderBase
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> body = req ?? {};
         string id = body.webhook_id;
-        return doPatchWrapped(sprintf("webhooks/%s", id), WrapperKeyWebhook, body - "webhook_id");
+        return doPatch(sprintf("webhooks/%s", id), body - "webhook_id");
     }
 
     private *DataProvider::AbstractDataProviderType getRequestTypeImpl() {

@@ -112,6 +112,21 @@ public const EventPaymentCompleted = "payment.completed";
 #! Event type: payment failed
 public const EventPaymentFailed = "payment.failed";
 
+#! Event type: payment created
+public const EventPaymentCreated = "payment.created";
+
+#! Event type: insurance cancelled (also fired when a standalone Insurance fails purchasing)
+public const EventInsuranceCancelled = "insurance.cancelled";
+
+#! Event type: scan form created
+public const EventScanFormCreated = "scan_form.created";
+
+#! Event type: scan form updated
+public const EventScanFormUpdated = "scan_form.updated";
+
+#! Event type: shipment invoice updated
+public const EventShipmentInvoiceUpdated = "shipment.invoice.updated";
+
 # ============================================================================
 # EasyPost webhook event description strings (these are the values returned
 # by the API in `description` of an Event object)
@@ -144,6 +159,21 @@ public const WebhookEventPaymentCompleted = "payment.completed";
 #! Webhook event: payment failed
 public const WebhookEventPaymentFailed = "payment.failed";
 
+#! Webhook event: payment created
+public const WebhookEventPaymentCreated = "payment.created";
+
+#! Webhook event: insurance cancelled
+public const WebhookEventInsuranceCancelled = "insurance.cancelled";
+
+#! Webhook event: scan form created
+public const WebhookEventScanFormCreated = "scan_form.created";
+
+#! Webhook event: scan form updated
+public const WebhookEventScanFormUpdated = "scan_form.updated";
+
+#! Webhook event: shipment invoice updated
+public const WebhookEventShipmentInvoiceUpdated = "shipment.invoice.updated";
+
 #! All supported event types
 public const AllEventTypes = (
     EventTrackerCreated,
@@ -151,10 +181,15 @@ public const AllEventTypes = (
     EventBatchCreated,
     EventBatchUpdated,
     EventInsurancePurchased,
+    EventInsuranceCancelled,
     EventRefundSuccessful,
     EventShipmentInvoiceCreated,
+    EventShipmentInvoiceUpdated,
     EventPaymentCompleted,
+    EventPaymentCreated,
     EventPaymentFailed,
+    EventScanFormCreated,
+    EventScanFormUpdated,
 );
 
 #! EasyPost logo in SVG format (loaded from file)

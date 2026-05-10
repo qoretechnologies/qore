@@ -14,7 +14,7 @@ public class EasyPostGetEventRequestDataType inherits HashDataType {
                 "desc": "Event to retrieve",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "events",
             },
         };
     }

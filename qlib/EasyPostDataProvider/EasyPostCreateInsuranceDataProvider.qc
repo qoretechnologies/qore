@@ -12,14 +12,14 @@ public class EasyPostCreateInsuranceRequestDataType inherits HashDataType {
                 "display_name": "To Address",
                 "short_desc": "Destination address",
                 "desc": "Destination address (or `{id: adr_xxx}`)",
-                "type": new EasyPostAddressInputType(),
+                "type": new EasyPostAddressInputType(AutoHashOrNothingType),
                 "preselected": True,
             },
             "from_address": {
                 "display_name": "From Address",
                 "short_desc": "Origin address",
                 "desc": "Origin address (or `{id: adr_xxx}`)",
-                "type": new EasyPostAddressInputType(),
+                "type": new EasyPostAddressInputType(AutoHashOrNothingType),
                 "preselected": True,
             },
             "tracking_code": {
@@ -28,7 +28,7 @@ public class EasyPostCreateInsuranceRequestDataType inherits HashDataType {
                 "desc": "Carrier tracking code for the shipment being insured",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "example_value": "9405500000000000000000",
             },
             "amount": {
                 "display_name": "Amount",
@@ -36,25 +36,20 @@ public class EasyPostCreateInsuranceRequestDataType inherits HashDataType {
                 "desc": "Amount to insure as a string (e.g. `\"100.00\"`)",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "example_value": "100.00",
             },
             "carrier": {
                 "display_name": "Carrier",
-                "short_desc": "Carrier reference",
-                "desc": "Carrier name or carrier account ID",
+                "short_desc": "Carrier name",
+                "desc": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`). EasyPost will auto-detect from "
+                    "`tracking_code` when omitted.",
                 "type": SoftStringOrNothingType,
-                "ref_data": "carrier_accounts",
+                "ref_data": "carrier_names",
             },
             "reference": {
                 "display_name": "Reference",
                 "short_desc": "Caller-supplied reference",
                 "desc": "Caller-supplied reference",
-                "type": SoftStringOrNothingType,
-            },
-            "provider": {
-                "display_name": "Provider",
-                "short_desc": "Insurance provider",
-                "desc": "Insurance provider override",
                 "type": SoftStringOrNothingType,
             },
         };

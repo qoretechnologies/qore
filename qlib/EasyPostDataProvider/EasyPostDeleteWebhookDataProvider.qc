@@ -14,7 +14,6 @@ public class EasyPostDeleteWebhookRequestDataType inherits HashDataType {
                 "desc": "Webhook to delete",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
                 "ref_data": "webhooks",
             },
         };

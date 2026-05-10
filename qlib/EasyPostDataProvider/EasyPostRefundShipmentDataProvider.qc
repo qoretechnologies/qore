@@ -14,7 +14,7 @@ public class EasyPostRefundShipmentRequestDataType inherits HashDataType {
                 "desc": "ID of a previously purchased shipment to refund",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "shipments",
             },
         };
     }

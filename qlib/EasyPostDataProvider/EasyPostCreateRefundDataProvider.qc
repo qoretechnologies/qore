@@ -10,12 +10,11 @@ public class EasyPostCreateRefundRequestDataType inherits HashDataType {
         const Fields = {
             "carrier": {
                 "display_name": "Carrier",
-                "short_desc": "Carrier reference",
-                "desc": "Carrier name or carrier account ID",
+                "short_desc": "Carrier name",
+                "desc": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`) of the labels being refunded",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
-                "ref_data": "carrier_accounts",
+                "ref_data": "carrier_names",
             },
             "tracking_codes": {
                 "display_name": "Tracking Codes",
@@ -23,7 +22,6 @@ public class EasyPostCreateRefundRequestDataType inherits HashDataType {
                 "desc": "List of tracking codes to refund",
                 "type": new ListDataType("EasyPostCreateRefundCodeList", SoftStringType, False),
                 "required": True,
-                "preselected": True,
             },
         };
     }

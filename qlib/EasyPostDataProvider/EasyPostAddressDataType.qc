@@ -110,6 +110,86 @@ public class EasyPostAddressInputType inherits HashDataType {
     }
 }
 
+#! Single verification error entry (element of `verifications.delivery.errors` / `verifications.zip4.errors`)
+public class EasyPostAddressVerificationErrorType inherits HashDataType {
+    public {
+        const Fields = {
+            "code": {"display_name": "Code", "type": SoftStringOrNothingType, "desc": "Error code (e.g. `E.ADDRESS.NOT_FOUND`)"},
+            "field": {"display_name": "Field", "type": SoftStringOrNothingType, "desc": "Address field the error applies to"},
+            "message": {"display_name": "Message", "type": SoftStringOrNothingType, "desc": "Human-readable error description"},
+            "suggestion": {"display_name": "Suggestion", "type": SoftStringOrNothingType, "desc": "Suggested correction, if any"},
+        };
+    }
+    constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
+        addQoreFields(Fields);
+    }
+}
+
+#! Verification details object (e.g. `verifications.delivery.details`)
+public class EasyPostAddressVerificationDetailsType inherits HashDataType {
+    public {
+        const Fields = {
+            "latitude": {"display_name": "Latitude", "type": SoftFloatOrNothingType, "desc": "Latitude of the address"},
+            "longitude": {"display_name": "Longitude", "type": SoftFloatOrNothingType, "desc": "Longitude of the address"},
+            "time_zone": {"display_name": "Time Zone", "type": SoftStringOrNothingType, "desc": "Time zone of the address (e.g. `America/Los_Angeles`)"},
+        };
+    }
+    constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
+        addQoreFields(Fields);
+    }
+}
+
+#! Single address verification result (delivery or zip4 sub-object of `verifications`)
+public class EasyPostAddressVerificationResultType inherits HashDataType {
+    public {
+        const Fields = {
+            "success": {"display_name": "Success", "type": SoftBoolOrNothingType, "desc": "`True` if verification succeeded"},
+            "errors": {
+                "display_name": "Errors",
+                "type": new ListDataType("EasyPostAddressVerificationErrorList", new EasyPostAddressVerificationErrorType(), True),
+                "desc": "List of verification error objects",
+            },
+            "details": {
+                "display_name": "Details",
+                "type": new EasyPostAddressVerificationDetailsType(AutoHashOrNothingType),
+                "desc": "Verification details (`latitude`, `longitude`, `time_zone`)",
+            },
+        };
+    }
+    constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
+        addQoreFields(Fields);
+    }
+}
+
+#! EasyPost address verifications object (`delivery` and `zip4` results)
+public class EasyPostAddressVerificationsType inherits HashDataType {
+    public {
+        const Fields = {
+            "delivery": {"display_name": "Delivery", "type": new EasyPostAddressVerificationResultType(AutoHashOrNothingType), "desc": "Delivery verification result"},
+            "zip4": {"display_name": "ZIP+4", "type": new EasyPostAddressVerificationResultType(AutoHashOrNothingType), "desc": "ZIP+4 verification result"},
+        };
+    }
+    constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
+        addQoreFields(Fields);
+    }
+}
+
 #! EasyPost full address record (response type)
 public class EasyPostAddressType inherits HashDataType {
     public {
@@ -146,12 +226,16 @@ public class EasyPostAddressType inherits HashDataType {
             "carrier_facility": {"display_name": "Carrier Facility", "type": SoftStringOrNothingType, "desc": "Carrier facility name"},
             "federal_tax_id": {"display_name": "Federal Tax ID", "type": SoftStringOrNothingType, "desc": "Federal tax identifier"},
             "state_tax_id": {"display_name": "State Tax ID", "type": SoftStringOrNothingType, "desc": "State tax identifier"},
-            "verifications": {"display_name": "Verifications", "type": AutoHashOrNothingType, "desc": "Verification results from EasyPost (delivery and zip4)"},
+            "verifications": {"display_name": "Verifications", "type": new EasyPostAddressVerificationsType(AutoHashOrNothingType), "desc": "Verification results from EasyPost (delivery and zip4)"},
             "created_at": {"display_name": "Created At", "type": SoftDateOrNothingType, "desc": "Creation timestamp"},
             "updated_at": {"display_name": "Updated At", "type": SoftDateOrNothingType, "desc": "Last-update timestamp"},
         };
     }
     constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
         addQoreFields(Fields);
     }
 }

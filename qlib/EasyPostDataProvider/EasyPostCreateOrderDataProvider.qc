@@ -60,7 +60,6 @@ public class EasyPostCreateOrderRequestDataType inherits HashDataType {
                 "desc": "Destination address (or `{id: adr_xxx}`)",
                 "type": new EasyPostAddressInputType(),
                 "required": True,
-                "preselected": True,
             },
             "from_address": {
                 "display_name": "From Address",
@@ -68,7 +67,6 @@ public class EasyPostCreateOrderRequestDataType inherits HashDataType {
                 "desc": "Origin address (or `{id: adr_xxx}`)",
                 "type": new EasyPostAddressInputType(),
                 "required": True,
-                "preselected": True,
             },
             "shipments": {
                 "display_name": "Shipments",
@@ -76,7 +74,6 @@ public class EasyPostCreateOrderRequestDataType inherits HashDataType {
                 "desc": "List of shipments to include in the order (each contains a parcel, etc.)",
                 "type": new ListDataType("EasyPostOrderReqShipmentList", new EasyPostOrderShipmentInputType(), False),
                 "required": True,
-                "preselected": True,
             },
             "buyer_address": {
                 "display_name": "Buyer Address",
@@ -101,12 +98,6 @@ public class EasyPostCreateOrderRequestDataType inherits HashDataType {
                 "short_desc": "Mark as return order",
                 "desc": "Set to `True` if this is a return order",
                 "type": SoftBoolOrNothingType,
-            },
-            "customs_info": {
-                "display_name": "Customs Info",
-                "short_desc": "Order-level customs info",
-                "desc": "Customs info applied across all shipments in the order",
-                "type": new EasyPostCustomsInfoInputType(AutoHashOrNothingType),
             },
             "carrier_accounts": {
                 "display_name": "Carrier Accounts",

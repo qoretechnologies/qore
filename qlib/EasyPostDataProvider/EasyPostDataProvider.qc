@@ -59,6 +59,7 @@ public class EasyPostDataProvider inherits EasyPostDataProviderBase {
 
             # Address actions
             "create-address": Class::forName("EasyPostDataProvider::EasyPostCreateAddressDataProvider"),
+            "get-address": Class::forName("EasyPostDataProvider::EasyPostGetAddressDataProvider"),
             "verify-address": Class::forName("EasyPostDataProvider::EasyPostVerifyAddressDataProvider"),
             "create-and-verify-address": Class::forName("EasyPostDataProvider::EasyPostCreateAndVerifyAddressDataProvider"),
 
@@ -68,22 +69,28 @@ public class EasyPostDataProvider inherits EasyPostDataProviderBase {
 
             # Shipment actions
             "create-shipment": Class::forName("EasyPostDataProvider::EasyPostCreateShipmentDataProvider"),
+            "get-shipment": Class::forName("EasyPostDataProvider::EasyPostGetShipmentDataProvider"),
             "buy-shipment": Class::forName("EasyPostDataProvider::EasyPostBuyShipmentDataProvider"),
             "refund-shipment": Class::forName("EasyPostDataProvider::EasyPostRefundShipmentDataProvider"),
             "get-shipment-label": Class::forName("EasyPostDataProvider::EasyPostGetShipmentLabelDataProvider"),
+            "get-shipment-smartrates": Class::forName("EasyPostDataProvider::EasyPostGetShipmentSmartratesDataProvider"),
             "rerate-shipment": Class::forName("EasyPostDataProvider::EasyPostRerateShipmentDataProvider"),
             "insure-shipment": Class::forName("EasyPostDataProvider::EasyPostInsureShipmentDataProvider"),
 
             # Tracker actions
             "create-tracker": Class::forName("EasyPostDataProvider::EasyPostCreateTrackerDataProvider"),
+            "get-tracker": Class::forName("EasyPostDataProvider::EasyPostGetTrackerDataProvider"),
+            "delete-tracker": Class::forName("EasyPostDataProvider::EasyPostDeleteTrackerDataProvider"),
             "bulk-create-trackers": Class::forName("EasyPostDataProvider::EasyPostBulkCreateTrackersDataProvider"),
 
             # Insurance actions
             "create-insurance": Class::forName("EasyPostDataProvider::EasyPostCreateInsuranceDataProvider"),
+            "get-insurance": Class::forName("EasyPostDataProvider::EasyPostGetInsuranceDataProvider"),
             "refund-insurance": Class::forName("EasyPostDataProvider::EasyPostRefundInsuranceDataProvider"),
 
             # Pickup actions
             "create-pickup": Class::forName("EasyPostDataProvider::EasyPostCreatePickupDataProvider"),
+            "get-pickup": Class::forName("EasyPostDataProvider::EasyPostGetPickupDataProvider"),
             "buy-pickup": Class::forName("EasyPostDataProvider::EasyPostBuyPickupDataProvider"),
             "cancel-pickup": Class::forName("EasyPostDataProvider::EasyPostCancelPickupDataProvider"),
 
@@ -100,9 +107,11 @@ public class EasyPostDataProvider inherits EasyPostDataProviderBase {
 
             # Refund actions
             "create-refund": Class::forName("EasyPostDataProvider::EasyPostCreateRefundDataProvider"),
+            "get-refund": Class::forName("EasyPostDataProvider::EasyPostGetRefundDataProvider"),
 
             # Batch actions
             "create-batch": Class::forName("EasyPostDataProvider::EasyPostCreateBatchDataProvider"),
+            "get-batch": Class::forName("EasyPostDataProvider::EasyPostGetBatchDataProvider"),
             "batch-add-shipments": Class::forName("EasyPostDataProvider::EasyPostBatchAddShipmentsDataProvider"),
             "batch-remove-shipments": Class::forName("EasyPostDataProvider::EasyPostBatchRemoveShipmentsDataProvider"),
             "batch-buy": Class::forName("EasyPostDataProvider::EasyPostBatchBuyDataProvider"),
@@ -117,7 +126,7 @@ public class EasyPostDataProvider inherits EasyPostDataProviderBase {
 
             # Event actions
             "get-event": Class::forName("EasyPostDataProvider::EasyPostGetEventDataProvider"),
-            "get-event-payloads": Class::forName("EasyPostDataProvider::EasyPostGetEventPayloadsDataProvider"),
+            "list-event-payloads": Class::forName("EasyPostDataProvider::EasyPostGetEventPayloadsDataProvider"),
             "get-event-payload": Class::forName("EasyPostDataProvider::EasyPostGetEventPayloadDataProvider"),
 
             # Carrier account actions

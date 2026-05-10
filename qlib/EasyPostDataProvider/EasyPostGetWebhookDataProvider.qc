@@ -14,7 +14,6 @@ public class EasyPostGetWebhookRequestDataType inherits HashDataType {
                 "desc": "Webhook to retrieve",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
                 "ref_data": "webhooks",
             },
         };

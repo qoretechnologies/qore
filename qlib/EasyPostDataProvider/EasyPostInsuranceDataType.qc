@@ -28,7 +28,7 @@ public class EasyPostInsuranceType inherits HashDataType {
                 ),
             },
             "tracking_code": {"display_name": "Tracking Code", "type": SoftStringOrNothingType, "desc": "Carrier tracking code"},
-            "tracker": {"display_name": "Tracker", "type": AutoHashOrNothingType, "desc": "Associated tracker (embedded)"},
+            "tracker": {"display_name": "Tracker", "type": new EasyPostTrackerType(AutoHashOrNothingType), "desc": "Associated tracker (embedded)"},
             "to_address": {"display_name": "To Address", "type": new EasyPostAddressType(), "desc": "Destination address"},
             "from_address": {"display_name": "From Address", "type": new EasyPostAddressType(), "desc": "Origin address"},
             "fee": {"display_name": "Fee", "type": new EasyPostFeeType(), "desc": "Fee charged for this insurance"},

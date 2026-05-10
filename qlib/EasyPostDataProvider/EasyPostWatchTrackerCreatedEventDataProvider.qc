@@ -45,8 +45,8 @@ public class EasyPostWatchTrackerCreatedEventDataProvider inherits EasyPostBaseE
         return eventDataType;
     }
 
-    private auto getExampleEventDataImpl(string event_id) {
-        hash<auto> base = EasyPostBaseEventDataProvider::getExampleEventDataImpl(event_id);
+    private hash<auto> getFakeEventData() {
+        hash<auto> base = EasyPostBaseEventDataProvider::getFakeEventData();
         base.result = {
             "id": "trk_example",
             "object": "Tracker",

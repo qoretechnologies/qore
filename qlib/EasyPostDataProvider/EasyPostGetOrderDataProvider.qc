@@ -14,7 +14,6 @@ public class EasyPostGetOrderRequestDataType inherits HashDataType {
                 "desc": "Order to retrieve",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
         };
     }

@@ -81,10 +81,13 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
         # Integration tests - require -c <connection>
         addTestCase("integration: list-addresses", \integrationListAddresses());
         addTestCase("integration: create-address (White House)", \integrationCreateAddress());
+        addTestCase("integration: get-address (round-trip)", \integrationGetAddress());
         addTestCase("integration: verify-address", \integrationVerifyAddress());
         addTestCase("integration: create-tracker", \integrationCreateTracker());
+        addTestCase("integration: get-tracker (round-trip)", \integrationGetTracker());
         addTestCase("integration: list-trackers", \integrationListTrackers());
         addTestCase("integration: list-shipments", \integrationListShipments());
+        addTestCase("integration: cleanup-tracker", \integrationCleanupTracker());
 
         set_return_value(main());
     }
@@ -184,6 +187,20 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
 
         EasyPostDataProvider::EasyPostTaxIdentifierType taxIdType();
         assertTrue(taxIdType.getFields().size() > 0, "EasyPostTaxIdentifierType must have fields");
+
+        # SmartRate
+        EasyPostDataProvider::EasyPostSmartRateType smartRateType();
+        assertTrue(smartRateType.getFields().size() > 0, "EasyPostSmartRateType must have fields");
+
+        EasyPostDataProvider::EasyPostTimeInTransitType titType();
+        assertTrue(titType.getFields().size() > 0, "EasyPostTimeInTransitType must have fields");
+
+        # ScanForm
+        EasyPostDataProvider::EasyPostScanFormType scanFormType();
+        assertTrue(scanFormType.getFields().size() > 0, "EasyPostScanFormType must have fields");
+
+        EasyPostDataProvider::EasyPostScanFormEventType scanFormEventType();
+        assertTrue(scanFormEventType.getFields().size() > 0, "EasyPostScanFormEventType must have fields");
     }
 
     #! Verify EasyPost app and a sample of registered actions exist in the action catalog
@@ -223,16 +240,22 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
         AbstractDataProviderFactory factory = DataProvider::getFactory("easypost");
         assertTrue(exists factory, "easypost factory must be registered");
 
-        list<string> watchActions = (
-            "watch-tracker-created",
-            "watch-tracker-updated",
-            "watch-batch-created",
-            "watch-batch-updated",
-            "watch-insurance-purchased",
-            "watch-refund-successful",
-            "watch-shipment-invoice-created",
-            "watch-payment-completed",
-            "watch-payment-failed",
+        # Map of watch-action name -> (event-type-string, expected webhook description)
+        list<list<string>> watchSpecs = (
+            ("watch-tracker-created", "tracker.created"),
+            ("watch-tracker-updated", "tracker.updated"),
+            ("watch-batch-created", "batch.created"),
+            ("watch-batch-updated", "batch.updated"),
+            ("watch-insurance-purchased", "insurance.purchased"),
+            ("watch-insurance-cancelled", "insurance.cancelled"),
+            ("watch-refund-successful", "refund.successful"),
+            ("watch-shipment-invoice-created", "shipment.invoice.created"),
+            ("watch-shipment-invoice-updated", "shipment.invoice.updated"),
+            ("watch-payment-created", "payment.created"),
+            ("watch-payment-completed", "payment.completed"),
+            ("watch-payment-failed", "payment.failed"),
+            ("watch-scan-form-created", "scan_form.created"),
+            ("watch-scan-form-updated", "scan_form.updated"),
         );
 
         # Verify each watch action is registered in the action catalog
@@ -249,9 +272,46 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
             action_names_set{action.action} = True;
         }
 
-        foreach string name in (watchActions) {
+        foreach list<string> spec in (watchSpecs) {
+            string name = spec[0];
             assertTrue(action_names_set{name} ?? False,
                 sprintf("watch action %y must be registered", name));
+        }
+
+        # Instantiate each watch provider directly and assert getExampleEventData() returns
+        # a well-formed event envelope with the correct description and a populated result.
+        list<AbstractDataProvider> providers = (
+            new EasyPostWatchTrackerCreatedEventDataProvider(),
+            new EasyPostWatchTrackerUpdatedEventDataProvider(),
+            new EasyPostWatchBatchCreatedEventDataProvider(),
+            new EasyPostWatchBatchUpdatedEventDataProvider(),
+            new EasyPostWatchInsurancePurchasedEventDataProvider(),
+            new EasyPostWatchInsuranceCancelledEventDataProvider(),
+            new EasyPostWatchRefundSuccessfulEventDataProvider(),
+            new EasyPostWatchShipmentInvoiceCreatedEventDataProvider(),
+            new EasyPostWatchShipmentInvoiceUpdatedEventDataProvider(),
+            new EasyPostWatchPaymentCreatedEventDataProvider(),
+            new EasyPostWatchPaymentCompletedEventDataProvider(),
+            new EasyPostWatchPaymentFailedEventDataProvider(),
+            new EasyPostWatchScanFormCreatedEventDataProvider(),
+            new EasyPostWatchScanFormUpdatedEventDataProvider(),
+        );
+
+        foreach int i in (xrange(providers.size())) {
+            AbstractDataProvider provider = providers[i];
+            string expectedDesc = watchSpecs[i][1];
+            auto example = provider.getExampleEventData(expectedDesc);
+            assertTrue(example.typeCode() == NT_HASH,
+                sprintf("getExampleEventData(%y) must return a hash", expectedDesc));
+            assertEq("Event", example.object,
+                sprintf("example event for %y must have object=Event", expectedDesc));
+            assertEq(expectedDesc, example.description,
+                sprintf("example event description must match %y", expectedDesc));
+            assertTrue(exists example.id, sprintf("example event for %y must have an id", expectedDesc));
+            assertTrue(example.result.typeCode() == NT_HASH,
+                sprintf("example event for %y must have a hash result", expectedDesc));
+            assertTrue(example.result.size() > 0,
+                sprintf("example event for %y must have a non-empty result", expectedDesc));
         }
     }
 
@@ -357,6 +417,39 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
         }
     }
 
+    #! Integration: re-fetch the created address to verify persistence (round-trip)
+    integrationGetAddress() {
+        checkJson();
+        if (!connName) {
+            testSkip("no connection specified (use -c <connection_name>)");
+            return;
+        }
+        if (!createdAddressId) {
+            testSkip("no created address id available (create-address test did not run successfully)");
+            return;
+        }
+        *DataProvider::AbstractDataProvider root = getRootProvider();
+        if (!root) {
+            return;
+        }
+        try {
+            DataProvider::AbstractDataProvider getAddress =
+                root.getChildProviderEx("get-address");
+            auto resp = getAddress.doRequest({"address_id": createdAddressId});
+            assertEq(createdAddressId, resp.id, "fetched address id must match the created id");
+            assertEq("1600 Pennsylvania Ave NW", resp.street1, "street1 must persist");
+            assertEq("Washington", resp.city, "city must persist");
+            assertEq("DC", resp.state, "state must persist");
+            assertEq("20500", resp.zip, "zip must persist");
+            assertEq("US", resp.country, "country must persist");
+        } catch (hash<ExceptionInfo> ex) {
+            if (shouldSkipForStatus(ex)) {
+                return;
+            }
+            rethrow;
+        }
+    }
+
     #! Integration: verify the address that was just created
     integrationVerifyAddress() {
         checkJson();
@@ -375,7 +468,7 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
         try {
             DataProvider::AbstractDataProvider verifyAddress =
                 root.getChildProviderEx("verify-address");
-            auto resp = verifyAddress.doRequest({"id": createdAddressId});
+            auto resp = verifyAddress.doRequest({"address_id": createdAddressId});
             assertTrue(exists resp, "verify-address must return a response");
             # Either response.address.verifications.delivery.success or
             # response.verifications.delivery.success - tolerate both shapes.
@@ -422,6 +515,35 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
             assertEq("EZ1000000001", resp.tracking_code,
                 "tracking_code must match the requested value");
             createdTrackerId = resp.id;
+        } catch (hash<ExceptionInfo> ex) {
+            if (shouldSkipForStatus(ex)) {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! Integration: re-fetch the created tracker to verify persistence (round-trip)
+    integrationGetTracker() {
+        checkJson();
+        if (!connName) {
+            testSkip("no connection specified (use -c <connection_name>)");
+            return;
+        }
+        if (!createdTrackerId) {
+            testSkip("no created tracker id available (create-tracker test did not run successfully)");
+            return;
+        }
+        *DataProvider::AbstractDataProvider root = getRootProvider();
+        if (!root) {
+            return;
+        }
+        try {
+            DataProvider::AbstractDataProvider getTracker =
+                root.getChildProviderEx("get-tracker");
+            auto resp = getTracker.doRequest({"tracker_id": createdTrackerId});
+            assertEq(createdTrackerId, resp.id, "fetched tracker id must match the created id");
+            assertEq("EZ1000000001", resp.tracking_code, "tracking_code must persist");
         } catch (hash<ExceptionInfo> ex) {
             if (shouldSkipForStatus(ex)) {
                 return;
@@ -480,6 +602,34 @@ public class EasyPostDataProviderTest inherits QUnit::Test {
                 ++count;
             }
             assertTrue(count >= 0, "list-shipments returned without throwing");
+        } catch (hash<ExceptionInfo> ex) {
+            if (shouldSkipForStatus(ex)) {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! Integration: clean up the tracker created during create-tracker test
+    integrationCleanupTracker() {
+        checkJson();
+        if (!connName) {
+            testSkip("no connection specified (use -c <connection_name>)");
+            return;
+        }
+        if (!createdTrackerId) {
+            testSkip("no created tracker id to clean up");
+            return;
+        }
+        *DataProvider::AbstractDataProvider root = getRootProvider();
+        if (!root) {
+            return;
+        }
+        try {
+            DataProvider::AbstractDataProvider deleteTracker =
+                root.getChildProviderEx("delete-tracker");
+            deleteTracker.doRequest({"tracker_id": createdTrackerId});
+            remove createdTrackerId;
         } catch (hash<ExceptionInfo> ex) {
             if (shouldSkipForStatus(ex)) {
                 return;

@@ -47,6 +47,7 @@ module EasyPostRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("easypostrest", EasyPostRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("easypostrests", EasyPostRestConnection::ConnectionScheme);
     };
 }
 

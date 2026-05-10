@@ -14,7 +14,7 @@ public class EasyPostBatchScanFormRequestDataType inherits HashDataType {
                 "desc": "Batch to generate a scan form for",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "batches",
             },
         };
     }

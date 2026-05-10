@@ -14,7 +14,6 @@ public class EasyPostCreateShipmentRequestDataType inherits HashDataType {
                 "desc": "Destination address - either a full address object or a reference by `id`",
                 "type": new EasyPostAddressInputType(),
                 "required": True,
-                "preselected": True,
             },
             "from_address": {
                 "display_name": "From Address",
@@ -22,7 +21,6 @@ public class EasyPostCreateShipmentRequestDataType inherits HashDataType {
                 "desc": "Origin address - either a full address object or a reference by `id`",
                 "type": new EasyPostAddressInputType(),
                 "required": True,
-                "preselected": True,
             },
             "parcel": {
                 "display_name": "Parcel",
@@ -30,7 +28,12 @@ public class EasyPostCreateShipmentRequestDataType inherits HashDataType {
                 "desc": "Parcel details - either a full parcel object or a reference by `id`",
                 "type": new EasyPostParcelInputType(),
                 "required": True,
-                "preselected": True,
+            },
+            "insurance": {
+                "display_name": "Insurance",
+                "short_desc": "Insurance amount for one-call buy",
+                "desc": "Insurance amount as a string (e.g. `\"100.00\"`). Used by the one-call buy flow.",
+                "type": SoftStringOrNothingType,
             },
             "return_address": {
                 "display_name": "Return Address",
@@ -92,6 +95,7 @@ public class EasyPostCreateShipmentRequestDataType inherits HashDataType {
                 "short_desc": "Carrier name",
                 "desc": "Carrier name (e.g. `USPS`, `UPS`, `FedEx`)",
                 "type": SoftStringOrNothingType,
+                "ref_data": "carrier_names",
             },
         };
     }

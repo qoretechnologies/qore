@@ -14,7 +14,6 @@ public class EasyPostCreateCustomsInfoRequestDataType inherits HashDataType {
                 "desc": "Either an EEL code or a Proof of Filing Citation. Use `NOEEI 30.37(a)` for shipments under USD $2,500.",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
             "contents_type": {
                 "display_name": "Contents Type",
@@ -22,7 +21,6 @@ public class EasyPostCreateCustomsInfoRequestDataType inherits HashDataType {
                 "desc": "Type of contents being shipped",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
                 "allowed_values": ContentsTypeAllowedValues,
             },
             "customs_certify": {
@@ -31,7 +29,6 @@ public class EasyPostCreateCustomsInfoRequestDataType inherits HashDataType {
                 "desc": "Set to `True` to certify the customs declarations",
                 "type": SoftBoolType,
                 "required": True,
-                "preselected": True,
             },
             "customs_signer": {
                 "display_name": "Customs Signer",
@@ -39,15 +36,13 @@ public class EasyPostCreateCustomsInfoRequestDataType inherits HashDataType {
                 "desc": "Name of the person certifying the customs declarations",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
             "non_delivery_option": {
                 "display_name": "Non-Delivery Option",
                 "short_desc": "What to do if delivery fails",
-                "desc": "Action to take if the shipment cannot be delivered",
-                "type": SoftStringType,
-                "required": True,
-                "preselected": True,
+                "desc": "Action to take if the shipment cannot be delivered. Defaults to `return` if not specified.",
+                "type": SoftStringOrNothingType,
+                "default_value": "return",
                 "allowed_values": NonDeliveryOptionAllowedValues,
             },
             "restriction_type": {
@@ -56,7 +51,6 @@ public class EasyPostCreateCustomsInfoRequestDataType inherits HashDataType {
                 "desc": "Type of customs restriction",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
                 "allowed_values": RestrictionTypeAllowedValues,
             },
             "customs_items": {
@@ -65,7 +59,6 @@ public class EasyPostCreateCustomsInfoRequestDataType inherits HashDataType {
                 "desc": "List of customs items in the shipment",
                 "type": new ListDataType("EasyPostCreateCustomsInfoItemList", new EasyPostCustomsItemInputType(), False),
                 "required": True,
-                "preselected": True,
             },
             "contents_explanation": {
                 "display_name": "Contents Explanation",

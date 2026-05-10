@@ -14,7 +14,6 @@ public class EasyPostGetParcelRequestDataType inherits HashDataType {
                 "desc": "Existing EasyPost parcel ID to retrieve",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
             },
         };
     }

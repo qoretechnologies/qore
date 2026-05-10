@@ -14,7 +14,6 @@ public class EasyPostGetCarrierAccountRequestDataType inherits HashDataType {
                 "desc": "Carrier account to retrieve",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
                 "ref_data": "carrier_accounts",
             },
         };

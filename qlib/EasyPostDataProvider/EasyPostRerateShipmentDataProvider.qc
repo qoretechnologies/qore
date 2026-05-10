@@ -14,7 +14,7 @@ public class EasyPostRerateShipmentRequestDataType inherits HashDataType {
                 "desc": "Shipment to re-rate",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
+                "ref_data": "shipments",
             },
         };
     }

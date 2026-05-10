@@ -14,7 +14,6 @@ public class EasyPostDeleteCarrierAccountRequestDataType inherits HashDataType {
                 "desc": "Carrier account to delete",
                 "type": SoftStringType,
                 "required": True,
-                "preselected": True,
                 "ref_data": "carrier_accounts",
             },
         };

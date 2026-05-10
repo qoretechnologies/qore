@@ -33,6 +33,10 @@ public class EasyPostRateType inherits HashDataType {
     constructor() {
         addQoreFields(Fields);
     }
+
+    constructor(Type base_type) : HashDataType(base_type) {
+        addQoreFields(Fields);
+    }
 }
 
 } # namespace EasyPostDataProvider
