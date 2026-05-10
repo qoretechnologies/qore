@@ -1884,7 +1884,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     #! Internal: checks if an HTTP/3 peer-close/read error should use the one-shot retry path
     private bool isHttp3ConnectionCloseError(string err) {
-        return err == "HTTP3-CONNECTION-CLOSED"
+        return err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella, still emitted from some sites
+            || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
+            || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
+            || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR";
     }
 
@@ -1895,7 +1898,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             || err == "QUIC-RECV-ERROR"
             || err == "QUIC-SEND-ERROR"
             || err == "HTTP3-CONNECT-ERROR"
-            || err == "HTTP3-CONNECTION-CLOSED"
+            || err == "HTTP3-CONNECTION-CLOSED"  # legacy umbrella; still emitted from some sites
+            || err == "HTTP3-IDLE-CLOSE"          # local idle timer expired
+            || err == "HTTP3-LOCAL-CLOSE"         # we sent CONNECTION_CLOSE
+            || err == "HTTP3-PEER-CLOSE"          # peer sent CONNECTION_CLOSE
             || err == "HTTP3-READ-ERROR"
             || err == "HTTP3-STATE-ERROR"
             || err == "HTTP3-ABORT"

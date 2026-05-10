@@ -290,13 +290,42 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             return nullptr;
         }
 
-        // Detect connection close (inner op transitions to "closed" when
-        // ngtcp2 enters DRAINING — e.g., after receiving CONNECTION_CLOSE
-        // from the server, possibly carrying a TLS alert).
+        // Detect connection close.  inner_op transitions to "closed" via
+        // QuicSession::isClosed() which has THREE distinct triggers:
+        //   - local idle timer expired (NGTCP2_ERR_IDLE_CLOSE)
+        //   - we sent CONNECTION_CLOSE
+        //   - peer sent CONNECTION_CLOSE
+        // Surface each as a different error code so callers (retry policy,
+        // operators, tests) can act on the actual cause instead of guessing
+        // from a one-size-fits-all "closed by peer during read" string.
         const char* inner_state = inner_op->getStateImpl();
         if (inner_state && !strcmp(inner_state, "closed")) {
-            setError("HTTP3-CONNECTION-CLOSED",
-                "QUIC connection closed by peer during read", xsink);
+            const char* err_code = "HTTP3-CONNECTION-CLOSED";
+            const char* err_desc = "QUIC connection closed during read";
+            auto session = inner_op->getSession();
+            if (session) {
+                switch (session->getCloseReason()) {
+                    case QuicSession::CloseReason::Idle:
+                        err_code = "HTTP3-IDLE-CLOSE";
+                        err_desc = "QUIC connection closed: local idle timer "
+                                   "expired before any response data arrived "
+                                   "(NGTCP2_ERR_IDLE_CLOSE)";
+                        break;
+                    case QuicSession::CloseReason::LocalClose:
+                        err_code = "HTTP3-LOCAL-CLOSE";
+                        err_desc = "QUIC connection closed locally during read";
+                        break;
+                    case QuicSession::CloseReason::PeerClose:
+                        err_code = "HTTP3-PEER-CLOSE";
+                        err_desc = "QUIC connection closed by peer during read";
+                        break;
+                    case QuicSession::CloseReason::Open:
+                        // Race: inner_op observed closed but session re-opened
+                        // (extremely unlikely).  Fall through to umbrella code.
+                        break;
+                }
+            }
+            setError(err_code, err_desc, xsink);
             cleanupPendingState();
             if (last_poll_info) {
                 last_poll_info->deref(xsink);
