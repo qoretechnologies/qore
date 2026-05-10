@@ -263,6 +263,12 @@ private:
     const QoreTypeInfo* getGuaranteedTypeForValue(const QoreValue* expr, const QoreTypeInfo* fallback) const;
     bool lowerCallArgs(const QoreParseListNode* parse_args, const QoreListNode* args,
         std::vector<QoreIRValue>& lowered, std::string& error);
+    bool callArgumentMayBeRuntimeNothing(const QoreValue& arg) const;
+    bool directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
+        const QoreParseListNode* parse_args, const QoreListNode* args) const;
+    bool overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, const QoreParseListNode* parse_args,
+        const QoreListNode* args) const;
     QoreIRValue lowerExprOpOrInvoke(QoreIROpcode op, const QoreValue& expr, const std::vector<QoreIRValue>& operands,
         const QoreProgramLocation* loc, std::string& error);
     QoreIRValue lowerExprOpOrInvokeNoGuard(QoreIROpcode op, const QoreValue& expr,

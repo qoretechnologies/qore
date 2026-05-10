@@ -218,9 +218,6 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     if (typeInfo) {
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
         parse_context.analysis.known_type = typeInfo;
-        if (QoreTypeInfo::parseReturns(typeInfo, NT_NOTHING) == QTI_NOT_EQUAL) {
-            parse_context.analysis.setFlag(QoreParseAnalysis::NeverNothing);
-        }
     }
     if (left_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)
         && right_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {

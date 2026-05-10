@@ -398,6 +398,10 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
         while (i.next()) {
             HashAssignmentHelper hah(i);
             QoreValue qv(hash_assignment_priv::get(hah)->swap(QoreValue()));
+            if (!QoreTypeInfo::retypeValue(qv, vti, xsink)) {
+                hash_assignment_priv::get(hah)->swap(qv);
+                return nullptr;
+            }
             QoreTypeInfo::acceptInputKey(vti, i.getKey(), qv, xsink);
             hash_assignment_priv::get(hah)->swap(qv);
             if (*xsink) {

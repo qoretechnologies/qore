@@ -32,21 +32,30 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 
-static bool qore_parse_hash_literal_varref_may_be_nothing(const QoreValue& v) {
-    if (v.getType() != NT_VARREF) {
-        return false;
+static bool qore_parse_hash_literal_value_may_be_nothing(const QoreValue& v) {
+    if (v.getType() == NT_VARREF) {
+        const VarRefNode* vr = v.get<const VarRefNode>();
+        qore_var_t vt = vr->getType();
+        if ((vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS) && vr->ref.id) {
+            return true;
+        }
+        if ((vt == VT_GLOBAL || vt == VT_THREAD_LOCAL) && vr->ref.var) {
+            return true;
+        }
     }
-    const VarRefNode* vr = v.get<const VarRefNode>();
-    qore_var_t vt = vr->getType();
-    if ((vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS) && vr->ref.id) {
+
+    if (v.hasNode()
+            && dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(v.getInternalNode())) {
+        // Hash and hashdecl member lookup can return NOTHING even when the
+        // declared member type is non-optional, because hashdecl slots are not
+        // implicitly materialized.
         return true;
     }
-    if ((vt == VT_GLOBAL || vt == VT_THREAD_LOCAL) && vr->ref.var) {
-        return true;
-    }
+
     return false;
 }
 
@@ -119,7 +128,7 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         }
 
         bool typed_varref_may_be_nothing = false;
-        typed_varref_may_be_nothing = qore_parse_hash_literal_varref_may_be_nothing(values[i]);
+        typed_varref_may_be_nothing = qore_parse_hash_literal_value_may_be_nothing(values[i]);
 
         parse_context.typeInfo = nullptr;
         parse_context.expected_type_info = expected_value_type;
@@ -128,7 +137,7 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         }
         vtypes[i] = parse_context.typeInfo;
         typed_varref_may_be_nothing = typed_varref_may_be_nothing
-            || qore_parse_hash_literal_varref_may_be_nothing(values[i]);
+            || qore_parse_hash_literal_value_may_be_nothing(values[i]);
 
         // For variable refs, clear type info to prevent baking declared or
         // narrowed types into the hash literal; the actual runtime value may

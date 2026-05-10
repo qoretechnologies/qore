@@ -9667,6 +9667,88 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
     return result;
 }
 
+static size_t qore_ir_get_call_arg_count(const QoreParseListNode* parse_args, const QoreListNode* args) {
+    return parse_args ? parse_args->size() : (args ? args->size() : 0);
+}
+
+static QoreValue qore_ir_get_call_arg(const QoreParseListNode* parse_args, const QoreListNode* args, size_t i) {
+    return parse_args ? parse_args->get(i) : args->retrieveEntry(i);
+}
+
+bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const {
+    if (arg.isNothing()) {
+        return true;
+    }
+    if (!arg.hasNode()) {
+        return false;
+    }
+
+    const AbstractQoreNode* node = arg.getInternalNode();
+    if (!node || !dynamic_cast<const ParseNode*>(node)) {
+        return false;
+    }
+
+    QoreParseAnalysis analysis;
+    bool got_analysis = false;
+    try {
+        got_analysis = getAnalysis(arg, analysis);
+    } catch (...) {
+        got_analysis = false;
+    }
+    if (LocalVar* local = getLocalVarFromValue(arg)) {
+        // Guard insertion treats unassigned locals as valid NOTHING values, but
+        // overload dispatch must fall back when a selected non-NOTHING variant
+        // could reject that runtime value.
+        return !local->isAssigned()
+            || !got_analysis
+            || !analysis.hasFlag(QoreParseAnalysis::NeverNothing);
+    }
+
+    if (got_analysis && analysis.hasFlag(QoreParseAnalysis::NeverNothing)) {
+        return false;
+    }
+
+    if (got_analysis && analysis.hasFlag(QoreParseAnalysis::KnownTypeInfo) && analysis.known_type) {
+        return true;
+    }
+
+    return true;
+}
+
+bool QoreIRLowering::directCallVariantMayRejectRuntimeNothing(const AbstractQoreFunctionVariant* variant,
+        const QoreParseListNode* parse_args, const QoreListNode* args) const {
+    if (!variant) {
+        return false;
+    }
+
+    const AbstractFunctionSignature* sig = variant->getSignature();
+    if (!sig) {
+        return false;
+    }
+
+    size_t nargs = qore_ir_get_call_arg_count(parse_args, args);
+    unsigned nparams = sig->numParams();
+    size_t ncheck = std::min(nargs, static_cast<size_t>(nparams));
+    for (size_t i = 0; i < ncheck; ++i) {
+        const QoreTypeInfo* param_ti = sig->getParamTypeInfo(static_cast<unsigned>(i));
+        if (QoreTypeInfo::parseReturns(param_ti, NT_NOTHING) != QTI_NOT_EQUAL) {
+            continue;
+        }
+        if (callArgumentMayBeRuntimeNothing(qore_ir_get_call_arg(parse_args, args, i))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool QoreIRLowering::overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
+        const AbstractQoreFunctionVariant* variant, const QoreParseListNode* parse_args,
+        const QoreListNode* args) const {
+    return func && func->numVariants() > 1
+        && directCallVariantMayRejectRuntimeNothing(variant, parse_args, args);
+}
+
 QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* call = dynamic_cast<const FunctionCallNode*>(node);
@@ -9680,7 +9762,8 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
 
     // If the function is resolved at parse time, use CallDirect to skip the AST round-trip
     const QoreFunction* func = call->getFunction();
-    if (func) {
+    if (func && !overloadedDirectCallNeedsRuntimeDispatch(func, call->getVariant(),
+            call->getParseArgs(), call->getArgs())) {
         if (!exception_stack.empty()) {
             // In try/catch: use Invoke with invoke_opcode = CallDirect
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
@@ -9828,7 +9911,9 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     // 2. The class is final (cannot have subclasses, so no override possible)
     const QoreMethod* method = call->getMethod();
     const QoreClass* qc = call->getClass();
-    if (method && qc && qc->isFinal()) {
+    if (method && qc && qc->isFinal()
+            && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(),
+                call->getVariant(), call->getParseArgs(), call->getArgs())) {
         // Safe devirtualization - the class is final, so no subclass can override
         const AbstractQoreFunctionVariant* variant = call->getVariant();
         QoreIRValue result;
@@ -9878,7 +9963,10 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
     // If getVariant() returns nullptr, AST set runtime_match=true, meaning parse-time variant
     // selection was inconclusive (due to missing type information), and runtime dispatch is required.
     const AbstractQoreFunctionVariant* variant = call->getVariant();
-    if (call->getMethod() && variant) {
+    const QoreMethod* method = call->getMethod();
+    if (method && variant
+            && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(), variant,
+                call->getParseArgs(), call->getArgs())) {
         QoreIRValue result;
         bool should_invoke = !exception_stack.empty();
         if (should_invoke) {

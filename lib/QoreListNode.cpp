@@ -274,8 +274,16 @@ QoreListNode* qore_list_private::newComplexListFromValue(const QoreTypeInfo* typ
         qore_list_private* ll = qore_list_private::get(*l);
         ListIterator i(l);
         while (i.next()) {
-            if (!QoreTypeInfo::superSetOf(vti, i.getValue().getTypeInfo())) {
-                QoreTypeInfo::acceptInputParam(vti, i.index(), nullptr, ll->getEntryReference(i.index()), xsink);
+            QoreValue& entry = ll->getEntryReference(i.index());
+            if (!QoreTypeInfo::retypeValue(entry, vti, xsink)) {
+                return nullptr;
+            }
+            if (*xsink) {
+                return nullptr;
+            }
+
+            if (!QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                QoreTypeInfo::acceptInputParam(vti, i.index(), nullptr, entry, xsink);
                 if (*xsink) {
                     return nullptr;
                 }
