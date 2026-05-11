@@ -278,17 +278,27 @@ public class HttpAsyncSocketIoController {
         }
     }
 
-    private bool runShutdownStep(string action, code<nothing()> step) {
+    stop() {
         try {
-            step();
-            return True;
+            stopIntern();
         } catch (hash<ExceptionInfo> ex) {
-            logShutdownException(action, ex);
+            logShutdownException("stopping controller", ex);
         }
-        return False;
+        # Reset stopping flag so the controller can be restarted
+        try {
+            AutoWriteLock al(m);
+            stopping = False;
+        } catch (hash<ExceptionInfo> ex) {
+            logShutdownException("resetting shutdown flag", ex);
+        }
+        @debug {
+            if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
+                log(LoggerLevel::INFO, "HttpAsyncSocketIoController stopped");
+            }
+        }
     }
 
-    stop() {
+    private stopIntern() {
         # Set stopping flag first — prevents handler tasks from submitting new operations
         # Copy keys under lock, then cancel without holding the lock
         # to avoid deadlock with controller callbacks that also acquire m
@@ -342,19 +352,25 @@ public class HttpAsyncSocketIoController {
         # raises HTTP2-STATE-ERROR / HTTP3-STATE-ERROR.
         if (stream_ops_to_abort) {
             foreach AbstractPollOperation sop in (stream_ops_to_abort) {
-                runShutdownStep("aborting stream operation", sub () {
+                try {
                     sop.abort();
-                });
+                } catch (hash<ExceptionInfo> ex) {
+                    logShutdownException("aborting stream operation", ex);
+                }
             }
         }
         # Signal persistent queues to exit their dedicated loops
-        runShutdownStep("signalling persistent queues", sub () {
+        try {
             signalPersistentQueuesToClose();
-        });
+        } catch (hash<ExceptionInfo> ex) {
+            logShutdownException("signalling persistent queues", ex);
+        }
         foreach string lhash in (listener_keys) {
-            runShutdownStep("cancelling listener owner " + lhash, sub () {
+            try {
                 controller.cancelByOwner(lhash);
-            });
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("cancelling listener owner " + lhash, ex);
+            }
         }
         # Cancel connection operations by their owner key (= connection unique hash).
         # For QUIC/HTTP/3 connections the cache key and owner are the connection
@@ -362,9 +378,11 @@ public class HttpAsyncSocketIoController {
         # controller.cancel(sock) would miss them.  cancelByOwner(uh) matches the
         # owner field set by submitConnectionOpIntern().
         foreach string uh in (conn_keys) {
-            runShutdownStep("cancelling connection owner " + uh, sub () {
+            try {
                 controller.cancelByOwner(uh);
-            });
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("cancelling connection owner " + uh, ex);
+            }
         }
         # Also cancel and close by socket for non-QUIC connections
         # (HTTP/1.x, HTTP/2) where the cache key is the socket unique hash.
@@ -372,38 +390,47 @@ public class HttpAsyncSocketIoController {
         # listener UDP socket; closing one logical connection would break the
         # other sessions on the listener.
         foreach Socket sock in (conn_sockets) {
-            runShutdownStep("cancelling and closing connection socket " + sock.uniqueHash(), sub () {
+            try {
                 controller.cancelAndClose(sock);
-            });
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("cancelling and closing connection socket " + sock.uniqueHash(), ex);
+            }
         }
         # Wait for all pending onComplete/abort callbacks to be processed before
         # stopping the handler pool. Cancelled WebSocket operations have their
         # onComplete dispatched asynchronously via QoreCallDispatcher. The handler
         # threads are blocked on done.waitForZero() until onComplete signals them.
         # Without this flush, handler_pool.stopWait() deadlocks.
-        runShutdownStep("flushing cancellation callbacks", sub () {
+        try {
             controller.flushCallbacks();
-        });
+        } catch (hash<ExceptionInfo> ex) {
+            logShutdownException("flushing cancellation callbacks", ex);
+        }
 
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
         # them from submitting new operations to the controller
-        if (runShutdownStep("stopping handler pool", sub () {
-                handler_pool.stopWait();
-            })) {
+        try {
+            handler_pool.stopWait();
             pool_stopped = True;  # Mark for recreation in start()
+        } catch (hash<ExceptionInfo> ex) {
+            logShutdownException("stopping handler pool", ex);
         }
         # NOTE: We don't recreate the pool here anymore. The pool will be recreated
         # in start() if the controller is restarted. Recreating here would leave
         # a worker thread running that blocks process exit.
         if (detached_connections) {
-            runShutdownStep("destroying detached connections", sub () {
+            try {
                 detached_connections = NOTHING;
-            });
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("destroying detached connections", ex);
+            }
         }
         if (detached_listeners) {
-            runShutdownStep("destroying detached listeners", sub () {
+            try {
                 detached_listeners = NOTHING;
-            });
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("destroying detached listeners", ex);
+            }
         }
         # Second pass: cancel any operations that handler tasks managed to submit
         # before observing the stopping flag (narrow race window)
@@ -428,28 +455,24 @@ public class HttpAsyncSocketIoController {
             }
         }
         foreach string uh in (conn_keys) {
-            runShutdownStep("cancelling late connection owner " + uh, sub () {
+            try {
                 controller.cancelByOwner(uh);
-            });
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("cancelling late connection owner " + uh, ex);
+            }
         }
         foreach Socket sock in (conn_sockets) {
-            runShutdownStep("cancelling and closing late connection socket " + sock.uniqueHash(), sub () {
+            try {
                 controller.cancelAndClose(sock);
-            });
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("cancelling and closing late connection socket " + sock.uniqueHash(), ex);
+            }
         }
         if (race_connections) {
-            runShutdownStep("destroying late connections", sub () {
+            try {
                 race_connections = NOTHING;
-            });
-        }
-        # Reset stopping flag so the controller can be restarted
-        {
-            AutoWriteLock al(m);
-            stopping = False;
-        }
-        @debug {
-            if (getenv("QORE_HTTP_ACCEPT_TRACE")) {
-                log(LoggerLevel::INFO, "HttpAsyncSocketIoController stopped");
+            } catch (hash<ExceptionInfo> ex) {
+                logShutdownException("destroying late connections", ex);
             }
         }
     }
