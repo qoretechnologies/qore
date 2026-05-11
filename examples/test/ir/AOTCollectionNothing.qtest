@@ -1,0 +1,152 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class AOTCollectionNothingTest
+
+class AOTCollectionNothingTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTCollectionNothingTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("IR/JIT direct-index collection operators preserve NOTHING",
+            \testExecModesDirectIndexCollectionNothing());
+        addTestCase("AOT qmod direct-index collection operators preserve NOTHING",
+            \testAOTQmodDirectIndexCollectionNothing());
+
+        set_return_value(main());
+    }
+
+    private string expectedOutput() {
+        return "typed-nothing:missing:missing:missing:missing:missing\n"
+            "typed-empty:list:list:list:hash:hash\n"
+            "qorus-options:missing\n";
+    }
+
+    private string collectionNothingFunctions(string prefix) {
+        string access = prefix == "" ? "" : prefix + " ";
+
+        return sprintf("%sstring sub kind(auto v) {
+    return !exists v ? \"missing\" : (v instanceof list ? \"list\" : (v instanceof hash ? \"hash\" : v.type()));
+}
+
+%sstring sub verify() {
+    list<int> l;
+    auto m = map $1 + 1, l;
+    auto s = (select l, True);
+    auto ms = map ($1, l, True);
+    auto hm = map {$1: $1}, l;
+    auto hms = map ({$1: $1}, l, True);
+
+    list<int> e = ();
+    auto em = map $1 + 1, e;
+    auto es = (select e, True);
+    auto ems = map ($1, e, True);
+    auto ehm = map {$1: $1}, e;
+    auto ehms = map ({$1: $1}, e, True);
+
+    hash<auto> opts;
+    auto workflow_options = map (\"name\": $1) + opts.$1, keys opts;
+
+    return sprintf(\"typed-nothing:%%s:%%s:%%s:%%s:%%s\\n\"
+        \"typed-empty:%%s:%%s:%%s:%%s:%%s\\n\"
+        \"qorus-options:%%s\\n\",
+        kind(m), kind(s), kind(ms), kind(hm), kind(hms),
+        kind(em), kind(es), kind(ems), kind(ehm), kind(ehms),
+        kind(workflow_options));
+}
+", access, access);
+    }
+
+    private string collectionNothingCode() {
+        return "%modern
+
+" + collectionNothingFunctions("");
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTCollectionNothingMod {
+    version = \"1.0\";
+    desc = \"AOT collection NOTHING regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTCollectionNothingMod {
+" + collectionNothingFunctions("public") + "
+}
+";
+    }
+
+    private string runScript(string mode, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+            libqore_dir, qore_bin, mode, script_path));
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    testExecModesDirectIndexCollectionNothing() {
+        TmpFile script("qore-ir-collection-nothing-", ".q");
+        script.file.write(collectionNothingCode());
+        script.file.write("printf(\"%s\", verify());\n");
+        script.file.close();
+
+        string ast = runScript("ast", script.path);
+        string ir = runScript("ir", script.path);
+        string jit = runScript("jit", script.path);
+
+        assertEq(expectedOutput(), ast, "AST direct-index collection operator baseline");
+        assertEq(ast, ir, "IR direct-index collection operators match AST for NOTHING inputs");
+        assertEq(ast, jit, "JIT direct-index collection operators match AST for NOTHING inputs");
+    }
+
+    testAOTQmodDirectIndexCollectionNothing() {
+        TmpDir tmp("qore-aot-collection-nothing-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTCollectionNothingMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern
+%requires AOTCollectionNothingMod
+printf(\"%s\", AOTCollectionNothingMod::verify());
+");
+        script.close();
+
+        string qmod_path = qmod_dir + "/AOTCollectionNothingMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled collection NOTHING module: " + compile_out);
+
+        assertEq(expectedOutput(), runModule(src_dir, script_path),
+            "source module direct-index collection operators");
+        assertEq(expectedOutput(), runModule(qmod_dir, script_path),
+            "AOT qmod direct-index collection operators");
+    }
+}

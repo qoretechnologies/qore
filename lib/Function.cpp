@@ -3785,6 +3785,11 @@ QoreValue UserVariantBase::eval(const char* name, CodeEvaluationHelper* ceh, Qor
         return QoreValue();
     }
 
+    // This is a normal function/method call, not a closure invocation.  If the
+    // caller is a closure body, do not let its captured LocalVar* map shadow this
+    // callee's own closure-use locals when evalIntern() dispatches to AOT/JIT code.
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+
     CodeContextHelper cch(xsink, CT_USER, name, self, qc ? qc : (ceh ? ceh->getClass() : nullptr), ref_obj);
     return evalIntern(name, uveh.getArgv(), self, xsink);
 }

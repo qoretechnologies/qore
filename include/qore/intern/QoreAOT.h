@@ -204,6 +204,14 @@ struct QoreAOTContext {
     time and runtime.
 */
 struct AOTSlotMap {
+    struct DotEvalDirectTarget {
+        const QoreClass* qc = nullptr;
+        const QoreMethod* method = nullptr;
+        const AbstractQoreFunctionVariant* variant = nullptr;
+        const char* fallback_method_name = nullptr;
+        bool pseudo = false;
+    };
+
     std::unordered_map<const void*, int32_t> local_slots;   //!< LocalVar* -> slot index
     std::unordered_map<const void*, int32_t> global_slots;  //!< Var* -> slot index
     std::unordered_map<uint64_t, int32_t> expr_slots;       //!< NaN-boxed expr bits -> slot index
@@ -212,6 +220,7 @@ struct AOTSlotMap {
     std::unordered_map<const void*, int32_t> regex_case_slots;  //!< CaseNodeRegex* -> slot index
     std::unordered_map<const void*, int32_t> lv_path_slots;  //!< QoreIRLValuePathInstruction* -> slot
     std::unordered_set<uint64_t> dot_eval_direct_bits;  //!< expr bits from DotEvalMethodDirect (classify as DOT_EVAL_TARGET)
+    std::unordered_map<uint64_t, DotEvalDirectTarget> dot_eval_direct_targets; //!< expr bits -> IR-selected target
     std::unordered_set<uint64_t> static_call_pre_evaluated_bits;  //!< CallStatic* expr bits whose args are IR operands
 
     //! Check if a slot already exists for a LocalVar*

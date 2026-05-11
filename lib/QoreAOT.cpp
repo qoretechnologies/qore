@@ -9672,6 +9672,9 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     memcpy(&bits, &dmd->expr, sizeof(bits));
                     recordExprSlot(bits, inst->opcode);
                     slots.dot_eval_direct_bits.insert(bits);
+                    slots.dot_eval_direct_targets[bits] = {
+                        dmd->qc, dmd->method, dmd->variant, dmd->fallback_method_name, dmd->pseudo
+                    };
                     break;
                 }
                 case QoreIROpcode::InvokeDotEvalMethodDirect: {
@@ -9680,6 +9683,9 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     memcpy(&bits, &idmd->expr, sizeof(bits));
                     recordExprSlot(bits, inst->opcode);
                     slots.dot_eval_direct_bits.insert(bits);
+                    slots.dot_eval_direct_targets[bits] = {
+                        idmd->qc, idmd->method, idmd->variant, idmd->fallback_method_name, idmd->pseudo
+                    };
                     break;
                 }
                 case QoreIROpcode::OnBlockExit: {
@@ -12654,24 +12660,36 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (slots.dot_eval_direct_bits.count(bits)) {
         if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
             MethodCallNode* mc = de->getMethodCall();
+            auto target_it = slots.dot_eval_direct_targets.find(bits);
+            const AOTSlotMap::DotEvalDirectTarget* target = target_it == slots.dot_eval_direct_targets.end()
+                ? nullptr : &target_it->second;
             id.kind = AOTExprKind::DOT_EVAL_TARGET;
-            const QoreClass* qc = mc->getClass();
+            bool force_name_dispatch = target && target->fallback_method_name
+                && !target->qc && !target->method;
+            const QoreClass* qc = force_name_dispatch ? nullptr
+                : (target && target->qc ? target->qc : mc->getClass());
+            bool is_pseudo = target ? target->pseudo : mc->isPseudo();
             // Pseudo-classes are not attached to the namespace tree, so
             // getNamespacePath() can be empty. Serialize their constructor
             // path so the runtime pseudo-class resolver can recover qc/method.
-            id.ref1 = qore_aot_encode_class_ref(qc, mc->isPseudo());
-            const QoreMethod* method = mc->getMethod();
-            id.ref2 = method ? method->getName() : (mc->getName() ? mc->getName() : "");
-            if (const AbstractQoreFunctionVariant* variant = mc->getVariant()) {
+            id.ref1 = qore_aot_encode_class_ref(qc, is_pseudo);
+            const QoreMethod* method = force_name_dispatch ? nullptr
+                : (target && target->method ? target->method : mc->getMethod());
+            const char* fallback_name = target && target->fallback_method_name
+                ? target->fallback_method_name : mc->getName();
+            id.ref2 = method ? method->getName() : (fallback_name ? fallback_name : "");
+            const AbstractQoreFunctionVariant* variant = force_name_dispatch ? nullptr
+                : (target && target->variant ? target->variant : mc->getVariant());
+            if (variant) {
                 if (AbstractFunctionSignature* sig = variant->getSignature()) {
                     const QoreClass* variant_class = variant->getClass();
                     id.ref2.append("\n");
-                    id.ref2.append(qore_aot_encode_class_ref(variant_class, mc->isPseudo()));
+                    id.ref2.append(qore_aot_encode_class_ref(variant_class, is_pseudo));
                     id.ref2.append("\n");
                     id.ref2.append(sig->getSignatureText());
                 }
             }
-            id.flags = mc->isPseudo() ? 1 : 0;
+            id.flags = is_pseudo ? 1 : 0;
             return id;
         }
     }

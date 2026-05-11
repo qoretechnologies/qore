@@ -27,6 +27,7 @@ class LValuePathSmokeTest inherits QUnit::Test {
         addTestCase("remove from member list", \testRemoveFromMemberList());
         addTestCase("pre/post increment on member", \testMemberIncrement());
         addTestCase("compound on local hash key", \testLocalHashKeyCompound());
+        addTestCase("compound on NULL hash key", \testNullHashKeyCompound());
         addTestCase("trim and chomp", \testTrimChomp());
         addTestCase("chomp on self.member", \testChompMember());
         addTestCase("splice returns mutated lvalue", \testSpliceReturnValue());
@@ -204,6 +205,17 @@ for (int i = 1; i <= 3; ++i) {
 printf(\"%d\\n\", h.total);
 ";
         assertSameInAllModes(code, "6\n", "local hash key compound");
+    }
+
+    testNullHashKeyCompound() {
+        string code = "
+hash h = {\"mappers\": NULL};
+h.mappers += {\"a\": 1};
+auto v = NULL;
+v += {\"b\": 2};
+printf(\"%d:%d:%d:%d\\n\", h.mappers.size(), h.mappers.a, v.size(), v.b);
+";
+        assertSameInAllModes(code, "1:1:1:2\n", "NULL hash key compound");
     }
 
     testTrimChomp() {

@@ -1056,6 +1056,11 @@ extern "C" DLLEXPORT void qore_rt_instantiate_local(LocalVar* var) {
         // across frames, so the frame boundary is the only way to
         // distinguish "my own frame's CVV" from an outer frame's.
         if (var->closureUse()
+                && thread_has_runtime_closure_env()
+                && thread_try_get_runtime_closure_var(var)) {
+            return;
+        }
+        if (var->closureUse()
                 && thread_try_find_closure_var_in_current_frame(var->getName())) {
             return;
         }
@@ -1309,16 +1314,34 @@ extern "C" DLLEXPORT uint64_t qore_rt_make_weak_value(uint64_t value, ExceptionS
     }
 }
 
+static QoreValue qore_rt_deref_loaded_var_value(QoreValue result, bool owned, ExceptionSink* xsink) {
+    if (result.getType() != NT_REFERENCE) {
+        if (!owned && result.hasNode()) {
+            return result.refSelf();
+        }
+        return result;
+    }
+
+    ValueHolder ref_holder(owned ? result : result.refSelf(), xsink);
+    bool needs_deref = true;
+    QoreValue deref = result.getInternalNode()->eval(needs_deref, xsink);
+    if (xsink && *xsink) {
+        return QoreValue();
+    }
+    if (!needs_deref && deref.hasNode()) {
+        deref = deref.refSelf();
+    }
+    return deref;
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink) {
     if (!var) {
         return toBits(QoreValue());
     }
     bool needs_deref = true;
     QoreValue result = var->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
-        result = result.refSelf();
-    }
-    return toBits(result);
+    QoreValue rv = qore_rt_deref_loaded_var_value(result, needs_deref, xsink);
+    return toBits(rv);
 }
 
 extern "C" DLLEXPORT void qore_rt_reload_local_if_stale(LocalVar* var, uint64_t* cache,
@@ -1635,7 +1658,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_global(Var* var, ExceptionSink* xsink
     }
     // Var::eval() returns an already-referenced value
     QoreValue result = var->eval();
-    return toBits(result);
+    return toBits(qore_rt_deref_loaded_var_value(result, true, xsink));
 }
 
 static void qore_rt_store_global_impl(Var* var, uint64_t value, ExceptionSink* xsink,
@@ -1673,10 +1696,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_closure(ClosureVarValue* var, Excepti
     }
     bool needs_deref = true;
     QoreValue result = var->eval(needs_deref, xsink);
-    if (!needs_deref && result.hasNode()) {
-        result = result.refSelf();
-    }
-    return toBits(result);
+    return toBits(qore_rt_deref_loaded_var_value(result, needs_deref, xsink));
 }
 
 static void qore_rt_store_closure_impl(ClosureVarValue* var, uint64_t value, ExceptionSink* xsink,
@@ -1714,7 +1734,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_thread_local(Var* var, ExceptionSink*
         return toBits(QoreValue());
     }
     QoreValue result = var->eval();
-    return toBits(result);
+    return toBits(qore_rt_deref_loaded_var_value(result, true, xsink));
 }
 
 extern "C" DLLEXPORT void qore_rt_store_thread_local(Var* var, uint64_t value, ExceptionSink* xsink) {
@@ -6309,6 +6329,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
             return toBits(QoreValue());
         }
     }
+    // This is a normal function call, not a closure invocation.  Do not let a
+    // caller closure's captured LocalVar* map shadow the callee's own closure-use
+    // locals when the callee is entered through the fast runtime path.
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+
     // Push frame boundary so that get_local_vars()/set_local_var_value() can correctly
     // determine call-stack depth for debugger introspection (same as CodeEvaluationHelper
     // via UserVariantExecHelper::ThreadFrameBoundaryHelper in the AST path).
@@ -6983,7 +7008,7 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
                             }
                             if (match) {
                                 return toBits(qore_method_private::evalTmpArgs(*derived, xsink, rc,
-                                    self, *arg_list, call_ctx));
+                                    self, *arg_list, call_ctx, dv));
                             }
                         }
                     }
@@ -6992,11 +7017,13 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
                         call_ctx, rc, xsink));
                 }
             }
-            return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list));
+            return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, nullptr,
+                target.variant));
         }
 
         if (target.qc && method && (self->getClass() == target.qc || self->getClass() == method->getClass())) {
-            return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, call_ctx));
+            return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, call_ctx,
+                target.variant));
         }
         return toBits(qore_rt_eval_self_method_by_name(self, method_name, *arg_list, call_ctx, rc, xsink));
     }
@@ -7006,7 +7033,7 @@ static uint64_t qore_rt_call_self_method_dispatch_impl(const QoreAOTCallTarget& 
     }
 
     // Explicit base/namespace-qualified self calls are deliberately non-virtual.
-    return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list));
+    return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc, self, *arg_list, nullptr, target.variant));
 }
 
 // --- Fast method call (bypasses QoreListNode + dispatch chain for devirtualized calls) ---
@@ -9781,6 +9808,11 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
                 return toBits(QoreValue());
             }
         }
+        // This is a normal function call, not a closure invocation.  Do not let a
+        // caller closure's captured LocalVar* map shadow the callee's own closure-use
+        // locals when the callee is entered through the AOT direct-call path.
+        ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+
         ThreadFrameBoundaryHelper tfbh(true);
 
         // Instantiate parameter locals directly from NaN-boxed args
@@ -10148,10 +10180,9 @@ extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_call_closure_fas
 static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         QoreAOTContext* ctx, int32_t slot, uint64_t* args,
         uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink) {
-    // Lightweight self-recursive call for AOT: eliminates ThreadFrameBoundaryHelper,
-    // ProgramThreadCountContextHelper, QoreJITStackLocation, execJITWithDeopt wrapper,
-    // acceptAssignment, and execCachedFunction indirection.  Calls the AOT function
-    // directly via function pointer.
+    // Lightweight self-recursive call for AOT: eliminates ProgramThreadCountContextHelper,
+    // QoreJITStackLocation, execJITWithDeopt wrapper, acceptAssignment, and
+    // execCachedFunction indirection.  Calls the AOT function directly via function pointer.
     if (check_stack(xsink)) {
         return toBits(QoreValue());
     }
@@ -10177,6 +10208,16 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
 
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
+
+    // A non-closure self-recursive call must not inherit the caller's closure runtime
+    // environment.  If the recursive call is made from a nested closure that captured
+    // this function's locals, the same LocalVar* would otherwise resolve to the outer
+    // frame's captured CVV and skip instantiating this recursive frame's own CVV.
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+
+    // Recursive calls need a frame boundary so closure-use locals are resolved in the
+    // current recursive frame instead of reusing the caller frame's closure variable.
+    ThreadFrameBoundaryHelper tfbh(true);
 
     // Instantiate params on thread-local stack
     if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
@@ -10226,7 +10267,7 @@ static uint64_t qore_rt_call_self_recursive_aot_impl(AotFunctionPtr self_fn,
         }
     }
 
-    // Call AOT function directly — no deopt, no frame boundary, no stack location
+    // Call AOT function directly — no deopt, no stack location
     uint64_t result_bits;
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
@@ -11190,9 +11231,10 @@ static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* metho
                 "already been deleted", qc->getName(), method->getName());
             return toBits(QoreValue());
         }
-        // Use evalTmpArgs to preserve ReferenceNode values in the pre-evaluated arg list
-        // (eval/evalNormalVariant use const CodeEvaluationHelper which dereferences references)
-        return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc_get_current_ref(), o, arg_list));
+        // Use evalTmpArgs to preserve ReferenceNode values in the pre-evaluated arg list while still honoring the
+        // parse-selected overload variant when one is available.
+        return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc_get_current_ref(), o, arg_list, nullptr,
+            variant));
     }
     // Class mismatch — name-based lookup (virtual dispatch to the runtime class)
     // Pass the runtime class context so that private method access checks succeed
@@ -11621,7 +11663,8 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
         if (clearConsumedArgCleanups(arg_cleanups, nargs, xsink) < 0) {
             return toBits(QoreValue());
         }
-        return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc_get_current_ref(), nullptr, *arg_list));
+        return toBits(qore_method_private::evalTmpArgs(*method, xsink, rc_get_current_ref(), nullptr, *arg_list,
+            nullptr, variant));
     }
 
     const UserSignature* sig = uvb->getUserSignature();

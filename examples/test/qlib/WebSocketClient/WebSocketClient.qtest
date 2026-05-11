@@ -22,7 +22,12 @@
 %exec-class WebSocketClientTest
 
 class MyWsConnection inherits WebSocketConnection {
-    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    private {
+        bool send_on_registered;
+    }
+
+    constructor(WebSocketHandler handler, bool send_on_registered = False) : WebSocketConnection(handler) {
+        self.send_on_registered = send_on_registered;
     }
 
     sendData() {
@@ -36,6 +41,12 @@ class MyWsConnection inherits WebSocketConnection {
     gotMessage(string msg) {
         send("RESPONSE:" + msg);
         #printf("GOT MSG: %y\n", msg);
+    }
+
+    registered() {
+        if (send_on_registered) {
+            send("REGISTERED");
+        }
     }
 }
 
@@ -59,7 +70,7 @@ class MyWsHandler inherits WebSocketHandler {
             ++hdr_gen;
             hdr_cond.broadcast();
         }
-        MyWsConnection conn(self);
+        MyWsConnection conn(self, exists hdr."registered-send");
         if (hdr."send-data") {
             conn.sendData();
         }
@@ -551,30 +562,50 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     http1AsyncWebSocketTests() {
-        list<auto> l = ();
-        Counter c(1);
-        code cb = sub (*data msg) {
-            if (exists msg) {
-                l += msg;
-                if (l.size() == responseSize) {
-                    c.dec();
+        {
+            list<auto> l = ();
+            Counter c(1);
+            code cb = sub (*data msg) {
+                if (exists msg) {
+                    l += msg;
+                    if (l.size() == responseSize) {
+                        c.dec();
+                    }
                 }
-            }
-        };
-        responseSize = 1;
-        hash<auto> opts = {
-            "url": "ws://localhost:" + linfo.port,
-            "logger": logger,
-            "http_version": "1.1",
-        };
-        WebSocketClient wsc(cb, opts);
-        wsc.connect();
-        assertFalse(wsc.isHttp2(), "HTTP/1.1 WebSocket should not negotiate HTTP/2");
-        wsc.send("REQUEST");
-        c.waitForZero(5s);
-        assertEq(list("RESPONSE:REQUEST"), l, "HTTP/1.1 async WebSocket should echo message");
-        wsc.disconnect();
-        delete wsc;
+            };
+            responseSize = 1;
+            hash<auto> opts = {
+                "url": "ws://localhost:" + linfo.port,
+                "logger": logger,
+                "http_version": "1.1",
+            };
+            WebSocketClient wsc(cb, opts);
+            wsc.connect();
+            assertFalse(wsc.isHttp2(), "HTTP/1.1 WebSocket should not negotiate HTTP/2");
+            wsc.send("REQUEST");
+            c.waitForZero(5s);
+            assertEq(list("RESPONSE:REQUEST"), l, "HTTP/1.1 async WebSocket should echo message");
+            wsc.disconnect();
+            delete wsc;
+        }
+
+        {
+            Queue msgs();
+            WebSocketClient wsc(sub (*data msg) {
+                if (exists msg) {
+                    msgs.push(msg);
+                }
+            }, {
+                "url": "ws://localhost:" + linfo.port,
+                "logger": logger,
+                "http_version": "1.1",
+            });
+            wsc.connect({"hdr": {"Registered-Send": "1"}});
+            assertEq("REGISTERED", msgs.get(5s),
+                "HTTP/1.1 async WebSocket should receive data sent from registered()");
+            wsc.disconnect();
+            delete wsc;
+        }
     }
 
     connectionTests() {
@@ -700,6 +731,32 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 wsc.disconnect();
             } catch (hash<ExceptionInfo> ex) {
                 assertTrue(False, sprintf("HTTP/2 WebSocket test failed: %s: %s", ex.err, ex.desc));
+            }
+            delete wsc;
+        }
+
+        # Test 1a: Data sent from registered() before the first client frame
+        {
+            Queue msgs();
+            hash<auto> opts = {
+                "url": "wss://localhost:" + h2info.port,
+                "logger": logger,
+                "http_version": "2.0",
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(sub (*data msg) {
+                if (exists msg) {
+                    msgs.push(msg);
+                }
+            }, opts);
+            try {
+                wsc.connect({"hdr": {"Registered-Send": "1"}});
+                assertTrue(wsc.isHttp2(), "WebSocket should connect over HTTP/2");
+                assertEq("REGISTERED", msgs.get(10s),
+                    "HTTP/2 WebSocket should receive data sent from registered()");
+                wsc.disconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(False, sprintf("HTTP/2 registered-send test failed: %s: %s", ex.err, ex.desc));
             }
             delete wsc;
         }

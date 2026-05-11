@@ -3790,12 +3790,12 @@ public:
     }
 
     DLLLOCAL QoreValue evalTmpArgs(ExceptionSink* xsink, RuntimeConfig& rc, QoreObject* self, QoreListNode* args,
-            const qore_class_private* cctx = nullptr) const {
+            const qore_class_private* cctx = nullptr, const AbstractQoreFunctionVariant* variant = nullptr) const {
         if (!static_flag) {
             assert(self);
-            return NMETHF(func)->evalMethodTmpArgs(xsink, rc, nullptr, self, args, cctx);
+            return NMETHF(func)->evalMethodTmpArgs(xsink, rc, variant, self, args, cctx);
         }
-        return SMETHF(func)->evalMethodTmpArgs(xsink, rc, nullptr, args, cctx);
+        return SMETHF(func)->evalMethodTmpArgs(xsink, rc, variant, args, cctx);
     }
 
     DLLLOCAL QoreValue evalPseudoMethod(RuntimeConfig& rc, const AbstractQoreFunctionVariant* variant,
@@ -3840,8 +3840,9 @@ public:
 
     DLLLOCAL static QoreValue evalTmpArgs(const QoreMethod& m, ExceptionSink* xsink, RuntimeConfig& rc,
             QoreObject* self,
-            QoreListNode* args, const qore_class_private* cctx = nullptr) {
-        return m.priv->evalTmpArgs(xsink, rc, self, args, cctx);
+            QoreListNode* args, const qore_class_private* cctx = nullptr,
+            const AbstractQoreFunctionVariant* variant = nullptr) {
+        return m.priv->evalTmpArgs(xsink, rc, self, args, cctx, variant);
     }
 
     DLLLOCAL static qore_method_private* get(QoreMethod& m) {

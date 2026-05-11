@@ -77,7 +77,7 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         // CodeEvaluationHelper with const args, which calls evalList() and dereferences
         // ReferenceNodes.
         if (tmp_args) {
-            return qore_method_private::evalTmpArgs(*method, xsink, rc, o, args, ctx);
+            return qore_method_private::evalTmpArgs(*method, xsink, rc, o, args, ctx, variant);
         }
         return variant
             ? qore_method_private::evalNormalVariant(*method, xsink, rc, o,

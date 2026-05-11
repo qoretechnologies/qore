@@ -9096,6 +9096,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
 
             QoreIRValue result;
             bool should_invoke = !exception_stack.empty();
+            // Ordinary object dot-eval must use runtime name dispatch: the parse-time
+            // method pointer can be a containing method object whose overload set does
+            // not match the runtime overload lookup exactly after AOT deserialization.
+            // Pseudo-methods remain direct so the existing fast paths are preserved.
+            const QoreMethod* method = m->isPseudo() ? m->getMethod() : nullptr;
+            const QoreClass* qc = m->isPseudo() ? m->getClass() : nullptr;
+            const AbstractQoreFunctionVariant* variant = m->isPseudo() ? m->getVariant() : nullptr;
             // Always set fallback_method_name so consumers (LLVM codegen, IR interpreter,
             // AOT deserialization) don't need to extract it from the AST expr field.
             // The expr is still stored for the LLVM AOT slot system (call target resolution).
@@ -9106,14 +9113,14 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                     return QoreIRValue();
                 }
                 QoreIRBasicBlock* handler = exception_stack.back();
-                auto* inst = builder.createInvokeDotEvalMethodDirect(m->getMethod(), m->getClass(),
-                    m->getVariant(), expr, m->isPseudo(), operands, normal_block, handler, op->loc);
+                auto* inst = builder.createInvokeDotEvalMethodDirect(method, qc, variant, expr, m->isPseudo(),
+                    operands, normal_block, handler, op->loc);
                 inst->fallback_method_name = strdup(m->getName());
                 builder.setBlock(normal_block);
                 result = inst->result;
             } else {
-                auto* inst = builder.createDotEvalMethodDirect(m->getMethod(), m->getClass(),
-                    m->getVariant(), expr, m->isPseudo(), operands, op->loc);
+                auto* inst = builder.createDotEvalMethodDirect(method, qc, variant, expr, m->isPseudo(),
+                    operands, op->loc);
                 inst->fallback_method_name = strdup(m->getName());
                 result = inst->result;
             }
@@ -11057,26 +11064,29 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     if (use_direct_index) {
         // Direct-index loop: avoid iterator overhead for typed lists
-        // Get list size
-        QoreIRValue list_size = builder.createListSize(input_list, map->loc)->result;
-
         // Create blocks AFTER evaluating the input expression
-        // No empty check needed: createSizedList(0) produces an empty list,
+        // No empty-list check needed: createSizedList(0) produces an empty list,
         // and the header condition (0 >= 0) immediately exits the loop.
+        QoreIRBasicBlock* nothing_block = createBlock("map.direct.nothing");
         QoreIRBasicBlock* preheader_block = createBlock("map.preheader");
         QoreIRBasicBlock* header_block = createBlock("map.header");
         QoreIRBasicBlock* body_block = createBlock("map.body");
         QoreIRBasicBlock* exit_block = createBlock("map.exit");
-        if (!preheader_block || !header_block || !body_block || !exit_block) {
+        QoreIRBasicBlock* final_block = createBlock("map.direct.final");
+        if (!nothing_block || !preheader_block || !header_block || !body_block || !exit_block || !final_block) {
             error = "IR builder failed to create blocks for map";
             return QoreIRValue();
         }
         header_block->is_loop_header = true;
 
-        builder.createBranch(preheader_block, map->loc);
+        QoreIRValue nothing_check_val = builder.createConstNothing(map->loc)->result;
+        QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard, input_list, nothing_check_val,
+            map->loc)->result;
+        builder.createBranchIf(is_nothing, nothing_block, preheader_block, map->loc);
 
         // Preheader: create pre-sized result list (size 0 for empty input is fine)
         builder.setBlock(preheader_block);
+        QoreIRValue list_size = builder.createListSize(input_list, map->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
         QoreIRValue result_list = builder.createSizedList(list_size, map->loc, expTypeInfo)->result;
         {
@@ -11183,8 +11193,19 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
         // Exit block: result_list is the result (empty for size 0, filled for size > 0)
         builder.setBlock(exit_block);
+        builder.createBranch(final_block, map->loc);
 
-        return result_list;
+        builder.setBlock(nothing_block);
+        QoreIRValue nothing_val = builder.createConstNothing(map->loc)->result;
+        builder.createBranch(final_block, map->loc);
+
+        builder.setBlock(final_block);
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({result_list, exit_block});
+        result_incoming.push_back({nothing_val, nothing_block});
+        auto* result_phi = builder.createPhi(result_incoming, map->loc);
+
+        return result_phi->result;
     }
 
     // Fallback: iterator-based loop for untyped lists
@@ -11406,29 +11427,33 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
     if (use_direct_index) {
         // Direct-index loop: avoid iterator overhead for typed lists
-        QoreIRValue list_size = builder.createListSize(input_list, select->loc)->result;
-
         // Create blocks AFTER evaluating the input expression
         // No empty check needed: createEmptyList produces an empty list for empty input,
         // and the header condition (0 >= 0) immediately exits the loop.
+        QoreIRBasicBlock* nothing_block = createBlock("select.direct.nothing");
         QoreIRBasicBlock* preheader_block = createBlock("select.preheader");
         QoreIRBasicBlock* header_block = createBlock("select.header");
         QoreIRBasicBlock* body_block = createBlock("select.body");
         QoreIRBasicBlock* append_block = createBlock("select.append");
         QoreIRBasicBlock* cont_block = createBlock("select.cont");
         QoreIRBasicBlock* exit_block = createBlock("select.exit");
-        if (!preheader_block || !header_block || !body_block
-                || !append_block || !cont_block || !exit_block) {
+        QoreIRBasicBlock* final_block = createBlock("select.direct.final");
+        if (!nothing_block || !preheader_block || !header_block || !body_block
+                || !append_block || !cont_block || !exit_block || !final_block) {
             error = "IR builder failed to create blocks for select";
             return QoreIRValue();
         }
         header_block->is_loop_header = true;
 
-        builder.createBranch(preheader_block, select->loc);
+        QoreIRValue nothing_check_val = builder.createConstNothing(select->loc)->result;
+        QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard, input_list, nothing_check_val,
+            select->loc)->result;
+        builder.createBranchIf(is_nothing, nothing_block, preheader_block, select->loc);
 
         // Preheader: create empty result list (filtered, size unknown)
         // Preserve input element type so the result has correct type info
         builder.setBlock(preheader_block);
+        QoreIRValue list_size = builder.createListSize(input_list, select->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, select->loc)->result;
         QoreIRValue result_list = builder.createEmptyList(select->loc, elem_type)->result;
         {
@@ -11537,8 +11562,19 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
 
         // Exit block: result_list is the result (empty for size 0)
         builder.setBlock(exit_block);
+        builder.createBranch(final_block, select->loc);
 
-        return result_list;
+        builder.setBlock(nothing_block);
+        QoreIRValue nothing_val = builder.createConstNothing(select->loc)->result;
+        builder.createBranch(final_block, select->loc);
+
+        builder.setBlock(final_block);
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({result_list, exit_block});
+        result_incoming.push_back({nothing_val, nothing_block});
+        auto* result_phi = builder.createPhi(result_incoming, select->loc);
+
+        return result_phi->result;
     }
 
     // Fallback: iterator-based loop for untyped lists
@@ -12125,28 +12161,32 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
     if (use_direct_index) {
         // Direct-index loop: avoid iterator overhead for typed lists
-        QoreIRValue list_size = builder.createListSize(input_list, ms->loc)->result;
-
         // Create blocks AFTER evaluating the input expression
         // No empty check needed: createEmptyList produces an empty list,
         // and the header condition (0 >= 0) immediately exits the loop.
+        QoreIRBasicBlock* nothing_block = createBlock("mapselect.direct.nothing");
         QoreIRBasicBlock* preheader_block = createBlock("mapselect.preheader");
         QoreIRBasicBlock* header_block = createBlock("mapselect.header");
         QoreIRBasicBlock* body_block = createBlock("mapselect.body");
         QoreIRBasicBlock* append_block = createBlock("mapselect.append");
         QoreIRBasicBlock* cont_block = createBlock("mapselect.cont");
         QoreIRBasicBlock* exit_block = createBlock("mapselect.exit");
-        if (!preheader_block || !header_block || !body_block
-                || !append_block || !cont_block || !exit_block) {
+        QoreIRBasicBlock* final_block = createBlock("mapselect.direct.final");
+        if (!nothing_block || !preheader_block || !header_block || !body_block
+                || !append_block || !cont_block || !exit_block || !final_block) {
             error = "IR builder failed to create blocks for map+select";
             return QoreIRValue();
         }
         header_block->is_loop_header = true;
 
-        builder.createBranch(preheader_block, ms->loc);
+        QoreIRValue nothing_check_val = builder.createConstNothing(ms->loc)->result;
+        QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard, input_list, nothing_check_val,
+            ms->loc)->result;
+        builder.createBranchIf(is_nothing, nothing_block, preheader_block, ms->loc);
 
         // Preheader: create empty result list (filtered, size unknown)
         builder.setBlock(preheader_block);
+        QoreIRValue list_size = builder.createListSize(input_list, ms->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, ms->loc)->result;
         QoreIRValue result_list = builder.createEmptyList(ms->loc)->result;
         {
@@ -12261,8 +12301,19 @@ QoreIRValue QoreIRLowering::lowerMapSelectNative(const QoreMapSelectOperatorNode
 
         // Exit block: result_list is the result (empty for size 0)
         builder.setBlock(exit_block);
+        builder.createBranch(final_block, ms->loc);
 
-        return result_list;
+        builder.setBlock(nothing_block);
+        QoreIRValue nothing_val = builder.createConstNothing(ms->loc)->result;
+        builder.createBranch(final_block, ms->loc);
+
+        builder.setBlock(final_block);
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({result_list, exit_block});
+        result_incoming.push_back({nothing_val, nothing_block});
+        auto* result_phi = builder.createPhi(result_incoming, ms->loc);
+
+        return result_phi->result;
     }
 
     // Fallback: iterator-based loop for untyped lists
@@ -12476,25 +12527,29 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
     if (use_direct_index) {
         // Direct-index loop: avoid iterator overhead for typed lists
-        QoreIRValue list_size = builder.createListSize(input_list, hm->loc)->result;
-
         // Create blocks AFTER evaluating the input expression
         // No empty check needed: createMakeHash produces an empty hash,
         // and the header condition (0 >= 0) immediately exits the loop.
+        QoreIRBasicBlock* nothing_block = createBlock("hashmap.direct.nothing");
         QoreIRBasicBlock* preheader_block = createBlock("hashmap.preheader");
         QoreIRBasicBlock* header_block = createBlock("hashmap.header");
         QoreIRBasicBlock* body_block = createBlock("hashmap.body");
         QoreIRBasicBlock* exit_block = createBlock("hashmap.exit");
-        if (!preheader_block || !header_block || !body_block || !exit_block) {
+        QoreIRBasicBlock* final_block = createBlock("hashmap.direct.final");
+        if (!nothing_block || !preheader_block || !header_block || !body_block || !exit_block || !final_block) {
             error = "IR builder failed to create blocks for hash map";
             return QoreIRValue();
         }
         header_block->is_loop_header = true;
 
-        builder.createBranch(preheader_block, hm->loc);
+        QoreIRValue nothing_check_val = builder.createConstNothing(hm->loc)->result;
+        QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard, input_list, nothing_check_val,
+            hm->loc)->result;
+        builder.createBranchIf(is_nothing, nothing_block, preheader_block, hm->loc);
 
         // Preheader: create empty result hash and proceed to loop
         builder.setBlock(preheader_block);
+        QoreIRValue list_size = builder.createListSize(input_list, hm->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, hm->loc)->result;
         QoreIRValue result_hash = builder.createMakeHash({}, hm->loc, hash_result_type)->result;
         {
@@ -12595,8 +12650,19 @@ QoreIRValue QoreIRLowering::lowerHashMapNative(const QoreHashMapOperatorNode* hm
 
         // Exit block: result_hash is the result (empty for size 0)
         builder.setBlock(exit_block);
+        builder.createBranch(final_block, hm->loc);
 
-        return result_hash;
+        builder.setBlock(nothing_block);
+        QoreIRValue nothing_val = builder.createConstNothing(hm->loc)->result;
+        builder.createBranch(final_block, hm->loc);
+
+        builder.setBlock(final_block);
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({result_hash, exit_block});
+        result_incoming.push_back({nothing_val, nothing_block});
+        auto* result_phi = builder.createPhi(result_incoming, hm->loc);
+
+        return result_phi->result;
     }
 
     // Fallback: iterator-based loop for untyped lists
@@ -12765,28 +12831,32 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
 
     if (use_direct_index) {
         // Direct-index loop: avoid iterator overhead for typed lists
-        QoreIRValue list_size = builder.createListSize(input_list, hms->loc)->result;
-
         // Create blocks AFTER evaluating the input expression
         // No empty check needed: createMakeHash produces an empty hash,
         // and the header condition (0 >= 0) immediately exits the loop.
+        QoreIRBasicBlock* nothing_block = createBlock("hashmapselect.direct.nothing");
         QoreIRBasicBlock* preheader_block = createBlock("hashmapselect.preheader");
         QoreIRBasicBlock* header_block = createBlock("hashmapselect.header");
         QoreIRBasicBlock* body_block = createBlock("hashmapselect.body");
         QoreIRBasicBlock* insert_block = createBlock("hashmapselect.insert");
         QoreIRBasicBlock* cont_block = createBlock("hashmapselect.cont");
         QoreIRBasicBlock* exit_block = createBlock("hashmapselect.exit");
-        if (!preheader_block || !header_block || !body_block
-                || !insert_block || !cont_block || !exit_block) {
+        QoreIRBasicBlock* final_block = createBlock("hashmapselect.direct.final");
+        if (!nothing_block || !preheader_block || !header_block || !body_block
+                || !insert_block || !cont_block || !exit_block || !final_block) {
             error = "IR builder failed to create blocks for hash map+select";
             return QoreIRValue();
         }
         header_block->is_loop_header = true;
 
-        builder.createBranch(preheader_block, hms->loc);
+        QoreIRValue nothing_check_val = builder.createConstNothing(hms->loc)->result;
+        QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard, input_list, nothing_check_val,
+            hms->loc)->result;
+        builder.createBranchIf(is_nothing, nothing_block, preheader_block, hms->loc);
 
         // Preheader: create empty result hash and proceed to loop
         builder.setBlock(preheader_block);
+        QoreIRValue list_size = builder.createListSize(input_list, hms->loc)->result;
         QoreIRValue zero = builder.createConstInt(0, hms->loc)->result;
         QoreIRValue result_hash = builder.createMakeHash({}, hms->loc, hash_result_type)->result;
         {
@@ -12907,8 +12977,19 @@ QoreIRValue QoreIRLowering::lowerHashMapSelectNative(const QoreHashMapSelectOper
 
         // Exit block: result_hash is the result (empty for size 0)
         builder.setBlock(exit_block);
+        builder.createBranch(final_block, hms->loc);
 
-        return result_hash;
+        builder.setBlock(nothing_block);
+        QoreIRValue nothing_val = builder.createConstNothing(hms->loc)->result;
+        builder.createBranch(final_block, hms->loc);
+
+        builder.setBlock(final_block);
+        std::vector<QoreIRPhiIncoming> result_incoming;
+        result_incoming.push_back({result_hash, exit_block});
+        result_incoming.push_back({nothing_val, nothing_block});
+        auto* result_phi = builder.createPhi(result_incoming, hms->loc);
+
+        return result_phi->result;
     }
 
     // Fallback: iterator-based loop for untyped lists

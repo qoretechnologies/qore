@@ -1188,9 +1188,8 @@ public auto sub parse_to_qore_value(string arg) {
             return eval_text(pc[1], True).value;
     }
 
-    # do not use "auto" here because auto narrows on assignment — this lvalue
-    # must remain heterogeneous so later iterations can push/add differently-typed values
-    any v;
+    # keep "auto" here; recursive closure frames must not leak across calls
+    auto v;
 
     list<hash> l = scan_exp(arg);
 

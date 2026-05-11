@@ -64,6 +64,16 @@ class EchoWsConnection inherits WebSocketConnection {
     }
 }
 
+#! Sends an initial message from registered(), before the first client frame arrives
+class RegisteredSendWsConnection inherits EchoWsConnection {
+    constructor(WebSocketHandler handler) : EchoWsConnection(handler) {
+    }
+
+    registered() {
+        send("registered-welcome");
+    }
+}
+
 #! WebSocket handler that creates echo connections
 class EchoWsHandler inherits WebSocketHandler {
     public {
@@ -96,6 +106,12 @@ class EchoWsHandler inherits WebSocketHandler {
         if (debug_output) {
             vprintf("WARN " + fmt + "\n", argv);
         }
+    }
+}
+
+class RegisteredSendWsHandler inherits EchoWsHandler {
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new RegisteredSendWsConnection(self);
     }
 }
 
@@ -163,6 +179,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         }
 
         addTestCase("WebSocket text echo over HTTP/3", \testH3WsTextEcho());
+        addTestCase("WebSocket registered send over HTTP/3", \testH3WsRegisteredSend());
         addTestCase("WebSocket binary echo over HTTP/3", \testH3WsBinaryEcho());
         addTestCase("WebSocket close handshake over HTTP/3", \testH3WsCloseHandshake());
         addTestCase("WebSocket multiple messages over HTTP/3", \testH3WsMultipleMessages());
@@ -232,6 +249,33 @@ l50Xb2GWQesIt9k5jF5IOw==
         WebSocketClient wsc(cb, opts);
         wsc.connect();
         return wsc;
+    }
+
+    #! Test initial server send from registered() over HTTP/3
+    testH3WsRegisteredSend() {
+        RegisteredSendWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        Queue msgs();
+        WebSocketClient wsc = createH3Client(sub (*data msg) {
+            if (exists msg) {
+                msgs.push(msg);
+            }
+        }, setup.port);
+        on_exit wsc.disconnect();
+
+        assertTrue(wsc.isHttp3(), "WebSocket should connect over HTTP/3");
+        assertEq("registered-welcome", msgs.get(5s),
+            "HTTP/3 WebSocket should receive data sent from registered()");
     }
 
     #! Test WebSocket text echo over HTTP/3

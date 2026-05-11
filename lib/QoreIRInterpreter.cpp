@@ -4825,7 +4825,7 @@ load_local_done:
                     out = val.hasNode() ? val.refSelf() : val;
                 } else {
                     auto it = closures.find(local_inst->local);
-                    if (it != closures.end()) {
+                    if (it != closures.end() && it->second.getType() != NT_REFERENCE) {
                         // Cache hit: val is shared with cache, needs refSelf for value slot
                         QoreValue val = it->second;
                         out = val.hasNode() ? val.refSelf() : val;
@@ -7025,7 +7025,7 @@ load_local_done:
                 auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
                 QoreValue out;
                 auto it = globals.find(var_inst->var);
-                if (it != globals.end()) {
+                if (it != globals.end() && it->second.getType() != NT_REFERENCE) {
                     QoreValue val = validateWeakRef(it->second);
                     out = val.hasNode() ? val.refSelf() : val;
                 } else {
@@ -7111,7 +7111,7 @@ load_local_done:
                 auto* var_inst = static_cast<QoreIRVarInstruction*>(inst);
                 QoreValue out;
                 auto it = threadlocals.find(var_inst->var);
-                if (it != threadlocals.end()) {
+                if (it != threadlocals.end() && it->second.getType() != NT_REFERENCE) {
                     QoreValue val = it->second;
                     out = val.hasNode() ? val.refSelf() : val;
                 } else {
@@ -12885,7 +12885,7 @@ QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, Exceptio
 
     qore_type_t vtype = v.getType();
 
-    if (vtype == NT_NOTHING) {
+    if (vtype == NT_NOTHING || vtype == NT_NULL) {
         const QoreTypeInfo* typeInfo = v.getTypeInfo();
         if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
             if (v.assign(QoreTypeInfo::getDefaultQoreValue(typeInfo), "<lvalue for += operator>")) {

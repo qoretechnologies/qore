@@ -51,11 +51,15 @@
 
 class RestClientPoolPerfTest inherits QUnit::Test {
     public {
-        #! Thread counts for scalability tests
-        const ThreadCounts = (1, 5, 10, 25, 50);
+        #! Default thread counts for scalability tests.  The full stress profile is available with
+        #! QORE_RESTCLIENT_POOL_PERF_STRESS=1, but the default profile needs to leave margin for
+        #! run_tests.sh's fixed 300s per-test timeout after the preceding HTTP/3 suite.
+        const DefaultThreadCounts = (1, 5, 10);
+        const StressThreadCounts = (1, 5, 10, 25, 50);
 
         #! Requests per thread in throughput tests
-        const RequestsPerThread = 20;
+        const DefaultRequestsPerThread = 5;
+        const StressRequestsPerThread = 20;
     }
 
     private {
@@ -233,6 +237,14 @@ http {
         return (now_us() - start).durationMicroseconds() / 1000.0;
     }
 
+    private list<int> threadCounts() {
+        return ENV.QORE_RESTCLIENT_POOL_PERF_STRESS ? StressThreadCounts : DefaultThreadCounts;
+    }
+
+    private int requestsPerThread() {
+        return ENV.QORE_RESTCLIENT_POOL_PERF_STRESS ? StressRequestsPerThread : DefaultRequestsPerThread;
+    }
+
     #! Print latency statistics if verbose
     private printLatencyStats(string label, list<float> latencies) {
         if (m_options.verbose < 3 || !latencies) {
@@ -348,7 +360,7 @@ http {
         on_exit pool.shutdown();
 
         int thread_count = 20;
-        int per_thread = RequestsPerThread;
+        int per_thread = requestsPerThread();
         int total = thread_count * per_thread;
 
         Counter done(thread_count);
@@ -405,7 +417,7 @@ http {
         on_exit pool.shutdown();
 
         int thread_count = 20;
-        int per_thread = RequestsPerThread;
+        int per_thread = requestsPerThread();
         int total = thread_count * per_thread;
 
         Counter done(thread_count);
@@ -461,13 +473,13 @@ http {
             printf("\n  RestClientPool scalability (blocking I/O):\n");
         }
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClient::RestClientPool pool(
                 {"url": base_url, "data": "json", "accept_all_certs": True},
                 <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -520,14 +532,14 @@ http {
             printf("\n  RestClientIoPool scalability (async multiplexed I/O):\n");
         }
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClientIo::RestClientIoPool pool(
                 {"url": base_url, "data": "json", "error_passthru": True,
                  "accept_all_certs": True, "protocol": "h2"},
                 <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -588,7 +600,7 @@ http {
             }
         );
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClientIo::RestClientIoPool pool(
                 {"url": base_url, "data": "json", "error_passthru": True,
                  "accept_all_certs": True, "protocol": "h2"},
@@ -596,7 +608,7 @@ http {
                 shared_mgr);
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -661,7 +673,7 @@ http {
             }
         );
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClientIo::RestClientIoPool pool(
                 {"url": base_url, "data": "json", "error_passthru": True,
                  "accept_all_certs": True, "protocol": "h3"},
@@ -669,7 +681,7 @@ http {
                 shared_mgr);
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -732,14 +744,14 @@ http {
             printf("\n  RestClientPool H3 scalability (blocking I/O, HTTP/3 QUIC):\n");
         }
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClient::RestClientPool pool(
                 {"url": base_url, "data": "json", "accept_all_certs": True,
                  "http_version": "3.0"},
                 <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -792,14 +804,14 @@ http {
             printf("\n  RestClientIoPool H3 scalability (async multiplexed I/O, HTTP/3 QUIC):\n");
         }
 
-        foreach int threads in (ThreadCounts) {
+        foreach int threads in (threadCounts()) {
             RestClientIo::RestClientIoPool pool(
                 {"url": base_url, "data": "json", "error_passthru": True,
                  "accept_all_certs": True, "protocol": "h3"},
                 <Qore::Thread::ConnectionPoolOptions>{"min": min(threads, 5), "max": threads + 5});
             on_exit pool.shutdown();
 
-            int per_thread = RequestsPerThread;
+            int per_thread = requestsPerThread();
             int total = threads * per_thread;
             Counter done(threads);
             Mutex mtx();
@@ -851,7 +863,7 @@ http {
         }
 
         int threads = 25;
-        int per_thread = RequestsPerThread;
+        int per_thread = requestsPerThread();
         int total = threads * per_thread;
 
         # --- RestClientPool (blocking) ---
