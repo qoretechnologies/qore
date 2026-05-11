@@ -391,11 +391,12 @@ private:
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
 
-    //! Connection C++ priv (raw pointer — Qore internal_members "connection" holds the ref)
-    /** Not ref'd in C++ to avoid GC-invisible reference cycles.
-        The QPP constructor stores the strong QoreObject ref in a Qore
-        internal_members slot where the DGC can see and break cycles.
-        This raw pointer is used for direct I/O-thread calls (onConnectionReady).
+    //! Connection C++ priv pointer guarded by @ref stream_lock.
+    /** The constructor takes an explicit C++ ref for this pointer so the
+        I/O thread can safely report ready/closed transitions even while an
+        app thread clears user-visible connection refs.  The ref is released
+        by @ref disarmConnectionPriv, @ref cleanup, or the first terminal
+        direct notification path that clears this member.
     */
     AbstractHttpPollConnectionPriv* connection_priv = nullptr;
 
@@ -409,9 +410,10 @@ private:
         subsequent post-handshake events (read errors, remote close) fall
         back to the normal @c setClosed path.
 
-        Raw pointer — the @c Http3ClientConnection owns this poll op and
-        outlives it contractually; no ref is taken to avoid GC-invisible
-        cycles, mirroring @c connection_priv.
+        Raw pointer only while armed.  Before invoking it outside
+        @ref stream_lock, the callback path takes a temporary ref on
+        @ref connection_priv, which is the same underlying connection
+        object and prevents a concurrent disarm from destroying the owner.
     */
     Http3ClientConnection* h3_owner_ = nullptr;
 

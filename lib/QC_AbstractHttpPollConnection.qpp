@@ -78,6 +78,9 @@ void AbstractHttpPollConnectionPriv::setClosed() {
         if (!on_closed_hook_fired) {
             on_closed_hook_fired = true;
             fire_hook = true;
+            // Keep the object alive after ready_cond wakes waiters that may
+            // release their connection reference before onClosedHook() runs.
+            ref();
         }
     }
     for (auto& [ptr, obj] : to_notify) {
@@ -91,6 +94,8 @@ void AbstractHttpPollConnectionPriv::setClosed() {
     // design/http-client-manager-cpp-port.md for the lock ordering rules.
     if (fire_hook) {
         onClosedHook();
+        ExceptionSink xsink;
+        deref(&xsink);
     }
 }
 
