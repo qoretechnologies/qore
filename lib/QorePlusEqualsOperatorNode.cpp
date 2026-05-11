@@ -135,7 +135,7 @@ QoreValue QorePlusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink*
     // do list plus-equals if left-hand side is a list
     qore_type_t vtype = v.getType();
 
-    if (vtype == NT_NOTHING) {
+    if (vtype == NT_NOTHING || vtype == NT_NULL) {
         // see if the lvalue has a default type
         const QoreTypeInfo *typeInfo = v.getTypeInfo();
         if (QoreTypeInfo::hasDefaultValue(typeInfo)) {
