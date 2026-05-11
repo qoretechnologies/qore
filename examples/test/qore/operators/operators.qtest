@@ -67,6 +67,7 @@ class Test inherits QUnit::Test {
         addTestCase("minus", \minus());
         addTestCase("range test", \rangeAndSlice());
         addTestCase("push & += tests", \pushPlusEqualsTests());
+        addTestCase("NULL += lvalue tests", \nullPlusEqualsLValueTests());
         addTestCase("instanceof injection isolation", \instanceofInjectionIsolation());
 
         set_return_value(main());
@@ -212,6 +213,20 @@ class Test inherits QUnit::Test {
             assertEq(1970-01-01T00:00:01Z, l0);
             Program p(PO_NEW_STYLE);
             assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("date l1; push l1, 1;", ""));
+        }
+    }
+
+    nullPlusEqualsLValueTests() {
+        {
+            hash h = {"mappers": NULL};
+            assertEq({"a": 1}, h.mappers += {"a": 1});
+            assertEq({"mappers": {"a": 1}}, h);
+            assertEq({"a": 1}, NULL + {"a": 1});
+        }
+        {
+            auto h = NULL;
+            assertEq({"a": 1}, h += {"a": 1});
+            assertEq({"a": 1}, h);
         }
     }
 
