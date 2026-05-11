@@ -173,6 +173,9 @@ public class ConnectionSchemeCache {
             # provided by the jni module
             "kafka": "KafkaDataProvider",
 
+            "katanarest": "KatanaRestClient",
+            "katanarests": "KatanaRestClient",
+
             "linear": "LinearRestClient",
 
             "mailgun": "MailgunRestClient",

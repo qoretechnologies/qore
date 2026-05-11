@@ -2255,6 +2255,7 @@ qore_user_module("qlib/Cin7CoreRestClient.qm" "ConnectionProvider;Mime;RestClien
 qore_user_module("qlib/ClickFunnelsRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/UnbounceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/UnleashedRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/KatanaRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/ZohoBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoInventoryRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZohoInvoiceRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2341,6 +2342,7 @@ qore_user_module("qlib/Cin7CoreDataProvider" "Cin7CoreRestClient;RestClient;Data
 qore_user_module("qlib/ClickFunnelsDataProvider" "ClickFunnelsRestClient;RestClient;RestClientIo;DataProvider" "clickfunnels-logo.svg")
 qore_user_module("qlib/UnbounceDataProvider" "UnbounceRestClient;RestClient;RestClientIo;DataProvider" "unbounce-logo.svg")
 qore_user_module("qlib/UnleashedDataProvider" "UnleashedRestClient;RestClient;DataProvider" "unleashed-logo.svg")
+qore_user_module("qlib/KatanaDataProvider" "KatanaRestClient;RestClient;RestClientIo;DataProvider" "katana-logo.svg")
 
 # Configure lang Doxyfile final pass with module tag files after all modules are defined
     if (DOXYGEN_FOUND)
