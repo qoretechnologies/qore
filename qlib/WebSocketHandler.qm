@@ -1279,6 +1279,14 @@ class WebSocketStreamProcessor {
                     };
                     wsc.applyIncomingExtensions(\msg, ext_ctx);
                     wsc.validateIncomingMessage(\msg);
+                    # Wrap user-code dispatch in the handler's thread-local
+                    # save/restore so any framework context (e.g., Qorus
+                    # service-context tld) is initialized on this worker
+                    # thread before gotMessage() runs.  Mirrors HttpServer.qm
+                    # which wraps handler.handleRequest() the same way on the
+                    # H1.1 path.
+                    *hash<auto> tld_save = handler.saveThreadLocalData();
+                    on_exit handler.restoreThreadLocalData(tld_save);
                     wsc.gotMessage(msg);
                 }
             }
