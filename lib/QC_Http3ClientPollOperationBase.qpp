@@ -553,10 +553,19 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
     // reported, drop both back-pointers so a subsequent read-side error on
     // this (losing) attempt does not re-enter the HE path.
     Http3ClientConnection* owner = nullptr;
+    AbstractHttpPollConnectionPriv* owner_cp = nullptr;
     {
         AutoLocker al(stream_lock);
         owner = h3_owner_;
         h3_owner_ = nullptr;
+        if (owner && connection_priv) {
+            // Pin the owner before releasing stream_lock; closeConnection()
+            // can disarm this poll op and drop the permanent connection ref.
+            owner_cp = connection_priv;
+            owner_cp->ref();
+        } else {
+            owner = nullptr;
+        }
     }
     if (owner) {
         owner->onInnerHandshakeFailed(this, err, desc);
@@ -569,6 +578,7 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
         if (cp) {
             cp->deref(xsink);  // release the ref taken in the constructor
         }
+        owner_cp->deref(xsink);  // release the callback lifetime ref
         return;
     }
     AbstractHttpPollConnectionPriv* cp = nullptr;
@@ -632,13 +642,23 @@ void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
     // base-class condition is signaled.  The owner is responsible for
     // calling @c connection_priv->onConnectionReady() on the winning path.
     Http3ClientConnection* owner = nullptr;
+    AbstractHttpPollConnectionPriv* owner_cp = nullptr;
     {
         AutoLocker al(stream_lock);
         owner = h3_owner_;
         h3_owner_ = nullptr;
+        if (owner && connection_priv) {
+            // Pin the owner before releasing stream_lock; closeConnection()
+            // can disarm this poll op and drop the permanent connection ref.
+            owner_cp = connection_priv;
+            owner_cp->ref();
+        } else {
+            owner = nullptr;
+        }
     }
     if (owner) {
         owner->onInnerHandshakeReady(this);
+        owner_cp->deref(xsink);  // release the callback lifetime ref
         return;
     }
     AutoLocker al(stream_lock);

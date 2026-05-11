@@ -463,7 +463,9 @@ static void ut_asyncio_timers(UnitTestCounters& c) {
     ctrl->start(&xsink);
     UT_ASSERT(c, !xsink, "start succeeds");
     ctrl->waitReady(10000, &xsink);
-    DateTimeNode* deadline = DateTimeNode::makeRelative(0, 0, 0, 1, 0, 0);
+    int deadline_us = 0;
+    int64 deadline_s = q_epoch_us(deadline_us) + 3600;
+    DateTimeNode* deadline = DateTimeNode::makeAbsolute(0, deadline_s, deadline_us);
     int64_t timer_id = ctrl->addTimer(deadline, QoreValue(), &xsink);
     UT_ASSERT(c, !xsink, "addTimer succeeds");
     UT_ASSERT(c, timer_id > 0, "timer_id is positive");
