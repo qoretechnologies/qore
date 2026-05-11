@@ -185,6 +185,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("WebSocket multiple messages over HTTP/3", \testH3WsMultipleMessages());
         addTestCase("concurrent WebSocket streams over HTTP/3", \testH3WsConcurrentStreams());
         addTestCase("required HTTP/3 WebSocket does not fall back", \testH3WsRequiredRejectsFallback());
+        addTestCase("concurrent HTTP/3 WebSocket listener retention", \testH3WsConcurrentListenerRetention());
         addTestCase("abnormal disconnect over HTTP/3", \testH3WsAbnormalDisconnect());
         addTestCase("HTTP/3 WebSocket first send after connect is fast", \testH3WsFirstSendAfterConnectFast());
         addTestCase("HTTP/3 WebSocket destructor disconnect is fast", \testH3WsDestructorDisconnectFast());
@@ -617,6 +618,142 @@ l50Xb2GWQesIt9k5jF5IOw==
                 ex.err, "expected HTTP/3 or QUIC error type, got: " + ex.err);
         }
         assertTrue(got_error, "required HTTP/3 WebSocket connection must not fall back to HTTP/1.1");
+    }
+
+    #! Test listener retention when many HTTP/3 WebSocket streams register concurrently
+    testH3WsConcurrentListenerRetention() {
+        EchoWsHandler ws_handler();
+        if (m_options.verbose > 2) {
+            ws_handler.debug_output = True;
+        }
+
+        hash<auto> setup = setupServer(ws_handler);
+        HttpServer server = setup.server;
+        on_exit {
+            server.stop();
+            delete server;
+        }
+
+        int client_count = 48;
+        Mutex m();
+        hash<string, WebSocketClient> clients;
+        hash<string, list<string>> received;
+        list<string> errors();
+
+        Counter start_gate(1);
+        Counter connected(client_count);
+        Counter first_done(client_count);
+        Counter second_done(client_count);
+
+        code record_error = sub (string msg) {
+            m.lock();
+            on_exit m.unlock();
+            errors += msg;
+        };
+
+        on_exit {
+            list<WebSocketClient> cleanup_clients();
+            m.lock();
+            foreach string key in (keys clients) {
+                cleanup_clients += clients{key};
+            }
+            m.unlock();
+
+            foreach WebSocketClient wsc in (cleanup_clients) {
+                try { wsc.disconnect(); } catch () {}
+                delete wsc;
+            }
+        }
+
+        for (int i = 0; i < client_count; ++i) {
+            int idx = i;
+            string key = sprintf("%d", idx);
+            received{key} = ();
+
+            background sub () {
+                on_exit {
+                    try { connected.dec(); } catch () {}
+                }
+
+                try {
+                    start_gate.waitForZero();
+
+                    code cb = sub (*data msg) {
+                        if (!exists msg) {
+                            return;
+                        }
+
+                        string text = msg.typeCode() == NT_STRING ? msg : msg.toString("UTF-8");
+                        m.lock();
+                        on_exit m.unlock();
+                        received{key} += text;
+
+                        if (text == sprintf("first-%02d", idx)) {
+                            try { first_done.dec(); } catch () {}
+                        } else if (text == sprintf("second-%02d", idx)) {
+                            try { second_done.dec(); } catch () {}
+                        } else {
+                            errors += sprintf("client %d received unexpected payload %y", idx, text);
+                        }
+                    };
+
+                    WebSocketClient wsc = createH3Client(cb, setup.port);
+                    if (!wsc.isHttp3()) {
+                        record_error(sprintf("client %d did not connect over HTTP/3", idx));
+                        return;
+                    }
+
+                    m.lock();
+                    clients{key} = wsc;
+                    m.unlock();
+
+                    wsc.send(sprintf("first-%02d", idx));
+                } catch (hash<ExceptionInfo> ex) {
+                    record_error(sprintf("client %d failed: %s: %s", idx, ex.err, ex.desc));
+                }
+            }();
+        }
+
+        start_gate.dec();
+
+        assertEq(0, connected.waitForZero(60s), "all concurrent clients should connect");
+
+        m.lock();
+        int error_count = errors.size();
+        int connected_count = clients.size();
+        m.unlock();
+        assertEq(0, error_count, sprintf("no client setup errors expected: %y", errors));
+        assertEq(client_count, connected_count, "all clients should be retained for the second frame");
+
+        assertEq(0, first_done.waitForZero(60s), "all first frames should be echoed");
+
+        for (int i = 0; i < client_count; ++i) {
+            string key = sprintf("%d", i);
+            clients{key}.send(sprintf("second-%02d", i));
+        }
+
+        assertEq(0, second_done.waitForZero(60s),
+            "all second frames should be delivered after concurrent listener registration");
+
+        m.lock();
+        on_exit m.unlock();
+        for (int i = 0; i < client_count; ++i) {
+            string key = sprintf("%d", i);
+            list<string> msgs = received{key};
+            string first = sprintf("first-%02d", i);
+            string second = sprintf("second-%02d", i);
+            bool found_first = False;
+            bool found_second = False;
+            foreach string msg in (msgs) {
+                if (msg == first) {
+                    found_first = True;
+                } else if (msg == second) {
+                    found_second = True;
+                }
+            }
+            assertTrue(found_first, sprintf("client %d should receive first echo", i));
+            assertTrue(found_second, sprintf("client %d should receive second echo", i));
+        }
     }
 
     #! Test abnormal disconnect (client drops without close frame)

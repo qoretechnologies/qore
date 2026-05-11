@@ -1043,6 +1043,7 @@ nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream
     // Store the QoreObject ref in internal_members to prevent GC
     QoreValue queue_arg = args->retrieveEntry(2);
     {
+        AutoLocker ml(priv->stream_member_lock);
         ValueHolder existing(self->getReferencedMemberNoMethod("stream_queue_objs", xsink), xsink);
         if (*xsink) {
             return QoreValue();
@@ -1080,6 +1081,7 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
     // Store in internal_members
     QoreValue listener_arg = args->retrieveEntry(2);
     {
+        AutoLocker ml(priv->stream_member_lock);
         ValueHolder existing(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
         if (*xsink) {
             return QoreValue();
@@ -1103,7 +1105,7 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
     if (!*xsink && listener_obj && priv->consumePendingOrQueueReady(skey)) {
         ASYNC_IO_TRACE("Http3ServerPollOperation::registerStreamListener REPLAY skey='%s' listener=%p\n",
             skey.c_str(), (void*)listener_obj);
-        listener_obj->evalMethod("notifyIo", nullptr, xsink);
+        ValueHolder rv(listener_obj->evalMethod("notifyIo", nullptr, xsink), xsink);
     }
 }
 
@@ -1111,25 +1113,37 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
 /** @param stream_key composite key "session_id:stream_id"
 */
 nothing Http3ServerPollOperation::onStreamData(string stream_key) {
-    ValueHolder listeners(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
-    if (*xsink || listeners->isNullOrNothing()) {
+    ValueHolder listener(xsink);
+    bool had_listeners = false;
+    size_t listener_count = 0;
+    {
+        AutoLocker ml(priv->stream_member_lock);
+        ValueHolder listeners(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
+        if (!*xsink && !listeners->isNullOrNothing() && listeners->getType() == NT_HASH) {
+            QoreHashNode* lhash = listeners->get<QoreHashNode>();
+            listener_count = lhash->size();
+            had_listeners = true;
+            listener = lhash->getKeyValue(stream_key->c_str()).refSelf();
+        }
+    }
+
+    if (*xsink || !had_listeners) {
         priv->markStreamDataPending(stream_key->c_str());
         ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NO_LISTENERS skey='%s' xsink=%d null=%d\n",
             stream_key->c_str(), (int)(*xsink ? 1 : 0),
-            (int)(listeners->isNullOrNothing() ? 1 : 0));
+            (int)(!had_listeners ? 1 : 0));
         return QoreValue();
     }
-    QoreHashNode* lhash = listeners->get<QoreHashNode>();
-    ValueHolder listener(lhash->getKeyValue(stream_key->c_str()).refSelf(), xsink);
+
     if (!listener->isNullOrNothing() && listener->getType() == NT_OBJECT) {
         QoreObject* lobj = listener->get<QoreObject>();
         ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NOTIFY skey='%s' listener=%p\n",
             stream_key->c_str(), (void*)lobj);
-        lobj->evalMethod("notifyIo", nullptr, xsink);
+        ValueHolder rv(lobj->evalMethod("notifyIo", nullptr, xsink), xsink);
     } else {
         priv->markStreamDataPending(stream_key->c_str());
         ASYNC_IO_TRACE("Http3ServerPollOperation::onStreamData NO_MATCH skey='%s' listeners_keys=%zu\n",
-            stream_key->c_str(), (size_t)lhash->size());
+            stream_key->c_str(), listener_count);
     }
 }
 
@@ -1152,20 +1166,34 @@ list<string> Http3ServerPollOperation::getAndClearDataReadyStreams() [flags=RET_
     @since %Qore 2.3
 */
 nothing Http3ServerPollOperation::notifyStreamListenersClosed() {
-    ValueHolder listeners(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
-    if (*xsink || listeners->isNullOrNothing()) {
-        return QoreValue();
-    }
-    QoreHashNode* lhash = listeners->get<QoreHashNode>();
-    ConstHashIterator hi(lhash);
-    while (hi.next()) {
-        QoreValue val = hi.get();
-        if (val.getType() == NT_OBJECT) {
-            QoreObject* lobj = val.get<QoreObject>();
-            ExceptionSink notify_xsink;
-            lobj->evalMethod("notifyIo", nullptr, &notify_xsink);
-            // Ignore errors from already-destroyed listeners
-            notify_xsink.clear();
+    std::vector<QoreObject*> listeners_to_notify;
+    {
+        AutoLocker ml(priv->stream_member_lock);
+        ValueHolder listeners(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
+        if (*xsink || listeners->isNullOrNothing() || listeners->getType() != NT_HASH) {
+            return QoreValue();
         }
+        QoreHashNode* lhash = listeners->get<QoreHashNode>();
+        ConstHashIterator hi(lhash);
+        while (hi.next()) {
+            QoreValue val = hi.get();
+            if (val.getType() == NT_OBJECT) {
+                QoreObject* lobj = val.get<QoreObject>();
+                lobj->ref();
+                listeners_to_notify.push_back(lobj);
+            }
+        }
+    }
+
+    for (QoreObject* lobj : listeners_to_notify) {
+        ExceptionSink notify_xsink;
+        {
+            ValueHolder rv(lobj->evalMethod("notifyIo", nullptr, &notify_xsink), &notify_xsink);
+        }
+        // Ignore errors from already-destroyed listeners
+        notify_xsink.clear();
+        ExceptionSink deref_xsink;
+        lobj->deref(&deref_xsink);
+        deref_xsink.clear();
     }
 }

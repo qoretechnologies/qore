@@ -201,6 +201,7 @@ public:
     /** Called by the I/O controller after continuePoll().
     */
     DLLLOCAL std::vector<std::string> getAndClearDataReadyStreams() {
+        AutoLocker al(op_lock);
         std::vector<std::string> result;
         result.swap(data_ready_streams);
         return result;
@@ -264,6 +265,14 @@ public:
         references transfers to this object (consumed on apply or in cleanup()).
     */
     DLLLOCAL void setPendingCertificate(QoreSSLCertificate* cert, QoreSSLPrivateKey* pk);
+
+    //! Protects Qore-side stream listener / queue object member maps
+    /** The C++ queue state is protected by @c op_lock.  The QPP layer also keeps
+        QoreObject refs in internal member hashes so objects remain alive while a
+        stream is active.  Those hashes are mutated from handler and worker
+        threads, so their copy/replace updates need separate serialization.
+    */
+    mutable QoreThreadLock stream_member_lock;
 
 protected:
     DLLLOCAL const char* getStateImpl() const override;
