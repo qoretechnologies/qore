@@ -116,6 +116,7 @@ public class DataProvider {
             "deel": "DeelDataProvider",
             "discord": "DiscordDataProvider",
             "discordws": "DiscordDataProvider",
+            "easypost": "EasyPostDataProvider",
             "elasticsearch": "ElasticSearchDataProvider",
             "elevenlabs": "ElevenLabsDataProvider",
             "empathicbuilding": "EmpathicBuildingDataProvider",

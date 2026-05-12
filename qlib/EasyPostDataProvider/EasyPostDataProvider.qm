@@ -1,0 +1,1233 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore EasyPostDataProvider module definition
+
+/*  EasyPostDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%new-style
+# require type definitions everywhere
+%require-types
+# enable all warnings
+%enable-all-warnings
+# strict argument handling
+%strict-args
+# do not require child data providers to be present
+%no-child-restrictions
+
+%requires(reexport) DataProvider
+%requires(reexport) RestClient
+%requires(reexport) RestClientIo
+%requires EasyPostRestClient
+%try-module json
+%define NoJson
+%endtry
+
+module EasyPostDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for EasyPost shipping and logistics services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new EasyPostDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": EasyPostDataProvider::AppName,
+            "display_name": "EasyPost",
+            "short_desc": "EasyPost shipping and logistics platform",
+            "desc": "EasyPost is a unified shipping API that connects to dozens of carriers including USPS, "
+                "UPS, FedEx, DHL, and more. This integration enables creating addresses, parcels, shipments, "
+                "trackers, insurance records, pickups, and orders, as well as managing carrier accounts and "
+                "subscribing to webhook events.\n\n"
+                "**Features:**\n"
+                "- Address creation, verification, and lookup\n"
+                "- Shipment lifecycle (create, buy, refund, label, rerate, insure)\n"
+                "- Tracker creation (single and bulk) and lookup\n"
+                "- Insurance creation and refund\n"
+                "- Pickup scheduling, buying, and cancellation\n"
+                "- Multi-shipment orders\n"
+                "- Customs information and customs items\n"
+                "- Refunds and batches\n"
+                "- Webhook and carrier-account management\n"
+                "- Real-time webhook events for tracker, batch, insurance, refund, and payment updates",
+            "scheme": "easypostrest",
+            "logo": EasyPostDataProvider::EasyPostLogo,
+            "logo_file_name": "easypost-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Shipping,),
+        });
+
+        # ========== ADDRESS ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/addresses",
+            "action": "list-addresses",
+            "groups": "Addresses",
+            "display_name": "List Addresses",
+            "short_desc": "List EasyPost addresses",
+            "desc": "Retrieve a paginated list of addresses, or fetch a single address by ID.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostAddressesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostAddressList", new EasyPostAddressType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-address",
+            "action": "create-address",
+            "groups": "Addresses",
+            "display_name": "Create Address",
+            "short_desc": "Create a new EasyPost address",
+            "desc": "Create a new address. Optionally request lenient or strict verification of the address.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateAddressDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateAddressDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateAddressRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-address",
+            "action": "get-address",
+            "groups": "Addresses",
+            "display_name": "Get Address",
+            "short_desc": "Retrieve an address by ID",
+            "desc": "Retrieve an EasyPost address by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetAddressDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetAddressDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetAddressRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/verify-address",
+            "action": "verify-address",
+            "groups": "Addresses",
+            "display_name": "Verify Address",
+            "short_desc": "Verify an existing address",
+            "desc": "Run carrier-side address verification on an existing address.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostVerifyAddressDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostVerifyAddressDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostVerifyAddressRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-and-verify-address",
+            "action": "create-and-verify-address",
+            "groups": "Addresses",
+            "display_name": "Create and Verify Address",
+            "short_desc": "Create and verify an address in one call",
+            "desc": "Create a new address and verify it in a single API call.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateAndVerifyAddressDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateAndVerifyAddressDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateAddressRequestDataType::Fields),
+        });
+
+        # ========== PARCEL ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-parcel",
+            "action": "get-parcel",
+            "groups": "Parcels",
+            "display_name": "Get Parcel",
+            "short_desc": "Retrieve a parcel by ID",
+            "desc": "Retrieve an EasyPost parcel by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetParcelDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetParcelDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetParcelRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-parcel",
+            "action": "create-parcel",
+            "groups": "Parcels",
+            "display_name": "Create Parcel",
+            "short_desc": "Create a new parcel",
+            "desc": "Create a new EasyPost parcel by dimensions and weight, or with a `predefined_package`.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateParcelDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateParcelDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateParcelRequestDataType::Fields),
+        });
+
+        # ========== SHIPMENT ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/shipments",
+            "action": "list-shipments",
+            "groups": "Shipments",
+            "display_name": "List Shipments",
+            "short_desc": "List shipments",
+            "desc": "Retrieve a paginated list of shipments. Optionally fetch by ID or filter by purchased status.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostShipmentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostShipmentList", new EasyPostShipmentType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-shipment",
+            "action": "create-shipment",
+            "groups": "Shipments",
+            "display_name": "Create Shipment",
+            "short_desc": "Create a new shipment (returns rate options)",
+            "desc": "Create a new shipment. The response contains a list of available rates that can be used "
+                "to purchase a label via `buy-shipment`.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateShipmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateShipmentDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateShipmentRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-shipment",
+            "action": "get-shipment",
+            "groups": "Shipments",
+            "display_name": "Get Shipment",
+            "short_desc": "Retrieve a shipment by ID",
+            "desc": "Retrieve an EasyPost shipment by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetShipmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetShipmentDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetShipmentRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/buy-shipment",
+            "action": "buy-shipment",
+            "groups": "Shipments",
+            "display_name": "Buy Shipment",
+            "short_desc": "Purchase a shipping label",
+            "desc": "Purchase a shipping label by selecting one of the rates returned by `create-shipment`.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostBuyShipmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostBuyShipmentDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostBuyShipmentRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/refund-shipment",
+            "action": "refund-shipment",
+            "groups": "Shipments",
+            "display_name": "Refund Shipment",
+            "short_desc": "Refund a purchased shipment",
+            "desc": "Submit a refund request for a previously purchased shipment.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostRefundShipmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostRefundShipmentDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostRefundShipmentRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-shipment-label",
+            "action": "get-shipment-label",
+            "groups": "Shipments",
+            "display_name": "Get Shipment Label",
+            "short_desc": "Retrieve a shipment label",
+            "desc": "Retrieve a shipment label in a specific format (PDF, ZPL, EPL2, or PNG).",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetShipmentLabelDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetShipmentLabelDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetShipmentLabelRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-shipment-smartrates",
+            "action": "get-shipment-smartrates",
+            "groups": "Shipments",
+            "display_name": "Get Shipment SmartRates",
+            "short_desc": "Retrieve SmartRates for a shipment",
+            "desc": "Retrieve SmartRates for a shipment. Each rate includes a `time_in_transit` "
+                "object with percentile-based estimated transit business days "
+                "(`percentile_50` through `percentile_99`) for SLA-aware rate selection.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetShipmentSmartratesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostShipmentSmartRateList", new EasyPostSmartRateType(), True);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                EasyPostGetShipmentSmartratesRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/rerate-shipment",
+            "action": "rerate-shipment",
+            "groups": "Shipments",
+            "display_name": "Rerate Shipment",
+            "short_desc": "Re-rate a shipment",
+            "desc": "Re-fetch rate quotes for an existing shipment.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostRerateShipmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostRerateShipmentDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostRerateShipmentRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/insure-shipment",
+            "action": "insure-shipment",
+            "groups": "Shipments",
+            "display_name": "Insure Shipment",
+            "short_desc": "Insure a shipment",
+            "desc": "Add insurance to an already-purchased shipment.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostInsureShipmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostInsureShipmentDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostInsureShipmentRequestDataType::Fields),
+        });
+
+        # ========== TRACKER ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/trackers",
+            "action": "list-trackers",
+            "groups": "Trackers",
+            "display_name": "List Trackers",
+            "short_desc": "List trackers",
+            "desc": "Retrieve a paginated list of trackers. Optionally filter by tracking code or carrier.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostTrackersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostTrackerList", new EasyPostTrackerType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-tracker",
+            "action": "create-tracker",
+            "groups": "Trackers",
+            "display_name": "Create Tracker",
+            "short_desc": "Create a tracker",
+            "desc": "Create a new tracker for a carrier tracking code.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateTrackerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateTrackerDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateTrackerRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-tracker",
+            "action": "get-tracker",
+            "groups": "Trackers",
+            "display_name": "Get Tracker",
+            "short_desc": "Retrieve a tracker by ID",
+            "desc": "Retrieve an EasyPost tracker by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetTrackerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetTrackerDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetTrackerRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/delete-tracker",
+            "action": "delete-tracker",
+            "groups": "Trackers",
+            "display_name": "Delete Tracker",
+            "short_desc": "Delete a tracker by ID",
+            "desc": "Delete an EasyPost tracker by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostDeleteTrackerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostDeleteTrackerDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostDeleteTrackerRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/bulk-create-trackers",
+            "action": "bulk-create-trackers",
+            "groups": "Trackers",
+            "display_name": "Bulk Create Trackers",
+            "short_desc": "Bulk-create trackers",
+            "desc": "Create up to 100 trackers in a single request.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostBulkCreateTrackersDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashOrNothingType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostBulkCreateTrackersRequestDataType::Fields),
+        });
+
+        # ========== INSURANCE ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/insurances",
+            "action": "list-insurances",
+            "groups": "Insurance",
+            "display_name": "List Insurance Records",
+            "short_desc": "List insurance records",
+            "desc": "Retrieve a paginated list of insurance records.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostInsuranceListDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostInsuranceList", new EasyPostInsuranceType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-insurance",
+            "action": "create-insurance",
+            "groups": "Insurance",
+            "display_name": "Create Insurance",
+            "short_desc": "Create a standalone insurance record",
+            "desc": "Create a standalone insurance record for a tracking code.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateInsuranceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateInsuranceDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateInsuranceRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-insurance",
+            "action": "get-insurance",
+            "groups": "Insurance",
+            "display_name": "Get Insurance",
+            "short_desc": "Retrieve an insurance record by ID",
+            "desc": "Retrieve an EasyPost insurance record by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetInsuranceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetInsuranceDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetInsuranceRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/refund-insurance",
+            "action": "refund-insurance",
+            "groups": "Insurance",
+            "display_name": "Refund Insurance",
+            "short_desc": "Refund an insurance record",
+            "desc": "Submit a refund request for an insurance record.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostRefundInsuranceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostRefundInsuranceDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostRefundInsuranceRequestDataType::Fields),
+        });
+
+        # ========== PICKUP ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/pickups",
+            "action": "list-pickups",
+            "groups": "Pickups",
+            "display_name": "List Pickups",
+            "short_desc": "List pickups",
+            "desc": "Retrieve a paginated list of pickups.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostPickupsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostPickupList", new EasyPostPickupType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-pickup",
+            "action": "create-pickup",
+            "groups": "Pickups",
+            "display_name": "Create Pickup",
+            "short_desc": "Schedule a pickup",
+            "desc": "Schedule a new pickup for a shipment.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreatePickupDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreatePickupDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreatePickupRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-pickup",
+            "action": "get-pickup",
+            "groups": "Pickups",
+            "display_name": "Get Pickup",
+            "short_desc": "Retrieve a pickup by ID",
+            "desc": "Retrieve an EasyPost pickup by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetPickupDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetPickupDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetPickupRequestDataType::Fields),
+        });
+
+        # pickup_id drives carrier dropdown via pickup_rates; has_dependents/on_change are not
+        # propagated by getActionOptionFromFields() — augment manually.
+        {
+            hash<string, hash<ActionOptionInfo>> opts =
+                DataProviderActionCatalog::getActionOptionFromFields(
+                    EasyPostBuyPickupRequestDataType::Fields);
+            opts.pickup_id += {"has_dependents": True, "on_change": ("refetch",)};
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": EasyPostDataProvider::AppName,
+                "path": "/buy-pickup",
+                "action": "buy-pickup",
+                "groups": "Pickups",
+                "display_name": "Buy Pickup",
+                "short_desc": "Confirm a pickup",
+                "desc": "Confirm/buy a previously scheduled pickup.",
+                "action_code": DPAT_API,
+                "data_provider_info": EasyPostBuyPickupDataProvider::ProviderInfo,
+                "get_output_type": AbstractDataProviderType sub () { return EasyPostBuyPickupDataProvider::ResponseType; },
+                "options": opts,
+            });
+        }
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/cancel-pickup",
+            "action": "cancel-pickup",
+            "groups": "Pickups",
+            "display_name": "Cancel Pickup",
+            "short_desc": "Cancel a pickup",
+            "desc": "Cancel a scheduled pickup.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCancelPickupDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCancelPickupDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCancelPickupRequestDataType::Fields),
+        });
+
+        # ========== ORDER ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-order",
+            "action": "get-order",
+            "groups": "Orders",
+            "display_name": "Get Order",
+            "short_desc": "Retrieve an order",
+            "desc": "Retrieve an EasyPost order by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetOrderDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetOrderDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetOrderRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-order",
+            "action": "create-order",
+            "groups": "Orders",
+            "display_name": "Create Order",
+            "short_desc": "Create a multi-shipment order",
+            "desc": "Create a new multi-shipment order.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateOrderDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateOrderDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateOrderRequestDataType::Fields),
+        });
+
+        # order_id drives carrier dropdown via order rates; has_dependents/on_change are not
+        # propagated by getActionOptionFromFields() — augment manually.
+        {
+            hash<string, hash<ActionOptionInfo>> opts =
+                DataProviderActionCatalog::getActionOptionFromFields(
+                    EasyPostBuyOrderRequestDataType::Fields);
+            opts.order_id += {"has_dependents": True, "on_change": ("refetch",)};
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": EasyPostDataProvider::AppName,
+                "path": "/buy-order",
+                "action": "buy-order",
+                "groups": "Orders",
+                "display_name": "Buy Order",
+                "short_desc": "Buy an order",
+                "desc": "Buy all shipments in an order with a single carrier and service.",
+                "action_code": DPAT_API,
+                "data_provider_info": EasyPostBuyOrderDataProvider::ProviderInfo,
+                "get_output_type": AbstractDataProviderType sub () { return EasyPostBuyOrderDataProvider::ResponseType; },
+                "options": opts,
+            });
+        }
+
+        # ========== CUSTOMS INFO / CUSTOMS ITEM ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-customs-info",
+            "action": "get-customs-info",
+            "groups": "Customs",
+            "display_name": "Get Customs Info",
+            "short_desc": "Retrieve a customs info object",
+            "desc": "Retrieve a customs info object by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetCustomsInfoDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetCustomsInfoDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetCustomsInfoRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-customs-info",
+            "action": "create-customs-info",
+            "groups": "Customs",
+            "display_name": "Create Customs Info",
+            "short_desc": "Create a customs info object",
+            "desc": "Create a customs info object for use with international shipments.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateCustomsInfoDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateCustomsInfoDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateCustomsInfoRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-customs-item",
+            "action": "get-customs-item",
+            "groups": "Customs",
+            "display_name": "Get Customs Item",
+            "short_desc": "Retrieve a customs item",
+            "desc": "Retrieve a customs item by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetCustomsItemDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetCustomsItemDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetCustomsItemRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-customs-item",
+            "action": "create-customs-item",
+            "groups": "Customs",
+            "display_name": "Create Customs Item",
+            "short_desc": "Create a customs item",
+            "desc": "Create a customs item for use in customs info objects.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateCustomsItemDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateCustomsItemDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateCustomsItemRequestDataType::Fields),
+        });
+
+        # ========== REFUND ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/refunds",
+            "action": "list-refunds",
+            "groups": "Refunds",
+            "display_name": "List Refunds",
+            "short_desc": "List refunds",
+            "desc": "Retrieve a paginated list of refunds.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostRefundsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostRefundList", new EasyPostRefundType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-refund",
+            "action": "create-refund",
+            "groups": "Refunds",
+            "display_name": "Create Refund",
+            "short_desc": "Request a refund",
+            "desc": "Submit one or more refund requests by carrier and tracking code.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateRefundDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostCreateRefundResultList", new EasyPostRefundType(), True);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateRefundRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-refund",
+            "action": "get-refund",
+            "groups": "Refunds",
+            "display_name": "Get Refund",
+            "short_desc": "Retrieve a refund by ID",
+            "desc": "Retrieve an EasyPost refund by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetRefundDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetRefundDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetRefundRequestDataType::Fields),
+        });
+
+        # ========== BATCH ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/batches",
+            "action": "list-batches",
+            "groups": "Batches",
+            "display_name": "List Batches",
+            "short_desc": "List batches",
+            "desc": "Retrieve a paginated list of batches.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostBatchesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostBatchList", new EasyPostBatchType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-batch",
+            "action": "create-batch",
+            "groups": "Batches",
+            "display_name": "Create Batch",
+            "short_desc": "Create a batch",
+            "desc": "Create a new batch of shipments.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateBatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateBatchDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateBatchRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-batch",
+            "action": "get-batch",
+            "groups": "Batches",
+            "display_name": "Get Batch",
+            "short_desc": "Retrieve a batch by ID",
+            "desc": "Retrieve an EasyPost batch by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetBatchDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetBatchDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetBatchRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/batch-add-shipments",
+            "action": "batch-add-shipments",
+            "groups": "Batches",
+            "display_name": "Add Shipments to Batch",
+            "short_desc": "Add shipments to a batch",
+            "desc": "Add shipments to an existing batch.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostBatchAddShipmentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostBatchAddShipmentsDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostBatchAddShipmentsRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/batch-remove-shipments",
+            "action": "batch-remove-shipments",
+            "groups": "Batches",
+            "display_name": "Remove Shipments from Batch",
+            "short_desc": "Remove shipments from a batch",
+            "desc": "Remove shipments from an existing batch.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostBatchRemoveShipmentsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostBatchRemoveShipmentsDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostBatchRemoveShipmentsRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/batch-buy",
+            "action": "batch-buy",
+            "groups": "Batches",
+            "display_name": "Buy Batch",
+            "short_desc": "Buy a batch",
+            "desc": "Purchase labels for all shipments in a batch.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostBatchBuyDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostBatchBuyDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostBatchBuyRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/batch-label",
+            "action": "batch-label",
+            "groups": "Batches",
+            "display_name": "Get Batch Label",
+            "short_desc": "Generate a combined batch label",
+            "desc": "Generate a single combined label file for all shipments in a batch.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostBatchLabelDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostBatchLabelDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostBatchLabelRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/batch-scan-form",
+            "action": "batch-scan-form",
+            "groups": "Batches",
+            "display_name": "Generate Batch Scan Form",
+            "short_desc": "Generate a scan form",
+            "desc": "Generate a scan form for all shipments in a batch.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostBatchScanFormDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostBatchScanFormDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostBatchScanFormRequestDataType::Fields),
+        });
+
+        # ========== WEBHOOK ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/webhooks",
+            "action": "list-webhooks",
+            "groups": "Webhooks",
+            "display_name": "List Webhooks",
+            "short_desc": "List webhooks",
+            "desc": "Retrieve all configured webhooks.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostWebhooksDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostWebhookList", new EasyPostWebhookType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-webhook",
+            "action": "get-webhook",
+            "groups": "Webhooks",
+            "display_name": "Get Webhook",
+            "short_desc": "Retrieve a webhook",
+            "desc": "Retrieve a webhook by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetWebhookDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetWebhookDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetWebhookRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-webhook",
+            "action": "create-webhook",
+            "groups": "Webhooks",
+            "display_name": "Create Webhook",
+            "short_desc": "Create a webhook",
+            "desc": "Create a new webhook subscription.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateWebhookDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateWebhookDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostCreateWebhookRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/update-webhook",
+            "action": "update-webhook",
+            "groups": "Webhooks",
+            "display_name": "Update Webhook",
+            "short_desc": "Update a webhook",
+            "desc": "Update an existing webhook.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostUpdateWebhookDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostUpdateWebhookDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostUpdateWebhookRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/delete-webhook",
+            "action": "delete-webhook",
+            "groups": "Webhooks",
+            "display_name": "Delete Webhook",
+            "short_desc": "Delete a webhook",
+            "desc": "Delete a webhook subscription.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostDeleteWebhookDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostDeleteWebhookDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostDeleteWebhookRequestDataType::Fields),
+        });
+
+        # ========== EVENT ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events-list",
+            "action": "list-events",
+            "groups": "Events",
+            "display_name": "List Events",
+            "short_desc": "List webhook events",
+            "desc": "Retrieve a paginated list of webhook delivery events.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostEventsListDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostEventList", new EasyPostEventType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-event",
+            "action": "get-event",
+            "groups": "Events",
+            "display_name": "Get Event",
+            "short_desc": "Retrieve an event",
+            "desc": "Retrieve a webhook event by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetEventDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetEventDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetEventRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/list-event-payloads",
+            "action": "list-event-payloads",
+            "groups": "Events",
+            "display_name": "List Event Payloads",
+            "short_desc": "List event payloads",
+            "desc": "List webhook delivery payloads (attempts) for an event.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetEventPayloadsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetEventPayloadsDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetEventPayloadsRequestDataType::Fields),
+        });
+
+        # event_id drives payload_id dropdown; has_dependents/on_change are not
+        # propagated by getActionOptionFromFields() — augment manually.
+        {
+            hash<string, hash<ActionOptionInfo>> opts =
+                DataProviderActionCatalog::getActionOptionFromFields(
+                    EasyPostGetEventPayloadRequestDataType::Fields);
+            opts.event_id += {"has_dependents": True, "on_change": ("refetch",)};
+            DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+                "app": EasyPostDataProvider::AppName,
+                "path": "/get-event-payload",
+                "action": "get-event-payload",
+                "groups": "Events",
+                "display_name": "Get Event Payload",
+                "short_desc": "Retrieve a single payload",
+                "desc": "Retrieve a single webhook delivery payload.",
+                "action_code": DPAT_API,
+                "data_provider_info": EasyPostGetEventPayloadDataProvider::ProviderInfo,
+                "get_output_type": AbstractDataProviderType sub () { return EasyPostGetEventPayloadDataProvider::ResponseType; },
+                "options": opts,
+            });
+        }
+
+        # ========== CARRIER ACCOUNT ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/carrier-accounts",
+            "action": "list-carrier-accounts",
+            "groups": "Carrier Accounts",
+            "display_name": "List Carrier Accounts",
+            "short_desc": "List carrier accounts",
+            "desc": "Retrieve all carrier accounts configured on the EasyPost account.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": EasyPostCarrierAccountsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("EasyPostCarrierAccountList", new EasyPostCarrierAccountType(), True);
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/get-carrier-account",
+            "action": "get-carrier-account",
+            "groups": "Carrier Accounts",
+            "display_name": "Get Carrier Account",
+            "short_desc": "Retrieve a carrier account",
+            "desc": "Retrieve a carrier account by ID.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostGetCarrierAccountDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostGetCarrierAccountDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostGetCarrierAccountRequestDataType::Fields),
+        });
+
+        # `type` controls the shape of `credentials`/`test_credentials`; mark it as
+        # structural_determinate + on_change refetch so the UI re-fetches the request type
+        # whenever the user picks a new carrier.
+        hash<auto> create_carrier_account_opts = DataProviderActionCatalog::getActionOptionFromFields(
+            EasyPostCreateCarrierAccountRequestDataType::Fields);
+        create_carrier_account_opts."type" += {
+            "has_dependents": True,
+            "structural_determinate": True,
+            "on_change": ("refetch",),
+        };
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/create-carrier-account",
+            "action": "create-carrier-account",
+            "groups": "Carrier Accounts",
+            "display_name": "Create Carrier Account",
+            "short_desc": "Create a carrier account",
+            "desc": "Create a new carrier account. Selecting a carrier type populates the `credentials` and "
+                "`test_credentials` fields with that carrier's specific schema.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostCreateCarrierAccountDataProvider::ProviderInfo,
+            "data_dependent_options": True,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostCreateCarrierAccountDataProvider::ResponseType; },
+            "options": create_carrier_account_opts,
+        });
+
+        # Selecting a carrier_account_id triggers a refetch so the credentials fields can be typed
+        # for the chosen account's carrier.
+        hash<auto> update_carrier_account_opts = DataProviderActionCatalog::getActionOptionFromFields(
+            EasyPostUpdateCarrierAccountRequestDataType::Fields);
+        update_carrier_account_opts."carrier_account_id" += {
+            "has_dependents": True,
+            "structural_determinate": True,
+            "on_change": ("refetch",),
+        };
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/update-carrier-account",
+            "action": "update-carrier-account",
+            "groups": "Carrier Accounts",
+            "display_name": "Update Carrier Account",
+            "short_desc": "Update a carrier account",
+            "desc": "Update an existing carrier account. Selecting a carrier account populates the "
+                "`credentials` and `test_credentials` fields with that carrier's specific schema.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostUpdateCarrierAccountDataProvider::ProviderInfo,
+            "data_dependent_options": True,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostUpdateCarrierAccountDataProvider::ResponseType; },
+            "options": update_carrier_account_opts,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/delete-carrier-account",
+            "action": "delete-carrier-account",
+            "groups": "Carrier Accounts",
+            "display_name": "Delete Carrier Account",
+            "short_desc": "Delete a carrier account",
+            "desc": "Delete a carrier account.",
+            "action_code": DPAT_API,
+            "data_provider_info": EasyPostDeleteCarrierAccountDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () { return EasyPostDeleteCarrierAccountDataProvider::ResponseType; },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(EasyPostDeleteCarrierAccountRequestDataType::Fields),
+        });
+
+        # ========== EVENT (TRIGGER) PROVIDERS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-tracker-created",
+            "action": "watch-tracker-created",
+            "groups": "Events",
+            "display_name": "On Tracker Created",
+            "short_desc": "Trigger when a tracker is created",
+            "desc": "Fires when a new tracker is created (`tracker.created` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchTrackerCreatedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventTrackerCreated,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-tracker-updated",
+            "action": "watch-tracker-updated",
+            "groups": "Events",
+            "display_name": "On Tracker Updated",
+            "short_desc": "Trigger when a tracker is updated",
+            "desc": "Fires when a tracker status changes (`tracker.updated` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchTrackerUpdatedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventTrackerUpdated,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-batch-created",
+            "action": "watch-batch-created",
+            "groups": "Events",
+            "display_name": "On Batch Created",
+            "short_desc": "Trigger when a batch is created",
+            "desc": "Fires when a new batch is created (`batch.created` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchBatchCreatedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventBatchCreated,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-batch-updated",
+            "action": "watch-batch-updated",
+            "groups": "Events",
+            "display_name": "On Batch Updated",
+            "short_desc": "Trigger when a batch is updated",
+            "desc": "Fires when a batch is updated (`batch.updated` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchBatchUpdatedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventBatchUpdated,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-insurance-purchased",
+            "action": "watch-insurance-purchased",
+            "groups": "Events",
+            "display_name": "On Insurance Purchased",
+            "short_desc": "Trigger when insurance is purchased",
+            "desc": "Fires when insurance is purchased (`insurance.purchased` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchInsurancePurchasedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventInsurancePurchased,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-refund-successful",
+            "action": "watch-refund-successful",
+            "groups": "Events",
+            "display_name": "On Refund Successful",
+            "short_desc": "Trigger when a refund succeeds",
+            "desc": "Fires when a refund is successful (`refund.successful` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchRefundSuccessfulEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventRefundSuccessful,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-shipment-invoice-created",
+            "action": "watch-shipment-invoice-created",
+            "groups": "Events",
+            "display_name": "On Shipment Invoice Created",
+            "short_desc": "Trigger when a shipment invoice is created",
+            "desc": "Fires when a shipment invoice is created (`shipment.invoice.created` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchShipmentInvoiceCreatedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventShipmentInvoiceCreated,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-payment-completed",
+            "action": "watch-payment-completed",
+            "groups": "Events",
+            "display_name": "On Payment Completed",
+            "short_desc": "Trigger when a payment is completed",
+            "desc": "Fires when a payment is completed (`payment.completed` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchPaymentCompletedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventPaymentCompleted,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-payment-failed",
+            "action": "watch-payment-failed",
+            "groups": "Events",
+            "display_name": "On Payment Failed",
+            "short_desc": "Trigger when a payment fails",
+            "desc": "Fires when a payment fails (`payment.failed` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchPaymentFailedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventPaymentFailed,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-payment-created",
+            "action": "watch-payment-created",
+            "groups": "Events",
+            "display_name": "On Payment Created",
+            "short_desc": "Trigger when a payment is charged",
+            "desc": "Fires when a bank account or credit card is successfully charged "
+                "(`payment.created` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchPaymentCreatedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventPaymentCreated,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-insurance-cancelled",
+            "action": "watch-insurance-cancelled",
+            "groups": "Events",
+            "display_name": "On Insurance Cancelled",
+            "short_desc": "Trigger when insurance is cancelled or fails",
+            "desc": "Fires when a standalone Insurance is cancelled or fails purchasing "
+                "(`insurance.cancelled` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchInsuranceCancelledEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventInsuranceCancelled,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-shipment-invoice-updated",
+            "action": "watch-shipment-invoice-updated",
+            "groups": "Events",
+            "display_name": "On Shipment Invoice Updated",
+            "short_desc": "Trigger when a shipment invoice is updated",
+            "desc": "Fires when a shipment invoice is adjusted and updated "
+                "(`shipment.invoice.updated` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchShipmentInvoiceUpdatedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventShipmentInvoiceUpdated,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-scan-form-created",
+            "action": "watch-scan-form-created",
+            "groups": "Events",
+            "display_name": "On Scan Form Created",
+            "short_desc": "Trigger when a scan form is created",
+            "desc": "Fires when initial creation of a ScanForm object is complete "
+                "(`scan_form.created` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchScanFormCreatedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventScanFormCreated,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": EasyPostDataProvider::AppName,
+            "path": "/events/watch-scan-form-updated",
+            "action": "watch-scan-form-updated",
+            "groups": "Events",
+            "display_name": "On Scan Form Updated",
+            "short_desc": "Trigger when a scan form status changes",
+            "desc": "Fires when the status of a ScanForm object changes "
+                "(`scan_form.updated` webhook event).",
+            "action_code": DPAT_EVENT,
+            "data_provider_info": EasyPostWatchScanFormUpdatedEventDataProvider::ProviderInfo,
+            "action_val": EasyPostDataProvider::EventScanFormUpdated,
+        });
+    };
+}
