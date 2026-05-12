@@ -35,12 +35,14 @@ public class EasyPostUpdateCarrierAccountRequestDataType inherits HashDataType {
                     "[carrier types](https://docs.easypost.com/docs/carrier-types).\n\n"
                     "**Example (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\"}`",
                 "type": AutoHashOrNothingType,
+                "sensitive": True,
             },
             "test_credentials": {
                 "display_name": "Test Credentials",
                 "short_desc": "Test credentials hash",
                 "desc": "New test credentials. Same schema as `credentials`.",
                 "type": AutoHashOrNothingType,
+                "sensitive": True,
             },
         };
     }

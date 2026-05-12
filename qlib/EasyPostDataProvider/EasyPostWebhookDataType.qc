@@ -8,8 +8,8 @@ public namespace EasyPostDataProvider {
 public class EasyPostCustomHeaderType inherits HashDataType {
     public {
         const Fields = {
-            "name": {"display_name": "Name", "type": SoftStringOrNothingType, "desc": "Header name", "required": True},
-            "value": {"display_name": "Value", "type": SoftStringOrNothingType, "desc": "Header value", "required": True},
+            "name": {"display_name": "Name", "type": SoftStringType, "desc": "Header name", "required": True},
+            "value": {"display_name": "Value", "type": SoftStringType, "desc": "Header value", "required": True},
         };
     }
     constructor() {

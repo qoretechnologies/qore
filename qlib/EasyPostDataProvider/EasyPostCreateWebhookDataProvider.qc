@@ -21,6 +21,7 @@ public class EasyPostCreateWebhookRequestDataType inherits HashDataType {
                 "short_desc": "Optional shared secret",
                 "desc": "Optional shared secret used to sign webhook payloads (HMAC-SHA-256)",
                 "type": SoftStringOrNothingType,
+                "sensitive": True,
             },
             "custom_headers": {
                 "display_name": "Custom Headers",

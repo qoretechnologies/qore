@@ -40,6 +40,7 @@ public class EasyPostCreateCarrierAccountRequestDataType inherits HashDataType {
                     "this field with the carrier's specific schema.\n\n"
                     "**Example (UPS)**: `{\"account_number\": \"...\", \"user_id\": \"...\", \"password\": \"...\"}`",
                 "type": AutoHashOrNothingType,
+                "sensitive": True,
             },
             "test_credentials": {
                 "display_name": "Test Credentials",
@@ -47,6 +48,7 @@ public class EasyPostCreateCarrierAccountRequestDataType inherits HashDataType {
                 "desc": "Carrier-specific credentials hash for the test environment. Same shape as `credentials` - "
                     "select a `type` to populate this field with the carrier's specific schema.",
                 "type": AutoHashOrNothingType,
+                "sensitive": True,
             },
         };
     }

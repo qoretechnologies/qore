@@ -21,6 +21,7 @@ public class EasyPostUpdateWebhookRequestDataType inherits HashDataType {
                 "short_desc": "Shared secret",
                 "desc": "Optional shared secret used to sign webhook payloads",
                 "type": SoftStringOrNothingType,
+                "sensitive": True,
             },
             "custom_headers": {
                 "display_name": "Custom Headers",

@@ -165,9 +165,14 @@ public class EasyPostBaseEventDataProvider inherits EasyPostDataProviderBase, Da
             body_str = "";
         }
 
-        # Optional HMAC signature verification
+        # HMAC signature verification (enforced when a webhook secret is configured)
         *string sig = request.hdr."x-hmac-signature" ?? request.hdr."X-Hmac-Signature";
-        if (webhook_secret.val() && sig.val()) {
+        if (webhook_secret.val()) {
+            if (!sig.val()) {
+                log(LoggerLevel::ERROR, "EasyPostBaseEventDataProvider: missing HMAC signature header for %s; "
+                    "ignoring event", event_type);
+                return;
+            }
             if (!verifyHmacSignature(body_str, sig)) {
                 log(LoggerLevel::ERROR, "EasyPostBaseEventDataProvider: HMAC signature mismatch for %s; ignoring event",
                     event_type);
