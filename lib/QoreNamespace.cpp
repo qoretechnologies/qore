@@ -1625,6 +1625,31 @@ int qore_root_ns_private::parseAddMethodToClassIntern(const QoreProgramLocation*
     return qore_class_private::addUserMethod(*oc, scname.getIdentifier(), v.release(), static_flag);
 }
 
+// returns a Qore-specific hint when a bareword matches a known keyword from Python, JS,
+// Java, Ruby, Swift, or similar languages; or nullptr if no hint applies.  Used to help
+// users (and AIs generating Qore code) translate from foreign syntax.
+static const char* bareword_foreign_hint(const char* bword) {
+    if (!bword) {
+        return nullptr;
+    }
+    // null-like values (Python None, JS null/undefined, Ruby/Swift/Lua nil)
+    if (!strcmp(bword, "None") || !strcmp(bword, "none")
+        || !strcmp(bword, "nil") || !strcmp(bword, "undefined")) {
+        return "did you mean 'NOTHING'?";
+    }
+    if (!strcmp(bword, "null")) {
+        return "did you mean 'NOTHING' (absent value) or 'NULL' (SQL null sentinel)?";
+    }
+    // lowercase booleans (JS, Java, C, C++, Python lowercased)
+    if (!strcmp(bword, "true")) {
+        return "did you mean 'True'? Qore boolean constants are capitalized.";
+    }
+    if (!strcmp(bword, "false")) {
+        return "did you mean 'False'? Qore boolean constants are capitalized.";
+    }
+    return nullptr;
+}
+
 // returns 0 for success, non-zero for error
 QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLocation* loc, const char* bword,
         const QoreTypeInfo*& typeInfo, bool& found) {
@@ -1707,7 +1732,11 @@ QoreValue qore_root_ns_private::parseResolveBarewordIntern(const QoreProgramLoca
         return rv.refSelf();
     }
 
-    parse_error(*loc, "cannot resolve bareword '%s' to any reachable object", bword);
+    if (const char* hint = bareword_foreign_hint(bword)) {
+        parse_error(*loc, "cannot resolve bareword '%s' to any reachable object; %s", bword, hint);
+    } else {
+        parse_error(*loc, "cannot resolve bareword '%s' to any reachable object", bword);
+    }
 
     //printd(5, "qore_root_ns_private::parseResolveBarewordIntern() this: %p '%s' abr: %d\n", this, bword, abr);
     return QoreValue();

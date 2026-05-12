@@ -1950,10 +1950,32 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
 
 DLLLOCAL int yylex(LEX_PARAMETERS);
 
+// returns a Qore-specific hint for common foreign-syntax mistakes (Python/JS/Java users
+// typing the wrong literal/keyword), or nullptr if no hint applies.  The bison message
+// passed in uses "%error-verbose": "syntax error, unexpected X, expecting Y or Z".
+DLLLOCAL static const char* qore_syntax_hint(const char* str) {
+    if (!str) {
+        return nullptr;
+    }
+    // [a, b]: square brackets are only the subscript operator in Qore
+    if (strstr(str, "unexpected '['")) {
+        return "Qore has no '[...]' list-literal syntax; use parentheses with commas instead, "
+            "e.g. '(1, 2, 3)' for a list or '(1,)' for a single-element list. "
+            "'[' is only valid as the subscript operator after an expression, "
+            "e.g. 'list[0]' or 'list[1..3]'.";
+    }
+    return nullptr;
+}
+
 DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
     //printd(5, "yyerror() location: %d:%d - %d:%d \"%s\"\n", loc->first_line, loc->first_col, loc->last_line, loc->last_col, str);
     const QoreProgramLocation* qloc = qore_program_private::get(*getProgram())->getLocation(loc->first_line, loc->last_line);
-    parse_error(*qloc, "%s", str);
+    const char* hint = qore_syntax_hint(str);
+    if (hint) {
+        parse_error(*qloc, "%s; %s", str, hint);
+    } else {
+        parse_error(*qloc, "%s", str);
+    }
 }
 %}
 

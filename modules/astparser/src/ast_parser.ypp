@@ -164,8 +164,32 @@ typedef void* yyscan_t;
 
 int yylex(YY_LEX_PARAMETERS);
 
+// returns a Qore-specific hint for common foreign-syntax mistakes (Python/JS/Java users
+// typing the wrong literal/keyword), or nullptr if no hint applies.  Mirrors the
+// matching function in lib/parser.ypp so QLS produces the same diagnostics.
+static const char* qore_syntax_hint(const char* str) {
+    if (!str) {
+        return nullptr;
+    }
+    if (strstr(str, "unexpected '['")) {
+        return "Qore has no '[...]' list-literal syntax; use parentheses with commas instead, "
+            "e.g. '(1, 2, 3)' for a list or '(1,)' for a single-element list. "
+            "'[' is only valid as the subscript operator after an expression, "
+            "e.g. 'list[0]' or 'list[1..3]'.";
+    }
+    return nullptr;
+}
+
 void yyerror(YYLTYPE *loc, yyscan_t scanner, AstParseErrorLog* errorLog, ASTTree* parseTree, const char* str) {
-    errorLog->reportError(*loc, str);
+    const char* hint = qore_syntax_hint(str);
+    if (hint) {
+        std::string msg(str);
+        msg.append("; ");
+        msg.append(hint);
+        errorLog->reportError(*loc, msg.c_str());
+    } else {
+        errorLog->reportError(*loc, str);
+    }
 }
 
 // Defined in ast_scanner.lpp - takes ownership of pending doc comment
