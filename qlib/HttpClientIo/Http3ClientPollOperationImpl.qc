@@ -597,7 +597,10 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
         int family = Http3ClientPollOperation::selectLocalBindFamily(url_info.host);
         string bind_addr = family == AF_INET6 ? "::" : "0.0.0.0";
-        sock.bindINET(bind_addr, "0", True, family, SOCK_DGRAM);
+        # QUIC client sockets need a unique local UDP 4-tuple.  SO_REUSEADDR
+        # with port 0 can let concurrent clients autobind the same ephemeral
+        # port on Linux, which makes server replies ambiguous.
+        sock.bindINET(bind_addr, "0", False, family, SOCK_DGRAM);
 
         return sock;
     }

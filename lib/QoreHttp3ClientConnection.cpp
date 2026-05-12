@@ -161,9 +161,11 @@ int Http3ClientConnection::buildAttempt(int family, int64_t not_before_ns_abs,
     ReferenceHolder<QoreSocketObject> sock_priv_holder(new QoreSocketObject, xsink);
     QoreSocketObject* sock_priv_raw = *sock_priv_holder;
 
-    // 1a. Bind UDP socket to an ephemeral port in the requested family.
+    // 1a. Bind UDP socket to a unique ephemeral port in the requested family.
     const char* bind_addr = (family == AF_INET6) ? "::" : "0.0.0.0";
-    int bind_rc = sock_priv_raw->bindINET(bind_addr, "0", true, family, SOCK_DGRAM,
+    // SO_REUSEADDR can let concurrent QUIC clients share a UDP 4-tuple on
+    // Linux, making server replies ambiguous between separate sockets.
+    int bind_rc = sock_priv_raw->bindINET(bind_addr, "0", false, family, SOCK_DGRAM,
         0, xsink);
     if (bind_rc < 0 || *xsink) {
         if (!*xsink) {
