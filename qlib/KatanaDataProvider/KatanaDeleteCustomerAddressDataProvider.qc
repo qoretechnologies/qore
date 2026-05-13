@@ -7,7 +7,7 @@ public class KatanaDeleteCustomerAddressDataProvider inherits KatanaDataProvider
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "delete",
-            "desc": "Delete a customeraddress from Katana",
+            "desc": "Delete a customer address from Katana",
             "type": "KatanaDeleteCustomerAddressDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,

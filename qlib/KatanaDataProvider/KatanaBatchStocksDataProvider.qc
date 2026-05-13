@@ -6,7 +6,7 @@ public namespace KatanaDataProvider {
 public class KatanaBatchStocksDataProvider inherits KatanaDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
-            "name": "batch_stocks", "desc": "Katana batch stocks collection (read-only)",
+            "name": "batch-stocks", "desc": "Katana batch stocks collection (read-only)",
             "type": "KatanaBatchStocksDataProvider",
             "has_record": True, "supports_read": True, "supports_native_search": True,
             "constructor_options": ConstructorOptions, "search_options": SearchOptions,
@@ -42,7 +42,7 @@ public class KatanaBatchStocksDataProvider inherits KatanaDataProviderBase {
         } + CommonSearchOptions;
     }
     constructor(RestClientIo::RestClientIo rest) : KatanaDataProviderBase(rest) {}
-    string getName() { return "batch_stocks"; }
+    string getName() { return "batch-stocks"; }
     *string getDesc() { return "Katana batch stocks collection (read-only)"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return new KatanaBatchStockDataType().getFields();

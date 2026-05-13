@@ -6,7 +6,7 @@ public namespace KatanaDataProvider {
 public class KatanaTaxRatesDataProvider inherits KatanaDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
-            "name": "tax_rates", "desc": "Katana tax rates collection",
+            "name": "tax-rates", "desc": "Katana tax rates collection",
             "type": "KatanaTaxRatesDataProvider",
             "has_record": True, "supports_read": True, "supports_native_search": True,
             "supports_children": True, "children_can_support_apis": True,
@@ -38,7 +38,7 @@ public class KatanaTaxRatesDataProvider inherits KatanaDataProviderBase {
         };
     }
     constructor(RestClientIo::RestClientIo rest) : KatanaDataProviderBase(rest) {}
-    string getName() { return "tax_rates"; }
+    string getName() { return "tax-rates"; }
     *string getDesc() { return "Katana tax rates collection"; }
     private *list<string> getChildProviderNamesImpl() { return keys ChildMap; }
     private *AbstractDataProvider getChildProviderImpl(string name) {

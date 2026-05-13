@@ -6,7 +6,7 @@ public namespace KatanaDataProvider {
 public class KatanaStockAdjustmentsDataProvider inherits KatanaDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
-            "name": "stock_adjustments", "desc": "Katana stock adjustments collection",
+            "name": "stock-adjustments", "desc": "Katana stock adjustments collection",
             "type": "KatanaStockAdjustmentsDataProvider",
             "has_record": True, "supports_read": True, "supports_native_search": True,
             "supports_children": True, "children_can_support_apis": True,
@@ -35,7 +35,7 @@ public class KatanaStockAdjustmentsDataProvider inherits KatanaDataProviderBase 
         };
     }
     constructor(RestClientIo::RestClientIo rest) : KatanaDataProviderBase(rest) {}
-    string getName() { return "stock_adjustments"; }
+    string getName() { return "stock-adjustments"; }
     *string getDesc() { return "Katana stock adjustments collection"; }
     private *list<string> getChildProviderNamesImpl() { return keys ChildMap; }
     private *AbstractDataProvider getChildProviderImpl(string name) {

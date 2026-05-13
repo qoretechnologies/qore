@@ -7,7 +7,7 @@ public class KatanaUpdateCustomerAddressDataProvider inherits KatanaDataProvider
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "update",
-            "desc": "Update an existing customeraddress in Katana",
+            "desc": "Update an existing customer address in Katana",
             "type": "KatanaUpdateCustomerAddressDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,

@@ -6,7 +6,7 @@ public namespace KatanaDataProvider {
 public class KatanaSalesOrdersDataProvider inherits KatanaDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
-            "name": "sales_orders", "desc": "Katana sales orders collection",
+            "name": "sales-orders", "desc": "Katana sales orders collection",
             "type": "KatanaSalesOrdersDataProvider",
             "has_record": True, "supports_read": True, "supports_native_search": True,
             "supports_children": True, "children_can_support_apis": True,
@@ -90,7 +90,7 @@ public class KatanaSalesOrdersDataProvider inherits KatanaDataProviderBase {
         };
     }
     constructor(RestClientIo::RestClientIo rest) : KatanaDataProviderBase(rest) {}
-    string getName() { return "sales_orders"; }
+    string getName() { return "sales-orders"; }
     *string getDesc() { return "Katana sales orders collection"; }
     private *list<string> getChildProviderNamesImpl() { return keys ChildMap; }
     private *AbstractDataProvider getChildProviderImpl(string name) {

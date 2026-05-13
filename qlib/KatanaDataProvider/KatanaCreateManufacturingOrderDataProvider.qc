@@ -7,7 +7,7 @@ public class KatanaCreateManufacturingOrderDataProvider inherits KatanaDataProvi
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "create",
-            "desc": "Create a new manufacturingorder in Katana",
+            "desc": "Create a new manufacturing order in Katana",
             "type": "KatanaCreateManufacturingOrderDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,

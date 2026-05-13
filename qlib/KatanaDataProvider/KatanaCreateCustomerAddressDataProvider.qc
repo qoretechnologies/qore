@@ -7,7 +7,7 @@ public class KatanaCreateCustomerAddressDataProvider inherits KatanaDataProvider
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "create",
-            "desc": "Create a new customeraddress in Katana",
+            "desc": "Create a new customer address in Katana",
             "type": "KatanaCreateCustomerAddressDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,

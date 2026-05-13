@@ -6,7 +6,7 @@ public namespace KatanaDataProvider {
 public class KatanaManufacturingOrdersDataProvider inherits KatanaDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
-            "name": "manufacturing_orders",
+            "name": "manufacturing-orders",
             "desc": "Katana manufacturing orders collection",
             "type": "KatanaManufacturingOrdersDataProvider",
             "has_record": True, "supports_read": True, "supports_native_search": True,
@@ -45,7 +45,7 @@ public class KatanaManufacturingOrdersDataProvider inherits KatanaDataProviderBa
         };
     }
     constructor(RestClientIo::RestClientIo rest) : KatanaDataProviderBase(rest) {}
-    string getName() { return "manufacturing_orders"; }
+    string getName() { return "manufacturing-orders"; }
     *string getDesc() { return "Katana manufacturing orders collection"; }
     private *list<string> getChildProviderNamesImpl() { return keys ChildMap; }
     private *AbstractDataProvider getChildProviderImpl(string name) {

@@ -7,7 +7,7 @@ public class KatanaCreateTaxRateDataProvider inherits KatanaDataProviderBase {
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "create",
-            "desc": "Create a new taxrate in Katana",
+            "desc": "Create a new tax rate in Katana",
             "type": "KatanaCreateTaxRateDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,

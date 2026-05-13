@@ -7,7 +7,7 @@ public class KatanaDeleteManufacturingOrderDataProvider inherits KatanaDataProvi
     public {
         const ProviderInfo = <DataProviderInfo>{
             "name": "delete",
-            "desc": "Delete a manufacturingorder from Katana",
+            "desc": "Delete a manufacturing order from Katana",
             "type": "KatanaDeleteManufacturingOrderDataProvider",
             "supports_request": True,
             "constructor_options": ConstructorOptions,
