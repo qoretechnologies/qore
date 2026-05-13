@@ -28,7 +28,9 @@
 
 %disable-warning unreferenced-variable
 
-%requires json
+%try-module json
+%define NoJson
+%endtry
 %requires Mime
 %requires Util
 %requires astparser

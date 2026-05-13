@@ -247,12 +247,16 @@ public class QoreChunkTextProcessor inherits DataProvider::AbstractDataProvider 
     #! Ensures the DocumentChunker is initialized (lazy creation to avoid file I/O in constructor)
     private ensureChunker() {
         if (!chunker) {
+%ifndef NoJson
             hash<auto> tokenizer_config =
                 parse_json(ReadOnlyFile::readTextFile(tokenizer_config_path));
             chunker = new QoreTokenizerUtils::DocumentChunker(tokenizer_config, {
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
             });
+%else
+            throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
+%endif
         }
     }
 

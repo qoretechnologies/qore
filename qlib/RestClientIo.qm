@@ -3266,6 +3266,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 if (resp_body.typeCode() == NT_BINARY) {
                     resp_body = resp_body.toString();
                 }
+%ifndef NoJson
                 if (resp_body.typeCode() == NT_STRING && raw.headers."content-type" =~ /json/i) {
                     try {
                         resp_body = parse_json(resp_body);
@@ -3273,6 +3274,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         # keep as string
                     }
                 }
+%endif
                 throw "OAUTH2-ERROR",
                     sprintf("OAuth2 token request failed with HTTP %d", raw.status_code),
                     {"status_code": raw.status_code, "body": resp_body, "headers": raw.headers};
@@ -3284,18 +3286,22 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 resp_body = resp_body.toString();
             }
             if (resp_body.typeCode() == NT_STRING) {
+%ifndef NoJson
                 if (raw.headers."content-type" =~ /json/i) {
                     return parse_json(resp_body);
                 }
+%endif
                 if (raw.headers."content-type" =~ /form-urlencoded/i) {
                     return parse_uri_query("?" + resp_body).params;
                 }
+%ifndef NoJson
                 # Default: try JSON
                 try {
                     return parse_json(resp_body);
                 } catch () {
                     # fall through
                 }
+%endif
             }
             throw "OAUTH2-ERROR", sprintf("Cannot parse OAuth2 token response with content-type %y",
                 raw.headers."content-type");
@@ -3502,7 +3508,9 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     "accept": MimeTypeText,
                 };
             } else if (c_location == "body-direct") {
+%ifndef NoJson
                 body_str = make_json(body);
+%endif
                 req_hdr = {
                     "content-type": MimeTypeJson,
                     "accept": MimeTypeJson,
@@ -3534,6 +3542,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
             } else {
                 # body-direct: deserialize JSON and expect a raw string token
                 auto parsed;
+%ifndef NoJson
                 try {
                     parsed = parse_json(raw.body.toString());
                 } catch (hash<ExceptionInfo> ex) {
@@ -3541,6 +3550,7 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                         sprintf("failed to parse custom token response body: %s: %s",
                             ex.err, ex.desc);
                 }
+%endif
                 if (parsed.typeCode() != NT_STRING) {
                     throw "REST-TOKEN-ERROR",
                         sprintf("custom token response body type expected to be \"string\"; "

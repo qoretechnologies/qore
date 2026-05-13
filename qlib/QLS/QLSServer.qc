@@ -224,6 +224,7 @@ public const ServerCapabilities = {
     },
 };
 
+%ifndef NoJson
 #! QLS - Language Server Protocol server implementation for Qore.
 public class QLSServer {
     private {
@@ -3741,6 +3742,7 @@ public class QLSServer {
         return make_jsonrpc_response(jsonRpcVer, request.id, result);
     }
 }
+%endif
 
 #! ASTSymbolKind to CompletionItem.kind mapping
 const CSTSymbolKindMap = {

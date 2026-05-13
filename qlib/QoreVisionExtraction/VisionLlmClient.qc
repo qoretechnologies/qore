@@ -278,7 +278,11 @@ public class VisionLlmClient {
         # If tool calls returned (structured extraction), extract the arguments
         if (resp.tool_calls) {
             structured = resp.tool_calls[0].arguments;
+%ifndef NoJson
             text = make_json(structured);
+%else
+            text = sprintf("%y", structured);
+%endif
         }
 
         return <VisionExtractionResult>{

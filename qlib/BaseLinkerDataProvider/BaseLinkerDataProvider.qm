@@ -30,7 +30,9 @@
 %requires(reexport) DataProvider
 %requires(reexport) BaseLinkerRestClient
 %requires RestClientIo
-%requires json
+%try-module json
+%define NoJson
+%endtry
 %requires Util
 %requires Logger
 %requires Mime

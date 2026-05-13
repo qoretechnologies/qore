@@ -140,6 +140,14 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
             "required": ("on_topic", "detected_topic", "reason"),
         };
 
+%ifdef NoJson
+        if (getFailClosed()) {
+            hash<GuardrailResult> result = makeFailResult(
+                "topic classification unavailable (json module missing, fail-closed)");
+            result.duration_ms = getElapsedMs(start);
+            return result;
+        }
+%else
         try {
             hash<QoreLlmUtils::LlmCompletionResult> llm_result =
                 llm.complete(system_prompt, text, output_schema);
@@ -169,6 +177,7 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
             }
             # LLM failure — pass through (fail open)
         }
+%endif
 
         hash<GuardrailResult> result = makePassResult();
         result.duration_ms = getElapsedMs(start);

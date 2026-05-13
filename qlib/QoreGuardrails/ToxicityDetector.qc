@@ -233,6 +233,9 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
 
         hash<QoreLlmUtils::LlmCompletionResult> llm_result =
             llm.complete(system_prompt, text, output_schema);
+%ifdef NoJson
+        throw "GUARDRAIL-ERROR", "the json module is required for LLM-based toxicity detection";
+%else
         hash<auto> parsed = parse_json(llm_result.content);
 
         if (parsed.is_toxic && parsed.confidence > llm_threshold) {
@@ -254,6 +257,7 @@ public class ToxicityDetector inherits AbstractGuardrailRule {
         hash<GuardrailResult> result = makePassResult();
         result.duration_ms = getElapsedMs(start);
         return result;
+%endif
     }
 }
 

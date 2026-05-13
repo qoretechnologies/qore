@@ -281,7 +281,11 @@ public class GoHighLevelDataProviderBase inherits DataProvider::AbstractDataProv
     /** @return a UUID string
     */
     static string generateIdempotencyKey() {
+%ifdef NoUuid
+        throw "GOHIGHLEVEL-DEPENDENCY-ERROR", "the uuid module is required to generate idempotency keys";
+%else
         return UUID::get();
+%endif
     }
 
     #! Makes a REST request with retry and rate limit handling

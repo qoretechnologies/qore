@@ -1166,7 +1166,11 @@ sse.setEventQueue();
         *data send_body;
         if (exists eff_body) {
             if (serialization == "json" && eff_body.typeCode() != NT_STRING) {
+%ifndef NoJson
                 send_body = make_json(eff_body);
+%else
+                throw "SSE-CLIENT-ERROR", "the json module is required to serialize JSON request bodies";
+%endif
             } else {
                 send_body = eff_body;
             }

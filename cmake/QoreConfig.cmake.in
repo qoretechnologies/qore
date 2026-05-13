@@ -119,20 +119,27 @@ else()
     endif()
 endif()
 
-# verify that qore-extract-qm-metadata can run (requires the json binary module);
-# if the json module is not installed, unset QORE_QM_METADATA_EXECUTABLE so that
-# downstream builds skip metadata extraction instead of failing
+# verify that qore-extract-qm-metadata can actually run end-to-end; it depends
+# on QoreApiMetadata::toJson(), which in turn requires the json binary module.
+# A simple "load json" probe is not sufficient: if the QoreApiMetadata .qmod
+# was AOT-compiled when json was unavailable, %try-module json baked in NoJson
+# and toJson() will throw at runtime even after json is installed later.
+# Exercise the toJson() entry point directly so we catch both situations and
+# disable metadata extraction (rather than failing downstream builds).
 if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_EXECUTABLE)
     execute_process(
-        COMMAND ${QORE_EXECUTABLE} -l json -ne ""
-        RESULT_VARIABLE _qore_json_result
+        COMMAND ${QORE_EXECUTABLE} [==[--exec=%modern
+%requires QoreApiMetadata
+QoreApiMetadata::toJson(<QoreApiMetadata::NamespaceInfo>{"name":"x","full_name":"x"});
+]==]
+        RESULT_VARIABLE _qore_qm_metadata_probe_result
         OUTPUT_QUIET ERROR_QUIET
     )
-    if(NOT _qore_json_result EQUAL 0)
-        message(STATUS "Qore json module not available; QM metadata extraction disabled")
+    if(NOT _qore_qm_metadata_probe_result EQUAL 0)
+        message(STATUS "qore-extract-qm-metadata cannot run (QoreApiMetadata::toJson() failed; json module unavailable or QoreApiMetadata was built without json support); QM metadata extraction disabled")
         unset(QORE_QM_METADATA_EXECUTABLE)
     endif()
-    unset(_qore_json_result)
+    unset(_qore_qm_metadata_probe_result)
 endif()
 
 # warning: the same prefix for current qore is used if there is no

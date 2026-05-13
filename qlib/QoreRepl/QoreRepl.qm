@@ -26,16 +26,15 @@
 
 %modern
 
-# Optional WebSocket support - enabled if WebSocketHandler is available
-%try-module WebSocketHandler >= 2.0
-%define NoWebSocketHandler
-%endtry
+%requires WebSocketHandler >= 2.0
 
 # Linenoise support for line editing and history
 %requires linenoise
 
 # JSON support for WebSocket message protocol
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 # Reflection support for introspection commands
 %requires reflection

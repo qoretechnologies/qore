@@ -32,7 +32,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) GoHighLevelRestClient
-%requires uuid
+%try-module uuid
+%define NoUuid
+%endtry
 %try-module json
 %define NoJson
 %endtry

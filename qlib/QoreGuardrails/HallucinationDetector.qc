@@ -218,6 +218,9 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
 
         hash<QoreLlmUtils::LlmCompletionResult> llm_result =
             llm.complete(system_prompt, user_prompt, output_schema);
+%ifdef NoJson
+        throw "GUARDRAIL-ERROR", "the json module is required for hallucination detection";
+%else
         hash<auto> parsed = parse_json(llm_result.content);
 
         if (parsed.grounding_score < min_grounding_score) {
@@ -242,6 +245,7 @@ public class HallucinationDetector inherits AbstractGuardrailRule {
         hash<GuardrailResult> result = makePassResult();
         result.duration_ms = getElapsedMs(start);
         return result;
+%endif
     }
 }
 

@@ -188,7 +188,11 @@ public class SquarespaceDataProviderBase inherits DataProvider::AbstractDataProv
     /** @return a UUID string
     */
     static string generateIdempotencyKey() {
+%ifdef NoUuid
+        throw "SQUARESPACE-DEPENDENCY-ERROR", "the uuid module is required to generate idempotency keys";
+%else
         return UUID::get();
+%endif
     }
 
     #! Formats a date/time value to ISO 8601 UTC format for Squarespace API

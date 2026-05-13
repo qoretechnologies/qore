@@ -345,6 +345,9 @@ llm.chatStream(
     */
     chatStream(list<hash<ChatMessage>> messages, code callback,
             *list<hash<ToolDefinition>> tools) {
+%ifdef NoJson
+        throw "LLM-ERROR", "the json module is required for streaming chat";
+%else
         if (mode == "callback") {
             throw "LLM-ERROR",
                 "streaming is not supported in callback mode; use chat() instead";
@@ -440,6 +443,7 @@ llm.chatStream(
                 });
             }
         }
+%endif
     }
 
     #! Estimates the token count for a text string
@@ -584,7 +588,11 @@ llm.chatStream(
                 break;
             } else if (block.type == "tool_use") {
                 # For tool-use extraction, the structured output is in the input field
+%ifndef NoJson
                 content = make_json(block.input);
+%else
+                throw "LLM-ERROR", "the json module is required for tool-use extraction";
+%endif
                 break;
             }
         }
@@ -679,6 +687,7 @@ llm.chatStream(
             } else if (msg.content.val()) {
                 api_msg.content = msg.content;
             }
+%ifndef NoJson
             if (msg.tool_calls) {
                 list<auto> tc_list = ();
                 foreach hash<ChatToolCall> tc in (msg.tool_calls) {
@@ -693,6 +702,7 @@ llm.chatStream(
                 }
                 api_msg.tool_calls = tc_list;
             }
+%endif
             if (msg.tool_call_id.val()) {
                 api_msg.tool_call_id = msg.tool_call_id;
             }
@@ -778,7 +788,11 @@ llm.chatStream(
                 *hash<auto> args;
                 if (tc.function.arguments.val()) {
                     if (tc.function.arguments.typeCode() == NT_STRING) {
+%ifndef NoJson
                         args = parse_json(tc.function.arguments);
+%else
+                        throw "LLM-ERROR", "the json module is required to parse tool call arguments";
+%endif
                     } else {
                         args = tc.function.arguments;
                     }
@@ -1037,6 +1051,7 @@ llm.chatStream(
             } else if (msg.content.val()) {
                 api_msg.content = msg.content;
             }
+%ifndef NoJson
             if (msg.tool_calls) {
                 list<auto> tc_list = ();
                 foreach hash<ChatToolCall> tc in (msg.tool_calls) {
@@ -1051,6 +1066,7 @@ llm.chatStream(
                 }
                 api_msg.tool_calls = tc_list;
             }
+%endif
             if (msg.tool_call_id.val()) {
                 api_msg.tool_call_id = msg.tool_call_id;
             }
