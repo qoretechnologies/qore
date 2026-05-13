@@ -1750,6 +1750,24 @@ cargo install tree-sitter-cli@0.26.5
       - supports API key authentication
       - provides JotformRestConnection for connection management with \c jotform:// URL scheme
       - supports multiple API domains (standard, EU, HIPAA)
+    - @ref katanadataproviderintro "KatanaDataProvider" module
+      - new module providing a data provider API for <a href="https://katanamrp.com/">Katana</a> Manufacturing ERP
+      - product, material, and variant management (create, read, update, delete, list)
+      - manufacturing order management (create, read, update, delete, list)
+      - sales order management with rows and addresses (create, read, update, delete, list)
+      - purchase order management with rows (create, read, update, delete, list)
+      - customer management with addresses, supplier management
+      - location management (read-only — Katana API has no create/update/delete)
+      - inventory management (read, plus safety-stock-level and reorder-point setters)
+      - stock adjustments with embedded rows in the parent payload
+      - batch stock (read-only), tax rate (create + read only), and webhook management
+      - polling-based event triggers across all major resources
+      - action catalog integration with trigger events for the most important resources
+      - connection support with \c katanarest:// URL scheme
+    - @ref katanarestclientintro "KatanaRestClient" module
+      - new module providing a REST client for <a href="https://katanamrp.com/">Katana</a>'s Manufacturing ERP REST API
+      - supports Bearer token (API key) authentication
+      - provides KatanaRestConnection for connection management with \c katanarest:// URL scheme
     - @ref keapdataproviderintro "KeapDataProvider" module
       - new module providing a data provider API for <a href="https://keap.com/">Keap</a> CRM
       - contact management (create, update, delete, merge, list, find by ID)

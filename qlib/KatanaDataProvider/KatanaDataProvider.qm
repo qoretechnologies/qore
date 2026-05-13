@@ -1,0 +1,2271 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore KatanaDataProvider module definition
+
+/*  KatanaDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) KatanaRestClient
+%requires RestClientIo
+
+module KatanaDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Katana MRP";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new KatanaDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": KatanaDataProvider::AppName,
+            "display_name": "Katana",
+            "short_desc": "Katana cloud manufacturing and inventory (MRP) integration",
+            "desc": "Katana is a cloud-based manufacturing and inventory management (MRP) "
+                "platform. This integration provides full CRUD operations for products, "
+                "materials, variants, manufacturing orders, sales orders, purchase orders, "
+                "customers, suppliers, locations, stock adjustments, tax rates, and webhooks, "
+                "plus inventory visibility, batch stock tracking, and native webhook and "
+                "polling event triggers.",
+            "scheme": "katanarest",
+            "logo": KatanaDataProvider::KatanaLogo,
+            "logo_file_name": "katana-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AccountingErp, DataProvider::AppGroup::Ecommerce),
+        });
+
+        # ========== PRODUCT ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/products",
+            "action": "list-products",
+            "groups": "Products",
+            "display_name": "List Products",
+            "short_desc": "List products with filters and pagination",
+            "desc": "List products from Katana MRP with optional filters",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "Get a specific product",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "products",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by product name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "is_sellable": <ActionOptionInfo>{
+                    "display_name": "Is Sellable",
+                    "short_desc": "Filter by sellable flag",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "is_producible": <ActionOptionInfo>{
+                    "display_name": "Is Producible",
+                    "short_desc": "Filter by producible flag",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "is_purchasable": <ActionOptionInfo>{
+                    "display_name": "Is Purchasable",
+                    "short_desc": "Filter by purchasable flag",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "category_name": <ActionOptionInfo>{
+                    "display_name": "Category Name",
+                    "short_desc": "Filter by category",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "default_supplier_id": <ActionOptionInfo>{
+                    "display_name": "Default Supplier ID",
+                    "short_desc": "Filter by default supplier",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "suppliers",
+                },
+                "batch_tracked": <ActionOptionInfo>{
+                    "display_name": "Batch Tracked",
+                    "short_desc": "Filter by batch tracking flag",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "serial_tracked": <ActionOptionInfo>{
+                    "display_name": "Serial Tracked",
+                    "short_desc": "Filter by serial tracking flag",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "uom": <ActionOptionInfo>{
+                    "display_name": "UoM",
+                    "short_desc": "Filter by unit of measure",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "is_auto_assembly": <ActionOptionInfo>{
+                    "display_name": "Is Auto Assembly",
+                    "short_desc": "Filter by auto-assembly flag",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+                "include_archived": <ActionOptionInfo>{
+                    "display_name": "Include Archived",
+                    "short_desc": "Include archived products",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "If `True`, includes archived products in the response",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/products",
+            "action": "get-product",
+            "groups": "Products",
+            "display_name": "Get Product",
+            "short_desc": "Get a single product by ID",
+            "desc": "Retrieve a single product by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "The product ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "products",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/products/create",
+            "action": "create-product",
+            "groups": "Products",
+            "display_name": "Create Product",
+            "short_desc": "Create a new product",
+            "desc": "Create a new product in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaProductDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateProductRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/products/update",
+            "action": "update-product",
+            "groups": "Products",
+            "display_name": "Update Product",
+            "short_desc": "Update an existing product",
+            "desc": "Update an existing product in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaProductDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateProductRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/products/delete",
+            "action": "delete-product",
+            "groups": "Products",
+            "display_name": "Delete Product",
+            "short_desc": "Delete a product",
+            "desc": "Delete a product from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteProductRequestDataType::Fields),
+        });
+
+        # ========== MATERIAL ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/materials",
+            "action": "list-materials",
+            "groups": "Materials",
+            "display_name": "List Materials",
+            "short_desc": "List materials with filters and pagination",
+            "desc": "List materials from Katana MRP with optional filters",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Material ID",
+                    "short_desc": "Get a specific material",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "materials",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by material name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "category_name": <ActionOptionInfo>{
+                    "display_name": "Category Name",
+                    "short_desc": "Filter by category",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "default_supplier_id": <ActionOptionInfo>{
+                    "display_name": "Default Supplier ID",
+                    "short_desc": "Filter by default supplier",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "suppliers",
+                },
+                "batch_tracked": <ActionOptionInfo>{
+                    "display_name": "Batch Tracked",
+                    "short_desc": "Filter by batch tracking",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/materials",
+            "action": "get-material",
+            "groups": "Materials",
+            "display_name": "Get Material",
+            "short_desc": "Get a single material by ID",
+            "desc": "Retrieve a single material by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Material ID",
+                    "short_desc": "The material ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "materials",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/materials/create",
+            "action": "create-material",
+            "groups": "Materials",
+            "display_name": "Create Material",
+            "short_desc": "Create a new material",
+            "desc": "Create a new material in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaMaterialDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateMaterialRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/materials/update",
+            "action": "update-material",
+            "groups": "Materials",
+            "display_name": "Update Material",
+            "short_desc": "Update an existing material",
+            "desc": "Update an existing material in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaMaterialDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateMaterialRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/materials/delete",
+            "action": "delete-material",
+            "groups": "Materials",
+            "display_name": "Delete Material",
+            "short_desc": "Delete a material",
+            "desc": "Delete a material from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteMaterialRequestDataType::Fields),
+        });
+
+        # ========== VARIANT ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/variants",
+            "action": "list-variants",
+            "groups": "Variants",
+            "display_name": "List Variants",
+            "short_desc": "List variants with filters and pagination",
+            "desc": "List product/material variants from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Variant ID",
+                    "short_desc": "Get a specific variant",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "variants",
+                },
+                "sku": <ActionOptionInfo>{
+                    "display_name": "SKU",
+                    "short_desc": "Filter by SKU",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "product_id": <ActionOptionInfo>{
+                    "display_name": "Product ID",
+                    "short_desc": "Filter by parent product ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "products",
+                },
+                "material_id": <ActionOptionInfo>{
+                    "display_name": "Material ID",
+                    "short_desc": "Filter by parent material ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "materials",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/variants",
+            "action": "get-variant",
+            "groups": "Variants",
+            "display_name": "Get Variant",
+            "short_desc": "Get a single variant by ID",
+            "desc": "Retrieve a single variant by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Variant ID",
+                    "short_desc": "The variant ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "variants",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/variants/create",
+            "action": "create-variant",
+            "groups": "Variants",
+            "display_name": "Create Variant",
+            "short_desc": "Create a new variant",
+            "desc": "Create a new variant in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaVariantDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateVariantRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/variants/update",
+            "action": "update-variant",
+            "groups": "Variants",
+            "display_name": "Update Variant",
+            "short_desc": "Update an existing variant",
+            "desc": "Update an existing variant in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaVariantDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateVariantRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/variants/delete",
+            "action": "delete-variant",
+            "groups": "Variants",
+            "display_name": "Delete Variant",
+            "short_desc": "Delete a variant",
+            "desc": "Delete a variant from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteVariantRequestDataType::Fields),
+        });
+
+        # ========== MANUFACTURING ORDER ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/manufacturing-orders",
+            "action": "list-manufacturing-orders",
+            "groups": "Manufacturing Orders",
+            "display_name": "List Manufacturing Orders",
+            "short_desc": "List manufacturing orders with filters",
+            "desc": "List manufacturing orders from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "Get a specific manufacturing order",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "manufacturing_orders",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": MoStatusUpdateAllowed,
+                    "preselected": True,
+                },
+                "location_id": <ActionOptionInfo>{
+                    "display_name": "Location ID",
+                    "short_desc": "Filter by location",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "locations",
+                },
+                "order_no": <ActionOptionInfo>{
+                    "display_name": "Order Number",
+                    "short_desc": "Filter by order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "is_linked_to_sales_order": <ActionOptionInfo>{
+                    "display_name": "Linked To Sales Order",
+                    "short_desc": "Filter MOs linked to a sales order",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "If `True`, returns only MOs created from a sales order; "
+                        "if `False`, only standalone MOs",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/manufacturing-orders",
+            "action": "get-manufacturing-order",
+            "groups": "Manufacturing Orders",
+            "display_name": "Get Manufacturing Order",
+            "short_desc": "Get a single manufacturing order by ID",
+            "desc": "Retrieve a single manufacturing order by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The manufacturing order ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "manufacturing_orders",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/manufacturing-orders/create",
+            "action": "create-manufacturing-order",
+            "groups": "Manufacturing Orders",
+            "display_name": "Create Manufacturing Order",
+            "short_desc": "Create a new manufacturing order",
+            "desc": "Create a new manufacturing order in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaManufacturingOrderDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateManufacturingOrderRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/manufacturing-orders/update",
+            "action": "update-manufacturing-order",
+            "groups": "Manufacturing Orders",
+            "display_name": "Update Manufacturing Order",
+            "short_desc": "Update an existing manufacturing order",
+            "desc": "Update an existing manufacturing order in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaManufacturingOrderDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateManufacturingOrderRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/manufacturing-orders/delete",
+            "action": "delete-manufacturing-order",
+            "groups": "Manufacturing Orders",
+            "display_name": "Delete Manufacturing Order",
+            "short_desc": "Delete a manufacturing order",
+            "desc": "Delete a manufacturing order from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteManufacturingOrderRequestDataType::Fields),
+        });
+
+        # ========== SALES ORDER ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-orders",
+            "action": "list-sales-orders",
+            "groups": "Sales Orders",
+            "display_name": "List Sales Orders",
+            "short_desc": "List sales orders with filters",
+            "desc": "List sales orders from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "Get a specific sales order",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "sales_orders",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": SoStatusUpdateAllowed,
+                    "preselected": True,
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "customers",
+                },
+                "location_id": <ActionOptionInfo>{
+                    "display_name": "Location ID",
+                    "short_desc": "Filter by location",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "locations",
+                },
+                "order_no": <ActionOptionInfo>{
+                    "display_name": "Order Number",
+                    "short_desc": "Filter by order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "source": <ActionOptionInfo>{
+                    "display_name": "Source",
+                    "short_desc": "Filter by source",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "invoicing_status": <ActionOptionInfo>{
+                    "display_name": "Invoicing Status",
+                    "short_desc": "Filter by invoicing status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "product_availability": <ActionOptionInfo>{
+                    "display_name": "Product Availability",
+                    "short_desc": "Filter by product availability",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": SoProductAvailabilityAllowed,
+                },
+                "ingredient_availability": <ActionOptionInfo>{
+                    "display_name": "Ingredient Availability",
+                    "short_desc": "Filter by ingredient availability",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": SoIngredientAvailabilityAllowed,
+                },
+                "production_status": <ActionOptionInfo>{
+                    "display_name": "Production Status",
+                    "short_desc": "Filter by production status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": SoProductionStatusAllowed,
+                },
+                "ecommerce_store_name": <ActionOptionInfo>{
+                    "display_name": "Ecommerce Store Name",
+                    "short_desc": "Filter by ecommerce store",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "ecommerce_order_id": <ActionOptionInfo>{
+                    "display_name": "Ecommerce Order ID",
+                    "short_desc": "Filter by ecommerce order ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "ecommerce_order_type": <ActionOptionInfo>{
+                    "display_name": "Ecommerce Order Type",
+                    "short_desc": "Filter by ecommerce order type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "currency": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Filter by currency",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "ISO 4217 currency code (e.g. `USD`, `EUR`)",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-orders",
+            "action": "get-sales-order",
+            "groups": "Sales Orders",
+            "display_name": "Get Sales Order",
+            "short_desc": "Get a single sales order by ID",
+            "desc": "Retrieve a single sales order by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The sales order ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "sales_orders",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-orders/create",
+            "action": "create-sales-order",
+            "groups": "Sales Orders",
+            "display_name": "Create Sales Order",
+            "short_desc": "Create a new sales order",
+            "desc": "Create a new sales order in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaSalesOrderDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateSalesOrderRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-orders/update",
+            "action": "update-sales-order",
+            "groups": "Sales Orders",
+            "display_name": "Update Sales Order",
+            "short_desc": "Update an existing sales order",
+            "desc": "Update an existing sales order in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaSalesOrderDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateSalesOrderRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-orders/delete",
+            "action": "delete-sales-order",
+            "groups": "Sales Orders",
+            "display_name": "Delete Sales Order",
+            "short_desc": "Delete a sales order",
+            "desc": "Delete a sales order from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteSalesOrderRequestDataType::Fields),
+        });
+
+        # ========== SALES ORDER ROW ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-rows",
+            "action": "list-sales-order-rows",
+            "groups": "Sales Orders",
+            "display_name": "List Sales Order Rows",
+            "short_desc": "List sales order rows with filters",
+            "desc": "List sales order line rows from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Row ID",
+                    "short_desc": "Get a specific row",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "sales_order_rows",
+                },
+                "sales_order_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order ID",
+                    "short_desc": "Filter by parent sales order",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "sales_orders",
+                    "preselected": True,
+                },
+                "variant_id": <ActionOptionInfo>{
+                    "display_name": "Variant ID",
+                    "short_desc": "Filter by variant",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "variants",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-rows",
+            "action": "get-sales-order-row",
+            "groups": "Sales Orders",
+            "display_name": "Get Sales Order Row",
+            "short_desc": "Get a single sales order row by ID",
+            "desc": "Retrieve a single sales order row by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Row ID",
+                    "short_desc": "The sales order row ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "sales_order_rows",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-rows/create",
+            "action": "create-sales-order-row",
+            "groups": "Sales Orders",
+            "display_name": "Create Sales Order Row",
+            "short_desc": "Create a new sales order row",
+            "desc": "Add a row to an existing sales order in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaSalesOrderRowRecordDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateSalesOrderRowRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-rows/update",
+            "action": "update-sales-order-row",
+            "groups": "Sales Orders",
+            "display_name": "Update Sales Order Row",
+            "short_desc": "Update an existing sales order row",
+            "desc": "Update an existing sales order row in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaSalesOrderRowRecordDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateSalesOrderRowRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-rows/delete",
+            "action": "delete-sales-order-row",
+            "groups": "Sales Orders",
+            "display_name": "Delete Sales Order Row",
+            "short_desc": "Delete a sales order row",
+            "desc": "Delete a sales order row from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteSalesOrderRowRequestDataType::Fields),
+        });
+
+        # ========== SALES ORDER ADDRESS ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-addresses",
+            "action": "list-sales-order-addresses",
+            "groups": "Sales Orders",
+            "display_name": "List Sales Order Addresses",
+            "short_desc": "List sales order addresses",
+            "desc": "List sales order shipping/billing addresses",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Address ID",
+                    "short_desc": "Get a specific address",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "sales_order_addresses",
+                },
+                "sales_order_id": <ActionOptionInfo>{
+                    "display_name": "Sales Order ID",
+                    "short_desc": "Filter by sales order",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "sales_orders",
+                    "preselected": True,
+                },
+                "entity_type": <ActionOptionInfo>{
+                    "display_name": "Entity Type",
+                    "short_desc": "Filter by entity type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": AddressEntityTypeAllowed,
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-addresses",
+            "action": "get-sales-order-address",
+            "groups": "Sales Orders",
+            "display_name": "Get Sales Order Address",
+            "short_desc": "Get a single sales order address by ID",
+            "desc": "Retrieve a single sales order address by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Address ID",
+                    "short_desc": "The address ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "sales_order_addresses",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-addresses/create",
+            "action": "create-sales-order-address",
+            "groups": "Sales Orders",
+            "display_name": "Create Sales Order Address",
+            "short_desc": "Create a new sales order address",
+            "desc": "Attach a `billing` or `shipping` address to a sales order",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaSalesOrderAddressDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateSalesOrderAddressRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-addresses/update",
+            "action": "update-sales-order-address",
+            "groups": "Sales Orders",
+            "display_name": "Update Sales Order Address",
+            "short_desc": "Update an existing sales order address",
+            "desc": "Update an existing sales order address in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaSalesOrderAddressDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateSalesOrderAddressRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/sales-order-addresses/delete",
+            "action": "delete-sales-order-address",
+            "groups": "Sales Orders",
+            "display_name": "Delete Sales Order Address",
+            "short_desc": "Delete a sales order address",
+            "desc": "Delete a sales order address from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteSalesOrderAddressRequestDataType::Fields),
+        });
+
+        # ========== PURCHASE ORDER ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-orders",
+            "action": "list-purchase-orders",
+            "groups": "Purchase Orders",
+            "display_name": "List Purchase Orders",
+            "short_desc": "List purchase orders with filters",
+            "desc": "List purchase orders from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "Get a specific purchase order",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "purchase_orders",
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": PoStatusUpdateAllowed,
+                    "preselected": True,
+                },
+                "supplier_id": <ActionOptionInfo>{
+                    "display_name": "Supplier ID",
+                    "short_desc": "Filter by supplier",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "suppliers",
+                },
+                "location_id": <ActionOptionInfo>{
+                    "display_name": "Location ID",
+                    "short_desc": "Filter by location",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "locations",
+                },
+                "order_no": <ActionOptionInfo>{
+                    "display_name": "Order Number",
+                    "short_desc": "Filter by order number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "entity_type": <ActionOptionInfo>{
+                    "display_name": "Entity Type",
+                    "short_desc": "Filter by entity type (regular or outsourced)",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": PoEntityTypeAllowed,
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-orders",
+            "action": "get-purchase-order",
+            "groups": "Purchase Orders",
+            "display_name": "Get Purchase Order",
+            "short_desc": "Get a single purchase order by ID",
+            "desc": "Retrieve a single purchase order by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "The purchase order ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "purchase_orders",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-orders/create",
+            "action": "create-purchase-order",
+            "groups": "Purchase Orders",
+            "display_name": "Create Purchase Order",
+            "short_desc": "Create a new purchase order",
+            "desc": "Create a new purchase order in Katana MRP. The visible fields depend on the "
+                "selected `entity_type` — `tracking_location_id` is only submittable for "
+                "`outsourced` purchase orders.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaPurchaseOrderDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreatePurchaseOrderRequestDataType::Fields) + {
+                "entity_type": <ActionOptionInfo>{
+                    "display_name": "Entity Type",
+                    "short_desc": "Entity type",
+                    "desc": "Whether the purchase order is `regular` or `outsourced`. "
+                        "Selecting `outsourced` exposes the `tracking_location_id` field.",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": PoEntityTypeAllowed,
+                    "structural_determinate": True,
+                    "on_change": ("refetch",),
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-orders/update",
+            "action": "update-purchase-order",
+            "groups": "Purchase Orders",
+            "display_name": "Update Purchase Order",
+            "short_desc": "Update an existing purchase order",
+            "desc": "Update an existing purchase order in Katana MRP. The visible fields depend on "
+                "the selected `entity_type` — `tracking_location_id` is only submittable for "
+                "`outsourced` purchase orders.",
+            "action_code": DPAT_API,
+            "data_dependent_options": True,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaPurchaseOrderDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdatePurchaseOrderRequestDataType::Fields) + {
+                "entity_type": <ActionOptionInfo>{
+                    "display_name": "Entity Type",
+                    "short_desc": "Entity type",
+                    "desc": "Whether the purchase order is `regular` or `outsourced`. "
+                        "Selecting `outsourced` exposes the `tracking_location_id` field.",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": PoEntityTypeAllowed,
+                    "structural_determinate": True,
+                    "on_change": ("refetch",),
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-orders/delete",
+            "action": "delete-purchase-order",
+            "groups": "Purchase Orders",
+            "display_name": "Delete Purchase Order",
+            "short_desc": "Delete a purchase order",
+            "desc": "Delete a purchase order from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeletePurchaseOrderRequestDataType::Fields),
+        });
+
+        # ========== PURCHASE ORDER ROW ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-order-rows",
+            "action": "list-purchase-order-rows",
+            "groups": "Purchase Orders",
+            "display_name": "List Purchase Order Rows",
+            "short_desc": "List purchase order rows with filters",
+            "desc": "List purchase order line rows from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Row ID",
+                    "short_desc": "Get a specific row",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "purchase_order_rows",
+                },
+                "purchase_order_id": <ActionOptionInfo>{
+                    "display_name": "Purchase Order ID",
+                    "short_desc": "Filter by parent purchase order",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "purchase_orders",
+                    "preselected": True,
+                },
+                "variant_id": <ActionOptionInfo>{
+                    "display_name": "Variant ID",
+                    "short_desc": "Filter by variant",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "variants",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-order-rows",
+            "action": "get-purchase-order-row",
+            "groups": "Purchase Orders",
+            "display_name": "Get Purchase Order Row",
+            "short_desc": "Get a single purchase order row by ID",
+            "desc": "Retrieve a single purchase order row by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Row ID",
+                    "short_desc": "The purchase order row ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "purchase_order_rows",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-order-rows/create",
+            "action": "create-purchase-order-row",
+            "groups": "Purchase Orders",
+            "display_name": "Create Purchase Order Row",
+            "short_desc": "Create a new purchase order row",
+            "desc": "Add a row to an existing purchase order in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaPurchaseOrderRowRecordDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreatePurchaseOrderRowRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-order-rows/update",
+            "action": "update-purchase-order-row",
+            "groups": "Purchase Orders",
+            "display_name": "Update Purchase Order Row",
+            "short_desc": "Update an existing purchase order row",
+            "desc": "Update an existing purchase order row in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaPurchaseOrderRowRecordDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdatePurchaseOrderRowRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/purchase-order-rows/delete",
+            "action": "delete-purchase-order-row",
+            "groups": "Purchase Orders",
+            "display_name": "Delete Purchase Order Row",
+            "short_desc": "Delete a purchase order row",
+            "desc": "Delete a purchase order row from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeletePurchaseOrderRowRequestDataType::Fields),
+        });
+
+        # ========== CUSTOMER ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customers",
+            "action": "list-customers",
+            "groups": "Customers",
+            "display_name": "List Customers",
+            "short_desc": "List customers with filters",
+            "desc": "List customers from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Get a specific customer",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "customers",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "first_name": <ActionOptionInfo>{
+                    "display_name": "First Name",
+                    "short_desc": "Filter by first name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "last_name": <ActionOptionInfo>{
+                    "display_name": "Last Name",
+                    "short_desc": "Filter by last name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "company": <ActionOptionInfo>{
+                    "display_name": "Company",
+                    "short_desc": "Filter by company",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "phone": <ActionOptionInfo>{
+                    "display_name": "Phone",
+                    "short_desc": "Filter by phone",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "reference_id": <ActionOptionInfo>{
+                    "display_name": "Reference ID",
+                    "short_desc": "Filter by external reference ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "category": <ActionOptionInfo>{
+                    "display_name": "Category",
+                    "short_desc": "Filter by customer category",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "currency": <ActionOptionInfo>{
+                    "display_name": "Currency",
+                    "short_desc": "Filter by currency",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "ISO 4217 currency code (e.g. `USD`, `EUR`)",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customers",
+            "action": "get-customer",
+            "groups": "Customers",
+            "display_name": "Get Customer",
+            "short_desc": "Get a single customer by ID",
+            "desc": "Retrieve a single customer by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customers/create",
+            "action": "create-customer",
+            "groups": "Customers",
+            "display_name": "Create Customer",
+            "short_desc": "Create a new customer",
+            "desc": "Create a new customer in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaCustomerDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateCustomerRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customers/update",
+            "action": "update-customer",
+            "groups": "Customers",
+            "display_name": "Update Customer",
+            "short_desc": "Update an existing customer",
+            "desc": "Update an existing customer in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaCustomerDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateCustomerRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customers/delete",
+            "action": "delete-customer",
+            "groups": "Customers",
+            "display_name": "Delete Customer",
+            "short_desc": "Delete a customer",
+            "desc": "Delete a customer from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteCustomerRequestDataType::Fields),
+        });
+
+        # ========== CUSTOMER ADDRESS ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customer-addresses",
+            "action": "list-customer-addresses",
+            "groups": "Customers",
+            "display_name": "List Customer Addresses",
+            "short_desc": "List customer addresses",
+            "desc": "List customer billing/shipping addresses",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Address ID",
+                    "short_desc": "Get a specific address",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "customer_addresses",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "customers",
+                    "preselected": True,
+                },
+                "entity_type": <ActionOptionInfo>{
+                    "display_name": "Entity Type",
+                    "short_desc": "Filter by entity type",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": AddressEntityTypeAllowed,
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customer-addresses",
+            "action": "get-customer-address",
+            "groups": "Customers",
+            "display_name": "Get Customer Address",
+            "short_desc": "Get a single customer address by ID",
+            "desc": "Retrieve a single customer address by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Address ID",
+                    "short_desc": "The address ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "customer_addresses",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customer-addresses/create",
+            "action": "create-customer-address",
+            "groups": "Customers",
+            "display_name": "Create Customer Address",
+            "short_desc": "Create a new customer address",
+            "desc": "Attach a `billing` or `shipping` address to a customer",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaCustomerAddressDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateCustomerAddressRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customer-addresses/update",
+            "action": "update-customer-address",
+            "groups": "Customers",
+            "display_name": "Update Customer Address",
+            "short_desc": "Update an existing customer address",
+            "desc": "Update an existing customer address in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaCustomerAddressDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateCustomerAddressRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/customer-addresses/delete",
+            "action": "delete-customer-address",
+            "groups": "Customers",
+            "display_name": "Delete Customer Address",
+            "short_desc": "Delete a customer address",
+            "desc": "Delete a customer address from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteCustomerAddressRequestDataType::Fields),
+        });
+
+        # ========== SUPPLIER ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/suppliers",
+            "action": "list-suppliers",
+            "groups": "Suppliers",
+            "display_name": "List Suppliers",
+            "short_desc": "List suppliers with filters",
+            "desc": "List suppliers from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Supplier ID",
+                    "short_desc": "Get a specific supplier",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "suppliers",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by supplier name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/suppliers",
+            "action": "get-supplier",
+            "groups": "Suppliers",
+            "display_name": "Get Supplier",
+            "short_desc": "Get a single supplier by ID",
+            "desc": "Retrieve a single supplier by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Supplier ID",
+                    "short_desc": "The supplier ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "suppliers",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/suppliers/create",
+            "action": "create-supplier",
+            "groups": "Suppliers",
+            "display_name": "Create Supplier",
+            "short_desc": "Create a new supplier",
+            "desc": "Create a new supplier in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaSupplierDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateSupplierRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/suppliers/update",
+            "action": "update-supplier",
+            "groups": "Suppliers",
+            "display_name": "Update Supplier",
+            "short_desc": "Update an existing supplier",
+            "desc": "Update an existing supplier in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaSupplierDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateSupplierRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/suppliers/delete",
+            "action": "delete-supplier",
+            "groups": "Suppliers",
+            "display_name": "Delete Supplier",
+            "short_desc": "Delete a supplier",
+            "desc": "Delete a supplier from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteSupplierRequestDataType::Fields),
+        });
+
+        # ========== LOCATION ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/locations",
+            "action": "list-locations",
+            "groups": "Locations",
+            "display_name": "List Locations",
+            "short_desc": "List locations with filters",
+            "desc": "List inventory locations from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Location ID",
+                    "short_desc": "Get a specific location",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "locations",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by location name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/locations",
+            "action": "get-location",
+            "groups": "Locations",
+            "display_name": "Get Location",
+            "short_desc": "Get a single location by ID",
+            "desc": "Retrieve a single location by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Location ID",
+                    "short_desc": "The location ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "locations",
+                },
+            },
+        });
+
+        # ========== INVENTORY ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/inventory",
+            "action": "list-inventory",
+            "groups": "Inventory",
+            "display_name": "List Inventory",
+            "short_desc": "List inventory levels with filters",
+            "desc": "List inventory stock levels across locations and variants",
+            "action_code": DPAT_FIND,
+            "options": {
+                "variant_id": <ActionOptionInfo>{
+                    "display_name": "Variant ID",
+                    "short_desc": "Filter by variant",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "variants",
+                    "preselected": True,
+                },
+                "location_id": <ActionOptionInfo>{
+                    "display_name": "Location ID",
+                    "short_desc": "Filter by location",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "locations",
+                    "preselected": True,
+                },
+                "include_archived": <ActionOptionInfo>{
+                    "display_name": "Include Archived",
+                    "short_desc": "Include archived items",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/inventory/set-safety-stock-level",
+            "action": "set-inventory-safety-stock-level",
+            "groups": "Inventory",
+            "display_name": "Set Inventory Safety Stock Level",
+            "short_desc": "Set safety stock level for a variant at a location",
+            "desc": "Set the safety stock level for a variant at a specific location in Katana "
+                "MRP via `POST /inventory_safety_stock_levels`",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaInventoryThresholdRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/inventory/set-reorder-point",
+            "action": "set-inventory-reorder-point",
+            "groups": "Inventory",
+            "display_name": "Set Inventory Reorder Point",
+            "short_desc": "Set reorder point for a variant at a location",
+            "desc": "Set the reorder point for a variant at a specific location in Katana MRP "
+                "via `POST /inventory_reorder_points`",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaInventoryThresholdRequestDataType::Fields),
+        });
+
+        # ========== STOCK ADJUSTMENT ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/stock-adjustments",
+            "action": "list-stock-adjustments",
+            "groups": "Stock Adjustments",
+            "display_name": "List Stock Adjustments",
+            "short_desc": "List stock adjustments with filters",
+            "desc": "List stock adjustments from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Adjustment ID",
+                    "short_desc": "Get a specific adjustment",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "stock_adjustments",
+                },
+                "location_id": <ActionOptionInfo>{
+                    "display_name": "Location ID",
+                    "short_desc": "Filter by location",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "locations",
+                },
+                "stock_adjustment_number": <ActionOptionInfo>{
+                    "display_name": "Adjustment Number",
+                    "short_desc": "Filter by adjustment number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/stock-adjustments",
+            "action": "get-stock-adjustment",
+            "groups": "Stock Adjustments",
+            "display_name": "Get Stock Adjustment",
+            "short_desc": "Get a single stock adjustment by ID",
+            "desc": "Retrieve a single stock adjustment by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Adjustment ID",
+                    "short_desc": "The stock adjustment ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "stock_adjustments",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/stock-adjustments/create",
+            "action": "create-stock-adjustment",
+            "groups": "Stock Adjustments",
+            "display_name": "Create Stock Adjustment",
+            "short_desc": "Create a new stock adjustment",
+            "desc": "Create a new stock adjustment in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaStockAdjustmentDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateStockAdjustmentRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/stock-adjustments/update",
+            "action": "update-stock-adjustment",
+            "groups": "Stock Adjustments",
+            "display_name": "Update Stock Adjustment",
+            "short_desc": "Update an existing stock adjustment",
+            "desc": "Update an existing stock adjustment in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaStockAdjustmentDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateStockAdjustmentRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/stock-adjustments/delete",
+            "action": "delete-stock-adjustment",
+            "groups": "Stock Adjustments",
+            "display_name": "Delete Stock Adjustment",
+            "short_desc": "Delete a stock adjustment",
+            "desc": "Delete a stock adjustment from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteStockAdjustmentRequestDataType::Fields),
+        });
+
+        # ========== BATCH STOCK ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/batch-stocks",
+            "action": "list-batch-stocks",
+            "groups": "Batch Stocks",
+            "display_name": "List Batch Stocks",
+            "short_desc": "List batch stocks with filters",
+            "desc": "List batch-tracked stock entries from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "batch_id": <ActionOptionInfo>{
+                    "display_name": "Batch ID",
+                    "short_desc": "Filter by batch ID",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "batch_stocks",
+                },
+                "variant_id": <ActionOptionInfo>{
+                    "display_name": "Variant ID",
+                    "short_desc": "Filter by variant",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "variants",
+                    "preselected": True,
+                },
+                "location_id": <ActionOptionInfo>{
+                    "display_name": "Location ID",
+                    "short_desc": "Filter by location",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "locations",
+                },
+                "batch_number": <ActionOptionInfo>{
+                    "display_name": "Batch Number",
+                    "short_desc": "Filter by batch number",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+            } + CommonListActionOptions,
+        });
+
+        # ========== TAX RATE ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/tax-rates",
+            "action": "list-tax-rates",
+            "groups": "Tax Rates",
+            "display_name": "List Tax Rates",
+            "short_desc": "List tax rates",
+            "desc": "List tax rates from Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Tax Rate ID",
+                    "short_desc": "Get a specific tax rate",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "tax_rates",
+                },
+                "name": <ActionOptionInfo>{
+                    "display_name": "Name",
+                    "short_desc": "Filter by tax rate name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/tax-rates/create",
+            "action": "create-tax-rate",
+            "groups": "Tax Rates",
+            "display_name": "Create Tax Rate",
+            "short_desc": "Create a new tax rate",
+            "desc": "Create a new tax rate in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaTaxRateDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateTaxRateRequestDataType::Fields),
+        });
+
+        # ========== WEBHOOK ACTIONS ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/webhooks",
+            "action": "list-webhooks",
+            "groups": "Webhooks",
+            "display_name": "List Webhooks",
+            "short_desc": "List webhooks",
+            "desc": "List configured webhooks in Katana MRP",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Webhook ID",
+                    "short_desc": "Get a specific webhook",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "webhooks",
+                },
+                "enabled": <ActionOptionInfo>{
+                    "display_name": "Enabled",
+                    "short_desc": "Filter by enabled flag",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "preselected": True,
+                },
+            } + CommonListActionOptions,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/webhooks",
+            "action": "get-webhook",
+            "groups": "Webhooks",
+            "display_name": "Get Webhook",
+            "short_desc": "Get a single webhook by ID",
+            "desc": "Retrieve a single webhook by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Webhook ID",
+                    "short_desc": "The webhook ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "webhooks",
+                },
+            },
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/webhooks/create",
+            "action": "create-webhook",
+            "groups": "Webhooks",
+            "display_name": "Create Webhook",
+            "short_desc": "Create a new webhook",
+            "desc": "Create a new webhook subscription in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaWebhookDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaCreateWebhookRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/webhooks/update",
+            "action": "update-webhook",
+            "groups": "Webhooks",
+            "display_name": "Update Webhook",
+            "short_desc": "Update an existing webhook",
+            "desc": "Update an existing webhook in Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new KatanaWebhookDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaUpdateWebhookRequestDataType::Fields),
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/webhooks/delete",
+            "action": "delete-webhook",
+            "groups": "Webhooks",
+            "display_name": "Delete Webhook",
+            "short_desc": "Delete a webhook",
+            "desc": "Delete a webhook from Katana MRP",
+            "action_code": DPAT_API,
+            "get_output_type": AbstractDataProviderType sub () {
+                return AbstractDataProviderType::get(AutoHashType);
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                KatanaDeleteWebhookRequestDataType::Fields),
+        });
+
+        # ========== EVENT TRIGGERS (NATIVE WEBHOOKS) ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_SO_CREATED,
+            "action": EVENT_SO_CREATED,
+            "groups": "Events",
+            "display_name": "Sales Order Created",
+            "short_desc": "Trigger when a sales order is created",
+            "desc": "Fires when a new sales order is created in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SO_CREATED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_SO_UPDATED,
+            "action": EVENT_SO_UPDATED,
+            "groups": "Events",
+            "display_name": "Sales Order Updated",
+            "short_desc": "Trigger when a sales order is updated",
+            "desc": "Fires when a sales order is updated in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SO_UPDATED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_SO_DELETED,
+            "action": EVENT_SO_DELETED,
+            "groups": "Events",
+            "display_name": "Sales Order Deleted",
+            "short_desc": "Trigger when a sales order is deleted",
+            "desc": "Fires when a sales order is deleted in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SO_DELETED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_SO_PACKED,
+            "action": EVENT_SO_PACKED,
+            "groups": "Events",
+            "display_name": "Sales Order Packed",
+            "short_desc": "Trigger when a sales order is packed",
+            "desc": "Fires when a sales order is packed in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SO_PACKED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_SO_DELIVERED,
+            "action": EVENT_SO_DELIVERED,
+            "groups": "Events",
+            "display_name": "Sales Order Delivered",
+            "short_desc": "Trigger when a sales order is delivered",
+            "desc": "Fires when a sales order is delivered in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SO_DELIVERED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_PO_CREATED,
+            "action": EVENT_PO_CREATED,
+            "groups": "Events",
+            "display_name": "Purchase Order Created",
+            "short_desc": "Trigger when a purchase order is created",
+            "desc": "Fires when a new purchase order is created in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PO_CREATED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_PO_UPDATED,
+            "action": EVENT_PO_UPDATED,
+            "groups": "Events",
+            "display_name": "Purchase Order Updated",
+            "short_desc": "Trigger when a purchase order is updated",
+            "desc": "Fires when a purchase order is updated in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PO_UPDATED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_PO_DELETED,
+            "action": EVENT_PO_DELETED,
+            "groups": "Events",
+            "display_name": "Purchase Order Deleted",
+            "short_desc": "Trigger when a purchase order is deleted",
+            "desc": "Fires when a purchase order is deleted in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PO_DELETED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_PO_PARTIAL,
+            "action": EVENT_PO_PARTIAL,
+            "groups": "Events",
+            "display_name": "Purchase Order Partially Received",
+            "short_desc": "Trigger when a purchase order is partially received",
+            "desc": "Fires when a purchase order is partially received in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PO_PARTIAL,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_PO_RECEIVED,
+            "action": EVENT_PO_RECEIVED,
+            "groups": "Events",
+            "display_name": "Purchase Order Received",
+            "short_desc": "Trigger when a purchase order is received",
+            "desc": "Fires when a purchase order is fully received in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PO_RECEIVED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_POR_CREATED,
+            "action": EVENT_POR_CREATED,
+            "groups": "Events",
+            "display_name": "Purchase Order Row Created",
+            "short_desc": "Trigger when a purchase order row is created",
+            "desc": "Fires when a purchase order row is created in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_POR_CREATED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_POR_UPDATED,
+            "action": EVENT_POR_UPDATED,
+            "groups": "Events",
+            "display_name": "Purchase Order Row Updated",
+            "short_desc": "Trigger when a purchase order row is updated",
+            "desc": "Fires when a purchase order row is updated in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_POR_UPDATED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_POR_DELETED,
+            "action": EVENT_POR_DELETED,
+            "groups": "Events",
+            "display_name": "Purchase Order Row Deleted",
+            "short_desc": "Trigger when a purchase order row is deleted",
+            "desc": "Fires when a purchase order row is deleted in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_POR_DELETED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_POR_RECEIVED,
+            "action": EVENT_POR_RECEIVED,
+            "groups": "Events",
+            "display_name": "Purchase Order Row Received",
+            "short_desc": "Trigger when a purchase order row is received",
+            "desc": "Fires when a purchase order row is received in Katana (native webhook)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_POR_RECEIVED,
+        });
+
+        # ========== EVENT TRIGGERS (POLLING) ==========
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_PRODUCTS,
+            "action": EVENT_NEW_PRODUCTS,
+            "groups": "Events",
+            "display_name": "New Products",
+            "short_desc": "Trigger when new products are created",
+            "desc": "Fires when a new product is detected in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_PRODUCTS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_UPD_PRODUCTS,
+            "action": EVENT_UPD_PRODUCTS,
+            "groups": "Events",
+            "display_name": "Updated Products",
+            "short_desc": "Trigger when products are updated",
+            "desc": "Fires when a product is updated in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_UPD_PRODUCTS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_MATERIALS,
+            "action": EVENT_NEW_MATERIALS,
+            "groups": "Events",
+            "display_name": "New Materials",
+            "short_desc": "Trigger when new materials are created",
+            "desc": "Fires when a new material is detected in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_MATERIALS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_UPD_MATERIALS,
+            "action": EVENT_UPD_MATERIALS,
+            "groups": "Events",
+            "display_name": "Updated Materials",
+            "short_desc": "Trigger when materials are updated",
+            "desc": "Fires when a material is updated in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_UPD_MATERIALS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_MOS,
+            "action": EVENT_NEW_MOS,
+            "groups": "Events",
+            "display_name": "New Manufacturing Orders",
+            "short_desc": "Trigger when new manufacturing orders are created",
+            "desc": "Fires when a new manufacturing order is detected in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_MOS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_UPD_MOS,
+            "action": EVENT_UPD_MOS,
+            "groups": "Events",
+            "display_name": "Updated Manufacturing Orders",
+            "short_desc": "Trigger when manufacturing orders are updated",
+            "desc": "Fires when a manufacturing order is updated in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_UPD_MOS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_SOS,
+            "action": EVENT_NEW_SOS,
+            "groups": "Events",
+            "display_name": "New Sales Orders (Polling)",
+            "short_desc": "Trigger when new sales orders are created (via polling)",
+            "desc": "Fires when a new sales order is detected in Katana (via polling); "
+                "complements the `sales-order-created` webhook event",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_SOS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_UPD_SOS,
+            "action": EVENT_UPD_SOS,
+            "groups": "Events",
+            "display_name": "Updated Sales Orders (Polling)",
+            "short_desc": "Trigger when sales orders are updated (via polling)",
+            "desc": "Fires when a sales order is updated in Katana (via polling); "
+                "complements the `sales-order-updated` webhook event",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_UPD_SOS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_POS,
+            "action": EVENT_NEW_POS,
+            "groups": "Events",
+            "display_name": "New Purchase Orders (Polling)",
+            "short_desc": "Trigger when new purchase orders are created (via polling)",
+            "desc": "Fires when a new purchase order is detected in Katana (via polling); "
+                "complements the `purchase-order-created` webhook event",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_POS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_UPD_POS,
+            "action": EVENT_UPD_POS,
+            "groups": "Events",
+            "display_name": "Updated Purchase Orders (Polling)",
+            "short_desc": "Trigger when purchase orders are updated (via polling)",
+            "desc": "Fires when a purchase order is updated in Katana (via polling); "
+                "complements the `purchase-order-updated` webhook event",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_UPD_POS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_CUSTOMERS,
+            "action": EVENT_NEW_CUSTOMERS,
+            "groups": "Events",
+            "display_name": "New Customers",
+            "short_desc": "Trigger when new customers are created",
+            "desc": "Fires when a new customer is detected in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CUSTOMERS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_UPD_CUSTOMERS,
+            "action": EVENT_UPD_CUSTOMERS,
+            "groups": "Events",
+            "display_name": "Updated Customers",
+            "short_desc": "Trigger when customers are updated",
+            "desc": "Fires when a customer is updated in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_UPD_CUSTOMERS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_SUPPLIERS,
+            "action": EVENT_NEW_SUPPLIERS,
+            "groups": "Events",
+            "display_name": "New Suppliers",
+            "short_desc": "Trigger when new suppliers are created",
+            "desc": "Fires when a new supplier is detected in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_SUPPLIERS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_UPD_SUPPLIERS,
+            "action": EVENT_UPD_SUPPLIERS,
+            "groups": "Events",
+            "display_name": "Updated Suppliers",
+            "short_desc": "Trigger when suppliers are updated",
+            "desc": "Fires when a supplier is updated in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_UPD_SUPPLIERS,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_INV_UPDATED,
+            "action": EVENT_INV_UPDATED,
+            "groups": "Events",
+            "display_name": "Inventory Updated",
+            "short_desc": "Trigger when inventory levels change",
+            "desc": "Fires when an inventory entry's stock level changes in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_INV_UPDATED,
+        });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": KatanaDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_STOCK_ADJ,
+            "action": EVENT_NEW_STOCK_ADJ,
+            "groups": "Events",
+            "display_name": "New Stock Adjustments",
+            "short_desc": "Trigger when stock adjustments are created",
+            "desc": "Fires when a new stock adjustment is detected in Katana (via polling)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_STOCK_ADJ,
+        });
+    };
+}
+
+/** @mainpage KatanaDataProvider Module
+
+    @tableofcontents
+
+    @section katanadataproviderintro KatanaDataProvider Introduction
+
+    The %KatanaDataProvider module provides a data provider API for Katana MRP, a cloud-based
+    manufacturing and inventory management platform.
+
+    To use this module, use \c "%requires KatanaDataProvider" in your code.
+
+    All the public symbols in the module are defined in the KatanaDataProvider namespace.
+
+    @section katanadataproviderrelnotes Release Notes
+
+    @subsection katanadataproviderv1_0 KatanaDataProvider v1.0
+    - the initial version of the %KatanaDataProvider module
+*/
