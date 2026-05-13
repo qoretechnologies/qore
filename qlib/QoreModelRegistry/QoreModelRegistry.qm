@@ -31,12 +31,10 @@
 %requires Mime
 %requires Util
 
+%requires SqlUtil
+
 %try-module json
 %define NoJson
-%endtry
-
-%try-module SqlUtil
-%define NoSqlUtil
 %endtry
 
 module QoreModelRegistry {

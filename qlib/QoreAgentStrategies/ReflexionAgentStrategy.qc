@@ -128,7 +128,12 @@ public class ReflexionAgentStrategy inherits AbstractAgentStrategy {
                 reflection_prompt, reflection_schema);
             ++llm_calls;
 
+%ifndef NoJson
             hash<auto> reflection = parse_json(reflection_result.content);
+%else
+            hash<auto> reflection = {};
+            throw "JSON-MODULE-MISSING", "json module is required for reflexion agent strategy";
+%endif
 
             emitEvent(<AgentEvent>{
                 "event_type": "iteration_completed",

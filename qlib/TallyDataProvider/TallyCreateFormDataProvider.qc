@@ -50,6 +50,9 @@ public class TallyCreateFormDataProvider inherits TallyDataProviderBase {
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+%ifdef NoUuid
+        throw "TALLY-DEPENDENCY-ERROR", "the uuid module is required to create Tally forms";
+%else
         # build the FORM_TITLE block from the title field
         string title_uuid = UUID::get();
         hash<auto> title_block = {
@@ -63,6 +66,7 @@ public class TallyCreateFormDataProvider inherits TallyDataProviderBase {
         };
         req.blocks = (title_block,) + (req.blocks ?? ());
         return doRestCommand("POST", "forms", req).body;
+%endif
     }
 }
 }

@@ -169,7 +169,7 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
                 return new FilesystemBackend(copts.path, copts.tenant_id);
             }
 
-%ifndef NoSqlUtil
+%ifndef NoJson
             case "database": {
                 if (!exists copts.datasource) {
                     throw "CONSTRUCTOR-ERROR",

@@ -27,7 +27,9 @@
 %modern
 
 %requires(reexport) QoreLlmUtils
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module QoreAgentStrategies {
     version = "1.0.0";

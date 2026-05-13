@@ -190,8 +190,13 @@ public class QoreSemanticChunkProcessor inherits DataProvider::AbstractDataProvi
         if (!copts.tokenizer_config_path.val()) {
             throw "CONSTRUCTOR-ERROR", "tokenizer_config_path option is required";
         }
+%ifndef NoJson
         hash<auto> tok_config =
             parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
+%else
+        throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
+        hash<auto> tok_config = {};
+%endif
 
         # Build embedding model config
         string emb_mode = copts.embedding_mode;

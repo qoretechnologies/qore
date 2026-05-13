@@ -145,8 +145,12 @@ public class PdfCoMergePdfDataProvider inherits PdfCoDataProviderBase {
             }
         }
         if (profile_overrides) {
+%ifndef NoJson
             hash<auto> existing = req.profiles.val() ? parse_json(req.profiles) : {};
             req.profiles = make_json(existing + profile_overrides);
+%else
+            throw "JSON-MODULE-MISSING", "json module is required for PdfCo profile merging";
+%endif
         }
         return doPost("pdf/merge2", req);
     }

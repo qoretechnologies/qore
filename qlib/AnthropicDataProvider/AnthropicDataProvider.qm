@@ -34,6 +34,10 @@
 %requires(reexport) AnthropicRestClient
 %requires RestClientIo
 
+%try-module json
+%define NoJson
+%endtry
+
 module AnthropicDataProvider {
     version = "1.0";
     desc = "user module providing a data provider API for Anthropic Claude services";

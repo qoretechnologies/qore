@@ -30,7 +30,9 @@
 %requires(reexport) DataProvider
 %requires(reexport) TallyRestClient
 %requires RestClientIo
-%requires uuid
+%try-module uuid
+%define NoUuid
+%endtry
 
 module TallyDataProvider {
     version = "1.0";

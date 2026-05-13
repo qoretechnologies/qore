@@ -362,10 +362,14 @@ public class SseConnectPollOperation inherits Qore::HttpClientPingPollOperationB
         *data send_body;
         if (exists sse_body) {
             if (sse_body.typeCode() != NT_STRING) {
+%ifndef NoJson
                 send_body = make_json(sse_body);
                 if (!sse_headers."Content-Type") {
                     sse_headers."Content-Type" = MimeTypeJson;
                 }
+%else
+                throw "SSE-CONNECTION-ERROR", "the json module is required to serialize JSON request bodies";
+%endif
             } else {
                 send_body = sse_body;
             }

@@ -190,6 +190,9 @@ public class GeminiDataProviderBase inherits DataProvider::AbstractDataProvider 
         @return the file info hash from the Gemini API
     */
     private hash<auto> uploadFile(string display_name, string mime_type, string base64_content) {
+%ifdef NoJson
+        throw "GEMINI-UPLOAD-ERROR", "the json module is required to upload files to Gemini";
+%else
         binary file_bytes = parse_base64_string(base64_content);
         int num_bytes = file_bytes.size();
 
@@ -242,6 +245,7 @@ public class GeminiDataProviderBase inherits DataProvider::AbstractDataProvider 
         # Parse JSON response
         hash<auto> result = parse_json(phase2_resp.body);
         return result."file" ?? result;
+%endif
     }
 
     #! Builds a model-qualified API path

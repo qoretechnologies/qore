@@ -171,9 +171,11 @@ public class PdfCoDataProviderBase inherits DataProvider::AbstractDataProvider {
         @return the parsed value
     */
     static auto parseJsonField(auto val) {
+%ifndef NoJson
         if (val.typeCode() == NT_STRING) {
             return parse_json(val);
         }
+%endif
         return val;
     }
 

@@ -211,8 +211,12 @@ public class QoreRerankerProcessor inherits DataProvider::AbstractDataProvider {
                     "tokenizer_config_path is required for ONNX mode";
             }
             rconfig.model_path = copts.reranker_model_path;
+%ifndef NoJson
             rconfig.tokenizer_config =
                 parse_json(ReadOnlyFile::readTextFile(copts.tokenizer_config_path));
+%else
+            throw "JSON-MODULE-MISSING", "json module is required for tokenizer config parsing";
+%endif
         }
 
         reranker = new QoreTokenizerUtils::CrossEncoderReranker(rconfig);

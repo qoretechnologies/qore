@@ -31,7 +31,9 @@
 %requires(reexport) ElevenLabsRestClient
 %requires RestClientIo
 %requires Mime
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module ElevenLabsDataProvider {
     version = "1.0";

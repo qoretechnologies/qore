@@ -32,7 +32,9 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) PdfCoRestClient
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 module PdfCoDataProvider {
     version = "1.0";

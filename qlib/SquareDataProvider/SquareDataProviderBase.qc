@@ -209,7 +209,11 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
     /** @return a UUID string
     */
     static string generateIdempotencyKey() {
+%ifdef NoUuid
+        throw "SQUARE-DEPENDENCY-ERROR", "the uuid module is required to generate idempotency keys";
+%else
         return UUID::get();
+%endif
     }
 
     #! Makes a REST request with retry and rate limit handling

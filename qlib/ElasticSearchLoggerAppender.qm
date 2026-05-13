@@ -511,9 +511,11 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             if (pipeline) {
                 action.index.pipeline = pipeline;
             }
+%ifndef NoJson
             bulkBody += make_json(action) + "\n";
             # Document line
             bulkBody += make_json(doc) + "\n";
+%endif
         }
 
         try {
@@ -522,7 +524,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             auto raw_response = rest.post("_bulk", bulkBody, {"Content-Type": "application/x-ndjson"});
             hash<auto> response;
             if (raw_response.typeCode() == NT_STRING) {
+%ifndef NoJson
                 response = parse_json(raw_response);
+%endif
             } else {
                 response = raw_response.body ?? {};
             }
