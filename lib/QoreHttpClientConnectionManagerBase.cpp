@@ -483,7 +483,23 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     // Pass `this` as the manager so the back-pointer is set BEFORE the
     // constructor submits to the I/O controller.  This eliminates the race
     // window where the I/O thread fires onClosedHook before setManager.
-    HttpClientConnectionBase* conn = nullptr;
+    //
+    // Adopt the freshly-constructed connection into a ReferenceHolder
+    // immediately so its lifetime is anchored to this stack frame.  The
+    // H1/H2/H3 constructors submit the socket to the AsyncIoController as
+    // part of construction, which means the I/O thread can already be
+    // running close-hook teardown and dropping its ref before this
+    // function reaches its error-path cleanup.  Holding a strong ref via
+    // the holder makes the post-switch / wait_for_ready failure paths
+    // (and the success path) ownership-safe regardless of what the I/O
+    // thread does in parallel.  Previously `conn` was a raw pointer and
+    // a parallel close-hook deref → delete could race the explicit
+    // `conn->deref(&dx)` cleanup, producing a glibc double-free abort
+    // (observed during burst Discord OAuth2 connection setup in the
+    // autostart phase: 7 consecutive autostart-time crashes on
+    // 2026-05-12, all in this code path with negative refcount and
+    // INVALIDATED_BIT set in the priv).
+    ReferenceHolder<HttpClientConnectionBase> conn(xsink);
     switch (opts_.protocol) {
         case HttpClientProtocol::H1: {
             Http1SslConfig ssl_cfg;
@@ -608,12 +624,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     conn = new Http2ClientConnection(adopted_obj,
                         adopted_priv, host, port,
                         opts_.max_streams_per_connection, xsink, this);
-                    if (*xsink) {
-                        if (conn) {
-                            conn->deref(xsink);
-                        }
-                        return nullptr;
-                    }
+                    // Fall through: any xsink raised here is handled by
+                    // the post-switch error block, and the holder will
+                    // deref `conn` safely on early return.
                 } else {
                     // H1 (or no ALPN) — keep the H1 connection.
                     conn = h1.release();
@@ -674,22 +687,19 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             // Hand off the adopted socket to the concrete H1 or H2
             // connection.  The adopt-socket ctor submits the socket
             // back to the AsyncIoController under its own poll op.
+            // The post-switch xsink check + the holder handle the error
+            // path; no explicit deref needed here.
             conn = neg->takeOver(opts_.max_streams_per_connection, this, xsink);
-            if (*xsink) {
-                return nullptr;
-            }
             // The neg helper is taken over; its destructor (on
             // ReferenceHolder scope exit) will not double-close the
             // socket.
             break;
         }
     }
-    if (*xsink) {
-        if (conn) {
-            ExceptionSink dx;
-            conn->deref(&dx);
-            dx.clear();
-        }
+    if (*xsink || !conn) {
+        // The holder derefs `conn` (if any) safely on scope exit, even
+        // if a parallel I/O-thread close-hook deref has already been
+        // observed — the holder owns one strong ref taken at assignment.
         return nullptr;
     }
 
@@ -709,8 +719,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             conn->setManager(nullptr);
             ExceptionSink dx;
             conn->closeConnection(&dx);
-            conn->deref(&dx);
             dx.clear();
+            // Holder derefs `conn` on scope exit.
             return nullptr;
         }
     }
@@ -726,7 +736,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
         conn->setIdleTimeoutHook((int64_t)opts_.idle_timeout_ms * 1000LL);
     }
 
-    return conn;
+    // Transfer ownership of the strong ref to the caller.
+    return conn.release();
 }
 
 // ============================================================

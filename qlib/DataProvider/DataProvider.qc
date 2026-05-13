@@ -116,6 +116,7 @@ public class DataProvider {
             "deel": "DeelDataProvider",
             "discord": "DiscordDataProvider",
             "discordws": "DiscordDataProvider",
+            "easypost": "EasyPostDataProvider",
             "elasticsearch": "ElasticSearchDataProvider",
             "elevenlabs": "ElevenLabsDataProvider",
             "empathicbuilding": "EmpathicBuildingDataProvider",
@@ -183,6 +184,8 @@ public class DataProvider {
 
             # provided by the jni module
             "kafka": "KafkaDataProvider",
+
+            "katana": "KatanaDataProvider",
 
             "linear": "LinearDataProvider",
 

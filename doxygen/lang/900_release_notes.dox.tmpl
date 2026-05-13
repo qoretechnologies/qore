@@ -1784,6 +1784,22 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a REST client for <a href="https://www.deel.com/">Deel</a>'s global workforce management API
       - supports API key (Bearer token) authentication
       - provides DeelRestConnection for connection management with \c deel:// URL scheme
+    - @ref easypostdataproviderintro "EasyPostDataProvider" module
+      - new module providing a data provider API for <a href="https://www.easypost.com/">EasyPost</a> multi-carrier shipping
+      - address creation and verification, parcel definition, shipment lifecycle (create, buy, refund, label retrieval)
+      - tracker creation and real-time tracking status retrieval
+      - insurance, pickup scheduling, order/batch management, customs info and items, refunds
+      - webhook management (create, update, delete, list, retry, event polling) and carrier account management
+      - 14 webhook-based event triggers (tracker, batch, insurance, refund, shipment-invoice, payment, scan-form events)
+      - SmartRate retrieval for SLA-aware rate selection (`time_in_transit` percentile breakdown)
+      - HMAC-SHA256 webhook signature verification helper
+      - cascading reference-data dropdowns for carrier selection driven by parent pickup/order rates
+      - action catalog integration covering 14 resource types and ~70 actions
+      - connection support with \c easypostrest:// URL scheme
+    - @ref easypostrestclientintro "EasyPostRestClient" module
+      - new module providing a REST client for <a href="https://www.easypost.com/">EasyPost</a>'s shipping REST API
+      - supports HTTP Basic authentication using the EasyPost API key
+      - provides EasyPostRestConnection for connection management with \c easypostrest:// URL scheme
     - @ref edifactutilintro "EdifactUtil" module
       - new module for parsing and generating UN/EDIFACT electronic data interchange messages
       - automatic UNA segment detection and custom delimiter support
@@ -1940,6 +1956,24 @@ cargo install tree-sitter-cli@0.26.5
       - supports API key authentication
       - provides JotformRestConnection for connection management with \c jotform:// URL scheme
       - supports multiple API domains (standard, EU, HIPAA)
+    - @ref katanadataproviderintro "KatanaDataProvider" module
+      - new module providing a data provider API for <a href="https://katanamrp.com/">Katana</a> Manufacturing ERP
+      - product, material, and variant management (create, read, update, delete, list)
+      - manufacturing order management (create, read, update, delete, list)
+      - sales order management with rows and addresses (create, read, update, delete, list)
+      - purchase order management with rows (create, read, update, delete, list)
+      - customer management with addresses, supplier management
+      - location management (read-only — Katana API has no create/update/delete)
+      - inventory management (read, plus safety-stock-level and reorder-point setters)
+      - stock adjustments with embedded rows in the parent payload
+      - batch stock (read-only), tax rate (create + read only), and webhook management
+      - polling-based event triggers across all major resources
+      - action catalog integration with trigger events for the most important resources
+      - connection support with \c katanarest:// URL scheme
+    - @ref katanarestclientintro "KatanaRestClient" module
+      - new module providing a REST client for <a href="https://katanamrp.com/">Katana</a>'s Manufacturing ERP REST API
+      - supports Bearer token (API key) authentication
+      - provides KatanaRestConnection for connection management with \c katanarest:// URL scheme
     - @ref keapdataproviderintro "KeapDataProvider" module
       - new module providing a data provider API for <a href="https://keap.com/">Keap</a> CRM
       - contact management (create, update, delete, merge, list, find by ID)

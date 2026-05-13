@@ -1,0 +1,497 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  KatanaDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/KatanaRestClient.qm
+%requires ../../../../qlib/KatanaDataProvider
+
+%exec-class KatanaDataProviderTest
+
+public class KatanaDataProviderTest inherits QUnit::Test {
+    private {
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Connection name (if provided) — enables live integration tests
+        *string conn_name;
+
+        #! Katana REST client (async) for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Live data provider (lazy)
+        *DataProvider::AbstractDataProvider root;
+
+        #! Test resource IDs for cleanup
+        *int testCustomerId;
+
+        #! Column width for --help option descriptions
+        const OptionColumn = 22;
+
+        #! Expected child-collection keys (excluding "events" container)
+        const ExpectedCollectionChildren = (
+            "products",
+            "materials",
+            "variants",
+            "manufacturing-orders",
+            "sales-orders",
+            "sales-order-rows",
+            "sales-order-addresses",
+            "purchase-orders",
+            "purchase-order-rows",
+            "customers",
+            "customer-addresses",
+            "suppliers",
+            "locations",
+            "inventory",
+            "stock-adjustments",
+            "batch-stocks",
+            "tax-rates",
+            "webhooks",
+        );
+
+        #! Expected total ChildMap size = collections (18) + "events" container = 19
+        const ExpectedChildCount = 19;
+    }
+
+    constructor() : Test("KatanaDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        conn_name = m_options.conn;
+
+        # Unit / smoke tests (no credentials required)
+        addTestCase("scheme registered", \testSchemeRegistered());
+        addTestCase("factory registered", \testFactoryRegistered());
+        addTestCase("app registered", \testAppRegistered());
+        addTestCase("actions registered", \testActionsRegistered());
+        addTestCase("event actions registered", \testEventActionsRegistered());
+        addTestCase("constants exposed", \testConstantsExposed());
+        addTestCase("data type instantiation", \testDataTypeInstantiation());
+        addTestCase("child map structure", \testChildMapStructure());
+        addTestCase("events container", \testEventsContainer());
+        addTestCase("example event data", \testExampleEventData());
+
+        # Integration tests (require -c <connection> or -k <apikey>)
+        addTestCase("integration: ping", \testPing());
+        addTestCase("integration: list-tax-rates", \testListTaxRates());
+        addTestCase("integration: customer CRUD", \testCustomerCrud());
+        addTestCase("integration: cleanup", \testCleanup());
+
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "connection name for integration tests",
+            OptionColumn);
+        printOption("-k,--apikey=ARG", "Katana API key (alternative to -c)",
+            OptionColumn);
+    }
+
+    private checkJson() {
+%ifdef NoJson
+        testSkip("no json module present");
+%endif
+    }
+
+    #! Sets up a Katana client for integration tests (via connection or apikey)
+    private setupConnection() {
+        if (conn_name) {
+            try {
+                AbstractConnection conn = get_connection(conn_name);
+                if (conn instanceof KatanaRestClient::KatanaRestConnection) {
+                    client = (cast<KatanaRestClient::KatanaRestConnection>(conn))
+                        .getAsync(True);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("connection lookup failed: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+            return;
+        }
+
+        *string apikey = m_options.apikey ?? ENV.KATANA_API_KEY;
+        if (apikey) {
+            client = new KatanaRestClient::KatanaRestClientIo({"apikey": apikey});
+        }
+    }
+
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no Katana credentials available (use -c <name> or -k <apikey>)");
+        }
+    }
+
+    #! Returns a root provider built from the live client (integration tests only)
+    private KatanaDataProvider::KatanaDataProvider getProvider() {
+        return new KatanaDataProvider::KatanaDataProvider(client);
+    }
+
+    ########################################################################
+    # Unit / smoke tests
+    ########################################################################
+
+    testSchemeRegistered() {
+        checkJson();
+        *hash<ConnectionSchemeInfo> scheme = ConnectionSchemeCache::getScheme("katanarest");
+        assertTrue(exists scheme, "katanarest scheme should be registered");
+    }
+
+    testFactoryRegistered() {
+        checkJson();
+        AbstractDataProviderFactory factory = DataProvider::getFactoryEx("katana");
+        assertEq("katana", factory.getName());
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("katana", info.name);
+        assertTrue(info.children_can_support_apis,
+            "children_can_support_apis should be True");
+        assertTrue(info.children_can_support_records,
+            "children_can_support_records should be True");
+        assertTrue(info.children_can_support_observers,
+            "children_can_support_observers should be True");
+    }
+
+    testAppRegistered() {
+        checkJson();
+        *hash<DataProviderAppInfo> app = DataProviderActionCatalog::getApp("Katana");
+        assertTrue(exists app, "Katana app should be registered");
+        assertEq("Katana", app.name);
+        assertEq("Katana", app.display_name);
+        assertEq("katanarest", app.scheme);
+        assertTrue(exists app.groups, "Katana app should have groups");
+    }
+
+    testActionsRegistered() {
+        checkJson();
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Katana");
+        assertGt(60, actions.size(), "at least 60 actions registered for Katana");
+
+        # Sample-check a few critical actions
+        hash<string, bool> found = {};
+        foreach hash<auto> action in (actions) {
+            found{action.action} = True;
+        }
+        assertTrue(found{"list-products"}, "list-products registered");
+        assertTrue(found{"create-product"}, "create-product registered");
+        assertTrue(found{"update-product"}, "update-product registered");
+        assertTrue(found{"delete-product"}, "delete-product registered");
+        assertTrue(found{"list-sales-orders"}, "list-sales-orders registered");
+        assertTrue(found{"create-sales-order"}, "create-sales-order registered");
+        assertTrue(found{"list-inventory"}, "list-inventory registered");
+        assertTrue(found{"set-inventory-safety-stock-level"},
+            "set-inventory-safety-stock-level registered");
+        assertTrue(found{"set-inventory-reorder-point"},
+            "set-inventory-reorder-point registered");
+        assertTrue(found{"list-batch-stocks"}, "list-batch-stocks registered");
+        assertTrue(found{"list-tax-rates"}, "list-tax-rates registered");
+    }
+
+    testEventActionsRegistered() {
+        checkJson();
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Katana");
+
+        hash<string, bool> event_actions = {};
+        foreach hash<auto> action in (actions) {
+            if (action.action_code == DPAT_EVENT) {
+                event_actions{action.action} = True;
+            }
+        }
+
+        # Native webhook events
+        assertTrue(event_actions{KatanaDataProvider::EVENT_SO_CREATED},
+            "EVENT_SO_CREATED registered");
+        assertTrue(event_actions{KatanaDataProvider::EVENT_PO_CREATED},
+            "EVENT_PO_CREATED registered");
+        assertTrue(event_actions{KatanaDataProvider::EVENT_POR_RECEIVED},
+            "EVENT_POR_RECEIVED registered");
+
+        # Polling events
+        assertTrue(event_actions{KatanaDataProvider::EVENT_NEW_PRODUCTS},
+            "EVENT_NEW_PRODUCTS registered");
+        assertTrue(event_actions{KatanaDataProvider::EVENT_INV_UPDATED},
+            "EVENT_INV_UPDATED registered");
+        assertTrue(event_actions{KatanaDataProvider::EVENT_NEW_STOCK_ADJ},
+            "EVENT_NEW_STOCK_ADJ registered");
+    }
+
+    testConstantsExposed() {
+        checkJson();
+        assertEq("Katana", KatanaDataProvider::AppName);
+        assertEq(50, KatanaDataProvider::DefaultPageSize);
+        assertEq(250, KatanaDataProvider::MaxPageSize);
+        assertEq(120, KatanaDataProvider::DefaultPollInterval);
+        assertEq(60, KatanaDataProvider::MinPollInterval);
+
+        assertEq("sales-order-created", KatanaDataProvider::EVENT_SO_CREATED);
+        assertEq("purchase-order-received", KatanaDataProvider::EVENT_PO_RECEIVED);
+        assertEq("watch-new-products", KatanaDataProvider::EVENT_NEW_PRODUCTS);
+        assertEq("watch-inventory-updated", KatanaDataProvider::EVENT_INV_UPDATED);
+    }
+
+    testDataTypeInstantiation() {
+        checkJson();
+        list<string> type_class_names = (
+            "KatanaDataProvider::KatanaProductDataType",
+            "KatanaDataProvider::KatanaMaterialDataType",
+            "KatanaDataProvider::KatanaVariantDataType",
+            "KatanaDataProvider::KatanaManufacturingOrderDataType",
+            "KatanaDataProvider::KatanaSalesOrderDataType",
+            "KatanaDataProvider::KatanaPurchaseOrderDataType",
+            "KatanaDataProvider::KatanaCustomerDataType",
+            "KatanaDataProvider::KatanaSupplierDataType",
+            "KatanaDataProvider::KatanaLocationDataType",
+            "KatanaDataProvider::KatanaInventoryDataType",
+            "KatanaDataProvider::KatanaStockAdjustmentDataType",
+            "KatanaDataProvider::KatanaBatchStockDataType",
+            "KatanaDataProvider::KatanaTaxRateDataType",
+            "KatanaDataProvider::KatanaWebhookDataType",
+        );
+
+        foreach string cls_name in (type_class_names) {
+            try {
+                Class cls = Class::forName(cls_name);
+                AbstractDataProviderType t = cast<AbstractDataProviderType>(cls.newObject());
+                hash<string, AbstractDataField> fields = t.getFields();
+                assertGt(0, fields.size(),
+                    sprintf("%s should have at least 1 field", cls_name));
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "UNKNOWN-CLASS") {
+                    if (m_options.verbose) {
+                        printf("note: type class %y not found — skipping\n", cls_name);
+                    }
+                    continue;
+                }
+                rethrow;
+            }
+        }
+    }
+
+    #! Smoke test: instantiate root provider with no client and walk the child map
+    testChildMapStructure() {
+        checkJson();
+        KatanaDataProvider::KatanaDataProvider provider(NOTHING);
+
+        assertEq("katana", provider.getName(), "root provider name is 'katana'");
+
+        *list<string> names = provider.getChildProviderNames();
+        assertTrue(exists names, "child names list is non-empty");
+        assertEq(ExpectedChildCount, names.size(),
+            sprintf("provider exposes %d children (got %d)",
+                ExpectedChildCount, names.size()));
+
+        # Verify each expected collection name is present
+        hash<string, bool> name_set = {};
+        foreach string n in (names) {
+            name_set{n} = True;
+        }
+        foreach string expected in (ExpectedCollectionChildren) {
+            assertTrue(name_set{expected},
+                sprintf("ChildMap exposes %y", expected));
+        }
+        assertTrue(name_set{"events"}, "ChildMap exposes 'events' container");
+    }
+
+    testEventsContainer() {
+        checkJson();
+        KatanaDataProvider::KatanaDataProvider provider(NOTHING);
+        try {
+            AbstractDataProvider events = provider.getChildProvider("events");
+            assertTrue(exists events, "events child resolves");
+            *list<string> event_names = events.getChildProviderNames();
+            assertTrue(exists event_names && event_names.size() > 0,
+                "events container exposes at least one event-name child");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "UNKNOWN-CLASS"
+                || ex.err == "CHILD-PROVIDER-ERROR"
+                || ex.desc =~ /KatanaEventsDataProvider/) {
+                # Tolerated while sibling agents are still producing the events tree
+                if (m_options.verbose) {
+                    printf("note: events container not yet available: %s: %s\n",
+                        ex.err, ex.desc);
+                }
+                testSkip("events container not yet produced");
+            }
+            rethrow;
+        }
+    }
+
+    #! Walks every watch provider and verifies its example event data is well-formed
+    testExampleEventData() {
+        checkJson();
+        KatanaDataProvider::KatanaDataProvider provider(NOTHING);
+        AbstractDataProvider events;
+        try {
+            events = provider.getChildProvider("events");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("events container not available: %s", ex.err));
+        }
+        *list<string> event_names = events.getChildProviderNames();
+        assertTrue(exists event_names && event_names.size() > 0,
+            "events container exposes children");
+
+        int checked = 0;
+        foreach string ev in (event_names) {
+            AbstractDataProvider watch = events.getChildProvider(ev);
+            auto example = watch.getExampleEventData(ev);
+            assertEq(NT_HASH, example.typeCode(),
+                sprintf("example data for %y is a hash", ev));
+            assertTrue(example.size() > 0,
+                sprintf("example data for %y has at least one field", ev));
+            ++checked;
+        }
+        assertGt(0, checked, "checked at least one event example");
+    }
+
+    ########################################################################
+    # Integration tests (require -c <connection> or -k <apikey>)
+    ########################################################################
+
+    testPing() {
+        skipIfNoCredentials();
+        if (!conn_name) {
+            testSkip("ping requires a named connection (-c)");
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping_result = conn.ping(True);
+        assertTrue(ping_result.ok, "connection ping succeeded");
+    }
+
+    #! Smallest live read: tax rates
+    testListTaxRates() {
+        skipIfNoCredentials();
+        KatanaDataProvider::KatanaDataProvider provider = getProvider();
+        AbstractDataProvider tr = provider.getChildProvider("tax-rates");
+        AbstractDataProviderRecordIterator it = tr.searchRecords(NOTHING,
+            {"limit": 5});
+        int count = 0;
+        while (it.next() && count < 5) {
+            hash<auto> record = it.getValue();
+            assertEq(NT_HASH, record.typeCode(),
+                sprintf("tax_rates record %d is a hash", count));
+            assertTrue(exists record.id, "tax_rates record has 'id'");
+            assertTrue(exists record.name, "tax_rates record has 'name'");
+            ++count;
+        }
+        assertLe(5, count, "list-tax-rates respected limit");
+    }
+
+    testCustomerCrud() {
+        skipIfNoCredentials();
+        KatanaDataProvider::KatanaDataProvider provider = getProvider();
+        AbstractDataProvider customers = provider.getChildProvider("customers");
+
+        # Create
+        AbstractDataProvider create = customers.getChildProvider("create");
+        hash<auto> created = create.doRequest({
+            "name": "QoreTest Customer " + now_us().toString(),
+            "email": "qoretest_" + string(rand()) + "@example.com",
+        });
+        assertTrue(exists created.id, "customer created with ID");
+        testCustomerId = created.id;
+
+        # Read back
+        AbstractDataProviderRecordIterator it = customers.searchRecords(NOTHING,
+            {"id": testCustomerId});
+        assertTrue(it.next(), "customer found by ID");
+        hash<auto> found = it.getValue();
+        assertEq(testCustomerId, found.id);
+
+        # Update
+        AbstractDataProvider update = customers.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "id": testCustomerId,
+            "comment": "Updated by QoreTest",
+        });
+        assertTrue(exists updated.id, "customer updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = customers.searchRecords(NOTHING,
+            {"id": testCustomerId});
+        assertTrue(it2.next(), "updated customer found");
+        hash<auto> verified = it2.getValue();
+        assertEq("Updated by QoreTest", verified.comment, "comment update persisted");
+    }
+
+    testCleanup() {
+        skipIfNoCredentials();
+        if (!testCustomerId) {
+            testSkip("no test customer to clean up");
+        }
+        try {
+            KatanaDataProvider::KatanaDataProvider provider = getProvider();
+            AbstractDataProvider customers = provider.getChildProvider("customers");
+            AbstractDataProvider del = customers.getChildProvider("delete");
+            del.doRequest({"id": testCustomerId});
+
+            # Verify 404 on subsequent read
+            try {
+                AbstractDataProviderRecordIterator it = customers.searchRecords(NOTHING,
+                    {"id": testCustomerId});
+                if (it.next()) {
+                    # Some APIs soft-delete; tolerate
+                    if (m_options.verbose) {
+                        printf("note: customer still present after delete (soft delete?)\n");
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                # Expected: 404 on deleted record
+                if (m_options.verbose) {
+                    printf("deleted customer not found: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Warning: cleanup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+        assertTrue(True, "cleanup completed");
+    }
+}

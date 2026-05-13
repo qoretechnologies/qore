@@ -130,6 +130,9 @@ public class ConnectionSchemeCache {
             "ds": "DataStreamClient",
             "dss": "DataStreamClient",
 
+            "easypostrest": "EasyPostRestClient",
+            "easypostrests": "EasyPostRestClient",
+
             "ebrests": "EmpathicBuildingDataProvider",
 
             "esrest": "ElasticSearchDataProvider",
@@ -169,6 +172,9 @@ public class ConnectionSchemeCache {
 
             # provided by the jni module
             "kafka": "KafkaDataProvider",
+
+            "katanarest": "KatanaRestClient",
+            "katanarests": "KatanaRestClient",
 
             "linear": "LinearRestClient",
 
