@@ -696,9 +696,27 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
         }
     }
     if (*xsink || !conn) {
-        // The holder derefs `conn` (if any) safely on scope exit, even
-        // if a parallel I/O-thread close-hook deref has already been
-        // observed — the holder owns one strong ref taken at assignment.
+        if (conn) {
+            // Synchronize with the I/O thread before the holder derefs.
+            // If the constructor partially succeeded (submitted to the
+            // AsyncIoController) and then failed, the I/O thread can be
+            // mid-setClosed/setError on this conn's priv.  Without this
+            // explicit close-and-cancel, the destructor chain (via the
+            // holder dtor) racing with the I/O thread's deref produces a
+            // glibc tcache double-free at delete this (observed crash
+            // signature: conn priv at function-exit with INVALIDATED_BIT
+            // set, on_closed_hook_fired=true, manager_ still set,
+            // pool_key_="" — i.e. the partial-construction error path
+            // bypassed the wait_for_ready cleanup).  setManager(nullptr)
+            // disables the close-hook callback into the manager so the
+            // synchronous closeConnection below cannot re-enter the
+            // manager from the I/O thread.
+            conn->setManager(nullptr);
+            ExceptionSink dx;
+            conn->closeConnection(&dx);
+            dx.clear();
+        }
+        // The holder derefs `conn` (if any) safely on scope exit.
         return nullptr;
     }
 
