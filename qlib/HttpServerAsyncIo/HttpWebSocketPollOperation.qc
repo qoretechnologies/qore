@@ -380,6 +380,22 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
             };
             call_object_method(wsc, "applyIncomingExtensions", \msg, ext_ctx);
             call_object_method(wsc, "validateIncomingMessage", \msg);
+            # Wrap user-code dispatch in the handler's thread-local save/restore
+            # so any framework context (e.g. Qorus service-context tld) is
+            # initialized on this worker-pool thread before gotMessage() runs.
+            # Mirrors WebSocketHandler::WebSocketStreamProcessor::notifyIo (H2/H3 path).
+            # The handler-pool worker starts with cleared tld (ThreadPool calls
+            # clear_all_program_thread_local_data() between tasks); without this
+            # wrap, gotMessage() runs with no service context and code paths
+            # that need it (e.g. UserApi::getConfigItemValue() returning NOTHING)
+            # fail silently.
+            *hash<auto> tld_save;
+            if (exists handler) {
+                tld_save = call_object_method(handler, "saveThreadLocalData");
+            }
+            on_exit if (exists handler) {
+                call_object_method(handler, "restoreThreadLocalData", tld_save);
+            }
             wsc.gotMessage(msg);
         }
     }
