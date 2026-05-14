@@ -1,0 +1,60 @@
+.\" qpatch.1 - man page for the Qore Patch Tool
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QPATCH 1 "2026 May 14" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qpatch \- command-line patch tool powered by the Qore Diff module
+.SH SYNOPSIS
+.B qpatch
+[\fIoptions\fP]
+\fIpatch-file\fP
+[\fItarget-file\fP]
+.SH DESCRIPTION
+\fBqpatch\fR applies a unified diff produced by \fBqdiff\fR(1) or any other
+unified\-diff source to a target file using the Qore \fBDiff\fR module.
+.PP
+With no target file the patch's own file header is used.
+With \fB\-d\fP / \fB\-\-dry\-run\fP the patch is only validated against the target
+and no changes are written.
+.SH OPTIONS
+.TP
+.BR \-d ", " \-\-dry\-run
+Check whether the patch applies cleanly without modifying any files.
+.TP
+.BR \-R ", " \-\-reverse
+Reverse the patch (undo changes).
+.TP
+.BR \-o ", " \-\-output =\fIFILE\fP
+Write the patched result to \fIFILE\fP instead of overwriting the original.
+.TP
+.BR \-v ", " \-\-verbose
+Show status messages.
+.TP
+.BR \-C ", " \-\-no\-color
+Disable colored output.
+.TP
+.BR \-V ", " \-\-version
+Show version information.
+.TP
+.BR \-h ", " \-\-help
+Show help text.
+.SH "EXIT STATUS"
+.TP
+.B 0
+Patch applied successfully (or dry-run passed).
+.TP
+.B 1
+Patch failed (context mismatch).
+.TP
+.B 2
+Error (missing file, invalid options).
+.SH SEE ALSO
+.BR qdiff (1),
+.BR qore (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

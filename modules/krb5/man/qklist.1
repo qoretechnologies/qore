@@ -1,0 +1,36 @@
+.\" qklist.1 - man page for the qklist Kerberos principal inspector
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QKLIST 1 "2026 May 14" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qklist \- print Kerberos principal information
+.SH SYNOPSIS
+.B qklist
+\fIprincipal\fP
+[\fIprincipal\fP ...]
+.SH DESCRIPTION
+\fBqklist\fR parses each Kerberos principal name argument with the Qore
+\fBkrb5\fR module and prints the principal, its realm and each of its
+components.
+.PP
+At least one principal name is required.
+A principal name has the form \fIname\fP\fB@\fP\fIREALM\fP or
+\fIname1\fP\fB/\fP\fIname2\fP\fB@\fP\fIREALM\fP with one or more components.
+.SH EXAMPLES
+.RS
+.B qklist alice@EXAMPLE.COM
+.RE
+.PP
+.RS
+.B qklist HTTP/web.example.com@EXAMPLE.COM
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR klist (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

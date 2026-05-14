@@ -1,0 +1,52 @@
+.\" qjar.1 - man page for the Qore JAR generation helper
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QJAR 1 "2026 May 14" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qjar \- generate Java class files and a JAR from Qore modules or reflection trees
+.SH SYNOPSIS
+.B qjar
+[\fIoptions\fP]
+[\fB\-i=\fP\fIinput_root_dir\fP | \fB\-m=\fP\fImodule\fP]
+\fB\-o=\fP\fIoutput_jar\fP
+.SH DESCRIPTION
+\fBqjar\fR uses the Qore \fBjni\fR module to emit JVM class files corresponding
+to a Qore module's public API, then packages them into a JAR.
+It is part of the Qore documentation build pipeline and is also useful when
+embedding Qore code in a Java host environment.
+.PP
+If \fB\-c\fP / \fB\-\-classes\fP is given, \fBqjar\fR walks an existing directory
+tree to find pre-generated class files instead of regenerating them.
+.PP
+If the \fBjni\fR module is not available a warning is printed and no class
+files are produced; the build continues.
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-classes
+Scan input for existing Java class files to include.
+.TP
+.BR \-d ", " \-\-dry\-run
+Do not create any output; only print paths that would be written.
+.TP
+.BR \-i ", " \-\-input =\fIdir\fP
+Root input directory (required unless \fB\-m\fP is used).
+.TP
+.BR \-m ", " \-\-module =\fImodule\fP
+Qore module to generate class files for.
+.TP
+.BR \-o ", " \-\-output =\fIjar\fP
+Path of the JAR file to create.
+.TP
+.BR \-h ", " \-\-help
+Show help text.
+.SH SEE ALSO
+.BR qdx (1),
+.BR qore (1),
+.BR jar (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

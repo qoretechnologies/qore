@@ -743,23 +743,110 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
-# HTTP/2 support via nghttp2 (required)
-pkg_check_modules(NGHTTP2 QUIET libnghttp2)
-if (NGHTTP2_FOUND)
-    message(STATUS "Found nghttp2: ${NGHTTP2_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_INCLUDE_DIRS})
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARIES})
+# HTTP/2 support via nghttp2 (required, >= 1.68.1)
+# Minimum 1.68.1: v1.68.1 fixes CVE-2026-27135 (GHSA-6933-cjhr-5qg6), a DoS via
+# assertion failure in nghttp2_session_terminate_session[2] when extension
+# frames (ALTSVC, PRIORITY_UPDATE) trigger a follow-on FRAME_SIZE_ERROR.
+# Encoded as NGHTTP2_VERSION_NUM 0x014401 (1.68.1).
+# Falls back to building from source via FetchContent when no system install
+# satisfies the minimum.
+set(NGHTTP2_VERSION "1.69.0")
+set(NGHTTP2_FOUND_SYSTEM FALSE)
+pkg_check_modules(NGHTTP2_PKG QUIET libnghttp2>=1.68.1)
+if (NGHTTP2_PKG_FOUND)
+    message(STATUS "Found nghttp2: ${NGHTTP2_PKG_VERSION}")
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_PKG_INCLUDE_DIRS})
+    list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_PKG_LIBRARIES})
+    set(NGHTTP2_FOUND_SYSTEM TRUE)
 else()
     # Try to find nghttp2 without pkg-config
     find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h)
     find_library(NGHTTP2_LIBRARY NAMES nghttp2)
-    if (NGHTTP2_INCLUDE_DIR AND NGHTTP2_LIBRARY)
-        message(STATUS "Found nghttp2: ${NGHTTP2_LIBRARY}")
-        list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_INCLUDE_DIR})
-        list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARY})
-    else()
-        message(FATAL_ERROR "nghttp2 is required for HTTP/2 support. Please install libnghttp2-dev (Debian/Ubuntu) or libnghttp2-devel (Fedora/RHEL)")
+    if (NGHTTP2_INCLUDE_DIR AND NGHTTP2_LIBRARY
+            AND EXISTS "${NGHTTP2_INCLUDE_DIR}/nghttp2/nghttp2ver.h")
+        file(STRINGS "${NGHTTP2_INCLUDE_DIR}/nghttp2/nghttp2ver.h" _nghttp2_ver
+             REGEX "^#define NGHTTP2_VERSION_NUM 0x")
+        if (_nghttp2_ver MATCHES "0x([0-9a-fA-F]+)")
+            math(EXPR _nghttp2_ver_num "0x${CMAKE_MATCH_1}" OUTPUT_FORMAT DECIMAL)
+            # 0x014401 = 82945 decimal (v1.68.1)
+            if (_nghttp2_ver_num LESS 82945)
+                message(STATUS "nghttp2 version too old (need >= 1.68.1 for CVE-2026-27135); will build from source")
+            else()
+                message(STATUS "Found nghttp2: ${NGHTTP2_LIBRARY}")
+                list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_INCLUDE_DIR})
+                list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARY})
+                set(NGHTTP2_FOUND_SYSTEM TRUE)
+            endif()
+        endif()
     endif()
+endif()
+
+if (NOT NGHTTP2_FOUND_SYSTEM)
+    # Build nghttp2 from source via FetchContent.
+    # nghttp2 unconditionally creates an add_custom_target(check) like ngtcp2/
+    # nghttp3, so we patch it out the same way before add_subdirectory.
+    message(STATUS "nghttp2 not found on system; building from source (nghttp2 ${NGHTTP2_VERSION})")
+    include(FetchContent)
+
+    # Save cache variables we override for the subproject build
+    set(_SAVE_NG2_BUILD_TESTING ${BUILD_TESTING})
+    set(_SAVE_NG2_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+    set(_SAVE_NG2_BUILD_STATIC_LIBS ${BUILD_STATIC_LIBS})
+    set(_SAVE_NG2_ENABLE_LIB_ONLY ${ENABLE_LIB_ONLY})
+    set(_SAVE_NG2_PIC ${CMAKE_POSITION_INDEPENDENT_CODE})
+
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+    set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+    # Static lib linked into libqore.so needs -fPIC
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
+
+    FetchContent_Declare(nghttp2
+        URL "https://github.com/nghttp2/nghttp2/releases/download/v${NGHTTP2_VERSION}/nghttp2-${NGHTTP2_VERSION}.tar.xz"
+        URL_HASH SHA256=1fb324b6ec2c56f6bde0658f4139ffd8209fa9e77ce98fd7a5f63af8d0e508ad
+        # Patch out the unconditional 'check' target to avoid duplicate-target
+        # errors when ngtcp2/nghttp3 are also fetched.
+        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
+        EXCLUDE_FROM_ALL
+    )
+    FetchContent_MakeAvailable(nghttp2)
+
+    # Restore cache variables
+    if (DEFINED _SAVE_NG2_BUILD_TESTING)
+        set(BUILD_TESTING ${_SAVE_NG2_BUILD_TESTING} CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_TESTING CACHE)
+    endif()
+    if (DEFINED _SAVE_NG2_BUILD_SHARED_LIBS)
+        set(BUILD_SHARED_LIBS ${_SAVE_NG2_BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_SHARED_LIBS CACHE)
+    endif()
+    if (DEFINED _SAVE_NG2_BUILD_STATIC_LIBS)
+        set(BUILD_STATIC_LIBS ${_SAVE_NG2_BUILD_STATIC_LIBS} CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_STATIC_LIBS CACHE)
+    endif()
+    if (DEFINED _SAVE_NG2_ENABLE_LIB_ONLY)
+        set(ENABLE_LIB_ONLY ${_SAVE_NG2_ENABLE_LIB_ONLY} CACHE BOOL "" FORCE)
+    else()
+        unset(ENABLE_LIB_ONLY CACHE)
+    endif()
+    if (DEFINED _SAVE_NG2_PIC)
+        set(CMAKE_POSITION_INDEPENDENT_CODE ${_SAVE_NG2_PIC} CACHE BOOL "" FORCE)
+    else()
+        unset(CMAKE_POSITION_INDEPENDENT_CODE CACHE)
+    endif()
+
+    # nghttp2 generates nghttp2ver.h in the build tree and ships public headers
+    # under lib/includes/nghttp2/.
+    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS
+        "${nghttp2_SOURCE_DIR}/lib/includes"
+        "${nghttp2_BINARY_DIR}/lib/includes"
+    )
+    # Link against the static target produced when BUILD_STATIC_LIBS=ON.
+    list(APPEND LIBQORE_OPTIONAL_LIBS nghttp2_static)
 endif()
 
 # QUIC/HTTP/3 support via ngtcp2 + nghttp3
@@ -839,30 +926,25 @@ if (NOT QUIC_FOUND_SYSTEM)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
     # --- nghttp3 (must come before ngtcp2) ---
+    # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
     FetchContent_Declare(nghttp3
         URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
         URL_HASH SHA256=6da0cd06b428d32a54c58137838505d9dc0371a900bb8070a46b29e1ceaf2e0f
+        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
+        EXCLUDE_FROM_ALL
     )
-    FetchContent_Populate(nghttp3)
-    # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
-    file(READ "${nghttp3_SOURCE_DIR}/CMakeLists.txt" _fc_content)
-    string(REPLACE "add_custom_target(check" "# add_custom_target(check" _fc_content "${_fc_content}")
-    file(WRITE "${nghttp3_SOURCE_DIR}/CMakeLists.txt" "${_fc_content}")
-    add_subdirectory(${nghttp3_SOURCE_DIR} ${nghttp3_BINARY_DIR} EXCLUDE_FROM_ALL)
+    FetchContent_MakeAvailable(nghttp3)
 
     # --- ngtcp2 (with OpenSSL crypto backend) ---
+    set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
+    set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(ngtcp2
         URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
         URL_HASH SHA256=dfd2c68bd64b89847c611425b9487105c46e8447b5c21e6aeb00642c8fbe2ca8
+        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
+        EXCLUDE_FROM_ALL
     )
-    set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
-    set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
-    FetchContent_Populate(ngtcp2)
-    # Patch out the unconditional 'check' target
-    file(READ "${ngtcp2_SOURCE_DIR}/CMakeLists.txt" _fc_content)
-    string(REPLACE "add_custom_target(check" "# add_custom_target(check" _fc_content "${_fc_content}")
-    file(WRITE "${ngtcp2_SOURCE_DIR}/CMakeLists.txt" "${_fc_content}")
-    add_subdirectory(${ngtcp2_SOURCE_DIR} ${ngtcp2_BINARY_DIR} EXCLUDE_FROM_ALL)
+    FetchContent_MakeAvailable(ngtcp2)
 
     # Restore cache variables
     if (DEFINED _SAVE_BUILD_TESTING)
@@ -2265,6 +2347,10 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 # QM metadata extraction requires the json binary module (via QoreApiMetadata).
 # On a fresh build json will not be installed yet; re-run cmake after
 # installing the json module to enable QM metadata extraction.
+#
+# The installed json module must also match the module API version of the
+# qore being built here, otherwise the build-tree qore would fail to load
+# it at build time and qore-extract-qm-metadata would break.
 set(QORE_EXECUTABLE ${CMAKE_BINARY_DIR}/qore)
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
@@ -2318,26 +2404,57 @@ foreach(_qore_build_module astparser reflection logger_bin linenoise krb5 mongod
     endif()
 endforeach()
 set(QORE_QM_METADATA_DEPENDS qore ${QORE_AOT_BINARY_MODULE_TARGETS})
+
+# extract the source's module API version from include/qore/ModuleManager.h
+file(STRINGS "${CMAKE_SOURCE_DIR}/include/qore/ModuleManager.h" _mm_lines
+    REGEX "^#define[ \t]+QORE_MODULE_API_(MAJOR|MINOR)[ \t]+[0-9]+")
+set(_src_api_major "")
+set(_src_api_minor "")
+foreach(_line ${_mm_lines})
+    if(_line MATCHES "QORE_MODULE_API_MAJOR[ \t]+([0-9]+)")
+        set(_src_api_major ${CMAKE_MATCH_1})
+    elseif(_line MATCHES "QORE_MODULE_API_MINOR[ \t]+([0-9]+)")
+        set(_src_api_minor ${CMAKE_MATCH_1})
+    endif()
+endforeach()
+unset(_mm_lines)
+
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 if(_qore_exe)
+    # Query installed json's api_major.api_minor via installed qore.  If the
+    # load fails (json missing or itself ABI-incompatible with installed qore)
+    # the exit code is non-zero and OUTPUT is empty.
     execute_process(
-        COMMAND ${_qore_exe} -l json -ne ""
+        COMMAND ${_qore_exe} -l json -ne
+            "printf(\"%d.%d\", get_module_hash().json.api_major, get_module_hash().json.api_minor);"
         RESULT_VARIABLE _qore_json_rc
-        OUTPUT_QUIET ERROR_QUIET
+        OUTPUT_VARIABLE _installed_json_api
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
     )
-    if(_qore_json_rc EQUAL 0)
-        set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
-        message(STATUS "json module available; QM metadata extraction enabled")
-    else()
+    if(NOT _qore_json_rc EQUAL 0)
         message(STATUS "json module not available; QM metadata extraction disabled"
             " (re-run cmake after installing json)")
+    elseif(NOT "${_src_api_major}" STREQUAL "" AND NOT "${_src_api_minor}" STREQUAL ""
+            AND NOT "${_installed_json_api}" STREQUAL "${_src_api_major}.${_src_api_minor}")
+        message(STATUS "installed json module API ${_installed_json_api} does not"
+            " match source module API ${_src_api_major}.${_src_api_minor};"
+            " QM metadata extraction disabled (rebuild + reinstall the json module"
+            " against this qore source tree, then re-run cmake)")
+    else()
+        set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+        message(STATUS "json module available (API ${_installed_json_api});"
+            " QM metadata extraction enabled")
     endif()
     unset(_qore_json_rc)
+    unset(_installed_json_api)
 else()
     message(STATUS "qore not installed; QM metadata extraction disabled"
         " (re-run cmake after installing qore and json)")
 endif()
 unset(_qore_exe)
+unset(_src_api_major)
+unset(_src_api_minor)
 
 # base modules
 qore_user_module("qlib/DatasourceProvider.qm" "")

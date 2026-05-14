@@ -43,9 +43,26 @@ if (!is_readable(source_file)) {
     exit(1);
 }
 
-hash<QoreApiMetadata::NamespaceInfo> metadata =
-    QoreApiMetadata::fromSourceFile(source_file);
-string json = QoreApiMetadata::toJson(metadata);
+string json;
+try {
+    hash<QoreApiMetadata::NamespaceInfo> metadata =
+        QoreApiMetadata::fromSourceFile(source_file);
+    json = QoreApiMetadata::toJson(metadata);
+} catch (hash<ExceptionInfo> ex) {
+    # the json module may be present but ABI-incompatible with the
+    # build-tree qore (e.g. when bumping QORE_MODULE_API); in that case
+    # QoreApiMetadata loads via %try-module and toJson() throws
+    # JSON-NOT-AVAILABLE.  Write an empty stub so the build continues
+    # instead of breaking unrecoverably.
+    if (ex.err == "JSON-NOT-AVAILABLE") {
+        stderr.printf("%s: WARNING: json module unavailable (ABI mismatch or "
+            "missing); writing empty metadata for %s\n",
+            get_script_name(), source_file);
+        json = "{}\n";
+    } else {
+        rethrow;
+    }
+}
 
 if (ARGV[1]) {
     File f();

@@ -3,7 +3,7 @@
 
 Name: qore
 Version: 2.3.0
-Release: 1%{?dist}
+Release: 4%{?dist}
 Summary: Multithreaded Programming Language
 
 # see https://github.com/qorelanguage/qore/blob/develop/README-LICENSE for license info
@@ -24,7 +24,7 @@ BuildRequires: pkgconfig(openssl)
 BuildRequires: pkgconfig(zlib)
 BuildRequires: pkgconfig(mpfr)
 BuildRequires: pkgconfig(bzip2)
-BuildRequires: pkgconfig(libnghttp2)
+BuildRequires: pkgconfig(libnghttp2) >= 1.68.1
 BuildRequires: pkgconfig(libcares)
 BuildRequires: pkgconfig(libbrotlienc)
 BuildRequires: pkgconfig(libbrotlidec)
@@ -92,7 +92,7 @@ and also for user modules delivered with Qore and also example programs.
 
 %files doc
 %license COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE
-%doc docs/lang docs/modules/* examples/
+%doc build/docs/lang build/docs/modules/* examples/
 
 %package devel
 Summary: The header files needed to compile programs using the qore library
@@ -111,6 +111,8 @@ Qore library.
 %{_bindir}/qpp
 %{_bindir}/qdx
 %{_bindir}/qjar
+%{_mandir}/man1/qdx.1.*
+%{_mandir}/man1/qjar.1.*
 %{_libdir}/libqore.so
 %{_libdir}/pkgconfig/qore.pc
 %dir %{_libdir}/cmake
@@ -134,7 +136,7 @@ This package provides HTML documentation for the C++ API for the Qore library.
 
 %files devel-doc
 %license COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE
-%doc docs/library/html/*
+%doc build/docs/library/html/*
 
 %package misc-tools
 Summary: Miscellaneous user tools writen in Qore Programming Language
@@ -154,32 +156,38 @@ This package contains tools for working with:
  - File Downloads (qget)
 
 %files misc-tools
+%{_bindir}/qdiff
 %{_bindir}/qdp
+%{_bindir}/qfmt
 %{_bindir}/qget
 %{_bindir}/qklist
-%{_bindir}/rest
-%{_bindir}/sfrest
-%{_bindir}/saprest
-%{_bindir}/sqlutil
-%{_bindir}/schema-reverse
-%{_bindir}/qschema
-%{_bindir}/qfmt
 %{_bindir}/qls
-%{_bindir}/qore-openapi3-gen
 %{_bindir}/qore-asyncapi-gen
 %{_bindir}/qore-extract-qm-metadata
+%{_bindir}/qore-openapi3-gen
+%{_bindir}/qpatch
+%{_bindir}/qschema
+%{_bindir}/rest
+%{_bindir}/saprest
+%{_bindir}/schema-reverse
+%{_bindir}/sfrest
+%{_bindir}/sqlutil
+%{_mandir}/man1/qdiff.1.*
 %{_mandir}/man1/qdp.1.*
-%{_mandir}/man1/qget.1.*
-%{_mandir}/man1/rest.1.*
-%{_mandir}/man1/sfrest.1.*
-%{_mandir}/man1/saprest.1.*
-%{_mandir}/man1/sqlutil.1.*
-%{_mandir}/man1/schema-reverse.1.*
-%{_mandir}/man1/qschema.1.*
 %{_mandir}/man1/qfmt.1.*
+%{_mandir}/man1/qget.1.*
+%{_mandir}/man1/qklist.1.*
 %{_mandir}/man1/qls.1.*
-%{_mandir}/man1/qore-openapi3-gen.1.*
 %{_mandir}/man1/qore-asyncapi-gen.1.*
+%{_mandir}/man1/qore-extract-qm-metadata.1.*
+%{_mandir}/man1/qore-openapi3-gen.1.*
+%{_mandir}/man1/qpatch.1.*
+%{_mandir}/man1/qschema.1.*
+%{_mandir}/man1/rest.1.*
+%{_mandir}/man1/saprest.1.*
+%{_mandir}/man1/schema-reverse.1.*
+%{_mandir}/man1/sfrest.1.*
+%{_mandir}/man1/sqlutil.1.*
 %license COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE
 
 %prep
@@ -190,23 +198,31 @@ find examples -type f -exec chmod -x {} \;
 %build
 %undefine _hardened_build
 export CXXFLAGS="%{?optflags}"
-cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DCMAKE_PREFIX_PATH=${_prefix}/lib64/cmake/Qore -DSINGLE_COMPILATION_UNIT=1.
+# out-of-source build: cmake's docs target uses relative paths to ../doxygen/
+# which only resolve correctly when run from a child directory of the source root
+mkdir -p build
+cd build
+cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DCMAKE_PREFIX_PATH=%{_prefix}/lib64/cmake/Qore -DSINGLE_COMPILATION_UNIT=1 ..
 %make_build
+# build the doxygen-generated C++ API docs that the qore-devel-doc subpackage ships
+%make_build docs
 
 %install
+cd build
 %make_install
 mkdir -p $RPM_BUILD_ROOT%{module_dir}
 rm -f $RPM_BUILD_ROOT%{_libdir}/libqore.la
 
 %check
-export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{version}
-./qore examples/test/qore/threads/background.qtest
-./qore examples/test/qore/threads/deadlock.qtest
-./qore examples/test/qore/threads/max-threads-count.qtest
-./qore examples/test/qore/threads/set_thread_init.qtest
-./qore examples/test/qore/threads/thread-object.qtest
-./qore examples/test/qore/threads/thread-resources.qtest
-./qore examples/test/qore/threads/tld.qtest
+cd build
+export QORE_MODULE_DIR=../qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{version}
+./qore ../examples/test/qore/threads/background.qtest
+./qore ../examples/test/qore/threads/deadlock.qtest
+./qore ../examples/test/qore/threads/max-threads-count.qtest
+./qore ../examples/test/qore/threads/set_thread_init.qtest
+./qore ../examples/test/qore/threads/thread-object.qtest
+./qore ../examples/test/qore/threads/thread-resources.qtest
+./qore ../examples/test/qore/threads/tld.qtest
 
 %files
 %{_bindir}/qore
@@ -216,8 +232,21 @@ export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{
 %{_bindir}/qdbg-vsc-adapter
 %{_mandir}/man1/qore.1.*
 %{_mandir}/man1/qdbg.1.*
+%{_mandir}/man1/qdbg-remote.1.*
+%{_mandir}/man1/qdbg-server.1.*
+%{_mandir}/man1/qdbg-vsc-adapter.1.*
 
 %changelog
+* Thu May 14 2026 David Nichols <david@qore.org> 2.3.0-4
+- tightened libnghttp2 BuildRequires to >= 1.68.1 (CVE-2026-27135)
+- added qdiff and qpatch to misc-tools package (were installed but unpackaged)
+- switched to out-of-source build under build/ so doxygen's relative
+  ../doxygen/header_template.html path resolves; this also lets us build
+  the docs target for the qore-devel-doc subpackage
+- added `make_build docs` to %build so qore-devel-doc subpackage ships content
+- fixed CMAKE_PREFIX_PATH shell-var typo (${_prefix} -> %{_prefix})
+- fixed SINGLE_COMPILATION_UNIT argument parsing (was "1." now "1" + source dir)
+
 * Mon Feb 9 2026 David Nichols <david@qore.org> 2.3.0-3
 - added required build dependencies: rust, cargo (for tree-sitter-cli)
 - added qfmt to misc-tools package

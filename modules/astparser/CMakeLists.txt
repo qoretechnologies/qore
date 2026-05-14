@@ -18,11 +18,23 @@ include(FetchContent)
 FetchContent_Declare(
     tree-sitter
     GIT_REPOSITORY https://github.com/tree-sitter/tree-sitter.git
-    GIT_TAG v0.26.5
+    GIT_TAG v0.26.8
 )
 FetchContent_GetProperties(tree-sitter)
 if(NOT tree-sitter_POPULATED)
+    # FetchContent_MakeAvailable() would call add_subdirectory() on the
+    # tree-sitter source, but we only need the populated source to compile
+    # lib/src/lib.c into our own static target. Setting CMP0169 to OLD is
+    # the cmake-sanctioned way to keep calling FetchContent_Populate() in
+    # this "sources only" case (cmake 3.30+).
+    if(POLICY CMP0169)
+        cmake_policy(PUSH)
+        cmake_policy(SET CMP0169 OLD)
+    endif()
     FetchContent_Populate(tree-sitter)
+    if(POLICY CMP0169)
+        cmake_policy(POP)
+    endif()
 endif()
 
 # Build tree-sitter C runtime as a static library

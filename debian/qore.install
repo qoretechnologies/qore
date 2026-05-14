@@ -5,3 +5,6 @@ usr/bin/qdbg-remote
 usr/bin/qdbg-vsc-adapter
 usr/share/man/man1/qore.1*
 usr/share/man/man1/qdbg.1*
+usr/share/man/man1/qdbg-remote.1*
+usr/share/man/man1/qdbg-server.1*
+usr/share/man/man1/qdbg-vsc-adapter.1*

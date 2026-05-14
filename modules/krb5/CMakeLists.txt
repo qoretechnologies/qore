@@ -141,6 +141,11 @@ install(PROGRAMS
     DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+install(FILES
+    man/qklist.1
+    DESTINATION ${CMAKE_INSTALL_MANDIR}/man1
+)
+
 if (DOXYGEN_FOUND)
     add_custom_target(QORE_KRB5_MOD_DOX_FILES DEPENDS ${QORE_DOX_KRB5_SRC})
     add_dependencies(docs-krb5 QORE_KRB5_MOD_DOX_FILES)
