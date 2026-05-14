@@ -1,0 +1,52 @@
+.\" qore-extract-qm-metadata.1 - man page for the Qore qpp/qlib metadata extractor
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QORE-EXTRACT-QM-METADATA 1 "2026 May 14" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qore-extract-qm-metadata \- extract structured API metadata from a Qore source file
+.SH SYNOPSIS
+.B qore-extract-qm-metadata
+\fIsource-file\fP
+[\fIoutput-file\fP]
+.SH DESCRIPTION
+\fBqore-extract-qm-metadata\fR uses the \fBQoreApiMetadata\fR module to parse a
+Qore source file (\fB.qm\fP, \fB.qc\fP or \fB.q\fP) and emit a JSON document
+describing its public API: classes, methods, functions, constants, hashdecls,
+enums and namespaces.
+.PP
+The tool is invoked at build time by the Qore CMake rules to populate
+\fI/usr/share/qore/metadata/\fP, which is consumed by tools such as
+\fBqls\fP(1) (the Qore Language Server) and the Qore documentation index.
+.PP
+If \fIoutput-file\fP is omitted the JSON document is written to standard output.
+.PP
+If the \fBjson\fR binary module is not available (missing or ABI-incompatible
+with the running \fBqore\fR), the tool emits a warning on standard error and
+writes an empty JSON object so that the build can continue.
+.SH ARGUMENTS
+.TP
+.I source-file
+Required.
+Path to a Qore source file (\fB.qm\fP, \fB.qc\fP or \fB.q\fP).
+.TP
+.I output-file
+Optional.
+If given, JSON is written to this file (truncating any prior contents);
+otherwise it is written to standard output.
+.SH "EXIT STATUS"
+.TP
+.B 0
+Success (including the json-unavailable graceful path).
+.TP
+.B 1
+Missing or unreadable source file.
+.SH SEE ALSO
+.BR qore (1),
+.BR qls (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

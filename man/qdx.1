@@ -1,0 +1,64 @@
+.\" qdx.1 - man page for the Qore Doxygen helper
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QDX 1 "2026 May 14" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qdx \- preprocessor for Qore doxygen documentation builds
+.SH SYNOPSIS
+.B qdx
+[\fIoptions\fP]
+\fIinfile\fP
+\fIoutfile\fP
+.SH DESCRIPTION
+\fBqdx\fR is a helper used by the Qore documentation build pipeline.
+It pre-processes \fB.qm\fP, \fB.qc\fP and \fB.dox\fP files into doxygen-friendly
+\fB.dox.h\fP intermediates, configures per-module \fBDoxyfile\fP templates from
+\fIDoxyfile.cmake.tmpl\fP, and post-processes the rendered HTML.
+.PP
+\fBqdx\fR is invoked from \fBcmake\fR\(aqs \fBdocs\fP target via the
+\fBqore_wrap_dox\fP() and \fBqore_external_user_module\fP() macros.
+It is not normally run by hand.
+.SH OPTIONS
+.TP
+.BR \-d ", " \-\-dox
+Process doxygen source files.
+.TP
+.BR \-D ", " \-\-define =\fIarg\fP
+Define a symbol for conditional parsing (repeatable).
+.TP
+.BR \-M ", " \-\-module\-dx =\fIsrc\fP:\fItrg\fP
+Prepare a doxyfile module template from \fIsrc\fP into \fItrg\fP.
+.TP
+.BR \-N ", " \-\-no\-mainpage
+Change \fB@mainpage\fR to \fB@page\fR.
+.TP
+.BR \-p ", " \-\-post
+Post-process rendered HTML files.
+.TP
+.BR \-k ", " \-\-keep\-dollar
+Preserve \fB$\fP characters during post-processing.
+.TP
+.BR \-t ", " \-\-tag =\fIarg\fP
+Tag argument forwarded to the doxyfile.
+.TP
+.BR \-T ", " \-\-top\-srcdir =\fIarg\fP
+Top-level source directory.
+.TP
+.BR \-h ", " \-\-help
+Show help text.
+.SH ENVIRONMENT
+.TP
+.B QORE_DOC_DEFINES
+Comma-separated list of additional symbols for conditional parsing
+(equivalent to repeating \fB\-D\fP).
+.SH SEE ALSO
+.BR qjar (1),
+.BR qore (1),
+.BR doxygen (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

@@ -1,0 +1,81 @@
+.\" qdiff.1 - man page for the Qore Diff Tool
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QDIFF 1 "2026 May 14" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qdiff \- command-line diff tool powered by the Qore Diff module
+.SH SYNOPSIS
+.B qdiff
+[\fIoptions\fP]
+\fIfile1\fP
+\fIfile2\fP
+.SH DESCRIPTION
+\fBqdiff\fR computes and renders differences between two files using the Qore
+\fBDiff\fR module.
+It supports several output modes (unified, normal, side\-by\-side, inline
+character and word diffs) and a structured data mode for JSON, YAML and Qore
+input.
+.PP
+A file argument of \fB\-\fP reads from standard input.
+.SH OPTIONS
+.SS "Output modes"
+.TP
+.BR \-u ", " \-\-unified
+Unified diff format (default).
+.TP
+.BR \-n ", " \-\-normal
+Normal (traditional) diff format.
+.TP
+.BR \-y ", " \-\-side\-by\-side
+Side-by-side columnar format.
+.TP
+.B \-\-chars
+Character-level inline diff.
+.TP
+.B \-\-words
+Word-level inline diff.
+.TP
+.BR \-D ", " \-\-data
+Structured data diff (JSON, YAML or Qore).
+.SS "General"
+.TP
+.BR \-c ", " \-\-context =\fIN\fP
+Lines of context (default: 3, unified mode).
+.TP
+.BR \-w ", " \-\-width =\fIN\fP
+Output width (default: terminal width).
+.TP
+.BR \-s ", " \-\-stats
+Show insertion / deletion / unchanged counts.
+.TP
+.BR \-C ", " \-\-no\-color
+Disable colored output.
+.TP
+.BR \-q ", " \-\-quiet
+Exit 0 if files are identical, 1 if they differ.
+.TP
+.BR \-V ", " \-\-version
+Show version information.
+.TP
+.BR \-h ", " \-\-help
+Show help text.
+.SH "EXIT STATUS"
+.TP
+.B 0
+Files are identical.
+.TP
+.B 1
+Files differ.
+.TP
+.B 2
+Error (missing file, invalid options).
+.SH SEE ALSO
+.BR qpatch (1),
+.BR qore (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.
