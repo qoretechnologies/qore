@@ -854,30 +854,25 @@ if (NOT QUIC_FOUND_SYSTEM)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
     # --- nghttp3 (must come before ngtcp2) ---
+    # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
     FetchContent_Declare(nghttp3
         URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
         URL_HASH SHA256=6da0cd06b428d32a54c58137838505d9dc0371a900bb8070a46b29e1ceaf2e0f
+        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
+        EXCLUDE_FROM_ALL
     )
-    FetchContent_Populate(nghttp3)
-    # Patch out the unconditional 'check' target that conflicts in multi-FetchContent builds
-    file(READ "${nghttp3_SOURCE_DIR}/CMakeLists.txt" _fc_content)
-    string(REPLACE "add_custom_target(check" "# add_custom_target(check" _fc_content "${_fc_content}")
-    file(WRITE "${nghttp3_SOURCE_DIR}/CMakeLists.txt" "${_fc_content}")
-    add_subdirectory(${nghttp3_SOURCE_DIR} ${nghttp3_BINARY_DIR} EXCLUDE_FROM_ALL)
+    FetchContent_MakeAvailable(nghttp3)
 
     # --- ngtcp2 (with OpenSSL crypto backend) ---
+    set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
+    set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
     FetchContent_Declare(ngtcp2
         URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
         URL_HASH SHA256=dfd2c68bd64b89847c611425b9487105c46e8447b5c21e6aeb00642c8fbe2ca8
+        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
+        EXCLUDE_FROM_ALL
     )
-    set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE)
-    set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
-    FetchContent_Populate(ngtcp2)
-    # Patch out the unconditional 'check' target
-    file(READ "${ngtcp2_SOURCE_DIR}/CMakeLists.txt" _fc_content)
-    string(REPLACE "add_custom_target(check" "# add_custom_target(check" _fc_content "${_fc_content}")
-    file(WRITE "${ngtcp2_SOURCE_DIR}/CMakeLists.txt" "${_fc_content}")
-    add_subdirectory(${ngtcp2_SOURCE_DIR} ${ngtcp2_BINARY_DIR} EXCLUDE_FROM_ALL)
+    FetchContent_MakeAvailable(ngtcp2)
 
     # Restore cache variables
     if (DEFINED _SAVE_BUILD_TESTING)
