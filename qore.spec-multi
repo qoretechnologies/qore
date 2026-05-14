@@ -53,7 +53,7 @@ BuildRequires: gmp-devel
 BuildRequires: mpfr-devel
 BuildRequires: doxygen
 BuildRequires: gcc-c++
-BuildRequires: pkgconfig(libnghttp2)
+BuildRequires: pkgconfig(libnghttp2) >= 1.68.1
 BuildRequires: pkgconfig(libcares)
 BuildRequires: pkgconfig(libbrotlienc)
 BuildRequires: pkgconfig(libbrotlidec)
@@ -236,20 +236,22 @@ This package contains tools for working with:
 
 %files misc-tools
 %defattr(-,root,root,-)
+%{_bindir}/qdiff
 %{_bindir}/qdp
+%{_bindir}/qfmt
 %{_bindir}/qget
 %{_bindir}/qklist
-%{_bindir}/rest
-%{_bindir}/sfrest
-%{_bindir}/saprest
-%{_bindir}/sqlutil
-%{_bindir}/schema-reverse
-%{_bindir}/qschema
-%{_bindir}/qfmt
 %{_bindir}/qls
-%{_bindir}/qore-openapi3-gen
 %{_bindir}/qore-asyncapi-gen
 %{_bindir}/qore-extract-qm-metadata
+%{_bindir}/qore-openapi3-gen
+%{_bindir}/qpatch
+%{_bindir}/qschema
+%{_bindir}/rest
+%{_bindir}/saprest
+%{_bindir}/schema-reverse
+%{_bindir}/sfrest
+%{_bindir}/sqlutil
 %{_mandir}/man1/qdp.1.*
 %{_mandir}/man1/qget.1.*
 %{_mandir}/man1/rest.1.*
@@ -272,6 +274,8 @@ find examples -type f -exec chmod -x {} \;
 export CXXFLAGS="%{?optflags}"
 cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} -DCMAKE_BUILD_TYPE=RELWITHDEBINFO -DCMAKE_SKIP_RPATH=1 -DCMAKE_SKIP_INSTALL_RPATH=1 -DCMAKE_SKIP_BUILD_RPATH=1 -DSINGLE_COMPILATION_UNIT=1 .
 %{__make} %{?_smp_mflags}
+# build the doxygen-generated C++ API docs that the qore-devel-doc subpackage ships
+%{__make} %{?_smp_mflags} docs
 
 %install
 %make_install
