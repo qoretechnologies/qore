@@ -2044,32 +2044,67 @@ set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
 # QM metadata extraction requires the json binary module (via QoreApiMetadata).
 # On a fresh build json will not be installed yet; re-run cmake after
 # installing the json module to enable QM metadata extraction.
+#
+# The installed json module must also match the module API version of the
+# qore being built here, otherwise the build-tree qore would fail to load
+# it at build time and qore-extract-qm-metadata would break.
 set(QORE_QM_METADATA_EXECUTABLE ${CMAKE_SOURCE_DIR}/bin/qore-extract-qm-metadata)
 set(QORE_QM_METADATA_SUBDIR core-qlib)
 set(QORE_QM_METADATA_ENV
     "QORE_MODULE_DIR=${CMAKE_BINARY_DIR}/modules/astparser:${CMAKE_BINARY_DIR}/modules/reflection:${CMAKE_BINARY_DIR}/modules/logger_bin:${CMAKE_BINARY_DIR}/modules/krb5:${CMAKE_SOURCE_DIR}/qlib"
     "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 set(QORE_QM_METADATA_DEPENDS qore astparser reflection logger_bin krb5)
+
+# extract the source's module API version from include/qore/ModuleManager.h
+file(STRINGS "${CMAKE_SOURCE_DIR}/include/qore/ModuleManager.h" _mm_lines
+    REGEX "^#define[ \t]+QORE_MODULE_API_(MAJOR|MINOR)[ \t]+[0-9]+")
+set(_src_api_major "")
+set(_src_api_minor "")
+foreach(_line ${_mm_lines})
+    if(_line MATCHES "QORE_MODULE_API_MAJOR[ \t]+([0-9]+)")
+        set(_src_api_major ${CMAKE_MATCH_1})
+    elseif(_line MATCHES "QORE_MODULE_API_MINOR[ \t]+([0-9]+)")
+        set(_src_api_minor ${CMAKE_MATCH_1})
+    endif()
+endforeach()
+unset(_mm_lines)
+
 find_program(_qore_exe NAMES qore HINTS ${CMAKE_INSTALL_FULL_BINDIR})
 if(_qore_exe)
+    # Query installed json's api_major.api_minor via installed qore.  If the
+    # load fails (json missing or itself ABI-incompatible with installed qore)
+    # the exit code is non-zero and OUTPUT is empty.
     execute_process(
-        COMMAND ${_qore_exe} -l json -ne ""
+        COMMAND ${_qore_exe} -l json -ne
+            "printf(\"%d.%d\", get_module_hash().json.api_major, get_module_hash().json.api_minor);"
         RESULT_VARIABLE _qore_json_rc
-        OUTPUT_QUIET ERROR_QUIET
+        OUTPUT_VARIABLE _installed_json_api
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
     )
-    if(_qore_json_rc EQUAL 0)
-        set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
-        message(STATUS "json module available; QM metadata extraction enabled")
-    else()
+    if(NOT _qore_json_rc EQUAL 0)
         message(STATUS "json module not available; QM metadata extraction disabled"
             " (re-run cmake after installing json)")
+    elseif(NOT "${_src_api_major}" STREQUAL "" AND NOT "${_src_api_minor}" STREQUAL ""
+            AND NOT "${_installed_json_api}" STREQUAL "${_src_api_major}.${_src_api_minor}")
+        message(STATUS "installed json module API ${_installed_json_api} does not"
+            " match source module API ${_src_api_major}.${_src_api_minor};"
+            " QM metadata extraction disabled (rebuild + reinstall the json module"
+            " against this qore source tree, then re-run cmake)")
+    else()
+        set(QORE_METADATA_DIR ${CMAKE_INSTALL_DATADIR}/qore/metadata)
+        message(STATUS "json module available (API ${_installed_json_api});"
+            " QM metadata extraction enabled")
     endif()
     unset(_qore_json_rc)
+    unset(_installed_json_api)
 else()
     message(STATUS "qore not installed; QM metadata extraction disabled"
         " (re-run cmake after installing qore and json)")
 endif()
 unset(_qore_exe)
+unset(_src_api_major)
+unset(_src_api_minor)
 
 # base modules
 qore_user_module("qlib/DatasourceProvider.qm" "")
