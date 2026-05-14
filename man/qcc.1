@@ -1,0 +1,203 @@
+.\" qcc.1 - man page for the Qore AOT compiler
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QCC 1 "2026 May 14" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qcc \- Qore ahead-of-time compiler
+.SH SYNOPSIS
+.B qcc
+[\fIoptions\fP]
+\fIsource-file\fP|\fIobject\fP...
+.SH DESCRIPTION
+\fBqcc\fR compiles Qore scripts, user modules, relocatable Qore objects, and
+archives using Qore's IR and LLVM AOT backend.
+It can produce standalone native executables, native \fB.qmod\fP user modules,
+per-file \fB.qo\fP relocatable objects, and \fB.qoa\fP static archives.
+.PP
+Source files must use \fB%modern\fP or have the \fB.qr\fP extension.
+Cross-compilation requires LLVM support for the selected target.
+Static linking requires a Qore build configured with
+\fBBUILD_STATIC_LIBQORE=ON\fP.
+.SH OPTIONS
+.SS "Output Mode"
+.TP
+.BR \-o ", " \-\-output =\fIfile\fP
+Set the output path.
+If omitted, the input file name without its extension is used.
+.TP
+.BR \-O ", " \-\-opt\-level =\fIN\fP
+Set LLVM optimization level 0 through 3.
+The default is 3.
+.TP
+.BR \-m ", " \-\-module
+Compile the input as a user module.
+A single \fB.qm\fP file or a split module directory can be compiled to
+\fB.qmod\fP.
+.TP
+.BR \-c ", " \-\-compile\-only
+Compile to a \fB.qo\fP relocatable object.
+.TP
+.B \-\-context =\fIdir\fP
+Set the directory context for per-file \fB.qo\fP compilation.
+This parses the whole split-module directory but emits only the selected
+input file's contributions.
+Required for some \fB\-c\fP workflows.
+.TP
+.BI \-L " dir"
+Add a script-mode sibling \fB.qo\fP search path.
+May be repeated.
+.TP
+.B \-\-output\-dir =\fIdir\fP
+Write compile-only output to \fIdir\fP.
+Required for batch mode with multiple sources and mutually exclusive with
+\fB\-o\fP.
+.TP
+.B \-\-from\-objects
+Aggregate mode.
+Positional arguments are \fB.qo\fP inputs; requires \fB\-m\fP and
+\fB\-\-context\fP and emits a standard \fB.qmod\fP.
+.TP
+.BR \-a ", " \-\-archive
+Archive mode.
+Positional arguments are \fB.qo\fP inputs; requires \fB\-\-context\fP and emits
+a \fB.qoa\fP static archive exposing \fBqore_qoa_register_all()\fP for a C++
+host.
+.SS "Compile Context"
+.TP
+.BR \-l ", " \-\-load =\fImodule\fP
+Load a Qore module before parsing sources.
+May be repeated.
+.TP
+.B \-\-stub =\fIfile\fP
+Preload a declarative Qore source file before target sources.
+The stub contributes declarations to parsing but does not emit a \fB.qo\fP.
+May be repeated.
+.TP
+.B \-\-parse\-option =\fIname\fP
+Add a parse option or \fBPO_*\fP flag to the compile program.
+May be repeated.
+.TP
+.B \-\-define =\fIname\fP[=\fIvalue\fP]
+Set a parser define before source parsing.
+May be repeated.
+.TP
+.B \-\-depfile =\fIfile\fP
+Emit a Make-format dependency file after a successful compile.
+.SS "Target and Link Options"
+.TP
+.BR \-S ", " \-\-static
+Link statically against libqore.
+.TP
+.BR \-t ", " \-\-target =\fItriple\fP
+Compile for an LLVM target triple instead of the native host target.
+.TP
+.B \-\-show\-targets
+Show supported target architectures and exit.
+.TP
+.BR \-e ", " \-\-entry =\fIfunction\fP
+Set the Qore function called by the generated C++ \fBmain()\fP in link mode.
+The default is \fBmain\fP.
+.SS "Metadata and Debug Information"
+.TP
+.B \-\-include\-source
+Embed source text in AOT metadata.
+.TP
+.B \-\-strip\-source
+Strip source text from AOT metadata.
+This is the default.
+.TP
+.B \-\-strip\-debug\-info
+Do not emit DWARF debug information.
+This reduces compile time and output size but disables debugger source/line
+support.
+.TP
+.B \-g
+Emit DWARF debug information.
+This is the default and overrides \fB\-\-strip\-debug\-info\fP when both are
+specified.
+.TP
+.B \-\-time\-trace[=\fIpath\fP]
+Emit a Chrome trace JSON file for optimization and code-generation passes.
+The default path is \fBqcc.trace.json\fP.
+.TP
+.B \-\-big\-fn\-threshold =\fIN\fP
+Mark functions with at least \fIN\fP IR blocks as \fBOptimizeNone\fP and
+\fBNoInline\fP.
+This trades some runtime speed for substantially faster compilation of very
+large functions.
+The default is 200; use 0 to disable.
+.SS "Inspection"
+.TP
+.B \-\-dump\-info
+Inspect embedded Qore AOT metadata in object files, \fB.qmod\fP modules,
+\fB.qo\fP fragments, \fB.qoa\fP archives, or linked AOT executables without
+executing them.
+.TP
+.B \-\-dump\-symbols
+With \fB\-\-dump\-info\fP, include an nm-like symbol table view.
+.TP
+.B \-\-dump\-sections
+With \fB\-\-dump\-info\fP, include object and AOT section tables.
+.SS "General"
+.TP
+.BR \-v ", " \-\-verbose
+Print verbose compiler progress.
+.TP
+.BR \-h ", " \-\-help
+Show command-line help and exit.
+.TP
+.BR \-V ", " \-\-version
+Show version information and exit.
+.SH ENVIRONMENT
+.TP
+.B QORE_LIBDIR
+Directory containing libqore.
+\fBqcc\fP uses this when locating the runtime library for generated code.
+.TP
+.B QORE_INCLUDE_DIR
+Colon-separated list of include directories.
+.TP
+.B QORE_INCLUDE_DIRS
+Additional colon-separated include directories.
+.TP
+.B QORE_AOT_BIG_FN_THRESHOLD
+Default threshold used by \fB\-\-big\-fn\-threshold\fP when the option is not
+specified.
+.TP
+.B QORE_AOT_NO_DEBUG_INFO
+If set to 1, disables AOT debug information unless overridden by command-line
+options.
+.SH EXAMPLES
+Compile a script to a native executable:
+.RS
+.B qcc script.qr
+.RE
+.PP
+Compile a script with an explicit output path:
+.RS
+.B qcc -o myapp script.qr
+.RE
+.PP
+Compile a split user module:
+.RS
+.B qcc -m qlib/DataProvider
+.RE
+.PP
+Compile a source file to a relocatable Qore object:
+.RS
+.B qcc -c --context=qlib/MyModule qlib/MyModule/Part.qc
+.RE
+.PP
+Inspect metadata in a compiled module:
+.RS
+.B qcc --dump-info MyModule.qmod
+.RE
+.SH SEE ALSO
+.BR qore (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

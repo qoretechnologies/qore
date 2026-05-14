@@ -15,11 +15,16 @@ Build-Depends: debhelper (>= 13),
                libmpfr-dev,
                libbz2-dev,
                libnghttp2-dev,
-               libcares-dev,
+               libngtcp2-dev,
+               libngtcp2-crypto-ossl-dev,
+               libnghttp3-dev,
+               libc-ares-dev,
                libbrotli-dev,
                libzstd-dev,
                liblz4-dev,
                libkrb5-dev,
+               libtree-sitter-dev,
+               llvm-dev | llvm-21-dev | llvm-20-dev,
                cargo,
                doxygen
 Standards-Version: 4.6.2
@@ -80,15 +85,16 @@ Package: libqore-dev
 Section: libdevel
 Architecture: any
 Depends: libqore20 (= ${binary:Version}),
+         ${shlibs:Depends},
          ${misc:Depends}
 Recommends: qore (= ${binary:Version})
-Description: Header files for developing with the qore library
+Description: Header files and compiler tools for developing with Qore
  Qore is a scripting language supporting threading and embedded logic, designed
  for applying a flexible scripting-based approach to enterprise interface
  development but is also useful as a general purpose language.
  .
- This package provides header files needed to compile client programs using the
- Qore library.
+ This package provides header files and development tools, including qcc, needed
+ to compile client programs and AOT-compiled Qore artifacts.
 
 Package: qore-misc-tools
 Architecture: all

@@ -157,6 +157,21 @@ modules/*/src/Makefile.in
 
 # ignore cmake build directories
 build*/
+obj-*/
+
+# Debian package build artifacts
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/*.debhelper.log
+/debian/*.substvars
+/debian/tmp/
+/debian/libqore-dev/
+/debian/libqore20/
+/debian/qore/
+/debian/qore-doc/
+/debian/qore-misc-tools/
+/debian/qore-stdlib/
 
 # ignore fontconfig generated files
 fontconfig/

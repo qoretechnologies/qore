@@ -28,14 +28,15 @@ if (NOT Eigen3_FOUND)
 endif()
 
 # ONNX Runtime is optional
+option(QORE_WITH_ONNXRUNTIME "Build the ml module with ONNX Runtime support when available" ON)
 set(HAVE_ONNXRUNTIME FALSE)
 find_package(PkgConfig QUIET)
-if (PkgConfig_FOUND)
+if (QORE_WITH_ONNXRUNTIME AND PkgConfig_FOUND)
     # Also check /opt/onnxruntime for pkg-config files
     set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:/opt/onnxruntime/lib/pkgconfig")
     pkg_check_modules(ONNXRUNTIME QUIET libonnxruntime)
 endif()
-if (NOT ONNXRUNTIME_FOUND)
+if (QORE_WITH_ONNXRUNTIME AND NOT ONNXRUNTIME_FOUND)
     find_library(ONNXRUNTIME_LIBRARY NAMES onnxruntime
                  HINTS /opt/onnxruntime/lib)
     find_path(ONNXRUNTIME_INCLUDE_DIR onnxruntime_cxx_api.h

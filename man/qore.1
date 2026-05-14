@@ -2,7 +2,7 @@
 .\"
 .\" Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 .\"
-.TH QORE 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.TH QORE 1 "2026 May 14" "Qore 2.3" "Qore Programming Language"
 .SH NAME
 qore \- interpreter for the Qore programming language
 .SH SYNOPSIS
@@ -14,6 +14,8 @@ qore \- interpreter for the Qore programming language
 \fBQore\fR is a modular, multi-threaded scripting language with optional strong
 typing, procedural and object-oriented features, built-in SQL integration,
 HTTP/2 and HTTP/3 support, and a clean syntax designed for readability.
+This release includes the IR execution engine, LLVM JIT compilation, tiered
+execution, and AOT compilation support for scripts and user modules.
 .PP
 When invoked without a program file and standard input is a terminal,
 \fBqore\fR starts an interactive REPL (read-eval-print loop).
@@ -43,6 +45,29 @@ Multiple \fB\-D\fP flags may be given.
 .TP
 .BR \-e ", " \-\-exec =\fIcode\fP
 Execute the Qore program given as a string on the command line.
+.TP
+.B \-\-exec\-mode =\fImode\fP
+Select the execution engine.
+\fImode\fP may be \fBast\fP, \fBir\fP, \fBjit\fP, or \fBtiered\fP.
+\fBtiered\fP is the default and promotes hot functions from AST execution to
+IR and then to JIT-compiled native code.
+.TP
+.B \-\-ir\-dump
+Dump the IR representation before execution.
+.TP
+.B \-\-ir\-fallback\-warn
+Print a warning on standard error when IR execution falls back to AST.
+.TP
+.B \-\-ir\-fallback\-report
+Print IR fallback counts by category when the process exits.
+.TP
+.B \-\-jit\-ir\-threshold =\fIN\fP
+In tiered mode, set the number of calls before a function is promoted to IR.
+The default is 100.
+.TP
+.B \-\-jit\-jit\-threshold =\fIN\fP
+In tiered mode, set the number of calls before a function is promoted to JIT.
+The default is 1000.
 .TP
 .BR \-l ", " \-\-load =\fImodule\fP
 Load the named module immediately at startup.
@@ -97,6 +122,36 @@ Display descriptions of all parse options and exit.
 .B \-\-lgpl\fR, \fB\-\-mit
 Set the library license flag to LGPL or MIT.
 GPL-licensed modules cannot be loaded when this is set.
+.SS "AOT Compilation Options"
+.TP
+.B \-\-compile
+Compile a Qore program to a standalone executable instead of executing it.
+.TP
+.B \-\-output =\fIfile\fP
+Set the output file for \fB\-\-compile\fP.
+The default is the input file name with the extension stripped.
+.TP
+.B \-\-opt\-level =\fIN\fP
+Set the AOT compiler optimization level from 0 to 3.
+The default is 2 for \fBqore --compile\fP.
+.TP
+.B \-\-target =\fItriple\fP
+Compile for the given LLVM target triple.
+The default is the native host target.
+.TP
+.B \-\-show\-targets
+Show supported target architectures and exit.
+.TP
+.B \-\-static
+Statically link libqore into the generated executable.
+This requires Qore to have been built with \fBBUILD_STATIC_LIBQORE=ON\fP.
+.TP
+.B \-\-compile\-module
+Compile a \fB.qm\fP user module to a native shared-library binary module.
+.PP
+For full AOT workflows, including \fB.qo\fP relocatable objects,
+\fB.qoa\fP archives, split-module compilation, dependency files, metadata
+inspection, and source/debug stripping options, use \fBqcc\fP(1).
 .SS "Module and Path Information"
 .TP
 .B \-\-module\-dir
@@ -166,6 +221,10 @@ prepended to the default module path.
 .B QORE_INCLUDE_DIR
 Colon-separated list of directories to search for include files.
 .TP
+.B QORE_LIBDIR
+Directory containing libqore, used by AOT-compiled programs and \fBqcc\fP
+when resolving the runtime library.
+.TP
 .B QORE_CHARSET
 Default character encoding if not specified with \fB\-c\fP.
 .TP
@@ -192,20 +251,40 @@ Evaluate an expression:
 .PP
 Execute inline code:
 .RS
-.B qore \-e 'printf("hello world\\n");'
+.B qore \-e 'printf(\(dqhello world\en\(dq);'
 .RE
 .PP
 Start an interactive REPL:
 .RS
 .B qore
 .RE
+.PP
+Run only the AST interpreter:
+.RS
+.B qore --exec-mode=ast myprog.q
+.RE
+.PP
+Run with explicit JIT compilation:
+.RS
+.B qore --exec-mode=jit myprog.q
+.RE
+.PP
+Compile a script to a native executable:
+.RS
+.B qore --compile -o myprog myprog.qr
+.RE
 .SH SEE ALSO
+.BR qcc (1),
 .BR qdp (1),
 .BR qget (1),
 .BR qls (1),
 .BR rest (1),
 .BR qfmt (1),
 .BR qdbg (1),
+.BR qdiff (1),
+.BR qpatch (1),
+.BR qdx (1),
+.BR qjar (1),
 .BR qschema (1),
 .BR sqlutil (1),
 .BR schema\-reverse (1)

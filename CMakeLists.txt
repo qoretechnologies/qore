@@ -496,15 +496,38 @@ elseif (TARGET zstd::libzstd_static AND NOT TARGET zstd::libzstd)
 endif()
 
 # LLVM libraries - find_package(LLVM CONFIG) sets LLVM_LIBRARY_DIRS
-# but not LLVM_LIBRARIES, so we need to find the main LLVM library ourselves
-if(LLVM_LIBRARY_DIRS)
+# but not LLVM_LIBRARIES, so we need to find the main LLVM library ourselves.
+# On Debian/Ubuntu, prefer the multiarch runtime library symlink
+# (/usr/lib/<multiarch>/libLLVM-<major>.so) over the development package path
+# (/usr/lib/llvm-<major>/lib/libLLVM.so) to avoid leaking the development
+# directory into installed RUNPATHs and confusing dpkg-shlibdeps.
+string(REGEX MATCH "^[0-9]+" QORE_LLVM_MAJOR_VERSION "${LLVM_PACKAGE_VERSION}")
+set(QORE_LLVM_LIBRARY_NAMES)
+if(QORE_LLVM_MAJOR_VERSION)
+    list(APPEND QORE_LLVM_LIBRARY_NAMES LLVM-${QORE_LLVM_MAJOR_VERSION})
+endif()
+list(APPEND QORE_LLVM_LIBRARY_NAMES LLVM)
+if(UNIX AND NOT APPLE)
+    set(QORE_LLVM_SYSTEM_LIBRARY_PATHS)
+    if(CMAKE_LIBRARY_ARCHITECTURE)
+        list(APPEND QORE_LLVM_SYSTEM_LIBRARY_PATHS "/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}")
+    endif()
+    list(APPEND QORE_LLVM_SYSTEM_LIBRARY_PATHS "/usr/lib" "/usr/lib64")
+    find_library(QORE_LLVM_SYSTEM_LIBRARY NAMES ${QORE_LLVM_LIBRARY_NAMES}
+        PATHS ${QORE_LLVM_SYSTEM_LIBRARY_PATHS} NO_DEFAULT_PATH)
+    if(QORE_LLVM_SYSTEM_LIBRARY AND LLVM_DIR MATCHES "^/usr/lib/llvm-[0-9]+/cmake$")
+        set(LLVM_LIBRARIES "${QORE_LLVM_SYSTEM_LIBRARY}" CACHE FILEPATH "LLVM library" FORCE)
+        message(STATUS "Found LLVM library: ${LLVM_LIBRARIES}")
+    endif()
+endif()
+if(NOT LLVM_LIBRARIES AND LLVM_LIBRARY_DIRS)
     # Try to find the unified LLVM library in the provided directory
-    find_library(LLVM_LIBRARIES NAMES LLVM HINTS ${LLVM_LIBRARY_DIRS} NO_DEFAULT_PATH)
+    find_library(LLVM_LIBRARIES NAMES ${QORE_LLVM_LIBRARY_NAMES} HINTS ${LLVM_LIBRARY_DIRS} NO_DEFAULT_PATH)
     if(LLVM_LIBRARIES)
         message(STATUS "Found LLVM library: ${LLVM_LIBRARIES}")
     else()
         message(WARNING "Could not find LLVM library in ${LLVM_LIBRARY_DIRS}, searching standard paths...")
-        find_library(LLVM_LIBRARIES NAMES LLVM)
+        find_library(LLVM_LIBRARIES NAMES ${QORE_LLVM_LIBRARY_NAMES})
         if(LLVM_LIBRARIES)
             message(STATUS "Found LLVM library (standard path): ${LLVM_LIBRARIES}")
         else()
@@ -534,7 +557,7 @@ else()
         list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${CARES_INCLUDE_DIR})
         list(APPEND LIBQORE_OPTIONAL_LIBS ${CARES_LIBRARY})
     else()
-        message(FATAL_ERROR "c-ares is required for asynchronous DNS resolution. Please install libcares-dev (Debian/Ubuntu), c-ares-devel (Fedora/RHEL/openSUSE), or c-ares-dev (Alpine)")
+        message(FATAL_ERROR "c-ares is required for asynchronous DNS resolution. Please install libc-ares-dev (Debian/Ubuntu), c-ares-devel (Fedora/RHEL/openSUSE), or c-ares-dev (Alpine)")
     endif()
 endif()
 set(HAVE_CARES TRUE)
@@ -1995,19 +2018,15 @@ set(QORE_LIBS ${LIBJSIG} ${BZIP2_LIBRARIES} ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS
 string(REPLACE ";" " " CMAKE_LDFLAGS "${QORE_LIBS}")
 string(STRIP "${CMAKE_LDFLAGS}" CMAKE_LDFLAGS)
 string(STRIP "${CMAKE_CXX_FLAGS}" CMAKE_CXX_FLAGS)
-# Add LLVM library directory since LLVM libs may not be on the standard linker search path
-# (e.g. MacPorts installs to /opt/local/libexec/llvm-XX/lib/)
-if(LLVM_LIBRARY_DIR)
-    target_link_directories(libqore PRIVATE ${LLVM_LIBRARY_DIR})
-endif()
 target_link_libraries(libqore PRIVATE ${QORE_LIBS})
-# Link LLVM libraries - prefer LLVM::LLVM target if available (best approach)
-# Otherwise add LLVM libraries directly to link command
+# Link LLVM libraries by explicit library path when available so installed
+# binaries do not inherit LLVM development directories in their RUNPATH.
+# Otherwise fall back to the imported LLVM target.
 # Use PUBLIC so LLVM propagates to consumers (e.g., qore executable)
-if(TARGET LLVM::LLVM)
-    target_link_libraries(libqore PUBLIC LLVM::LLVM)
-elseif(LLVM_LIBS)
+if(LLVM_LIBS)
     target_link_libraries(libqore PUBLIC ${LLVM_LIBS})
+elseif(TARGET LLVM::LLVM)
+    target_link_libraries(libqore PUBLIC LLVM::LLVM)
 endif()
 if (WIN32 OR MINGW OR MSYS)
     target_link_libraries(libqore ${WINSOCKET_LIBRARIES})
