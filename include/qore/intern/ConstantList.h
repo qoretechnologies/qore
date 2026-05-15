@@ -149,6 +149,11 @@ public:
     //! Sets the runtime value (val + saved_val) for AOT init functions
     DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink);
 
+    // Follows a chain of RuntimeConstantRefNode indirections (const A = B;
+    // const B = ...) to the terminal stored value while preserving unresolved
+    // AOT shells / external stubs as runtime references.
+    DLLLOCAL static const QoreValue& resolveRtConstRef(const QoreValue& start);
+
     DLLLOCAL int parseInit(ClassNs ptr);
 
     DLLLOCAL int parseCommitRuntimeInit();

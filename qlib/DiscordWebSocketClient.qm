@@ -79,6 +79,10 @@ module DiscordWebSocketClient {
     - fixed a bug where a server-initiated \c Heartbeat request (gateway opcode 1) caused an unhandled
       \c DISCORD-ERROR exception, killing the gateway connection and silently stopping event delivery;
       the client now responds immediately with a heartbeat as required by the Discord gateway protocol
+    - fixed a bug where a zombied gateway connection (the gateway silently stops responding and
+      acknowledging heartbeats, with no close frame) went undetected forever, silently stopping
+      all event delivery with no error and no reconnect; heartbeat ACKs are now tracked and a
+      missing ACK forces a reconnect (with session resume), as required by the gateway protocol
 
     @subsection discordwebsocketclientv1_1 DiscordWebSocketClient v1.1
     - added \c disconnect() override to stop the heartbeat thread before disconnecting, preventing
@@ -340,6 +344,13 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         #! Heartbeat thread stop flag
         bool hb_stop;
 
+        #! Set to @ref True when the gateway acknowledges a heartbeat
+        /** Used to detect a zombied connection: if the gateway does not acknowledge a heartbeat
+            before the next one is due, the connection is dead and must be reestablished, as
+            required by the Discord gateway protocol.  Protected by @ref heartbeat_lock.
+        */
+        bool heartbeat_ack = True;
+
         #! API version
         int api = DefaultApi;
     }
@@ -484,6 +495,50 @@ hash<auto> h = ws.getInfo();
 
     #! Handle a Heartbeat ACK
     private handleHeartbeatAck() {
+        AutoLock al(heartbeat_lock);
+        heartbeat_ack = True;
+    }
+
+    #! Returns @ref True if the connection is zombied (the previous heartbeat was not acknowledged)
+    /** otherwise marks a heartbeat as in flight (awaiting an ACK) and returns @ref False
+
+        @note acquires @ref heartbeat_lock internally
+    */
+    private bool heartbeatZombieCheck() {
+        AutoLock al(heartbeat_lock);
+        if (!heartbeat_ack) {
+            return True;
+        }
+        heartbeat_ack = False;
+        return False;
+    }
+
+    #! Forces a reconnect from a separate thread after a zombied connection is detected
+    /** The reconnect must not be driven from the heartbeat thread itself: the reconnect path
+        calls @ref reconnectPreamble() -> stopHeartbeatThread(), which waits for the heartbeat
+        thread to exit, so driving it from the heartbeat thread would deadlock.  This method
+        starts a short-lived thread to call @ref WebSocketClient::WebSocketClient::reconnect()
+        "reconnect()" and returns immediately so the heartbeat thread can exit.
+    */
+    private triggerZombieReconnect() {
+        code reconnector = sub () {
+            try {
+                # explicitly qualified: the inherited "reconnect" bool member otherwise shadows
+                # the WebSocketClient::reconnect() method name
+                WebSocketClient::reconnect();
+            } catch (hash<ExceptionInfo> ex) {
+                logError("zombie-connection reconnect failed: %s", get_exception_string(ex));
+            }
+        };
+%ifdef PO_NO_THREAD_CONTROL
+        start_thread(reconnector);
+%else
+        if (start_thread) {
+            start_thread(reconnector);
+        } else {
+            background reconnector();
+        }
+%endif
     }
 
     #! Sends a heartbeat message to the gateway with the last sequence number received
@@ -589,6 +644,8 @@ hash<auto> h = ws.getInfo();
         if (hb_tid) {
             throw "DISCORD-ERROR", sprintf("Heartbeat thread already running in TID %y", hb_tid);
         }
+        # a fresh connection starts with no heartbeat in flight
+        heartbeat_ack = True;
         heartbeat_cnt.add();
         on_error {
             remove hb_tid;
@@ -650,6 +707,16 @@ hash<auto> h = ws.getInfo();
                 }
             }
             if (hb_stop) {
+                break;
+            }
+            # if the gateway did not acknowledge the previous heartbeat before this one is due,
+            # the connection is zombied; per the Discord gateway protocol we must tear it down
+            # and reconnect (resuming the session) instead of continuing to send into the void
+            if (heartbeatZombieCheck()) {
+                logWarn("the gateway did not acknowledge the previous heartbeat within the "
+                    "heartbeat interval (%d ms); the connection is zombied, forcing a reconnect",
+                    heartbeat_interval);
+                triggerZombieReconnect();
                 break;
             }
             try {

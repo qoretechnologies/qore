@@ -323,34 +323,35 @@ int ConstantEntry::parseCommitRuntimeInit() {
     return err;
 }
 
-QoreValue ConstantEntry::getReferencedValue() const {
-    if (val.getType() == NT_RTCONSTREF) {
-        ConstantEntry* rce = val.get<const RuntimeConstantRefNode>()->getConstantEntry();
-        if (rce->saved_val) {
-            return rce->saved_val.refSelf();
+// Collapse a chain of RuntimeConstantRefNode indirections to the concrete
+// stored value.  A constant whose initializer is itself another constant
+// (possibly transitively: const A = B; const B = C; ...) leaves each
+// entry's saved_val pointing at the next RuntimeConstantRefNode.  Unwrapping
+// only one level (the original behavior) leaked the internal NT_RTCONSTREF
+// parse-node type out through the public QoreExternalConstant API, where
+// C++/module consumers (e.g. the jni module building Java proxy classes) have
+// no way to handle it.  Follow the chain to the terminal value, but preserve
+// unresolved AOT shells / external stubs as references until the runtime host
+// supplies the value.  Parse-time recursive-constant detection (see
+// ConstantEntry::get) prevents cycles; the bound is a defensive backstop only.
+const QoreValue& ConstantEntry::resolveRtConstRef(const QoreValue& start) {
+    const QoreValue* v = &start;
+    for (unsigned i = 0; v->getType() == NT_RTCONSTREF && i < 65536; ++i) {
+        ConstantEntry* rce = v->get<const RuntimeConstantRefNode>()->getConstantEntry();
+        if (!rce->saved_val) {
+            return rce->aot_shell_pending || rce->external_stub ? *v : rce->saved_val;
         }
-        if (rce->aot_shell_pending || rce->external_stub) {
-            return val.refSelf();
-        }
-        return rce->saved_val.refSelf();
-    } else {
-        return val.refSelf();
+        v = &rce->saved_val;
     }
+    return *v;
+}
+
+QoreValue ConstantEntry::getReferencedValue() const {
+    return resolveRtConstRef(val).refSelf();
 }
 
 const QoreValue ConstantEntry::getValue() const {
-    if (val.getType() == NT_RTCONSTREF) {
-        ConstantEntry* rce = val.get<const RuntimeConstantRefNode>()->getConstantEntry();
-        if (rce->saved_val) {
-            return rce->saved_val;
-        }
-        if (rce->aot_shell_pending || rce->external_stub) {
-            return val;
-        }
-        return rce->saved_val;
-    } else {
-        return val;
-    }
+    return resolveRtConstRef(val);
 }
 
 ConstantList::ConstantList(const ConstantList& old, const QoreParseOptions& po, ClassNs p) : ptr(p), runtime_init_hwm(old.runtime_init_hwm) {
