@@ -532,6 +532,8 @@ l50Xb2GWQesIt9k5jF5IOw==
             \testHttp2SseHeartbeat());
         addTestCase("H3 SSE observable receives heartbeat keep-alive",
             \testHttp3SseHeartbeat());
+        addTestCase("H3 SSE survives QUIC idle timeout without app data",
+            \testHttp3SseSurvivesQuicIdleTimeout());
         addTestCase("H2 callback-drained SSE readiness streams complete",
             \testHttp2CallbackDrainedSse());
         addTestCase("H3 callback-drained SSE readiness streams complete",
@@ -1071,6 +1073,73 @@ l50Xb2GWQesIt9k5jF5IOw==
             });
         on_exit delete mgr;
         runSseHeartbeatFlow("H3 heartbeat", mgr, sprintf("https://127.0.0.1:%d/", h3_port));
+    }
+
+    testHttp3SseSurvivesQuicIdleTimeout() {
+        *string old_idle_timeout = getenv("QORE_QUIC_IDLE_TIMEOUT_MS");
+        setenv("QORE_QUIC_IDLE_TIMEOUT_MS", "2000");
+        on_exit {
+            if (exists old_idle_timeout) {
+                setenv("QORE_QUIC_IDLE_TIMEOUT_MS", old_idle_timeout);
+            } else {
+                unsetenv("QORE_QUIC_IDLE_TIMEOUT_MS");
+            }
+        }
+
+        RecordingSseHandler idle_handler();
+        HttpServer idle_server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        on_exit delete idle_server;
+        idle_server.setDefaultHandler("sse", idle_handler);
+        idle_server.waitForAsyncIo();
+        int idle_port = idle_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        }).port;
+        idle_server.waitForAsyncIo();
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "accept_all_certs": True,
+                "request_timeout": 15s,
+                "connect_timeout": 5s,
+            });
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d/", idle_port);
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            url, "GET", "/", {"Accept": "text/event-stream"});
+        on_exit stream.cancel();
+
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+        assertEq(0, idle_handler.registered.waitForZero(SseTestTimeout),
+            "H3 idle SSE: connection should register");
+
+        # The dedicated server/client sessions advertise a 2s QUIC idle
+        # timeout.  Waiting past that point with no SSE application data
+        # verifies that QUIC PING keepalive is still armed for the active
+        # streaming response after the request dispatch record was cleaned up.
+        Counter idle_pause(1);
+        idle_pause.waitForZero(4s);
+
+        try {
+            idle_handler.last_conn.send(<SseMessageInfo>{
+                "event": "after-idle",
+                "data": "still-open",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("H3 idle SSE: send after idle failed: %s: %s", ex.err, ex.desc));
+        }
+
+        *hash<SseMessageInfo> evt = reader.readEvent(10s);
+        assertEq(True, exists evt, "H3 idle SSE: event after idle received");
+        assertEq("after-idle", evt.event, "H3 idle SSE: event name");
+        assertEq("still-open", evt.data, "H3 idle SSE: event data");
     }
 
     testHttp2CallbackDrainedSse() {

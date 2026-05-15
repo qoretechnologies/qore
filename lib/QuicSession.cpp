@@ -51,8 +51,11 @@
 #include <algorithm>
 #include <cassert>
 #include <cctype>
+#include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <limits>
 
 // Static session ID counter
 std::atomic<int64_t> QuicSession::next_session_id_{1};
@@ -70,6 +73,30 @@ static bool quic_ngtcp2_log_enabled() {
         cached = (v && *v && strcmp(v, "0") != 0) ? 1 : 0;
     }
     return cached != 0;
+}
+
+static ngtcp2_duration get_configured_quic_idle_timeout_ns() {
+    const char* v = getenv("QORE_QUIC_IDLE_TIMEOUT_MS");
+    if (!v || !*v) {
+        return QuicSession::QUIC_IDLE_TIMEOUT_NS;
+    }
+
+    char* end = nullptr;
+    errno = 0;
+    unsigned long long ms = strtoull(v, &end, 10);
+    if (errno || end == v || *end || !ms) {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN,
+            "ignoring invalid QORE_QUIC_IDLE_TIMEOUT_MS value: %s", v);
+        return QuicSession::QUIC_IDLE_TIMEOUT_NS;
+    }
+
+    constexpr unsigned long long NS_PER_MS = 1000000ULL;
+    if (ms > std::numeric_limits<ngtcp2_duration>::max() / NS_PER_MS) {
+        qore_async_io_log(QORE_LOG_LEVEL_WARN,
+            "ignoring too-large QORE_QUIC_IDLE_TIMEOUT_MS value: %s", v);
+        return QuicSession::QUIC_IDLE_TIMEOUT_NS;
+    }
+    return static_cast<ngtcp2_duration>(ms * NS_PER_MS);
 }
 
 static void quic_ngtcp2_log_printf(void* /*user_data*/, const char* fmt, ...) {
@@ -652,6 +679,8 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
                             const struct sockaddr* remote_addr, socklen_t remote_addrlen,
                             int ssl_verify_mode, bool enable_0rtt,
                             QoreSSLCertificate* client_cert, QoreSSLPrivateKey* client_pk) {
+    local_idle_timeout_ns_ = get_configured_quic_idle_timeout_ns();
+
     sock_ = sock;
     is_server_ = false;
     host_ = host;
@@ -763,8 +792,8 @@ int QuicSession::initClient(qore_socket_private* sock, ExceptionSink* xsink,
     params.initial_max_stream_data_uni = QUIC_CLIENT_INITIAL_MAX_STREAM_DATA;
     params.initial_max_data = QUIC_CLIENT_INITIAL_MAX_DATA;
     // Idle timeout: ngtcp2 default is 0 (no timeout), which prevents cleanup of
-    // lost connections and enables resource exhaustion.  30s is standard for clients.
-    params.max_idle_timeout = QUIC_IDLE_TIMEOUT_NS;
+    // lost connections and enables resource exhaustion.
+    params.max_idle_timeout = local_idle_timeout_ns_;
     params.active_connection_id_limit = QUIC_ACTIVE_CONNECTION_ID_LIMIT;
     // RFC 9221: Advertise willingness to receive QUIC DATAGRAM frames
     params.max_datagram_frame_size = QUIC_MAX_DATAGRAM_FRAME_SIZE;
@@ -812,6 +841,8 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
                             SSL_CTX* shared_ssl_ctx,
                             int ssl_verify_mode,
                             bool ssl_accept_all_certs) {
+    local_idle_timeout_ns_ = get_configured_quic_idle_timeout_ns();
+
     sock_ = sock;
     is_server_ = true;
     dispatcher_ = dispatcher;
@@ -897,8 +928,8 @@ int QuicSession::initServer(qore_socket_private* sock, ExceptionSink* xsink,
     params.initial_max_stream_data_uni = QUIC_SERVER_INITIAL_MAX_STREAM_DATA;
     params.initial_max_data = QUIC_SERVER_INITIAL_MAX_DATA;
     // Idle timeout: ngtcp2 default is 0 (no timeout), which allows malicious clients
-    // to hold server sessions open indefinitely.  30s matches the client setting.
-    params.max_idle_timeout = QUIC_IDLE_TIMEOUT_NS;
+    // to hold server sessions open indefinitely.
+    params.max_idle_timeout = local_idle_timeout_ns_;
     params.active_connection_id_limit = QUIC_ACTIVE_CONNECTION_ID_LIMIT;
     // RFC 9221: Advertise willingness to receive QUIC DATAGRAM frames
     params.max_datagram_frame_size = QUIC_MAX_DATAGRAM_FRAME_SIZE;
@@ -974,9 +1005,9 @@ int QuicSession::resetHttp3(ExceptionSink* xsink) {
     // Clear all stream state from the rejected 0-RTT attempt: streams opened during
     // 0-RTT (including internal uni-streams created by nghttp3) were discarded by ngtcp2
     streams_.clear();
-    updateKeepAliveLocked();
     body_data_.clear();
     streaming_body_data_.clear();
+    updateKeepAliveAfterStreamStateChangeLocked();
     // Clear any pre-H3 buffered data and completed streams from the 0-RTT attempt
     pre_h3_buffer_.clear();
     pre_h3_buffer_size_ = 0;
@@ -2053,6 +2084,7 @@ int QuicSession::submitTrailers(int64_t stream_id, const strcase_str_map_t& trai
     }
 
     pending_write_.store(true, std::memory_order_release);
+    updateKeepAliveAfterStreamStateChangeLocked();
     return 0;
 }
 
@@ -2141,6 +2173,7 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
 
     // Signal that there's data to write
     pending_write_.store(true, std::memory_order_release);
+    updateKeepAliveAfterStreamStateChangeLocked();
 
     return 0;
 }
@@ -2215,6 +2248,7 @@ int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
 
     // Signal that there's data to write (HEADERS frame)
     pending_write_.store(true, std::memory_order_release);
+    updateKeepAliveAfterStreamStateChangeLocked();
 
     printd(5, "QuicSession::submitResponseStreaming() stream_id=" QLLD " status=%d - streaming_body_data_ entry created\n",
         stream_id, status_code);
@@ -2492,6 +2526,7 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
     }
 
     pending_write_.store(true, std::memory_order_release);
+    updateKeepAliveAfterStreamStateChangeLocked();
     return 0;
 }
 
@@ -2738,11 +2773,7 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
                     std::memory_order_release);
             }
             streams_.erase(it);
-            // Arm the keepalive cooldown if this drained the last stream.
-            if (streams_.empty()) {
-                armKeepAliveCooldownLocked();
-            }
-            updateKeepAliveLocked();
+            updateKeepAliveAfterStreamStateChangeLocked();
             return result;
         }
     }
@@ -2864,10 +2895,7 @@ void QuicSession::cleanupStream(int64_t stream_id) {
             notify_data = true;
         }
         streams_.erase(it);
-        if (streams_.empty()) {
-            armKeepAliveCooldownLocked();
-        }
-        updateKeepAliveLocked();
+        updateKeepAliveAfterStreamStateChangeLocked();
         if (notify_data) {
             notifyStreamData();
         }
@@ -2921,10 +2949,7 @@ int QuicSession::resetStream(int64_t stream_id) {
             notify_data = true;
         }
         streams_.erase(it);
-        if (streams_.empty()) {
-            armKeepAliveCooldownLocked();
-        }
-        updateKeepAliveLocked();
+        updateKeepAliveAfterStreamStateChangeLocked();
         if (notify_data) {
             notifyStreamData();
         }
@@ -3124,10 +3149,7 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
         }
         streams_.erase(sit);
     }
-    if (streams_.empty()) {
-        armKeepAliveCooldownLocked();
-    }
-    updateKeepAliveLocked();
+    updateKeepAliveAfterStreamStateChangeLocked();
 
     // Signal that packets need to be written (RESET_STREAM frame)
     pending_write_.store(true, std::memory_order_release);
@@ -3434,6 +3456,7 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                 session->markStreamComplete(stream_id);
             }
         }
+        session->updateKeepAliveAfterStreamStateChangeLocked();
 
         // Extend max remote bidi streams so the peer can open new ones
         if (session->is_server_) {
@@ -3449,15 +3472,29 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
     return 0;
 }
 
+bool QuicSession::hasActiveApplicationStreamsLocked() const {
+    return !streams_.empty()
+        || !body_data_.empty()
+        || !streaming_body_data_.empty()
+        || !stream_input_streams_.empty();
+}
+
+void QuicSession::updateKeepAliveAfterStreamStateChangeLocked() {
+    if (!hasActiveApplicationStreamsLocked()) {
+        armKeepAliveCooldownLocked();
+    }
+    updateKeepAliveLocked();
+}
+
 int QuicSession::handshakeCompletedCallback(ngtcp2_conn* conn, void* user_data) {
     auto* session = static_cast<QuicSession*>(user_data);
     session->handshake_completed_.store(true, std::memory_order_release);
 
-    // Configure keepalive based on peer's max_idle_timeout AND stream count.
+    // Configure keepalive based on peer's max_idle_timeout AND stream activity.
     // Mirrors curl's cf_ngtcp2_setup_keep_alive pattern: without an active
     // stream we leave keepalive disabled and let the peer's idle timer close
     // the connection naturally — otherwise idle client connections leak.
-    // updateKeepAliveLocked() reads streams_, so it must run under mtx_;
+    // updateKeepAliveLocked() reads stream tracking state, so it must run under mtx_;
     // ngtcp2 holds the session lock for the duration of this callback.
     session->updateKeepAliveLocked();
 
@@ -3477,7 +3514,7 @@ void QuicSession::updateKeepAliveLocked() {
     //    advertises a non-zero value)."
     // ngtcp2 enforces idle close on each side using the effective value, so
     // PINGs must fire often enough to refresh BOTH sides' timers.  We always
-    // advertise QUIC_IDLE_TIMEOUT_NS, so when peer's value is longer (or
+    // advertise local_idle_timeout_ns_, so when peer's value is longer (or
     // absent), our local one wins and that's the figure we must beat.
     //
     // The earlier code used `peer_max_idle / 2` directly — wrong: when the
@@ -3488,10 +3525,10 @@ void QuicSession::updateKeepAliveLocked() {
     const ngtcp2_duration peer_idle = (rp && rp->max_idle_timeout)
         ? rp->max_idle_timeout : UINT64_MAX;
     const ngtcp2_duration effective_idle = std::min<ngtcp2_duration>(
-        QUIC_IDLE_TIMEOUT_NS, peer_idle);
+        local_idle_timeout_ns_, peer_idle);
     if (effective_idle == UINT64_MAX) {
         // Neither side advertises an idle timeout (we always advertise
-        // QUIC_IDLE_TIMEOUT_NS, so this is unreachable; guard anyway):
+        // local_idle_timeout_ns_, so this is unreachable; guard anyway):
         // keepalive is meaningless.
         ngtcp2_conn_set_keep_alive_timeout(conn_, UINT64_MAX);
         keepalive_cooldown_until_ = 0;
@@ -3500,18 +3537,19 @@ void QuicSession::updateKeepAliveLocked() {
     const ngtcp2_duration keep_ns =
         (effective_idle > 1) ? (effective_idle / 2) : 1;
 
-    if (!streams_.empty()) {
+    if (hasActiveApplicationStreamsLocked()) {
         // Streams are active — keep both sides' idle timers refreshed by
         // PINGing every effective_idle/2.  Mirrors curl's
         // cf_ngtcp2_setup_keep_alive (lib/vquic/curl_ngtcp2.c:180-215) but
         // uses the effective value rather than peer's only.
         ASYNC_IO_TRACE("QuicSession::updateKeepAlive ACTIVE session=%lld "
             "peer_max_idle_ns=%llu effective_idle_ns=%llu keep_ns=%llu "
-            "streams=%zu\n",
+            "streams=%zu body_data=%zu streaming_body_data=%zu input_streams=%zu\n",
             (long long)session_id_,
             (unsigned long long)(rp ? rp->max_idle_timeout : 0),
             (unsigned long long)effective_idle,
-            (unsigned long long)keep_ns, streams_.size());
+            (unsigned long long)keep_ns, streams_.size(), body_data_.size(),
+            streaming_body_data_.size(), stream_input_streams_.size());
         ngtcp2_conn_set_keep_alive_timeout(conn_, keep_ns);
         // Active streams cancel any prior cooldown.
         keepalive_cooldown_until_ = 0;
@@ -4609,6 +4647,7 @@ void QuicSession::setStreamInputStream(int64_t stream_id, InputStream* is, Excep
     }
     stream_input_streams_.emplace(stream_id, StreamInputStreamInfo(is));
     has_active_input_streams_.store(true, std::memory_order_release);
+    updateKeepAliveAfterStreamStateChangeLocked();
     printd(5, "QuicSession::setStreamInputStream() stream_id=" QLLD " pollable=%d fd=%d\n",
         stream_id, stream_input_streams_[stream_id].is_pollable,
         stream_input_streams_[stream_id].stream_fd);
@@ -4693,6 +4732,7 @@ void QuicSession::processStreamInputStreams(ExceptionSink* xsink) {
     }
 
     // Clean up completed streams (unassignThread + erase)
+    bool erased = false;
     for (auto it = stream_input_streams_.begin(); it != stream_input_streams_.end(); ) {
         if (it->second.eof) {
             if (!it->second.need_reassign) {
@@ -4700,6 +4740,7 @@ void QuicSession::processStreamInputStreams(ExceptionSink* xsink) {
                 it->second.input_stream->unassignThread(&tmp);
             }
             it = stream_input_streams_.erase(it);
+            erased = true;
         } else {
             ++it;
         }
@@ -4707,9 +4748,13 @@ void QuicSession::processStreamInputStreams(ExceptionSink* xsink) {
     if (stream_input_streams_.empty()) {
         has_active_input_streams_.store(false, std::memory_order_release);
     }
+    if (erased) {
+        updateKeepAliveAfterStreamStateChangeLocked();
+    }
 }
 
 void QuicSession::cleanupStreamInputStreams(ExceptionSink* xsink) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
     for (auto& [stream_id, info] : stream_input_streams_) {
         if (!info.need_reassign) {
             info.input_stream->unassignThread(xsink);
@@ -4717,6 +4762,7 @@ void QuicSession::cleanupStreamInputStreams(ExceptionSink* xsink) {
     }
     stream_input_streams_.clear();
     has_active_input_streams_.store(false, std::memory_order_release);
+    updateKeepAliveAfterStreamStateChangeLocked();
 }
 
 void QuicSession::getExtraFds(std::vector<std::pair<int, int>>& extra_fds) const {

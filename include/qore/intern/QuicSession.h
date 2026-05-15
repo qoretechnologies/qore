@@ -1079,6 +1079,12 @@ private:
     */
     DLLLOCAL void updateKeepAliveLocked();
 
+    //! Returns true if any application-visible request or response stream is active
+    DLLLOCAL bool hasActiveApplicationStreamsLocked() const;
+
+    //! Updates keepalive after stream tracking changes, arming idle cooldown if needed
+    DLLLOCAL void updateKeepAliveAfterStreamStateChangeLocked();
+
     //! Arms the keepalive cooldown deadline; call when @c streams_ becomes empty
     /** Sets @c keepalive_cooldown_until_ = @c now + (peer_max_idle * 2/3).  Must
         be called *before* @ref updateKeepAliveLocked() so that the cooldown
@@ -1267,6 +1273,7 @@ private:
     ngtcp2_crypto_conn_ref conn_ref_{};              //!< TLS<->ngtcp2 connection reference
     qore_socket_private* sock_ = nullptr;           //!< associated socket
     bool is_server_ = false;                        //!< true if server-side session
+    ngtcp2_duration local_idle_timeout_ns_ = QUIC_IDLE_TIMEOUT_NS; //!< advertised idle timeout for this session
     int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
 
     //! Server CID for this session (used for CID-based routing)
