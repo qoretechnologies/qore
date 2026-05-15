@@ -1511,7 +1511,7 @@ if (SINGLE_COMPILATION_UNIT)
     # generated parser.cpp and scanner.cpp from the build directory are used
     # instead of any stale files from autotools builds in lib/
     file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
-    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+    set(_scu_content
 "// Auto-generated wrapper - ensures build directory files are used
 #include \"${CMAKE_CURRENT_BINARY_DIR}/parser.cpp\"
 #include \"${CMAKE_CURRENT_BINARY_DIR}/scanner.cpp\"
@@ -1970,9 +1970,27 @@ if (SINGLE_COMPILATION_UNIT)
     # Conditionally add alloc tracking QPP to the SCU (the QPP-generated C++ is safe for SCU;
     # only AllocTracking.cpp with its global malloc/free symbols must be compiled separately)
     if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
-        file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+        string(APPEND _scu_content
             "#include \"${CMAKE_BINARY_DIR}/ql_alloc_tracking.cpp\"\n")
     endif ()
+
+    # Emit the SCU wrapper mtime-stably: write the assembled content to a
+    # staging file, then configure_file ... COPYONLY copies it to the real
+    # path only when the content actually differs.  A plain file(WRITE)
+    # rewrites the file (and bumps its mtime) on every cmake run, which
+    # forces a full libqore recompile + relink on every reconfigure.  On
+    # macOS APFS/Tart that spurious relink runs concurrently (make -j) with
+    # the qcc/qore/binary-module links that consume libqore, and ld fails
+    # with "can't write output file" (job 175756).  Keeping the mtime stable
+    # means a reconfigure (e.g. the post-module-install AOT re-probe) does
+    # not relink libqore at all.
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
+        "${_scu_content}")
+    configure_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp.in
+        ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
+        COPYONLY)
+    unset(_scu_content)
     # Files that must be compiled separately from the SCU:
     # - qore-main.cpp: includes platform dynamic-loader headers such as
     #   <link.h> that define ELF macros conflicting with LLVM headers in the SCU
