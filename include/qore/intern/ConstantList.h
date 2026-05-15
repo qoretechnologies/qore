@@ -136,6 +136,11 @@ public:
 
     DLLLOCAL const QoreValue getValue() const;
 
+    // Follows a chain of RuntimeConstantRefNode indirections (const A = B;
+    // const B = ...) to the terminal stored value so the internal
+    // NT_RTCONSTREF node type is never exposed through the public API.
+    DLLLOCAL static const QoreValue& resolveRtConstRef(const QoreValue& start);
+
     DLLLOCAL int parseInit(ClassNs ptr);
 
     DLLLOCAL int parseCommitRuntimeInit();
