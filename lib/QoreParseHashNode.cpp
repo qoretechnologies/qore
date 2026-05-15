@@ -33,6 +33,8 @@
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
+#include "qore/intern/SelfVarrefNode.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/typed_hash_decl_private.h"
 
@@ -48,12 +50,20 @@ static bool qore_parse_hash_literal_value_may_be_nothing(const QoreValue& v) {
         }
     }
 
-    if (v.hasNode()
-            && dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(v.getInternalNode())) {
-        // Hash and hashdecl member lookup can return NOTHING even when the
-        // declared member type is non-optional, because hashdecl slots are not
-        // implicitly materialized.
-        return true;
+    if (v.hasNode()) {
+        const AbstractQoreNode* node = v.getInternalNode();
+        if (dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            // Hash and hashdecl member lookup can return NOTHING even when the
+            // declared member type is non-optional, because hashdecl slots are not
+            // implicitly materialized.
+            return true;
+        }
+
+        if (dynamic_cast<const SelfVarrefNode*>(node) || dynamic_cast<const StaticClassVarRefNode*>(node)) {
+            // Class members and static class vars can also be unassigned at
+            // runtime despite a non-optional declared type.
+            return true;
+        }
     }
 
     return false;
@@ -139,7 +149,7 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         typed_varref_may_be_nothing = typed_varref_may_be_nothing
             || qore_parse_hash_literal_value_may_be_nothing(values[i]);
 
-        // For variable refs, clear type info to prevent baking declared or
+        // For lvalue-like refs, clear type info to prevent baking declared or
         // narrowed types into the hash literal; the actual runtime value may
         // be NOTHING, so the type must be determined at runtime.
         if (vtypes[i] && typed_varref_may_be_nothing) {

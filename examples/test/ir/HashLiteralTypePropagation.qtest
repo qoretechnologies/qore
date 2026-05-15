@@ -21,11 +21,22 @@ hashdecl HeterogeneousListB {
     int i;
 }
 
+class HashLiteralTypePropagationStaticMember {
+    public {
+        static int sequence;
+    }
+
+    static auto getHeartbeat() {
+        return {"op": 2, "d": sequence};
+    }
+}
+
 class HashLiteralTypePropagationTest inherits QUnit::Test {
     private {
         string qore_bin;
         string qcc_bin;
         string libqore_dir;
+        int missing_sequence;
     }
 
     constructor() : QUnit::Test("HashLiteralTypePropagationTest", "1.0", \ARGV) {
@@ -42,8 +53,12 @@ class HashLiteralTypePropagationTest inherits QUnit::Test {
             \testOptionalHashdeclSlotsAcceptNothing());
         addTestCase("heterogeneous list literals keep compatible common types",
             \testHeterogeneousListCommonTypes());
+        addTestCase("untyped hash literal accepts unassigned object member",
+            \testUntypedHashLiteralAcceptsUnassignedObjectMember());
         addTestCase("typed hash literal rejects unassigned typed local in exec modes",
             \testTypedHashRejectsNothingInExecModes());
+        addTestCase("untyped hash literal accepts unassigned object member in exec modes",
+            \testUntypedHashLiteralAcceptsUnassignedObjectMemberInExecModes());
         addTestCase("optional container literal slots accept unassigned typed locals in exec modes",
             \testOptionalContainerSlotsAcceptNothingInExecModes());
         addTestCase("optional hashdecl slots accept unassigned typed locals in exec modes",
@@ -52,6 +67,8 @@ class HashLiteralTypePropagationTest inherits QUnit::Test {
             \testHeterogeneousListCommonTypesInExecModes());
         addTestCase("typed hash literal rejects unassigned typed local in source-stripped AOT",
             \testTypedHashRejectsNothingInAOT());
+        addTestCase("untyped hash literal accepts unassigned object member in source-stripped AOT",
+            \testUntypedHashLiteralAcceptsUnassignedObjectMemberInAOT());
         addTestCase("optional container literal slots accept unassigned typed locals in source-stripped AOT",
             \testOptionalContainerSlotsAcceptNothingInAOT());
         addTestCase("optional hashdecl slots accept unassigned typed locals in source-stripped AOT",
@@ -128,6 +145,59 @@ class HashLiteralTypePropagationTest inherits QUnit::Test {
         assertEq("list<auto>", combined.fullType(), "populated list<auto> concatenation must not narrow");
         assertEq("list<hash<auto>>", hashdecls.fullType(), "unrelated hashdecls share hash<auto>, not first hashdecl");
         assertEq("hash<HeterogeneousListB>", hashdecls[1].fullType(), "second hashdecl value is preserved");
+    }
+
+    testUntypedHashLiteralAcceptsUnassignedObjectMember() {
+        auto heartbeat = {"op": 1, "d": missing_sequence};
+        auto static_heartbeat = HashLiteralTypePropagationStaticMember::getHeartbeat();
+
+        assertEq(1, heartbeat.op, "hash literal keeps scalar values");
+        assertTrue(heartbeat.hasKey("d"), "hash literal keeps object-member slot");
+        assertNothing(heartbeat.d, "unassigned object member stays NOTHING in untyped hash literal");
+        assertEq(2, static_heartbeat.op, "hash literal keeps static scalar values");
+        assertTrue(static_heartbeat.hasKey("d"), "hash literal keeps static member slot");
+        assertNothing(static_heartbeat.d, "unassigned static member stays NOTHING in untyped hash literal");
+    }
+
+    testUntypedHashLiteralAcceptsUnassignedObjectMemberInExecModes() {
+        TmpDir tmp("qore-hash-literal-type-propagation-object-member-");
+        string src = writeScript(tmp.path, "object-member-nothing.q", "%modern
+class C {
+    private {
+        int sequence;
+    }
+
+    run() {
+        auto h = {\"op\": 1, \"d\": sequence};
+        printf(\"h=%y type=%s\\n\", h, h.fullType());
+    }
+}
+
+class S {
+    public {
+        static int sequence;
+    }
+
+    static auto heartbeat() {
+        return {\"op\": 2, \"d\": sequence};
+    }
+}
+
+C c();
+c.run();
+auto s = S::heartbeat();
+printf(\"static=%y type=%s\\n\", s, s.fullType());
+");
+
+        foreach string mode in (("ast", "ir", "jit")) {
+            string out = runScript(src, mode);
+            assertTrue(out.regex("op: 1, d: null"),
+                sprintf("%s mode preserves unassigned object member as NOTHING: %s", mode, out));
+            assertTrue(out.regex("op: 2, d: null"),
+                sprintf("%s mode preserves unassigned static member as NOTHING: %s", mode, out));
+            assertTrue(out.regex("EXIT=0"),
+                sprintf("%s mode exits cleanly: %s", mode, out));
+        }
     }
 
     testTypedHashRejectsNothingInExecModes() {
@@ -251,6 +321,49 @@ printf(\"unexpected=%y\\n\", result);
             "source-stripped AOT reports the typed hash value slot: " + run_out);
         assertTrue(run_out.regex("EXIT=3"),
             "source-stripped AOT exits with runtime error: " + run_out);
+    }
+
+    testUntypedHashLiteralAcceptsUnassignedObjectMemberInAOT() {
+        TmpDir tmp("qore-hash-literal-type-propagation-object-member-aot-");
+        string src = writeScript(tmp.path, "object-member-nothing-aot.q", "%modern
+class C {
+    private {
+        int sequence;
+    }
+
+    run() {
+        auto h = {\"op\": 1, \"d\": sequence};
+        printf(\"h=%y type=%s\\n\", h, h.fullType());
+    }
+}
+
+class S {
+    public {
+        static int sequence;
+    }
+
+    static auto heartbeat() {
+        return {\"op\": 2, \"d\": sequence};
+    }
+}
+
+C c();
+c.run();
+auto s = S::heartbeat();
+printf(\"static=%y type=%s\\n\", s, s.fullType());
+");
+        string exe = tmp.path + "/object-member-nothing-aot";
+        string compile_out = compileScript(src, exe);
+        assertTrue(compile_out.regex("EXIT=0"), "AOT compile succeeds: " + compile_out);
+        assertTrue(is_file(exe), "AOT executable exists");
+
+        string run_out = runCompiled(exe);
+        assertTrue(run_out.regex("op: 1, d: null"),
+            "source-stripped AOT preserves unassigned object member as NOTHING: " + run_out);
+        assertTrue(run_out.regex("op: 2, d: null"),
+            "source-stripped AOT preserves unassigned static member as NOTHING: " + run_out);
+        assertTrue(run_out.regex("EXIT=0"),
+            "source-stripped AOT object-member script exits cleanly: " + run_out);
     }
 
     testOptionalContainerSlotsAcceptNothingInAOT() {
