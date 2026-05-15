@@ -131,7 +131,8 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
                 "site": "test-site",
             });
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
                 testSkip(sprintf("cannot connect to Chargebee API: %s", ex.desc));
             }
             rethrow;
@@ -363,7 +364,8 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
             assertTrue(client1.getURL() =~ /test-site\.chargebee\.com/);
             assertTrue(client1.getURL() =~ /api\/v2$/);
         } catch (hash<ExceptionInfo> ex) {
-            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR") {
+            if (ex.err == "SOCKET-CONNECT-ERROR" || ex.err == "SOCKET-SSL-ERROR"
+                    || ex.err == "QOREADDRINFO-GETINFO-ERROR") {
                 testSkip(sprintf("cannot connect to Chargebee API: %s", ex.desc));
                 return;
             }
