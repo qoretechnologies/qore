@@ -36,12 +36,18 @@ class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
     int testHandleEventData(auto msgdata) {
         return handleEventData(msgdata);
     }
+
+    #! exposes the private heartbeat zombie-detection check for testing
+    bool testHeartbeatZombieCheck() {
+        return heartbeatZombieCheck();
+    }
 }
 
 public class Main inherits QUnit::Test {
     constructor() : Test("DiscordWebSocketClientTest", "1.0") {
         addTestCase("discord tests", \discordTests());
         addTestCase("heartbeat request tests", \heartbeatRequestTests());
+        addTestCase("heartbeat zombie detection tests", \zombieDetectionTests());
         addTestCase("connection tests", \connectionTests());
 
         # Return for compatibility with test harness that checks return value.
@@ -56,6 +62,26 @@ public class Main inherits QUnit::Test {
 
     discordTests() {
         checkModule();
+    }
+
+    #! the gateway must acknowledge heartbeats; a missing ACK means a zombied connection
+    /** verifies the heartbeat-ACK tracking: the first cycle is never a zombie, a cycle with no
+        intervening ACK is a zombie, and an ACK (gateway opcode 11) clears the zombie state
+    */
+    zombieDetectionTests() {
+        checkModule();
+
+        TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+
+        # first heartbeat cycle: nothing in flight yet, so not a zombie
+        assertFalse(c.testHeartbeatZombieCheck());
+        # the previous heartbeat was never acknowledged before the next cycle -> zombied
+        assertTrue(c.testHeartbeatZombieCheck());
+        # a Heartbeat ACK (opcode 11) from the gateway clears the zombie state
+        assertEq(1, c.testHandleEventData({"op": 11}));
+        assertFalse(c.testHeartbeatZombieCheck());
+        # still no further ACK -> zombied again
+        assertTrue(c.testHeartbeatZombieCheck());
     }
 
     #! the Discord gateway can send opcode 1 (Heartbeat) to request an immediate heartbeat;
