@@ -2471,9 +2471,54 @@ else()
     message(STATUS "qore not installed; QM metadata extraction disabled"
         " (re-run cmake after installing qore and json)")
 endif()
-unset(_qore_exe)
 unset(_src_api_major)
 unset(_src_api_minor)
+
+# Probe external binary modules whose availability at AOT-compile time
+# changes qlib qmod output (via %try-module / %ifdef No<Name> branches in
+# the qlib sources).  Record the probe results in a stamp file; the AOT
+# rules in QORE_USER_MODULE_AOT_RULES depend on this stamp so re-running
+# cmake after installing or removing one of these modules forces a
+# re-AOT, instead of leaving stale qmods on disk with the wrong
+# %ifdef branch baked in.
+#
+# `configure_file ... COPYONLY` only touches the destination when the
+# content changes -- so qmods don't rebuild on every cmake run, only
+# when the probe set actually changes.
+set(_qore_aot_probe_modules json yaml xml uuid msgpack process imagemagick sysconf oracle)
+set(_qore_aot_probe_content "")
+if(_qore_exe)
+    foreach(_pm ${_qore_aot_probe_modules})
+        execute_process(
+            COMMAND ${_qore_exe} -l ${_pm} -ne
+                "printf(\"%d.%d\", get_module_hash().${_pm}.api_major, get_module_hash().${_pm}.api_minor);"
+            RESULT_VARIABLE _pm_rc
+            OUTPUT_VARIABLE _pm_api
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+        )
+        if(_pm_rc EQUAL 0 AND NOT "${_pm_api}" STREQUAL "")
+            string(APPEND _qore_aot_probe_content "${_pm}=${_pm_api}\n")
+        else()
+            string(APPEND _qore_aot_probe_content "${_pm}=missing\n")
+        endif()
+    endforeach()
+    unset(_pm_rc)
+    unset(_pm_api)
+else()
+    foreach(_pm ${_qore_aot_probe_modules})
+        string(APPEND _qore_aot_probe_content "${_pm}=no-qore-yet\n")
+    endforeach()
+endif()
+set(QORE_AOT_PROBE_STAMP ${CMAKE_BINARY_DIR}/qore-aot-probe.stamp)
+file(WRITE ${CMAKE_BINARY_DIR}/qore-aot-probe.stamp.in "${_qore_aot_probe_content}")
+configure_file(
+    ${CMAKE_BINARY_DIR}/qore-aot-probe.stamp.in
+    ${QORE_AOT_PROBE_STAMP}
+    COPYONLY)
+unset(_qore_aot_probe_modules)
+unset(_qore_aot_probe_content)
+unset(_qore_exe)
 
 # base modules
 qore_user_module("qlib/DatasourceProvider.qm" "")

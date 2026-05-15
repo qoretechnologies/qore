@@ -556,16 +556,25 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     endif()
 
     # Dependency strategy: qmod output depends on the module's own
-    # source files (ARGN) and on ${QCC_FORMAT_STAMP} (see root
-    # CMakeLists.txt).  The stamp's mtime tracks only files that
-    # change qmod wire format or qcc compile semantics — NOT every
-    # libqore source edit.  Target-level `add_dependencies` below
-    # ensures qcc and libqore are BUILT before qmod rules run
-    # (needed for cold builds) without making qmod rules mtime-
-    # dependent on their binaries.  Previously `DEPENDS $<TARGET_FILE:qcc>`
-    # triggered all 238 qmod rebuilds on any libqore relink, even for
-    # runtime-only fixes (QoreAOTRuntime.cpp, Function.cpp evalIntern,
-    # slot-reg filtering, etc.) that don't affect qmod output.
+    # source files (ARGN), ${QCC_FORMAT_STAMP}, and
+    # ${QORE_AOT_PROBE_STAMP} (see root CMakeLists.txt).  ${QCC_FORMAT_STAMP}
+    # tracks files that change qmod wire format or qcc compile semantics --
+    # not every libqore source edit.  ${QORE_AOT_PROBE_STAMP} tracks which
+    # external binary modules (json, yaml, xml, ...) were loadable at
+    # cmake configure time; the .qm sources use %try-module / %ifdef
+    # No<Name> to branch on availability, and that decision is baked
+    # into the AOT-compiled .qmod, so re-AOT must fire when the probe
+    # outcome changes.  Target-level `add_dependencies` below ensures
+    # qcc and libqore are BUILT before qmod rules run (needed for cold
+    # builds) without making qmod rules mtime-dependent on their
+    # binaries.  Previously `DEPENDS $<TARGET_FILE:qcc>` triggered all
+    # 238 qmod rebuilds on any libqore relink, even for runtime-only
+    # fixes (QoreAOTRuntime.cpp, Function.cpp evalIntern, slot-reg
+    # filtering, etc.) that don't affect qmod output.
+    set(_qmod_probe_dep "")
+    if (DEFINED QORE_AOT_PROBE_STAMP)
+        set(_qmod_probe_dep ${QORE_AOT_PROBE_STAMP})
+    endif()
     if (${_is_dir})
         # Optional symlink at qlib/<name>/<name>.qmod (inside the source
         # subdir, alongside the resources).  Tests using
@@ -580,7 +589,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qore_qcc_command} -m ${_source_root}
                 --depfile=${_qmod_dep} -o ${_qmod_out}
-            DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP}
+            DEPENDS ${ARGN} ${_qmod_jar_srcs} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
@@ -615,7 +624,7 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
             COMMAND ${CMAKE_COMMAND} -E env ${QORE_QM_METADATA_ENV}
                 ${_qore_qcc_command} -m ${_source_root}
                 --depfile=${_qmod_dep} -o ${_qmod_out}
-            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP}
+            DEPENDS ${ARGN} ${QCC_FORMAT_STAMP} ${_qmod_probe_dep}
             DEPFILE ${_qmod_dep}
             WORKING_DIRECTORY ${_qmod_out_dir}
             COMMENT "AOT compile ${_name}.qmod"
