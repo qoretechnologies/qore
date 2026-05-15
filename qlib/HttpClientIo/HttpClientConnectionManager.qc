@@ -1227,7 +1227,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     }
                     if (pool.hasKey(key)) {
                         foreach HttpClientConnection conn in (pool{key}) {
-                            if (conn.isClosed() || conn.isDraining()) {
+                            if (isConnectionEvictableAtCheckout(conn)) {
+                                push dead_conns, conn;
+                                continue;
+                            }
+                            if (conn.isDraining()) {
                                 continue;
                             }
                             if (!isConnectionAlive(conn)) {
@@ -1282,6 +1286,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # Resolve protocol and check capacity under the write lock, then release
             # it before creating the connection.
             string protocol;
+            list<HttpClientConnection> checkout_evictions;
             {
                 AutoWriteLock al(pool_lock);
                 if (shutdown) {
@@ -1297,8 +1302,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     list<HttpClientConnection> live = ();
                     *HttpClientConnection reusable;
                     foreach HttpClientConnection conn in (pool{key}) {
-                        if (conn.isClosed()) {
-                            log(LoggerLevel::DEBUG, "evicting closed connection %d to %s",
+                        if (isConnectionEvictableAtCheckout(conn)) {
+                            push checkout_evictions, conn;
+                            log(LoggerLevel::DEBUG, "evicting unavailable connection %d to %s at checkout",
                                 conn.getConnectionId(), key);
                         } else {
                             push live, conn;
@@ -1352,6 +1358,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     throw "HTTPCLIENT-CAPACITY-ERROR",
                         sprintf("all %d connections to %s have reached the concurrent "
                             "stream limit", current_count, key);
+                }
+            }
+            foreach HttpClientConnection conn in (checkout_evictions) {
+                try {
+                    conn.close();
+                } catch () {
                 }
             }
 
@@ -2232,6 +2244,21 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         return True;
+    }
+
+    #! Internal: checks if a connection can be evicted synchronously at checkout
+    /** Draining connections must not accept new streams.  Once they have no
+        active streams, keeping them in the pool only creates a race with the
+        async I/O completion callback: a replacement connection can be added
+        before the callback removes the idle draining entry.  Evict such
+        connections here; leave draining connections with active streams for
+        the async completion path.
+
+        @note Called under pool_lock read/write lock — must not block or acquire pool_lock
+    */
+    private bool isConnectionEvictableAtCheckout(HttpClientConnection conn) {
+        return conn.isClosed()
+            || (conn.isDraining() && conn.getActiveStreamCount() == 0);
     }
 
     #! Internal: evicts specific connections from the pool and closes them
