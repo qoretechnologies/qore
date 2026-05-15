@@ -15,7 +15,13 @@ archives using Qore's IR and LLVM AOT backend.
 It can produce standalone native executables, native \fB.qmod\fP user modules,
 per-file \fB.qo\fP relocatable objects, and \fB.qoa\fP static archives.
 .PP
-Source files must use \fB%modern\fP or have the \fB.qr\fP extension.
+AOT compilation requires \fB%modern\fP source semantics.
+Modern script and application sources should use the \fB.qr\fP extension,
+which enables \fB%modern\fP by default.
+The \fB.q\fP extension keeps legacy defaults unless the source contains an
+explicit \fB%modern\fP directive.
+Other non-\fB.q\fP source extensions, such as \fB.qc\fP and \fB.qm\fP, also
+enable \fB%modern\fP by default.
 Cross-compilation requires LLVM support for the selected target.
 Static linking requires a Qore build configured with
 \fBBUILD_STATIC_LIBQORE=ON\fP.
@@ -84,10 +90,16 @@ May be repeated.
 .TP
 .B \-\-depfile =\fIfile\fP
 Emit a Make-format dependency file after a successful compile.
+.TP
+.B \-\-save\-temps
+Keep temporary \fB.qo\fP objects and generated C++ glue from one-shot
+multi-source executable mode.
 .SS "Target and Link Options"
 .TP
 .BR \-S ", " \-\-static
-Link statically against libqore.
+Link a single-source executable statically against libqore.
+Generated-host modes, including one-shot multi-source executables and
+\fB.qo\fP link mode, do not support \fB\-\-static\fP directly.
 .TP
 .BR \-t ", " \-\-target =\fItriple\fP
 Compile for an LLVM target triple instead of the native host target.
@@ -96,7 +108,8 @@ Compile for an LLVM target triple instead of the native host target.
 Show supported target architectures and exit.
 .TP
 .BR \-e ", " \-\-entry =\fIfunction\fP
-Set the Qore function called by the generated C++ \fBmain()\fP in link mode.
+Set the Qore function called by the generated C++ \fBmain()\fP in one-shot
+multi-source executable mode or \fB.qo\fP link mode.
 The default is \fBmain\fP.
 .SS "Metadata and Debug Information"
 .TP
@@ -177,6 +190,18 @@ Compile a script to a native executable:
 Compile a script with an explicit output path:
 .RS
 .B qcc -o myapp script.qr
+.RE
+.PP
+Compile a multi-file application directly to an executable:
+.RS
+.B qcc -o myapp src/lib.qr src/main.qr
+.RE
+.PP
+Batch-compile a multi-file application and link it:
+.RS
+.B qcc -c --output-dir=build/aot src/lib.qr src/main.qr
+.br
+.B qcc -o myapp build/aot/*.qo
 .RE
 .PP
 Compile a split user module:

@@ -24,14 +24,22 @@
 #!/usr/bin/qore
     @endcode
 
-    %Qore is moving toward establishing @ref new-style "%new-style" as the default syntax; all examples given in the %Qore documentation are given assuming @ref new-style "%new-style".  To use %Qore with the recommended @ref parse_directives "parse directives", the following can be used as an example:
+    Modern %Qore code should use @ref modern "%modern" semantics; examples in the %Qore documentation assume @ref modern "%modern" unless they explicitly document legacy behavior. Save new script and application sources with the \c ".qr" extension to enable @ref modern "%modern" automatically:
 
     @code{.py}
-#!/usr/bin/qore
-%new-style
-%strict-args
-%require-types
-%enable-all-warnings
+#!/usr/bin/env qore
+# hello.qr
+string sub greet(string name) {
+    return "Hello, " + name + "!";
+}
+printf("%s\n", greet("World"));
+    @endcode
+
+    Alternatively, keep any filename and use the @ref modern "%modern" parse directive explicitly:
+
+    @code{.py}
+#!/usr/bin/env qore
+%modern
     @endcode
 
     @note If another installation directory is used (such as \c /usr/local/bin), then the correct path must be reflected in the first line of the %Qore script (ex: <tt>#!/usr/local/bin/qore</tt>), or more portably without using a direct path to the interpreter:
@@ -40,5 +48,5 @@
     @endcode
     This form will work as long as the \c qore binary is in the current \c PATH.
 
-    %Qore convention dictates that %Qore script file names end with \c ".q"; @ref user_modules "user modules" with \c ".qm", and <a href="../../modules/QUnit/html/index.html#qunitintro">test scripts</a> with \c ".qtest".
+    %Qore convention dictates that modern script and application source file names end with \c ".qr". The \c ".q" extension is reserved for scripts that rely on legacy defaults unless they contain an explicit @ref modern "%modern" directive. @ref user_modules "User modules" use \c ".qm", split-module component files commonly use \c ".qc" or \c ".ql", and <a href="../../modules/QUnit/html/index.html#qunitintro">test scripts</a> use \c ".qtest".
 */

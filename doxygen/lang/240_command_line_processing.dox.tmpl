@@ -77,7 +77,7 @@
     |<tt>--output=</tt><em>path</em>|\c -o|Specify output path for compiled binary (default: script name without extension)
     |<tt>--strip-source</tt>|n/a|Remove source code from compiled binary (for IP protection)
     |<tt>--opt-level=</tt><em>N</em>|n/a|LLVM optimization level 0-3 (default: 2)
-    |<tt>--static</tt>|n/a|Static link against \c libqore_static.a (requires static library build)
+    |<tt>--static</tt>|n/a|Static link single-source executables against \c libqore_static.a (requires static library build)
     |<tt>--target=</tt><em>triple</em>|n/a|Cross-compilation target triple (e.g., \c x86_64-linux-gnu)
 
     <b>\c qcc AOT Compiler Parameters</b>
@@ -100,6 +100,7 @@
     |<tt>--define=</tt><em>name</em><tt>[=</tt><em>value</em><tt>]</tt>|Set parser defines before parsing
     |<tt>--parse-option=</tt><em>name</em>|Set a parse option before parsing
     |<tt>--depfile=</tt><em>file</em>|Emit a Make-format dependency file
+    |<tt>--save-temps</tt>|Keep temporary \c .qo and glue files from one-shot multi-source executable mode
     |<tt>--from-objects</tt>|Aggregate \c .qo inputs into a \c .qmod with \c -m
     |<tt>-a</tt>, <tt>--archive</tt>|Create a \c .qoa archive from \c .qo inputs
     |<tt>--include-source</tt>|Embed source text in the artifact
@@ -108,10 +109,30 @@
     |<tt>-g</tt>|Emit DWARF debug information
     |<tt>--time-trace[=</tt><em>path</em><tt>]</tt>|Emit Chrome-format LLVM timing trace
     |<tt>--big-fn-threshold=</tt><em>N</em>|Compile very large functions with \c OptimizeNone, default 200
-    |<tt>-e</tt>, <tt>--entry=</tt><em>fn</em>|Entry function for generated link-mode \c main()
+    |<tt>-e</tt>, <tt>--entry=</tt><em>fn</em>|Entry function for generated one-shot or link-mode \c main()
     |<tt>--dump-info</tt>|Inspect embedded AOT metadata without executing the artifact
     |<tt>--dump-symbols</tt>|Include an nm-like symbol table in dump output
     |<tt>--dump-sections</tt>|Include object and AOT section tables in dump output
+
+    AOT compilation requires @ref modern "%modern" source semantics. Modern
+    script and application sources should use the \c .qr extension; \c .q keeps
+    legacy defaults unless the source contains an explicit \c %%modern directive.
+    Other non-\c .q source extensions, such as \c .qc and \c .qm, enable
+    \c %%modern by default.
+
+    Multi-file applications can be compiled directly to an executable:
+
+    @code{.sh}
+qcc -o myapp src/lib.qr src/main.qr
+    @endcode
+
+    Build systems should normally use the explicit object workflow, compiling
+    \c .qr sources to \c .qo objects and linking the objects into an executable:
+
+    @code{.sh}
+qcc -c --output-dir=build/aot src/lib.qr src/main.qr
+qcc -o myapp build/aot/*.qo
+    @endcode
 
     There are two additional options available with debugging versions of %Qore as follows:
 

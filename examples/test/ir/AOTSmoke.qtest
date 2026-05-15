@@ -292,6 +292,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source runtime const ref", \testStripSourceRuntimeConstRef());
         addTestCase("AOT constant reverse map honors namespace constant order",
             \testNamespaceConstantReverseMapOrder());
+        addTestCase("AOT qcc one-shot multi-source executable",
+            \testQccOneShotMultiSourceExecutable());
         addTestCase("AOT batch fragments avoid forward constant refs",
             \testBatchFragmentConstantReverseMapOrder());
         addTestCase("AOT batch fragments defer class constant refs",
@@ -8473,6 +8475,78 @@ exit(0);
         string interp_out = runInterpreted(code);
         assertEq(interp_out, result.run_out,
             "namespace constant reverse map order: strip-source matches interpreter");
+    }
+
+    testQccOneShotMultiSourceExecutable() {
+        string tmp_dir = sprintf("/tmp/aot_qcc_one_shot_%d_%d", getpid(), rand());
+        string qo_dir = tmp_dir + "/qo";
+        mkdir(tmp_dir);
+        mkdir(qo_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string lib_path = tmp_dir + "/lib.qr";
+        string main_path = tmp_dir + "/main.qr";
+        string app_path = tmp_dir + "/app";
+
+        {
+            File f();
+            f.open2(lib_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("string sub oneShotMessage() {
+    return \"one-shot-qcc-ok\";
+}
+");
+            f.close();
+        }
+        {
+            File f();
+            f.open2(main_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("int sub main() {
+    printf(\"%s\\n\", oneShotMessage());
+    return 0;
+}
+");
+            f.close();
+        }
+
+        string compile_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, app_path, lib_path, main_path));
+        assertTrue(compile_out.regex("EXIT=0"),
+            "qcc one-shot compiles and links multiple .qr sources: " + compile_out);
+        assertTrue(is_file(app_path), "qcc one-shot created executable");
+
+        *list<string> temp_match = (compile_out =~ x/(\/tmp\/qcc-aot-[A-Za-z0-9]+)/);
+        if (temp_match) {
+            assertFalse(is_dir(temp_match[0]),
+                "qcc one-shot cleans temporary directory by default: " + temp_match[0]);
+        }
+
+        string run_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1; echo EXIT=$?",
+            libqore_dir, app_path));
+        assertEq("one-shot-qcc-ok\nEXIT=0\n", run_out,
+            "qcc one-shot executable runs cross-file call: " + run_out);
+
+        string missing_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, lib_path, main_path));
+        assertTrue(missing_out.regex("multi-source executable mode requires -o/--output")
+                && missing_out.regex("EXIT=1"),
+            "qcc one-shot without -o has actionable error: " + missing_out);
+
+        string qo_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -c --output-dir=%s %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, qo_dir, lib_path, main_path));
+        assertTrue(qo_out.regex("EXIT=0"),
+            "qcc batch compiles objects for mixed-input negative test: " + qo_out);
+
+        string mixed_out = backquote(sprintf(
+            "LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -o %s/bad %s %s/*.qo 2>&1; echo EXIT=$?",
+            libqore_dir, libqore_dir, qcc_bin, tmp_dir, lib_path, qo_dir));
+        assertTrue(mixed_out.regex("mixed source and \\.qo inputs")
+                && mixed_out.regex("EXIT=1"),
+            "qcc one-shot rejects mixed source and .qo inputs: " + mixed_out);
     }
 
     testBatchFragmentConstantReverseMapOrder() {

@@ -711,15 +711,17 @@ public:
         applications (e.g. Qorus's qctl):
 
         ```
-        qcc -c -LBUILD_DIR -o foo.qo foo.qc
+        qcc -c -LBUILD_DIR -o foo.qo foo.qr
         ```
 
         Sibling `.qo` files discovered under each `-L` directory are
         preloaded via `QoreAOTBinaryMultiDeserializer` so that
         cross-file type references in @p target_file (inheritance,
         member access, typed expressions) resolve at parse time.
-        Parse context is otherwise plain `%modern` defaults — no
+        Parse context is otherwise plain script context — no
         PO_IN_MODULE, no module-context helper, no `.qm` required.
+        Use `.qr` for modern script/application sources; `.q` keeps legacy
+        defaults unless the source contains an explicit `%modern` directive.
 
         The output `.qo` carries:
         - compiled LLVM native code for items declared in @p target_file;
@@ -734,7 +736,7 @@ public:
         @param output_path path for the output `.qo`
         @param parse_options parse options to seed the compile program
                         (PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES
-                        suggested; `%modern` directive in the source
+                        suggested; `.qr` sources and `%modern` directives
                         will OR-merge additional bits)
         @param error error message on failure
         @param opt_level LLVM optimization level 0-3 (default: 2)

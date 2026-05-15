@@ -21,6 +21,11 @@ When invoked without a program file and standard input is a terminal,
 \fBqore\fR starts an interactive REPL (read-eval-print loop).
 When a program file is given, it is parsed and executed.
 The \fB\-e\fR option allows executing code supplied on the command line.
+.PP
+Modern script and application sources should use the \fB.qr\fP extension,
+which enables \fB%modern\fP by default.
+The \fB.q\fP extension keeps legacy defaults unless the source contains an
+explicit \fB%modern\fP directive.
 .SH OPTIONS
 .SS "General Options"
 .TP
@@ -241,7 +246,7 @@ The \fBqore\fP interpreter (default installation path).
 .SH EXAMPLES
 Run a script:
 .RS
-.B qore myprog.q
+.B qore myprog.qr
 .RE
 .PP
 Evaluate an expression:
@@ -261,12 +266,12 @@ Start an interactive REPL:
 .PP
 Run only the AST interpreter:
 .RS
-.B qore --exec-mode=ast myprog.q
+.B qore --exec-mode=ast oldstyle.q
 .RE
 .PP
 Run with explicit JIT compilation:
 .RS
-.B qore --exec-mode=jit myprog.q
+.B qore --exec-mode=jit myprog.qr
 .RE
 .PP
 Compile a script to a native executable:
