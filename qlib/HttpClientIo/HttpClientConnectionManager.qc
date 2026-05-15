@@ -2248,17 +2248,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     #! Internal: checks if a connection can be evicted synchronously at checkout
     /** Draining connections must not accept new streams.  Once they have no
-        active streams, keeping them in the pool only creates a race with the
-        async I/O completion callback: a replacement connection can be added
-        before the callback removes the idle draining entry.  Evict such
-        connections here; leave draining connections with active streams for
-        the async completion path.
+        active streams or pending stream reservations, keeping them in the pool
+        only creates a race with the async I/O completion callback: a
+        replacement connection can be added before the callback removes the
+        idle draining entry.  Evict such connections here; leave draining
+        connections with outstanding work for the async completion path.
 
         @note Called under pool_lock read/write lock — must not block or acquire pool_lock
     */
     private bool isConnectionEvictableAtCheckout(HttpClientConnection conn) {
         return conn.isClosed()
-            || (conn.isDraining() && conn.getActiveStreamCount() == 0);
+            || (conn.isDraining() && conn.getOutstandingStreamCount() == 0);
     }
 
     #! Internal: evicts specific connections from the pool and closes them

@@ -257,6 +257,16 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         return getPollOperation().getActiveStreamCount();
     }
 
+    #! Returns the number of active streams plus pending reservations
+    /** Pending reservations are stream handles assigned to this connection but
+        not yet submitted to the protocol layer.  They must be treated as
+        outstanding work for checkout-time eviction decisions.
+    */
+    int getOutstandingStreamCount() {
+        AutoLock al(lock);
+        return getPollOperation().getActiveStreamCount() + pending_stream_count;
+    }
+
     #! Returns the connection ID
     int getConnectionId() {
         return connection_id;
