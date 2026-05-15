@@ -43,7 +43,7 @@
 %endtry
 
 module DiscordWebSocketClient {
-    version = "1.1";
+    version = "1.2";
     desc = "User module for communicating with the Discord WebSocket API gateway";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -74,6 +74,11 @@ module DiscordWebSocketClient {
       @ref connectionproviderintro "ConnectionProvider" module)
 
     @section discordwebsocketclientrelnotes Release Notes
+
+    @subsection discordwebsocketclientv1_2 DiscordWebSocketClient v1.2
+    - fixed a bug where a server-initiated \c Heartbeat request (gateway opcode 1) caused an unhandled
+      \c DISCORD-ERROR exception, killing the gateway connection and silently stopping event delivery;
+      the client now responds immediately with a heartbeat as required by the Discord gateway protocol
 
     @subsection discordwebsocketclientv1_1 DiscordWebSocketClient v1.1
     - added \c disconnect() override to stop the heartbeat thread before disconnecting, preventing
@@ -443,6 +448,14 @@ hash<auto> h = ws.getInfo();
                 }
                 break;
 
+            case DOP_HEARTBEAT:
+                # the gateway can request an immediate heartbeat at any time; we must respond right
+                # away with the last sequence number received, otherwise the gateway treats the
+                # connection as a zombie, closes it, and stops delivering events
+                logDebug("Gateway requested an immediate heartbeat; responding with sequence %y", last_sequence);
+                sendHeartbeat();
+                break;
+
             case DOP_HEARTBEAT_ACK:
                 handleHeartbeatAck();
                 break;
@@ -471,6 +484,14 @@ hash<auto> h = ws.getInfo();
 
     #! Handle a Heartbeat ACK
     private handleHeartbeatAck() {
+    }
+
+    #! Sends a heartbeat message to the gateway with the last sequence number received
+    private sendHeartbeat() {
+        sendData({
+            "op": DOP_HEARTBEAT,
+            "d": last_sequence,
+        });
     }
 
     #! Executes before a reconnect
@@ -633,10 +654,7 @@ hash<auto> h = ws.getInfo();
             }
             try {
                 # send a heartbeat message
-                sendData({
-                    "op": DOP_HEARTBEAT,
-                    "d": last_sequence,
-                });
+                sendHeartbeat();
             } catch (hash<ExceptionInfo> ex) {
                 logError("Heartbeat failed: %y", get_exception_string(ex));
             }

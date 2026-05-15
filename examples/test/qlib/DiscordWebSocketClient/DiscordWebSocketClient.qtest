@@ -17,9 +17,31 @@
 
 %exec-class Main
 
+#! Test subclass that captures outbound gateway payloads and exposes the private event handler
+class TestDiscordWebSocketClient inherits DiscordWebSocketClient {
+    public {
+        #! all payloads passed to sendData()
+        list<auto> sent();
+    }
+
+    constructor(hash<auto> opts) : DiscordWebSocketClient(opts) {
+    }
+
+    #! capture outbound payloads instead of writing to a (nonexistent) connection
+    sendData(auto value) {
+        sent += value;
+    }
+
+    #! exposes the private gateway event handler for testing
+    int testHandleEventData(auto msgdata) {
+        return handleEventData(msgdata);
+    }
+}
+
 public class Main inherits QUnit::Test {
     constructor() : Test("DiscordWebSocketClientTest", "1.0") {
         addTestCase("discord tests", \discordTests());
+        addTestCase("heartbeat request tests", \heartbeatRequestTests());
         addTestCase("connection tests", \connectionTests());
 
         # Return for compatibility with test harness that checks return value.
@@ -34,6 +56,42 @@ public class Main inherits QUnit::Test {
 
     discordTests() {
         checkModule();
+    }
+
+    #! the Discord gateway can send opcode 1 (Heartbeat) to request an immediate heartbeat;
+    /** the client must respond right away with a heartbeat carrying the last sequence number,
+        otherwise the gateway treats the connection as a zombie and stops delivering events
+    */
+    heartbeatRequestTests() {
+        checkModule();
+
+        TestDiscordWebSocketClient c({"url": "wss://x", "token": "x"});
+
+        # a server-initiated Heartbeat request (opcode 1) must not throw and must trigger an
+        # immediate heartbeat reply
+        int rc = c.testHandleEventData({"t": NOTHING, "s": NOTHING, "op": 1, "d": NOTHING});
+        # WSEDC_CONTINUE (1): keep processing the connection (do not break / reconnect)
+        assertEq(1, rc);
+        assertEq(1, c.sent.size());
+        assertEq(1, c.sent[0].op);
+        # no sequence received yet, so the heartbeat carries a null sequence (as required by the
+        # Discord gateway protocol)
+        assertNothing(c.sent[0].d);
+
+        # the last received sequence number must be sent in the heartbeat reply
+        c.testHandleEventData({"op": 11, "s": 99});
+        c.testHandleEventData({"op": 1});
+        assertEq(2, c.sent.size());
+        assertEq(1, c.sent[1].op);
+        assertEq(99, c.sent[1].d);
+
+        # an unknown opcode must still raise an error (the default case is preserved)
+        assertThrows("DISCORD-ERROR", "do not know how to handle opcode",
+            sub () { c.testHandleEventData({"op": 4242}); });
+
+        # a payload with no opcode must still raise an error
+        assertThrows("DISCORD-ERROR", "missing opcode",
+            sub () { c.testHandleEventData({"d": "x"}); });
     }
 
     connectionTests() {
