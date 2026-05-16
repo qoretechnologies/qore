@@ -252,5 +252,16 @@ These examples are from the core migration and should be reused as precedent:
   `decimal_sep` and `thousands_sep`, `pattern` and `byte_offset` for binary
   searches, `length` instead of `len` for binary slices, `other_hash` instead of
   `oh`, and `method` instead of generic `name` for callable-method checks.
+- String pseudo-methods use method-specific names where they communicate the
+  call-site role: `prefix` for `startsWith()`, `suffix` for `endsWith()`,
+  `substring` for containment/searches, `offset` for character search offsets,
+  `separator` for literal split delimiters, `separator_pattern` for regex split
+  delimiters, `pattern` for regex matching/extraction, `length` for slices, and
+  `encoding_flags` / `decoding_flags` for string encode/decode bitfields. Avoid
+  parser-conflicting names such as `trim`; use `trim_line` for line parsing.
+- Do not mark ambiguous string compatibility overloads such as
+  `splitRegex(separator_pattern, with_separator, limit)` when a fuller overload
+  has a defaulted middle parameter and can already serve named calls via
+  `options: 0`.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

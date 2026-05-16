@@ -714,6 +714,36 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "hasCallableNormalMethod", ("method",));
         assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "hasCallableStaticMethod", ("method",));
         assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "getCallReference", ("identifier",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "comparePartial", ("other_string",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "equalPartial", ("other_string",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "equalPartialPath", ("other_string",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "find", ("substring", "offset"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "rfind", ("substring", "offset"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "substr", ("start", "length"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "split", ("separator", "with_separator"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "split", ("separator", "quote", "trim_unquoted"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitString", ("separator",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitLinesRegex",
+            ("separator_pattern", "options", "with_separator"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "splitRegex",
+            ("separator_pattern", "options", "with_separator", "limit"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regex", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regexCount", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regexExtract", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regexExtractNamed", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "regexExtractDetailed", ("pattern", "options"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getUnicode", ("offset",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getByte", ("byte_offset",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "startsWith", ("prefix",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "endsWith", ("suffix",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "contains", ("substring",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getLine",
+            ("offset", "line_separator", "trim_line", "byte_count"));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getEncoded", ("encoding_flags",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "getDecoded", ("decoding_flags",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "toBase64", ("max_line_length",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "toBase64Url", ("max_line_length",));
+        assertNamedPseudoMethodVariantCount(StringPseudoClass, "toInt", ("base",));
     }
 
     modNameTests() {

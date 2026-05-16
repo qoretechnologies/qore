@@ -164,7 +164,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
     builtinOptIn() {
         assertEq("cde", substr(str: "abcdef", start: 2, len: 3), "opted-in builtin accepts named arguments");
         assertEq("de", substr(len: 2, str: "abcdef", start: 3), "opted-in builtin accepts reordered names");
-        assertEq("cde", "abcdef".substr(start: 2, len: 3), "opted-in string pseudo-method accepts named arguments");
+        assertEq("cde", "abcdef".substr(start: 2, length: 3), "opted-in string pseudo-method accepts named arguments");
     }
 
     reviewedMathBuiltinOptIn() {
@@ -578,6 +578,48 @@ public class NamedArgumentsTest inherits QUnit::Test {
             line_separator: NOTHING), "binary toHexArray exposes formatting arguments");
         assertEq("bc", bin.substr(start: 1, length: 2).toString(encoding: "UTF-8"),
             "binary substr exposes start and length");
+
+        string text = "alpha\nbeta\nalpha";
+        assertEq(text.find("ph", 0), text.find(substring: "ph", offset: 0),
+            "string find exposes substring and offset");
+        assertEq(text.rfind("alpha", -1), text.rfind(substring: "alpha", offset: -1),
+            "string rfind exposes substring and offset");
+        assertEq(text.substr(0, 5), text.substr(start: 0, length: 5), "string substr exposes length");
+        assertEq(text.split("\n", True), text.split(separator: "\n", with_separator: True),
+            "string split exposes separator and with_separator");
+        assertEq("'a', b".split(",", "'", True), "'a', b".split(separator: ",", quote: "'", trim_unquoted: True),
+            "string split quote variant exposes separator, quote, and trim_unquoted");
+        assertTrue(text.splitString(separator: "\n") != NOTHING, "string splitString exposes separator");
+        assertTrue(text.splitLinesRegex(separator_pattern: "\n", options: 0, with_separator: False) != NOTHING,
+            "string splitLinesRegex exposes separator_pattern");
+        assertEq(text.splitRegex("\n", 0, False, -1), text.splitRegex(separator_pattern: "\n", options: 0,
+            with_separator: False, limit: -1), "string splitRegex exposes regex separator with options");
+        assertTrue(text.regex(pattern: "^alpha", options: 0), "string regex exposes pattern");
+        assertEq(2, text.regexCount(pattern: "alpha", options: 0), "string regexCount exposes pattern");
+        assertEq(text.regexExtract("(alpha)", 0), text.regexExtract(pattern: "(alpha)", options: 0),
+            "string regexExtract exposes pattern");
+        assertEq(text.regexExtractNamed("(?<word>alpha)", 0),
+            text.regexExtractNamed(pattern: "(?<word>alpha)", options: 0),
+            "string regexExtractNamed exposes pattern");
+        assertEq(text.regexExtractDetailed("alpha", 0), text.regexExtractDetailed(pattern: "alpha", options: 0),
+            "string regexExtractDetailed exposes pattern");
+        assertEq(text.getUnicode(0), text.getUnicode(offset: 0), "string getUnicode exposes offset");
+        assertEq(text.getByte(0), text.getByte(byte_offset: 0), "string getByte exposes byte_offset");
+        assertTrue(text.startsWith(prefix: "alpha"), "string startsWith exposes prefix");
+        assertTrue(text.endsWith(suffix: "alpha"), "string endsWith exposes suffix");
+        assertTrue(text.contains(substring: "beta"), "string contains exposes substring");
+        int byte_count = 0;
+        assertEq("alpha", text.getLine(offset: 0, line_separator: "\n", trim_line: True, byte_count: \byte_count),
+            "string getLine exposes line_separator and byte_count");
+        assertEq(6, byte_count, "string getLine writes byte_count");
+        assertEq("<tag>", "&lt;tag&gt;".getDecoded(decoding_flags: CD_ALL), "string getDecoded exposes decoding_flags");
+        assertEq("&lt;tag&gt;", "<tag>".getEncoded(encoding_flags: CE_HTML), "string getEncoded exposes encoding_flags");
+        assertEq("YQ==", "a".toBase64(max_line_length: -1), "string toBase64 exposes max_line_length");
+        assertEq("YQ", "a".toBase64Url(max_line_length: -1), "string toBase64Url exposes max_line_length");
+        assertEq(255, "ff".toInt(base: 16), "string toInt exposes base");
+        assertEq(0, "abc".comparePartial(other_string: "ab"), "string comparePartial exposes other_string");
+        assertTrue("abc".equalPartial(other_string: "ab"), "string equalPartial exposes other_string");
+        assertTrue("/api/v1".equalPartialPath(other_string: "/api"), "string equalPartialPath exposes other_string");
 
         assertEq(date(seconds: 0).format("YYYY"), date(seconds: 0).format(format: "YYYY"),
             "date format exposes format");
