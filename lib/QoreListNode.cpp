@@ -632,6 +632,26 @@ QoreListNode* QoreListNode::sortDescending(const ResolvedCallReferenceNode* fr, 
 QoreListNode* qore_list_private::eval(ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> nl(getCopy(), xsink);
     //printd(5, "qore_list_private::eval() '%s' -> '%s'\n", QoreTypeInfo::getName(complexTypeInfo), get_full_type_name(*nl));
+    if (eval_pos_map) {
+        assert(eval_pos_map->size() == length);
+        nl->priv->resize(eval_result_size);
+        for (size_t i = 0; i < length; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "named argument evaluation")) {
+                return nullptr;
+            }
+            ValueEvalOptimizedRefHolder v(entry[i], xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            size_t pos = (*eval_pos_map)[i];
+            assert(pos < eval_result_size);
+            nl->setEntry(pos, v.takeReferencedValue(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+        return nl.release();
+    }
     for (size_t i = 0; i < length; ++i) {
         ValueEvalOptimizedRefHolder v(entry[i], xsink);
         if (*xsink) {

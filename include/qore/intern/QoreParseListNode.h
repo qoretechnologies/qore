@@ -43,6 +43,7 @@ DLLLOCAL QoreValue copy_value_and_resolve_lvar_refs(const QoreValue& n, Exceptio
 class QoreParseListNode : public ParseNode {
 public:
     typedef std::deque<QoreValue> nvec_t;
+    typedef std::deque<std::string> arg_name_vec_t;
 
     DLLLOCAL QoreParseListNode(const QoreProgramLocation* loc) : ParseNode(loc, NT_PARSE_LIST, true) {
     }
@@ -50,7 +51,11 @@ public:
     DLLLOCAL QoreParseListNode(const QoreParseListNode& old, ExceptionSink* xsink) : ParseNode(old),
             vtype(old.vtype), typeInfo(old.typeInfo), finalized(old.finalized), vlist(old.vlist) {
         for (unsigned i = 0; i < old.values.size(); ++i) {
-            add(copy_value_and_resolve_lvar_refs(old.values[i], xsink), old.lvec[i]);
+            if (old.hasArgName(i)) {
+                addNamed(old.getArgName(i), copy_value_and_resolve_lvar_refs(old.values[i], xsink), old.lvec[i]);
+            } else {
+                add(copy_value_and_resolve_lvar_refs(old.values[i], xsink), old.lvec[i]);
+            }
             if (*xsink)
                 return;
         }
@@ -64,6 +69,22 @@ public:
     DLLLOCAL void add(QoreValue v, const QoreProgramLocation* loc) {
         values.push_back(v);
         lvec.push_back(loc);
+        arg_names.push_back(std::string());
+
+        if (!size()) {
+            if (v.hasNode() && v.hasEffect()) {
+                set_effect(true);
+            }
+        } else if (has_effect() && !v.hasEffect()) {
+            set_effect(false);
+        }
+    }
+
+    DLLLOCAL void addNamed(const char* name, QoreValue v, const QoreProgramLocation* loc) {
+        values.push_back(v);
+        lvec.push_back(loc);
+        arg_names.push_back(name ? name : "");
+        named_args = true;
 
         if (!size()) {
             if (v.hasNode() && v.hasEffect()) {
@@ -82,6 +103,14 @@ public:
         QoreValue rv = values[0];
         values.pop_front();
         lvec.pop_front();
+        arg_names.pop_front();
+        named_args = false;
+        for (const auto& i : arg_names) {
+            if (!i.empty()) {
+                named_args = true;
+                break;
+            }
+        }
         return rv;
     }
 
@@ -93,6 +122,14 @@ public:
         QoreValue rv = values.back();
         values.pop_back();
         lvec.pop_back();
+        arg_names.pop_back();
+        named_args = false;
+        for (const auto& i : arg_names) {
+            if (!i.empty()) {
+                named_args = true;
+                break;
+            }
+        }
         return rv;
     }
 
@@ -124,6 +161,50 @@ public:
 
     DLLLOCAL size_t size() const {
         return values.size();
+    }
+
+    DLLLOCAL bool hasNamedArgs() const {
+        return named_args;
+    }
+
+    DLLLOCAL bool hasArgName(size_t i) const {
+        assert(i < arg_names.size());
+        return !arg_names[i].empty();
+    }
+
+    DLLLOCAL const char* getArgName(size_t i) const {
+        assert(i < arg_names.size());
+        return arg_names[i].empty() ? nullptr : arg_names[i].c_str();
+    }
+
+    DLLLOCAL const arg_name_vec_t& getArgNamesVector() const {
+        return arg_names;
+    }
+
+    DLLLOCAL bool hasArgName(const char* name) const {
+        assert(name);
+        for (const auto& i : arg_names) {
+            if (i == name) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    DLLLOCAL void appendFrom(QoreParseListNode* l) {
+        assert(l);
+        for (size_t i = 0; i < l->values.size(); ++i) {
+            values.push_back(l->values[i]);
+            lvec.push_back(l->lvec[i]);
+            arg_names.push_back(l->arg_names[i]);
+            if (!l->arg_names[i].empty()) {
+                named_args = true;
+            }
+        }
+        l->values.clear();
+        l->lvec.clear();
+        l->arg_names.clear();
+        l->named_args = false;
     }
 
     DLLLOCAL const QoreTypeInfo* getParseTypeInfo() const {
@@ -198,6 +279,7 @@ protected:
     nvec_t values;
     type_vec_t vtypes;
     lvec_t lvec;
+    arg_name_vec_t arg_names;
     // common value type, if any
     const QoreTypeInfo* vtype = nullptr;
     // node type info (derivative of list)
@@ -206,6 +288,8 @@ protected:
     bool finalized = false;
     // is this a variable list declaration?
     bool vlist = false;
+    // true if any entry has a call-site argument name
+    bool named_args = false;
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return typeInfo;

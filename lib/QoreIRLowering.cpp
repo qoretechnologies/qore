@@ -9170,6 +9170,33 @@ bool QoreIRLowering::lowerCallArgs(const QoreParseListNode* parse_args, const Qo
         }
         return true;
     }
+    const qore_list_private* args_priv = qore_list_private::get(args);
+    if (args_priv && args_priv->hasCallArgEvalMap()) {
+        const std::vector<size_t>* pos_map = args_priv->getCallArgEvalMap();
+        size_t result_size = args_priv->getCallArgEvalResultSize();
+        assert(pos_map && pos_map->size() == args->size());
+        std::vector<QoreIRValue> positional(result_size);
+        for (size_t i = 0; i < args->size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "IR named call argument lowering")) {
+                error = "IR named call argument lowering cancelled or interrupted";
+                return false;
+            }
+            QoreIRValue arg = lowerExpression(args->retrieveEntry(i), error);
+            if (!arg.isValid()) {
+                return false;
+            }
+            size_t pos = (*pos_map)[i];
+            assert(pos < result_size);
+            positional[pos] = arg;
+        }
+        for (size_t i = 0; i < result_size; ++i) {
+            if (!positional[i].isValid()) {
+                positional[i] = builder.createConstNothing()->result;
+            }
+            lowered.push_back(positional[i]);
+        }
+        return true;
+    }
     for (size_t i = 0; i < args->size(); ++i) {
         QoreIRValue arg = lowerExpression(args->retrieveEntry(i), error);
         if (!arg.isValid()) {
@@ -9675,11 +9702,31 @@ QoreIRValue QoreIRLowering::lowerBuiltinTypeConversion(const QoreValue& expr, st
 }
 
 static size_t qore_ir_get_call_arg_count(const QoreParseListNode* parse_args, const QoreListNode* args) {
-    return parse_args ? parse_args->size() : (args ? args->size() : 0);
+    if (parse_args) {
+        return parse_args->size();
+    }
+    if (!args) {
+        return 0;
+    }
+    const qore_list_private* args_priv = qore_list_private::get(args);
+    return args_priv && args_priv->hasCallArgEvalMap() ? args_priv->getCallArgEvalResultSize() : args->size();
 }
 
 static QoreValue qore_ir_get_call_arg(const QoreParseListNode* parse_args, const QoreListNode* args, size_t i) {
-    return parse_args ? parse_args->get(i) : args->retrieveEntry(i);
+    if (parse_args) {
+        return parse_args->get(i);
+    }
+    const qore_list_private* args_priv = qore_list_private::get(args);
+    if (args_priv && args_priv->hasCallArgEvalMap()) {
+        assert(false && "mapped call arguments must be handled by callers that can build a positional view");
+        return QoreValue();
+    }
+    return args->retrieveEntry(i);
+}
+
+static bool qore_ir_call_args_have_named_holes(const QoreListNode* args) {
+    const qore_list_private* args_priv = qore_list_private::get(args);
+    return args_priv && args_priv->callArgEvalMapHasHoles();
 }
 
 bool QoreIRLowering::callArgumentMayBeRuntimeNothing(const QoreValue& arg) const {
@@ -9736,12 +9783,30 @@ bool QoreIRLowering::directCallVariantMayRejectRuntimeNothing(const AbstractQore
     size_t nargs = qore_ir_get_call_arg_count(parse_args, args);
     unsigned nparams = sig->numParams();
     size_t ncheck = std::min(nargs, static_cast<size_t>(nparams));
+
+    std::vector<QoreValue> mapped_args;
+    const qore_list_private* args_priv = !parse_args && args ? qore_list_private::get(args) : nullptr;
+    if (args_priv && args_priv->hasCallArgEvalMap()) {
+        const std::vector<size_t>* pos_map = args_priv->getCallArgEvalMap();
+        if (args_priv->callArgEvalMapHasHoles()) {
+            return true;
+        }
+        mapped_args.resize(ncheck);
+        for (size_t si = 0; si < pos_map->size(); ++si) {
+            size_t pos = (*pos_map)[si];
+            if (pos < ncheck) {
+                mapped_args[pos] = args->retrieveEntry(si);
+            }
+        }
+    }
+
     for (size_t i = 0; i < ncheck; ++i) {
         const QoreTypeInfo* param_ti = sig->getParamTypeInfo(static_cast<unsigned>(i));
         if (QoreTypeInfo::parseReturns(param_ti, NT_NOTHING) != QTI_NOT_EQUAL) {
             continue;
         }
-        if (callArgumentMayBeRuntimeNothing(qore_ir_get_call_arg(parse_args, args, i))) {
+        QoreValue arg = mapped_args.empty() ? qore_ir_get_call_arg(parse_args, args, i) : mapped_args[i];
+        if (callArgumentMayBeRuntimeNothing(arg)) {
             return true;
         }
     }
@@ -9752,6 +9817,9 @@ bool QoreIRLowering::directCallVariantMayRejectRuntimeNothing(const AbstractQore
 bool QoreIRLowering::overloadedDirectCallNeedsRuntimeDispatch(const QoreFunction* func,
         const AbstractQoreFunctionVariant* variant, const QoreParseListNode* parse_args,
         const QoreListNode* args) const {
+    if (qore_ir_call_args_have_named_holes(args)) {
+        return true;
+    }
     return func && func->numVariants() > 1
         && directCallVariantMayRejectRuntimeNothing(variant, parse_args, args);
 }

@@ -907,8 +907,14 @@ module.exports = grammar({
 
     argument_list: $ => seq(
       '(',
-      optional(seq(commaSep1($._expression), optional(','))),
+      optional(seq(commaSep1(choice($.named_argument, $._expression)), optional(','))),
       ')',
+    ),
+
+    named_argument: $ => seq(
+      field('name', $.identifier),
+      ':',
+      field('value', $._expression),
     ),
 
     member_expression: $ => prec.left(PREC.MEMBER, seq(

@@ -205,6 +205,12 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     // number of arguments in call
     unsigned num_args = parse_args ? parse_args->size() : 0;
+    bool named_args = parse_args && parse_args->hasNamedArgs();
+    name_vec_t arg_names;
+    if (named_args) {
+        const QoreParseListNode::arg_name_vec_t& names = parse_args->getArgNamesVector();
+        arg_names.assign(names.begin(), names.end());
+    }
 
     // argument type list
     type_vec_t argTypeInfo;
@@ -254,7 +260,25 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         }
 
         // find variant
-        variant = func->parseFindVariant(loc, argTypeInfo, class_ctx, err);
+        QoreNamedArgBinding named_binding;
+        variant = named_args
+            ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding)
+            : func->parseFindVariant(loc, argTypeInfo, class_ctx, err);
+
+        if (named_args) {
+            if (!variant) {
+                if (!err) {
+                    qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR",
+                        new QoreStringNode("named arguments require overload resolution at parse time; this call is "
+                            "ambiguous or depends on runtime argument types"));
+                    err = -1;
+                }
+            } else if (args) {
+                qore_list_private::setNeedsEval(*args);
+                qore_list_private::get(args)->setCallArgEvalMap(std::move(named_binding.source_to_param),
+                    named_binding.result_size);
+            }
+        }
 
         /*
         printd(5, "FunctionCallBase::parseArgsVariant() this: %p (%s::)%s ign: %d func: %p variant: %p rt: %s\n",

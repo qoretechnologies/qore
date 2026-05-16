@@ -33,6 +33,9 @@
 #define _QORE_QORELISTPRIVATE_H
 
 #include <cstring>
+#include <memory>
+#include <utility>
+#include <vector>
 
 typedef ReferenceHolder<QoreListNode> safe_qorelist_t;
 
@@ -45,6 +48,8 @@ struct qore_list_private {
     unsigned obj_count = 0;
     const QoreTypeInfo* complexTypeInfo = nullptr;
     QoreReferenceCounter weakRefs;
+    std::unique_ptr<std::vector<size_t>> eval_pos_map;
+    size_t eval_result_size = 0;
     bool finalized : 1;
     bool vlist : 1;
     bool valid : 1;
@@ -598,6 +603,27 @@ struct qore_list_private {
     }
 
     DLLLOCAL QoreListNode* eval(ExceptionSink* xsink);
+
+    DLLLOCAL void setCallArgEvalMap(std::vector<size_t>&& pos_map, size_t result_size) {
+        eval_pos_map = std::make_unique<std::vector<size_t>>(std::move(pos_map));
+        eval_result_size = result_size;
+    }
+
+    DLLLOCAL bool hasCallArgEvalMap() const {
+        return static_cast<bool>(eval_pos_map);
+    }
+
+    DLLLOCAL bool callArgEvalMapHasHoles() const {
+        return eval_pos_map && eval_pos_map->size() < eval_result_size;
+    }
+
+    DLLLOCAL const std::vector<size_t>* getCallArgEvalMap() const {
+        return eval_pos_map.get();
+    }
+
+    DLLLOCAL size_t getCallArgEvalResultSize() const {
+        return eval_result_size;
+    }
 
     DLLLOCAL void weakRef() {
         weakRefs.ROreference();

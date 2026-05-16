@@ -1149,6 +1149,57 @@ static void do_call_str(QoreString &desc, const QoreFunction* func, const type_v
     desc.concat(')');
 }
 
+static void do_named_call_str(QoreString &desc, const QoreFunction* func, const type_vec_t& argTypeInfo,
+        const name_vec_t& argNames) {
+    unsigned num_args = argTypeInfo.size();
+    do_call_name(desc, func);
+    if (num_args) {
+        for (unsigned i = 0; i < num_args; ++i) {
+            if (i < argNames.size() && !argNames[i].empty()) {
+                desc.sprintf("%s: ", argNames[i].c_str());
+            }
+            desc.concat(QoreTypeInfo::getPath(argTypeInfo[i]));
+            if (i != (num_args - 1)) {
+                desc.concat(", ");
+            }
+        }
+    }
+    desc.concat(')');
+}
+
+static void add_unknown_named_args(QoreStringNode* desc, const name_vec_t& argNames,
+        const name_vec_t& accessibleParamNames) {
+    name_vec_t unknownNames;
+    for (const auto& argName : argNames) {
+        if (argName.empty()) {
+            continue;
+        }
+        if (std::find(accessibleParamNames.begin(), accessibleParamNames.end(), argName)
+                != accessibleParamNames.end()) {
+            continue;
+        }
+        if (std::find(unknownNames.begin(), unknownNames.end(), argName) == unknownNames.end()) {
+            unknownNames.push_back(argName);
+        }
+    }
+    if (unknownNames.empty()) {
+        return;
+    }
+
+    desc->concat(unknownNames.size() == 1 ? "named argument " : "named arguments ");
+    for (size_t i = 0; i < unknownNames.size(); ++i) {
+        desc->sprintf("'%s'", unknownNames[i].c_str());
+        if (i + 2 < unknownNames.size()) {
+            desc->concat(", ");
+        } else if (i + 1 < unknownNames.size()) {
+            desc->concat(" and ");
+        }
+    }
+    desc->concat(unknownNames.size() == 1
+        ? " does not match any accessible parameter; "
+        : " do not match any accessible parameter; ");
+}
+
 static int warn_excess_args(const QoreProgramLocation* loc, const QoreFunction* func, const type_vec_t& argTypeInfo,
         AbstractFunctionSignature* sig) {
     unsigned nargs = argTypeInfo.size();
@@ -1187,6 +1238,83 @@ static int check_extra_args(AbstractFunctionSignature* sig, const type_vec_t& ar
             return -1;
     }
     return 0;
+}
+
+struct NamedArgCandidateBinding {
+    type_vec_t arg_types;
+    std::vector<bool> supplied;
+    std::vector<size_t> source_to_param;
+    size_t result_size = 0;
+    int omitted_defaultable = 0;
+};
+
+static int find_named_param(const AbstractFunctionSignature* sig, const std::string& name) {
+    for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
+        const char* pname = sig->getName(pi);
+        if (pname && name == pname) {
+            return pi;
+        }
+    }
+    return -1;
+}
+
+static bool param_is_defaultable_or_optional(const AbstractFunctionSignature* sig, unsigned pi) {
+    if (sig->hasDefaultArg(pi)) {
+        return true;
+    }
+    return QoreTypeInfo::parseAcceptsReturns(sig->getParamTypeInfo(pi), NT_NOTHING) != QTI_NOT_EQUAL;
+}
+
+static bool bind_named_call_args(const AbstractFunctionSignature* sig, const type_vec_t& source_types,
+        const name_vec_t& names, NamedArgCandidateBinding& binding) {
+    assert(source_types.size() == names.size());
+    binding.arg_types.clear();
+    binding.supplied.assign(sig->numParams(), false);
+    binding.source_to_param.assign(source_types.size(), 0);
+    binding.result_size = 0;
+    binding.omitted_defaultable = 0;
+
+    bool seen_named = false;
+    size_t positional = 0;
+    for (size_t i = 0; i < source_types.size(); ++i) {
+        size_t target;
+        if (names[i].empty()) {
+            if (seen_named) {
+                return false;
+            }
+            target = positional++;
+        } else {
+            seen_named = true;
+            int pi = find_named_param(sig, names[i]);
+            if (pi < 0) {
+                return false;
+            }
+            target = static_cast<size_t>(pi);
+            if (target < positional) {
+                return false;
+            }
+            if (binding.supplied[target]) {
+                return false;
+            }
+        }
+
+        if (binding.arg_types.size() <= target) {
+            binding.arg_types.resize(target + 1, nullptr);
+        }
+        binding.arg_types[target] = source_types[i];
+        binding.source_to_param[i] = target;
+        binding.result_size = std::max(binding.result_size, target + 1);
+        if (target < binding.supplied.size()) {
+            binding.supplied[target] = true;
+        }
+    }
+
+    for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
+        if (!binding.supplied[pi] && param_is_defaultable_or_optional(sig, pi)) {
+            ++binding.omitted_defaultable;
+        }
+    }
+    return true;
 }
 
 QoreListNode* QoreFunction::runtimeGetCallVariants() const {
@@ -1765,6 +1893,310 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
             break;
     }
     return checkVariant(xsink, args, class_ctx, aqf, last_class, internal_access, ppo, variant);
+}
+
+const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const QoreProgramLocation* loc,
+        const type_vec_t& argTypeInfo, const name_vec_t& argNames, const qore_class_private* class_ctx,
+        int& err, QoreNamedArgBinding& binding) const {
+    int score_len = -1;
+    int score = -1;
+    int max_score = -1;
+    int pmatch = -1;
+    int nperfect = -1;
+    int omitted_defaultable = -1;
+    unsigned npv = 0;
+
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    const AbstractQoreFunctionVariant* pvariant = nullptr;
+    NamedArgCandidateBinding best_binding;
+
+    QoreFunction* aqf = nullptr;
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    QoreParseOptions po = parse_get_parse_options();
+    int cnt = 0;
+    bool runtime_match = false;
+    bool has_possible_match = false;
+    QoreProgram* pgm = getProgram();
+
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop;
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+        assert(!aqf->vlist.empty());
+
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                continue;
+            }
+
+            AbstractFunctionSignature* sig = (*i)->getSignature();
+            int64 vflags = (*i)->getFlags();
+            bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+            if (strict_args && (vflags & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                continue;
+            }
+
+            bool uses_extra_args = (*i)->hasVarargs();
+            ++cnt;
+
+            NamedArgCandidateBinding cb;
+            if (!bind_named_call_args(sig, argTypeInfo, argNames, cb)) {
+                continue;
+            }
+
+            if ((int)(sig->numParams() * QTI_IDENT) < score) {
+                continue;
+            }
+
+            int variant_pmatch = 0;
+            int pscore = 0;
+            int max_pscore = 0;
+            int variant_nperfect = 0;
+            bool variant_runtime_match = false;
+            bool variant_soft_match = false;
+            bool ok = true;
+
+            for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
+                const QoreTypeInfo* t = sig->getParamTypeInfo(pi);
+                bool pos_supplied = pi < cb.supplied.size() && cb.supplied[pi];
+                const QoreTypeInfo* a = pos_supplied && pi < cb.arg_types.size() ? cb.arg_types[pi] : nullptr;
+                bool pos_has_arg = pos_supplied && QoreTypeInfo::hasType(a);
+
+                qore_type_result_e rc = QTI_UNASSIGNED;
+                qore_type_result_e max_rc = QTI_UNASSIGNED;
+                if (QoreTypeInfo::hasType(t)) {
+                    if (pos_supplied && sig->hasDefaultArg(pi)
+                            && (QoreTypeInfo::isType(a, NT_NOTHING)
+                                || (QoreTypeInfo::isType(a, NT_NULL)
+                                    && qore_is_non_optional_soft_type(t)))) {
+                        rc = max_rc = QTI_IDENT;
+                    } else if (!pos_has_arg) {
+                        if (pos_supplied) {
+                            variant_runtime_match = true;
+                            break;
+                        } else if (sig->hasDefaultArg(pi)) {
+                            rc = max_rc = QTI_IGNORE;
+                        } else {
+                            a = nothingTypeInfo;
+                        }
+                    }
+                }
+
+                if (rc == QTI_UNASSIGNED) {
+                    bool may_not_match = false;
+                    bool may_need_filter = false;
+                    rc = QoreTypeInfo::parseAccepts(t, a, may_not_match, may_need_filter, max_rc, true);
+                    if (may_not_match) {
+                        variant_soft_match = true;
+                        variant_runtime_match = true;
+                        if (rc == QTI_IDENT) {
+                            ++variant_nperfect;
+                        }
+                    } else if (rc == QTI_IDENT) {
+                        ++variant_nperfect;
+                    }
+                }
+
+                if (rc == QTI_NOT_EQUAL) {
+                    ok = false;
+                    if (ilist.size() == 1 && aqf->vlist.singular() && pgm->getParseExceptionSink()) {
+                        return doSingleVariantTypeException(loc, pi, aqf->className(), getName(), sig, t, a);
+                    }
+                    break;
+                }
+
+                ++variant_pmatch;
+                if (rc != QTI_IGNORE && pos_has_arg) {
+                    pscore += rc;
+                    if (max_rc == QTI_UNASSIGNED) {
+                        max_rc = rc;
+                    }
+                    max_pscore += max_rc;
+                }
+            }
+
+            if (variant_runtime_match) {
+                runtime_match = true;
+                variant = nullptr;
+                break;
+            }
+
+            if (!ok) {
+                continue;
+            }
+
+            if ((sig->numParams() < cb.arg_types.size()) && !uses_extra_args && strict_args
+                    && check_extra_args(sig, cb.arg_types)) {
+                continue;
+            }
+
+            if (!npv) {
+                pvariant = variant;
+            } else {
+                pvariant = nullptr;
+            }
+            ++npv;
+
+            bool better = false;
+            if (pscore > score && max_pscore >= max_score) {
+                better = true;
+            } else if (pscore == score) {
+                if (variant_nperfect > nperfect) {
+                    better = true;
+                } else if (variant_nperfect == nperfect) {
+                    if (omitted_defaultable == -1 || cb.omitted_defaultable < omitted_defaultable) {
+                        better = true;
+                    } else if (cb.omitted_defaultable == omitted_defaultable
+                            && (score_len == -1 || sig->numParams() < (unsigned)score_len)) {
+                        better = true;
+                    }
+                }
+            }
+
+            if (better) {
+                if (variant_pmatch < pmatch) {
+                    variant = nullptr;
+                    runtime_match = true;
+                    break;
+                }
+                pmatch = variant_pmatch;
+                score = pscore;
+                max_score = max_pscore;
+                nperfect = variant_nperfect;
+                score_len = sig->numParams();
+                omitted_defaultable = cb.omitted_defaultable;
+                variant = *i;
+                best_binding = std::move(cb);
+            } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
+                if (variant_soft_match && variant) {
+                    has_possible_match = true;
+                } else {
+                    variant = nullptr;
+                    pmatch = variant_pmatch;
+                    score_len = -1;
+                }
+            }
+        }
+
+        if (runtime_match) {
+            assert(!variant);
+            break;
+        }
+        if (stop || variant) {
+            break;
+        }
+    }
+
+    assert(!(runtime_match && variant));
+
+    if (!variant && has_possible_match && !runtime_match) {
+        runtime_match = true;
+    }
+
+    if (!variant && pvariant) {
+        variant = pvariant;
+    } else if (!variant && !runtime_match && pmatch == -1 && pgm->getParseExceptionSink()) {
+        name_vec_t accessibleParamNames;
+        if (cnt) {
+            last_class = 0;
+            internal_access = false;
+            for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+                bool stop;
+                aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+                if (!aqf) {
+                    break;
+                }
+
+                for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+                    if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                        continue;
+                    }
+                    bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+                    if (strict_args && ((*i)->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                        continue;
+                    }
+
+                    const name_vec_t& names = (*i)->getSignature()->getParamNames();
+                    for (const auto& name : names) {
+                        if (!name.empty() && std::find(accessibleParamNames.begin(), accessibleParamNames.end(), name)
+                                == accessibleParamNames.end()) {
+                            accessibleParamNames.push_back(name);
+                        }
+                    }
+                }
+                if (stop) {
+                    break;
+                }
+            }
+        }
+
+        QoreStringNode* desc = new QoreStringNode("no variant matching named call '");
+        do_named_call_str(*desc, this, argTypeInfo, argNames);
+        desc->concat("' can be found; ");
+        if (!cnt) {
+            desc->concat("no variants were accessible in this context");
+        } else {
+            add_unknown_named_args(desc, argNames, accessibleParamNames);
+            desc->concat("the following variants were tested:");
+
+            last_class = 0;
+            internal_access = false;
+            for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+                bool stop;
+                aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+                if (!aqf) {
+                    break;
+                }
+                const char* class_name = aqf->className();
+
+                for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+                    if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                        continue;
+                    }
+                    bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+                    if (strict_args && ((*i)->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                        continue;
+                    }
+
+                    desc->concat("\n   ");
+                    if (class_name) {
+                        desc->sprintf("%s::", class_name);
+                    }
+                    desc->sprintf("%s(%s)", getName(), (*i)->getSignature()->getSignatureText());
+                }
+                if (stop) {
+                    break;
+                }
+            }
+        }
+        qore_program_private::makeParseException(pgm, *loc, "PARSE-TYPE-ERROR", desc);
+        if (!err) {
+            err = -1;
+        }
+    } else if (variant) {
+        int64 flags = variant->getFlags();
+        if (flags & (QCF_NOOP | QCF_RUNTIME_NOOP)) {
+            QoreStringNode* desc = getNoopError(this, aqf, variant);
+            desc->concat("; to disable this warning, use '%disable-warning invalid-operation' in your code");
+            qore_program_private::makeParseWarning(pgm, *loc, QP_WARN_CALL_WITH_TYPE_ERRORS,
+                "CALL-WITH-TYPE-ERRORS", desc);
+        }
+
+        AbstractFunctionSignature* sig = variant->getSignature();
+        if (!variant->hasVarargs() && best_binding.arg_types.size() > sig->numParams()) {
+            if (warn_excess_args(loc, this, best_binding.arg_types, sig) && !err) {
+                err = -1;
+            }
+        }
+
+        binding.source_to_param = std::move(best_binding.source_to_param);
+        binding.result_size = best_binding.result_size;
+    }
+
+    return variant;
 }
 
 // finds a variant at parse time

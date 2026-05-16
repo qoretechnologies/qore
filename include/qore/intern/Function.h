@@ -202,6 +202,11 @@ protected:
     bool varargs = false;
 };
 
+struct QoreNamedArgBinding {
+    std::vector<size_t> source_to_param;
+    size_t result_size = 0;
+};
+
 // used to store return type info during parsing for user code
 class RetTypeInfo {
     QoreParseTypeInfo* parseTypeInfo;
@@ -1328,6 +1333,10 @@ public:
     // reachable
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err) const;
+
+    DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNamed(const QoreProgramLocation* loc,
+            const type_vec_t& argTypeInfo, const name_vec_t& argNames,
+            const qore_class_private* class_ctx, int& err, QoreNamedArgBinding& binding) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {

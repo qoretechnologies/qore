@@ -1,0 +1,88 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class NamedArgumentsTest
+
+string sub na_defaults(int a = 1, int b = 2, int c = 3) {
+    return sprintf("%d:%d:%d", a, b, c);
+}
+
+string sub na_required(int a, int b, int c = 3) {
+    return sprintf("%d:%d:%d", a, b, c);
+}
+
+our list<int> na_order;
+
+int sub na_mark(int v) {
+    na_order += v;
+    return v;
+}
+
+string sub na_pair(int a, int b) {
+    return sprintf("%d:%d", a, b);
+}
+
+string sub na_pick(int count, string mode = "default") {
+    return sprintf("count:%d:%s", count, mode);
+}
+
+string sub na_pick(float size, string unit = "m") {
+    return sprintf("size:%s:%s", size, unit);
+}
+
+public class NamedArgumentsTest inherits QUnit::Test {
+    constructor() : Test("Named arguments test", "1.0") {
+        addTestCase("defaults and mixed arguments", \defaultsAndMixedArguments(), NOTHING);
+        addTestCase("source evaluation order", \sourceEvaluationOrder(), NOTHING);
+        addTestCase("overload selection by name", \overloadSelectionByName(), NOTHING);
+        addTestCase("parse failures", \parseFailures(), NOTHING);
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    defaultsAndMixedArguments() {
+        assertEq("1:2:100", na_defaults(c: 100), "named default holes");
+        assertEq("9:2:100", na_defaults(a: 9, c: 100), "named middle default");
+        assertEq("9:2:100", na_required(9, c: 100, b: 2), "positional before named");
+    }
+
+    sourceEvaluationOrder() {
+        na_order = ();
+        assertEq("2:1", na_pair(b: na_mark(1), a: na_mark(2)), "mapped call result");
+        assertEq((1, 2), na_order, "source order is preserved");
+    }
+
+    overloadSelectionByName() {
+        assertEq("count:3:default", na_pick(count: 3), "first variant selected by name");
+        assertEq("size:1.5:cm", na_pick(size: 1.5, unit: "cm"), "second variant selected by name");
+    }
+
+    parseFailures() {
+        assertThrows("PARSE-EXCEPTION", "duplicate named argument 'a'", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a) {} f(a: 1, a: 2);", "duplicate-name");
+        });
+
+        assertThrows("PARSE-TYPE-ERROR", "named argument 'z' does not match any accessible parameter", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a) {} f(z: 1);", "unknown-name");
+        });
+
+        assertThrows("PARSE-EXCEPTION", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a, int b) {} f(a: 1, 2);", "positional-after-named");
+        });
+
+        assertThrows("PARSE-TYPE-ERROR", "named arguments are not supported for calls without a parse-time-resolved signature", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a) {} code c = \\f(); c(a: 1);", "call-reference");
+        });
+    }
+}

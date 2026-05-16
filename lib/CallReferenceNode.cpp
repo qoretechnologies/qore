@@ -158,6 +158,14 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
     }
 
     if (parse_args) {
+        if (parse_args->hasNamedArgs()) {
+            qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR",
+                new QoreStringNode(
+                    "named arguments are not supported for calls without a parse-time-resolved signature"));
+            if (!err) {
+                err = -1;
+            }
+        }
         type_vec_t argTypeInfo;
         {
             QoreParseContextAnalysisHelper ah(parse_context);
