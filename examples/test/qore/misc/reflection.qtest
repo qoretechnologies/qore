@@ -720,6 +720,19 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Condition", "wait_count", ("lock",));
         assertNamedConstructorVariantCount("Counter", ("initial_value",));
         assertNamedClassMethodVariantCount("Counter", "waitForZero", ("timeout_ms",));
+        assertNamedConstructorVariantCount("ParseOptions", ("parse_options",));
+        assertNamedConstructorVariantCount("ParseOptions", ("name",));
+        assertNamedConstructorVariantCount("ParseOptions", ("names",));
+        foreach string name in (("clear", "hasAll", "hasAny", "merge", "set")) {
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("other",));
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("parse_options",));
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("name",));
+        }
+        foreach string name in (("mask",)) {
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("other",));
+            assertNamedClassMethodVariantCount("ParseOptions", name, ("parse_options",));
+        }
+        assertNamedClassMethodVariantCount("ParseOptions", "equals", ("other",));
         assertNamedConstructorVariantCount("Queue", ("max_size",));
         assertNamedClassMethodVariantCount("Queue", "push", ("value", "timeout_ms"));
         assertNamedClassMethodVariantCount("Queue", "insert", ("value", "timeout_ms"));

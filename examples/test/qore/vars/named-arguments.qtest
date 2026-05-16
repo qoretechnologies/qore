@@ -118,6 +118,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed crypto builtin opt-in", \reviewedCryptoBuiltinOptIn(), NOTHING);
         addTestCase("reviewed file builtin opt-in", \reviewedFileBuiltinOptIn(), NOTHING);
         addTestCase("reviewed library builtin opt-in", \reviewedLibraryBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed parse-options class builtin opt-in", \reviewedParseOptionsClassBuiltinOptIn(),
+            NOTHING);
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
         addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
@@ -531,6 +533,29 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "sub ql_lib_named_blacklist() { qore_add_module_to_blacklist(name: \"NamedArgsTest\", "
             "message: \"test\"); qore_add_module_to_blacklist_ex(name: \"NamedArgsTest\", message: \"test\"); }",
             "library-named");
+    }
+
+    reviewedParseOptionsClassBuiltinOptIn() {
+        ParseOptions opts = new ParseOptions(parse_options: PO_NO_NETWORK);
+        assertTrue(opts.hasAll(parse_options: PO_NO_NETWORK), "ParseOptions integer constructor exposes parse_options");
+
+        opts.set(name: "no-filesystem");
+        assertTrue(opts.hasAny(name: "no-filesystem"), "ParseOptions string methods expose name");
+        opts.clear(name: "no-filesystem");
+        assertFalse(opts.hasAny(name: "no-filesystem"), "ParseOptions clear exposes name");
+
+        opts.set(parse_options: PO_NO_GUI);
+        assertTrue(opts.hasAny(parse_options: PO_NO_GUI), "ParseOptions set exposes parse_options");
+        opts.clear(parse_options: PO_NO_GUI);
+        assertFalse(opts.hasAny(parse_options: PO_NO_GUI), "ParseOptions clear exposes parse_options");
+
+        ParseOptions other = new ParseOptions(names: ("no-database",));
+        ParseOptions merged = opts.merge(other: other);
+        assertTrue(merged.hasAll(other: other), "ParseOptions object variants expose other");
+        assertTrue(merged.hasAny(name: "no-database"), "ParseOptions list constructor exposes names");
+
+        ParseOptions masked = merged.mask(parse_options: PO_NO_DATABASE);
+        assertTrue(masked.equals(other: other), "ParseOptions mask and equals expose reviewed names");
     }
 
     reviewedThreadBuiltinOptIn() {

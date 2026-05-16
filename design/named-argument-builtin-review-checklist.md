@@ -127,6 +127,9 @@ Keep consistent names across related APIs:
   `buffer_size` for stream buffers, and `line_separator`/`trim_line` for line
   parsing controls. Avoid exposing internal names such as `is`, `os`, `t`,
   `eol`, or `bufsize`.
+- Parse-option helpers: `parse_options` for integer `PO_*` masks, `name` and
+  `names` for string option names, and `other` for another `ParseOptions`
+  object. Do not expose the internal abbreviation `po`.
 
 If a rename is needed, update all of the following in the same commit:
 
