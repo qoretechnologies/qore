@@ -1,0 +1,146 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  i18n.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%requires ../../../qlib/QUnit.qm
+
+%try-module i18n
+%define NoI18n
+%endtry
+
+%exec-class I18nTest
+
+class I18nTest inherits QUnit::Test {
+    constructor() : Test("I18nTest", "1.0") {
+        addTestCase("backend version introspection", \backendInfoTest());
+        addTestCase("cardinal plural categories", \cardinalPluralCategoryTest());
+        addTestCase("visible fraction digits", \visibleFractionDigitsTest());
+        addTestCase("ordinal plural categories", \ordinalPluralCategoryTest());
+        addTestCase("plural form selection", \pluralFormTest());
+        addTestCase("plural validation errors", \validationErrorTest());
+
+        set_return_value(main());
+    }
+
+    backendInfoTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        hash<auto> info = I18n::get_backend_info();
+        assertEq("icu", info.backend);
+        assertRegex("^[0-9]+\\.[0-9]+", info.icu_version);
+        assertRegex("^[0-9]+\\.[0-9]+", I18n::get_icu_version());
+        assertRegex("^[0-9]+\\.[0-9]+", info.cldr_version);
+        assertEq(I18n::get_cldr_version(), info.cldr_version);
+        assertEq(0, info.catalog_schema_version);
+    }
+
+    cardinalPluralCategoryTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        assertEq("one", I18n::plural_category(1, "en"));
+        assertEq("other", I18n::plural_category(2, "en"));
+
+        assertEq("other", I18n::plural_category(1, "ja"));
+        assertEq("other", I18n::plural_category(2, "zh"));
+
+        assertEq("one", I18n::plural_category(1, "ru"));
+        assertEq("few", I18n::plural_category(2, "ru"));
+        assertEq("many", I18n::plural_category(5, "ru"));
+
+        assertEq("zero", I18n::plural_category(0, "ar"));
+        assertEq("one", I18n::plural_category(1, "ar"));
+        assertEq("two", I18n::plural_category(2, "ar"));
+        assertEq("few", I18n::plural_category(3, "ar"));
+        assertEq("many", I18n::plural_category(11, "ar"));
+        assertEq("other", I18n::plural_category(100, "ar"));
+
+        assertEq("few", I18n::plural_category(2, "cs"));
+        assertEq("many", I18n::plural_category(5, "pl"));
+        assertEq("zero", I18n::plural_category(0, "cy"));
+        assertEq("two", I18n::plural_category(2, "cy"));
+    }
+
+    visibleFractionDigitsTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        assertEq("one", I18n::plural_category("1", "ru"));
+        assertEq("other", I18n::plural_category("1.0", "ru"));
+        assertEq("other", I18n::plural_category("1.00", "ru"));
+
+        assertEq("one", I18n::plural_category("1", "cs"));
+        assertEq("many", I18n::plural_category("1.0", "cs"));
+        assertEq("many", I18n::plural_category("1.20", "cs"));
+    }
+
+    ordinalPluralCategoryTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        hash<auto> opts = {"type": "ordinal"};
+        assertEq("one", I18n::plural_category(1, "en", opts));
+        assertEq("two", I18n::plural_category(2, "en", opts));
+        assertEq("few", I18n::plural_category(3, "en", opts));
+        assertEq("other", I18n::plural_category(4, "en", opts));
+        assertEq("other", I18n::plural_category(11, "en", opts));
+        assertEq("one", I18n::plural_category(21, "en", opts));
+    }
+
+    pluralFormTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        hash<auto> ru_forms = {
+            "one": "file-one",
+            "few": "file-few",
+            "many": "file-many",
+            "other": "file-other",
+        };
+        assertEq("file-one", I18n::plural_form(1, "ru", ru_forms));
+        assertEq("file-few", I18n::plural_form(2, "ru", ru_forms));
+        assertEq("file-many", I18n::plural_form(5, "ru", ru_forms));
+        assertEq("file-other", I18n::plural_form("1.0", "ru", ru_forms));
+
+        hash<auto> exact_forms = {
+            "=0": "no files",
+            "=1": "one exact file",
+            "one": "one category file",
+            "other": "many files",
+        };
+        assertEq("no files", I18n::plural_form(0, "en", exact_forms));
+        assertEq("one exact file", I18n::plural_form("1.0", "en", exact_forms));
+        assertEq("many files", I18n::plural_form(2, "en", exact_forms));
+
+        hash<auto> suffixes = {"one": "st", "two": "nd", "few": "rd", "other": "th"};
+        assertEq("nd", I18n::plural_form(2, "en", suffixes, {"type": "ordinal"}));
+        assertEq("th", I18n::plural_form(4, "en", suffixes, {"type": "ordinal"}));
+    }
+
+    validationErrorTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        assertThrows("I18N-NUMBER-ERROR", auto sub() {
+            return I18n::plural_category("abc", "en");
+        });
+        assertThrows("I18N-PLURAL-TYPE-ERROR", auto sub() {
+            return I18n::plural_category(1, "en", {"type": "range"});
+        });
+        assertThrows("I18N-FORMS-ERROR", auto sub() {
+            return I18n::plural_form(2, "en", {"one": "one"});
+        });
+        assertThrows("I18N-FORMS-ERROR", auto sub() {
+            return I18n::plural_form(1, "en", {"bogus": "bad", "other": "other"});
+        });
+        assertThrows("I18N-NUMBER-ERROR", auto sub() {
+            return I18n::plural_form(1, "en", {"=abc": "bad", "other": "other"});
+        });
+    }
+}

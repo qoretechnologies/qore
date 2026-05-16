@@ -2057,6 +2057,8 @@ add_subdirectory(modules/reflection)
 add_subdirectory(modules/logger_bin)
 # linenoise module
 add_subdirectory(modules/linenoise)
+# i18n module
+add_subdirectory(modules/i18n)
 # krb5 module
 add_subdirectory(modules/krb5)
 # mongodb module (optional, requires libmongoc)

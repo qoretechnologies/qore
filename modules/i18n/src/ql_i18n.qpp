@@ -1,0 +1,622 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  ql_i18n.qpp
+
+  Qore i18n module functions
+
+  Copyright (C) 2026 Qore Technologies, s.r.o.
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+*/
+
+#include "i18n-module.h"
+
+#include <unicode/bytestream.h>
+#include <unicode/locid.h>
+#include <unicode/numberformatter.h>
+#include <unicode/plurrule.h>
+#include <unicode/stringpiece.h>
+#include <unicode/ulocdata.h>
+#include <unicode/unistr.h>
+#include <unicode/uversion.h>
+
+#include <algorithm>
+#include <cctype>
+#include <memory>
+#include <string>
+
+static const char* i18n_icu_error_name(UErrorCode status) {
+    return u_errorName(status);
+}
+
+static std::string i18n_version_to_string(const UVersionInfo version) {
+    char buf[U_MAX_VERSION_STRING_LENGTH] = {0};
+    u_versionToString(version, buf);
+    return buf;
+}
+
+static std::string i18n_get_icu_version_string() {
+    UVersionInfo version;
+    u_getVersion(version);
+    return i18n_version_to_string(version);
+}
+
+static std::string i18n_get_cldr_version_string(ExceptionSink* xsink) {
+    UVersionInfo version;
+    UErrorCode status = U_ZERO_ERROR;
+    ulocdata_getCLDRVersion(version, &status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot read ICU CLDR version: %s", i18n_icu_error_name(status));
+        return std::string();
+    }
+    return i18n_version_to_string(version);
+}
+
+static bool i18n_is_ascii_space(char c) {
+    return std::isspace(static_cast<unsigned char>(c)) != 0;
+}
+
+static bool i18n_trim_ascii(const std::string& s, std::string& out, ExceptionSink* xsink) {
+    size_t start = 0;
+    while (start < s.size() && i18n_is_ascii_space(s[start])) {
+        if (start && !(start % 100) && qore_check_cancel(xsink, "trimming i18n numeric string")) {
+            return false;
+        }
+        ++start;
+    }
+
+    size_t end = s.size();
+    while (end > start && i18n_is_ascii_space(s[end - 1])) {
+        if ((s.size() - end) && !((s.size() - end) % 100)
+            && qore_check_cancel(xsink, "trimming i18n numeric string")) {
+            return false;
+        }
+        --end;
+    }
+
+    out = s.substr(start, end - start);
+    return true;
+}
+
+struct I18nDecimalInfo {
+    std::string formatted;
+    std::string canonical;
+    int32_t fraction_digits = 0;
+};
+
+static bool i18n_parse_decimal_string(const std::string& input, I18nDecimalInfo& info, ExceptionSink* xsink,
+        const char* arg_name) {
+    std::string s;
+    if (!i18n_trim_ascii(input, s, xsink)) {
+        return false;
+    }
+    if (s.empty()) {
+        xsink->raiseException("I18N-NUMBER-ERROR", "%s cannot be empty", arg_name);
+        return false;
+    }
+
+    size_t pos = 0;
+    bool negative = false;
+    if (s[pos] == '+' || s[pos] == '-') {
+        negative = s[pos] == '-';
+        ++pos;
+    }
+
+    std::string integer;
+    while (pos < s.size() && std::isdigit(static_cast<unsigned char>(s[pos]))) {
+        if (pos && !(pos % 100) && qore_check_cancel(xsink, "parsing i18n numeric string")) {
+            return false;
+        }
+        integer.push_back(s[pos++]);
+    }
+
+    std::string fraction;
+    if (pos < s.size() && s[pos] == '.') {
+        ++pos;
+        while (pos < s.size() && std::isdigit(static_cast<unsigned char>(s[pos]))) {
+            if (pos && !(pos % 100) && qore_check_cancel(xsink, "parsing i18n numeric string")) {
+                return false;
+            }
+            fraction.push_back(s[pos++]);
+        }
+    }
+
+    if (integer.empty() && fraction.empty()) {
+        xsink->raiseException("I18N-NUMBER-ERROR", "%s must contain at least one digit", arg_name);
+        return false;
+    }
+
+    if (pos != s.size()) {
+        xsink->raiseException("I18N-NUMBER-ERROR",
+            "%s must be a base-10 integer or decimal string; got '%s'", arg_name, input.c_str());
+        return false;
+    }
+
+    if (integer.empty()) {
+        integer = "0";
+    }
+
+    if (integer.size() > 1000) {
+        xsink->raiseException("I18N-NUMBER-ERROR",
+            "%s has too many integer digits; maximum supported is 1000", arg_name);
+        return false;
+    }
+
+    size_t first_non_zero = integer.find_first_not_of('0');
+    std::string canonical_integer = first_non_zero == std::string::npos ? "0" : integer.substr(first_non_zero);
+
+    std::string canonical_fraction = fraction;
+    size_t trim_pos = 0;
+    while (!canonical_fraction.empty() && canonical_fraction.back() == '0') {
+        if (trim_pos && !(trim_pos % 100) && qore_check_cancel(xsink, "normalizing i18n numeric string")) {
+            return false;
+        }
+        canonical_fraction.pop_back();
+        ++trim_pos;
+    }
+
+    if (fraction.size() > 100) {
+        xsink->raiseException("I18N-NUMBER-ERROR",
+            "%s has too many visible fraction digits; maximum supported is 100", arg_name);
+        return false;
+    }
+
+    bool is_zero = canonical_integer == "0" && canonical_fraction.empty();
+
+    info.formatted.clear();
+    if (negative && !is_zero) {
+        info.formatted.push_back('-');
+    }
+    info.formatted += canonical_integer;
+    if (!fraction.empty()) {
+        info.formatted.push_back('.');
+        info.formatted += fraction;
+    }
+
+    info.canonical.clear();
+    if (negative && !is_zero) {
+        info.canonical.push_back('-');
+    }
+    info.canonical += canonical_integer;
+    if (!canonical_fraction.empty()) {
+        info.canonical.push_back('.');
+        info.canonical += canonical_fraction;
+    }
+    info.fraction_digits = static_cast<int32_t>(fraction.size());
+
+    return true;
+}
+
+static bool i18n_value_to_decimal_info(QoreValue value, I18nDecimalInfo& info, ExceptionSink* xsink) {
+    switch (value.getType()) {
+        case NT_INT: {
+            int64 i = value.getAsBigInt();
+            info.formatted = std::to_string(i);
+            info.canonical = info.formatted;
+            info.fraction_digits = 0;
+            return true;
+        }
+        case NT_NUMBER:
+        case NT_FLOAT:
+        case NT_STRING: {
+            QoreStringValueHelper str(value, QCS_UTF8, xsink);
+            if (*xsink) {
+                return false;
+            }
+            return i18n_parse_decimal_string(str->c_str(), info, xsink, "value");
+        }
+    }
+
+    xsink->raiseException("I18N-TYPE-ERROR", "value must be an int, float, number, or string; got type '%s'",
+        value.getTypeName());
+    return false;
+}
+
+static std::string i18n_qore_string_to_utf8(const QoreStringNode* str, ExceptionSink* xsink, const char* arg_name) {
+    TempEncodingHelper tmp(str, QCS_UTF8, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+
+    if (!tmp || !tmp->c_str()[0]) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "%s cannot be empty", arg_name);
+        return std::string();
+    }
+
+    if (tmp->strlen() > 255) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "%s is too long; maximum supported length is 255 bytes",
+            arg_name);
+        return std::string();
+    }
+
+    return tmp->c_str();
+}
+
+static bool i18n_qore_value_to_utf8_string(QoreValue value, std::string& out, ExceptionSink* xsink,
+        const char* arg_name) {
+    if (value.getType() != NT_STRING) {
+        xsink->raiseException("I18N-TYPE-ERROR", "%s must be a string; got type '%s'", arg_name, value.getTypeName());
+        return false;
+    }
+
+    QoreStringValueHelper str(value, QCS_UTF8, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    out = str->c_str();
+    return true;
+}
+
+static icu::Locale i18n_make_locale(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
+    std::string tag = i18n_qore_string_to_utf8(locale_arg, xsink, "locale");
+    if (*xsink) {
+        return icu::Locale::getRoot();
+    }
+
+    std::replace(tag.begin(), tag.end(), '_', '-');
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::forLanguageTag(icu::StringPiece(tag), status);
+    if (U_FAILURE(status) || locale.isBogus()) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "invalid locale '%s': %s", tag.c_str(),
+            i18n_icu_error_name(status));
+        return icu::Locale::getRoot();
+    }
+
+    return locale;
+}
+
+static UPluralType i18n_get_plural_type(const QoreHashNode* opts, ExceptionSink* xsink) {
+    if (!opts) {
+        return UPLURAL_TYPE_CARDINAL;
+    }
+
+    QoreValue value = opts->getKeyValue("type");
+    if (value.isNullOrNothing()) {
+        return UPLURAL_TYPE_CARDINAL;
+    }
+
+    std::string type;
+    if (!i18n_qore_value_to_utf8_string(value, type, xsink, "opts.type")) {
+        return UPLURAL_TYPE_CARDINAL;
+    }
+
+    if (type == "cardinal") {
+        return UPLURAL_TYPE_CARDINAL;
+    }
+    if (type == "ordinal") {
+        return UPLURAL_TYPE_ORDINAL;
+    }
+
+    xsink->raiseException("I18N-PLURAL-TYPE-ERROR",
+        "unsupported plural type '%s'; expected 'cardinal' or 'ordinal'", type.c_str());
+    return UPLURAL_TYPE_CARDINAL;
+}
+
+static std::string i18n_select_plural_category(QoreValue value, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    I18nDecimalInfo decimal;
+    if (!i18n_value_to_decimal_info(value, decimal, xsink)) {
+        return std::string();
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+
+    UPluralType type = i18n_get_plural_type(opts, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    std::unique_ptr<icu::PluralRules> rules(icu::PluralRules::forLocale(locale, type, status));
+    if (U_FAILURE(status) || !rules) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create plural rules for locale '%s': %s",
+            locale.getName(), i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    icu::number::LocalizedNumberFormatter formatter = icu::number::NumberFormatter::with()
+        .precision(icu::number::Precision::fixedFraction(decimal.fraction_digits))
+        .locale(locale);
+    icu::number::FormattedNumber formatted = formatter.formatDecimal(icu::StringPiece(decimal.formatted), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot format plural operand '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    icu::UnicodeString keyword = rules->select(formatted, status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot select plural category for '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    std::string rv;
+    keyword.toUTF8String(rv);
+    return rv;
+}
+
+static bool i18n_get_form_value(const QoreHashNode* forms, const char* key, std::string& out, ExceptionSink* xsink) {
+    QoreValue value = forms->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return false;
+    }
+
+    return i18n_qore_value_to_utf8_string(value, out, xsink, key);
+}
+
+static QoreStringNode* i18n_select_plural_form(QoreValue value, const QoreStringNode* locale_arg,
+        const QoreHashNode* forms, const QoreHashNode* opts, ExceptionSink* xsink) {
+    if (!forms) {
+        xsink->raiseException("I18N-FORMS-ERROR", "forms cannot be NOTHING");
+        return nullptr;
+    }
+
+    I18nDecimalInfo decimal;
+    if (!i18n_value_to_decimal_info(value, decimal, xsink)) {
+        return nullptr;
+    }
+
+    size_t i = 0;
+    ConstHashIterator hi(forms);
+    while (hi.next()) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking plural forms")) {
+            return nullptr;
+        }
+        ++i;
+
+        const char* key = hi.getKey();
+        if (!key || !key[0]) {
+            xsink->raiseException("I18N-FORMS-ERROR", "forms cannot contain an empty key");
+            return nullptr;
+        }
+
+        std::string form_value;
+        if (!i18n_qore_value_to_utf8_string(hi.get(), form_value, xsink, key)) {
+            return nullptr;
+        }
+
+        if (key[0] == '=') {
+            I18nDecimalInfo exact;
+            if (!i18n_parse_decimal_string(key + 1, exact, xsink, "forms exact-value key")) {
+                return nullptr;
+            }
+            if (exact.canonical == decimal.canonical) {
+                return new QoreStringNode(form_value, QCS_UTF8);
+            }
+            continue;
+        }
+
+        const char* valid_categories[] = {"zero", "one", "two", "few", "many", "other"};
+        bool valid = false;
+        for (const char* category : valid_categories) {
+            if (!strcmp(key, category)) {
+                valid = true;
+                break;
+            }
+        }
+        if (!valid) {
+            xsink->raiseException("I18N-FORMS-ERROR",
+                "invalid plural form key '%s'; expected a CLDR category or exact key such as '=0'", key);
+            return nullptr;
+        }
+    }
+
+    std::string category = i18n_select_plural_category(value, locale_arg, opts, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::string selected;
+    if (i18n_get_form_value(forms, category.c_str(), selected, xsink)) {
+        if (*xsink) {
+            return nullptr;
+        }
+        return new QoreStringNode(selected, QCS_UTF8);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+
+    if (!i18n_get_form_value(forms, "other", selected, xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("I18N-FORMS-ERROR",
+                "forms must include an 'other' fallback when no exact-value key matches");
+        }
+        return nullptr;
+    }
+
+    return new QoreStringNode(selected, QCS_UTF8);
+}
+
+/** @defgroup i18n_functions I18n Functions
+ */
+///@{
+namespace Qore::I18n;
+
+//! Returns information about the locale-data backend used by the module.
+/** @return a hash with \c backend, \c icu_version, \c cldr_version, and \c catalog_schema_version keys
+
+    @par Example:
+    @code{.py}
+hash<auto> info = I18n::get_backend_info();
+printf("I18n backend: %s %s\n", info.backend, info.icu_version);
+    @endcode
+*/
+hash<auto> get_backend_info() [flags=CONSTANT] {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("backend", new QoreStringNode("icu", QCS_UTF8), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    h->setKeyValue("icu_version", new QoreStringNode(i18n_get_icu_version_string(), QCS_UTF8), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    UVersionInfo cldr_version;
+    UErrorCode status = U_ZERO_ERROR;
+    ulocdata_getCLDRVersion(cldr_version, &status);
+    h->setKeyValue("cldr_version",
+        new QoreStringNode(U_SUCCESS(status) ? i18n_version_to_string(cldr_version) : "unknown", QCS_UTF8), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    h->setKeyValue("catalog_schema_version", 0, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return h.release();
+}
+
+//! Returns the ICU library version used by the module.
+/** @return ICU version string, for example \c "78.2"
+
+    @par Example:
+    @code{.py}
+printf("ICU: %s\n", I18n::get_icu_version());
+    @endcode
+*/
+string get_icu_version() [flags=CONSTANT] {
+    return new QoreStringNode(i18n_get_icu_version_string(), QCS_UTF8);
+}
+
+//! Returns the CLDR data version used by ICU.
+/** @return CLDR version string
+
+    @throw I18N-ICU-ERROR if ICU does not expose the CLDR data version
+
+    @par Example:
+    @code{.py}
+printf("CLDR: %s\n", I18n::get_cldr_version());
+    @endcode
+*/
+string get_cldr_version() [flags=RET_VALUE_ONLY] {
+    std::string version = i18n_get_cldr_version_string(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(version, QCS_UTF8);
+}
+
+//! Returns the CLDR plural category for a value and locale using cardinal rules.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag, for example \c "en", \c "ru", or \c "ar"
+    @return one of \c "zero", \c "one", \c "two", \c "few", \c "many", or \c "other"
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
+
+    @note String values preserve visible fraction digits, so \c "1", \c "1.0", and \c "1.00" can select different
+    categories in locales whose CLDR rules distinguish them.
+
+    @par Example:
+    @code{.py}
+assertEq("one", I18n::plural_category(1, "en"));
+assertEq("few", I18n::plural_category(2, "ru"));
+    @endcode
+*/
+string plural_category(auto value, string locale) [flags=RET_VALUE_ONLY] {
+    std::string category = i18n_select_plural_category(value, locale, nullptr, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(category, QCS_UTF8);
+}
+
+//! Returns the CLDR plural category for a value and locale.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag, for example \c "en", \c "ru", or \c "ar"
+    @param opts optional hash; \c "type" may be \c "cardinal" or \c "ordinal"
+    @return one of \c "zero", \c "one", \c "two", \c "few", \c "many", or \c "other"
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
+
+    @par Example:
+    @code{.py}
+assertEq("one", I18n::plural_category(1, "en", {"type": "ordinal"}));
+assertEq("two", I18n::plural_category(2, "en", {"type": "ordinal"}));
+    @endcode
+*/
+string plural_category(auto value, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    std::string category = i18n_select_plural_category(value, locale, opts, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(category, QCS_UTF8);
+}
+
+//! Selects a caller-supplied plural form using cardinal CLDR rules.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag
+    @param forms hash keyed by CLDR plural category, with optional exact-value keys such as \c "=0" or \c "=1"
+    @return the selected form string; missing category keys fall back to \c "other"
+
+    @throw I18N-FORMS-ERROR if \a forms is invalid or does not include an \c "other" fallback
+    @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
+
+    @note This function only selects among forms supplied by the caller. A locale string alone cannot localize an
+    English two-form word pair into languages with more plural categories.
+
+    @par Example:
+    @code{.py}
+hash<auto> ru = {"one": "soubor", "few": "soubory", "many": "souboru", "other": "souboru"};
+printf("%d %s\n", n, I18n::plural_form(n, "cs", ru));
+    @endcode
+*/
+string plural_form(auto value, string locale, hash<auto> forms) [flags=RET_VALUE_ONLY] {
+    return i18n_select_plural_form(value, locale, forms, nullptr, xsink);
+}
+
+//! Selects a caller-supplied plural form using CLDR rules.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag
+    @param forms hash keyed by CLDR plural category, with optional exact-value keys such as \c "=0" or \c "=1"
+    @param opts optional hash; \c "type" may be \c "cardinal" or \c "ordinal"
+    @return the selected form string; missing category keys fall back to \c "other"
+
+    @throw I18N-FORMS-ERROR if \a forms is invalid or does not include an \c "other" fallback
+    @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed
+    @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
+
+    @note Exact-value keys take precedence over CLDR categories.
+
+    @par Example:
+    @code{.py}
+hash<auto> en_ordinal = {"one": "st", "two": "nd", "few": "rd", "other": "th"};
+printf("2%s\n", I18n::plural_form(2, "en", en_ordinal, {"type": "ordinal"}));
+    @endcode
+*/
+string plural_form(auto value, string locale, hash<auto> forms, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_select_plural_form(value, locale, forms, opts, xsink);
+}
+
+///@}
