@@ -195,7 +195,7 @@ qclass Dir [arg=Dir* d; dom=FILESYSTEM];
 Dir dir("utf-8");
     @endcode
  */
-Dir::constructor(*string encoding) {
+Dir::constructor(*string encoding) [flags=NAMED_ARGS] {
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
     SimpleRefHolder<Dir> d(new Dir(xsink, qe));
     if (*xsink)
@@ -236,7 +236,7 @@ if (!d.chdir("../doc")) {
 
     @throw DIR-CHDIR-ERROR cannot change to relative directory because no current directory is set
  */
-bool Dir::chdir(string path) {
+bool Dir::chdir(string path) [flags=NAMED_ARGS] {
     return !d->chdir(path->getBuffer(), xsink);
 }
 
@@ -286,7 +286,7 @@ if (!d.exists()) {
     @throw DIR-CREATE-ERROR cannot create directory; no directory is set
     @throw DIR-CREATE-FAILURE error creating directory (\c arg will be assigned to the errno value)
 */
-int Dir::create(softint mode = 0777) {
+int Dir::create(softint mode = 0777) [flags=NAMED_ARGS] {
     return d->create((int)mode, xsink);
 }
 
@@ -305,12 +305,12 @@ try {
     @throw DIR-CHMOD-ERROR cannot change directory's mode; no directory is set
     @throw DIR-CHMOD-FAILURE error changing directory's mode (\c arg will be assigned to the errno value)
  */
-nothing Dir::chmod(softint mode) {
+nothing Dir::chmod(softint mode) [flags=NAMED_ARGS] {
     d->chmod((int)mode, xsink);
 }
 
 //! Change the ownership of the directory from the userid
-/** @param uid the userid of the user to change the directory to
+/** @param owner the userid of the user to change the directory to
 
     @par Platform Availability:
     @ref Qore::Option::HAVE_UNIX_FILEMGT
@@ -327,9 +327,9 @@ try {
     @throw DIR-CHOWN-ERROR cannot change directory owner; no directory is set
     @throw DIR-CHOWN-FAILURE error changing directory owner (\c arg will be assigned to the errno value)
  */
-nothing Dir::chown(int uid) {
+nothing Dir::chown(int owner) [flags=NAMED_ARGS] {
 #ifdef HAVE_CHOWN
-    d->chown((uid_t)uid, (gid_t)-1, xsink);
+    d->chown((uid_t)owner, (gid_t)-1, xsink);
     return QoreValue();
 #else
     return missing_method_error("Dir::chown", "UNIX_FILEMGT", xsink);
@@ -337,7 +337,7 @@ nothing Dir::chown(int uid) {
 }
 
 //! Change the ownership of the directory from the username
-/** @param username the username of the user to change the directory to
+/** @param owner the username of the user to change the directory to
 
     @par Platform Availability:
     @ref Qore::Option::HAVE_UNIX_FILEMGT
@@ -355,14 +355,14 @@ try {
     @throw DIR-CHOWN-ERROR cannot change directory owner; no directory is set
     @throw DIR-CHOWN-FAILURE error changing directory owner (\c arg will be assigned to the errno value)
  */
-nothing Dir::chown(string username) {
+nothing Dir::chown(string owner) [flags=NAMED_ARGS] {
 #ifdef HAVE_CHOWN
    uid_t uid;
 
    // Try getting UID for username
-   int rc = q_uname2uid(username->getBuffer(), uid);
+   int rc = q_uname2uid(owner->getBuffer(), uid);
    if (rc)
-      xsink->raiseException("DIR-CHOWN-PARAMETER-ERROR", "no userid found for user '%s'", username->getBuffer());
+      xsink->raiseException("DIR-CHOWN-PARAMETER-ERROR", "no userid found for user '%s'", owner->getBuffer());
    else
       d->chown(uid, (gid_t)-1, xsink);
    return QoreValue();
@@ -372,7 +372,7 @@ nothing Dir::chown(string username) {
 }
 
 //! Change the group membership of the directory from the group id
-/** @param gid the groupid of the user to change the directory to
+/** @param group the groupid of the user to change the directory to
 
     @par Platform Availability:
     @ref Qore::Option::HAVE_UNIX_FILEMGT
@@ -389,9 +389,9 @@ try {
     @throw DIR-CHOWN-ERROR cannot change directory owner; no directory is set
     @throw DIR-CHOWN-FAILURE error changing directory owner (\c arg will be assigned to the errno value)
  */
-nothing Dir::chgrp(int gid) {
+nothing Dir::chgrp(int group) [flags=NAMED_ARGS] {
 #ifdef HAVE_CHOWN
-   d->chown((uid_t)-1, (gid_t)gid, xsink);
+   d->chown((uid_t)-1, (gid_t)group, xsink);
    return QoreValue();
 #else
    return missing_method_error("Dir::chgrp", "UNIX_FILEMGT", xsink);
@@ -399,7 +399,7 @@ nothing Dir::chgrp(int gid) {
 }
 
 //! Change the group membership of the directory
-/** @param groupname the group name of the group to change the directory to
+/** @param group the group name of the group to change the directory to
 
     @par Platform Availability:
     @ref Qore::Option::HAVE_UNIX_FILEMGT
@@ -417,14 +417,14 @@ try {
     @throw DIR-CHOWN-ERROR cannot change directory owner; no directory is set
     @throw DIR-CHOWN-FAILURE error changing directory owner (\c arg will be assigned to the errno value)
  */
-nothing Dir::chgrp(string groupname) {
+nothing Dir::chgrp(string group) [flags=NAMED_ARGS] {
 #ifdef HAVE_CHOWN
    gid_t gid;
 
    // Try getting GID for name
-   int rc = q_gname2gid(groupname->getBuffer(), gid);
+   int rc = q_gname2gid(group->getBuffer(), gid);
    if (rc)
-      xsink->raiseException("DIR-CHGRP-PARAMETER-ERROR", "no groupid found for group '%s'", groupname->getBuffer());
+      xsink->raiseException("DIR-CHGRP-PARAMETER-ERROR", "no groupid found for group '%s'", group->getBuffer());
    else
       d->chown((uid_t)-1, gid, xsink);
    return QoreValue();
@@ -449,7 +449,7 @@ try {
     @throw DIR-MKDIR-PARAMETER-ERROR only direct subdirectories are allowed
     @throw DIR-MKDIR-FAILURE error creating directory (\c arg will be assigned to the errno value)
  */
-nothing Dir::mkdir(string subdir, softint mode = 0777) {
+nothing Dir::mkdir(string subdir, softint mode = 0777) [flags=NAMED_ARGS] {
    // check if there is a path delimiter
    if (strchr(subdir->getBuffer(), QORE_DIR_SEP))
       xsink->raiseException("DIR-MKDIR-PARAMETER-ERROR", "only single, direct subdirectories are allowed");
@@ -474,7 +474,7 @@ try {
 
     @see @ref Qore::rmdir()
  */
-nothing Dir::rmdir(string subdir) {
+nothing Dir::rmdir(string subdir) [flags=NAMED_ARGS] {
    // check if there is a path delimiter
    if (strchr(subdir->getBuffer(), QORE_DIR_SEP))
       xsink->raiseException("DIR-RMDIR-PARAMETER-ERROR", "only direct subdirectories are allowed");
@@ -503,7 +503,7 @@ try {
 
     @since %Qore 0.8.8 added the \a full parameter
  */
-list<auto> Dir::list(bool full = False) {
+list<auto> Dir::list(bool full = False) [flags=NAMED_ARGS] {
    return d->list(xsink, -1, 0, 0, full);
 }
 
@@ -534,7 +534,7 @@ try {
 
     @since %Qore 0.8.8 added the \a full parameter
  */
-list<auto> Dir::list(string regex, softint regex_options = 0, softbool full = False) {
+list<auto> Dir::list(string regex, softint regex_options = 0, softbool full = False) [flags=NAMED_ARGS] {
    return d->list(xsink, -1, regex, (int)regex_options, full);
 }
 
@@ -561,7 +561,7 @@ try {
 
     @since %Qore 0.8.8 added the \a full parameter
  */
-list<auto> Dir::listFiles(bool full = False) {
+list<auto> Dir::listFiles(bool full = False) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFMT^S_IFDIR, 0, 0, full);
 }
 
@@ -592,7 +592,7 @@ try {
 
     @since %Qore 0.8.8 added the \a full parameter
  */
-list<auto> Dir::listFiles(string regex, softint regex_options = 0, softbool full = False) {
+list<auto> Dir::listFiles(string regex, softint regex_options = 0, softbool full = False) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFMT^S_IFDIR, regex, (int)regex_options, full);
 }
 
@@ -619,7 +619,7 @@ try {
 
     @since %Qore 0.8.8 added the \a full parameter
  */
-list<auto> Dir::listDirs(bool full = False) {
+list<auto> Dir::listDirs(bool full = False) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFDIR, 0, 0, full);
 }
 
@@ -650,7 +650,7 @@ try {
 
     @since %Qore 0.8.8 added the \a full parameter
  */
-list<auto> Dir::listDirs(string regex, softint regex_options = 0, softbool full = False) {
+list<auto> Dir::listDirs(string regex, softint regex_options = 0, softbool full = False) [flags=NAMED_ARGS] {
    return d->list(xsink, S_IFDIR, regex, (int)regex_options, full);
 }
 
@@ -672,7 +672,7 @@ File f = d.openFile("myfile.txt", O_CREAT|O_WRONLY, 0644, "utf-8");
 
     @note see File::open2() for additional exceptions that can be thrown opening the file
  */
-File Dir::openFile(string filename, int flags = O_RDONLY, int mode = 0666, *string encoding) {
+File Dir::openFile(string filename, int flags = O_RDONLY, int mode = 0666, *string encoding) [flags=NAMED_ARGS] {
    if (strchr(filename->getBuffer(), QORE_DIR_SEP))
       return xsink->raiseException("DIR-OPENFILE-PARAMETER-ERROR", "only filenames without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
 
@@ -704,7 +704,7 @@ Dir sd = d.openDir("mysubdir");
 
     @throw DIR-OPENDIR-PARAMETER-ERROR only direct subdirectory names without path separators are allowed
  */
-Dir Dir::openDir(string subdir, *string encoding) {
+Dir Dir::openDir(string subdir, *string encoding) [flags=NAMED_ARGS] {
    // check if there is a path delimiter in
    if (strchr(subdir->getBuffer(), QORE_DIR_SEP))
       return xsink->raiseException("DIR-OPENDIR-PARAMETER-ERROR", "only direct directory names without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
@@ -718,7 +718,7 @@ Dir Dir::openDir(string subdir, *string encoding) {
 //! Remove the file with the given name in the Dir object's directory
 /** If any errors occur unlinking the file, then an exception occurs
 
-    @param file Remove the file with the given name in the Dir object's directory
+    @param filename Remove the file with the given name in the Dir object's directory
 
     @return @ref True if the file was present and could be removed, @ref False if the file did not exist
 
@@ -734,15 +734,15 @@ try {
     @throw DIR-REMOVEFILE-PARAMETER-ERROR only filenames without path (i.e. without path separator characters) are allowed
     @throw DIR-REMOVEFILE-FAILURE the unlink() function returned an error (\c arg will be assigned to the errno value)
  */
-bool Dir::removeFile(string file) {
+bool Dir::removeFile(string filename) [flags=NAMED_ARGS] {
    // check if there is a path delimiter in
-   if (strchr(file->getBuffer(), QORE_DIR_SEP))
+   if (strchr(filename->getBuffer(), QORE_DIR_SEP))
       return xsink->raiseException("DIR-REMOVEFILE-PARAMETER-ERROR", "only filenames without path (i.e. without '%c' characters) are allowed", QORE_DIR_SEP);
 
-   std::string path = d->getPath(file->getBuffer());
+   std::string path = d->getPath(filename->getBuffer());
    errno = 0; // clear errno flag
    if (unlink(path.c_str()) && errno != ENOENT)
-      return xsink->raiseErrnoException("DIR-REMOVEFILE-FAILURE", errno, "error removing file '%s'", file->getBuffer());
+      return xsink->raiseErrnoException("DIR-REMOVEFILE-FAILURE", errno, "error removing file '%s'", filename->getBuffer());
 
    // if an errno was set it must be ENOENT at this point.
    // so we return that no file is removed

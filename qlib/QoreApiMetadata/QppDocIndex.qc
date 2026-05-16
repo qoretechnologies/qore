@@ -75,7 +75,7 @@ public class QppDocIndex {
         if (!d.chdir(dir_path)) {
             return index;
         }
-        list<string> files = d.listFiles("\\.meta\\.json$");
+        list<string> files = d.listFiles(regex: "\\.meta\\.json$");
         foreach string fname in (files) {
             string path = dir_path + "/" + fname;
             string content = ReadOnlyFile::readTextFile(path);

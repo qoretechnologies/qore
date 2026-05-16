@@ -428,7 +428,7 @@ public class FilePoller {
         # file of file hashes
         list<hash<FilePollerFileEventInfo>> ret =
             map cast<hash<FilePollerFileEventInfo>>($1 + ("filepath": path + DirSep + $1.name)),
-                d.listFiles(mask, reopt, True);
+                d.listFiles(regex: mask, regex_options: reopt, full: True);
 
         # remove all files that aren't old enough
         if (minage) {

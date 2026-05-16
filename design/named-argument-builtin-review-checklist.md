@@ -379,6 +379,9 @@ These examples are from the core migration and should be reused as precedent:
   native Breakpoint methods themselves support named arguments.
 - Expression-like constructors should use the complete public owner name
   `program` rather than implementation abbreviations such as `pgm`.
+- Filesystem class methods should expose path role names. For `Dir`, use
+  `owner` / `group` for ownership changes and `filename` for file-name-only
+  operations such as `removeFile()`.
 - Do not mark an overload when it makes an already-enabled named call ambiguous
   with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
   step, value)` must remain positional because it conflicts with the named

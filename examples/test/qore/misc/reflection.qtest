@@ -657,6 +657,22 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("symlink", ("target_path", "link_path"));
         assertNamedCallableVariantCount("umask", ("mask",));
 
+        assertNamedConstructorVariantCount("Dir", ("encoding",));
+        assertNamedClassMethodVariantCount("Dir", "chdir", ("path",));
+        assertNamedClassMethodVariantCount("Dir", "create", ("mode",));
+        assertNamedClassMethodVariantCount("Dir", "chmod", ("mode",));
+        assertNamedClassMethodVariantCount("Dir", "chown", ("owner",), 2);
+        assertNamedClassMethodVariantCount("Dir", "chgrp", ("group",), 2);
+        assertNamedClassMethodVariantCount("Dir", "mkdir", ("subdir", "mode"));
+        assertNamedClassMethodVariantCount("Dir", "rmdir", ("subdir",));
+        foreach string name in (("list", "listFiles", "listDirs")) {
+            assertNamedClassMethodVariantCount("Dir", name, ("full",));
+            assertNamedClassMethodVariantCount("Dir", name, ("regex", "regex_options", "full"));
+        }
+        assertNamedClassMethodVariantCount("Dir", "openFile", ("filename", "flags", "mode", "encoding"));
+        assertNamedClassMethodVariantCount("Dir", "openDir", ("subdir", "encoding"));
+        assertNamedClassMethodVariantCount("Dir", "removeFile", ("filename",));
+
         foreach string name in (("basename", "dirname")) {
             assertNamedCallableVariantCount(name, ("path",));
         }

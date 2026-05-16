@@ -75,7 +75,7 @@ public class FileListDataProvider inherits FileDataProviderBase {
         }
         Dir dir();
         dir.chdir(req.path);
-        return dir.listFiles(True);
+        return dir.listFiles(full: True);
     }
 
     #! Returns the description of a successful request message, if any

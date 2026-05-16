@@ -363,7 +363,7 @@ public class QLSServer {
             Dir d();
             if (!d.chdir(dirname(logFilePath))) {
                 try {
-                    d.create(0755);
+                    d.create(mode: 0755);
                 } catch (hash<ExceptionInfo> ex) {
                     return;
                 }

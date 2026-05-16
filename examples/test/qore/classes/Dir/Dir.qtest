@@ -12,6 +12,7 @@
 class DirTest inherits QUnit::Test {
     constructor() : QUnit::Test("Dir", "1.0") {
         addTestCase("DirTest", \dirTest());
+        addTestCase("Dir named calls", \namedCallTest());
         addTestCase("issue3192 test", \issue3192Test());
         addTestCase("DirStatInfo inherits StatInfo", \dirStatInfoTest());
         set_return_value(main());
@@ -49,6 +50,46 @@ class DirTest inherits QUnit::Test {
         hash<auto> h = d.statvfs();
         assertEq("hash<FilesystemInfo>", h.fullType());
 %endif
+    }
+
+    namedCallTest() {
+        string tmpdirPath = sprintf(tmp_location() + DirSep + "qoretest" + get_random_string());
+        string subdir = "named_subdir";
+        string filename = "named.txt";
+        string subdirPath = tmpdirPath + DirSep + subdir;
+        string filePath = subdirPath + DirSep + filename;
+        on_exit {
+            if (is_file(filePath))
+                unlink(filePath);
+            if (is_dir(subdirPath))
+                rmdir(subdirPath);
+            if (is_dir(tmpdirPath))
+                rmdir(tmpdirPath);
+        }
+
+        Dir d(encoding: "UTF-8");
+        assertEq(False, d.chdir(path: tmpdirPath));
+        assertEq(1, d.create(mode: 0700));
+        d.chmod(mode: 0700);
+        d.mkdir(subdir: subdir, mode: 0700);
+
+        Dir child = d.openDir(subdir: subdir, encoding: "UTF-8");
+        File f = child.openFile(filename: filename, flags: O_CREAT | O_WRONLY | O_TRUNC, mode: 0600,
+            encoding: "UTF-8");
+        f.write("abc\n");
+        f.close();
+
+        assertEq((subdir,), d.listDirs(full: False));
+        assertEq((filename,), child.listFiles(regex: "^named", regex_options: 0, full: False));
+        assertEq((filename,), child.list(regex: "\\.txt$", regex_options: 0, full: False));
+
+        list<auto> full = child.listFiles(full: True);
+        assertEq(filename, full[0].name);
+        assertEq("hash<DirStatInfo>", full[0].fullType());
+
+        assertTrue(child.removeFile(filename: filename));
+        assertFalse(child.removeFile(filename: filename));
+        d.rmdir(subdir: subdir);
     }
 
     issue3192Test() {
