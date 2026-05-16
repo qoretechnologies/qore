@@ -658,6 +658,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // records.  Legacy EXPR_TREE blobs are still readable for old objects but
     // are not emitted by new AOT output.
     flags |= QORE_AOT_FEAT_BCA_NATIVE_ARGS;
+    // Named calls in base-constructor argument lists need the same source-order
+    // evaluation plus parameter-slot mapping as normal call nodes.
+    flags |= QORE_AOT_FEAT_BCA_NAMED_ARG_MAP;
     // Closure expression metadata must preserve both the declared signature
     // ellipsis and the variant-level QCF_USES_EXTRA_ARGS flag set when the
     // closure body references argv/$N.

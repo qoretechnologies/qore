@@ -1840,7 +1840,7 @@ int BCANode::parseInit(BCList* bcl, const char* classname) {
             classid = sclass->getID();
 
             // find constructor variant
-            const QoreMethod* m = sclass->getConstructor();
+            const QoreMethod* m = qore_class_private::get(*sclass)->parseGetConstructor();
             QoreParseContext parse_context;
             parse_context.oflag = qore_class_private::getSelfId(*sclass);
             if (m) {

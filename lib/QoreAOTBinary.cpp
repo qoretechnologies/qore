@@ -5142,6 +5142,37 @@ static bool writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 // not emit EXPR_TREE fallback.
                                 const QoreListNode* args = bca->getArgs();
                                 uint16_t num_args = args ? static_cast<uint16_t>(args->size()) : 0;
+                                const qore_list_private* args_priv = qore_list_private::get(args);
+                                const std::vector<size_t>* eval_map = args_priv
+                                    ? args_priv->getCallArgEvalMap()
+                                    : nullptr;
+                                uint16_t eval_result_size = 0;
+                                uint16_t eval_map_size = 0;
+                                if (eval_map) {
+                                    if (args_priv->getCallArgEvalResultSize() > UINT16_MAX
+                                            || eval_map->size() > UINT16_MAX) {
+                                        error = "BCA named-argument map is too large to serialize";
+                                        return false;
+                                    }
+                                    eval_result_size = static_cast<uint16_t>(
+                                        args_priv->getCallArgEvalResultSize());
+                                    eval_map_size = static_cast<uint16_t>(eval_map->size());
+                                }
+                                writer.writeU16(eval_result_size);
+                                writer.writeU16(eval_map_size);
+                                for (uint16_t mi = 0; mi < eval_map_size; ++mi) {
+                                    if (mi && !(mi % 100)
+                                            && qore_check_cancel(nullptr, "AOT BCA named argument map serialization")) {
+                                        error = "operation cancelled during AOT BCA named argument map serialization";
+                                        return false;
+                                    }
+                                    size_t target = (*eval_map)[mi];
+                                    if (target > UINT16_MAX) {
+                                        error = "BCA named-argument map target is too large to serialize";
+                                        return false;
+                                    }
+                                    writer.writeU16(static_cast<uint16_t>(target));
+                                }
                                 writer.writeU16(num_args);
 
                                 const QoreClass* method_class = mi.method->getClass();
@@ -10848,6 +10879,19 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                                 entry.start_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
                                 entry.end_line = static_cast<int16_t>(QoreAOTBinaryReader::readU16(ptr));
                             }
+                            if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BCA_NAMED_ARG_MAP) != 0) {
+                                entry.eval_result_size = QoreAOTBinaryReader::readU16(ptr);
+                                uint16_t eval_map_size = QoreAOTBinaryReader::readU16(ptr);
+                                entry.source_to_param.reserve(eval_map_size);
+                                for (uint16_t mi = 0; mi < eval_map_size; ++mi) {
+                                    if (mi && !(mi % 100)
+                                            && qore_check_cancel(nullptr, "AOT BCA named argument map deserialization")) {
+                                        error = "operation cancelled during AOT BCA named argument map deserialization";
+                                        return false;
+                                    }
+                                    entry.source_to_param.push_back(QoreAOTBinaryReader::readU16(ptr));
+                                }
+                            }
 
                             // Resolve base class by path
                             entry.classid = 0;
@@ -11364,6 +11408,43 @@ bool QoreAOTBinaryDeserializer::resolveBCAExpressions(std::string& error) {
                         arg_list->push(QoreValue(), nullptr);
                     }
                 }
+            }
+            if (arg_list && !entry.source_to_param.empty()) {
+                if (entry.source_to_param.size() != arg_list->size()) {
+                    error = "invalid BCA named-argument map size";
+                    error += "; class='";
+                    error += pbca.qc ? pbca.qc->getNamespacePath() : "<unknown>";
+                    error += "' method='constructor' base='";
+                    error += entry.base_path.empty() ? "<unknown>" : entry.base_path;
+                    error += "'";
+                    arg_list->deref(nullptr);
+                    delete bcal;
+                    return false;
+                }
+                for (size_t mi = 0; mi < entry.source_to_param.size(); ++mi) {
+                    if (mi && !(mi % 100)
+                            && qore_check_cancel(nullptr, "AOT BCA named argument map validation")) {
+                        error = "operation cancelled during AOT BCA named argument map validation";
+                        arg_list->deref(nullptr);
+                        delete bcal;
+                        return false;
+                    }
+                    size_t target = entry.source_to_param[mi];
+                    if (target >= entry.eval_result_size) {
+                        error = "invalid BCA named-argument map target";
+                        error += "; class='";
+                        error += pbca.qc ? pbca.qc->getNamespacePath() : "<unknown>";
+                        error += "' method='constructor' base='";
+                        error += entry.base_path.empty() ? "<unknown>" : entry.base_path;
+                        error += "'";
+                        arg_list->deref(nullptr);
+                        delete bcal;
+                        return false;
+                    }
+                }
+                qore_list_private::setNeedsEval(*arg_list);
+                qore_list_private::get(arg_list)->setCallArgEvalMap(std::move(entry.source_to_param),
+                    entry.eval_result_size);
             }
 
             const QoreProgramLocation* bca_loc = &loc_builtin;

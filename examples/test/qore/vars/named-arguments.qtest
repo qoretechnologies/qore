@@ -28,6 +28,14 @@ string sub na_pair(int a, int b) {
     return sprintf("%d:%d", a, b);
 }
 
+nothing sub na_set_ref(reference<int> target, int value) {
+    target = value;
+}
+
+string sub na_fixed_varargs(int a, int b = 2, ...) {
+    return sprintf("%d:%d", a, b);
+}
+
 string sub na_pick(int count, string mode = "default") {
     return sprintf("count:%d:%s", count, mode);
 }
@@ -36,9 +44,39 @@ string sub na_pick(float size, string unit = "m") {
     return sprintf("size:%s:%s", size, unit);
 }
 
+class NA_Base {
+    public {
+        string base_value;
+    }
+
+    constructor(int a = 1, int b = 2) {
+        base_value = sprintf("%d:%d", a, b);
+    }
+}
+
+class NA_Child inherits NA_Base {
+    public {
+        string child_value;
+    }
+
+    constructor(int x = 3, int y = 4) : NA_Base(b: na_mark(20), a: na_mark(10)) {
+        child_value = sprintf("%d:%d", x, y);
+    }
+
+    string method(int a, int b = 2) {
+        return sprintf("%d:%d", a, b);
+    }
+
+    static string staticMethod(int a, int b = 2) {
+        return sprintf("%d:%d", a, b);
+    }
+}
+
 public class NamedArgumentsTest inherits QUnit::Test {
     constructor() : Test("Named arguments test", "1.0") {
         addTestCase("defaults and mixed arguments", \defaultsAndMixedArguments(), NOTHING);
+        addTestCase("methods and constructors", \methodsAndConstructors(), NOTHING);
+        addTestCase("references and varargs", \referencesAndVarargs(), NOTHING);
         addTestCase("source evaluation order", \sourceEvaluationOrder(), NOTHING);
         addTestCase("overload selection by name", \overloadSelectionByName(), NOTHING);
         addTestCase("builtin opt-in", \builtinOptIn(), NOTHING);
@@ -52,6 +90,24 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq("1:2:100", na_defaults(c: 100), "named default holes");
         assertEq("9:2:100", na_defaults(a: 9, c: 100), "named middle default");
         assertEq("9:2:100", na_required(9, c: 100, b: 2), "positional before named");
+    }
+
+    methodsAndConstructors() {
+        na_order = ();
+        NA_Child child = new NA_Child(y: 8, x: 7);
+        assertEq("10:20", child.base_value, "base constructor arguments are mapped by name");
+        assertEq("7:8", child.child_value, "constructor arguments are mapped by name");
+        assertEq((20, 10), na_order, "base constructor argument evaluation keeps source order");
+        assertEq("3:4", child.method(b: 4, a: 3), "method arguments are mapped by name");
+        assertEq("5:6", NA_Child::staticMethod(b: 6, a: 5), "static method arguments are mapped by name");
+    }
+
+    referencesAndVarargs() {
+        int target = 1;
+        na_set_ref(value: 9, target: \target);
+        assertEq(9, target, "reference arguments are mapped by name");
+        assertEq("5:2", na_fixed_varargs(a: 5), "fixed parameters before varargs accept named arguments");
+        assertEq("5:6", na_fixed_varargs(b: 6, a: 5), "fixed parameters before varargs are reordered");
     }
 
     sourceEvaluationOrder() {
@@ -68,6 +124,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
     builtinOptIn() {
         assertEq("cde", substr(str: "abcdef", start: 2, len: 3), "opted-in builtin accepts named arguments");
         assertEq("de", substr(len: 2, str: "abcdef", start: 3), "opted-in builtin accepts reordered names");
+        assertEq("cde", "abcdef".substr(start: 2, len: 3), "opted-in string pseudo-method accepts named arguments");
     }
 
     parseFailures() {
@@ -104,6 +161,12 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "varargs-only variants cannot accept named arguments", sub() {
             Program p(PO_NEW_STYLE);
             p.parse("sub f(...) {} f(a: 1);", "varargs-only");
+        });
+
+        assertThrows("NAMED-ARG-UNKNOWN", "named argument 'missing' does not match any accessible parameter", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("class B { constructor(int a) {} } class C inherits B { constructor() : B(missing: 1) {} } C c();",
+                "base-constructor-unknown");
         });
     }
 }

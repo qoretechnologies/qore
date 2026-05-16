@@ -412,7 +412,7 @@ string substr = str.substr(-10);
 
     @note equivalent to @ref Qore::substr(softstring, softint)
  */
-string <string>::substr(softint start) [flags=RET_VALUE_ONLY] {
+string <string>::substr(softint start) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreStringNode* rv = str->substr(start, xsink);
     if (!rv)
         rv = new QoreStringNode(str->getEncoding());
@@ -439,7 +439,7 @@ string substr = str.substr(10, -2);
 
     @since %Qore 0.8.5
  */
-string <string>::substr(softint start, softint len) [flags=RET_VALUE_ONLY] {
+string <string>::substr(softint start, softint len) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreStringNode* rv = str->substr(start, len, xsink);
     if (!rv)
         rv = new QoreStringNode(str->getEncoding());

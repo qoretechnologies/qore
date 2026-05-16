@@ -135,8 +135,9 @@ constexpr uint64_t QORE_AOT_FEAT_WIDE_LOC_TABLES = 1ULL << 38; //!< SLOT_MAPS lo
 constexpr uint64_t QORE_AOT_FEAT_LOCAL_DECL_ORDINAL = 1ULL << 39; //!< local slot records carry body-local ordinal for duplicate-name disambiguation
 constexpr uint64_t QORE_AOT_FEAT_CLASS_INJECTION = 1ULL << 40; //!< class records preserve import/injection compatibility metadata
 constexpr uint64_t QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS = 1ULL << 41; //!< variant signatures carry original body parse options for source-stripped domain checks
+constexpr uint64_t QORE_AOT_FEAT_BCA_NAMED_ARG_MAP = 1ULL << 42; //!< BCA records preserve named-argument source-to-parameter evaluation maps
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -1593,6 +1594,8 @@ class QoreAOTBinaryDeserializer {
         std::string base_path;
         int16_t start_line = 0;
         int16_t end_line = 0;
+        size_t eval_result_size = 0;
+        std::vector<size_t> source_to_param;
         std::vector<PendingBCAArgBlob> arg_blobs;
     };
     struct PendingBCA {
