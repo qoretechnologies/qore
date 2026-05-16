@@ -5,6 +5,7 @@
 %no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
 %requires QUnit
 
 %exec-class NamedArgumentsTest
@@ -115,6 +116,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed object builtin opt-in", \reviewedObjectBuiltinOptIn(), NOTHING);
         addTestCase("reviewed misc builtin opt-in", \reviewedMiscBuiltinOptIn(), NOTHING);
         addTestCase("reviewed crypto builtin opt-in", \reviewedCryptoBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed file builtin opt-in", \reviewedFileBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -420,6 +422,55 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq(16, pbkdf2(digest: "sha256", password: "password", salt: "salt", iterations: 1,
             key_length: 16).size(), "pbkdf2 exposes key_length");
         assertEq(4, get_random_bytes(size: 4).size(), "random helper exposes size");
+    }
+
+    reviewedFileBuiltinOptIn() {
+        string file = sprintf("%s%sqore-na-file-%d-%s.txt", tmp_location(), DirSep, getpid(),
+            get_random_bytes(size: 4).toHex());
+        string target = file + ".renamed";
+        on_exit unlink(path: file);
+        on_exit unlink(path: target);
+
+        {
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC, 0600, "utf-8");
+            f.write("named file");
+        }
+
+        assertTrue(is_file(path: file), "is_file exposes path");
+        assertFalse(is_dir(path: file), "is_dir exposes path");
+        assertTrue(is_readable(path: file), "is_readable exposes path");
+        assertTrue(is_writable(path: file), "is_writable exposes path");
+        assertEq(0, chmod(path: file, mode: 0600), "chmod exposes path and mode");
+        assertTrue(stat(path: file) != NOTHING, "stat exposes path");
+        assertTrue(lstat(path: file) != NOTHING, "lstat exposes path");
+        assertTrue(hstat(path: file) != NOTHING, "hstat exposes path");
+        assertTrue(hlstat(path: file) != NOTHING, "hlstat exposes path");
+        assertTrue(statvfs(path: file) != NOTHING, "statvfs exposes path");
+        assertTrue(inlist(file, glob(pattern: file)), "glob exposes pattern");
+        assertTrue(absolute_path(path: file), "absolute_path exposes path");
+        assertTrue(absolute_path_unix(path: file), "absolute_path_unix exposes path");
+        assertTrue(absolute_path(path: realpath(path: file)), "realpath exposes path");
+
+        rename(source_path: file, target_path: target);
+        assertFalse(is_file(path: file), "rename moved source");
+        assertTrue(is_file(path: target), "rename moved target");
+        int old_mask = umask(mask: 022);
+        assertEq(022, umask(mask: old_mask), "umask exposes mask");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("chdir(path: \"/\"); mkdir(path: \"/tmp/qore-na\", mode: 0777, parents: True); "
+            "mkdir_ex(path: \"/tmp/qore-na\", mode: 0777, parents: True); mkfifo(path: \"/tmp/qore-na-fifo\"); "
+            "unlink(path: \"/tmp/qore-na\"); rmdir(path: \"/tmp/qore-na\"); "
+            "chown(path: \"/tmp/qore-na\", owner: -1, group: -1); "
+            "lchown(path: \"/tmp/qore-na\", owner: -1, group: -1); "
+            "readlink(path: \"/tmp/qore-na-link\"); "
+            "symlink(target_path: \"/tmp/qore-na-target\", link_path: \"/tmp/qore-na-link\"); "
+            "is_socket(path: \"/tmp/qore-na\"); is_pipe(path: \"/tmp/qore-na\"); "
+            "is_cdev(path: \"/tmp/qore-na\"); is_bdev(path: \"/tmp/qore-na\"); "
+            "is_dev(path: \"/tmp/qore-na\"); is_link(path: \"/tmp/qore-na\"); "
+            "is_executable(path: \"/bin/sh\"); absolute_path_windows(path: \"C:\\\\temp\");",
+            "file-named");
     }
 
     parseFailures() {

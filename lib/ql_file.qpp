@@ -54,12 +54,22 @@
 #include "qore/intern/qore_glob.h"
 #endif
 
-static bool check_stat(unsigned code, const QoreString& path) {
+static bool check_stat(unsigned code, const QoreString& path, ExceptionSink* xsink) {
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
+      return false;
+   }
+
    return (q_get_mode(path) & S_IFMT) == code;
 }
 
 #ifdef HAVE_LSTAT
-static bool check_lstat(unsigned code, const QoreString& path) {
+static bool check_lstat(unsigned code, const QoreString& path, ExceptionSink* xsink) {
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
+      return false;
+   }
+
    struct stat sbuf;
    int rc;
 
@@ -70,16 +80,24 @@ static bool check_lstat(unsigned code, const QoreString& path) {
 }
 #endif
 
-static bool is_writable_intern(const QoreStringNode* path) {
+static bool is_writable_intern(const QoreStringNode* path, ExceptionSink* xsink) {
 #if defined HAVE_PWD_H
    struct stat sbuf;
    int rc;
+
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+      return false;
+   }
 
    if ((rc = stat(path->getBuffer(), &sbuf)))
       return false;
 
    if (S_ISDIR(sbuf.st_mode)) { // If path is a directory.
       QoreStringMaker tfn("%s/xxx_qore_tmp_test_xxx", path->getBuffer());
+      if (smh && !smh->checkFilesystemAccess(tfn.c_str(), QSEC_CREATE | QSEC_DELETE, xsink)) {
+         return false;
+      }
       rc = open(tfn.getBuffer(), O_WRONLY | O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
       if (rc != -1) {
          close(rc);
@@ -89,6 +107,9 @@ static bool is_writable_intern(const QoreStringNode* path) {
       return false;
    }
 
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
+      return false;
+   }
    rc = open(path->getBuffer(), O_WRONLY);
    if (rc != -1) {
       close(rc);
@@ -97,12 +118,23 @@ static bool is_writable_intern(const QoreStringNode* path) {
    return false;
 
 #elif defined(HAVE_ACCESS) && defined(_Q_WINDOWS)
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
+      return false;
+   }
    // only use access(2) on Windows
    return access(path->getBuffer(), W_OK) == 0;
 #elif defined _Q_WINDOWS
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+      return false;
+   }
    int ftype = q_get_mode(*path) & S_IFMT;
    if (ftype & S_ISDIR) {
       QoreStringMaker tfn("%s\\xxx_qore_tmp_test_xxx", path->getBuffer());
+      if (smh && !smh->checkFilesystemAccess(tfn.c_str(), QSEC_CREATE | QSEC_DELETE, xsink)) {
+         return false;
+      }
       HANDLE h = CreateFile(tfn.getBuffer(), GENERIC_WRITE, 0, 0, CREATE_NEW, FILE_ATTRIBUTE_NORMAL|FILE_FLAG_DELETE_ON_CLOSE, 0);
       if (h == INVALID_HANDLE_VALUE)
          return false;
@@ -111,6 +143,9 @@ static bool is_writable_intern(const QoreStringNode* path) {
    }
    else {
       // try to open the file with write permissions
+      if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_WRITE, xsink)) {
+         return false;
+      }
       int rc = open(path->getBuffer(), O_WRONLY);
       if (rc == -1)
          return false;
@@ -119,6 +154,26 @@ static bool is_writable_intern(const QoreStringNode* path) {
    }
 #error no is_writable() implementation for this platform
 #endif
+}
+
+static std::string get_glob_sandbox_path(const char* pattern) {
+   std::string rv(pattern);
+   size_t meta = rv.find_first_of("*?[");
+   if (meta == std::string::npos) {
+      return rv;
+   }
+
+   size_t slash = rv.rfind('/', meta);
+#ifdef _Q_WINDOWS
+   size_t bslash = rv.rfind('\\', meta);
+   if (slash == std::string::npos || (bslash != std::string::npos && bslash > slash)) {
+      slash = bslash;
+   }
+#endif
+   if (slash == std::string::npos) {
+      return ".";
+   }
+   return slash ? rv.substr(0, slash) : "/";
 }
 
 //! file status information hash as returned from @ref Qore::hstat() "hstat()", @ref Qore::hlstat() "hlstat()", @ref Qore::Dir::hstat() "Dir::hstat()", @ref Qore::FileLineIterator::hstat() "FileLineIterator::hstat()", @ref Qore::ReadOnlyFile::hstat() "ReadOnlyFile::hstat()", and @ref Qore::ReadOnlyFile::hlstat() "ReadOnlyFile::hlstat()"
@@ -220,8 +275,8 @@ hashdecl FilesystemInfo {
 bool b = is_file("/etc/hosts");
     @endcode
  */
-bool is_file(string path) [flags=CONSTANT;dom=FILESYSTEM] {
-   return check_stat(S_IFREG, *path);
+bool is_file(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   return check_stat(S_IFREG, *path, xsink);
 }
 
 //! Returns @ref True if the string passed identifies a directory on the filesystem, @ref False if not
@@ -235,8 +290,8 @@ bool is_file(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 bool b = is_dir("/tmp/mydir");
     @endcode
  */
-bool is_dir(string path) [flags=CONSTANT;dom=FILESYSTEM] {
-   return check_stat(S_IFDIR, *path);
+bool is_dir(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   return check_stat(S_IFDIR, *path, xsink);
 }
 
 //! Returns @ref True if the string passed identifies a socket on the filesystem, @ref False if not
@@ -252,9 +307,9 @@ bool is_dir(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 bool b = is_socket("/tmp/X0");
     @endcode
  */
-bool is_socket(string path) [flags=CONSTANT;dom=FILESYSTEM] {
+bool is_socket(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef S_IFSOCK
-   return check_stat(S_IFSOCK, *path);
+   return check_stat(S_IFSOCK, *path, xsink);
 #else
    missing_function_error("is_socket", "UNIX_FILEMGT", xsink);
    return false;
@@ -272,8 +327,8 @@ bool is_socket(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 bool b = is_pipe("/tmp/mypipe");
     @endcode
  */
-bool is_pipe(string path) [flags=CONSTANT;dom=FILESYSTEM] {
-   return check_stat(S_IFIFO, *path);
+bool is_pipe(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   return check_stat(S_IFIFO, *path, xsink);
 }
 
 //! Returns @ref True if the string passed identifies a character device on the filesystem, @ref False if not
@@ -287,8 +342,8 @@ bool is_pipe(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 bool b = is_cdev("/tmp/tty");
     @endcode
  */
-bool is_cdev(string path) [flags=CONSTANT;dom=FILESYSTEM] {
-   return check_stat(S_IFCHR, *path);
+bool is_cdev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   return check_stat(S_IFCHR, *path, xsink);
 }
 
 //! Returns @ref True if the string passed identifies a block device on the filesystem, @ref False if not
@@ -302,8 +357,8 @@ bool is_cdev(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 bool b = is_bdev("/tmp/sda1");
     @endcode
  */
-bool is_bdev(string path) [flags=CONSTANT;dom=FILESYSTEM] {
-   return check_stat(S_IFBLK, *path);
+bool is_bdev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   return check_stat(S_IFBLK, *path, xsink);
 }
 
 //! Returns @ref True if the string passed identifies a device (either block or character) on the filesystem, @ref False if not
@@ -317,7 +372,12 @@ bool is_bdev(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 bool b = is_dev("/tmp/scanner");
     @endcode
  */
-bool is_dev(string path) [flags=CONSTANT;dom=FILESYSTEM] {
+bool is_dev(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+      return false;
+   }
+
    struct stat sbuf;
    int rc;
 
@@ -344,9 +404,9 @@ bool is_dev(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 bool b = is_link("/etc/hosts");
     @endcode
  */
-bool is_link(string path) [flags=CONSTANT;dom=FILESYSTEM] {
+bool is_link(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_LSTAT
-   return check_lstat(S_IFLNK, *path);
+   return check_lstat(S_IFLNK, *path, xsink);
 #else
    missing_function_error("is_link", "UNIX_FILEMGT", xsink);
    return false;
@@ -364,7 +424,11 @@ bool is_link(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 bool b = is_readable("/etc/hosts");
     @endcode
  */
-bool is_readable(string path) [flags=CONSTANT;dom=FILESYSTEM] {
+bool is_readable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+      return false;
+   }
    return q_path_is_readable(path->getBuffer());
 }
 
@@ -381,8 +445,8 @@ bool b = is_writable("/etc/hosts");
 
     @since %Qore 0.8.12 this function works properly on Windows
  */
-bool is_writable(string path) [flags=CONSTANT;dom=FILESYSTEM] {
-   return is_writable_intern(path);
+bool is_writable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   return is_writable_intern(path, xsink);
 }
 
 //! Returns @ref True if the string passed identifies a file or a directory writable by the current user (backwards-compatible misspelling of is_writable())
@@ -398,8 +462,8 @@ bool b = is_writeable("/etc/hosts");
 
     @since %Qore 0.8.12 this function works properly on Windows
  */
-bool is_writeable(string path) [flags=CONSTANT;dom=FILESYSTEM] {
-   return is_writable_intern(path);
+bool is_writeable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
+   return is_writable_intern(path, xsink);
 }
 
 //! Returns @ref True if the string passed identifies an executable on the filesystem, @ref False if not
@@ -415,8 +479,13 @@ bool is_writeable(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 bool b = is_executable("/bin/login");
     @endcode
  */
-bool is_executable(string path) [flags=CONSTANT;dom=FILESYSTEM] {
+bool is_executable(string path) [flags=CONSTANT,NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_PWD_H
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ | QSEC_EXECUTE, xsink)) {
+      return false;
+   }
+
    struct stat sbuf;
    int rc;
 
@@ -444,8 +513,8 @@ bool is_executable(string path) [flags=CONSTANT;dom=FILESYSTEM] {
 //! Renames (or moves) files or directories. Note that for this call to function properly, the %Qore process must have sufficient permissions and access to the given filesystem objects or paths to execute the rename operation
 /** This function does not return any value; if any errors occur, an exception is thrown.
 
-    @param old_path The original path for the file to move
-    @param new_path The target path for the file
+    @param source_path The original path for the file to move
+    @param target_path The target path for the file
 
     @par Example:
     @code{.py}
@@ -456,30 +525,30 @@ rename("/tmp/myfile", "/tmp/myfile.txt");
 
     @note Some operating systems do not allow moving files between filesystems (ex Solaris)
  */
-nothing rename(string old_path, string new_path) [dom=FILESYSTEM] {
-   if (old_path->empty())
-      return xsink->raiseException("RENAME-ERROR", "empty path to current file name given as first argument");
+nothing rename(string source_path, string target_path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   if (source_path->empty())
+      return xsink->raiseException("RENAME-ERROR", "empty source_path argument");
 
    // new file name
-   if (new_path->empty())
-      return xsink->raiseException("RENAME-ERROR", "empty new file path given as second argument");
+   if (target_path->empty())
+      return xsink->raiseException("RENAME-ERROR", "empty target_path argument");
 
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
       // Need delete access to source
-      if (!smh->checkFilesystemAccess(old_path->c_str(), QSEC_DELETE, xsink)) {
+      if (!smh->checkFilesystemAccess(source_path->c_str(), QSEC_DELETE, xsink)) {
          return QoreValue();
       }
       // Need create and delete access to destination (delete because rename can overwrite existing files)
-      if (!smh->checkFilesystemAccess(new_path->c_str(), QSEC_CREATE | QSEC_DELETE, xsink)) {
+      if (!smh->checkFilesystemAccess(target_path->c_str(), QSEC_CREATE | QSEC_DELETE, xsink)) {
          return QoreValue();
       }
    }
 
-   int rc = rename(old_path->getBuffer(), new_path->getBuffer());
+   int rc = rename(source_path->getBuffer(), target_path->getBuffer());
    if (rc)
-      xsink->raiseErrnoException("RENAME-ERROR", errno, "rename('%s', '%s') failed", old_path->getBuffer(), new_path->getBuffer());
+      xsink->raiseErrnoException("RENAME-ERROR", errno, "rename('%s', '%s') failed", source_path->getBuffer(), target_path->getBuffer());
 
    return QoreValue();
 }
@@ -499,8 +568,13 @@ nothing rename(string old_path, string new_path) [dom=FILESYSTEM] {
 
     @see File::statvfs() for a static method in the @ref Qore::File "File class" that throws an exception instead of returning @ref nothing when errors occur
  */
-*hash<FilesystemInfo> statvfs(string path) [dom=FILESYSTEM] {
+*hash<FilesystemInfo> statvfs(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef Q_HAVE_STATVFS
+    QoreSandboxManagerHelper smh;
+    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+        return QoreValue();
+    }
+
     struct statvfs vfs;
     if (statvfs(path->getBuffer(), &vfs))
         return QoreValue();
@@ -527,7 +601,12 @@ if (!exists l)
     hstat() for a version of this function that returns a user-friendly hash instead of a list\n\n
     File::stat() for a static method in the File class that throws an exception instead of returning @ref nothing when errors occur
  */
-*list<auto> stat(string path) [dom=FILESYSTEM] {
+*list<auto> stat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+    QoreSandboxManagerHelper smh;
+    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+        return QoreValue();
+    }
+
     struct stat sbuf;
     if (stat(path->getBuffer(), &sbuf))
         return QoreValue();
@@ -558,7 +637,12 @@ if (!exists l)
     hlstat() for a version of this function that returns a user-friendly hash instead of a list\n\n
     File::lstat() for a static method in the File class that throws an exception instead of returning @ref nothing when errors occur
  */
-*list<auto> lstat(string path) [dom=FILESYSTEM] {
+*list<auto> lstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+      return QoreValue();
+   }
+
    struct stat sbuf;
 #ifdef HAVE_LSTAT
    if (lstat(path->getBuffer(), &sbuf))
@@ -592,7 +676,12 @@ if (!h)
     stat() for a version of this function that returns a traditional @ref stat_list "list" instead of a user-friendly hash\n\n
     File::hstat() for a static method in the File class that throws an exception instead of returning @ref nothing when errors occur
  */
-*hash<StatInfo> hstat(string path) [dom=FILESYSTEM] {
+*hash<StatInfo> hstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+      return QoreValue();
+   }
+
    struct stat sbuf;
    if (stat(path->getBuffer(), &sbuf))
       return QoreValue();
@@ -622,7 +711,12 @@ if (!exists h)
     lstat() for a version of this function that returns a traditional @ref stat_list "list" instead of a user-friendly hash\n\n
     File::hlstat() for a static method in the File class that throws an exception instead of returning @ref nothing when errors occur
  */
-*hash<StatInfo> hlstat(string path) [dom=FILESYSTEM] {
+*hash<StatInfo> hlstat(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+      return QoreValue();
+   }
+
    struct stat sbuf;
 #ifdef HAVE_LSTAT
    if (lstat(path->getBuffer(), &sbuf))
@@ -642,7 +736,7 @@ nothing hlstat() [flags=RUNTIME_NOOP;dom=FILESYSTEM] {
 
 //! Returns a list of files matching the string argument or @ref nothing if the call to glob() fails
 /**
-    @param glob_str the glob string, containing an optional path (in which case the entire path must be readable) and a glob filename pattern
+    @param pattern the glob string, containing an optional path (in which case the entire path must be readable) and a glob filename pattern
 
     @return a list of files matching the string argument or @ref nothing if the call to glob() fails, in which case errno() can be used to get the error
 
@@ -653,19 +747,40 @@ if (!gl)
     printf("failed to glob *.txt: %s\n", strerror());
     @endcode
  */
-*list<string> glob(string glob_str) [dom=FILESYSTEM] {
+*list<string> glob(string pattern) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+    QoreSandboxManagerHelper smh;
+    if (smh) {
+        std::string check_path = get_glob_sandbox_path(pattern->c_str());
+        if (!smh->checkFilesystemAccess(check_path.c_str(), QSEC_READ, xsink)) {
+            return QoreValue();
+        }
+    }
+
     glob_t globbuf;
-    if (glob(glob_str->getBuffer(), 0, 0, &globbuf)) {
+    if (glob(pattern->getBuffer(), 0, 0, &globbuf)) {
         globfree(&globbuf);
         return QoreValue();
     }
 
-    QoreListNode *l = new QoreListNode(stringTypeInfo);
-    for (unsigned i = 0; i < globbuf.gl_pathc; ++i)
+    ReferenceHolder<QoreListNode> l(new QoreListNode(stringTypeInfo), xsink);
+    for (unsigned i = 0; i < globbuf.gl_pathc; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "building glob result")) {
+            globfree(&globbuf);
+            return QoreValue();
+        }
+        if (smh && !smh->checkFilesystemAccess(globbuf.gl_pathv[i], QSEC_READ, xsink)) {
+            globfree(&globbuf);
+            return QoreValue();
+        }
         l->push(new QoreStringNode(globbuf.gl_pathv[i]), xsink);
+        if (*xsink) {
+            globfree(&globbuf);
+            return QoreValue();
+        }
+    }
 
     globfree(&globbuf);
-    return l;
+    return l.release();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -687,7 +802,7 @@ if (unlink(path))
     printf("%s: %s\n", path, strerror());
     @endcode
  */
-int unlink(string path) [dom=FILESYSTEM] {
+int unlink(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -716,7 +831,7 @@ if (umask(mask)) {
 }
     @endcode
  */
-int umask(softint mask) [dom=PROCESS] {
+int umask(softint mask) [flags=NAMED_ARGS;dom=PROCESS] {
    return umask((int)mask);
 }
 
@@ -749,7 +864,7 @@ if (mkdir("/tmp/newdir", 0755)) {
     - %Qore 0.8.13 added the <i>parents</i> parameter
     - %Qore 0.9.5 fixed error-handling and the return value to be sane and consistent independently of the args
  */
-int mkdir(string path, softint mode = 0777, bool parents = False) [dom=FILESYSTEM] {
+int mkdir(string path, softint mode = 0777, bool parents = False) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     // Check sandbox security restrictions (for non-parent case; parent case checked by QoreDir)
     QoreSandboxManagerHelper smh;
     if (smh && !parents) {
@@ -798,7 +913,7 @@ mkdir_ex("/tmp/newdir", 0755);
 
     @since %Qore 0.9.5
  */
-nothing mkdir_ex(string path, softint mode = 0777, bool parents = False) [dom=FILESYSTEM] {
+nothing mkdir_ex(string path, softint mode = 0777, bool parents = False) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     if (parents) {
         QoreDir dir(xsink);
         if (dir.chdir(path->c_str(), xsink) == -1) {
@@ -809,6 +924,12 @@ nothing mkdir_ex(string path, softint mode = 0777, bool parents = False) [dom=FI
         dir.create((int)mode, xsink);
         return QoreValue();
     }
+
+    QoreSandboxManagerHelper smh;
+    if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_CREATE, xsink)) {
+        return QoreValue();
+    }
+
 #ifdef _Q_WINDOWS
     int rc = _mkdir(path->c_str());
 #else
@@ -833,7 +954,7 @@ if (rmdir("/tmp/newdir"))
 
     @see @ref Qore::Dir::rmdir()
  */
-int rmdir(string path) [dom=FILESYSTEM] {
+int rmdir(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -856,7 +977,7 @@ if (chmod("/bin/login", 0755))
     printf("rmdir /tmp/newdir: %s\n", strerror());
     @endcode
  */
-int chmod(string path, softint mode) [dom=FILESYSTEM] {
+int chmod(string path, softint mode) [flags=NAMED_ARGS;dom=FILESYSTEM] {
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -881,7 +1002,7 @@ if (chdir(dir))
 
     @since %Qore 0.8.4 this function is tagged with @ref Qore::PO_NO_PROCESS_CONTROL
  */
-int chdir(string path) [dom=PROCESS,FILESYSTEM] {
+int chdir(string path) [flags=NAMED_ARGS;dom=PROCESS,FILESYSTEM] {
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
    if (smh) {
@@ -939,7 +1060,7 @@ if (mkfifo("/tmp/pipe"))
     printf("mkfifo /tmp/pipe: %s\n", strerror());
     @endcode
  */
-int mkfifo(string path, softint mode = 0600) [dom=FILESYSTEM] {
+int mkfifo(string path, softint mode = 0600) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_MKFIFO
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
@@ -972,7 +1093,7 @@ if (chown("/bin/login", 0, 0))
 
     @see lchown() for a version of this function that does not follow symbolic links
  */
-int chown(string path, softint owner = -1, softint group = -1) [dom=FILESYSTEM] {
+int chown(string path, softint owner = -1, softint group = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_CHOWN
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
@@ -992,8 +1113,8 @@ int chown(string path, softint owner = -1, softint group = -1) [dom=FILESYSTEM] 
     Qore::Option::HAVE_UNIX_FILEMGT
 
     @param path path to the file or directory to change
-    @param uid the uid of the new user owner; -1 means do not change user owner
-    @param gid the gid of the new group owner; -1 means do not change group owner
+    @param owner the uid of the new user owner; -1 means do not change user owner
+    @param group the gid of the new group owner; -1 means do not change group owner
 
     @return 0 if no error occurred; -1 if an error occurred, in which case errno() and/or strerror() can be used to retrieve the error
 
@@ -1005,7 +1126,7 @@ if (lchown("/tmp/socket", 0, 0))
 
     @see chown() for a version of this function that follows symbolic links (ie operates on the target instead of on the link itself)
  */
-int lchown(string path, softint uid = -1, softint gid = -1) [dom=FILESYSTEM] {
+int lchown(string path, softint owner = -1, softint group = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_LCHOWN
    // Check sandbox security restrictions
    QoreSandboxManagerHelper smh;
@@ -1014,7 +1135,7 @@ int lchown(string path, softint uid = -1, softint gid = -1) [dom=FILESYSTEM] {
          return -1;
       }
    }
-   return lchown(path->getBuffer(), (uid_t)uid, (uid_t)gid);
+   return lchown(path->getBuffer(), (uid_t)owner, (uid_t)group);
 #else
    return missing_function_error("lchown", "UNIX_FILEMGT", xsink);
 #endif
@@ -1035,8 +1156,13 @@ string str = readlink("/tmp/symbolic_link");
 
     @throw READLINK-ERROR Invalid arguments or a system error occured (ex: file does not exist or is not a symbolic link)
  */
-string readlink(string path) [dom=FILESYSTEM] {
+string readlink(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_READLINK
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+      return QoreValue();
+   }
+
    char buf[QORE_PATH_MAX + 1];
    qore_offset_t len = readlink(path->getBuffer(), buf, QORE_PATH_MAX);
    if (len < 0)
@@ -1056,8 +1182,8 @@ string readlink(string path) [dom=FILESYSTEM] {
     This function does not return any value; if any errors occur, an exception is thrown.
     If the target of the symbolic link does not exist, it is not an error; the symbolic link is created anyway.
 
-    @param old_path The original path; the target of the link
-    @param new_path The path to the location of the new symbolic link to be created with this function call
+    @param target_path The original path; the target of the link
+    @param link_path The path to the location of the new symbolic link to be created with this function call
 
     @par Example:
     @code{.py}
@@ -1068,18 +1194,23 @@ symlink("/tmp/temporary-dir", "/users/oracle/install");
 
     @since %Qore 0.8.5
  */
-nothing symlink(string old_path, string new_path) [dom=FILESYSTEM] {
+nothing symlink(string target_path, string link_path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
 #ifdef HAVE_SYMLINK
-   if (old_path->empty())
-      return xsink->raiseException("SYMLINK-ERROR", "empty path to current file name given as first argument");
+   if (target_path->empty())
+      return xsink->raiseException("SYMLINK-ERROR", "empty target_path argument");
 
    // new file name
-   if (new_path->empty())
-      return xsink->raiseException("SYMLINK-ERROR", "empty new file path given as second argument");
+   if (link_path->empty())
+      return xsink->raiseException("SYMLINK-ERROR", "empty link_path argument");
 
-   int rc = symlink(old_path->getBuffer(), new_path->getBuffer());
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(link_path->c_str(), QSEC_CREATE, xsink)) {
+      return QoreValue();
+   }
+
+   int rc = symlink(target_path->getBuffer(), link_path->getBuffer());
    if (rc)
-      xsink->raiseErrnoException("SYMLINK-ERROR", errno, "symlink('%s', '%s') failed", old_path->getBuffer(), new_path->getBuffer());
+      xsink->raiseErrnoException("SYMLINK-ERROR", errno, "symlink('%s', '%s') failed", target_path->getBuffer(), link_path->getBuffer());
 
    return QoreValue();
 #else
@@ -1103,7 +1234,7 @@ bool abs = absolute_path(path);
 
     @since %Qore 0.8.12 this function is a native function in %Qore; moved from the <a href="../../modules/Util/html/index.html">Util</a> module
 */
-bool absolute_path(string path) [flags=CONSTANT] {
+bool absolute_path(string path) [flags=CONSTANT,NAMED_ARGS] {
    return q_absolute_path(path->getBuffer());
 }
 
@@ -1123,7 +1254,7 @@ bool abs = absolute_path_unix(path);
 
     @since %Qore 0.8.12 this function is a native function in %Qore; moved from the <a href="../../modules/Util/html/index.html">Util</a> module
 */
-bool absolute_path_unix(string path) [flags=CONSTANT] {
+bool absolute_path_unix(string path) [flags=CONSTANT,NAMED_ARGS] {
    return q_absolute_path_unix(path->getBuffer());
 }
 
@@ -1143,7 +1274,7 @@ bool abs = absolute_path_windows(path);
 
     @since %Qore 0.8.12 this function is a native function in %Qore; moved from the <a href="../../modules/Util/html/index.html">Util</a> module
 */
-bool absolute_path_windows(string path) [flags=CONSTANT] {
+bool absolute_path_windows(string path) [flags=CONSTANT,NAMED_ARGS] {
    return q_absolute_path_windows(path->getBuffer());
 }
 
@@ -1161,7 +1292,12 @@ string realpath = realpath(path);
 
     @since %Qore 0.8.12
  */
-string realpath(string path) [dom=FILESYSTEM] {
+string realpath(string path) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+   QoreSandboxManagerHelper smh;
+   if (smh && !smh->checkFilesystemAccess(path->c_str(), QSEC_READ, xsink)) {
+      return QoreValue();
+   }
+
    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(path->getEncoding()));
    return q_realpath(*path, **rv, xsink) ? 0 : rv.release();
 }

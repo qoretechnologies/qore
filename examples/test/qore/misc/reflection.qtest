@@ -572,6 +572,30 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("has_digest", ("digest",));
         assertNamedCallableVariantCount("pbkdf2", ("digest", "password", "salt", "iterations", "key_length"));
         assertNamedCallableVariantCount("get_random_bytes", ("size",));
+
+        foreach string name in (("absolute_path", "absolute_path_unix", "absolute_path_windows", "chdir",
+                "hlstat", "hstat", "is_bdev", "is_cdev", "is_dev", "is_dir", "is_executable", "is_file",
+                "is_link", "is_pipe", "is_readable", "is_socket", "is_writable", "is_writeable", "lstat",
+                "readlink", "realpath", "rmdir", "stat", "statvfs", "unlink")) {
+            assertNamedCallableVariantCount(name, ("path",));
+        }
+        assertNamedCallableVariantCount("glob", ("pattern",));
+
+        foreach string name in (("chmod", "mkfifo")) {
+            assertNamedCallableVariantCount(name, ("path", "mode"));
+        }
+
+        foreach string name in (("chown", "lchown")) {
+            assertNamedCallableVariantCount(name, ("path", "owner", "group"));
+        }
+
+        foreach string name in (("mkdir", "mkdir_ex")) {
+            assertNamedCallableVariantCount(name, ("path", "mode", "parents"));
+        }
+
+        assertNamedCallableVariantCount("rename", ("source_path", "target_path"));
+        assertNamedCallableVariantCount("symlink", ("target_path", "link_path"));
+        assertNamedCallableVariantCount("umask", ("mask",));
     }
 
     modNameTests() {
