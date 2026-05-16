@@ -247,6 +247,9 @@ const CF_RET_VALUE_ONLY = QCF_RET_VALUE_ONLY;
 */
 const CF_RUNTIME_NOOP = QCF_RUNTIME_NOOP;
 
+//! indicates that a builtin variant accepts named-argument calls
+const CF_NAMED_ARGS = QCF_NAMED_ARGS;
+
 //! indicates that the code is safe to use in a constant expression (i.e. has no side effects and is deterministic)
 const CF_CONSTANT = QCF_CONSTANT;
 ///@}

@@ -7278,6 +7278,7 @@ void init() {
     fset.insert("DEPRECATED");
     fset.insert("RET_VALUE_ONLY");
     fset.insert("RUNTIME_NOOP");
+    fset.insert("NAMED_ARGS");
     fset.insert("CONSTANT");
 }
 

@@ -1764,7 +1764,7 @@ static QoreOperatorNode* process_weak_assignment(const QoreProgramLocation* loc,
 
 static void add_named_call_arg(QoreParseListNode* l, char* name, QoreValue arg, const QoreProgramLocation* loc) {
     if (l->hasArgName(name)) {
-        parse_error(*loc, "duplicate named argument '%s'", name);
+        parseException(*loc, "NAMED-ARG-DUPLICATE", "duplicate named argument '%s' in named call", name);
     }
     l->addNamed(name, arg, loc);
     free(name);
@@ -3065,6 +3065,14 @@ named_arg_list:
         $$ = $1;
     }
     | named_arg_list ',' {
+        $$ = $1;
+    }
+    | named_arg_list ',' exp {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
+            @3.first_line, @3.last_line);
+        parseException(*loc, "NAMED-ARG-POSITIONAL-AFTER-NAMED",
+            "positional argument cannot follow a named argument in a named call");
+        QoreValue($3).discard(nullptr);
         $$ = $1;
     }
     ;

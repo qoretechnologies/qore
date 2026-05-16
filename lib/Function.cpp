@@ -1198,6 +1198,19 @@ static void add_unknown_named_args(QoreStringNode* desc, const name_vec_t& argNa
     desc->concat(unknownNames.size() == 1
         ? " does not match any accessible parameter; "
         : " do not match any accessible parameter; ");
+
+    if (!accessibleParamNames.empty()) {
+        desc->concat("accessible named parameters are ");
+        for (size_t i = 0; i < accessibleParamNames.size(); ++i) {
+            desc->sprintf("'%s'", accessibleParamNames[i].c_str());
+            if (i + 2 < accessibleParamNames.size()) {
+                desc->concat(", ");
+            } else if (i + 1 < accessibleParamNames.size()) {
+                desc->concat(" and ");
+            }
+        }
+        desc->concat("; ");
+    }
 }
 
 static int warn_excess_args(const QoreProgramLocation* loc, const QoreFunction* func, const type_vec_t& argTypeInfo,
@@ -1248,6 +1261,19 @@ struct NamedArgCandidateBinding {
     int omitted_defaultable = 0;
 };
 
+enum class NamedArgBindFailureReason {
+    None,
+    PositionalAfterNamed,
+    UnknownName,
+    OverwritesPositional,
+    Duplicate,
+};
+
+struct NamedArgBindFailure {
+    NamedArgBindFailureReason reason = NamedArgBindFailureReason::None;
+    std::string name;
+};
+
 static int find_named_param(const AbstractFunctionSignature* sig, const std::string& name) {
     for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
         const char* pname = sig->getName(pi);
@@ -1266,13 +1292,14 @@ static bool param_is_defaultable_or_optional(const AbstractFunctionSignature* si
 }
 
 static bool bind_named_call_args(const AbstractFunctionSignature* sig, const type_vec_t& source_types,
-        const name_vec_t& names, NamedArgCandidateBinding& binding) {
+        const name_vec_t& names, NamedArgCandidateBinding& binding, NamedArgBindFailure& failure) {
     assert(source_types.size() == names.size());
     binding.arg_types.clear();
     binding.supplied.assign(sig->numParams(), false);
     binding.source_to_param.assign(source_types.size(), 0);
     binding.result_size = 0;
     binding.omitted_defaultable = 0;
+    failure = NamedArgBindFailure();
 
     bool seen_named = false;
     size_t positional = 0;
@@ -1280,6 +1307,7 @@ static bool bind_named_call_args(const AbstractFunctionSignature* sig, const typ
         size_t target;
         if (names[i].empty()) {
             if (seen_named) {
+                failure.reason = NamedArgBindFailureReason::PositionalAfterNamed;
                 return false;
             }
             target = positional++;
@@ -1287,13 +1315,19 @@ static bool bind_named_call_args(const AbstractFunctionSignature* sig, const typ
             seen_named = true;
             int pi = find_named_param(sig, names[i]);
             if (pi < 0) {
+                failure.reason = NamedArgBindFailureReason::UnknownName;
+                failure.name = names[i];
                 return false;
             }
             target = static_cast<size_t>(pi);
             if (target < positional) {
+                failure.reason = NamedArgBindFailureReason::OverwritesPositional;
+                failure.name = names[i];
                 return false;
             }
             if (binding.supplied[target]) {
+                failure.reason = NamedArgBindFailureReason::Duplicate;
+                failure.name = names[i];
                 return false;
             }
         }
@@ -1914,10 +1948,14 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
     const qore_class_private* last_class = nullptr;
     bool internal_access = false;
     QoreParseOptions po = parse_get_parse_options();
-    int cnt = 0;
     bool runtime_match = false;
     bool has_possible_match = false;
     QoreProgram* pgm = getProgram();
+    int accessible_cnt = 0;
+    int named_callable_cnt = 0;
+    int unsupported_cnt = 0;
+    int varargs_only_cnt = 0;
+    NamedArgBindFailure best_failure;
 
     for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
         bool stop;
@@ -1939,11 +1977,27 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 continue;
             }
 
+            ++accessible_cnt;
+            if (!(*i)->isNamedCallable()) {
+                ++unsupported_cnt;
+                continue;
+            }
+
             bool uses_extra_args = (*i)->hasVarargs();
-            ++cnt;
+            if (uses_extra_args && !sig->numParams()) {
+                ++varargs_only_cnt;
+                continue;
+            }
+
+            ++named_callable_cnt;
 
             NamedArgCandidateBinding cb;
-            if (!bind_named_call_args(sig, argTypeInfo, argNames, cb)) {
+            NamedArgBindFailure bind_failure;
+            if (!bind_named_call_args(sig, argTypeInfo, argNames, cb, bind_failure)) {
+                if (best_failure.reason == NamedArgBindFailureReason::None
+                        || bind_failure.reason == NamedArgBindFailureReason::OverwritesPositional) {
+                    best_failure = std::move(bind_failure);
+                }
                 continue;
             }
 
@@ -2100,7 +2154,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         variant = pvariant;
     } else if (!variant && !runtime_match && pmatch == -1 && pgm->getParseExceptionSink()) {
         name_vec_t accessibleParamNames;
-        if (cnt) {
+        if (named_callable_cnt) {
             last_class = 0;
             internal_access = false;
             for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
@@ -2118,8 +2172,15 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                     if (strict_args && ((*i)->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
                         continue;
                     }
+                    if (!(*i)->isNamedCallable()) {
+                        continue;
+                    }
+                    AbstractFunctionSignature* sig = (*i)->getSignature();
+                    if ((*i)->hasVarargs() && !sig->numParams()) {
+                        continue;
+                    }
 
-                    const name_vec_t& names = (*i)->getSignature()->getParamNames();
+                    const name_vec_t& names = sig->getParamNames();
                     for (const auto& name : names) {
                         if (!name.empty() && std::find(accessibleParamNames.begin(), accessibleParamNames.end(), name)
                                 == accessibleParamNames.end()) {
@@ -2136,12 +2197,42 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
         QoreStringNode* desc = new QoreStringNode("no variant matching named call '");
         do_named_call_str(*desc, this, argTypeInfo, argNames);
         desc->concat("' can be found; ");
-        if (!cnt) {
+        const char* errcode = "PARSE-TYPE-ERROR";
+        if (!accessible_cnt) {
             desc->concat("no variants were accessible in this context");
+        } else if (!named_callable_cnt) {
+            errcode = "NAMED-CALL-NOT-SUPPORTED";
+            if (unsupported_cnt) {
+                desc->concat("accessible builtin variants have not opted in to named arguments with QCF_NAMED_ARGS");
+                if (varargs_only_cnt) {
+                    desc->concat("; varargs-only variants cannot accept named arguments");
+                }
+            } else if (varargs_only_cnt) {
+                desc->concat("varargs-only variants cannot accept named arguments because there are no fixed "
+                    "parameters to bind");
+            } else {
+                desc->concat("the target does not accept named-argument calls");
+            }
+            desc->concat("; use positional arguments instead. The following variants were considered:");
         } else {
-            add_unknown_named_args(desc, argNames, accessibleParamNames);
-            desc->concat("the following variants were tested:");
+            if (best_failure.reason == NamedArgBindFailureReason::UnknownName) {
+                errcode = "NAMED-ARG-UNKNOWN";
+                add_unknown_named_args(desc, argNames, accessibleParamNames);
+            } else if (best_failure.reason == NamedArgBindFailureReason::OverwritesPositional) {
+                errcode = "NAMED-ARG-OVERWRITES-POSITIONAL";
+                desc->sprintf("named argument '%s' would overwrite a positional argument already bound to the same "
+                    "parameter; ", best_failure.name.c_str());
+            } else if (best_failure.reason == NamedArgBindFailureReason::PositionalAfterNamed) {
+                errcode = "NAMED-ARG-POSITIONAL-AFTER-NAMED";
+                desc->concat("positional argument cannot follow a named argument; ");
+            } else if (best_failure.reason == NamedArgBindFailureReason::Duplicate) {
+                errcode = "NAMED-ARG-DUPLICATE";
+                desc->sprintf("named argument '%s' is supplied more than once; ", best_failure.name.c_str());
+            }
+            desc->concat("the following named-callable variants were tested:");
+        }
 
+        if (accessible_cnt) {
             last_class = 0;
             internal_access = false;
             for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
@@ -2160,19 +2251,26 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                     if (strict_args && ((*i)->getFlags() & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
                         continue;
                     }
+                    if (named_callable_cnt && !(*i)->isNamedCallable()) {
+                        continue;
+                    }
+                    AbstractFunctionSignature* sig = (*i)->getSignature();
+                    if (named_callable_cnt && (*i)->hasVarargs() && !sig->numParams()) {
+                        continue;
+                    }
 
                     desc->concat("\n   ");
                     if (class_name) {
                         desc->sprintf("%s::", class_name);
                     }
-                    desc->sprintf("%s(%s)", getName(), (*i)->getSignature()->getSignatureText());
+                    desc->sprintf("%s(%s)", getName(), sig->getSignatureText());
                 }
                 if (stop) {
                     break;
                 }
             }
         }
-        qore_program_private::makeParseException(pgm, *loc, "PARSE-TYPE-ERROR", desc);
+        qore_program_private::makeParseException(pgm, *loc, errcode, desc);
         if (!err) {
             err = -1;
         }

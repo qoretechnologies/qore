@@ -140,6 +140,7 @@ typedef std::vector<int> sig_vec_t;
 #define QCF_RET_VALUE_ONLY         (1 << 4)  //! code only returns a value and has no other side effects
 #define QCF_RUNTIME_NOOP           (1 << 5)  //! this variant is a noop like QCF_NOOP, but additionally is not available to programs executing with %require-types (PO_REQUIRE_TYPES)
 #define QCF_ABSTRACT_OVERRIDE_ALL  (1 << 6)  //! this variant overrides all abstract base class variants in the same method
+#define QCF_NAMED_ARGS             (1 << 7)  //! builtin variant opts in to named-argument calls
 
 // composite flags
 #define QCF_CONSTANT (QCF_CONSTANT_INTERN | QCF_RET_VALUE_ONLY) //! code is safe to use in a constant expression (i.e. has no side effects, does not change internal state, cannot throw an exception under any circumstances, just returns a calculation based on its arguments)

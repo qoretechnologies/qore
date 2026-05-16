@@ -644,6 +644,10 @@ public:
         return is_user;
     }
 
+    DLLLOCAL bool isNamedCallable() const {
+        return is_user || (flags & QCF_NAMED_ARGS);
+    }
+
     DLLLOCAL bool hasBody() const;
 
     DLLLOCAL virtual bool isModulePublic() const {

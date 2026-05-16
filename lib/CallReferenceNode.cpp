@@ -159,9 +159,10 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
 
     if (parse_args) {
         if (parse_args->hasNamedArgs()) {
-            qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR",
+            qore_program_private::makeParseException(getProgram(), *loc, "NAMED-CALL-NOT-SUPPORTED",
                 new QoreStringNode(
-                    "named arguments are not supported for calls without a parse-time-resolved signature"));
+                    "named arguments are not supported for call-reference or closure calls without a "
+                    "parse-time-resolved signature; use positional arguments instead"));
             if (!err) {
                 err = -1;
             }

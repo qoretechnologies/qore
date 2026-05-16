@@ -41,6 +41,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("defaults and mixed arguments", \defaultsAndMixedArguments(), NOTHING);
         addTestCase("source evaluation order", \sourceEvaluationOrder(), NOTHING);
         addTestCase("overload selection by name", \overloadSelectionByName(), NOTHING);
+        addTestCase("builtin opt-in", \builtinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -64,25 +65,45 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq("size:1.5:cm", na_pick(size: 1.5, unit: "cm"), "second variant selected by name");
     }
 
+    builtinOptIn() {
+        assertEq("cde", substr(str: "abcdef", start: 2, len: 3), "opted-in builtin accepts named arguments");
+        assertEq("de", substr(len: 2, str: "abcdef", start: 3), "opted-in builtin accepts reordered names");
+    }
+
     parseFailures() {
-        assertThrows("PARSE-EXCEPTION", "duplicate named argument 'a'", sub() {
+        assertThrows("NAMED-ARG-DUPLICATE", "duplicate named argument 'a'", sub() {
             Program p(PO_NEW_STYLE);
             p.parse("sub f(int a) {} f(a: 1, a: 2);", "duplicate-name");
         });
 
-        assertThrows("PARSE-TYPE-ERROR", "named argument 'z' does not match any accessible parameter", sub() {
+        assertThrows("NAMED-ARG-UNKNOWN", "named argument 'z' does not match any accessible parameter", sub() {
             Program p(PO_NEW_STYLE);
             p.parse("sub f(int a) {} f(z: 1);", "unknown-name");
         });
 
-        assertThrows("PARSE-EXCEPTION", sub() {
+        assertThrows("NAMED-ARG-POSITIONAL-AFTER-NAMED", sub() {
             Program p(PO_NEW_STYLE);
             p.parse("sub f(int a, int b) {} f(a: 1, 2);", "positional-after-named");
         });
 
-        assertThrows("PARSE-TYPE-ERROR", "named arguments are not supported for calls without a parse-time-resolved signature", sub() {
+        assertThrows("NAMED-ARG-OVERWRITES-POSITIONAL", "named argument 'a' would overwrite a positional argument", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(int a, int b) {} f(1, a: 2);", "overwrite-positional");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "call-reference or closure calls without a parse-time-resolved signature", sub() {
             Program p(PO_NEW_STYLE);
             p.parse("sub f(int a) {} code c = \\f(); c(a: 1);", "call-reference");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("type(arg: 1);", "builtin-not-opted-in");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "varargs-only variants cannot accept named arguments", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(...) {} f(a: 1);", "varargs-only");
         });
     }
 }
