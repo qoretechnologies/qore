@@ -16,4 +16,10 @@
 
     @section DEPRECATED
     Code with this flag is deprecated and may be removed in a future version of %Qore; if a variant with this flag is resolved at parse time, a @ref deprecated warning is raised (assuming this warning is enabled).
+
+    @section NAMED_ARGS
+    Builtin functions and methods with this flag accept @ref function_named_arguments "named-argument calls".
+    User-defined functions and methods accept named arguments automatically when their signature is resolved at parse
+    time; builtin variants must opt in explicitly so parameter names are not exposed as a public calling interface by
+    accident.
 */

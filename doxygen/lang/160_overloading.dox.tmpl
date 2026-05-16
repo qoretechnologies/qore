@@ -23,6 +23,28 @@ string sub example(string str) {
 
     When types are declared in the source, %Qore uses this information to perform overloaded function and method resolution at parse time, which speeds up runtime execution.  If there is not enough information to match the function or method variant at parse time, then %Qore has to perform variant resolution at runtime, therefore it's advisable to declare types whenever possible.
 
+    @section overloading_named_arguments Named Arguments And Overloading
+    Named-argument calls are resolved by applying the argument names to each accessible candidate variant's own
+    parameter list before the normal type scoring runs. A candidate is rejected if a name is unknown for that variant,
+    appears more than once, or would overwrite a parameter already filled by a positional argument.
+
+    @code{.py}
+string sub describe(int count, string mode = "default") {
+    return sprintf("count:%d:%s", count, mode);
+}
+
+string sub describe(float size, string unit = "m") {
+    return sprintf("size:%s:%s", size, unit);
+}
+
+describe(count: 3);           # selects the first variant
+describe(size: 1.5, unit: "cm");  # selects the second variant
+    @endcode
+
+    If more than one variant accepts the same named call with the same type score, variants with fewer omitted
+    defaultable parameters are preferred. If the call is still ambiguous, the normal overload ambiguity diagnostics
+    apply.
+
     @see @ref require-types "%require-types"
 
     @section overloaded_methods Overloaded Class Methods

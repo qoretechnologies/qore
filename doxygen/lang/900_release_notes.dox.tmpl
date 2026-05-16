@@ -42,6 +42,8 @@
       with @ref auto_no_narrow "auto!" opt-out
     - new @ref enums "enum" and @ref typedef_keyword "typedef" keywords
     - new @ref code_complex_type "code<ReturnType(ParamTypes...)>" typed callable syntax
+    - new @ref function_named_arguments "named-argument call syntax" for parse-time-resolved functions, methods,
+      constructors, and base constructors
     - new @ref union_type "union<...>" explicit union type syntax
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
     - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH string-literal escapes
@@ -227,6 +229,29 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     - Use the untyped @ref code_type "code" type instead of the typed \c code<...> syntax if strict type
       checking is not desired
     - Ensure closures and call references match the expected signature
+    @endparblock
+
+    @par Named Arguments
+    @parblock
+    Calls can now pass arguments by parameter name with <tt>name: expression</tt> syntax when the target signature is
+    resolved at parse time:
+
+    @code{.py}
+sub connect(string host, int port = 443, *int timeout = NOTHING) {
+    # ...
+}
+
+connect(host: "example.com", timeout: 30);
+    @endcode
+
+    Named arguments may follow positional arguments, are evaluated in source order, and use normal default-argument
+    handling for omitted parameters. Calls through untyped call references or runtime-only dispatch are rejected with
+    \c NAMED-CALL-NOT-SUPPORTED. Builtin variants accept named arguments only when they opt in with the new
+    @ref NAMED_ARGS "NAMED_ARGS" code flag; user-defined variants accept named arguments automatically when resolved
+    at parse time.
+
+    <b>Compatibility note:</b> parameter names become part of the public calling interface for named callers.
+    Renaming a public parameter can now break callers that use named arguments.
     @endparblock
 
     @par Removal of %strict-types Support
@@ -602,6 +627,12 @@ cargo install tree-sitter-cli@0.26.5
       - supports or-nothing variant: \c *code<int(string)>
       - works with complex types: \c code<list<int>(hash<string, \c int>)>
       - incompatible signature assignments cause parse-time \c PARSE-TYPE-ERROR
+    - new @ref function_named_arguments "named-argument call syntax"
+      - syntax: \c connect(host: \c "example.com", \c timeout: \c 30)
+      - supported for parse-time-resolved functions, methods, constructors, and base constructors
+      - positional arguments may appear before named arguments; positional arguments after named arguments are errors
+      - duplicate, unknown, and positional-overwriting names raise concrete \c NAMED-ARG-* diagnostics
+      - builtin variants must opt in with the new @ref NAMED_ARGS "NAMED_ARGS" code flag
     - new @ref union_type "union<...>" explicit union type syntax
       - syntax: \c union<int, \c string> for a type accepting either int or string
       - supports or-nothing modifier: \c *union<int, \c string> accepts NOTHING as well
