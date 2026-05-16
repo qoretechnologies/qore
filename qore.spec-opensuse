@@ -27,7 +27,7 @@ Group:          Development/Languages/Other
 Url:            http://qore.org
 Source:         https://github.com/qorelanguage/qore/releases/download/release-%{version}/qore-%{version}.tar.bz2
 BuildRequires:  bison
-BuildRequires:  cmake >= 3.5
+BuildRequires:  cmake >= 3.14
 BuildRequires:  doxygen
 BuildRequires:  fdupes
 BuildRequires:  flex >= 2.5.31

@@ -689,6 +689,10 @@ public:
         @param stub_files source files that provide declarations only
         @param parse_defines parse-time defines to apply to every target
         @param parse_option_flags parse-option flag names to apply to every target
+        @param compiled_count_out optional output for the total number of
+                emitted Qore code variants
+        @param report_artifacts true to report each `.qo` as a user-visible
+                qcc artifact; false when the objects are temporary
         @return true on success, false on failure
     */
     static bool compileScriptFilesBatch(
@@ -702,7 +706,9 @@ public:
             const std::vector<std::string>& require_modules = {},
             const std::vector<std::string>& stub_files = {},
             const std::vector<std::string>& parse_defines = {},
-            const std::vector<std::string>& parse_option_flags = {});
+            const std::vector<std::string>& parse_option_flags = {},
+            int* compiled_count_out = nullptr,
+            bool report_artifacts = true);
 
     //! Compile one file of a Qore application to a
     //! `.qo` in script-context mode (no module wrapper, no `.qm`).

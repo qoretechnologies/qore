@@ -3,7 +3,7 @@ Section: devel
 Priority: optional
 Maintainer: David Nichols <david@qore.org>
 Build-Depends: debhelper (>= 13),
-               cmake (>= 3.5),
+               cmake (>= 3.14),
                g++,
                flex (>= 2.5.31),
                bison,

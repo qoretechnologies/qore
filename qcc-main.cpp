@@ -40,6 +40,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <cerrno>
@@ -93,6 +94,18 @@ static bool is_directory(const char* path) {
 static bool is_file(const std::string& path) {
     struct stat st;
     return stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+}
+
+static int64_t file_size(const std::string& path) {
+    struct stat st;
+    if (stat(path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+        return st.st_size;
+    }
+    return -1;
+}
+
+static const char* source_mode_suffix(bool include_source) {
+    return include_source ? ", include-source" : "";
 }
 
 //! Join two path components.
@@ -474,6 +487,11 @@ static bool show_version = false;
 static bool dump_info = false;
 static bool dump_symbols = false;
 static bool dump_sections = false;
+
+static bool qcc_output_verbose() {
+    const char* verbose_env = getenv("QORE_AOT_VERBOSE");
+    return verbose || (verbose_env && *verbose_env && strcmp(verbose_env, "0")) || getenv("QORE_AOT_DEBUG");
+}
 
 static bool apply_parse_option_flags(QoreParseOptions& po, std::string& error) {
     for (const std::string& raw : parse_option_flags) {
@@ -2944,7 +2962,8 @@ static bool get_batch_object_path(const std::string& source_path,
 static int link_script_objects_to_executable(const std::string& output,
         const std::vector<std::string>& object_paths,
         const std::string& glue_path, const char* entry,
-        const char* mode_label) {
+        const char* mode_label, int compiled_count = -1, int opt_level = -1,
+        bool include_source = false) {
     if (object_paths.empty()) {
         fprintf(stderr, "error: %s link failed for output '%s': no .qo inputs\n",
             mode_label, output.c_str());
@@ -3065,8 +3084,33 @@ static int link_script_objects_to_executable(const std::string& output,
             glue_path.c_str(), link_rc, cmd.c_str());
         return 1;
     }
-    printf("%s: %s binary (%zu .qo inputs, entry: %s)\n",
-        output.c_str(), mode_label, object_paths.size(), entry);
+    int64_t output_size = file_size(output);
+    std::string mode_suffix;
+    if (opt_level >= 0) {
+        mode_suffix = " (-O" + std::to_string(opt_level);
+        if (include_source) {
+            mode_suffix += ", include-source";
+        }
+        mode_suffix += ")";
+    }
+    if (compiled_count >= 0) {
+        if (output_size >= 0) {
+            printf("qcc: %s%s: %lld bytes for %d Qore code variants (%zu .qo inputs, entry: %s): %s\n",
+                mode_label, mode_suffix.c_str(), (long long)output_size, compiled_count,
+                object_paths.size(), entry, output.c_str());
+        } else {
+            printf("qcc: %s%s: %d Qore code variants (%zu .qo inputs, entry: %s): %s\n",
+                mode_label, mode_suffix.c_str(), compiled_count, object_paths.size(), entry, output.c_str());
+        }
+    } else if (output_size >= 0) {
+        printf("qcc: %s%s: %lld bytes from %zu .qo input%s (entry: %s): %s\n",
+            mode_label, mode_suffix.c_str(), (long long)output_size, object_paths.size(),
+            object_paths.size() == 1 ? "" : "s", entry, output.c_str());
+    } else {
+        printf("qcc: %s%s: %zu .qo input%s (entry: %s): %s\n",
+            mode_label, mode_suffix.c_str(), object_paths.size(), object_paths.size() == 1 ? "" : "s",
+            entry, output.c_str());
+    }
     return 0;
 }
 
@@ -3083,6 +3127,9 @@ int main(int argc, char** argv) {
     }
     if (time_trace_path) {
         setenv("QORE_AOT_TIME_TRACE", time_trace_path, 1);
+    }
+    if (verbose) {
+        setenv("QORE_AOT_VERBOSE", "1", 1);
     }
     // Propagate the CLI flag's value to QORE_AOT_BIG_FN_THRESHOLD so
     // the IR-to-LLVM lowerer picks it up.  Overwrite the env only when
@@ -3260,11 +3307,12 @@ int main(int argc, char** argv) {
         }
 
         qore_init(QL_GPL, "UTF-8", true);
+        int compiled_count = 0;
         bool ok = QoreAOT::compileScriptFilesBatch(
             target_files, temp_dir, PO_DEFAULT, error,
             opt_level, target_triple, include_source,
             load_modules, stub_files, parse_defines,
-            parse_option_flags);
+            parse_option_flags, &compiled_count, false);
         qore_cleanup();
         if (!ok) {
             fprintf(stderr,
@@ -3316,7 +3364,8 @@ int main(int argc, char** argv) {
 
         std::string glue_path = join_path(temp_dir, "qcc-main.cpp");
         int rc = link_script_objects_to_executable(output_path, object_paths,
-            glue_path, entry_fn, "multi-source executable");
+            glue_path, entry_fn, "multi-source executable", compiled_count,
+            opt_level, include_source);
         if (save_temps) {
             fprintf(stderr, "qcc: temporary files saved in '%s'\n",
                 temp_dir.c_str());
@@ -3388,10 +3437,11 @@ int main(int argc, char** argv) {
             qore_cleanup();
             return 1;
         }
-        printf("%s: archived %zu .qo input%s into .qoa (O%d%s)\n",
-            output.c_str(), object_paths.size(),
-            object_paths.size() == 1 ? "" : "s", opt_level,
-            include_source ? "" : ", source-stripped");
+        if (qcc_output_verbose()) {
+            printf("qcc: archived %zu .qo input%s into .qoa (-O%d%s): %s\n",
+                object_paths.size(), object_paths.size() == 1 ? "" : "s",
+                opt_level, source_mode_suffix(include_source), output.c_str());
+        }
         qore_cleanup();
         return 0;
     }
@@ -3459,10 +3509,11 @@ int main(int argc, char** argv) {
             qore_cleanup();
             return 1;
         }
-        printf("%s: aggregated .qmod from %zu .qo input%s (O%d%s)\n",
-            output.c_str(), object_paths.size(),
-            object_paths.size() == 1 ? "" : "s", opt_level,
-            include_source ? "" : ", source-stripped");
+        if (qcc_output_verbose()) {
+            printf("qcc: aggregated .qmod from %zu .qo input%s (-O%d%s): %s\n",
+                object_paths.size(), object_paths.size() == 1 ? "" : "s",
+                opt_level, source_mode_suffix(include_source), output.c_str());
+        }
         // Aggregator mode re-parses every source in --context for
         // metadata extraction.  Per-.qo depfiles (emitted by the per-file
         // rule) cover the common case, but a new file added to the dir
@@ -3729,7 +3780,7 @@ int main(int argc, char** argv) {
         }
         printf("Output: %s\n", output.c_str());
         printf("Mode: %s\n", is_split_module ? "split module" : (module_mode ? "module" : "executable"));
-        printf("Optimization: O%d\n", opt_level);
+        printf("Optimization: -O%d\n", opt_level);
         if (static_link) {
             printf("Static linking: enabled\n");
         }
@@ -3767,10 +3818,12 @@ int main(int argc, char** argv) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled script-context .qo (O%d, %zu -L path%s%s)\n",
-                output.c_str(), opt_level, script_lib_dirs.size(),
-                script_lib_dirs.size() == 1 ? "" : "s",
-                include_source ? "" : ", source-stripped");
+            if (qcc_output_verbose()) {
+                printf("qcc: compiled script-context .qo (-O%d, %zu -L path%s%s): %s\n",
+                    opt_level, script_lib_dirs.size(),
+                    script_lib_dirs.size() == 1 ? "" : "s",
+                    source_mode_suffix(include_source), output.c_str());
+            }
             // deps = target source only (script mode has no
             // --context dir; -L preload is a linker-style decl path,
             // not a parser-opened source set).  Not yet wired in cmake.
@@ -3794,8 +3847,10 @@ int main(int argc, char** argv) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled per-file .qo (O%d%s)\n", output.c_str(), opt_level,
-                include_source ? "" : ", source-stripped");
+            if (qcc_output_verbose()) {
+                printf("qcc: compiled per-file .qo (-O%d%s): %s\n", opt_level,
+                    source_mode_suffix(include_source), output.c_str());
+            }
             // deps = target source + every sibling .qm/.qc/.ql
             // in --context=DIR (matches compileSeparatedModuleFile's dir scan).
             if (depfile_path
@@ -3817,9 +3872,11 @@ int main(int argc, char** argv) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled split module (O%d%s%s)\n", output.c_str(), opt_level,
-                compile_only ? ", relocatable .qo" : "",
-                include_source ? "" : ", source-stripped");
+            if (qcc_output_verbose()) {
+                printf("qcc: compiled split module (-O%d%s%s): %s\n", opt_level,
+                    compile_only ? ", relocatable .qo" : "",
+                    source_mode_suffix(include_source), output.c_str());
+            }
             // source_file is the split-module directory itself;
             // pass it as `context` so every .qm/.qc/.ql inside counts as a dep.
             // Leave `source` empty so the target dir is not double-listed.
@@ -3843,9 +3900,11 @@ int main(int argc, char** argv) {
             fprintf(stderr, "error: %s\n", error.c_str());
             rc = 1;
         } else {
-            printf("%s: compiled module (O%d%s%s)\n", output.c_str(), opt_level,
-                compile_only ? ", relocatable .qo" : "",
-                include_source ? "" : ", source-stripped");
+            if (qcc_output_verbose()) {
+                printf("qcc: compiled module (-O%d%s%s): %s\n", opt_level,
+                    compile_only ? ", relocatable .qo" : "",
+                    source_mode_suffix(include_source), output.c_str());
+            }
             // deps = just the .qm file
             if (depfile_path && !write_depfile(depfile_path, output, source_file, nullptr)) {
                 rc = 1;
@@ -3879,9 +3938,11 @@ int main(int argc, char** argv) {
                 fprintf(stderr, "error: %s\n", error.c_str());
                 rc = 1;
             } else {
-                printf("%s: compiled (O%d%s%s)\n", output.c_str(), opt_level,
-                    static_link ? ", static" : "",
-                    include_source ? "" : ", source-stripped");
+                if (qcc_output_verbose()) {
+                    printf("qcc: compiled executable (-O%d%s%s): %s\n", opt_level,
+                        static_link ? ", static" : "",
+                        source_mode_suffix(include_source), output.c_str());
+                }
             }
         }
 

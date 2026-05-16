@@ -44,6 +44,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdio>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <set>
@@ -783,7 +784,76 @@ static uint64_t computeSourceHash(const char* label) {
     return XXH64(src.data(), static_cast<size_t>(sz), 0);
 }
 
-//! Report AOT compilation statistics
+static constexpr const char* QCC_LOG_PREFIX = "qcc: ";
+static constexpr const char* QCC_CODE_BODY_DESC = "Qore code variants";
+
+static bool qccAOTVerbose() {
+    const char* verbose = getenv("QORE_AOT_VERBOSE");
+    return debug > 0 || (verbose && *verbose && strcmp(verbose, "0")) || getenv("QORE_AOT_DEBUG");
+}
+
+static std::string qccTargetTriple(const char* target_triple) {
+    return target_triple && *target_triple
+        ? target_triple : llvm::sys::getDefaultTargetTriple();
+}
+
+static int64_t qccFileSize(const std::string& path) {
+    struct stat sb;
+    if (!stat(path.c_str(), &sb) && S_ISREG(sb.st_mode)) {
+        return sb.st_size;
+    }
+    return -1;
+}
+
+static bool qccReportMetadataSizeStart(const char* label, size_t size) {
+    if (!qccAOTVerbose()) {
+        return false;
+    }
+    printf("%s%s: %zu bytes", QCC_LOG_PREFIX, label, size);
+    return true;
+}
+
+static std::string qccCompileModeSuffix(int opt_level, bool include_source) {
+    std::string rv = " (-O" + std::to_string(opt_level);
+    if (include_source) {
+        rv += ", include-source";
+    }
+    rv += ")";
+    return rv;
+}
+
+static void reportAOTArtifactStats(const char* label, int opt_level, bool include_source,
+        int compiled_count, int total_funcs, int failed_count, const char* target_triple,
+        const std::string& output_path, bool metadata_only = false) {
+    std::string resolved_target = qccTargetTriple(target_triple);
+    std::string mode_suffix = qccCompileModeSuffix(opt_level, include_source);
+    int skipped_count = total_funcs - compiled_count - failed_count;
+    int64_t output_size = qccFileSize(output_path);
+    const char* relation = metadata_only ? "with metadata for" : "for";
+    if (output_size >= 0) {
+        if (failed_count || skipped_count) {
+            printf("%s%s%s: %lld bytes %s %d/%d %s (target: %s; %d failed, %d skipped): %s\n",
+                QCC_LOG_PREFIX, label, mode_suffix.c_str(), (long long)output_size, relation,
+                compiled_count, total_funcs, QCC_CODE_BODY_DESC, resolved_target.c_str(),
+                failed_count, skipped_count, output_path.c_str());
+        } else {
+            printf("%s%s%s: %lld bytes %s %d %s (target: %s): %s\n",
+                QCC_LOG_PREFIX, label, mode_suffix.c_str(), (long long)output_size, relation,
+                compiled_count, QCC_CODE_BODY_DESC, resolved_target.c_str(), output_path.c_str());
+        }
+    } else if (failed_count || skipped_count) {
+        printf("%s%s%s: output written %s %d/%d %s (target: %s; %d failed, %d skipped): %s\n",
+            QCC_LOG_PREFIX, label, mode_suffix.c_str(), relation, compiled_count, total_funcs,
+            QCC_CODE_BODY_DESC, resolved_target.c_str(), failed_count, skipped_count,
+            output_path.c_str());
+    } else {
+        printf("%s%s%s: output written %s %d %s (target: %s): %s\n",
+            QCC_LOG_PREFIX, label, mode_suffix.c_str(), relation, compiled_count,
+            QCC_CODE_BODY_DESC, resolved_target.c_str(), output_path.c_str());
+    }
+}
+
+//! Report qcc compilation statistics
 static void reportAOTCompileStats(const char* label, int compiled_count, int total_funcs,
         int failed_count, const std::vector<AOTCompiledFunc>& compiled_funcs,
         const char* target_triple, bool metadata_only = false) {
@@ -813,24 +883,28 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
                 has_handler_issue ? (has_unsup ? " + missing handler IRs" : "missing handler IRs") : "");
         }
     }
-    std::string resolved_target = target_triple && *target_triple
-        ? target_triple : llvm::sys::getDefaultTargetTriple();
+    std::string resolved_target = qccTargetTriple(target_triple);
     int skipped_count = total_funcs - compiled_count - failed_count;
     const char* action = metadata_only
-        ? "prepared AOT metadata for"
+        ? "prepared compilation metadata for"
         : "generated native code for";
-    if (failed_count || skipped_count) {
-        printf("AOT %s: %s %d/%d functions (target: %s; %d failed, %d skipped)\n",
-            label, action, compiled_count, total_funcs, resolved_target.c_str(),
-            failed_count, skipped_count);
-    } else {
-        printf("AOT %s: %s %d functions (target: %s)\n",
-            label, action, compiled_count, resolved_target.c_str());
+    if (qccAOTVerbose()) {
+        if (failed_count || skipped_count) {
+            printf("%s%s: %s %d/%d %s (target: %s; %d failed, %d skipped)\n",
+                QCC_LOG_PREFIX, label, action, compiled_count, total_funcs,
+                QCC_CODE_BODY_DESC, resolved_target.c_str(),
+                failed_count, skipped_count);
+        } else {
+            printf("%s%s: %s %d %s (target: %s)\n",
+                QCC_LOG_PREFIX, label, action, compiled_count, QCC_CODE_BODY_DESC,
+                resolved_target.c_str());
+        }
     }
     int total_fallback = unsupported_count + handler_fallback_count;
     if (total_fallback > 0) {
-        printf("AOT: incomplete AOT metadata: %d/%d functions complete, %d missing required metadata",
-            compiled_count - total_fallback, compiled_count, total_fallback);
+        printf("%sincomplete compilation metadata: %d/%d %s complete, %d missing required metadata",
+            QCC_LOG_PREFIX, compiled_count - total_fallback, compiled_count,
+            QCC_CODE_BODY_DESC, total_fallback);
         if (unsupported_count > 0 && handler_fallback_count > 0) {
             printf(" (%d unsupported exprs, %d missing handlers)",
                 unsupported_count, handler_fallback_count);
@@ -838,8 +912,9 @@ static void reportAOTCompileStats(const char* label, int compiled_count, int tot
             printf(" (%d missing handlers)", handler_fallback_count);
         }
         printf("\n");
-    } else {
-        printf("AOT: complete AOT metadata generated for %d functions\n", compiled_count);
+    } else if (qccAOTVerbose()) {
+        printf("%scomplete compilation metadata generated for %d %s\n",
+            QCC_LOG_PREFIX, compiled_count, QCC_CODE_BODY_DESC);
     }
 }
 
@@ -1622,7 +1697,7 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
 
 static std::string makeModuleInitCompileError(const char* mod_name, const char* module_path,
         const std::string& detail) {
-    std::string error = "AOT module init for '";
+    std::string error = "qore compilation module init for '";
     error += mod_name ? mod_name : "<unknown>";
     error += "'";
     if (module_path && *module_path) {
@@ -1648,7 +1723,7 @@ static bool validateModuleInitVariant(const AbstractQoreFunctionVariant* variant
     std::string detail = init_kind;
     detail += " selected variant signature '";
     detail += sig ? sig->getSignatureText() : "<unknown>";
-    detail += "'; AOT module init handlers must accept no arguments";
+    detail += "'; qore compilation module init handlers must accept no arguments";
     error = makeModuleInitCompileError(mod_name, module_path, detail);
     return false;
 }
@@ -2270,7 +2345,7 @@ static void setAOTCompileFatal(std::string* fatal_error, const char* item_kind,
         return;
     }
 
-    *fatal_error = "AOT ";
+    *fatal_error = "qore compilation ";
     *fatal_error += phase;
     *fatal_error += " failed for ";
     *fatal_error += item_kind;
@@ -3671,8 +3746,8 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
         const char* target_triple = nullptr, bool static_link = false) {
     // For cross-compilation, skip linking — user must link with their cross-toolchain
     if (target_triple) {
-        printf("cross-compiled object: %s (link manually for target '%s')\n",
-            obj_path.c_str(), target_triple);
+        printf("%scross-compiled object: %s (link manually for target '%s')\n",
+            QCC_LOG_PREFIX, obj_path.c_str(), target_triple);
         return true;
     }
 
@@ -4238,7 +4313,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             return false;
         }
 
-        printf("AOT: metadata blob: %d bytes", (int)metadata.size());
+        bool report_metadata = qccReportMetadataSizeStart("compilation metadata", metadata.size());
 
         // Compress only the post-header data to keep magic/header readable
         // Skip compression for include-source binaries to preserve source code searchability
@@ -4249,17 +4324,19 @@ bool QoreAOT::compile(QoreProgram* pgm,
             std::string compress_error;
             if (compressMetadata(post_header, compressed_post, compress_error)) {
                 int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
-                printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                    100.0 * compressed_total / (int)metadata.size());
+                if (report_metadata) {
+                    printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                        100.0 * compressed_total / (int)metadata.size());
+                }
                 // Patch compression byte in header (byte 34)
                 metadata[34] = 1;
                 // Replace post-header data with compressed version
                 metadata.resize(AOT_HEADER_BYTES);
                 metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
-            } else {
+            } else if (report_metadata) {
                 printf("\n");
             }
-        } else {
+        } else if (report_metadata) {
             printf("\n");
         }
         generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs,
@@ -4312,6 +4389,10 @@ bool QoreAOT::compile(QoreProgram* pgm,
     if (!target_triple) {
         remove(obj_path.c_str());
     }
+
+    reportAOTArtifactStats("compilation", opt_level, include_source,
+        compiled_count, total_funcs + 1, failed_count, target_triple,
+        target_triple ? obj_path : output_path);
 
     return true;
 }
@@ -4864,10 +4945,10 @@ static bool parseModuleMetadata(const char* source, int source_len, const char* 
                     ExceptionSink xsink;
                     int rc = MM.runTimeLoadModule(&xsink, mod_name.c_str(), nullptr);
                     if (rc < 0 || xsink) {
-                        fprintf(stderr, "AOT warning: optional module '%s' is not available during compilation\n",
-                            mod_name.c_str());
-                        fprintf(stderr, "             '%s'-dependent functionality will be disabled in the compiled module\n",
-                            mod_name.c_str());
+                        fprintf(stderr, "%swarning: optional module '%s' is not available during compilation\n",
+                            QCC_LOG_PREFIX, mod_name.c_str());
+                        fprintf(stderr, "%s         '%s'-dependent functionality will be disabled in the compiled module\n",
+                            QCC_LOG_PREFIX, mod_name.c_str());
                     }
                     xsink.clear();
                 }
@@ -5594,8 +5675,11 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
         llvm::Function* fn = module.getFunction(cf.llvm_symbol);
         if (!fn) {
             if (cf.name.substr(0, 14) == "__const_init::" || cf.name.substr(0, 13) == "__svar_init::") {
-                fprintf(stderr, "AOT generateModuleABIV2: SKIP init func '%s' llvm_symbol='%s' (not found in LLVM module)\n",
-                    cf.name.c_str(), cf.llvm_symbol.c_str());
+                if (qccAOTVerbose()) {
+                    fprintf(stderr, "%smodule ABI table: skipping init body '%s' "
+                        "(LLVM symbol '%s' was not emitted)\n",
+                        QCC_LOG_PREFIX, cf.name.c_str(), cf.llvm_symbol.c_str());
+                }
             }
             continue;
         }
@@ -5611,8 +5695,10 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
     }
 
     int num_funcs = (int)func_entries.size();
-    fprintf(stderr, "AOT generateModuleABIV2: compiled_funcs=%d, func_entries=%d\n",
-        (int)compiled_funcs.size(), num_funcs);
+    if (qccAOTVerbose()) {
+        fprintf(stderr, "%smodule ABI table: %d native entries from %zu compiled variants\n",
+            QCC_LOG_PREFIX, num_funcs, compiled_funcs.size());
+    }
     llvm::GlobalVariable* func_table_gv = nullptr;
     if (num_funcs > 0) {
         auto* table_type = llvm::ArrayType::get(func_entry_type, num_funcs);
@@ -5798,8 +5884,8 @@ static void generateModuleABIV2(llvm::LLVMContext& ctx, llvm::Module& module,
 static bool linkSharedLib(const std::string& obj_path, const std::string& so_path, std::string& error,
         const char* target_triple = nullptr) {
     if (target_triple) {
-        printf("cross-compiled module object: %s (link manually for target '%s')\n",
-            obj_path.c_str(), target_triple);
+        printf("%scross-compiled module object: %s (link manually for target '%s')\n",
+            QCC_LOG_PREFIX, obj_path.c_str(), target_triple);
         return true;
     }
 
@@ -6111,7 +6197,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             return false;
         }
 
-        printf("AOT: module metadata blob: %d bytes", (int)metadata.size());
+        bool report_metadata = qccReportMetadataSizeStart("module metadata", metadata.size());
 
         // Compress only the post-header data (skip compression for include-source to preserve source searchability)
         const uint32_t AOT_HEADER_BYTES = 60;
@@ -6122,17 +6208,19 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             std::string compress_error;
             if (compressMetadata(post_header, compressed_post, compress_error)) {
                 int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
-                printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                    100.0 * compressed_total / (int)metadata.size());
+                if (report_metadata) {
+                    printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                        100.0 * compressed_total / (int)metadata.size());
+                }
                 // Patch compression byte in header (byte 34)
                 metadata[34] = 1;
                 // Replace post-header data with compressed version
                 metadata.resize(AOT_HEADER_BYTES);
                 metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
-            } else {
+            } else if (report_metadata) {
                 printf("\n");
             }
-        } else {
+        } else if (report_metadata) {
             printf("\n");
         }
         hdr.compression = include_source ? 0 : (use_metadata != &metadata ? 1 : 0);
@@ -6194,6 +6282,10 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             remove(obj_path.c_str());
         }
     }
+
+    reportAOTArtifactStats("module compilation", opt_level, include_source,
+        compiled_count, total_funcs, failed_count, target_triple,
+        (compile_only || target_triple) ? obj_path : output_path);
 
     return true;
 }
@@ -6579,7 +6671,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 return false;
             }
 
-            printf("AOT: split module metadata blob: %d bytes", (int)metadata.size());
+            bool report_metadata = qccReportMetadataSizeStart("split module metadata", metadata.size());
 
             // Compress only the post-header data (skip compression for include-source to preserve source searchability)
             const uint32_t AOT_HEADER_BYTES = 60;
@@ -6590,17 +6682,19 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 std::string compress_error;
                 if (compressMetadata(post_header, compressed_post, compress_error)) {
                     int compressed_total = AOT_HEADER_BYTES + (int)compressed_post.size();
-                    printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                        100.0 * compressed_total / (int)metadata.size());
+                    if (report_metadata) {
+                        printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                            100.0 * compressed_total / (int)metadata.size());
+                    }
                     // Patch compression byte in header (byte 34)
                     metadata[34] = 1;
                     // Replace post-header data with compressed version
                     metadata.resize(AOT_HEADER_BYTES);
                     metadata.insert(metadata.end(), compressed_post.begin(), compressed_post.end());
-                } else {
+                } else if (report_metadata) {
                     printf("\n");
                 }
-            } else {
+            } else if (report_metadata) {
                 printf("\n");
             }
             hdr.compression = include_source ? 0 : (use_metadata != &metadata ? 1 : 0);
@@ -6661,6 +6755,10 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 remove(obj_path.c_str());
             }
         }
+
+        reportAOTArtifactStats("split module compilation", opt_level, include_source,
+            compiled_count, total_funcs, failed_count, target_triple,
+            (compile_only || target_triple) ? obj_path : output_path);
     }
 
     // Clean up phantom module dependencies created during compilation
@@ -6815,7 +6913,9 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         int opt_level, const char* target_triple, bool include_source,
         std::string& error,
         size_t module_cmd_begin = 0,
-        size_t module_cmd_end = std::numeric_limits<size_t>::max()) {
+        size_t module_cmd_end = std::numeric_limits<size_t>::max(),
+        int* compiled_count_out = nullptr,
+        bool report_artifact = true) {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
@@ -7010,6 +7110,14 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         return false;
     }
 
+    if (compiled_count_out) {
+        *compiled_count_out = compiled_count;
+    }
+    if (report_artifact) {
+        reportAOTArtifactStats("script-context .qo", opt_level, include_source,
+            compiled_count, total_funcs, failed_count, target_triple, output_path);
+    }
+
     return true;
 }
 
@@ -7145,7 +7253,9 @@ bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& require_modules,
         const std::vector<std::string>& stub_files,
         const std::vector<std::string>& parse_defines,
-        const std::vector<std::string>& parse_option_flags) {
+        const std::vector<std::string>& parse_option_flags,
+        int* compiled_count_out,
+        bool report_artifacts) {
     if (target_files.empty()) {
         error = "compileScriptFilesBatch: target_files is empty";
         return false;
@@ -7292,6 +7402,7 @@ bool QoreAOT::compileScriptFilesBatch(
 
     // Now emit one .qo per target using the shared parsed program.
     const bool trace_emit = getenv("QORE_AOT_TRACE_BATCH_EMIT") != nullptr;
+    int total_compiled_count = 0;
     for (auto& e : entries) {
         if (trace_emit) {
             fprintf(stderr, "[aot-trace] emit start: %s\n",
@@ -7299,15 +7410,24 @@ bool QoreAOT::compileScriptFilesBatch(
             fflush(stderr);
         }
         std::string per_err;
+        int per_file_compiled_count = 0;
         if (!emitScriptQoFromParsedProgram(*qpgm, e.canon, e.source,
                 e.out_path, opt_level, target_triple, include_source,
-                per_err, e.module_cmd_begin, e.module_cmd_end)) {
+                per_err, e.module_cmd_begin, e.module_cmd_end,
+                &per_file_compiled_count, report_artifacts)) {
             error = per_err;
             return false;
         }
-        printf("%s: batch-compiled script-context .qo (O%d%s)\n",
-            e.out_path.c_str(), opt_level,
-            include_source ? "" : ", source-stripped");
+        total_compiled_count += per_file_compiled_count;
+        if (report_artifacts && qccAOTVerbose()) {
+            printf("%sbatch-compiled script-context .qo (-O%d%s): %s\n",
+                QCC_LOG_PREFIX, opt_level,
+                include_source ? ", include-source" : "", e.out_path.c_str());
+        }
+    }
+
+    if (compiled_count_out) {
+        *compiled_count_out = total_compiled_count;
     }
 
     return true;
@@ -7628,8 +7748,10 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
     }
 
-    printf("AOT: script .qo fragment blob: %d bytes (uncompressed)\n",
-        (int)metadata_blob.size());
+    if (qccAOTVerbose()) {
+        printf("%sscript .qo fragment metadata: %d bytes (uncompressed)\n", QCC_LOG_PREFIX,
+            (int)metadata_blob.size());
+    }
 
     // Emit fragment symbols (slice 5).  App-name = sanitized
     // basename of the target file so different files in the same
@@ -7701,6 +7823,9 @@ bool QoreAOT::compileScriptFile(const char* target_file,
     if (!emitObjectFile(*module, output_path, error, opt_level, target_triple)) {
         return false;
     }
+
+    reportAOTArtifactStats("script-context .qo", opt_level, include_source,
+        compiled_count, total_funcs, failed_count, target_triple, output_path);
 
     return true;
 }
@@ -8121,9 +8246,12 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
             }
         }
 
-        printf("AOT: per-file %s fragment blob: %d bytes (uncompressed), order=%d\n",
-            is_primary ? "primary" : "secondary",
-            (int)uncompressed_metadata.size(), fragment_order);
+        if (qccAOTVerbose()) {
+            printf("%sper-file %s fragment metadata: %d bytes (uncompressed), order=%d\n",
+                QCC_LOG_PREFIX,
+                is_primary ? "primary" : "secondary",
+                (int)uncompressed_metadata.size(), fragment_order);
+        }
 
         // Emit exported fragment symbols
         // (`qore_<sanmod>_<sanfile>_fragment_data` +
@@ -8177,6 +8305,11 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
         if (!emitObjectFile(*module, output_path, error, opt_level, target_triple)) {
             return false;
         }
+
+        reportAOTArtifactStats(
+            is_primary ? "per-file .qo (primary)" : "per-file .qo (secondary)",
+            opt_level, include_source, compiled_count, total_funcs, failed_count,
+            target_triple, output_path);
     }
 
     QMM.removeUserModuleDependency(mod_info.name.c_str());
@@ -8190,8 +8323,8 @@ static bool linkSharedLibMulti(const std::vector<std::string>& obj_paths,
         const std::string& so_path, std::string& error,
         const char* target_triple = nullptr) {
     if (target_triple) {
-        printf("cross-compiled module objects for target '%s' — link manually\n",
-            target_triple);
+        printf("%scross-compiled module objects for target '%s' — link manually\n",
+            QCC_LOG_PREFIX, target_triple);
         return true;
     }
 
@@ -8558,7 +8691,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 return false;
             }
 
-            printf("AOT: aggregated metadata blob: %d bytes", (int)metadata.size());
+            bool report_metadata = qccReportMetadataSizeStart("aggregated metadata", metadata.size());
             const uint32_t AOT_HEADER_BYTES = 60;
             if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
                 std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES,
@@ -8568,16 +8701,18 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 if (compressMetadata(post_header, compressed_post, compress_error)) {
                     int compressed_total = AOT_HEADER_BYTES
                         + (int)compressed_post.size();
-                    printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                        100.0 * compressed_total / (int)metadata.size());
+                    if (report_metadata) {
+                        printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                            100.0 * compressed_total / (int)metadata.size());
+                    }
                     metadata[34] = 1;
                     metadata.resize(AOT_HEADER_BYTES);
                     metadata.insert(metadata.end(), compressed_post.begin(),
                         compressed_post.end());
-                } else {
+                } else if (report_metadata) {
                     printf("\n");
                 }
-            } else {
+            } else if (report_metadata) {
                 printf("\n");
             }
 
@@ -8640,6 +8775,10 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         if (!target_triple) {
             remove(glue_obj.c_str());
         }
+
+        reportAOTArtifactStats("module aggregation", opt_level, include_source,
+            compiled_count, total_funcs, failed_count, target_triple,
+            target_triple ? glue_obj : output_path, true);
     }
 
     QMM.removeUserModuleDependency(mod_info.name.c_str());
@@ -8655,8 +8794,8 @@ static bool createStaticArchive(const std::vector<std::string>& obj_paths,
         const std::string& archive_path, std::string& error,
         const char* target_triple = nullptr) {
     if (target_triple) {
-        printf("cross-compiled archive for target '%s' — build manually\n",
-            target_triple);
+        printf("%scross-compiled archive for target '%s' — build manually\n",
+            QCC_LOG_PREFIX, target_triple);
         return true;
     }
     if (obj_paths.empty()) {
@@ -9035,7 +9174,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 return false;
             }
 
-            printf("AOT: archive metadata blob: %d bytes", (int)metadata.size());
+            bool report_metadata = qccReportMetadataSizeStart("archive metadata", metadata.size());
             const uint32_t AOT_HEADER_BYTES = 60;
             if (!include_source && metadata.size() > AOT_HEADER_BYTES) {
                 std::vector<uint8_t> post_header(metadata.begin() + AOT_HEADER_BYTES,
@@ -9045,16 +9184,18 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 if (compressMetadata(post_header, compressed_post, compress_error)) {
                     int compressed_total = AOT_HEADER_BYTES
                         + (int)compressed_post.size();
-                    printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
-                        100.0 * compressed_total / (int)metadata.size());
+                    if (report_metadata) {
+                        printf(" (compressed to %d bytes, %.1f%%)\n", compressed_total,
+                            100.0 * compressed_total / (int)metadata.size());
+                    }
                     metadata[34] = 1;
                     metadata.resize(AOT_HEADER_BYTES);
                     metadata.insert(metadata.end(), compressed_post.begin(),
                         compressed_post.end());
-                } else {
+                } else if (report_metadata) {
                     printf("\n");
                 }
-            } else {
+            } else if (report_metadata) {
                 printf("\n");
             }
 
@@ -9127,6 +9268,10 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
         if (!target_triple) {
             remove(glue_obj.c_str());
         }
+
+        reportAOTArtifactStats("archive aggregation", opt_level, include_source,
+            compiled_count, total_funcs, failed_count, target_triple,
+            target_triple ? glue_obj : output_path, true);
     }
 
     QMM.removeUserModuleDependency(mod_info.name.c_str());

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.14)
 
 # NOTE: Qore should always use semantic versioning: https://semver.org/
 set(VERSION_MAJOR 2)
@@ -20,6 +20,16 @@ if (POLICY CMP0042)
 endif()
 
 project(qore-language)
+
+set(QORE_FETCHCONTENT_URL_OPTIONS)
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
+    list(APPEND QORE_FETCHCONTENT_URL_OPTIONS DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+endif()
+
+set(QORE_FETCHCONTENT_EXCLUDE_FROM_ALL)
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.28")
+    list(APPEND QORE_FETCHCONTENT_EXCLUDE_FROM_ALL EXCLUDE_FROM_ALL)
+endif()
 
 # On macOS, auto-detect package manager prefixes for find_package() calls.
 # MacPorts (/opt/local) is preferred; Homebrew is added after.
@@ -479,7 +489,22 @@ if(APPLE AND NOT DEFINED LLVM_DIR)
         endif()
     endif()
 endif()
+if (DEFINED CMAKE_DISABLE_FIND_PACKAGE_LibEdit)
+    set(_QORE_SAVE_CMAKE_DISABLE_FIND_PACKAGE_LIBEDIT_DEFINED TRUE)
+    set(_QORE_SAVE_CMAKE_DISABLE_FIND_PACKAGE_LIBEDIT "${CMAKE_DISABLE_FIND_PACKAGE_LibEdit}")
+else()
+    set(_QORE_SAVE_CMAKE_DISABLE_FIND_PACKAGE_LIBEDIT_DEFINED FALSE)
+endif()
+set(CMAKE_DISABLE_FIND_PACKAGE_LibEdit ON CACHE BOOL "Disable optional LibEdit discovery while loading LLVMConfig" FORCE)
 find_package(LLVM REQUIRED CONFIG)
+if (_QORE_SAVE_CMAKE_DISABLE_FIND_PACKAGE_LIBEDIT_DEFINED)
+    set(CMAKE_DISABLE_FIND_PACKAGE_LibEdit "${_QORE_SAVE_CMAKE_DISABLE_FIND_PACKAGE_LIBEDIT}" CACHE BOOL "" FORCE)
+else()
+    unset(CMAKE_DISABLE_FIND_PACKAGE_LibEdit CACHE)
+    unset(CMAKE_DISABLE_FIND_PACKAGE_LibEdit)
+endif()
+unset(_QORE_SAVE_CMAKE_DISABLE_FIND_PACKAGE_LIBEDIT_DEFINED)
+unset(_QORE_SAVE_CMAKE_DISABLE_FIND_PACKAGE_LIBEDIT)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM_INCLUDE_DIRS=${LLVM_INCLUDE_DIRS}")
 
@@ -817,6 +842,16 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
     set(_SAVE_NG2_BUILD_STATIC_LIBS ${BUILD_STATIC_LIBS})
     set(_SAVE_NG2_ENABLE_LIB_ONLY ${ENABLE_LIB_ONLY})
     set(_SAVE_NG2_PIC ${CMAKE_POSITION_INDEPENDENT_CODE})
+    set(_QORE_NGHTTP2_DISABLE_FIND_PACKAGE_DEFINED)
+    set(_QORE_NGHTTP2_DISABLED_FIND_PACKAGES Jansson Libevent Jemalloc)
+    foreach(_qore_pkg IN LISTS _QORE_NGHTTP2_DISABLED_FIND_PACKAGES)
+        set(_qore_var "CMAKE_DISABLE_FIND_PACKAGE_${_qore_pkg}")
+        if (DEFINED ${_qore_var})
+            list(APPEND _QORE_NGHTTP2_DISABLE_FIND_PACKAGE_DEFINED ${_qore_pkg})
+            set("_QORE_NGHTTP2_SAVE_${_qore_pkg}" "${${_qore_var}}")
+        endif()
+        set(${_qore_var} ON CACHE BOOL "Disable optional ${_qore_pkg} discovery for Qore's nghttp2 lib-only fallback" FORCE)
+    endforeach()
 
     set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -828,10 +863,11 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
     FetchContent_Declare(nghttp2
         URL "https://github.com/nghttp2/nghttp2/releases/download/v${NGHTTP2_VERSION}/nghttp2-${NGHTTP2_VERSION}.tar.xz"
         URL_HASH SHA256=1fb324b6ec2c56f6bde0658f4139ffd8209fa9e77ce98fd7a5f63af8d0e508ad
+        ${QORE_FETCHCONTENT_URL_OPTIONS}
         # Patch out the unconditional 'check' target to avoid duplicate-target
         # errors when ngtcp2/nghttp3 are also fetched.
         PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
-        EXCLUDE_FROM_ALL
+        ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}
     )
     FetchContent_MakeAvailable(nghttp2)
 
@@ -861,6 +897,22 @@ if (NOT NGHTTP2_FOUND_SYSTEM)
     else()
         unset(CMAKE_POSITION_INDEPENDENT_CODE CACHE)
     endif()
+    foreach(_qore_pkg IN LISTS _QORE_NGHTTP2_DISABLED_FIND_PACKAGES)
+        set(_qore_var "CMAKE_DISABLE_FIND_PACKAGE_${_qore_pkg}")
+        list(FIND _QORE_NGHTTP2_DISABLE_FIND_PACKAGE_DEFINED ${_qore_pkg} _qore_was_defined)
+        if (_qore_was_defined EQUAL -1)
+            unset(${_qore_var} CACHE)
+            unset(${_qore_var})
+        else()
+            set(${_qore_var} "${_QORE_NGHTTP2_SAVE_${_qore_pkg}}" CACHE BOOL "" FORCE)
+            unset("_QORE_NGHTTP2_SAVE_${_qore_pkg}")
+        endif()
+    endforeach()
+    unset(_QORE_NGHTTP2_DISABLED_FIND_PACKAGES)
+    unset(_QORE_NGHTTP2_DISABLE_FIND_PACKAGE_DEFINED)
+    unset(_qore_pkg)
+    unset(_qore_var)
+    unset(_qore_was_defined)
 
     # nghttp2 generates nghttp2ver.h in the build tree and ships public headers
     # under lib/includes/nghttp2/.
@@ -953,8 +1005,9 @@ if (NOT QUIC_FOUND_SYSTEM)
     FetchContent_Declare(nghttp3
         URL "https://github.com/ngtcp2/nghttp3/releases/download/v${NGHTTP3_VERSION}/nghttp3-${NGHTTP3_VERSION}.tar.xz"
         URL_HASH SHA256=6da0cd06b428d32a54c58137838505d9dc0371a900bb8070a46b29e1ceaf2e0f
+        ${QORE_FETCHCONTENT_URL_OPTIONS}
         PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
-        EXCLUDE_FROM_ALL
+        ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}
     )
     FetchContent_MakeAvailable(nghttp3)
 
@@ -964,8 +1017,9 @@ if (NOT QUIC_FOUND_SYSTEM)
     FetchContent_Declare(ngtcp2
         URL "https://github.com/ngtcp2/ngtcp2/releases/download/v${NGTCP2_VERSION}/ngtcp2-${NGTCP2_VERSION}.tar.xz"
         URL_HASH SHA256=dfd2c68bd64b89847c611425b9487105c46e8447b5c21e6aeb00642c8fbe2ca8
+        ${QORE_FETCHCONTENT_URL_OPTIONS}
         PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
-        EXCLUDE_FROM_ALL
+        ${QORE_FETCHCONTENT_EXCLUDE_FROM_ALL}
     )
     FetchContent_MakeAvailable(ngtcp2)
 

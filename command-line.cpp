@@ -1196,6 +1196,15 @@ static void set_include_source(const char* arg) {
     aot_include_source = true;
 }
 
+static bool qcc_output_verbose() {
+    const char* verbose = getenv("QORE_AOT_VERBOSE");
+    return debug > 0 || (verbose && *verbose && strcmp(verbose, "0")) || getenv("QORE_AOT_DEBUG");
+}
+
+static const char* qcc_source_mode_suffix(bool include_source) {
+    return include_source ? ", include-source" : "";
+}
+
 static void set_debug_show_narrowing(const char* arg) {
     qore_debug_narrowing = true;
 }
@@ -1775,21 +1784,25 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             const char* split_dir = split_module_dir.empty() ? program_file_name : split_module_dir.c_str();
             if (!QoreAOT::compileSeparatedModule(split_dir, output_path, parse_options, error,
                      aot_opt_level, aot_target, aot_include_source)) {
-               fprintf(stderr, "AOT split module compilation failed: %s\n", error.c_str());
+               fprintf(stderr, "qcc: split module compilation failed: %s\n", error.c_str());
                rc = 1;
             } else {
-               printf("compiled split module (O%d%s): %s\n", aot_opt_level,
-                   aot_include_source ? "" : ", source-stripped", output_path.c_str());
+               if (qcc_output_verbose()) {
+                  printf("qcc: compiled split module (-O%d%s): %s\n", aot_opt_level,
+                     qcc_source_mode_suffix(aot_include_source), output_path.c_str());
+               }
             }
          } else if (compile_module_mode) {
             if (!QoreAOT::compileModule(source_text.c_str(), (int)source_text.size(),
                      source_label.c_str(), output_path, parse_options, error,
                      aot_opt_level, aot_target, aot_include_source)) {
-               fprintf(stderr, "AOT module compilation failed: %s\n", error.c_str());
+               fprintf(stderr, "qcc: module compilation failed: %s\n", error.c_str());
                rc = 1;
             } else {
-               printf("compiled module (O%d%s): %s\n", aot_opt_level,
-                   aot_include_source ? "" : ", source-stripped", output_path.c_str());
+               if (qcc_output_verbose()) {
+                  printf("qcc: compiled module (-O%d%s): %s\n", aot_opt_level,
+                     qcc_source_mode_suffix(aot_include_source), output_path.c_str());
+               }
             }
          } else {
             // Use the program's parse options (includes %modern, %new-style, etc.)
@@ -1798,11 +1811,13 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
             if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
                      source_label.c_str(), output_path, aot_po, error,
                      aot_opt_level, aot_target, aot_static, aot_include_source)) {
-               fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
+               fprintf(stderr, "qcc: compilation failed: %s\n", error.c_str());
                rc = 1;
             } else {
-               printf("compiled (O%d%s): %s\n", aot_opt_level,
-                   aot_include_source ? "" : ", source-stripped", output_path.c_str());
+               if (qcc_output_verbose()) {
+                  printf("qcc: compiled executable (-O%d%s): %s\n", aot_opt_level,
+                     qcc_source_mode_suffix(aot_include_source), output_path.c_str());
+               }
             }
          }
          goto exit;

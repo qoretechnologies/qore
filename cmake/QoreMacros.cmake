@@ -394,7 +394,7 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
         message(STATUS "")
         message(STATUS "Module ${_module_name} uninstall target: make uninstall")
         message(STATUS "")
-    else()
+    elseif (NOT "${_mod_suffix}" STREQUAL "1")
         message(WARNING "Module ${_module_name} uninstall script: no file: ${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in")
     endif()
 

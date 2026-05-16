@@ -426,7 +426,7 @@ class AOTSmokeTest inherits QUnit::Test {
             flags_str += " " + compile_flags[i];
         }
 
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --output %s%s %s 2>&1",
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --output %s%s %s 2>&1",
             libqore_dir, qore_bin, paths.out, flags_str, paths.src);
         string compile_out = backquote(compile_cmd);
 
@@ -466,7 +466,7 @@ class AOTSmokeTest inherits QUnit::Test {
             flags_str += " " + compile_flags[i];
         }
 
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --output %s%s %s 2>&1",
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --output %s%s %s 2>&1",
             libqore_dir, qore_bin, paths.out, flags_str, paths.src);
         return backquote(compile_cmd);
     }
@@ -502,14 +502,14 @@ class AOTSmokeTest inherits QUnit::Test {
     }
 
     private bool compileOutputHasCompleteAot(string compile_out) {
-        *list<string> native_match = (compile_out =~ x/generated native code for (\d+) functions/);
-        *list<string> metadata_match = (compile_out =~ x/complete AOT metadata generated for (\d+) functions/);
+        *list<string> native_match = (compile_out =~ x/generated native code for (\d+) Qore code variants/);
+        *list<string> metadata_match = (compile_out =~ x/complete compilation metadata generated for (\d+) Qore code variants/);
         return native_match && metadata_match && native_match[0] == metadata_match[0];
     }
 
     private bool compileOutputHasCompleteAotCount(string compile_out, string count) {
-        return compile_out.regex("generated native code for " + count + " functions")
-            && compile_out.regex("complete AOT metadata generated for " + count + " functions");
+        return compile_out.regex("generated native code for " + count + " Qore code variants")
+            && compile_out.regex("complete compilation metadata generated for " + count + " Qore code variants");
     }
 
     #! Compile a script and return {compile_out, run_out, all_precompiled}
@@ -521,7 +521,7 @@ class AOTSmokeTest inherits QUnit::Test {
         }
 
         # Compile with --include-source to embed source text
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --include-source %s --output %s 2>&1",
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --include-source %s --output %s 2>&1",
             libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
@@ -4839,7 +4839,7 @@ printf(\"sum: %d\\n\", sum);
             hash<auto> result = compileWithFlags(code, (sprintf("--opt-level=%d", level),));
             assertTrue(result.compiled, sprintf("O%d: compilation succeeded", level));
             # Verify output message includes opt level
-            assertTrue(result.compile_out.regex(sprintf("compiled \\(O%d", level)),
+            assertTrue(result.compile_out.regex(sprintf("compiled executable \\(-O%d", level)),
                 sprintf("O%d: output shows opt level", level));
             assertEq(interp_out, result.run_out,
                 sprintf("O%d: output matches interpreter", level));
@@ -4964,7 +4964,7 @@ printf(\"sum: %d\\n\", sum);
             output_flag = " --output " + output_path;
         }
 
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile-module%s%s %s 2>&1",
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile-module%s%s %s 2>&1",
             libqore_dir, qore_bin, output_flag, flags_str, qm_path);
         string compile_out = backquote(compile_cmd);
 
@@ -5728,7 +5728,7 @@ public namespace AOTTestMod {
         hash<auto> result = compileModuleFile(qm_path, qmod_path);
 
         assertTrue(result.compiled, "module compilation produced .qmod: " + result.compile_out);
-        assertTrue(result.compile_out.regex("compiled module \\(O2"),
+        assertTrue(result.compile_out.regex("compiled module \\(-O2"),
             "compile output shows module compilation: " + result.compile_out);
         assertTrue(compileOutputHasCompleteAotCount(result.compile_out, "3"),
             "all module functions pre-compiled: " + result.compile_out);
@@ -6006,8 +6006,8 @@ public namespace AOTScalarLocalCoerce {
         string qmod_path = tmp_dir + "/AOTScalarLocalCoerce.qmod";
         hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
         assertTrue(result.compiled, "scalar local coercion module compiled: " + result.compile_out);
-        assertTrue(result.compile_out.regex("source-stripped"),
-            "scalar local coercion module is source-stripped: " + result.compile_out);
+        assertTrue(result.compile_out.regex("module compilation"),
+            "scalar local coercion module reports compilation summary: " + result.compile_out);
 
         string test_code = "%modern
 %requires AOTScalarLocalCoerce
@@ -6061,8 +6061,8 @@ public namespace AOTPointerNullCoalesce {
         string qmod_path = tmp_dir + "/AOTPointerNullCoalesce.qmod";
         hash<auto> result = compileModuleFile(qm_path, qmod_path, ("--strip-source",));
         assertTrue(result.compiled, "pointer NULL coalescing module compiled: " + result.compile_out);
-        assertTrue(result.compile_out.regex("source-stripped"),
-            "pointer NULL coalescing module is source-stripped: " + result.compile_out);
+        assertTrue(result.compile_out.regex("module compilation"),
+            "pointer NULL coalescing module reports compilation summary: " + result.compile_out);
 
         string test_code = "%modern
 %requires AOTPointerNullCoalesce
@@ -6785,7 +6785,7 @@ public namespace AOTOptMod {
             hash<auto> result = compileModuleFile(qm_path, qmod_path,
                 (sprintf("--opt-level=%d", level),));
             assertTrue(result.compiled, sprintf("module O%d compiled: %s", level, result.compile_out));
-            assertTrue(result.compile_out.regex(sprintf("compiled module \\(O%d", level)),
+            assertTrue(result.compile_out.regex(sprintf("compiled module \\(-O%d", level)),
                 sprintf("O%d: shows correct opt level: %s", level, result.compile_out));
         }
     }
@@ -6963,7 +6963,7 @@ printf(\"%d\\n\", h.getValue());
             output_flag = " --output " + output_path;
         }
 
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile-module%s%s %s 2>&1",
+        string compile_cmd = sprintf("QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile-module%s%s %s 2>&1",
             libqore_dir, qore_bin, output_flag, flags_str, dir_path);
         string compile_out = backquote(compile_cmd);
 
@@ -7039,7 +7039,7 @@ public namespace AOTSplitTest {
         hash<auto> result = compileSplitModule(mod_info.dir, qmod_path);
 
         assertTrue(result.compiled, "split module compiled: " + result.compile_out);
-        assertTrue(result.compile_out.regex("compiled split module \\(O2"),
+        assertTrue(result.compile_out.regex("compiled split module \\(-O2"),
             "compile output shows split module compilation: " + result.compile_out);
 
         # Test script that uses all parts of the split module
@@ -7334,7 +7334,7 @@ printf(\"%d\\n\", AOTSplitSlash::slash_val());
         }
 
         # Compile with --strip-source (LD_LIBRARY_PATH ensures the build libqore is used)
-        string compile_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
+        string compile_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --strip-source %s --output %s 2>&1",
             libqore_dir, libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
@@ -7374,7 +7374,7 @@ printf(\"%d\\n\", AOTSplitSlash::slash_val());
             unlink(paths.src);
         }
 
-        string compile_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
+        string compile_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_AOT_VERBOSE=1 %s -b --compile --strip-source %s --output %s 2>&1",
             libqore_dir, libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
@@ -7394,8 +7394,8 @@ exit(0);
 ";
         hash<auto> result = compileStripSourceAndRun(code);
         assertTrue(result.compiled, "strip-source basic compiled: " + result.compile_out);
-        assertTrue(result.compile_out.regex("source-stripped"),
-            "compile output mentions source-stripped: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compilation \\(-O2\\):.*bytes"),
+            "compile output shows default compilation summary: " + result.compile_out);
         assertEq("Hello, World!\n", result.run_out, "strip-source basic output correct");
     }
 
@@ -7463,9 +7463,8 @@ exit(0);
         assertEq(strip_result.run_out, normal_result.run_out,
             "strip-source output matches normal AOT output");
 
-        # The strip-source compile output should mention "source-stripped"
-        assertTrue(strip_result.compile_out.regex("source-stripped"),
-            "compile output mentions source-stripped");
+        assertTrue(strip_result.all_precompiled,
+            "strip-source compile output reports complete compilation metadata");
     }
 
     testStripSourceBackwardCompat() {
@@ -7488,13 +7487,12 @@ exit(0);
 ";
         hash<auto> result = compileStripSourceAndRun(code);
         assertTrue(result.compiled, "strip-source compiled");
-        # Verify compile output shows metadata blob size
-        assertTrue(result.compile_out.regex("metadata blob:.*bytes"),
-            "compile output shows metadata blob size: " + result.compile_out);
-        # Verify compile output shows source-stripped
-        assertTrue(result.compile_out.regex("source-stripped"),
-            "compile output shows source-stripped: " + result.compile_out);
-        # Verify it reports generated native code and complete AOT metadata
+        # Verify compile output shows metadata size
+        assertTrue(result.compile_out.regex("metadata:.*bytes"),
+            "compile output shows metadata size: " + result.compile_out);
+        assertTrue(result.compile_out.regex("compilation \\(-O2\\):.*bytes"),
+            "compile output shows compilation artifact summary: " + result.compile_out);
+        # Verify it reports generated native code and complete compilation metadata
         assertTrue(compileOutputHasCompleteAot(result.compile_out),
             "compile output shows complete AOT stats: " + result.compile_out);
     }
@@ -7595,8 +7593,8 @@ public namespace StripHashDeclMod {
         }
 
         assertTrue(mod_info.compiled, "strip-source module with hashdecl compiled: " + mod_info.compile_out);
-        assertTrue(mod_info.compile_out.regex("source-stripped"),
-            "compile output shows source-stripped: " + mod_info.compile_out);
+        assertTrue(mod_info.compile_out.regex("module compilation \\(-O2\\):.*bytes"),
+            "compile output shows module artifact summary: " + mod_info.compile_out);
 
         # Create a test script that uses the hashdecl
         string test_code = "%modern
@@ -7978,7 +7976,7 @@ printf(\"%s\\n\", c.getName());
         assertTrue(result.compiled, "strip-source member-default function-call executable compiled: "
             + result.compile_out);
         assertTrue(compileOutputHasCompleteAot(result.compile_out),
-            "strip-source member-default function-call executable has complete AOT metadata: "
+            "strip-source member-default function-call executable has complete compilation metadata: "
             + result.compile_out);
         assertEq("proc-omq\n", result.run_out,
             "strip-source member default resolves same-program function call");
@@ -8810,7 +8808,7 @@ int sub large() {
         assertTrue(compile_out.regex("EXIT=0"),
             "qcc batch compiles statement-location filter fragments: " + compile_out);
 
-        *list<string> small_match = (compile_out =~ x/([^\n]+small_qr\.qo): batch-compiled/);
+        *list<string> small_match = (compile_out =~ x/script-context \.qo[^\n]+: ([^\n]+small_qr\.qo)/);
         assertTrue(small_match != NOTHING,
             "qcc output reports small fragment path: " + compile_out);
 

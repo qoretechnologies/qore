@@ -13,7 +13,7 @@ Source0: https://github.com/qorelanguage/qore/releases/download/release-%{versio
 
 Requires: libqore%{?_isa} = %{version}-%{release}
 Requires: %{name}-stdlib%{?_isa} = %{version}-%{release}
-BuildRequires: cmake >= 3.5
+BuildRequires: cmake >= 3.14
 BuildRequires: gcc-c++
 BuildRequires: flex >= 2.5.31
 BuildRequires: bison
