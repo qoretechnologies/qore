@@ -207,7 +207,7 @@ EventLoop::copy() {
 
 //! Adds a socket to the event loop
 /** @par Example:
-    @code{.py} loop.add(socket, SOCK_POLLIN); @endcode
+    @code{.py} loop.add(socket: socket, events: SOCK_POLLIN); @endcode
 
     @param socket The socket to add
     @param events Events to monitor (SOCK_POLLIN and/or SOCK_POLLOUT)
@@ -215,7 +215,7 @@ EventLoop::copy() {
     @throw EVENT-LOOP-ERROR Failed to add socket to event loop
     @throw SOCKET-NOT-OPEN Socket is not open
 */
-nothing EventLoop::add(Socket[QoreSocketObject] socket, int events) {
+nothing EventLoop::add(Socket[QoreSocketObject] socket, int events) [flags=NAMED_ARGS] {
     if (!socket->isOpen()) {
         xsink->raiseException("SOCKET-NOT-OPEN", "Cannot add closed socket to event loop");
         return QoreValue();
@@ -234,7 +234,7 @@ nothing EventLoop::add(Socket[QoreSocketObject] socket, int events) {
 
 //! Adds a file to the event loop
 /** @par Example:
-    @code{.py} loop.add(file, SOCK_POLLIN); @endcode
+    @code{.py} loop.add(file: file, events: SOCK_POLLIN); @endcode
 
     @param file The file to add (typically a pipe or ReadOnlyFile)
     @param events Events to monitor (SOCK_POLLIN and/or SOCK_POLLOUT)
@@ -242,7 +242,7 @@ nothing EventLoop::add(Socket[QoreSocketObject] socket, int events) {
     @throw EVENT-LOOP-ERROR Failed to add file to event loop
     @throw FILE-READ-ERROR File is not open
 */
-nothing EventLoop::add(ReadOnlyFile[File] file, int events) {
+nothing EventLoop::add(ReadOnlyFile[File] file, int events) [flags=NAMED_ARGS] {
     if (!file->isOpen()) {
         xsink->raiseException("FILE-READ-ERROR", "Cannot add closed file to event loop");
         return QoreValue();
@@ -261,7 +261,7 @@ nothing EventLoop::add(ReadOnlyFile[File] file, int events) {
 
 //! Modifies events for a registered socket
 /** @par Example:
-    @code{.py} loop.modify(socket, SOCK_POLLIN | SOCK_POLLOUT); @endcode
+    @code{.py} loop.modify(socket: socket, events: SOCK_POLLIN | SOCK_POLLOUT); @endcode
 
     @param socket The socket to modify
     @param events New events to monitor (SOCK_POLLIN and/or SOCK_POLLOUT)
@@ -269,7 +269,7 @@ nothing EventLoop::add(ReadOnlyFile[File] file, int events) {
     @throw EVENT-LOOP-ERROR Failed to modify socket events
     @throw SOCKET-NOT-OPEN Socket is not open
 */
-nothing EventLoop::modify(Socket[QoreSocketObject] socket, int events) {
+nothing EventLoop::modify(Socket[QoreSocketObject] socket, int events) [flags=NAMED_ARGS] {
     if (!socket->isOpen()) {
         xsink->raiseException("SOCKET-NOT-OPEN", "Cannot modify closed socket in event loop");
         return QoreValue();
@@ -287,13 +287,13 @@ nothing EventLoop::modify(Socket[QoreSocketObject] socket, int events) {
 
 //! Removes a socket from the event loop
 /** @par Example:
-    @code{.py} loop.del(socket); @endcode
+    @code{.py} loop.del(socket: socket); @endcode
 
     @param socket The socket to remove
 
     @note It is safe to call this method for sockets that are not registered or have been closed
 */
-nothing EventLoop::del(Socket[QoreSocketObject] socket) {
+nothing EventLoop::del(Socket[QoreSocketObject] socket) [flags=NAMED_ARGS] {
     // Use obj_socket (QoreObject*) created by HARD_QORE_VALUE_OBJ_DATA to remove by object
     // This handles the case where the socket has been closed but is still registered
     el->removeByObject(const_cast<QoreObject*>(obj_socket), xsink);
@@ -301,13 +301,13 @@ nothing EventLoop::del(Socket[QoreSocketObject] socket) {
 
 //! Removes a file from the event loop
 /** @par Example:
-    @code{.py} loop.del(file); @endcode
+    @code{.py} loop.del(file: file); @endcode
 
     @param file The file to remove
 
     @note It is safe to call this method for files that are not registered or have been closed
 */
-nothing EventLoop::del(ReadOnlyFile[File] file) {
+nothing EventLoop::del(ReadOnlyFile[File] file) [flags=NAMED_ARGS] {
     // Use obj_file (QoreObject*) created by HARD_QORE_VALUE_OBJ_DATA to remove by object
     // This handles the case where the file has been closed but is still registered
     el->removeByObject(const_cast<QoreObject*>(obj_file), xsink);
@@ -315,7 +315,7 @@ nothing EventLoop::del(ReadOnlyFile[File] file) {
 
 //! Adds an event notifier to the event loop
 /** @par Example:
-    @code{.py} loop.add(notifier, SOCK_POLLIN); @endcode
+    @code{.py} loop.add(notifier: notifier, events: SOCK_POLLIN); @endcode
 
     @param notifier The event notifier to add
     @param events Events to monitor (typically SOCK_POLLIN)
@@ -329,7 +329,7 @@ nothing EventLoop::del(ReadOnlyFile[File] file) {
 
     @since %Qore 2.1
 */
-nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
+nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) [flags=NAMED_ARGS] {
     if (!notifier->isValid()) {
         xsink->raiseException("EVENT-NOTIFIER-ERROR", "Cannot add invalid notifier to event loop");
         return QoreValue();
@@ -349,7 +349,7 @@ nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
 
 //! Removes an event notifier from the event loop
 /** @par Example:
-    @code{.py} loop.del(notifier); @endcode
+    @code{.py} loop.del(notifier: notifier); @endcode
 
     @param notifier The event notifier to remove
 
@@ -357,14 +357,14 @@ nothing EventLoop::add(EventNotifier[QoreEventNotifier] notifier, int events) {
 
     @since %Qore 2.1
 */
-nothing EventLoop::del(EventNotifier[QoreEventNotifier] notifier) {
+nothing EventLoop::del(EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
     el->removeByObject(const_cast<QoreObject*>(obj_notifier), xsink);
 }
 
 //! Polls for events on registered sockets/files and timers
 /** @par Example:
     @code{.py}
-*list<hash<EventPollInfo>> events = loop.poll(5s);
+*list<hash<EventPollInfo>> events = loop.poll(timeout_ms: 5s);
 if (events) {
     for (hash<EventPollInfo> ev in events) {
         if (ev.events & SOCK_POLLTIMER) {
@@ -392,7 +392,7 @@ if (events) {
 
     @since %Qore 2.3 (return type changed from list<hash<SocketPollInfo>> to list<hash<EventPollInfo>>)
 */
-*list<hash<EventPollInfo>> EventLoop::poll(timeout timeout_ms = -1) {
+*list<hash<EventPollInfo>> EventLoop::poll(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (el->loop.empty()) {
         return QoreValue();
     }
@@ -482,29 +482,29 @@ bool EventLoop::empty() {
 //! Adds a timer to the event loop
 /** @par Example:
     @code{.py}
-    int id = loop.addTimer(now_us() + 100000, "my data");
+    int id = loop.addTimer(deadline: now_us() + 100000, user_data: "my data");
     @endcode
 
     @param deadline absolute deadline for the timer (as a date/time value)
-    @param udata user data to associate with this timer; returned in EventPollInfo when the timer fires
+    @param user_data user data to associate with this timer; returned in EventPollInfo when the timer fires
 
     @return the timer ID
 
     @since %Qore 2.3
 */
-int EventLoop::addTimer(date deadline, auto udata) {
+int EventLoop::addTimer(date deadline, auto user_data) [flags=NAMED_ARGS] {
     int64 deadline_us = deadline->getEpochMicrosecondsUTC();
     int64_t id = el->loop.addTimer(deadline_us, nullptr);
     // Store the Qore user data separately
-    udata.refSelf();
-    el->timer_data_map[id] = {udata};
+    user_data.refSelf();
+    el->timer_data_map[id] = {user_data};
     return id;
 }
 
 //! Cancels a timer
 /** @par Example:
     @code{.py}
-    bool canceled = loop.cancelTimer(timer_id);
+    bool canceled = loop.cancelTimer(timer_id: timer_id);
     @endcode
 
     @param timer_id the timer ID returned by addTimer()
@@ -513,7 +513,7 @@ int EventLoop::addTimer(date deadline, auto udata) {
 
     @since %Qore 2.3
 */
-bool EventLoop::cancelTimer(int timer_id) {
+bool EventLoop::cancelTimer(int timer_id) [flags=NAMED_ARGS] {
     bool rv = el->loop.cancelTimer(timer_id);
     if (rv) {
         auto it = el->timer_data_map.find(timer_id);

@@ -122,6 +122,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
             NOTHING);
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
         addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed event-loop class builtin opt-in", \reviewedEventLoopClassBuiltinOptIn(),
+            NOTHING);
         addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
         addTestCase("reviewed iterator builtin opt-in", \reviewedIteratorBuiltinOptIn(), NOTHING);
         addTestCase("reviewed regex class builtin opt-in", \reviewedRegexClassBuiltinOptIn(), NOTHING);
@@ -691,6 +693,25 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq(ETIMEDOUT, cond.wait(lock: cond_mutex, timeout_date: 1ms),
             "Condition wait exposes timeout_date");
         assertEq(0, cond.wait_count(lock: cond_mutex), "Condition wait_count exposes lock");
+    }
+
+    reviewedEventLoopClassBuiltinOptIn() {
+        EventLoop loop();
+        int timer_id = loop.addTimer(deadline: now_us(), user_data: "named-timer");
+        *list<hash<EventPollInfo>> timer_events = loop.poll(timeout_ms: 0);
+        assertEq(1, timer_events.size(), "EventLoop poll exposes timeout_ms");
+        assertEq(timer_id, timer_events[0].timer_id, "EventLoop addTimer exposes deadline");
+        assertEq("named-timer", timer_events[0].timer_udata, "EventLoop addTimer exposes user_data");
+        assertFalse(loop.cancelTimer(timer_id: timer_id), "EventLoop cancelTimer exposes timer_id");
+
+        EventNotifier notifier();
+        loop.add(notifier: notifier, events: SOCK_POLLIN);
+        notifier.notify();
+        *list<hash<EventPollInfo>> notifier_events = loop.poll(timeout_ms: 1s);
+        assertEq(1, notifier_events.size(), "EventLoop add exposes notifier and events");
+        assertTrue((notifier_events[0].events & SOCK_POLLIN) != 0, "EventLoop returns notifier readiness");
+        loop.del(notifier: notifier);
+        notifier.acknowledge();
     }
 
     reviewedStreamBuiltinOptIn() {

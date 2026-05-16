@@ -732,6 +732,16 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedConstructorVariantCount("ThreadPool",
             ("max_threads", "min_idle_threads", "max_idle_threads", "idle_release_timeout"));
         assertNamedClassMethodVariantCount("ThreadPool", "submit", ("task", "cancel_callback"));
+        assertNamedClassMethodVariantCount("EventLoop", "add", ("socket", "events"));
+        assertNamedClassMethodVariantCount("EventLoop", "add", ("file", "events"));
+        assertNamedClassMethodVariantCount("EventLoop", "add", ("notifier", "events"));
+        assertNamedClassMethodVariantCount("EventLoop", "modify", ("socket", "events"));
+        assertNamedClassMethodVariantCount("EventLoop", "del", ("socket",));
+        assertNamedClassMethodVariantCount("EventLoop", "del", ("file",));
+        assertNamedClassMethodVariantCount("EventLoop", "del", ("notifier",));
+        assertNamedClassMethodVariantCount("EventLoop", "poll", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("EventLoop", "addTimer", ("deadline", "user_data"));
+        assertNamedClassMethodVariantCount("EventLoop", "cancelTimer", ("timer_id",));
         assertNamedConstructorVariantCount("ParseOptions", ("parse_options",));
         assertNamedConstructorVariantCount("ParseOptions", ("name",));
         assertNamedConstructorVariantCount("ParseOptions", ("names",));

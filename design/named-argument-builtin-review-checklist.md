@@ -330,5 +330,8 @@ These examples are from the core migration and should be reused as precedent:
   `max_threads`, `min_idle_threads`, `max_idle_threads`,
   `idle_release_timeout`, `task`, and `cancel_callback`. Do not expose terse
   implementation names such as `max`, `minidle`, `maxidle`, or `release_ms`.
+- Event-loop APIs use the polled object role as the name (`socket`, `file`, or
+  `notifier`) plus `events`; timer APIs use `deadline`, `user_data`, and
+  `timer_id`. Do not expose `udata` as a public formal parameter name.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.
