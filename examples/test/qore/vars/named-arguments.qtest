@@ -102,6 +102,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("builtin opt-in", \builtinOptIn(), NOTHING);
         addTestCase("reviewed math builtin opt-in", \reviewedMathBuiltinOptIn(), NOTHING);
         addTestCase("reviewed type builtin opt-in", \reviewedTypeBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed string builtin opt-in", \reviewedStringBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -168,6 +169,20 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "binary conversion exposes value and encoding");
     }
 
+    reviewedStringBuiltinOptIn() {
+        assertEq(3, length(str: "abc"), "string length accepts named arguments");
+        assertEq(3, length(bin: binary(value: "abc")), "binary length accepts named arguments");
+        assertEq("cde", binary_to_string(value: substr(bin: binary(value: "abcdef"), start: 2, len: 3),
+            encoding: "USASCII"), "binary substr exposes bin/start/len");
+        assertEq(2, index(substr: "cd", str: "abcdef", pos: 1), "index exposes search names");
+        assertEq(("a", "b"), split(separator: ",", str: "a,b"), "split exposes separator and string");
+        assertEq(True, regex(str: "abc123", pattern: "\\d+", options: 0), "regex exposes pattern");
+        assertEq("abcX", regex_subst(str: "abc123", pattern: "\\d+", replacement: "X"),
+            "regex_subst exposes replacement");
+        assertEq("a:b", join(separator: ":", values: ("a", "b")), "join list variant exposes separator and values");
+        assertEq("x:2", vsprintf(format: "%s:%d", values: ("x", 2)), "vsprintf exposes format and values");
+    }
+
     parseFailures() {
         assertThrows("NAMED-ARG-DUPLICATE", "duplicate named argument 'a'", sub() {
             Program p(PO_NEW_STYLE);
@@ -196,7 +211,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {
             Program p(PO_NEW_STYLE);
-            p.parse("length(arg: 1);", "builtin-not-opted-in");
+            p.parse("sort(arg: 1);", "builtin-not-opted-in");
         });
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "varargs-only variants cannot accept named arguments", sub() {

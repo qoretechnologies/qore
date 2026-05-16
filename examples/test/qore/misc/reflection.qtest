@@ -190,6 +190,51 @@ class ReflectionTest inherits QUnit::Test {
         assertTrue(found_two_arg_substr);
         assertTrue(found_three_arg_substr);
 
+        bool found_binary_substr = False;
+        foreach FunctionVariant v in (Function::forName("substr").getVariants()) {
+            if (v.getParamNames() == ("bin", "start", "len")) {
+                found_binary_substr = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("bin", "start", "len"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_binary_substr);
+
+        bool found_length_str = False;
+        bool found_length_bin = False;
+        foreach FunctionVariant v in (Function::forName("length").getVariants()) {
+            if (v.getParamNames() == ("str",)) {
+                found_length_str = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str",), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("bin",)) {
+                found_length_bin = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("bin",), v.getNamedParameterNames());
+            } else if (!v.numParams()) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_length_str);
+        assertTrue(found_length_bin);
+
+        bool found_regex_subst_replacement = False;
+        bool found_regex_subst_callback = False;
+        foreach FunctionVariant v in (Function::forName("regex_subst").getVariants()) {
+            if (v.getParamNames() == ("str", "pattern", "replacement", "options")) {
+                found_regex_subst_replacement = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str", "pattern", "replacement", "options"), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("str", "pattern", "callback", "options")) {
+                found_regex_subst_callback = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str", "pattern", "callback", "options"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_regex_subst_replacement);
+        assertTrue(found_regex_subst_callback);
+
         bool found_abs = False;
         foreach FunctionVariant v in (Function::forName("abs").getVariants()) {
             if (v.getParamNames() == ("value",)) {
