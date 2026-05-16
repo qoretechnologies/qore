@@ -35,10 +35,13 @@
 #include <unicode/currunit.h>
 #include <unicode/datefmt.h>
 #include <unicode/locid.h>
+#include <unicode/numfmt.h>
 #include <unicode/numberformatter.h>
+#include <unicode/parsepos.h>
 #include <unicode/plurrule.h>
 #include <unicode/stringpiece.h>
 #include <unicode/timezone.h>
+#include <unicode/uchar.h>
 #include <unicode/ulocdata.h>
 #include <unicode/unistr.h>
 #include <unicode/uversion.h>
@@ -1064,6 +1067,82 @@ static QoreStringNode* i18n_format_currency_value(QoreValue value, const QoreStr
     return new QoreStringNode(rv, QCS_UTF8);
 }
 
+static QoreValue i18n_parse_number_value(const QoreStringNode* text_arg, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::string text = i18n_string_arg_to_utf8(text_arg, xsink, "text", 4096);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    std::unique_ptr<icu::NumberFormat> formatter(icu::NumberFormat::createInstance(locale, status));
+    if (U_FAILURE(status) || !formatter) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create number parser for locale '%s': %s",
+            locale.getName(), i18n_icu_error_name(status));
+        return QoreValue();
+    }
+
+    bool integer_only = false;
+    bool has_integer_only = false;
+    i18n_get_optional_bool(opts, "integer_only", integer_only, has_integer_only);
+    if (has_integer_only) {
+        formatter->setParseIntegerOnly(integer_only);
+    }
+
+    icu::UnicodeString input = icu::UnicodeString::fromUTF8(icu::StringPiece(text));
+    icu::Formattable parsed;
+    icu::ParsePosition pos(0);
+    formatter->parse(input, parsed, pos);
+    if (pos.getIndex() == 0 || pos.getErrorIndex() >= 0) {
+        xsink->raiseException("I18N-PARSE-ERROR", "cannot parse number '%s' for locale '%s'",
+            text.c_str(), locale.getName());
+        return QoreValue();
+    }
+
+    int32_t i = pos.getIndex();
+    while (i < input.length()) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking parsed i18n number trailing text")) {
+            return QoreValue();
+        }
+        UChar32 ch = input.char32At(i);
+        if (!u_isUWhiteSpace(ch)) {
+            xsink->raiseException("I18N-PARSE-ERROR",
+                "unexpected trailing text while parsing number '%s' for locale '%s'", text.c_str(), locale.getName());
+            return QoreValue();
+        }
+        i += U16_LENGTH(ch);
+    }
+
+    status = U_ZERO_ERROR;
+    QoreValue rv;
+    switch (parsed.getType()) {
+        case icu::Formattable::kLong:
+            rv = static_cast<int64>(parsed.getLong(status));
+            break;
+        case icu::Formattable::kInt64:
+            rv = parsed.getInt64(status);
+            break;
+        case icu::Formattable::kDouble:
+            rv = new QoreNumberNode(parsed.getDouble(status));
+            break;
+        default:
+            xsink->raiseException("I18N-PARSE-ERROR",
+                "ICU returned an unsupported parsed number type for '%s'", text.c_str());
+            return QoreValue();
+    }
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot convert parsed number '%s': %s",
+            text.c_str(), i18n_icu_error_name(status));
+        return QoreValue();
+    }
+    return rv;
+}
+
 static bool i18n_get_datetime_style(const QoreHashNode* opts, const char* key, icu::DateFormat::EStyle def,
         icu::DateFormat::EStyle& out, ExceptionSink* xsink) {
     out = def;
@@ -1772,6 +1851,38 @@ string format_number(auto value, string locale) [flags=RET_VALUE_ONLY] {
 */
 string format_number(auto value, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
     return i18n_format_number_value(value, locale, opts, xsink);
+}
+
+//! Parses a locale-formatted decimal number with explicit locale data.
+/** @param text locale-formatted decimal number text
+    @param locale BCP 47 locale tag, including supported Unicode numbering-system extensions
+    @return parsed Qore integer or number value
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-PARSE-ERROR if \a text cannot be parsed completely as a number
+    @throw I18N-ICU-ERROR if ICU cannot parse or convert the value
+
+    @par Example:
+    @code{.py}
+assertEq(1234, I18n::parse_number("1,234", "en-US"));
+    @endcode
+*/
+auto parse_number(string text, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_parse_number_value(text, locale, nullptr, xsink);
+}
+
+//! Parses a locale-formatted decimal number with explicit locale data and options.
+/** @param text locale-formatted decimal number text
+    @param locale BCP 47 locale tag
+    @param opts optional hash; supported key: \c integer_only
+    @return parsed Qore integer or number value
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-PARSE-ERROR if \a text cannot be parsed completely as a number
+    @throw I18N-ICU-ERROR if ICU cannot parse or convert the value
+*/
+auto parse_number(string text, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_parse_number_value(text, locale, opts, xsink);
 }
 
 //! Formats a currency value with explicit locale data.

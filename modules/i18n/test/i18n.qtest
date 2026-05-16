@@ -154,6 +154,12 @@ class I18nTest inherits QUnit::Test {
         assertEq("1,234.50", I18n::format_number("1234.50", "en-US"));
         assertEq("1234.50", I18n::format_number("1234.50", "en-US", {"grouping": False}));
         assertEq("1.00", I18n::format_number(1, "en-US", {"min_fraction_digits": 2}));
+        assertEq(1234, I18n::parse_number("1,234", "en-US"));
+        assertEq(1234, I18n::parse_number("1.234", "de-DE"));
+        assertEq("1234.5", string(I18n::parse_number("1,234.50", "en-US")));
+        assertThrows("I18N-PARSE-ERROR", auto sub() {
+            return I18n::parse_number("1,234.50 trailing", "en-US");
+        });
         assertRegex("^\\$12\\.50$", I18n::format_currency("12.5", "USD", "en-US"));
         date instant = 2020-05-04T15:06:07Z;
         assertEq("May 4, 2020",

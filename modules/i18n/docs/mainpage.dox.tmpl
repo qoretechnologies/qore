@@ -162,6 +162,7 @@ I18n::clear_thread_locale();
 %requires i18n
 
 printf("%s\n", I18n::format_number("1234.50", "en-US"));
+printf("%y\n", I18n::parse_number("1,234.50", "en-US"));
 printf("%s\n", I18n::format_currency("12.5", "USD", "en-US"));
 printf("%s\n", I18n::format_datetime(2020-05-04T15:06:07Z, "en-US",
     {"date_style": "medium", "time_style": "none"}));
