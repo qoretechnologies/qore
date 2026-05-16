@@ -29,6 +29,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("plural validation errors", \validationErrorTest());
         addTestCase("message catalog lookup", \messageCatalogLookupTest());
         addTestCase("message catalog plural lookup", \messageCatalogPluralLookupTest());
+        addTestCase("message catalog bidi isolation", \messageCatalogBidiIsolationTest());
         addTestCase("message catalog state policy", \messageCatalogStatePolicyTest());
         addTestCase("message catalog layer precedence", \messageCatalogLayerPrecedenceTest());
         addTestCase("message catalog JSON file loading", \messageCatalogJsonFileLoadingTest());
@@ -369,6 +370,16 @@ class I18nTest inherits QUnit::Test {
         assertEq("2 files", catalog.tn(2, "1 file", "{count} files", "de"));
         assertEq("1 file", catalog.tn(1, "1 file", "{count} files", "de"));
         assertEq("1.0 files", catalog.tn("1.0", "1 file", "{count} files", "de"));
+    }
+
+    messageCatalogBidiIsolationTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        I18n::MessageCatalog catalog(createCatalog());
+
+        assertEq("Hello, \u2068Sam\u2069", catalog.t("Hello, {name}", "ar", {"name": "Sam"}));
+        assertEq("\u20682\u2069 files", catalog.tn(2, "1 file", "{count} files", "ar"));
     }
 
     messageCatalogStatePolicyTest() {

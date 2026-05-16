@@ -66,6 +66,9 @@ struct I18nCatalogDecimalInfo {
     int32_t fraction_digits = 0;
 };
 
+static constexpr const char* I18N_BIDI_FSI = "\xE2\x81\xA8";
+static constexpr const char* I18N_BIDI_PDI = "\xE2\x81\xA9";
+
 static const char* i18n_catalog_icu_error_name(UErrorCode status) {
     return u_errorName(status);
 }
@@ -249,6 +252,28 @@ static std::string i18n_catalog_normalize_locale(const std::string& raw) {
     }
 
     return locale.empty() ? "root" : locale;
+}
+
+static bool i18n_catalog_is_rtl_locale(const std::string& raw) {
+    std::string locale = i18n_catalog_normalize_locale(raw);
+    size_t pos = locale.find('-');
+    std::string language = pos == std::string::npos ? locale : locale.substr(0, pos);
+    std::transform(language.begin(), language.end(), language.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    return language == "ar" || language == "dv" || language == "fa" || language == "he" || language == "iw"
+        || language == "ks" || language == "ku" || language == "nqo" || language == "ps" || language == "sd"
+        || language == "ug" || language == "ur" || language == "yi";
+}
+
+static void i18n_catalog_append_placeholder_value(std::string& out, const char* value, bool bidi_isolate) {
+    if (bidi_isolate) {
+        out += I18N_BIDI_FSI;
+    }
+    out += value;
+    if (bidi_isolate) {
+        out += I18N_BIDI_PDI;
+    }
 }
 
 static bool i18n_catalog_qore_value_to_utf8(QoreValue value, std::string& out, ExceptionSink* xsink,
@@ -543,10 +568,10 @@ public:
             if (!i18n_catalog_validate_placeholders(id, fallback, xsink)) {
                 return nullptr;
             }
-            return formatMessage(fallback, args, xsink);
+            return formatMessage(fallback, args, i18n_catalog_is_rtl_locale(locale), xsink);
         }
 
-        return formatMessage(*msg, args, xsink);
+        return formatMessage(*msg, args, i18n_catalog_is_rtl_locale(locale), xsink);
     }
 
     DLLLOCAL QoreStringNode* translatePlural(const QoreStringNode* id_arg, const QoreStringNode* singular_arg,
@@ -586,7 +611,7 @@ public:
             if (!validatePluralPlaceholders(id, fallback, xsink)) {
                 return nullptr;
             }
-            return formatPluralMessage(fallback, value, "en", args, xsink);
+            return formatPluralMessage(fallback, value, "en", args, i18n_catalog_is_rtl_locale(locale), xsink);
         }
 
         if (!msg->plural) {
@@ -595,7 +620,7 @@ public:
             return nullptr;
         }
 
-        return formatPluralMessage(*msg, value, locale, args, xsink);
+        return formatPluralMessage(*msg, value, locale, args, i18n_catalog_is_rtl_locale(locale), xsink);
     }
 
     DLLLOCAL QoreListNode* getFallbackChain(const QoreStringNode* locale_arg, ExceptionSink* xsink) const {
@@ -967,7 +992,7 @@ private:
     }
 
     DLLLOCAL QoreStringNode* formatText(const std::string& text, const QoreHashNode* args,
-            const I18nCatalogDecimalInfo* count, ExceptionSink* xsink) const {
+            const I18nCatalogDecimalInfo* count, bool bidi_isolate, ExceptionSink* xsink) const {
         std::string out;
         out.reserve(text.size());
 
@@ -995,7 +1020,7 @@ private:
 
             std::string name = text.substr(i + 1, end - i - 1);
             if (count && name == "count") {
-                out += count->formatted;
+                i18n_catalog_append_placeholder_value(out, count->formatted.c_str(), bidi_isolate);
                 i = end;
                 continue;
             }
@@ -1017,7 +1042,7 @@ private:
             if (*xsink) {
                 return nullptr;
             }
-            out += str->c_str();
+            i18n_catalog_append_placeholder_value(out, str->c_str(), bidi_isolate);
             i = end;
         }
 
@@ -1025,12 +1050,12 @@ private:
     }
 
     DLLLOCAL QoreStringNode* formatMessage(const I18nCatalogMessage& msg, const QoreHashNode* args,
-            ExceptionSink* xsink) const {
-        return formatText(msg.message, args, nullptr, xsink);
+            bool bidi_isolate, ExceptionSink* xsink) const {
+        return formatText(msg.message, args, nullptr, bidi_isolate, xsink);
     }
 
     DLLLOCAL QoreStringNode* formatPluralMessage(const I18nCatalogMessage& msg, QoreValue value,
-            const std::string& locale, const QoreHashNode* args, ExceptionSink* xsink) const {
+            const std::string& locale, const QoreHashNode* args, bool bidi_isolate, ExceptionSink* xsink) const {
         I18nCatalogDecimalInfo decimal;
         if (!i18n_catalog_value_to_decimal_info(value, decimal, xsink)) {
             return nullptr;
@@ -1044,7 +1069,7 @@ private:
                     return nullptr;
                 }
                 if (exact.canonical == decimal.canonical) {
-                    return formatText(entry.second, args, &decimal, xsink);
+                    return formatText(entry.second, args, &decimal, bidi_isolate, xsink);
                 }
             }
         }
@@ -1063,7 +1088,7 @@ private:
             return nullptr;
         }
 
-        return formatText(form->second, args, &decimal, xsink);
+        return formatText(form->second, args, &decimal, bidi_isolate, xsink);
     }
 };
 

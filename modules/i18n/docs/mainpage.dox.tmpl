@@ -114,7 +114,9 @@ I18n::MessageCatalog billing_catalog(files);
 
     Catalog construction validates placeholders. Plain translations must preserve exactly the placeholders from the
     source text. Plural forms must preserve all non-\c count source placeholders and may use \c count for the selected
-    numeric value. Message formatting fails if a required placeholder argument is missing.
+    numeric value. Message formatting fails if a required placeholder argument is missing. Placeholder output is
+    wrapped in Unicode bidi isolation marks automatically for RTL requested locales such as Arabic, Hebrew, Persian,
+    and Urdu.
 
     @section i18n_locale Locale Negotiation
 
