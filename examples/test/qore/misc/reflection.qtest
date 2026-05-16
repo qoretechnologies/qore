@@ -608,6 +608,47 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("rename", ("source_path", "target_path"));
         assertNamedCallableVariantCount("symlink", ("target_path", "link_path"));
         assertNamedCallableVariantCount("umask", ("mask",));
+
+        foreach string name in (("basename", "dirname")) {
+            assertNamedCallableVariantCount(name, ("path",));
+        }
+
+        assertNamedCallableVariantCount("exit", ("status",));
+        assertNamedCallableVariantCount("exec", ("command",));
+        assertNamedCallableVariantCount("system", ("command",));
+        assertNamedCallableVariantCount("setgroups", ("group_ids",));
+        assertNamedCallableVariantCount("sleep", ("seconds",));
+        assertNamedCallableVariantCount("usleep", ("microseconds",));
+        assertNamedCallableVariantCount("usleep", ("duration",));
+        assertNamedCallableVariantCount("kill", ("pid", "signal"));
+        assertNamedCallableVariantCount("srand", ("seed",));
+        assertNamedCallableVariantCount("strerror", ("error_number",));
+
+        foreach string name in (("setuid", "seteuid")) {
+            assertNamedCallableVariantCount(name, ("uid",));
+        }
+
+        foreach string name in (("setgid", "setegid")) {
+            assertNamedCallableVariantCount(name, ("gid",));
+        }
+
+        foreach string name in (("gethostbyname", "gethostbyname_long")) {
+            assertNamedCallableVariantCount(name, ("hostname",));
+        }
+
+        foreach string name in (("gethostbyaddr", "gethostbyaddr_long")) {
+            assertNamedCallableVariantCount(name, ("address", "family"));
+        }
+
+        assertNamedCallableVariantCount("getaddrinfo", ("node", "service", "family", "flags"));
+        assertNamedCallableVariantCount("getaddrinfo_async",
+            ("node", "service", "family", "flags", "socktype", "protocol", "timeout"));
+        assertNamedCallableVariantCount("getnameinfo_async", ("address", "family", "port", "timeout"));
+        assertNamedCallableVariantCount("close_all_fd", ("standard_fds",));
+        assertNamedCallableVariantCount("qore_set_library_options", ("options",));
+        assertNamedCallableVariantCount("set_global_http2_mode", ("mode",), 2);
+        assertNamedCallableVariantCount("qore_add_module_to_blacklist", ("name", "message"));
+        assertNamedCallableVariantCount("qore_add_module_to_blacklist_ex", ("name", "message"));
     }
 
     modNameTests() {

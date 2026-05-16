@@ -217,5 +217,11 @@ These examples are from the core migration and should be reused as precedent:
 - Filesystem `glob_str` was renamed to `pattern`; `rename(old_path, new_path)`
   was renamed to `rename(source_path, target_path)`; `symlink(old_path,
   new_path)` was renamed to `symlink(target_path, link_path)`.
+- Library/process helpers expanded internal abbreviations before exposure:
+  `rc` -> `status`, `gids` -> `group_ids`, `sig` -> `signal`, `usecs` ->
+  `microseconds`, `d` -> `duration`, `addr` -> `address`, `type` -> `family`,
+  `strd` -> `standard_fds`, `opts` -> `options`, and `msg` -> `message`.
+- Timeout parameters with the Qore `timeout` type should use the public name
+  `timeout` unless an established API already exposes `timeout_ms`.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

@@ -117,6 +117,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed misc builtin opt-in", \reviewedMiscBuiltinOptIn(), NOTHING);
         addTestCase("reviewed crypto builtin opt-in", \reviewedCryptoBuiltinOptIn(), NOTHING);
         addTestCase("reviewed file builtin opt-in", \reviewedFileBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed library builtin opt-in", \reviewedLibraryBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -484,6 +485,46 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "is_dev(path: \"/tmp/qore-na\"); is_link(path: \"/tmp/qore-na\"); "
             "is_executable(path: \"/bin/sh\"); absolute_path_windows(path: \"C:\\\\temp\");",
             "file-named");
+    }
+
+    reviewedLibraryBuiltinOptIn() {
+        assertEq("file.txt", basename(path: "/tmp/file.txt"), "basename exposes path");
+        assertEq("/tmp", dirname(path: "/tmp/file.txt"), "dirname exposes path");
+        assertTrue(strerror(error_number: 0) != NOTHING, "strerror exposes error_number");
+        srand(seed: 1);
+        assertEq(0, sleep(seconds: 0), "sleep exposes seconds");
+        assertEq(0, usleep(microseconds: 0), "usleep exposes microseconds");
+        assertEq(0, usleep(duration: 0ms), "usleep date variant exposes duration");
+
+        string original_http2 = get_global_http2_mode();
+        on_exit set_global_http2_mode(mode: original_http2);
+        set_global_http2_mode(mode: "auto");
+        assertEq("auto", get_global_http2_mode(), "HTTP/2 mode string variant exposes mode");
+        set_global_http2_mode(mode: HTTP2Mode::Disabled);
+        assertEq("disabled", get_global_http2_mode(), "HTTP/2 mode enum variant exposes mode");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub ql_lib_named_exit() { exit(status: 0); } "
+            "sub ql_lib_named_exec() { exec(command: \"/bin/true\"); } "
+            "sub ql_lib_named_system() { system(command: \"true\"); } "
+            "sub ql_lib_named_setgroups() { setgroups(group_ids: ()); } "
+            "sub ql_lib_named_kill() { kill(pid: 0, signal: 0); } "
+            "sub ql_lib_named_setuid() { setuid(uid: 0); seteuid(uid: 0); } "
+            "sub ql_lib_named_setgid() { setgid(gid: 0); setegid(gid: 0); } "
+            "sub ql_lib_named_gethostbyname() { gethostbyname(hostname: \"localhost\"); "
+            "gethostbyname_long(hostname: \"localhost\"); } "
+            "sub ql_lib_named_gethostbyaddr() { gethostbyaddr(address: \"127.0.0.1\", family: AF_INET); "
+            "gethostbyaddr_long(address: \"127.0.0.1\", family: AF_INET); } "
+            "sub ql_lib_named_getaddrinfo() { getaddrinfo(node: \"localhost\", service: NOTHING, "
+            "family: AF_UNSPEC, flags: 0); getaddrinfo_async(node: \"localhost\", service: NOTHING, "
+            "family: AF_UNSPEC, flags: 0, socktype: SOCK_STREAM, protocol: 0, timeout: -1); } "
+            "sub ql_lib_named_getnameinfo() { getnameinfo_async(address: \"127.0.0.1\", family: AF_INET, "
+            "port: 0, timeout: -1); } "
+            "sub ql_lib_named_closefds() { close_all_fd(standard_fds: False); } "
+            "sub ql_lib_named_options() { qore_set_library_options(options: 0); } "
+            "sub ql_lib_named_blacklist() { qore_add_module_to_blacklist(name: \"NamedArgsTest\", "
+            "message: \"test\"); qore_add_module_to_blacklist_ex(name: \"NamedArgsTest\", message: \"test\"); }",
+            "library-named");
     }
 
     parseFailures() {

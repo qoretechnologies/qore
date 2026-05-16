@@ -70,6 +70,7 @@ class SystemCallTest inherits QUnit::Test {
         }
 
         SandboxManager sm();
+        sm.addFilesystemAllowedPath("/bin/sh", QSEC_EXECUTE);
         Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
         p.setSandboxManager(sm);
 
