@@ -742,6 +742,11 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("EventLoop", "poll", ("timeout_ms",));
         assertNamedClassMethodVariantCount("EventLoop", "addTimer", ("deadline", "user_data"));
         assertNamedClassMethodVariantCount("EventLoop", "cancelTimer", ("timer_id",));
+        assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "waitForReady", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "registerReadyNotifier", ("notifier",));
+        assertNamedClassMethodVariantCount("HttpClientConnectionBase", "waitForReadyOrError", ("timeout_ms",));
+        assertNamedConstructorVariantCount("Http1Connection", ("target_host", "target_port", "ssl_required"));
+        assertNamedClassMethodVariantCount("Http1Connection", "waitForReady", ("timeout_ms",));
         assertNamedConstructorVariantCount("ParseOptions", ("parse_options",));
         assertNamedConstructorVariantCount("ParseOptions", ("name",));
         assertNamedConstructorVariantCount("ParseOptions", ("names",));

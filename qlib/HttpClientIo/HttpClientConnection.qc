@@ -486,7 +486,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
     */
     bool waitForReady(timeout timeout_ms = 30s) {
         log(LoggerLevel::DEBUG, "waitForReady() timeout=%y", timeout_ms);
-        bool ready = AbstractHttpPollConnection::waitForReady(timeout_ms);
+        bool ready = AbstractHttpPollConnection::waitForReady(timeout_ms: timeout_ms);
 
         if (self.isClosed()) {
             *hash<auto> err = getPollOperation().getError();

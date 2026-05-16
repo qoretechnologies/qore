@@ -1388,7 +1388,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
                 bool h2c_ok = False;
                 try {
-                    h2c_ok = conn.waitForReady(H2C_PROBE_TIMEOUT);
+                    h2c_ok = conn.waitForReady(timeout_ms: H2C_PROBE_TIMEOUT);
                 } catch () {
                     # Connection closed during probe (server rejected h2c)
                 }
@@ -1551,7 +1551,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         # Wait for H3 with stagger timeout using poll on the connection's notifier
         EventNotifier h3_notifier();
-        bool h3_queued = h3conn.registerReadyNotifier(h3_notifier);
+        bool h3_queued = h3conn.registerReadyNotifier(notifier: h3_notifier);
         if (!h3_queued) {
             # Already decided (ready or failed)
             if (h3conn.isReady()) {
@@ -1595,8 +1595,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         # Race: register notifier and check if either already connected
         EventNotifier race_notifier();
-        bool h3_pending = h3conn.registerReadyNotifier(race_notifier);
-        bool h2_pending = h2conn.registerReadyNotifier(race_notifier);
+        bool h3_pending = h3conn.registerReadyNotifier(notifier: race_notifier);
+        bool h2_pending = h2conn.registerReadyNotifier(notifier: race_notifier);
 
         # If either already decided (ready or failed), check immediately
         if (!h3_pending || !h2_pending) {

@@ -124,6 +124,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed event-loop class builtin opt-in", \reviewedEventLoopClassBuiltinOptIn(),
             NOTHING);
+        addTestCase("reviewed HTTP readiness builtin opt-in", \reviewedHttpReadinessBuiltinOptIn(),
+            NOTHING);
         addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
         addTestCase("reviewed iterator builtin opt-in", \reviewedIteratorBuiltinOptIn(), NOTHING);
         addTestCase("reviewed regex class builtin opt-in", \reviewedRegexClassBuiltinOptIn(), NOTHING);
@@ -712,6 +714,24 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertTrue((notifier_events[0].events & SOCK_POLLIN) != 0, "EventLoop returns notifier readiness");
         loop.del(notifier: notifier);
         notifier.acknowledge();
+    }
+
+    reviewedHttpReadinessBuiltinOptIn() {
+        AbstractHttpPollConnection conn();
+        EventNotifier notifier();
+
+        assertTrue(conn.registerReadyNotifier(notifier: notifier),
+            "AbstractHttpPollConnection registerReadyNotifier exposes notifier");
+        assertFalse(conn.waitForReady(timeout_ms: 0ms),
+            "AbstractHttpPollConnection waitForReady exposes timeout_ms");
+        conn.onConnectionReady();
+        assertTrue(conn.waitForReady(timeout_ms: 0ms),
+            "AbstractHttpPollConnection reports readiness after onConnectionReady");
+        notifier.acknowledge();
+
+        HttpClientConnectionBase base();
+        assertFalse(base.waitForReadyOrError(timeout_ms: 1),
+            "HttpClientConnectionBase waitForReadyOrError exposes timeout_ms");
     }
 
     reviewedStreamBuiltinOptIn() {

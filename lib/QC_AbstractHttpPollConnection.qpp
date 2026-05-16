@@ -163,7 +163,7 @@ nothing AbstractHttpPollConnection::onConnectionReady() {
     @note Does not throw on CLOSED — the caller should check isClosed()
     and getConnectionState() to determine the reason for a False return.
 */
-bool AbstractHttpPollConnection::waitForReady(timeout timeout_ms = 30s) {
+bool AbstractHttpPollConnection::waitForReady(timeout timeout_ms = 30s) [flags=NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("AbstractHttpPollConnection", "waitForReady", xsink);
     if (*xsink) {
         return false;
@@ -232,7 +232,7 @@ nothing AbstractHttpPollConnection::setDraining() {
 
     @since %Qore 2.3
 */
-bool AbstractHttpPollConnection::registerReadyNotifier(EventNotifier[QoreEventNotifier] notifier) {
+bool AbstractHttpPollConnection::registerReadyNotifier(EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
     // Transfer the ref from the QPP ReferenceHolder — priv takes ownership
     QoreEventNotifier* ptr = notifier.release();
     QoreObject* obj = const_cast<QoreObject*>(obj_notifier);

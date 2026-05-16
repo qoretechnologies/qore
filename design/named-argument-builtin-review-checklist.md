@@ -333,5 +333,9 @@ These examples are from the core migration and should be reused as precedent:
 - Event-loop APIs use the polled object role as the name (`socket`, `file`, or
   `notifier`) plus `events`; timer APIs use `deadline`, `user_data`, and
   `timer_id`. Do not expose `udata` as a public formal parameter name.
+- HTTP readiness APIs use `timeout_ms` for blocking readiness waits and
+  `notifier` for `registerReadyNotifier()`. HTTP connection constructors should
+  keep the endpoint and TLS decision explicit (`target_host`, `target_port`,
+  `ssl_required`) when they are exposed to named calls.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

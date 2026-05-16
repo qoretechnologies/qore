@@ -116,7 +116,7 @@ int HttpClientConnectionBase::getPendingStreamCount() [flags=RET_VALUE_ONLY] {
     @return True if the connection is ready; False on timeout
     @throw HTTPCLIENT-CONNECT-ERROR if closed with an error
 */
-bool HttpClientConnectionBase::waitForReadyOrError(int timeout_ms = 30000) {
+bool HttpClientConnectionBase::waitForReadyOrError(int timeout_ms = 30000) [flags=NAMED_ARGS] {
     return priv->waitForReadyOrError((int64_t)timeout_ms, xsink);
 }
 
