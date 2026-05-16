@@ -20,19 +20,15 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-find_package(PkgConfig QUIET)
-set(ICU_FOUND FALSE)
-if (PkgConfig_FOUND)
-    pkg_check_modules(ICU QUIET icu-uc icu-i18n)
-endif()
-
 if (NOT ICU_FOUND)
-    find_package(ICU COMPONENTS uc i18n QUIET)
-endif()
+    find_package(PkgConfig QUIET)
+    if (PkgConfig_FOUND)
+        pkg_check_modules(ICU QUIET icu-uc icu-i18n)
+    endif()
 
-if (NOT ICU_FOUND)
-    message(STATUS "ICU not found - i18n module will NOT be built")
-    return()
+    if (NOT ICU_FOUND)
+        find_package(ICU COMPONENTS uc i18n REQUIRED)
+    endif()
 endif()
 
 message(STATUS "ICU found - building i18n module")
@@ -67,7 +63,11 @@ set(I18N_CPP_SRC
 )
 
 set(QORE_DOX_I18N_TMPL_SRC
+    docs/catalogs.dox.tmpl
+    docs/cli.dox.tmpl
+    docs/locale-formatting.dox.tmpl
     docs/mainpage.dox.tmpl
+    docs/plural.dox.tmpl
 )
 
 qore_wrap_qpp_value(I18N_QPP_SOURCES DOXLIST _dox_src ${I18N_QPP_SRC})
@@ -83,11 +83,16 @@ endif()
 target_link_libraries(${i18n_module_name} ${ICU_LIBRARIES})
 add_dependencies(${i18n_module_name} libqore I18N_QPP_GENERATED_FILES)
 
-set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/i18n/mainpage.dox ${_dox_src})
+if (DOXYGEN_FOUND)
+    qore_wrap_dox(QORE_DOX_I18N_SRC ${QORE_DOX_I18N_TMPL_SRC})
+    set(MODULE_DOX_INPUT ${QORE_DOX_I18N_SRC} ${_dox_src})
+else()
+    set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/i18n/mainpage.dox ${_dox_src})
+endif()
+
 qore_binary_module_qore(${i18n_module_name} "${VERSION}" "/${VERSION}")
 
 if (DOXYGEN_FOUND)
-    qore_wrap_dox(QORE_DOX_I18N_SRC ${QORE_DOX_I18N_TMPL_SRC})
     add_custom_target(QORE_I18N_MOD_DOX_FILES DEPENDS ${QORE_DOX_I18N_SRC})
     add_dependencies(docs-i18n QORE_I18N_MOD_DOX_FILES)
 endif()

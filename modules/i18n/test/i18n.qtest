@@ -35,6 +35,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("message catalog JSON file loading", \messageCatalogJsonFileLoadingTest());
         addTestCase("message catalog JSON validation", \messageCatalogJsonValidationTest());
         addTestCase("message catalog discovery", \messageCatalogDiscoveryTest());
+        addTestCase("message catalog discovery sandbox", \messageCatalogDiscoverySandboxTest());
         addTestCase("message catalog validation", \messageCatalogValidationTest());
 
         set_return_value(main());
@@ -524,6 +525,37 @@ class I18nTest inherits QUnit::Test {
 
         assertThrows("I18N-CATALOG-ERROR", auto sub() {
             return I18n::discover_catalog_files("../billing", "cs", {"search_path": (base_dir,)});
+        });
+    }
+
+    messageCatalogDiscoverySandboxTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        string base_dir = make_tmp_dir("qore-i18n-sandbox-");
+        on_exit remove_tree(base_dir);
+
+        mkdir(base_dir + "/billing");
+        string base_root = base_dir + "/billing/root.json";
+        writeTextFile(base_root, createCatalogJson("Root"));
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("
+%modern
+%requires i18n
+
+list<string> sub discover_catalogs(string domain, string locale, string path) {
+    return I18n::discover_catalog_files(domain, locale, {\"search_path\": (path,)});
+}
+        ", "i18n_sandbox_discovery");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(base_dir);
+        p.setSandboxManager(sm);
+
+        assertEq((base_root,), p.callFunction("discover_catalogs", "billing", "root", base_dir));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", auto sub() {
+            return p.callFunction("discover_catalogs", "billing", "root", "/etc");
         });
     }
 

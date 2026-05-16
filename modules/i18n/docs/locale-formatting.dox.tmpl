@@ -1,0 +1,68 @@
+/** @page i18nlocaleformatting Locale, Formatting, and Collation
+
+    @section i18nlocalenegotiation Locale Negotiation
+
+    Locale utilities canonicalize BCP 47 tags, strip Unicode formatting extensions from catalog identity, parse
+    HTTP \c Accept-Language headers, and choose an effective catalog locale from an explicit available-locale list.
+
+    @code{.py}
+%requires i18n
+
+printf("%s\n", I18n::canonicalize_locale("en_US")); # en-US
+printf("%s\n", I18n::add_likely_subtags("sr"));     # sr-Cyrl-RS
+printf("%y\n", I18n::get_locale_fallback_chain("fr-CA-u-nu-latn"));
+
+string locale = I18n::negotiate_locale(
+    "fr-CA, fr;q=0.8, en;q=0.5",
+    ("en", "fr", "root")
+);
+printf("%s\n", locale); # fr
+    @endcode
+
+    \c I18n::parse_accept_language() returns a preference-sorted list of hashes containing \c locale, \c q, \c index,
+    and \c wildcard keys. Header parsing is bounded and rejects malformed \c q values instead of guessing.
+    Negotiation also uses ICU likely-subtags so broad requests such as \c sr can match an available
+    \c sr-Cyrl catalog.
+
+    The module also exposes a thread-local ambient locale for request/task integration:
+
+    @code{.py}
+I18n::set_thread_locale("cs-CZ");
+assertEq("cs-CZ", I18n::get_thread_locale());
+hash<auto> locale_context = I18n::capture_locale_context();
+I18n::clear_thread_locale();
+I18n::apply_locale_context(locale_context);
+    @endcode
+
+    Explicit-locale APIs remain the stable default. Raw \c Queue handoff does not propagate the ambient locale; pass an
+    explicit context object from \c I18n::capture_locale_context() or a locale string across queue boundaries.
+
+    @section i18nformatting Formatting and Collation
+
+    Number and currency formatting use explicit locale arguments and do not change existing core machine-format
+    functions. Collation APIs expose compare, binary sort-key, and collation-version primitives; sort keys are for
+    cache-local ordering unless they are tagged with locale, collation options, backend, ICU/CLDR versions, and
+    collation version.
+
+    @code{.py}
+%requires i18n
+
+printf("%s\n", I18n::format_number("1234.50", "en-US"));
+printf("%y\n", I18n::parse_number("1,234.50", "en-US"));
+printf("%s\n", I18n::format_currency("12.5", "USD", "en-US"));
+printf("%s\n", I18n::format_datetime(2020-05-04T15:06:07Z, "en-US",
+    {"date_style": "medium", "time_style": "none"}));
+printf("%s\n", I18n::format_datetime(2020-05-04T15:06:07Z, "en-US", {"skeleton": "yMMMd"}));
+assertLt(0, I18n::compare_strings("a", "b", "en-US"));
+binary key = I18n::get_sort_key("file-001", "en-US-u-kn-true");
+    @endcode
+
+    @section i18nversions Backend Versions
+
+    The module exposes ICU and CLDR data versions so deployments can report the locale-data backend in diagnostics:
+
+    @code{.py}
+hash<auto> info = I18n::get_backend_info();
+printf("backend=%s icu=%s cldr=%s\n", info.backend, info.icu_version, info.cldr_version);
+    @endcode
+*/

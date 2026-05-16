@@ -449,6 +449,18 @@ find_package(BZip2 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
 
+# ICU is required so the bundled i18n module is always built and available.
+pkg_check_modules(ICU QUIET icu-uc icu-i18n)
+if(ICU_FOUND)
+    if(ICU_VERSION)
+        message(STATUS "Found ICU: ${ICU_VERSION}")
+    else()
+        message(STATUS "Found ICU")
+    endif()
+else()
+    find_package(ICU COMPONENTS uc i18n REQUIRED)
+endif()
+
 # c-ares is required for asynchronous DNS resolution in socket I/O.
 pkg_check_modules(CARES QUIET libcares)
 if(CARES_FOUND)

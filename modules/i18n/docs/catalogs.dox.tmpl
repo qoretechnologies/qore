@@ -1,0 +1,80 @@
+/** @page i18ncatalogs Message Catalogs
+
+    \c I18n::MessageCatalog stores schema-versioned native catalogs passed as Qore data. Lookup uses source strings by
+    default and supports stable symbolic ids with \c tc(). Locale fallback is deterministic:
+    \c fr-CA-u-nu-latn falls back through \c fr-CA, \c fr, and \c root for catalog identity.
+
+    @section i18ncatalogsnative Native Catalog Data
+
+    @code{.py}
+%requires i18n
+
+hash<auto> native_catalog = {
+    "schema_version": I18n::get_catalog_schema_version(),
+    "locales": {
+        "root": {"messages": {"Hello, {name}": "Hello, {name}"}},
+        "cs": {"messages": {
+            "Hello, {name}": {
+                "message": "Ahoj, {name}",
+                "state": "translated",
+            },
+            "1 file": {
+                "plural_source": "{count} files",
+                "forms": {
+                    "one": "{count} soubor",
+                    "few": "{count} soubory",
+                    "other": "{count} souboru",
+                },
+                "state": "translated",
+            },
+            "workflow.greeting": {
+                "source": "Hello, {name}",
+                "message": "Nazdar, {name}",
+                "state": "translated",
+            },
+        }},
+    },
+};
+
+I18n::MessageCatalog catalog(native_catalog);
+printf("%s\n", catalog.t("Hello, {name}", "cs-CZ", {"name": "Petr"}));
+printf("%s\n", catalog.tn(2, "1 file", "{count} files", "cs"));
+printf("%s\n", catalog.tc("workflow.greeting", "Hello, {name}", "cs", {"name": "Eva"}));
+    @endcode
+
+    @section i18ncatalogsjson JSON Catalogs
+
+    The same native shape can be stored as UTF-8 JSON and loaded without evaluating catalog text as Qore code:
+
+    @code{.py}
+hash<auto> catalog_data = I18n::load_native_catalog("catalog.json");
+I18n::MessageCatalog catalog_from_file("catalog.json");
+I18n::MessageCatalog layered_catalog(("base.json", "override.json"));
+    @endcode
+
+    File-loading APIs and constructors are tagged with the \c FILESYSTEM functional domain and enforce a bounded file
+    size. JSON parsing is strict, rejects duplicate object keys, and validates UTF-8 strings.
+
+    @section i18ncatalogsdiscovery Discovery
+
+    Discovery uses \c QORE_CATALOG_DIR by default and can be overridden explicitly. Returned files are already ordered
+    for deterministic composition: lower precedence first, with \c root before more-specific locale files.
+
+    @code{.py}
+list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {
+    "search_path": ("/opt/qore/catalogs",),
+    "override_path": "/etc/qore/catalogs",
+});
+I18n::MessageCatalog billing_catalog(files);
+    @endcode
+
+    Runtime state policy follows gettext's conservative behavior by default: \c fuzzy, \c needs-review, and
+    \c stale entries are stored but not used at runtime. Pass \c {"use_unreviewed": True} to the constructor to preview
+    those entries in development.
+
+    Catalog construction validates placeholders. Plain translations must preserve exactly the placeholders from the
+    source text. Plural forms must preserve all non-\c count source placeholders and may use \c count for the selected
+    numeric value. Message formatting fails if a required placeholder argument is missing. Placeholder output is
+    wrapped in Unicode bidi isolation marks automatically for RTL requested locales such as Arabic, Hebrew, Persian,
+    and Urdu.
+*/

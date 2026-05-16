@@ -27,6 +27,7 @@
 
 #include "i18n-module.h"
 
+#include "qore/QoreSandboxManager.h"
 #include "qore/SystemEnvironment.h"
 #include "qore/intern/QoreTimeZoneManager.h"
 
@@ -807,7 +808,12 @@ static std::string i18n_join_catalog_path(const std::string& dir, const std::str
     return dir + "/" + rel;
 }
 
-static bool i18n_regular_file_exists(const std::string& path) {
+static bool i18n_regular_file_exists(const std::string& path, ExceptionSink* xsink) {
+    QoreSandboxManagerHelper smh;
+    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
+        return false;
+    }
+
     struct stat sbuf;
     return !stat(path.c_str(), &sbuf) && S_ISREG(sbuf.st_mode);
 }
@@ -852,7 +858,10 @@ static std::vector<std::string> i18n_discover_catalog_files(const std::string& d
                     continue;
                 }
                 seen.insert(path);
-                if (i18n_regular_file_exists(path)) {
+                if (i18n_regular_file_exists(path, xsink)) {
+                    if (*xsink) {
+                        return files;
+                    }
                     files.push_back(std::move(path));
                 }
             }
