@@ -113,9 +113,10 @@
     - Unicode-aware case conversion (1-to-many uppercase mappings, fixed UTF-8 corruption bug)
 
     <i>Modules and integrations:</i>
-    - new builtin modules: @ref dataframeintro "dataframe", @ref krb5intro "krb5",
-      @ref linenoiseintro "linenoise", @ref mlintro "ml", @ref mongodbintro "mongodb", @ref ocrintro "ocr",
-      @ref protobufintro "protobuf", @ref tokenizerintro "tokenizer"
+    - new builtin modules: @ref dataframeintro "dataframe", @ref i18nintro "i18n",
+      @ref krb5intro "krb5", @ref linenoiseintro "linenoise", @ref mlintro "ml",
+      @ref mongodbintro "mongodb", @ref ocrintro "ocr", @ref protobufintro "protobuf",
+      @ref tokenizerintro "tokenizer"
     - new HTTP / async I/O modules: @ref httpclientiointro "HttpClientIo",
       @ref ftpclientiointro "FtpClientIo", @ref httputilintro "HttpUtil"
     - dozens of new user modules covering AI/LLM (@ref anthropicrestclientintro "Anthropic",
@@ -1219,6 +1220,20 @@ cargo install tree-sitter-cli@0.26.5
       - Eigen3-backed float64 columns for SIMD-friendly numeric operations
       - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
       - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O
+    - @ref i18nintro "i18n" module
+      - new builtin module providing ICU-backed internationalization and localization primitives
+      - native schema-versioned message catalogs with deterministic locale fallback, placeholder validation,
+        metadata state handling, layered JSON catalog loading, and \c QORE_CATALOG_DIR discovery
+      - CLDR plural APIs: \c plural_category(), \c plural_form(), and catalog \c tn() entries with exact-value
+        selectors and per-locale plural forms while keeping \c Util::plural() as an English two-form helper
+      - BCP 47 locale canonicalization, likely-subtag expansion, \c Accept-Language parsing, and effective-locale
+        negotiation for HTTP/API workflows
+      - explicit-locale number parsing/formatting, currency formatting, date/time style and skeleton formatting,
+        collation compare/sort-key APIs, and backend version introspection
+      - thread-local locale controls using the \c LOCALE_CONTROL functional domain; catalog file APIs use
+        \c FILESYSTEM
+      - \c qore-i18n tool for AST-based extraction, catalog statistics, pseudolocalization, and simple PO
+        import/export
     - @ref krb5intro "krb5" module
       - new builtin module providing Kerberos 5 and GSSAPI primitives for credential caches,
         keytabs, principals, service tickets, GSSAPI initiator and acceptor contexts,
