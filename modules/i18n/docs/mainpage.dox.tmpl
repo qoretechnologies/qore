@@ -62,6 +62,15 @@ hash<auto> native_catalog = {
                 "message": "Ahoj, {name}",
                 "state": "translated",
             },
+            "1 file": {
+                "plural_source": "{count} files",
+                "forms": {
+                    "one": "{count} soubor",
+                    "few": "{count} soubory",
+                    "other": "{count} souboru",
+                },
+                "state": "translated",
+            },
             "workflow.greeting": {
                 "source": "Hello, {name}",
                 "message": "Nazdar, {name}",
@@ -73,6 +82,7 @@ hash<auto> native_catalog = {
 
 I18n::MessageCatalog catalog(native_catalog);
 printf("%s\n", catalog.t("Hello, {name}", "cs-CZ", {"name": "Petr"}));
+printf("%s\n", catalog.tn(2, "1 file", "{count} files", "cs"));
 printf("%s\n", catalog.tc("workflow.greeting", "Hello, {name}", "cs", {"name": "Eva"}));
     @endcode
 
@@ -80,8 +90,9 @@ printf("%s\n", catalog.tc("workflow.greeting", "Hello, {name}", "cs", {"name": "
     \c stale entries are stored but not used at runtime. Pass \c {"use_unreviewed": True} to the constructor to preview
     those entries in development.
 
-    Catalog construction validates simple placeholders. Translations must preserve exactly the placeholders from the
-    source text, and message formatting fails if a required placeholder argument is missing.
+    Catalog construction validates placeholders. Plain translations must preserve exactly the placeholders from the
+    source text. Plural forms must preserve all non-\c count source placeholders and may use \c count for the selected
+    numeric value. Message formatting fails if a required placeholder argument is missing.
 
     @section i18n_locale Locale Negotiation
 

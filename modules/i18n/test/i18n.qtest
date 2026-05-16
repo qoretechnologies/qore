@@ -25,6 +25,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("plural form selection", \pluralFormTest());
         addTestCase("plural validation errors", \validationErrorTest());
         addTestCase("message catalog lookup", \messageCatalogLookupTest());
+        addTestCase("message catalog plural lookup", \messageCatalogPluralLookupTest());
         addTestCase("message catalog state policy", \messageCatalogStatePolicyTest());
         addTestCase("message catalog layer precedence", \messageCatalogLayerPrecedenceTest());
         addTestCase("message catalog validation", \messageCatalogValidationTest());
@@ -191,6 +192,22 @@ class I18nTest inherits QUnit::Test {
                             "message": "Hello, {name}",
                             "state": "translated",
                         },
+                        "1 file": {
+                            "plural_source": "{count} files",
+                            "forms": {
+                                "one": "1 file",
+                                "other": "{count} files",
+                            },
+                            "state": "translated",
+                        },
+                        "{name} has 1 file": {
+                            "plural_source": "{name} has {count} files",
+                            "forms": {
+                                "one": "{name} has 1 file",
+                                "other": "{name} has {count} files",
+                            },
+                            "state": "translated",
+                        },
                     },
                 },
                 "cs": {
@@ -202,6 +219,26 @@ class I18nTest inherits QUnit::Test {
                         "workflow.greeting": {
                             "source": "Hello, {name}",
                             "message": "Nazdar, {name}",
+                            "state": "translated",
+                        },
+                        "1 file": {
+                            "plural_source": "{count} files",
+                            "forms": {
+                                "one": "{count} soubor",
+                                "few": "{count} soubory",
+                                "many": "{count} souboru",
+                                "other": "{count} souboru",
+                            },
+                            "state": "translated",
+                        },
+                        "{name} has 1 file": {
+                            "plural_source": "{name} has {count} files",
+                            "forms": {
+                                "one": "{name} ma {count} soubor",
+                                "few": "{name} ma {count} soubory",
+                                "many": "{name} ma {count} souboru",
+                                "other": "{name} ma {count} souboru",
+                            },
                             "state": "translated",
                         },
                     },
@@ -234,9 +271,28 @@ class I18nTest inherits QUnit::Test {
         assertEq(("cs", "fr", "root"), catalog.availableLocales());
 
         hash<auto> stats = catalog.getStats("cs");
-        assertEq(2, stats.total);
-        assertEq(2, stats.translated);
-        assertEq(2, stats.usable);
+        assertEq(4, stats.total);
+        assertEq(4, stats.translated);
+        assertEq(4, stats.usable);
+    }
+
+    messageCatalogPluralLookupTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        I18n::MessageCatalog catalog(createCatalog());
+
+        assertEq("1 soubor", catalog.tn(1, "1 file", "{count} files", "cs"));
+        assertEq("2 soubory", catalog.tn(2, "1 file", "{count} files", "cs"));
+        assertEq("5 souboru", catalog.tn(5, "1 file", "{count} files", "cs"));
+        assertEq("1.0 souboru", catalog.tn("1.0", "1 file", "{count} files", "cs"));
+
+        assertEq("Petr ma 2 soubory",
+            catalog.tn(2, "{name} has 1 file", "{name} has {count} files", "cs", {"name": "Petr"}));
+
+        assertEq("2 files", catalog.tn(2, "1 file", "{count} files", "de"));
+        assertEq("1 file", catalog.tn(1, "1 file", "{count} files", "de"));
+        assertEq("1.0 files", catalog.tn("1.0", "1 file", "{count} files", "de"));
     }
 
     messageCatalogStatePolicyTest() {
@@ -327,6 +383,34 @@ class I18nTest inherits QUnit::Test {
                 "locales": {
                     "cs": {"messages": {
                         "Hello": {"message": "Ahoj", "state": "reviewed"},
+                    }},
+                },
+            });
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "1 file": {
+                            "plural_source": "{count} files",
+                            "forms": {"one": "{count} soubor"},
+                        },
+                    }},
+                },
+            });
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "{name} has 1 file": {
+                            "plural_source": "{name} has {count} files",
+                            "forms": {"other": "{count} souboru"},
+                        },
                     }},
                 },
             });

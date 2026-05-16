@@ -27,6 +27,12 @@
 
 #include "i18n-module.h"
 
+#include <unicode/locid.h>
+#include <unicode/numberformatter.h>
+#include <unicode/plurrule.h>
+#include <unicode/stringpiece.h>
+#include <unicode/unistr.h>
+
 #include <algorithm>
 #include <cctype>
 #include <memory>
@@ -42,12 +48,25 @@ constexpr int64 I18N_CATALOG_SCHEMA_VERSION = 1;
 struct I18nCatalogMessage {
     std::string source;
     std::string message;
+    std::string plural_source;
+    std::unordered_map<std::string, std::string> plural_forms;
     std::string state = "translated";
     std::set<std::string> placeholders;
+    bool plural = false;
 };
 
 using I18nMessageMap = std::unordered_map<std::string, I18nCatalogMessage>;
 using I18nLocaleMap = std::unordered_map<std::string, I18nMessageMap>;
+
+struct I18nCatalogDecimalInfo {
+    std::string formatted;
+    std::string canonical;
+    int32_t fraction_digits = 0;
+};
+
+static const char* i18n_catalog_icu_error_name(UErrorCode status) {
+    return u_errorName(status);
+}
 
 static bool i18n_catalog_is_ascii_ident_start(char c) {
     return std::isalpha(static_cast<unsigned char>(c)) || c == '_';
@@ -67,6 +86,151 @@ static bool i18n_catalog_check_locale_length(const std::string& locale, Exceptio
         return false;
     }
     return true;
+}
+
+static bool i18n_catalog_trim_ascii(const std::string& s, std::string& out, ExceptionSink* xsink) {
+    size_t start = 0;
+    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) {
+        if (start && !(start % 100) && qore_check_cancel(xsink, "trimming i18n catalog numeric string")) {
+            return false;
+        }
+        ++start;
+    }
+
+    size_t end = s.size();
+    while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) {
+        if ((s.size() - end) && !((s.size() - end) % 100)
+            && qore_check_cancel(xsink, "trimming i18n catalog numeric string")) {
+            return false;
+        }
+        --end;
+    }
+
+    out = s.substr(start, end - start);
+    return true;
+}
+
+static bool i18n_catalog_parse_decimal_string(const std::string& input, I18nCatalogDecimalInfo& info,
+        ExceptionSink* xsink, const char* field) {
+    std::string s;
+    if (!i18n_catalog_trim_ascii(input, s, xsink)) {
+        return false;
+    }
+    if (s.empty()) {
+        xsink->raiseException("I18N-NUMBER-ERROR", "%s cannot be empty", field);
+        return false;
+    }
+
+    size_t pos = 0;
+    bool negative = false;
+    if (s[pos] == '+' || s[pos] == '-') {
+        negative = s[pos] == '-';
+        ++pos;
+    }
+
+    std::string integer;
+    while (pos < s.size() && std::isdigit(static_cast<unsigned char>(s[pos]))) {
+        if (pos && !(pos % 100) && qore_check_cancel(xsink, "parsing i18n catalog numeric string")) {
+            return false;
+        }
+        integer.push_back(s[pos++]);
+    }
+
+    std::string fraction;
+    if (pos < s.size() && s[pos] == '.') {
+        ++pos;
+        while (pos < s.size() && std::isdigit(static_cast<unsigned char>(s[pos]))) {
+            if (pos && !(pos % 100) && qore_check_cancel(xsink, "parsing i18n catalog numeric string")) {
+                return false;
+            }
+            fraction.push_back(s[pos++]);
+        }
+    }
+
+    if (integer.empty() && fraction.empty()) {
+        xsink->raiseException("I18N-NUMBER-ERROR", "%s must contain at least one digit", field);
+        return false;
+    }
+    if (pos != s.size()) {
+        xsink->raiseException("I18N-NUMBER-ERROR",
+            "%s must be a base-10 integer or decimal string; got '%s'", field, input.c_str());
+        return false;
+    }
+    if (integer.empty()) {
+        integer = "0";
+    }
+    if (integer.size() > 1000) {
+        xsink->raiseException("I18N-NUMBER-ERROR",
+            "%s has too many integer digits; maximum supported is 1000", field);
+        return false;
+    }
+    if (fraction.size() > 100) {
+        xsink->raiseException("I18N-NUMBER-ERROR",
+            "%s has too many visible fraction digits; maximum supported is 100", field);
+        return false;
+    }
+
+    size_t first_non_zero = integer.find_first_not_of('0');
+    std::string canonical_integer = first_non_zero == std::string::npos ? "0" : integer.substr(first_non_zero);
+
+    std::string canonical_fraction = fraction;
+    size_t trim_pos = 0;
+    while (!canonical_fraction.empty() && canonical_fraction.back() == '0') {
+        if (trim_pos && !(trim_pos % 100) && qore_check_cancel(xsink, "normalizing i18n catalog numeric string")) {
+            return false;
+        }
+        canonical_fraction.pop_back();
+        ++trim_pos;
+    }
+
+    bool is_zero = canonical_integer == "0" && canonical_fraction.empty();
+    info.formatted.clear();
+    if (negative && !is_zero) {
+        info.formatted.push_back('-');
+    }
+    info.formatted += canonical_integer;
+    if (!fraction.empty()) {
+        info.formatted.push_back('.');
+        info.formatted += fraction;
+    }
+
+    info.canonical.clear();
+    if (negative && !is_zero) {
+        info.canonical.push_back('-');
+    }
+    info.canonical += canonical_integer;
+    if (!canonical_fraction.empty()) {
+        info.canonical.push_back('.');
+        info.canonical += canonical_fraction;
+    }
+    info.fraction_digits = static_cast<int32_t>(fraction.size());
+
+    return true;
+}
+
+static bool i18n_catalog_value_to_decimal_info(QoreValue value, I18nCatalogDecimalInfo& info,
+        ExceptionSink* xsink) {
+    switch (value.getType()) {
+        case NT_INT:
+            info.formatted = std::to_string(value.getAsBigInt());
+            info.canonical = info.formatted;
+            info.fraction_digits = 0;
+            return true;
+
+        case NT_NUMBER:
+        case NT_FLOAT:
+        case NT_STRING: {
+            QoreStringValueHelper str(value, QCS_UTF8, xsink);
+            if (*xsink) {
+                return false;
+            }
+            return i18n_catalog_parse_decimal_string(str->c_str(), info, xsink, "value");
+        }
+    }
+
+    xsink->raiseException("I18N-TYPE-ERROR", "value must be an int, float, number, or string; got type '%s'",
+        value.getTypeName());
+    return false;
 }
 
 static std::string i18n_catalog_normalize_locale(const std::string& raw) {
@@ -197,6 +361,78 @@ static bool i18n_catalog_get_optional_string(const QoreHashNode* h, const char* 
     return i18n_catalog_qore_value_to_utf8(value, out, xsink, key);
 }
 
+static bool i18n_catalog_is_valid_plural_category(const char* key) {
+    const char* valid_categories[] = {"zero", "one", "two", "few", "many", "other"};
+    for (const char* category : valid_categories) {
+        if (!strcmp(key, category)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool i18n_catalog_validate_plural_key(const char* key, ExceptionSink* xsink) {
+    if (!key || !key[0]) {
+        xsink->raiseException("I18N-CATALOG-ERROR", "plural form keys cannot be empty");
+        return false;
+    }
+    if (key[0] == '=') {
+        I18nCatalogDecimalInfo exact;
+        return i18n_catalog_parse_decimal_string(key + 1, exact, xsink, "plural exact-value key");
+    }
+    if (!i18n_catalog_is_valid_plural_category(key)) {
+        xsink->raiseException("I18N-CATALOG-ERROR",
+            "invalid plural form key '%s'; expected a CLDR category or exact key such as '=0'", key);
+        return false;
+    }
+    return true;
+}
+
+static std::string i18n_catalog_select_plural_category(const I18nCatalogDecimalInfo& decimal,
+        const std::string& locale_name, ExceptionSink* xsink) {
+    std::string tag = i18n_catalog_normalize_locale(locale_name);
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::forLanguageTag(icu::StringPiece(tag), status);
+    if (U_FAILURE(status) || locale.isBogus()) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "invalid locale '%s': %s", locale_name.c_str(),
+            i18n_catalog_icu_error_name(status));
+        return std::string();
+    }
+
+    std::unique_ptr<icu::PluralRules> rules(icu::PluralRules::forLocale(locale, UPLURAL_TYPE_CARDINAL, status));
+    if (U_FAILURE(status) || !rules) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create plural rules for locale '%s': %s",
+            locale.getName(), i18n_catalog_icu_error_name(status));
+        return std::string();
+    }
+
+    icu::number::LocalizedNumberFormatter formatter = icu::number::NumberFormatter::with()
+        .precision(icu::number::Precision::fixedFraction(decimal.fraction_digits))
+        .locale(locale);
+    icu::number::FormattedNumber formatted = formatter.formatDecimal(icu::StringPiece(decimal.formatted), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot format plural operand '%s': %s",
+            decimal.formatted.c_str(), i18n_catalog_icu_error_name(status));
+        return std::string();
+    }
+
+    icu::UnicodeString keyword = rules->select(formatted, status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot select plural category for '%s': %s",
+            decimal.formatted.c_str(), i18n_catalog_icu_error_name(status));
+        return std::string();
+    }
+
+    std::string rv;
+    keyword.toUTF8String(rv);
+    return rv;
+}
+
+static bool i18n_catalog_contains_placeholder(const std::set<std::string>& placeholders,
+        const std::string& name) {
+    return placeholders.find(name) != placeholders.end();
+}
+
 } // namespace
 
 class QoreMessageCatalog : public AbstractPrivateData {
@@ -262,7 +498,10 @@ public:
             return nullptr;
         }
 
-        const I18nCatalogMessage* msg = findMessage(id, locale);
+        const I18nCatalogMessage* msg = findMessage(id, locale, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
         if (!msg || (!use_unreviewed && msg->state != "translated")) {
             I18nCatalogMessage fallback;
             fallback.source = source;
@@ -276,6 +515,55 @@ public:
         return formatMessage(*msg, args, xsink);
     }
 
+    DLLLOCAL QoreStringNode* translatePlural(const QoreStringNode* id_arg, const QoreStringNode* singular_arg,
+            const QoreStringNode* plural_arg, const QoreStringNode* locale_arg, QoreValue value,
+            const QoreHashNode* args, ExceptionSink* xsink) const {
+        std::string id = i18n_catalog_qore_string_to_utf8(id_arg, xsink, "id");
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string singular = i18n_catalog_qore_string_to_utf8(singular_arg, xsink, "singular");
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string plural = i18n_catalog_qore_string_to_utf8(plural_arg, xsink, "plural");
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string locale = i18n_catalog_qore_string_to_utf8(locale_arg, xsink, "locale");
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!i18n_catalog_check_locale_length(locale, xsink, "locale")) {
+            return nullptr;
+        }
+
+        const I18nCatalogMessage* msg = findMessage(id, locale, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!msg || (!use_unreviewed && msg->state != "translated")) {
+            I18nCatalogMessage fallback;
+            fallback.source = singular;
+            fallback.plural_source = plural;
+            fallback.plural = true;
+            fallback.plural_forms["one"] = singular;
+            fallback.plural_forms["other"] = plural;
+            if (!validatePluralPlaceholders(id, fallback, xsink)) {
+                return nullptr;
+            }
+            return formatPluralMessage(fallback, value, "en", args, xsink);
+        }
+
+        if (!msg->plural) {
+            xsink->raiseException("I18N-CATALOG-ERROR",
+                "message '%s' is not a plural message and cannot be used by tn()", id.c_str());
+            return nullptr;
+        }
+
+        return formatPluralMessage(*msg, value, locale, args, xsink);
+    }
+
     DLLLOCAL QoreListNode* getFallbackChain(const QoreStringNode* locale_arg, ExceptionSink* xsink) const {
         std::string locale = i18n_catalog_qore_string_to_utf8(locale_arg, xsink, "locale");
         if (*xsink) {
@@ -286,7 +574,10 @@ public:
         }
 
         ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
-        std::vector<std::string> chain = fallbackChain(locale);
+        std::vector<std::string> chain = fallbackChain(locale, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
         for (size_t i = 0; i < chain.size(); ++i) {
             rv->push(new QoreStringNode(chain[i], QCS_UTF8), xsink);
             if (*xsink) {
@@ -305,7 +596,10 @@ public:
             return nullptr;
         }
 
-        for (const std::string& entry : fallbackChain(locale)) {
+        for (const std::string& entry : fallbackChain(locale, xsink)) {
+            if (*xsink) {
+                return nullptr;
+            }
             if (locales.find(entry) != locales.end()) {
                 return new QoreStringNode(entry, QCS_UTF8);
             }
@@ -447,6 +741,46 @@ private:
                 return false;
             }
 
+            QoreValue forms_value = h->getKeyValue("forms");
+            if (!forms_value.isNullOrNothing()) {
+                if (!h->getKeyValue("message").isNullOrNothing()) {
+                    xsink->raiseException("I18N-CATALOG-ERROR",
+                        "message '%s' cannot define both message and plural forms", id.c_str());
+                    return false;
+                }
+
+                QoreValue plural_source_value = h->getKeyValue("plural_source");
+                if (plural_source_value.isNullOrNothing()) {
+                    xsink->raiseException("I18N-CATALOG-ERROR",
+                        "plural message '%s' must contain a plural_source string", id.c_str());
+                    return false;
+                }
+                if (!i18n_catalog_qore_value_to_utf8(plural_source_value, msg.plural_source, xsink,
+                        "plural_source")) {
+                    return false;
+                }
+
+                if (forms_value.getType() != NT_HASH) {
+                    xsink->raiseException("I18N-CATALOG-ERROR",
+                        "plural message '%s' forms must be a hash", id.c_str());
+                    return false;
+                }
+                msg.plural = true;
+                if (!parsePluralForms(id, forms_value.get<const QoreHashNode>(), msg, xsink)) {
+                    return false;
+                }
+
+                if (!i18n_catalog_get_optional_string(h, "state", msg.state, xsink)) {
+                    return false;
+                }
+                if (!i18n_catalog_is_allowed_state(msg.state)) {
+                    xsink->raiseException("I18N-CATALOG-ERROR",
+                        "message '%s' has unsupported state '%s'", id.c_str(), msg.state.c_str());
+                    return false;
+                }
+                return validatePluralPlaceholders(id, msg, xsink);
+            }
+
             QoreValue message_value = h->getKeyValue("message");
             if (message_value.isNullOrNothing()) {
                 xsink->raiseException("I18N-CATALOG-ERROR", "message '%s' must contain a message string",
@@ -474,12 +808,100 @@ private:
         return i18n_catalog_validate_placeholders(id, msg, xsink);
     }
 
-    DLLLOCAL std::vector<std::string> fallbackChain(const std::string& raw_locale) const {
+    DLLLOCAL bool parsePluralForms(const std::string& id, const QoreHashNode* forms, I18nCatalogMessage& msg,
+            ExceptionSink* xsink) const {
+        bool has_other = false;
+        size_t i = 0;
+        ConstHashIterator fi(forms);
+        while (fi.next()) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "loading i18n catalog plural forms")) {
+                return false;
+            }
+            ++i;
+
+            const char* key = fi.getKey();
+            if (!i18n_catalog_validate_plural_key(key, xsink)) {
+                return false;
+            }
+            if (!strcmp(key, "other")) {
+                has_other = true;
+            }
+
+            std::string form;
+            if (!i18n_catalog_qore_value_to_utf8(fi.get(), form, xsink, key)) {
+                return false;
+            }
+            msg.plural_forms[key] = std::move(form);
+        }
+
+        if (!has_other) {
+            xsink->raiseException("I18N-CATALOG-ERROR",
+                "plural message '%s' must define an 'other' form", id.c_str());
+            return false;
+        }
+        return true;
+    }
+
+    DLLLOCAL bool validatePluralPlaceholders(const std::string& id, I18nCatalogMessage& msg,
+            ExceptionSink* xsink) const {
+        std::set<std::string> required;
+        if (!i18n_catalog_collect_placeholders(msg.source, required, xsink, "plural message source")) {
+            return false;
+        }
+        if (!i18n_catalog_collect_placeholders(msg.plural_source, required, xsink, "plural message plural_source")) {
+            return false;
+        }
+        required.erase("count");
+
+        std::set<std::string> allowed = required;
+        allowed.insert("count");
+
+        size_t i = 0;
+        for (const auto& entry : msg.plural_forms) {
+            if (i && !(i % 100) && qore_check_cancel(xsink, "validating i18n catalog plural placeholders")) {
+                return false;
+            }
+            ++i;
+
+            std::set<std::string> placeholders;
+            if (!i18n_catalog_collect_placeholders(entry.second, placeholders, xsink, "plural form text")) {
+                return false;
+            }
+
+            for (const std::string& placeholder : placeholders) {
+                if (!i18n_catalog_contains_placeholder(allowed, placeholder)) {
+                    xsink->raiseException("I18N-CATALOG-ERROR",
+                        "plural message '%s' form '%s' introduces unknown placeholder '{%s}'",
+                        id.c_str(), entry.first.c_str(), placeholder.c_str());
+                    return false;
+                }
+            }
+
+            for (const std::string& placeholder : required) {
+                if (!i18n_catalog_contains_placeholder(placeholders, placeholder)) {
+                    xsink->raiseException("I18N-CATALOG-ERROR",
+                        "plural message '%s' form '%s' must preserve placeholder '{%s}'",
+                        id.c_str(), entry.first.c_str(), placeholder.c_str());
+                    return false;
+                }
+            }
+        }
+
+        msg.placeholders = std::move(required);
+        return true;
+    }
+
+    DLLLOCAL std::vector<std::string> fallbackChain(const std::string& raw_locale, ExceptionSink* xsink) const {
         std::vector<std::string> chain;
         std::string locale = i18n_catalog_normalize_locale(raw_locale);
         if (locale != "root") {
             chain.push_back(locale);
+            size_t count = 0;
             while (true) {
+                if (count && !(count % 100) && qore_check_cancel(xsink, "building i18n catalog fallback chain")) {
+                    return chain;
+                }
+                ++count;
                 size_t pos = locale.rfind('-');
                 if (pos == std::string::npos) {
                     break;
@@ -492,8 +914,12 @@ private:
         return chain;
     }
 
-    DLLLOCAL const I18nCatalogMessage* findMessage(const std::string& id, const std::string& locale) const {
-        for (const std::string& entry : fallbackChain(locale)) {
+    DLLLOCAL const I18nCatalogMessage* findMessage(const std::string& id, const std::string& locale,
+            ExceptionSink* xsink) const {
+        for (const std::string& entry : fallbackChain(locale, xsink)) {
+            if (*xsink) {
+                return nullptr;
+            }
             auto li = locales.find(entry);
             if (li == locales.end()) {
                 continue;
@@ -506,34 +932,40 @@ private:
         return nullptr;
     }
 
-    DLLLOCAL QoreStringNode* formatMessage(const I18nCatalogMessage& msg, const QoreHashNode* args,
-            ExceptionSink* xsink) const {
+    DLLLOCAL QoreStringNode* formatText(const std::string& text, const QoreHashNode* args,
+            const I18nCatalogDecimalInfo* count, ExceptionSink* xsink) const {
         std::string out;
-        out.reserve(msg.message.size());
+        out.reserve(text.size());
 
-        for (size_t i = 0; i < msg.message.size(); ++i) {
+        for (size_t i = 0; i < text.size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(xsink, "formatting i18n message")) {
                 return nullptr;
             }
 
-            if (msg.message[i] != '{') {
-                out.push_back(msg.message[i]);
+            if (text[i] != '{') {
+                out.push_back(text[i]);
                 continue;
             }
 
             size_t end = i + 1;
-            while (end < msg.message.size() && msg.message[end] != '}') {
+            while (end < text.size() && text[end] != '}') {
                 if (end && !(end % 100) && qore_check_cancel(xsink, "formatting i18n message")) {
                     return nullptr;
                 }
                 ++end;
             }
-            if (end == msg.message.size()) {
+            if (end == text.size()) {
                 xsink->raiseException("I18N-FORMAT-ERROR", "unmatched '{' in catalog message");
                 return nullptr;
             }
 
-            std::string name = msg.message.substr(i + 1, end - i - 1);
+            std::string name = text.substr(i + 1, end - i - 1);
+            if (count && name == "count") {
+                out += count->formatted;
+                i = end;
+                continue;
+            }
+
             if (!args) {
                 xsink->raiseException("I18N-FORMAT-ERROR", "missing arguments for placeholder '{%s}'",
                     name.c_str());
@@ -557,6 +989,48 @@ private:
 
         return new QoreStringNode(out, QCS_UTF8);
     }
+
+    DLLLOCAL QoreStringNode* formatMessage(const I18nCatalogMessage& msg, const QoreHashNode* args,
+            ExceptionSink* xsink) const {
+        return formatText(msg.message, args, nullptr, xsink);
+    }
+
+    DLLLOCAL QoreStringNode* formatPluralMessage(const I18nCatalogMessage& msg, QoreValue value,
+            const std::string& locale, const QoreHashNode* args, ExceptionSink* xsink) const {
+        I18nCatalogDecimalInfo decimal;
+        if (!i18n_catalog_value_to_decimal_info(value, decimal, xsink)) {
+            return nullptr;
+        }
+
+        for (const auto& entry : msg.plural_forms) {
+            if (!entry.first.empty() && entry.first[0] == '=') {
+                I18nCatalogDecimalInfo exact;
+                if (!i18n_catalog_parse_decimal_string(entry.first.c_str() + 1, exact, xsink,
+                        "plural exact-value key")) {
+                    return nullptr;
+                }
+                if (exact.canonical == decimal.canonical) {
+                    return formatText(entry.second, args, &decimal, xsink);
+                }
+            }
+        }
+
+        std::string category = i18n_catalog_select_plural_category(decimal, locale, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        auto form = msg.plural_forms.find(category);
+        if (form == msg.plural_forms.end()) {
+            form = msg.plural_forms.find("other");
+        }
+        if (form == msg.plural_forms.end()) {
+            xsink->raiseException("I18N-CATALOG-ERROR", "plural message is missing required 'other' form");
+            return nullptr;
+        }
+
+        return formatText(form->second, args, &decimal, xsink);
+    }
 };
 
 //! Message catalog for locale-aware text lookup and simple placeholder formatting.
@@ -571,6 +1045,15 @@ hash<auto> catalog = {
         "root": {"messages": {"Hello, {name}": "Hello, {name}"}},
         "cs": {"messages": {
             "Hello, {name}": {"message": "Ahoj, {name}", "state": "translated"},
+            "1 file": {
+                "plural_source": "{count} files",
+                "forms": {
+                    "one": "{count} soubor",
+                    "few": "{count} soubory",
+                    "other": "{count} souboru",
+                },
+                "state": "translated",
+            },
         }},
     },
 };
@@ -682,6 +1165,42 @@ string MessageCatalog::t(string source, string locale) [flags=RET_VALUE_ONLY] {
 */
 string MessageCatalog::t(string source, string locale, *hash<auto> vars) [flags=RET_VALUE_ONLY] {
     return catalog->translate(source, source, locale, vars, xsink);
+}
+
+//! Translates and formats a source-string plural message for an explicit locale.
+/** @param value numeric plural selector; strings preserve visible fraction digits
+    @param singular source-language singular fallback text and lookup key
+    @param plural source-language plural fallback text
+    @param locale requested locale
+    @return translated plural form, or the selected source fallback if no runtime-usable entry is found
+
+    @throw I18N-CATALOG-ERROR if the selected catalog entry is not plural-capable
+    @throw I18N-FORMAT-ERROR if a required placeholder argument is missing
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot select a plural category
+*/
+string MessageCatalog::tn(auto value, string singular, string plural, string locale) [flags=RET_VALUE_ONLY] {
+    return catalog->translatePlural(singular, singular, plural, locale, value, nullptr, xsink);
+}
+
+//! Translates and formats a source-string plural message for an explicit locale.
+/** @param value numeric plural selector; strings preserve visible fraction digits
+    @param singular source-language singular fallback text and lookup key
+    @param plural source-language plural fallback text
+    @param locale requested locale
+    @param vars placeholder values; \c count is supplied by \a value when used in the selected form
+    @return translated plural form, or the selected source fallback if no runtime-usable entry is found
+
+    @throw I18N-CATALOG-ERROR if the selected catalog entry is not plural-capable
+    @throw I18N-FORMAT-ERROR if a required placeholder argument is missing
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot select a plural category
+*/
+string MessageCatalog::tn(auto value, string singular, string plural, string locale, *hash<auto> vars)
+        [flags=RET_VALUE_ONLY] {
+    return catalog->translatePlural(singular, singular, plural, locale, value, vars, xsink);
 }
 
 //! Translates a symbolic-id message for an explicit locale.
