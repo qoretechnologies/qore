@@ -29,7 +29,13 @@
 
 QoreNamespace I18nNS("Qore::I18n");
 
+DLLLOCAL void preinitMessageCatalogClass();
+DLLLOCAL QoreClass* initMessageCatalogClass(QoreNamespace& ns);
+
 static void i18n_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
+    preinitMessageCatalogClass();
+
+    I18nNS.addSystemClass(initMessageCatalogClass(I18nNS));
     init_i18n_functions(I18nNS);
 }
 

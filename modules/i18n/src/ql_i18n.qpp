@@ -41,6 +41,8 @@
 #include <memory>
 #include <string>
 
+static constexpr int64 I18N_CATALOG_SCHEMA_VERSION = 1;
+
 static const char* i18n_icu_error_name(UErrorCode status) {
     return u_errorName(status);
 }
@@ -482,7 +484,7 @@ hash<auto> get_backend_info() [flags=CONSTANT] {
     if (*xsink) {
         return QoreValue();
     }
-    h->setKeyValue("catalog_schema_version", 0, xsink);
+    h->setKeyValue("catalog_schema_version", I18N_CATALOG_SCHEMA_VERSION, xsink);
     if (*xsink) {
         return QoreValue();
     }
@@ -517,6 +519,18 @@ string get_cldr_version() [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     return new QoreStringNode(version, QCS_UTF8);
+}
+
+//! Returns the native message catalog schema version supported by this module.
+/** @return catalog schema version number
+
+    @par Example:
+    @code{.py}
+assertEq(1, I18n::get_catalog_schema_version());
+    @endcode
+*/
+int get_catalog_schema_version() [flags=CONSTANT] {
+    return I18N_CATALOG_SCHEMA_VERSION;
 }
 
 //! Returns the CLDR plural category for a value and locale using cardinal rules.

@@ -57,6 +57,7 @@ include_directories(${CMAKE_BINARY_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 set(I18N_QPP_SRC
+    src/QC_MessageCatalog.qpp
     src/ql_i18n.qpp
 )
 

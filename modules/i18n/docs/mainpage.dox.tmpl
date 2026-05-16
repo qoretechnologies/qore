@@ -44,6 +44,45 @@ printf("%s\n", I18n::plural_category("1", "lv"));
 printf("%s\n", I18n::plural_category("1.0", "lv"));
     @endcode
 
+    @section i18n_catalogs Message Catalogs
+
+    \c I18n::MessageCatalog stores schema-versioned native catalogs passed as Qore data. Lookup uses source strings by
+    default and supports stable symbolic ids with \c tc(). Locale fallback is deterministic:
+    \c fr-CA-u-nu-latn falls back through \c fr-CA, \c fr, and \c root for catalog identity.
+
+    @code{.py}
+%requires i18n
+
+hash<auto> native_catalog = {
+    "schema_version": I18n::get_catalog_schema_version(),
+    "locales": {
+        "root": {"messages": {"Hello, {name}": "Hello, {name}"}},
+        "cs": {"messages": {
+            "Hello, {name}": {
+                "message": "Ahoj, {name}",
+                "state": "translated",
+            },
+            "workflow.greeting": {
+                "source": "Hello, {name}",
+                "message": "Nazdar, {name}",
+                "state": "translated",
+            },
+        }},
+    },
+};
+
+I18n::MessageCatalog catalog(native_catalog);
+printf("%s\n", catalog.t("Hello, {name}", "cs-CZ", {"name": "Petr"}));
+printf("%s\n", catalog.tc("workflow.greeting", "Hello, {name}", "cs", {"name": "Eva"}));
+    @endcode
+
+    Runtime state policy follows gettext's conservative behavior by default: \c fuzzy, \c needs-review, and
+    \c stale entries are stored but not used at runtime. Pass \c {"use_unreviewed": True} to the constructor to preview
+    those entries in development.
+
+    Catalog construction validates simple placeholders. Translations must preserve exactly the placeholders from the
+    source text, and message formatting fails if a required placeholder argument is missing.
+
     @section i18n_versions Backend Versions
 
     The module exposes ICU and CLDR data versions so deployments can report the locale-data backend in diagnostics:
@@ -55,7 +94,7 @@ printf("backend=%s icu=%s cldr=%s\n", info.backend, info.icu_version, info.cldr_
 
     @section i18n_scope Current Scope
 
-    This module is the initial implementation target for issue #5334. Catalog loading, extraction tooling, rich
-    message formatting, locale-aware number/date/currency formatting, collation, request-locale propagation, and
+    This module is the implementation target for issue #5334. Catalog file loading, extraction tooling, rich message
+    formatting, locale-aware number/date/currency formatting, collation, request-locale propagation, and
     machine-translation workflow support are planned follow-up phases in the same issue.
 */

@@ -23,6 +23,10 @@ class I18nTest inherits QUnit::Test {
         addTestCase("ordinal plural categories", \ordinalPluralCategoryTest());
         addTestCase("plural form selection", \pluralFormTest());
         addTestCase("plural validation errors", \validationErrorTest());
+        addTestCase("message catalog lookup", \messageCatalogLookupTest());
+        addTestCase("message catalog state policy", \messageCatalogStatePolicyTest());
+        addTestCase("message catalog layer precedence", \messageCatalogLayerPrecedenceTest());
+        addTestCase("message catalog validation", \messageCatalogValidationTest());
 
         set_return_value(main());
     }
@@ -37,7 +41,8 @@ class I18nTest inherits QUnit::Test {
         assertRegex("^[0-9]+\\.[0-9]+", I18n::get_icu_version());
         assertRegex("^[0-9]+\\.[0-9]+", info.cldr_version);
         assertEq(I18n::get_cldr_version(), info.cldr_version);
-        assertEq(0, info.catalog_schema_version);
+        assertEq(1, info.catalog_schema_version);
+        assertEq(1, I18n::get_catalog_schema_version());
     }
 
     cardinalPluralCategoryTest() {
@@ -141,6 +146,160 @@ class I18nTest inherits QUnit::Test {
         });
         assertThrows("I18N-NUMBER-ERROR", auto sub() {
             return I18n::plural_form(1, "en", {"=abc": "bad", "other": "other"});
+        });
+    }
+
+    private hash<auto> createCatalog() {
+        return {
+            "schema_version": 1,
+            "locales": {
+                "root": {
+                    "messages": {
+                        "Hello, {name}": "Hello, {name}",
+                        "workflow.greeting": {
+                            "source": "Hello, {name}",
+                            "message": "Hello, {name}",
+                            "state": "translated",
+                        },
+                    },
+                },
+                "cs": {
+                    "messages": {
+                        "Hello, {name}": {
+                            "message": "Ahoj, {name}",
+                            "state": "translated",
+                        },
+                        "workflow.greeting": {
+                            "source": "Hello, {name}",
+                            "message": "Nazdar, {name}",
+                            "state": "translated",
+                        },
+                    },
+                },
+                "fr": {
+                    "messages": {
+                        "Hello, {name}": {
+                            "message": "Bonjour, {name}",
+                            "state": "translated",
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    messageCatalogLookupTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        I18n::MessageCatalog catalog(createCatalog());
+
+        assertEq("Ahoj, Petr", catalog.t("Hello, {name}", "cs-CZ", {"name": "Petr"}));
+        assertEq("Nazdar, Eva", catalog.tc("workflow.greeting", "Hello, {name}", "cs", {"name": "Eva"}));
+        assertEq("Bonjour, Jean", catalog.t("Hello, {name}", "fr-CA", {"name": "Jean"}));
+        assertEq("Hello, Sam", catalog.t("Hello, {name}", "de", {"name": "Sam"}));
+
+        assertEq(("cs-CZ", "cs", "root"), catalog.getFallbackChain("cs-CZ-u-nu-latn"));
+        assertEq("cs", catalog.getEffectiveLocale("cs-CZ"));
+        assertEq(("cs", "fr", "root"), catalog.availableLocales());
+
+        hash<auto> stats = catalog.getStats("cs");
+        assertEq(2, stats.total);
+        assertEq(2, stats.translated);
+        assertEq(2, stats.usable);
+    }
+
+    messageCatalogStatePolicyTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        hash<auto> data = {
+            "schema_version": 1,
+            "locales": {
+                "root": {"messages": {"Hello": "Hello"}},
+                "cs": {"messages": {"Hello": {"message": "Ahoj", "state": "fuzzy"}}},
+            },
+        };
+
+        I18n::MessageCatalog strict(data);
+        I18n::MessageCatalog preview(data, {"use_unreviewed": True});
+
+        assertEq("Hello", strict.t("Hello", "cs"));
+        assertEq("Ahoj", preview.t("Hello", "cs"));
+
+        hash<auto> strict_stats = strict.getStats("cs");
+        hash<auto> preview_stats = preview.getStats("cs");
+        assertEq(0, strict_stats.usable);
+        assertEq(1, preview_stats.usable);
+    }
+
+    messageCatalogLayerPrecedenceTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        hash<auto> base = {
+            "schema_version": 1,
+            "locales": {
+                "root": {"messages": {"Hello": "Hello"}},
+                "cs": {"messages": {"Hello": "Ahoj"}},
+            },
+        };
+        hash<auto> override = {
+            "schema_version": 1,
+            "locales": {
+                "cs": {"messages": {"Hello": "Cau"}},
+            },
+        };
+
+        I18n::MessageCatalog catalog((base, override));
+        assertEq("Cau", catalog.t("Hello", "cs"));
+        assertEq("Hello", catalog.t("Hello", "de"));
+    }
+
+    messageCatalogValidationTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        assertThrows("I18N-FORMAT-ERROR", auto sub() {
+            I18n::MessageCatalog catalog(createCatalog());
+            return catalog.t("Hello, {name}", "cs");
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({"schema_version": 2, "locales": {}});
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "Hello, {name}": {"message": "Ahoj", "state": "translated"},
+                    }},
+                },
+            });
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "Hello": {"message": "Ahoj, {name}", "state": "translated"},
+                    }},
+                },
+            });
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "Hello": {"message": "Ahoj", "state": "reviewed"},
+                    }},
+                },
+            });
         });
     }
 }
