@@ -223,5 +223,9 @@ These examples are from the core migration and should be reused as precedent:
   `strd` -> `standard_fds`, `opts` -> `options`, and `msg` -> `message`.
 - Timeout parameters with the Qore `timeout` type should use the public name
   `timeout` unless an established API already exposes `timeout_ms`.
+- Thread helpers use intent names for public calls: `tid` -> `thread_id`,
+  thread-local data hashes use `data`, thread-local key lists use `key_list`,
+  worker counts use `thread_count`, thread init uses `callback`, resource
+  callback arguments use `argument`, and `TimeZone` parameters use `timezone`.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

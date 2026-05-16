@@ -118,6 +118,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed crypto builtin opt-in", \reviewedCryptoBuiltinOptIn(), NOTHING);
         addTestCase("reviewed file builtin opt-in", \reviewedFileBuiltinOptIn(), NOTHING);
         addTestCase("reviewed library builtin opt-in", \reviewedLibraryBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -525,6 +526,39 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "sub ql_lib_named_blacklist() { qore_add_module_to_blacklist(name: \"NamedArgsTest\", "
             "message: \"test\"); qore_add_module_to_blacklist_ex(name: \"NamedArgsTest\", message: \"test\"); }",
             "library-named");
+    }
+
+    reviewedThreadBuiltinOptIn() {
+        save_thread_data(data: {"na-thread-key": "value"});
+        assertEq("value", get_thread_data(key: "na-thread-key"), "thread data lookup exposes key");
+        assertEq({"na-thread-key": "value"}, remove_thread_data(key_list: ("na-thread-key",)),
+            "thread data removal exposes keys");
+        save_thread_data(key: "na-thread-key", value: "deleted");
+        delete_thread_data(key_list: ("na-thread-key",));
+        assertNothing(get_thread_data(key: "na-thread-key"), "thread data deletion exposes keys");
+        assertTrue(get_parent_caller_location(offset: 0) != NOTHING, "caller location exposes offset");
+
+        assertEq((2, 4, 6), parallel_map(callable: auto sub(auto x) { return x * 2; }, items: (1, 2, 3),
+            thread_count: 1), "parallel_map exposes callable, items, and thread_count");
+        list<auto> seen = ();
+        parallel_foreach(callable: sub(auto x) { seen += x; }, items: (1, 2, 3), thread_count: 1);
+        assertEq((1, 2, 3), seen, "parallel_foreach exposes callable, items, and thread_count");
+
+        Channel ch(1);
+        ch.send("payload");
+        hash<auto> selected = channel_select(cases: ({"channel": ch, "op": "recv"},), timeout: 0);
+        assertEq(0, selected.index, "channel_select exposes cases");
+        assertEq("payload", selected.value, "channel_select receives the ready value");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub ql_thread_named_cancel() { cancel_thread(thread_id: 1, reason: NOTHING); } "
+            "sub ql_thread_named_stack() { set_default_thread_stack_size(stack_size: 1024 * 1024); } "
+            "sub ql_thread_named_init() { set_thread_init(callback: NOTHING); } "
+            "sub ql_thread_named_name() { set_thread_name(name: \"qore-na\"); } "
+            "sub ql_thread_named_tz() { set_thread_tz(timezone: new TimeZone(\"UTC\")); } "
+            "sub ql_thread_named_resource() { set_thread_resource(resource: sub(auto arg) {}, argument: NOTHING); "
+            "remove_thread_resource(resource: sub() {}); }",
+            "thread-named");
     }
 
     parseFailures() {

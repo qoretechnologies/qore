@@ -649,6 +649,24 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("set_global_http2_mode", ("mode",), 2);
         assertNamedCallableVariantCount("qore_add_module_to_blacklist", ("name", "message"));
         assertNamedCallableVariantCount("qore_add_module_to_blacklist_ex", ("name", "message"));
+
+        assertNamedCallableVariantCount("save_thread_data", ("data",));
+        assertNamedCallableVariantCount("save_thread_data", ("key", "value"));
+        assertNamedCallableVariantCount("delete_thread_data", ("key_list",));
+        assertNamedCallableVariantCount("remove_thread_data", ("key_list",));
+        assertNamedCallableVariantCount("get_thread_data", ("key",));
+        assertNamedCallableVariantCount("get_parent_caller_location", ("offset",));
+        assertNamedCallableVariantCount("set_thread_init", ("callback",));
+        assertNamedCallableVariantCount("set_thread_tz", ("timezone",));
+        assertNamedCallableVariantCount("set_thread_resource", ("resource",));
+        assertNamedCallableVariantCount("set_thread_resource", ("resource", "argument"));
+        assertNamedCallableVariantCount("remove_thread_resource", ("resource",), 2);
+        assertNamedCallableVariantCount("set_default_thread_stack_size", ("stack_size",));
+        assertNamedCallableVariantCount("set_thread_name", ("name",));
+        assertNamedCallableVariantCount("cancel_thread", ("thread_id", "reason"));
+        assertNamedCallableVariantCount("parallel_map", ("callable", "items", "thread_count"));
+        assertNamedCallableVariantCount("parallel_foreach", ("callable", "items", "thread_count"));
+        assertNamedCallableVariantCount("channel_select", ("cases", "timeout"));
     }
 
     modNameTests() {
@@ -1260,8 +1278,8 @@ class ReflectionTest inherits QUnit::Test {
 
         {
             AbstractReflectionFunction f = Function::forName("get_thread_data");
-            assertEq(CF_RET_VALUE_ONLY, f.getCodeFlags());
-            assertEq(("RET_VALUE_ONLY",), f.getCodeFlagList());
+            assertEq(CF_RET_VALUE_ONLY | CF_NAMED_ARGS, f.getCodeFlags());
+            assertEq(("RET_VALUE_ONLY", "NAMED_ARGS"), f.getCodeFlagList());
             assertEq(DOM_THREAD_CONTROL | DOM_THREAD_INFO, f.getDomain());
             assertEq(("THREAD_CONTROL", "THREAD_INFO"), f.getDomainStringList());
         }
