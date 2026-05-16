@@ -87,7 +87,7 @@ TreeMap::copy() {
 
     @see TreeMap::remove()
  */
-nothing TreeMap::put(string path, auto value) {
+nothing TreeMap::put(string path, auto value) [flags=NAMED_ARGS] {
     tm->put(self, path, value, xsink);
 }
 
@@ -119,7 +119,7 @@ v = tm.get("def/g/hi/five", \h.unmatched);  # returns "5" and h.unmatched is "fi
 
     @since %Qore 0.8.13
  */
-auto TreeMap::get(string path, *reference<*string> unmatched) [flags=RET_VALUE_ONLY] {
+auto TreeMap::get(string path, *reference<*string> unmatched) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return tm->get(path, unmatched, xsink);
 }
 
@@ -132,7 +132,7 @@ auto TreeMap::get(string path, *reference<*string> unmatched) [flags=RET_VALUE_O
 
     @see TreeMap::put()
 */
-auto TreeMap::take(string path) {
+auto TreeMap::take(string path) [flags=NAMED_ARGS] {
     return tm->take(self, path, xsink);
 }
 

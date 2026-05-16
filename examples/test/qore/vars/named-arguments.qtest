@@ -514,6 +514,14 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq(0, usleep(microseconds: 0), "usleep exposes microseconds");
         assertEq(0, usleep(duration: 0ms), "usleep date variant exposes duration");
 
+        TreeMap tm();
+        tm.put(path: "api/v1", value: "handler");
+        *string unmatched;
+        assertEq("handler", tm.get(path: "api/v1/users", unmatched: \unmatched),
+            "TreeMap get exposes path and unmatched");
+        assertEq("users", unmatched, "TreeMap get writes unmatched suffix");
+        assertEq("handler", tm.take(path: "api/v1"), "TreeMap take exposes path");
+
         string original_http2 = get_global_http2_mode();
         on_exit set_global_http2_mode(mode: original_http2);
         set_global_http2_mode(mode: "auto");
