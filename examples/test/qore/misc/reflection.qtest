@@ -137,6 +137,18 @@ class ReflectionTest inherits QUnit::Test {
         assertEq("Qore::Reflection::AbstractVariant", Class::forName("AbstractVariant").getPathName());
     }
 
+    assertNamedCallableVariantCount(string name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach FunctionVariant v in (Function::forName(name).getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
     namedCallReflectionTests() {
         FunctionVariant uv = Function::forName("named_reflection_target").getVariants()[0];
         assertTrue(uv.isNamedCallable());
@@ -395,6 +407,28 @@ class ReflectionTest inherits QUnit::Test {
             assertTrue(v.isNamedCallable());
             assertEq(("name",), v.getNamedParameterNames());
         }
+
+        foreach string name in (("compress", "gzip", "deflate_raw", "bzip2", "zstd")) {
+            assertNamedCallableVariantCount(name, ("data", "level"), 2);
+        }
+
+        assertNamedCallableVariantCount("brotli", ("data", "quality"), 2);
+        assertNamedCallableVariantCount("lz4", ("data", "acceleration"), 2);
+
+        foreach string name in (("uncompress_to_binary", "gunzip_to_binary", "inflate_raw_to_binary",
+                "bunzip2_to_binary", "unbrotli_to_binary", "unzstd_to_binary")) {
+            assertNamedCallableVariantCount(name, ("compressed_data",));
+        }
+
+        foreach string name in (("uncompress_to_string", "gunzip_to_string", "inflate_raw_to_string",
+                "bunzip2_to_string", "unbrotli_to_string", "unzstd_to_string")) {
+            assertNamedCallableVariantCount(name, ("compressed_data", "encoding"));
+        }
+
+        assertNamedCallableVariantCount("unlz4_to_binary", ("compressed_data", "max_output_size"));
+        assertNamedCallableVariantCount("unlz4_to_string", ("compressed_data", "max_output_size", "encoding"));
+        assertNamedCallableVariantCount("get_compressor", ("algorithm", "level"));
+        assertNamedCallableVariantCount("get_decompressor", ("algorithm",));
     }
 
     modNameTests() {

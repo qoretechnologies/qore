@@ -106,6 +106,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed utility builtin opt-in", \reviewedUtilityBuiltinOptIn(), NOTHING);
         addTestCase("reviewed list builtin opt-in", \reviewedListBuiltinOptIn(), NOTHING);
         addTestCase("reviewed pwd builtin opt-in", \reviewedPwdBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed compression builtin opt-in", \reviewedCompressionBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -237,6 +238,57 @@ public class NamedArgumentsTest inherits QUnit::Test {
         p.parse("getpwuid(uid: 0); getpwuid2(uid: 0); getpwnam(name: \"root\"); getpwnam2(name: \"root\"); "
             "getgrgid(gid: 0); getgrgid2(gid: 0); getgrnam(name: \"root\"); getgrnam2(name: \"root\");",
             "pwd-named");
+    }
+
+    reviewedCompressionBuiltinOptIn() {
+        string payload = "named compression payload";
+
+        binary zlib = compress(data: payload, level: Z_DEFAULT_COMPRESSION);
+        assertEq(payload, uncompress_to_string(compressed_data: zlib, encoding: "utf-8"),
+            "zlib helpers expose data and compressed_data");
+        assertEq(binary(value: payload), uncompress_to_binary(compressed_data: zlib),
+            "zlib binary decompression exposes compressed_data");
+
+        binary gzip_data = gzip(data: payload, level: Z_DEFAULT_COMPRESSION);
+        assertEq(payload, gunzip_to_string(compressed_data: gzip_data, encoding: "utf-8"),
+            "gzip helpers expose data and compressed_data");
+        assertEq(binary(value: payload), gunzip_to_binary(compressed_data: gzip_data),
+            "gzip binary decompression exposes compressed_data");
+
+        binary raw = deflate_raw(data: payload, level: Z_DEFAULT_COMPRESSION);
+        assertEq(payload, inflate_raw_to_string(compressed_data: raw, encoding: "utf-8"),
+            "raw deflate helpers expose data and compressed_data");
+        assertEq(binary(value: payload), inflate_raw_to_binary(compressed_data: raw),
+            "raw deflate binary decompression exposes compressed_data");
+
+        binary bzip = bzip2(data: payload, level: BZ2_DEFAULT_COMPRESSION);
+        assertEq(payload, bunzip2_to_string(compressed_data: bzip, encoding: "utf-8"),
+            "bzip2 helpers expose data and compressed_data");
+        assertEq(binary(value: payload), bunzip2_to_binary(compressed_data: bzip),
+            "bzip2 binary decompression exposes compressed_data");
+
+        binary brotli_data = brotli(data: payload, quality: BROTLI_DEFAULT_QUALITY);
+        assertEq(payload, unbrotli_to_string(compressed_data: brotli_data, encoding: "utf-8"),
+            "Brotli helpers expose data and compressed_data");
+        assertEq(binary(value: payload), unbrotli_to_binary(compressed_data: brotli_data),
+            "Brotli binary decompression exposes compressed_data");
+
+        binary zstd_data = zstd(data: payload, level: ZSTD_DEFAULT_LEVEL);
+        assertEq(payload, unzstd_to_string(compressed_data: zstd_data, encoding: "utf-8"),
+            "Zstd helpers expose data and compressed_data");
+        assertEq(binary(value: payload), unzstd_to_binary(compressed_data: zstd_data),
+            "Zstd binary decompression exposes compressed_data");
+
+        binary lz4_data = lz4(data: payload, acceleration: LZ4_DEFAULT_ACCELERATION);
+        assertEq(payload, unlz4_to_string(compressed_data: lz4_data, max_output_size: 1024, encoding: "utf-8"),
+            "LZ4 helpers expose data and compressed_data");
+        assertEq(binary(value: payload), unlz4_to_binary(compressed_data: lz4_data, max_output_size: 1024),
+            "LZ4 binary decompression exposes compressed_data");
+
+        assertTrue(get_compressor(algorithm: COMPRESSION_ALG_ZLIB, level: COMPRESSION_LEVEL_DEFAULT) != NOTHING,
+            "get_compressor exposes algorithm");
+        assertTrue(get_decompressor(algorithm: COMPRESSION_ALG_ZLIB) != NOTHING,
+            "get_decompressor exposes algorithm");
     }
 
     parseFailures() {
