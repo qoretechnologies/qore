@@ -41,7 +41,7 @@
 ///@{
 //! Retrieves the value of an environment variable or @ref nothing if the variable is not set
 /**
-    @param var the name of the environment variable
+    @param name the name of the environment variable
 
     @return the value of an environment variable or @ref nothing if the variable is not set
 
@@ -52,8 +52,8 @@
 
     @since %Qore 0.8.4 tagged with PO_NO_EXTERNAL_INFO
  */
-*string getenv(string var) [flags=CONSTANT;dom=EXTERNAL_INFO] {
-   return SysEnv.getAsStringNode(var->getBuffer());
+*string getenv(string name) [flags=CONSTANT,NAMED_ARGS;dom=EXTERNAL_INFO] {
+   return SysEnv.getAsStringNode(name->getBuffer());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -64,8 +64,8 @@ nothing getenv() [flags=NOOP;dom=EXTERNAL_INFO] {
 
 //! Sets an environment variable to a value
 /**
-    @param env the name of the environment variable
-    @param val the new value of the environment variable
+    @param name the name of the environment variable
+    @param value the new value of the environment variable
 
     @return -1 for error or 0 for success; if an error occurs, errno() and/or strerror() can be used to get the error code or message
 
@@ -79,8 +79,8 @@ if (setenv("PATH", "/bin:/usr/bin"))
 
     @since %Qore 0.8.4 tagged with PO_NO_PROCESS
  */
-int setenv(string env, softstring val) [dom=PROCESS] {
-   return SysEnv.set(env->getBuffer(), val->getBuffer());
+int setenv(string name, softstring value) [flags=NAMED_ARGS;dom=PROCESS] {
+   return SysEnv.set(name->getBuffer(), value->getBuffer());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -91,7 +91,7 @@ nothing setenv() [flags=NOOP;dom=PROCESS] {
 
 //! Unsets an environment variable
 /**
-    @param env the name of the environment variable to unset
+    @param name the name of the environment variable to unset
 
     @return -1 for error or 0 for success; if an error occurs, errno() and/or strerror() can be used to get the error code or message
 
@@ -105,8 +105,8 @@ if (unsetenv("PATH"))
 
     @since %Qore 0.8.4 tagged with PO_NO_PROCESS
  */
-int unsetenv(string env) [dom=PROCESS] {
-   return SysEnv.unset(env->getBuffer());
+int unsetenv(string name) [flags=NAMED_ARGS;dom=PROCESS] {
+   return SysEnv.unset(name->getBuffer());
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments

@@ -48,8 +48,8 @@
 binary frame = ws_encode_frame("hello", WSOP_Text, True);
     @endcode
 
-    @param msg the message data (string or binary)
-    @param op the WebSocket opcode (e.g., WSOP_Text, WSOP_Binary, WSOP_Close)
+    @param message the message data (string or binary)
+    @param opcode the WebSocket opcode (e.g., WSOP_Text, WSOP_Binary, WSOP_Close)
     @param masked if @ref True "True", applies random masking (required for client-to-server frames per RFC 6455)
     @param fin the FIN flag; @ref True "True" for the final (or only) fragment (default: @ref True "True")
     @param rsv_bits RSV extension bits using Qore WebSocket constants (e.g., \c WS_RSV1 = 0x40); default 0
@@ -58,22 +58,22 @@ binary frame = ws_encode_frame("hello", WSOP_Text, True);
 
     @since %Qore 2.3
 */
-binary ws_encode_frame(data msg, int op, softbool masked, softbool fin = True, int rsv_bits = 0) [flags=RET_VALUE_ONLY] {
+binary ws_encode_frame(data message, int opcode, softbool masked, softbool fin = True, int rsv_bits = 0) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     const void* payload = nullptr;
     size_t payload_len = 0;
 
-    if (!msg.isNullOrNothing()) {
-        switch (msg.getType()) {
+    if (!message.isNullOrNothing()) {
+        switch (message.getType()) {
             case NT_STRING: {
-                QoreStringValueHelper str(msg);
+                QoreStringValueHelper str(message);
                 payload = str->c_str();
                 payload_len = str->size();
                 uint8_t rsv = static_cast<uint8_t>((rsv_bits >> 4) & 0x07);
                 return WebSocketFrameEncoder::encode(
-                    static_cast<WsOpcode>(op), payload, payload_len, (bool)fin, (bool)masked, rsv);
+                    static_cast<WsOpcode>(opcode), payload, payload_len, (bool)fin, (bool)masked, rsv);
             }
             case NT_BINARY: {
-                const BinaryNode* bin = msg.get<const BinaryNode>();
+                const BinaryNode* bin = message.get<const BinaryNode>();
                 payload = bin->getPtr();
                 payload_len = bin->size();
                 break;
@@ -88,7 +88,7 @@ binary ws_encode_frame(data msg, int op, softbool masked, softbool fin = True, i
     uint8_t rsv = static_cast<uint8_t>((rsv_bits >> 4) & 0x07);
 
     return WebSocketFrameEncoder::encode(
-        static_cast<WsOpcode>(op), payload, payload_len, (bool)fin, (bool)masked, rsv);
+        static_cast<WsOpcode>(opcode), payload, payload_len, (bool)fin, (bool)masked, rsv);
 }
 
 //! Applies or removes a WebSocket mask to/from binary data (XOR with 4-byte key)
@@ -111,7 +111,7 @@ binary unmasked = ws_unmask_data(masked_payload, mask_key);
 
     @since %Qore 2.3
 */
-binary ws_unmask_data(binary data, binary mask) [flags=RET_VALUE_ONLY] {
+binary ws_unmask_data(binary data, binary mask) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (mask->size() != 4) {
         xsink->raiseException("WEBSOCKET-ERROR",
             "mask must be exactly 4 bytes; got " QSD " bytes", mask->size());
@@ -133,12 +133,17 @@ binary ws_unmask_data(binary data, binary mask) [flags=RET_VALUE_ONLY] {
 
     // Process 4 bytes at a time for better throughput
     size_t i = 0;
+    size_t iter = 0;
     size_t aligned_len = len & ~static_cast<size_t>(3);
     for (; i < aligned_len; i += 4) {
+        if (iter && !(iter % 100) && qore_check_cancel(xsink, "WebSocket masking")) {
+            return QoreValue();
+        }
         dst[i]     = src[i]     ^ mask_key[0];
         dst[i + 1] = src[i + 1] ^ mask_key[1];
         dst[i + 2] = src[i + 2] ^ mask_key[2];
         dst[i + 3] = src[i + 3] ^ mask_key[3];
+        ++iter;
     }
     // Handle remaining bytes
     for (; i < len; ++i) {

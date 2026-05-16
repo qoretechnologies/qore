@@ -132,7 +132,7 @@ namespace Qore::SQL;
 
 //! Returns a @ref datasource_hash "datasource hash" of the components of a datasource string
 /**
-    @param ds a string describing the datasource with the following syntax:\n
+    @param datasource a string describing the datasource with the following syntax:\n
     <tt>[</tt><em>driver</em><tt>:][</tt><em>user</em><tt>/</tt><em>pass</em><tt>]\@</tt><em>db</em><tt>[(</tt><em>charset</em><tt>)][%</tt><em>host</em><tt>[:</tt><em>port</em><tt>][{</tt><em>option</em><tt>=</tt><em>val</em><tt>[,...]}]</tt> \n
     where all elements except <tt>\@</tt><em>db</em> are optional
 
@@ -151,8 +151,8 @@ hash<auto> h = parse_datasource("pgsql:user/pass@dbname(utf8)%dbhost.internal:15
 
     @since %Qore 0.8.6
 */
-hash<auto> parse_datasource(string ds) [flags=RET_VALUE_ONLY] {
-    return parseDatasource(ds->getBuffer(), xsink);
+hash<auto> parse_datasource(string datasource) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return parseDatasource(datasource->getBuffer(), xsink);
 }
 
 //! Returns a list of strings of DBI drivers currently loaded or @ref nothing if no drivers are loaded
@@ -190,7 +190,7 @@ hash<auto> parse_datasource(string ds) [flags=RET_VALUE_ONLY] {
 
     @since %Qore 0.8.6
 */
-*list<string> dbi_get_driver_capability_list(string driver) [flags=CONSTANT] {
+*list<string> dbi_get_driver_capability_list(string driver) [flags=CONSTANT,NAMED_ARGS] {
     DBIDriver *dd = DBI.find(driver->getBuffer());
     return !dd ? 0 : qore_dbi_private::get(*dd)->getCapList();
 }
@@ -213,7 +213,7 @@ int caps = dbi_get_driver_capabilities("pgsql");
 
     @since %Qore 0.8.6
 */
-int dbi_get_driver_capabilities(string driver) [flags=CONSTANT] {
+int dbi_get_driver_capabilities(string driver) [flags=CONSTANT,NAMED_ARGS] {
     DBIDriver* dd = DBI.find(driver->getBuffer());
     return !dd ? 0 : qore_dbi_private::get(*dd)->getCaps();
 }
@@ -236,7 +236,7 @@ int dbi_get_driver_capabilities(string driver) [flags=CONSTANT] {
 
     @since %Qore 0.8.6
 */
-*hash<auto> dbi_get_driver_options(string driver) [flags=CONSTANT] {
+*hash<auto> dbi_get_driver_options(string driver) [flags=CONSTANT,NAMED_ARGS] {
     DBIDriver* dd = DBI.find(driver->getBuffer());
     return !dd ? 0 : qore_dbi_private::get(*dd)->getOptionHash();
 }
@@ -279,7 +279,7 @@ string str = make_datasource_string({
 
     @since %Qore 2.3
 */
-string make_datasource_string(hash<auto> config) [flags=RET_VALUE_ONLY] {
+string make_datasource_string(hash<auto> config) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return makeConfigString(config, xsink);
 }
 ///@}
@@ -324,4 +324,3 @@ const DATE = "date";
 */
 const RESULTSET = "resultset";
 ///@}
-

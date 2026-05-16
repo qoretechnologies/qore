@@ -264,6 +264,63 @@ class ReflectionTest inherits QUnit::Test {
             }
         }
         assertEq(3, found_round);
+
+        FunctionVariant getenvv = Function::forName("getenv").getVariant(StringType);
+        assertTrue(getenvv.isNamedCallable());
+        assertEq(("name",), getenvv.getNamedParameterNames());
+
+        bool found_setenv = False;
+        foreach FunctionVariant v in (Function::forName("setenv").getVariants()) {
+            if (v.getParamNames() == ("name", "value")) {
+                found_setenv = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("name", "value"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_setenv);
+
+        FunctionVariant unsetenvv = Function::forName("unsetenv").getVariant(StringType);
+        assertTrue(unsetenvv.isNamedCallable());
+        assertEq(("name",), unsetenvv.getNamedParameterNames());
+
+        FunctionVariant parse_dsv = Function::forName("Qore::SQL::parse_datasource").getVariant(StringType);
+        assertTrue(parse_dsv.isNamedCallable());
+        assertEq(("datasource",), parse_dsv.getNamedParameterNames());
+
+        bool found_make_ds = False;
+        foreach FunctionVariant v in (Function::forName("Qore::SQL::make_datasource_string").getVariants()) {
+            if (v.getParamNames() == ("config",)) {
+                found_make_ds = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("config",), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_make_ds);
+
+        foreach string name in (("Qore::SQL::dbi_get_driver_capability_list", "Qore::SQL::dbi_get_driver_capabilities",
+                "Qore::SQL::dbi_get_driver_options")) {
+            FunctionVariant v = Function::forName(name).getVariant(StringType);
+            assertTrue(v.isNamedCallable());
+            assertEq(("driver",), v.getNamedParameterNames());
+        }
+
+        FunctionVariant cx_valuev = Function::forName("cx_value").getVariant(StringType);
+        assertTrue(cx_valuev.isNamedCallable());
+        assertEq(("key",), cx_valuev.getNamedParameterNames());
+
+        bool found_ws_encode = False;
+        foreach FunctionVariant v in (Function::forName("ws_encode_frame").getVariants()) {
+            if (v.getParamNames() == ("message", "opcode", "masked", "fin", "rsv_bits")) {
+                found_ws_encode = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("message", "opcode", "masked", "fin", "rsv_bits"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_ws_encode);
+
+        FunctionVariant ws_unmaskv = Function::forName("ws_unmask_data").getVariant(BinaryType, BinaryType);
+        assertTrue(ws_unmaskv.isNamedCallable());
+        assertEq(("data", "mask"), ws_unmaskv.getNamedParameterNames());
     }
 
     modNameTests() {

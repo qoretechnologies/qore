@@ -103,6 +103,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed math builtin opt-in", \reviewedMathBuiltinOptIn(), NOTHING);
         addTestCase("reviewed type builtin opt-in", \reviewedTypeBuiltinOptIn(), NOTHING);
         addTestCase("reviewed string builtin opt-in", \reviewedStringBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed utility builtin opt-in", \reviewedUtilityBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -181,6 +182,32 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "regex_subst exposes replacement");
         assertEq("a:b", join(separator: ":", values: ("a", "b")), "join list variant exposes separator and values");
         assertEq("x:2", vsprintf(format: "%s:%d", values: ("x", 2)), "vsprintf exposes format and values");
+    }
+
+    reviewedUtilityBuiltinOptIn() {
+        string key = "QORE_NAMED_ARGS_TEST_ENV";
+        unsetenv(name: key);
+        setenv(name: key, value: "named-ok");
+        assertEq("named-ok", getenv(name: key), "environment helpers expose name and value");
+        unsetenv(name: key);
+        assertNothing(getenv(name: key), "environment helpers clean up with named arguments");
+
+        assertEq({
+            "type": "sqlite3",
+            "db": ":memory:",
+        }, parse_datasource(datasource: "sqlite3:@:memory:"), "parse_datasource exposes datasource");
+
+        hash<auto> row = {
+            "name": ("david",),
+        };
+        context (row) {
+            assertEq("david", cx_value(key: "name"), "cx_value exposes key");
+        }
+
+        assertEq(<81026869>, ws_encode_frame(message: "hi", opcode: 1, masked: False),
+            "ws_encode_frame exposes message and opcode");
+        assertEq(<01020304>, ws_unmask_data(data: <00000000>, mask: <01020304>),
+            "ws_unmask_data exposes data and mask");
     }
 
     parseFailures() {
