@@ -27,13 +27,17 @@
 
 #include "i18n-module.h"
 
+#include "qore/intern/QoreTimeZoneManager.h"
+
 #include <unicode/bytestream.h>
 #include <unicode/coll.h>
 #include <unicode/currunit.h>
+#include <unicode/datefmt.h>
 #include <unicode/locid.h>
 #include <unicode/numberformatter.h>
 #include <unicode/plurrule.h>
 #include <unicode/stringpiece.h>
+#include <unicode/timezone.h>
 #include <unicode/ulocdata.h>
 #include <unicode/unistr.h>
 #include <unicode/uversion.h>
@@ -854,6 +858,101 @@ static QoreStringNode* i18n_format_currency_value(QoreValue value, const QoreStr
     return new QoreStringNode(rv, QCS_UTF8);
 }
 
+static bool i18n_get_datetime_style(const QoreHashNode* opts, const char* key, icu::DateFormat::EStyle def,
+        icu::DateFormat::EStyle& out, ExceptionSink* xsink) {
+    out = def;
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+
+    std::string style;
+    if (!i18n_qore_value_to_utf8_string(value, style, xsink, key)) {
+        return false;
+    }
+
+    if (style == "none") {
+        out = icu::DateFormat::kNone;
+    } else if (style == "short") {
+        out = icu::DateFormat::kShort;
+    } else if (style == "medium") {
+        out = icu::DateFormat::kMedium;
+    } else if (style == "long") {
+        out = icu::DateFormat::kLong;
+    } else if (style == "full") {
+        out = icu::DateFormat::kFull;
+    } else {
+        xsink->raiseException("I18N-FORMAT-ERROR",
+            "opts.%s must be 'none', 'short', 'medium', 'long', or 'full'; got '%s'", key, style.c_str());
+        return false;
+    }
+    return true;
+}
+
+static std::string i18n_get_datetime_timezone_id(const DateTimeNode* dt) {
+    const AbstractQoreZoneInfo* zone = dt->getZone();
+    if (!zone) {
+        return "UTC";
+    }
+    const char* region = zone->getRegionName();
+    if (!region || !strcmp(region, "UTC")) {
+        return "UTC";
+    }
+    if (region[0] == '+' || region[0] == '-') {
+        return std::string("GMT") + region;
+    }
+    return region;
+}
+
+static QoreStringNode* i18n_format_datetime_value(const DateTimeNode* dt, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    if (dt->isRelative()) {
+        xsink->raiseException("I18N-DATETIME-ERROR", "relative date/time values cannot be formatted as instants");
+        return nullptr;
+    }
+
+    icu::DateFormat::EStyle date_style;
+    icu::DateFormat::EStyle time_style;
+    if (!i18n_get_datetime_style(opts, "date_style", icu::DateFormat::kMedium, date_style, xsink)
+        || !i18n_get_datetime_style(opts, "time_style", icu::DateFormat::kShort, time_style, xsink)) {
+        return nullptr;
+    }
+    if (date_style == icu::DateFormat::kNone && time_style == icu::DateFormat::kNone) {
+        xsink->raiseException("I18N-FORMAT-ERROR", "date_style and time_style cannot both be 'none'");
+        return nullptr;
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::unique_ptr<icu::DateFormat> formatter(icu::DateFormat::createDateTimeInstance(date_style, time_style,
+        locale));
+    if (!formatter) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create date/time formatter for locale '%s'",
+            locale.getName());
+        return nullptr;
+    }
+
+    std::string tzid = i18n_get_datetime_timezone_id(dt);
+    icu::UnicodeString tzid_u = icu::UnicodeString::fromUTF8(icu::StringPiece(tzid));
+    formatter->adoptTimeZone(icu::TimeZone::createTimeZone(tzid_u));
+
+    UDate udate = static_cast<UDate>(dt->getEpochSecondsUTC()) * 1000.0
+        + static_cast<UDate>(dt->getMicrosecond()) / 1000.0;
+    icu::UnicodeString formatted;
+    formatter->format(udate, formatted);
+
+    std::string rv;
+    formatted.toUTF8String(rv);
+    return new QoreStringNode(rv, QCS_UTF8);
+}
+
 static std::unique_ptr<icu::Collator> i18n_make_collator(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
     icu::Locale locale = i18n_make_locale(locale_arg, xsink);
     if (*xsink) {
@@ -1302,6 +1401,36 @@ string format_currency(auto value, string currency, string locale) [flags=RET_VA
 */
 string format_currency(auto value, string currency, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
     return i18n_format_currency_value(value, currency, locale, opts, xsink);
+}
+
+//! Formats an absolute date/time value with explicit locale data.
+/** @param dt absolute date/time value
+    @param locale BCP 47 locale tag, including supported calendar/hour-cycle extensions
+    @return locale-formatted date/time with medium date and short time styles
+
+    @throw I18N-DATETIME-ERROR if \a dt is relative
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if formatting options are invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a date/time formatter
+*/
+string format_datetime(date dt, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_format_datetime_value(dt, locale, nullptr, xsink);
+}
+
+//! Formats an absolute date/time value with explicit locale data and style options.
+/** @param dt absolute date/time value
+    @param locale BCP 47 locale tag, including supported calendar/hour-cycle extensions
+    @param opts optional hash; \c date_style and \c time_style may be \c "none", \c "short", \c "medium", \c "long",
+        or \c "full"
+    @return locale-formatted date/time
+
+    @throw I18N-DATETIME-ERROR if \a dt is relative
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if \a opts is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a date/time formatter
+*/
+string format_datetime(date dt, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_format_datetime_value(dt, locale, opts, xsink);
 }
 
 //! Compares two strings using explicit locale collation.

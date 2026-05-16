@@ -130,6 +130,8 @@ printf("%s\n", locale); # fr
 
 printf("%s\n", I18n::format_number("1234.50", "en-US"));
 printf("%s\n", I18n::format_currency("12.5", "USD", "en-US"));
+printf("%s\n", I18n::format_datetime(2020-05-04T15:06:07Z, "en-US",
+    {"date_style": "medium", "time_style": "none"}));
 assertLt(0, I18n::compare_strings("a", "b", "en-US"));
 binary key = I18n::get_sort_key("file-001", "en-US-u-kn-true");
     @endcode
@@ -146,6 +148,6 @@ printf("backend=%s icu=%s cldr=%s\n", info.backend, info.icu_version, info.cldr_
     @section i18n_scope Current Scope
 
     This module is the implementation target for issue #5334. Catalog file loading, extraction tooling, rich message
-    formatting, locale-aware date/time formatting, request-locale propagation, and machine-translation workflow support
-    are planned follow-up phases in the same issue.
+    formatting, date/time skeleton formatting, request-locale propagation, and machine-translation workflow support are
+    planned follow-up phases in the same issue.
 */

@@ -138,6 +138,11 @@ class I18nTest inherits QUnit::Test {
         assertEq("1234.50", I18n::format_number("1234.50", "en-US", {"grouping": False}));
         assertEq("1.00", I18n::format_number(1, "en-US", {"min_fraction_digits": 2}));
         assertRegex("^\\$12\\.50$", I18n::format_currency("12.5", "USD", "en-US"));
+        date instant = 2020-05-04T15:06:07Z;
+        assertEq("May 4, 2020",
+            I18n::format_datetime(instant, "en-US", {"date_style": "medium", "time_style": "none"}));
+        assertRegex("^3:06.*PM$",
+            I18n::format_datetime(instant, "en-US", {"date_style": "none", "time_style": "short"}));
 
         assertLt(0, I18n::compare_strings("a", "b", "en-US"));
         assertEq(0, I18n::compare_strings("a", "a", "en-US"));
