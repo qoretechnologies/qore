@@ -379,6 +379,27 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq("2019-12-30", format_date(format: "YYYY-MM-DD",
             date_value: get_date_from_iso_week(year: 2020, week: 1, day: 1)),
             "ISO week helper exposes year, week, and day");
+
+        TimeZone original_tz = TimeZone::get();
+        on_exit TimeZone::set(zone: original_tz);
+        TimeZone utc = new TimeZone(region: "UTC");
+        TimeZone utc_offset = new TimeZone(seconds_east: 0);
+        assertEq(0, get_epoch_seconds(date_value: utc.date(seconds: 0, microseconds: 0)),
+            "TimeZone date exposes seconds and microseconds");
+        assertEq(0, get_epoch_seconds(date_value: utc_offset.date(date_string: "1970-01-01T00:00:00Z")),
+            "TimeZone date exposes date_string");
+        assertEq(0, get_epoch_seconds(date_value: utc.date(date_string: "1970-01-01 00:00:00",
+            mask: "YYYY-MM-DD HH:mm:SS")), "TimeZone date exposes mask");
+        assertEq(get_epoch_microseconds(date_value: absolute),
+            get_epoch_microseconds(date_value: utc.date(date_value: absolute)),
+            "TimeZone date exposes date_value");
+        assertEq(1234, get_epoch_milliseconds(date_value: utc.dateMs(milliseconds: 1234)),
+            "TimeZone dateMs exposes milliseconds");
+        assertEq(1234567, get_epoch_microseconds(date_value: utc.dateUs(microseconds: 1234567)),
+            "TimeZone dateUs exposes microseconds");
+        TimeZone::setRegion(region: "UTC");
+        TimeZone::setUTCOffset(seconds_east: 0);
+        TimeZone::set(zone: original_tz);
     }
 
     reviewedObjectBuiltinOptIn() {

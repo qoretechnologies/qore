@@ -107,7 +107,7 @@ qclass TimeZone [arg=TimeZoneData* z; vparent=Serializable; serializer=reinterpr
 
     @par Example:
     @code{.py}
-TimeZone tz("Europe/Prague");
+TimeZone tz(region: "Europe/Prague");
     @endcode
 
     @throw TZINFO-ERROR Unable to read zoneinfo file; invalid file magic; error parsing zoneinfo file, etc
@@ -115,7 +115,7 @@ TimeZone tz("Europe/Prague");
 
     @since %Qore 0.8.12 an absolute path to a zoneinfo file can be provided if the @ref Qore::PO_NO_FILESYSTEM sandboxing restriction is not in place (checked at runtime if an absolute path is passed)
  */
-TimeZone::constructor(string region) {
+TimeZone::constructor(string region) [flags=NAMED_ARGS] {
     create_timezone_from_region(region, *self, xsink);
 }
 
@@ -124,10 +124,10 @@ TimeZone::constructor(string region) {
 
     @par Example:
     @code{.py}
-TimeZone tz(3600);
+TimeZone tz(seconds_east: 3600);
     @endcode
  */
-TimeZone::constructor(softint seconds_east) {
+TimeZone::constructor(softint seconds_east) [flags=NAMED_ARGS] {
     const AbstractQoreZoneInfo* zone = QTZM.findCreateOffsetZone(seconds_east);
     self->setPrivate(CID_TIMEZONE, new TimeZoneData(zone));
 }
@@ -182,39 +182,39 @@ string TimeZone::region() [flags=CONSTANT] {
 }
 
 //! Returns the equivalent date in the time zone of the current object
-/** @param secs offset are in seconds from 1970-01-01Z
-    @param us offset are in microseconds from \c 1970-01-01Z
+/** @param seconds offset are in seconds from 1970-01-01Z
+    @param microseconds offset are in microseconds from \c 1970-01-01Z
 
     @par Example:
     @code{.py}
-date dt = tz.date(secs);
+date dt = tz.date(seconds: seconds);
     @endcode
  */
-date TimeZone::date(softint secs, softint us = 0) [flags=CONSTANT] {
-    return DateTimeNode::makeAbsolute(z->get(), secs, (int)us);
+date TimeZone::date(softint seconds, softint microseconds = 0) [flags=CONSTANT,NAMED_ARGS] {
+    return DateTimeNode::makeAbsolute(z->get(), seconds, (int)microseconds);
 }
 
 //! Returns the equivalent date in the time zone of the current object
-/** @param d A date that will be used to create the date in the time zone of the objects; the same point in time will be returned but in the time zone of the object
+/** @param date_value A date that will be used to create the date in the time zone of the objects; the same point in time will be returned but in the time zone of the object
 
     @par Example:
     @code{.py}
-date dt = tz.date(2012-01-01T13:56:23+01:00);
+date dt = tz.date(date_value: 2012-01-01T13:56:23+01:00);
     @endcode
  */
-date TimeZone::date(date d) [flags=CONSTANT] {
-    return DateTimeNode::makeAbsolute(z->get(), d->getEpochSecondsUTC(), d->getMicrosecond());
+date TimeZone::date(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return DateTimeNode::makeAbsolute(z->get(), date_value->getEpochSecondsUTC(), date_value->getMicrosecond());
 }
 
 //! Returns the equivalent date in the time zone of the current object
-/** @param dtstr The string to be used to return a date in the object's time zone; supports
+/** @param date_string The string to be used to return a date in the object's time zone; supports
     ISO-8601, RFC 7231 (HTTP dates: IMF-fixdate, RFC 850, asctime), and RFC 2822 (email dates
     with numeric timezone offset) formats
 
     @par Example:
     @code{.py}
-date dt = tz.date("2012-01-01T13:56:23");
-date dt = tz.date("Sun, 06 Nov 1994 08:49:37 GMT");  # RFC 7231 IMF-fixdate
+date dt = tz.date(date_string: "2012-01-01T13:56:23");
+date dt = tz.date(date_string: "Sun, 06 Nov 1994 08:49:37 GMT");  # RFC 7231 IMF-fixdate
     @endcode
 
     @note RFC 7231 and RFC 2822 dates are always returned as UTC regardless of the TimeZone object's zone
@@ -223,23 +223,23 @@ date dt = tz.date("Sun, 06 Nov 1994 08:49:37 GMT");  # RFC 7231 IMF-fixdate
 
     @since %Qore 2.3.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported
  */
-date TimeZone::date(string dtstr) [flags=CONSTANT] {
-    return new DateTimeNode(z->get(), dtstr->getBuffer());
+date TimeZone::date(string date_string) [flags=CONSTANT,NAMED_ARGS] {
+    return new DateTimeNode(z->get(), date_string->getBuffer());
 }
 
 //! Returns a @ref date "date/time" value in the current TimeZone corresponding to parsing a string argument according to a @ref date_mask "format mask"
 /**
-    @param dtstr a string giving a date
+    @param date_string a string giving a date
     @param mask the mask for the date value; see @ref date_mask for information on the format of the
     @ref date_mask "format mask"
 
-    @return the @ref date "date/time" value in the current TimeZone corresponding to parsing the \a dtstr string
+    @return the @ref date "date/time" value in the current TimeZone corresponding to parsing the \a date_string string
     argument according to \a mask serving as a @ref date_mask "format mask"
 
     @par Example:
     @code{.py}
-TimeZone tz("Europe/London");
-printf("%y\n", tz.date("05/02/2012", "DD/MM/YYYY")); # outputs: 2012-02-05 00:00:00 Sun Z (GMT)
+TimeZone tz(region: "Europe/London");
+printf("%y\n", tz.date(date_string: "05/02/2012", mask: "DD/MM/YYYY")); # outputs: 2012-02-05 00:00:00 Sun Z (GMT)
     @endcode
 
     @throw DATE-CONVERT-ERROR invalid mask specification
@@ -248,36 +248,36 @@ printf("%y\n", tz.date("05/02/2012", "DD/MM/YYYY")); # outputs: 2012-02-05 00:00
 
     @since %Qore 0.8.6
 */
-date TimeZone::date(string dtstr, string mask) [flags=RET_VALUE_ONLY] {
-    return make_date_with_mask(z->get(), *dtstr, *mask, xsink);
+date TimeZone::date(string date_string, string mask) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return make_date_with_mask(z->get(), *date_string, *mask, xsink);
 }
 
 //! Returns a date in the object's zone based on an offsets in milliseconds from \c 1970-01-01Z
-/** @param ms an offsets in milliseconds from \c 1970-01-01Z
+/** @param milliseconds an offsets in milliseconds from \c 1970-01-01Z
 
     @return a date in the object's zone based on the given offsets in milliseconds from \c 1970-01-01Z
 
     @par Example:
     @code{.py}
-date dt = tz.dateMs(offset_ms);
+date dt = tz.dateMs(milliseconds: offset_ms);
     @endcode
  */
-date TimeZone::dateMs(softint ms) [flags=CONSTANT] {
-    return DateTimeNode::makeAbsolute(z->get(), ms / 1000, (int)((ms % 1000) * 1000));
+date TimeZone::dateMs(softint milliseconds) [flags=CONSTANT,NAMED_ARGS] {
+    return DateTimeNode::makeAbsolute(z->get(), milliseconds / 1000, (int)((milliseconds % 1000) * 1000));
 }
 
 //! Returns a date in the object's zone based on an offsets in microseconds from \c 1970-01-01Z
-/** @param us an offsets in microseconds from \c 1970-01-01Z
+/** @param microseconds an offsets in microseconds from \c 1970-01-01Z
 
     @return a date in the object's zone based on the given offsets in microseconds from \c 1970-01-01Z
 
     @par Example:
     @code{.py}
-date dt = tz.dateUs(offset_uss);
+date dt = tz.dateUs(microseconds: offset_us);
     @endcode
  */
-date TimeZone::dateUs(softint us) [flags=CONSTANT] {
-    return DateTimeNode::makeAbsolute(z->get(), us / 1000000, (int)(us % 1000000));
+date TimeZone::dateUs(softint microseconds) [flags=CONSTANT,NAMED_ARGS] {
+    return DateTimeNode::makeAbsolute(z->get(), microseconds / 1000000, (int)(microseconds % 1000000));
 }
 
 //! Returns a TimeZone object for the current time zone
@@ -299,11 +299,11 @@ static TimeZone TimeZone::get() [flags=CONSTANT] {
 
     @par Example:
     @code{.py}
-TimeZone tz("Europe/Prague");
-TimeZone::set(tz);
+TimeZone tz(region: "Europe/Prague");
+TimeZone::set(zone: tz);
     @endcode
  */
-static nothing TimeZone::set(TimeZone[TimeZoneData] zone) [dom=LOCALE_CONTROL] {
+static nothing TimeZone::set(TimeZone[TimeZoneData] zone) [dom=LOCALE_CONTROL;flags=NAMED_ARGS] {
     getProgram()->setTZ(zone->get());
 }
 
@@ -314,10 +314,10 @@ static nothing TimeZone::set(TimeZone[TimeZoneData] zone) [dom=LOCALE_CONTROL] {
 
     @par Example:
     @code{.py}
-TimeZone::setUTCOffset(3600);
+TimeZone::setUTCOffset(seconds_east: 3600);
     @endcode
  */
-static nothing TimeZone::setUTCOffset(softint seconds_east) [dom=LOCALE_CONTROL] {
+static nothing TimeZone::setUTCOffset(softint seconds_east) [dom=LOCALE_CONTROL;flags=NAMED_ARGS] {
     const AbstractQoreZoneInfo *zone = QTZM.findCreateOffsetZone(seconds_east);
     getProgram()->setTZ(zone);
 }
@@ -334,10 +334,10 @@ static nothing TimeZone::setUTCOffset(softint seconds_east) [dom=LOCALE_CONTROL]
 
     @par Example:
     @code{.py}
-TimeZone::setRegion("Europe/Prague");
+TimeZone::setRegion(region: "Europe/Prague");
     @endcode
  */
-static nothing TimeZone::setRegion(string region) [dom=LOCALE_CONTROL] {
+static nothing TimeZone::setRegion(string region) [dom=LOCALE_CONTROL;flags=NAMED_ARGS] {
     const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->getBuffer(), xsink);
     if (!*xsink) {
         getProgram()->setTZ(zone);

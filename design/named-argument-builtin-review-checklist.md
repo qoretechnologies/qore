@@ -349,5 +349,9 @@ These examples are from the core migration and should be reused as precedent:
 - Qlib wrapper/object call sites must also stay positional when the receiver is
   not parse-time-resolved tightly enough for qmod named-call compilation, even
   if the underlying native method now supports named arguments.
+- Time and terminal APIs should expand terse units and value roles before
+  opt-in: use `seconds`, `microseconds`, `milliseconds`, `date_value`,
+  `date_string`, and `offset` instead of `secs`, `us`, `ms`, `d`, `dtstr`,
+  and `cc`.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

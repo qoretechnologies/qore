@@ -768,6 +768,23 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("AsyncIoController", "submitTask", ("task", "cancel_callback"));
         assertNamedClassMethodVariantCount("AsyncIoController", "setMaxCallbackWorkers", ("max_workers",));
         assertNamedClassMethodVariantCount("AsyncIoController", "setMaxIoThreads", ("max_threads",));
+        assertNamedConstructorVariantCount("TimeZone", ("region",));
+        assertNamedConstructorVariantCount("TimeZone", ("seconds_east",));
+        assertNamedClassMethodVariantCount("TimeZone", "date", ("seconds", "microseconds"));
+        assertNamedClassMethodVariantCount("TimeZone", "date", ("date_value",));
+        assertNamedClassMethodVariantCount("TimeZone", "date", ("date_string",));
+        assertNamedClassMethodVariantCount("TimeZone", "date", ("date_string", "mask"));
+        assertNamedClassMethodVariantCount("TimeZone", "dateMs", ("milliseconds",));
+        assertNamedClassMethodVariantCount("TimeZone", "dateUs", ("microseconds",));
+        assertNamedClassMethodVariantCount("TimeZone", "set", ("zone",));
+        assertNamedClassMethodVariantCount("TimeZone", "setRegion", ("region",));
+        assertNamedClassMethodVariantCount("TimeZone", "setUTCOffset", ("seconds_east",));
+        foreach string name in (("setLFlag", "setCFlag", "setOFlag", "setIFlag")) {
+            assertNamedClassMethodVariantCount("TermIOS", name, ("flag",));
+        }
+        assertNamedClassMethodVariantCount("TermIOS", "getCC", ("offset",));
+        assertNamedClassMethodVariantCount("TermIOS", "setCC", ("offset", "value"));
+        assertNamedClassMethodVariantCount("TermIOS", "isEqual", ("termios",));
         assertNamedConstructorVariantCount("ParseOptions", ("parse_options",));
         assertNamedConstructorVariantCount("ParseOptions", ("name",));
         assertNamedConstructorVariantCount("ParseOptions", ("names",));
