@@ -21,6 +21,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("cardinal plural categories", \cardinalPluralCategoryTest());
         addTestCase("visible fraction digits", \visibleFractionDigitsTest());
         addTestCase("ordinal plural categories", \ordinalPluralCategoryTest());
+        addTestCase("locale negotiation utilities", \localeNegotiationTest());
         addTestCase("plural form selection", \pluralFormTest());
         addTestCase("plural validation errors", \validationErrorTest());
         addTestCase("message catalog lookup", \messageCatalogLookupTest());
@@ -96,6 +97,32 @@ class I18nTest inherits QUnit::Test {
         assertEq("other", I18n::plural_category(4, "en", opts));
         assertEq("other", I18n::plural_category(11, "en", opts));
         assertEq("one", I18n::plural_category(21, "en", opts));
+    }
+
+    localeNegotiationTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        assertEq("en-US", I18n::canonicalize_locale("en_US"));
+        assertEq("he", I18n::canonicalize_locale("iw"));
+        assertEq(("fr-CA", "fr", "root"), I18n::get_locale_fallback_chain("fr-CA-u-nu-latn"));
+
+        list<hash<auto>> ranges = I18n::parse_accept_language("da, en-gb;q=0.8, en;q=0.7");
+        assertEq(3, ranges.size());
+        assertEq("da", ranges[0].locale);
+        assertEq("en-GB", ranges[1].locale);
+        assertEq("en", ranges[2].locale);
+        assertEq(0.8, ranges[1].q);
+
+        assertEq("fr", I18n::negotiate_locale("fr-CA, fr;q=0.8, en;q=0.5", ("en", "fr", "root")));
+        assertEq("en", I18n::negotiate_locale("de-AT, en;q=0.9", ("en", "fr", "root")));
+        assertEq("root", I18n::negotiate_locale("de-AT", ("en", "fr", "root")));
+        assertEq("fr", I18n::negotiate_locale("de-AT", ("en", "fr"), "fr"));
+        assertEq("fr", I18n::negotiate_locale("*, en;q=0.5", ("en", "fr"), "fr"));
+
+        assertThrows("I18N-ACCEPT-LANGUAGE-ERROR", auto sub() {
+            return I18n::parse_accept_language("en;q=1.5");
+        });
     }
 
     pluralFormTest() {

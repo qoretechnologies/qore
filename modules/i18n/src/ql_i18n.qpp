@@ -38,8 +38,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <memory>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 static constexpr int64 I18N_CATALOG_SCHEMA_VERSION = 1;
 
@@ -93,6 +96,15 @@ static bool i18n_trim_ascii(const std::string& s, std::string& out, ExceptionSin
     }
 
     out = s.substr(start, end - start);
+    return true;
+}
+
+static bool i18n_check_locale_length(const std::string& locale, ExceptionSink* xsink, const char* arg_name) {
+    if (locale.size() > 255) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "%s is too long; maximum supported length is 255 bytes",
+            arg_name);
+        return false;
+    }
     return true;
 }
 
@@ -241,13 +253,267 @@ static std::string i18n_qore_string_to_utf8(const QoreStringNode* str, Exception
         return std::string();
     }
 
-    if (tmp->strlen() > 255) {
-        xsink->raiseException("I18N-LOCALE-ERROR", "%s is too long; maximum supported length is 255 bytes",
-            arg_name);
+    std::string rv = tmp->c_str();
+    if (!i18n_check_locale_length(rv, xsink, arg_name)) {
         return std::string();
     }
 
+    return rv;
+}
+
+static std::string i18n_accept_language_to_utf8(const QoreStringNode* str, ExceptionSink* xsink) {
+    TempEncodingHelper tmp(str, QCS_UTF8, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+    if (!tmp) {
+        xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+            "Accept-Language header could not be converted to UTF-8");
+        return std::string();
+    }
+    if (tmp->strlen() > 8192) {
+        xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+            "Accept-Language header is too long; maximum supported length is 8192 bytes");
+        return std::string();
+    }
     return tmp->c_str();
+}
+
+static std::string i18n_strip_unicode_extensions(const std::string& locale) {
+    std::string lower = locale;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    size_t ext = lower.find("-u-");
+    return ext == std::string::npos ? locale : locale.substr(0, ext);
+}
+
+static std::string i18n_canonicalize_locale_tag(const std::string& raw, ExceptionSink* xsink,
+        bool strip_extensions = false) {
+    std::string tag = raw.empty() ? "root" : raw;
+    if (tag == "root") {
+        return tag;
+    }
+    if (!i18n_check_locale_length(tag, xsink, "locale")) {
+        return std::string();
+    }
+
+    std::replace(tag.begin(), tag.end(), '_', '-');
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::forLanguageTag(icu::StringPiece(tag), status);
+    if (U_FAILURE(status) || locale.isBogus()) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "invalid locale '%s': %s", raw.c_str(),
+            i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    std::string canonical = locale.toLanguageTag<std::string>(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "cannot canonicalize locale '%s': %s", raw.c_str(),
+            i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    return strip_extensions ? i18n_strip_unicode_extensions(canonical) : canonical;
+}
+
+static std::vector<std::string> i18n_locale_fallback_chain(const std::string& raw, ExceptionSink* xsink) {
+    std::vector<std::string> chain;
+    std::string locale = i18n_canonicalize_locale_tag(raw, xsink, true);
+    if (*xsink) {
+        return chain;
+    }
+
+    if (locale != "root") {
+        chain.push_back(locale);
+        while (true) {
+            size_t pos = locale.rfind('-');
+            if (pos == std::string::npos) {
+                break;
+            }
+            locale.resize(pos);
+            chain.push_back(locale);
+        }
+    }
+    chain.push_back("root");
+    return chain;
+}
+
+struct I18nLanguageRange {
+    std::string locale;
+    double q = 1.0;
+    int64 index = 0;
+    bool wildcard = false;
+};
+
+static std::vector<I18nLanguageRange> i18n_parse_accept_language_header(const std::string& header,
+        ExceptionSink* xsink) {
+    std::vector<I18nLanguageRange> ranges;
+    if (header.size() > 8192) {
+        xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+            "Accept-Language header is too long; maximum supported length is 8192 bytes");
+        return ranges;
+    }
+
+    size_t start = 0;
+    int64 index = 0;
+    while (start <= header.size()) {
+        if (start && !(start % 100) && qore_check_cancel(xsink, "parsing Accept-Language header")) {
+            return ranges;
+        }
+
+        size_t comma = header.find(',', start);
+        std::string raw_item = header.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+        std::string item;
+        if (!i18n_trim_ascii(raw_item, item, xsink)) {
+            return ranges;
+        }
+
+        if (!item.empty()) {
+            if (ranges.size() >= 100) {
+                xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+                    "Accept-Language header has too many language ranges; maximum supported count is 100");
+                return ranges;
+            }
+
+            size_t semi = item.find(';');
+            std::string range_text;
+            if (!i18n_trim_ascii(item.substr(0, semi), range_text, xsink)) {
+                return ranges;
+            }
+            if (range_text.empty()) {
+                xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR", "empty language range in Accept-Language header");
+                return ranges;
+            }
+
+            I18nLanguageRange range;
+            range.index = index++;
+            range.wildcard = range_text == "*";
+            if (range.wildcard) {
+                range.locale = "*";
+            } else {
+                range.locale = i18n_canonicalize_locale_tag(range_text, xsink, true);
+                if (*xsink) {
+                    return ranges;
+                }
+            }
+
+            if (semi != std::string::npos) {
+                std::string params = item.substr(semi + 1);
+                size_t pstart = 0;
+                while (pstart <= params.size()) {
+                    size_t psemi = params.find(';', pstart);
+                    std::string raw_param = params.substr(pstart,
+                        psemi == std::string::npos ? std::string::npos : psemi - pstart);
+                    std::string param;
+                    if (!i18n_trim_ascii(raw_param, param, xsink)) {
+                        return ranges;
+                    }
+                    if (param.size() >= 2 && param[0] == 'q' && param[1] == '=') {
+                        char* end = nullptr;
+                        range.q = std::strtod(param.c_str() + 2, &end);
+                        if (!end || *end || range.q < 0.0 || range.q > 1.0) {
+                            xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+                                "invalid q value '%s' in Accept-Language header", param.c_str() + 2);
+                            return ranges;
+                        }
+                    }
+                    if (psemi == std::string::npos) {
+                        break;
+                    }
+                    pstart = psemi + 1;
+                }
+            }
+
+            if (range.q > 0.0) {
+                ranges.push_back(std::move(range));
+            }
+        }
+
+        if (comma == std::string::npos) {
+            break;
+        }
+        start = comma + 1;
+    }
+
+    std::stable_sort(ranges.begin(), ranges.end(), [](const I18nLanguageRange& a, const I18nLanguageRange& b) {
+        if (a.q == b.q) {
+            return a.index < b.index;
+        }
+        return a.q > b.q;
+    });
+
+    return ranges;
+}
+
+static QoreStringNode* i18n_negotiate_locale(const QoreStringNode* header, const QoreListNode* available,
+        const QoreStringNode* default_locale, ExceptionSink* xsink) {
+    std::string header_str = i18n_accept_language_to_utf8(header, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::string default_str = "root";
+    if (default_locale) {
+        default_str = i18n_qore_string_to_utf8(default_locale, xsink, "default_locale");
+        if (*xsink) {
+            return nullptr;
+        }
+        default_str = i18n_canonicalize_locale_tag(default_str, xsink, true);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    std::unordered_map<std::string, std::string> available_map;
+    for (size_t i = 0; i < available->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking available locales")) {
+            return nullptr;
+        }
+        QoreStringValueHelper value(available->retrieveEntry(i), QCS_UTF8, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string locale = i18n_canonicalize_locale_tag(value->c_str(), xsink, true);
+        if (*xsink) {
+            return nullptr;
+        }
+        available_map.emplace(locale, locale);
+    }
+
+    std::vector<I18nLanguageRange> ranges = i18n_parse_accept_language_header(header_str, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    for (size_t i = 0; i < ranges.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "negotiating locale")) {
+            return nullptr;
+        }
+
+        if (ranges[i].wildcard) {
+            auto def = available_map.find(default_str);
+            if (def != available_map.end()) {
+                return new QoreStringNode(def->second, QCS_UTF8);
+            }
+            return new QoreStringNode(default_str, QCS_UTF8);
+        }
+
+        for (const std::string& candidate : i18n_locale_fallback_chain(ranges[i].locale, xsink)) {
+            if (*xsink) {
+                return nullptr;
+            }
+            if (candidate == "root" && ranges[i].locale != "root") {
+                continue;
+            }
+            auto match = available_map.find(candidate);
+            if (match != available_map.end()) {
+                return new QoreStringNode(match->second, QCS_UTF8);
+            }
+        }
+    }
+
+    return new QoreStringNode(default_str, QCS_UTF8);
 }
 
 static bool i18n_qore_value_to_utf8_string(QoreValue value, std::string& out, ExceptionSink* xsink,
@@ -531,6 +797,121 @@ assertEq(1, I18n::get_catalog_schema_version());
 */
 int get_catalog_schema_version() [flags=CONSTANT] {
     return I18N_CATALOG_SCHEMA_VERSION;
+}
+
+//! Returns the canonical BCP 47 form of a locale tag.
+/** @param locale locale tag such as \c "en_US" or \c "iw"
+    @return canonical BCP 47 locale tag
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+
+    @par Example:
+    @code{.py}
+assertEq("en-US", I18n::canonicalize_locale("en_US"));
+    @endcode
+*/
+string canonicalize_locale(string locale) [flags=RET_VALUE_ONLY] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string canonical = i18n_canonicalize_locale_tag(tag, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(canonical, QCS_UTF8);
+}
+
+//! Returns the catalog fallback chain for a locale tag.
+/** Unicode formatting extensions are stripped from catalog identity.
+
+    @param locale locale tag
+    @return fallback chain such as \c ("fr-CA", "fr", "root")
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+list<string> get_locale_fallback_chain(string locale) [flags=RET_VALUE_ONLY] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    std::vector<std::string> chain = i18n_locale_fallback_chain(tag, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; i < chain.size(); ++i) {
+        rv->push(new QoreStringNode(chain[i], QCS_UTF8), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
+//! Parses an HTTP Accept-Language header.
+/** @param header Accept-Language header value
+    @return list of hashes sorted by preference; each hash has \c locale, \c q, \c index, and \c wildcard keys
+
+    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed
+    @throw I18N-LOCALE-ERROR if a language range is invalid
+*/
+list<hash<auto>> parse_accept_language(string header) [flags=RET_VALUE_ONLY] {
+    std::string header_str = i18n_accept_language_to_utf8(header, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    std::vector<I18nLanguageRange> ranges = i18n_parse_accept_language_header(header_str, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < ranges.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "returning Accept-Language ranges")) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("locale", new QoreStringNode(ranges[i].locale, QCS_UTF8), xsink);
+        if (*xsink) return QoreValue();
+        h->setKeyValue("q", ranges[i].q, xsink);
+        if (*xsink) return QoreValue();
+        h->setKeyValue("index", ranges[i].index, xsink);
+        if (*xsink) return QoreValue();
+        h->setKeyValue("wildcard", ranges[i].wildcard, xsink);
+        if (*xsink) return QoreValue();
+        rv->push(h.release(), xsink);
+        if (*xsink) return QoreValue();
+    }
+    return rv.release();
+}
+
+//! Negotiates an effective locale from an HTTP Accept-Language header.
+/** @param header Accept-Language header value
+    @param available available catalog locales
+    @return best matching locale, or \c "root" if no match is found
+
+    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed
+    @throw I18N-LOCALE-ERROR if a language range or available locale is invalid
+*/
+string negotiate_locale(string header, list<string> available) [flags=RET_VALUE_ONLY] {
+    return i18n_negotiate_locale(header, available, nullptr, xsink);
+}
+
+//! Negotiates an effective locale from an HTTP Accept-Language header.
+/** @param header Accept-Language header value
+    @param available available catalog locales
+    @param default_locale default locale returned when no language range matches
+    @return best matching locale, or \a default_locale if no match is found
+
+    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed
+    @throw I18N-LOCALE-ERROR if a language range, available locale, or default locale is invalid
+*/
+string negotiate_locale(string header, list<string> available, string default_locale) [flags=RET_VALUE_ONLY] {
+    return i18n_negotiate_locale(header, available, default_locale, xsink);
 }
 
 //! Returns the CLDR plural category for a value and locale using cardinal rules.
