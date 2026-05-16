@@ -1155,6 +1155,70 @@ hash<auto> get_backend_info() [flags=CONSTANT] {
     return h.release();
 }
 
+//! Parses native catalog JSON data into a Qore catalog hash.
+/** The JSON data must be UTF-8 and must represent the schema-versioned native catalog shape consumed by
+    I18n::MessageCatalog. Catalog JSON is data only; it is parsed by this module and never evaluated as Qore code.
+
+    @param json UTF-8 JSON catalog data
+    @return native catalog hash suitable for I18n::MessageCatalog
+
+    @throw I18N-CATALOG-JSON-ERROR if \a json is malformed, not UTF-8, or does not contain a JSON object
+
+    @par Example:
+    @code{.py}
+hash<auto> catalog_data = I18n::parse_native_catalog_json(ReadOnlyFile::readTextFile("catalog.json"));
+I18n::MessageCatalog catalog(catalog_data);
+    @endcode
+*/
+hash<auto> parse_native_catalog_json(string json) [flags=RET_VALUE_ONLY] {
+    QoreHashNode* catalog = i18n_parse_native_catalog_json(json, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return catalog;
+}
+
+//! Loads and parses a native catalog JSON file.
+/** Files are parsed as UTF-8 JSON and never evaluated as Qore code. The resulting hash is still validated by
+    I18n::MessageCatalog construction.
+
+    @param path catalog JSON file path
+    @return native catalog hash suitable for I18n::MessageCatalog
+
+    @throw FILE-READ-ERROR if the file cannot be read
+    @throw I18N-CATALOG-ERROR if the file exceeds the default size limit
+    @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
+
+    @par Example:
+    @code{.py}
+I18n::MessageCatalog catalog(I18n::load_native_catalog("catalog.json"));
+    @endcode
+*/
+hash<auto> load_native_catalog(string path) [dom=FILESYSTEM] {
+    QoreHashNode* catalog = i18n_load_native_catalog_json(path, -1, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return catalog;
+}
+
+//! Loads and parses a native catalog JSON file with an explicit maximum file size.
+/** @param path catalog JSON file path
+    @param max_file_len maximum accepted file size in bytes
+    @return native catalog hash suitable for I18n::MessageCatalog
+
+    @throw FILE-READ-ERROR if the file cannot be read
+    @throw I18N-CATALOG-ERROR if \a max_file_len is invalid or the file exceeds it
+    @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
+*/
+hash<auto> load_native_catalog(string path, int max_file_len) [dom=FILESYSTEM] {
+    QoreHashNode* catalog = i18n_load_native_catalog_json(path, max_file_len, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return catalog;
+}
+
 //! Returns the ICU library version used by the module.
 /** @return ICU version string, for example \c "78.2"
 

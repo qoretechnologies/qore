@@ -33,5 +33,8 @@
 extern QoreNamespace I18nNS;
 
 DLLLOCAL void init_i18n_functions(QoreNamespace& ns);
+DLLLOCAL QoreHashNode* i18n_parse_native_catalog_json(const QoreStringNode* json, ExceptionSink* xsink);
+DLLLOCAL QoreHashNode* i18n_load_native_catalog_json(const QoreStringNode* path, int64 max_file_len,
+    ExceptionSink* xsink);
 
 #endif

@@ -62,6 +62,7 @@ set(I18N_QPP_SRC
 )
 
 set(I18N_CPP_SRC
+    src/i18n-catalog-json.cpp
     src/i18n-module.cpp
 )
 

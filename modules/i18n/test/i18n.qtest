@@ -7,6 +7,7 @@
 
 %modern
 
+%requires ../../../qlib/FsUtil.qm
 %requires ../../../qlib/QUnit.qm
 
 %try-module i18n
@@ -30,6 +31,8 @@ class I18nTest inherits QUnit::Test {
         addTestCase("message catalog plural lookup", \messageCatalogPluralLookupTest());
         addTestCase("message catalog state policy", \messageCatalogStatePolicyTest());
         addTestCase("message catalog layer precedence", \messageCatalogLayerPrecedenceTest());
+        addTestCase("message catalog JSON file loading", \messageCatalogJsonFileLoadingTest());
+        addTestCase("message catalog JSON validation", \messageCatalogJsonValidationTest());
         addTestCase("message catalog validation", \messageCatalogValidationTest());
 
         set_return_value(main());
@@ -293,6 +296,23 @@ class I18nTest inherits QUnit::Test {
         };
     }
 
+    private string createCatalogJson(string cs_message) {
+        return "{\n"
+            "  \"schema_version\": 1,\n"
+            "  \"locales\": {\n"
+            "    \"root\": {\"messages\": {\"Hello, {name}\": \"Hello, {name}\"}},\n"
+            "    \"cs\": {\"messages\": {\n"
+            "      \"Hello, {name}\": {\"message\": \"" + cs_message + ", {name}\", \"state\": \"translated\"},\n"
+            "      \"1 file\": {\n"
+            "        \"plural_source\": \"{count} files\",\n"
+            "        \"forms\": {\"one\": \"{count} soubor\", \"few\": \"{count} soubory\", \"other\": \"{count} souboru\"},\n"
+            "        \"state\": \"translated\"\n"
+            "      }\n"
+            "    }}\n"
+            "  }\n"
+            "}\n";
+    }
+
     messageCatalogLookupTest() {
 %ifdef NoI18n
         testSkip("i18n module not available");
@@ -378,6 +398,56 @@ class I18nTest inherits QUnit::Test {
         I18n::MessageCatalog catalog((base, override));
         assertEq("Cau", catalog.t("Hello", "cs"));
         assertEq("Hello", catalog.t("Hello", "de"));
+    }
+
+    messageCatalogJsonFileLoadingTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        TmpFile base("qore-i18n-", ".json");
+        base.file.write(createCatalogJson("Ahoj"));
+        base.file.close();
+
+        hash<auto> loaded = I18n::load_native_catalog(base.path);
+        assertEq(1, loaded.schema_version);
+        assertEq("Ahoj, {name}", loaded.locales.cs.messages."Hello, {name}".message);
+
+        I18n::MessageCatalog catalog(base.path);
+        assertEq("Ahoj, Petr", catalog.t("Hello, {name}", "cs", {"name": "Petr"}));
+        assertEq("2 soubory", catalog.tn(2, "1 file", "{count} files", "cs"));
+
+        TmpFile override("qore-i18n-", ".json");
+        override.file.write(createCatalogJson("Cau"));
+        override.file.close();
+
+        I18n::MessageCatalog layered((base.path, override.path));
+        assertEq("Cau, Eva", layered.t("Hello, {name}", "cs", {"name": "Eva"}));
+    }
+
+    messageCatalogJsonValidationTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
+            return I18n::parse_native_catalog_json("{\"a\": 1, \"a\": 2}");
+        });
+        assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
+            return I18n::parse_native_catalog_json("[1, 2, 3]");
+        });
+
+        TmpFile tmp("qore-i18n-", ".json");
+        tmp.file.write(createCatalogJson("Ahoj"));
+        tmp.file.close();
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return I18n::load_native_catalog(tmp.path, 8);
+        });
+
+        TmpFile bad("qore-i18n-", ".json");
+        bad.file.write("{\"schema_version\": 1,");
+        bad.file.close();
+        assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
+            return new I18n::MessageCatalog(bad.path);
+        });
     }
 
     messageCatalogValidationTest() {

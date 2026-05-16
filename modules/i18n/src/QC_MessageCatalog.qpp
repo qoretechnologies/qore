@@ -44,6 +44,8 @@
 namespace {
 
 constexpr int64 I18N_CATALOG_SCHEMA_VERSION = 1;
+constexpr int64 I18N_CATALOG_DEFAULT_MAX_FILE_LEN = 16 * 1024 * 1024;
+constexpr int64 I18N_CATALOG_MAX_FILE_LEN = 256 * 1024 * 1024;
 
 struct I18nCatalogMessage {
     std::string source;
@@ -433,6 +435,30 @@ static bool i18n_catalog_contains_placeholder(const std::set<std::string>& place
     return placeholders.find(name) != placeholders.end();
 }
 
+static int64 i18n_catalog_get_max_file_len_option(const QoreHashNode* opts, ExceptionSink* xsink) {
+    if (!opts) {
+        return I18N_CATALOG_DEFAULT_MAX_FILE_LEN;
+    }
+
+    QoreValue value = opts->getKeyValue("max_file_len");
+    if (value.isNullOrNothing()) {
+        return I18N_CATALOG_DEFAULT_MAX_FILE_LEN;
+    }
+    if (value.getType() != NT_INT) {
+        xsink->raiseException("I18N-CATALOG-ERROR",
+            "opts.max_file_len must be an int; got type '%s'", value.getTypeName());
+        return 0;
+    }
+
+    int64 max_file_len = value.getAsBigInt();
+    if (max_file_len < 1 || max_file_len > I18N_CATALOG_MAX_FILE_LEN) {
+        xsink->raiseException("I18N-CATALOG-ERROR",
+            "opts.max_file_len must be between 1 and %lld bytes", I18N_CATALOG_MAX_FILE_LEN);
+        return 0;
+    }
+    return max_file_len;
+}
+
 } // namespace
 
 class QoreMessageCatalog : public AbstractPrivateData {
@@ -478,6 +504,14 @@ public:
                 return;
             }
         }
+    }
+
+    DLLLOCAL void loadCatalogFile(const QoreStringNode* path, int64 max_file_len, ExceptionSink* xsink) {
+        ReferenceHolder<QoreHashNode> catalog(i18n_load_native_catalog_json(path, max_file_len, xsink), xsink);
+        if (*xsink) {
+            return;
+        }
+        loadCatalog(*catalog, xsink);
     }
 
     DLLLOCAL QoreStringNode* translate(const QoreStringNode* id_arg, const QoreStringNode* source_arg,
@@ -1034,8 +1068,8 @@ private:
 };
 
 //! Message catalog for locale-aware text lookup and simple placeholder formatting.
-/** The class stores an immutable, schema-versioned native catalog passed as Qore data. Catalog file loading is
-    intentionally separate from this class so filesystem sandboxing can be applied by the future loader API.
+/** The class stores an immutable, schema-versioned native catalog passed as Qore data or loaded from UTF-8 JSON
+    catalog files. File-loading constructors are tagged with the \c FILESYSTEM functional domain.
 
     Native catalog shape:
     @code{.py}
@@ -1091,6 +1125,46 @@ MessageCatalog::constructor(hash<auto> native_catalog, *hash<auto> opts) {
     self->setPrivate(CID_MESSAGECATALOG, holder.release());
 }
 
+//! Creates a message catalog from one native catalog JSON file.
+/** @param path path to a UTF-8 native catalog JSON file
+
+    @throw FILE-READ-ERROR if the file cannot be read
+    @throw I18N-CATALOG-JSON-ERROR if the file does not contain valid native catalog JSON
+    @throw I18N-CATALOG-ERROR if the catalog schema or placeholders are invalid
+*/
+MessageCatalog::constructor(string path) [dom=FILESYSTEM] {
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog());
+    holder->loadCatalogFile(path, I18N_CATALOG_DEFAULT_MAX_FILE_LEN, xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_MESSAGECATALOG, holder.release());
+}
+
+//! Creates a message catalog from one native catalog JSON file with options.
+/** @param path path to a UTF-8 native catalog JSON file
+    @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
+        \c "max_file_len" sets the maximum accepted file size in bytes
+
+    @throw FILE-READ-ERROR if the file cannot be read
+    @throw I18N-CATALOG-JSON-ERROR if the file does not contain valid native catalog JSON
+    @throw I18N-CATALOG-ERROR if the catalog schema, placeholders, or options are invalid
+*/
+MessageCatalog::constructor(string path, *hash<auto> opts) [dom=FILESYSTEM] {
+    bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
+    int64 max_file_len = i18n_catalog_get_max_file_len_option(opts, xsink);
+    if (*xsink) {
+        return;
+    }
+
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed));
+    holder->loadCatalogFile(path, max_file_len, xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_MESSAGECATALOG, holder.release());
+}
+
 //! Creates a message catalog by merging native catalog hashes in order.
 /** Later catalog hashes override earlier hashes per whole message id.
 
@@ -1106,6 +1180,62 @@ MessageCatalog::constructor(list<hash<auto>> native_catalogs) {
         }
         QoreValue value = native_catalogs->retrieveEntry(i);
         holder->loadCatalog(value.get<const QoreHashNode>(), xsink);
+        if (*xsink) {
+            return;
+        }
+    }
+    self->setPrivate(CID_MESSAGECATALOG, holder.release());
+}
+
+//! Creates a message catalog by merging native catalog JSON files in order.
+/** Later catalog files override earlier files per whole message id.
+
+    @param paths list of UTF-8 native catalog JSON file paths
+
+    @throw FILE-READ-ERROR if a file cannot be read
+    @throw I18N-CATALOG-JSON-ERROR if a file does not contain valid native catalog JSON
+    @throw I18N-CATALOG-ERROR if any catalog schema or placeholders are invalid
+*/
+MessageCatalog::constructor(list<string> paths) [dom=FILESYSTEM] {
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog());
+    for (size_t i = 0; i < paths->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "loading i18n catalog files")) {
+            return;
+        }
+        const QoreStringNode* path = paths->retrieveEntry(i).get<const QoreStringNode>();
+        holder->loadCatalogFile(path, I18N_CATALOG_DEFAULT_MAX_FILE_LEN, xsink);
+        if (*xsink) {
+            return;
+        }
+    }
+    self->setPrivate(CID_MESSAGECATALOG, holder.release());
+}
+
+//! Creates a message catalog by merging native catalog JSON files in order with options.
+/** Later catalog files override earlier files per whole message id.
+
+    @param paths list of UTF-8 native catalog JSON file paths
+    @param opts options hash; \c "use_unreviewed" allows \c fuzzy, \c needs-review, and \c stale entries at runtime;
+        \c "max_file_len" sets the maximum accepted file size in bytes for each file
+
+    @throw FILE-READ-ERROR if a file cannot be read
+    @throw I18N-CATALOG-JSON-ERROR if a file does not contain valid native catalog JSON
+    @throw I18N-CATALOG-ERROR if any catalog schema, placeholders, or options are invalid
+*/
+MessageCatalog::constructor(list<string> paths, *hash<auto> opts) [dom=FILESYSTEM] {
+    bool use_unreviewed = opts && opts->getKeyValue("use_unreviewed").getAsBool();
+    int64 max_file_len = i18n_catalog_get_max_file_len_option(opts, xsink);
+    if (*xsink) {
+        return;
+    }
+
+    std::unique_ptr<QoreMessageCatalog> holder(new QoreMessageCatalog(use_unreviewed));
+    for (size_t i = 0; i < paths->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "loading i18n catalog files")) {
+            return;
+        }
+        const QoreStringNode* path = paths->retrieveEntry(i).get<const QoreStringNode>();
+        holder->loadCatalogFile(path, max_file_len, xsink);
         if (*xsink) {
             return;
         }
