@@ -263,5 +263,11 @@ These examples are from the core migration and should be reused as precedent:
   `splitRegex(separator_pattern, with_separator, limit)` when a fuller overload
   has a defaulted middle parameter and can already serve named calls via
   `options: 0`.
+- Stream and iterator builtins use domain terms instead of terse implementation
+  names: `source`, `input_stream`, `output_stream`, `buffer_size`,
+  `line_separator`, `trim_line`, `text`, `value`, `format`, and `format_args`.
+  Leave varargs formatting methods such as `printf(format, ...)` and
+  `f_printf(format, ...)` positional-only; fixed-arity `vprintf()` variants can
+  opt in with `format` and `format_args`.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

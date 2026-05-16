@@ -119,6 +119,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed file builtin opt-in", \reviewedFileBuiltinOptIn(), NOTHING);
         addTestCase("reviewed library builtin opt-in", \reviewedLibraryBuiltinOptIn(), NOTHING);
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
         addTestCase("reviewed pseudo-method opt-in", \reviewedPseudoMethodOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
@@ -560,6 +561,62 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "sub ql_thread_named_resource() { set_thread_resource(resource: sub(auto arg) {}, argument: NOTHING); "
             "remove_thread_resource(resource: sub() {}); }",
             "thread-named");
+    }
+
+    reviewedStreamBuiltinOptIn() {
+        BinaryInputStream bis = new BinaryInputStream(source: binary("abc"));
+        assertEq(binary("ab"), bis.read(limit: 2), "BinaryInputStream constructor and read expose names");
+
+        StringInputStream sis = new StringInputStream(source: "alpha");
+        assertEq(binary("al"), sis.read(limit: 2), "StringInputStream constructor and read expose names");
+
+        BinaryOutputStream bos();
+        bos.write(data: <0102>);
+        assertEq(<0102>, bos.getData(), "BinaryOutputStream write exposes data");
+
+        StringOutputStream sos = new StringOutputStream(encoding: "UTF-8");
+        sos.write(data: binary("ab"));
+        assertEq("ab", sos.getData(), "StringOutputStream constructor and write expose names");
+
+        StreamReader sr = new StreamReader(input_stream: new StringInputStream(source: "line1\nline2"),
+            encoding: "UTF-8");
+        assertEq("line1", sr.readLine(line_separator: "\n", trim_line: True),
+            "StreamReader readLine exposes line_separator and trim_line");
+        assertEq(binary("line2"), sr.readBinary(limit: -1), "StreamReader readBinary exposes limit");
+
+        sr = new StreamReader(input_stream: new StringInputStream(source: "abc"), encoding: "UTF-8");
+        assertEq("ab", sr.readString(limit: 2), "StreamReader readString exposes limit");
+
+        BufferedStreamReader bsr = new BufferedStreamReader(input_stream: new StringInputStream(source: "x\ny"),
+            encoding: "UTF-8", buffer_size: 2);
+        assertEq("x", bsr.readLine(line_separator: "\n", trim_line: True),
+            "BufferedStreamReader constructor exposes input_stream, encoding, and buffer_size");
+
+        BinaryOutputStream writer_out();
+        StreamWriter sw = new StreamWriter(output_stream: writer_out, encoding: "UTF-8");
+        sw.print(text: "a");
+        sw.write(text: "b");
+        sw.write(data: <63>);
+        sw.vprintf(format: "%s", format_args: ("d",));
+        sw.f_vprintf(format: "%2s", format_args: ("ef",));
+        sw.writei1(value: 65);
+        assertEq(binary("abcdefA"), writer_out.getData(),
+            "StreamWriter exposes output_stream, text, data, format_args, and value names");
+
+        DataLineIterator dli = new DataLineIterator(source: "a,b\nc,d", line_separator: "\n", trim_line: True);
+        assertTrue(dli.next(), "DataLineIterator named constructor creates iterator");
+        assertEq(("a", "b"), dli.getSplitLine(separator: ",", quote: "'", line_separator: "\n",
+            trim_unquoted: False), "AbstractLineIterator getSplitLine exposes separator and line_separator");
+
+        StringSplitIterator split_it = new StringSplitIterator(source: "left:right", separator: ":");
+        assertTrue(split_it.next(), "StringSplitIterator named constructor creates iterator");
+        assertEq("left", split_it.getValue(), "StringSplitIterator exposes source and separator");
+
+        StringRegexSplitIterator regex_it = new StringRegexSplitIterator(source: "left:right",
+            separator_pattern: ":", options: 0, with_separator: False);
+        assertTrue(regex_it.next(), "StringRegexSplitIterator named constructor creates iterator");
+        assertEq("left", regex_it.getValue(),
+            "StringRegexSplitIterator exposes source and separator_pattern");
     }
 
     reviewedPseudoMethodOptIn() {

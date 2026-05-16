@@ -189,8 +189,8 @@ int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
 qclass StringSplitIterator [arg=StringSplitIterator* i; ns=Qore; vparent=AbstractIterator];
 
 //! Creates the iterator with a source string and delimiter.
-/** @param src the string to iterate over (captured by reference)
-    @param sep the byte-wise delimiter; an empty delimiter yields the whole
+/** @param source the string to iterate over (captured by reference)
+    @param separator the byte-wise delimiter; an empty delimiter yields the whole
            source once
 
     @par Example:
@@ -198,9 +198,9 @@ qclass StringSplitIterator [arg=StringSplitIterator* i; ns=Qore; vparent=Abstrac
 StringSplitIterator it("a,b,c", ",");
     @endcode
  */
-StringSplitIterator::constructor(string src, string sep) {
+StringSplitIterator::constructor(string source, string separator) [flags=NAMED_ARGS] {
     self->setPrivate(CID_STRINGSPLITITERATOR,
-        new StringSplitIterator(src, sep));
+        new StringSplitIterator(source, separator));
 }
 
 //! Creates a copy of the iterator.

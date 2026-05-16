@@ -75,7 +75,7 @@ StringOutputStream::constructor() {
     character data for the given encoding is written to the @ref StringOutputStream object, otherwise a string with
     invalid character data will be returned by getData()
  */
-StringOutputStream::constructor(string encoding) {
+StringOutputStream::constructor(string encoding) [flags=NAMED_ARGS] {
    SimpleRefHolder<StringOutputStream> sos(new StringOutputStream(QEM.findCreate(encoding)));
    self->setPrivate(CID_STRINGOUTPUTSTREAM, sos.release());
 }
@@ -108,7 +108,7 @@ nothing StringOutputStream::close() {
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread
     that created the object
  */
-nothing StringOutputStream::write(binary data) {
+nothing StringOutputStream::write(binary data) [flags=NAMED_ARGS] {
     os->writeHelper(data, xsink);
 }
 

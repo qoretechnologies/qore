@@ -161,6 +161,30 @@ class ReflectionTest inherits QUnit::Test {
         assertEq(expected_count, found);
     }
 
+    assertNamedClassMethodVariantCount(string class_name, string name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach AbstractMethodVariant v in (Class::forName(class_name).getMethod(name).getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
+    assertNamedConstructorVariantCount(string class_name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach AbstractMethodVariant v in (Class::forName(class_name).getConstructorMethod().getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
     namedCallReflectionTests() {
         FunctionVariant uv = Function::forName("named_reflection_target").getVariants()[0];
         assertTrue(uv.isNamedCallable());
@@ -679,6 +703,35 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("parallel_map", ("callable", "items", "thread_count"));
         assertNamedCallableVariantCount("parallel_foreach", ("callable", "items", "thread_count"));
         assertNamedCallableVariantCount("channel_select", ("cases", "timeout"));
+
+        assertNamedConstructorVariantCount("BinaryInputStream", ("source",));
+        assertNamedClassMethodVariantCount("BinaryInputStream", "read", ("limit",));
+        assertNamedClassMethodVariantCount("BinaryOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("StringInputStream", ("source",));
+        assertNamedClassMethodVariantCount("StringInputStream", "read", ("limit",));
+        assertNamedConstructorVariantCount("StringOutputStream", ("encoding",));
+        assertNamedClassMethodVariantCount("StringOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("StreamReader", ("input_stream", "encoding"));
+        assertNamedClassMethodVariantCount("StreamReader", "readString", ("limit",));
+        assertNamedClassMethodVariantCount("StreamReader", "readLine", ("line_separator", "trim_line"));
+        assertNamedClassMethodVariantCount("StreamReader", "readBinary", ("limit",));
+        assertNamedConstructorVariantCount("BufferedStreamReader", ("input_stream", "encoding", "buffer_size"));
+        assertNamedConstructorVariantCount("StreamWriter", ("output_stream", "encoding"));
+        assertNamedClassMethodVariantCount("StreamWriter", "print", ("text",));
+        assertNamedClassMethodVariantCount("StreamWriter", "vprintf", ("format", "format_args"));
+        assertNamedClassMethodVariantCount("StreamWriter", "f_vprintf", ("format", "format_args"));
+        assertNamedClassMethodVariantCount("StreamWriter", "write", ("text",));
+        assertNamedClassMethodVariantCount("StreamWriter", "write", ("data",));
+        foreach string name in (("writei1", "writei2", "writei4", "writei8", "writei2LSB", "writei4LSB",
+                "writei8LSB")) {
+            assertNamedClassMethodVariantCount("StreamWriter", name, ("value",));
+        }
+        assertNamedConstructorVariantCount("DataLineIterator", ("source", "line_separator", "trim_line"));
+        assertNamedClassMethodVariantCount("AbstractLineIterator", "getSplitLine",
+            ("separator", "quote", "line_separator", "trim_unquoted"));
+        assertNamedConstructorVariantCount("StringSplitIterator", ("source", "separator"));
+        assertNamedConstructorVariantCount("StringRegexSplitIterator",
+            ("source", "separator_pattern", "options", "with_separator"));
 
         assertNamedPseudoMethodVariantCount(ValuePseudoClass, "fullType", ("with_namespaces",));
         assertNamedPseudoMethodVariantCount(ValuePseudoClass, "toString", ("encoding",));

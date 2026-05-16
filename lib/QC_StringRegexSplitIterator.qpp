@@ -212,20 +212,21 @@ const QoreTypeInfo* StringRegexSplitIterator::getElementType() const {
 qclass StringRegexSplitIterator [arg=StringRegexSplitIterator* i; ns=Qore; vparent=AbstractIterator];
 
 //! Creates the iterator with a source string, regex pattern, options, and optional include-separator flag.
-/** @param src the string to iterate over (captured by reference; converted to UTF-8 if necessary)
-    @param regex_sep the separator regular expression
+/** @param source the string to iterate over (captured by reference; converted to UTF-8 if necessary)
+    @param separator_pattern the separator regular expression
     @param options regex options (e.g. @ref RE_Caseless)
     @param with_separator if True, the matched separator is included at the end of each piece
 
     @throw REGEX-COMPILATION-ERROR the regex could not be compiled
  */
-StringRegexSplitIterator::constructor(string src, string regex_sep, int options = 0, bool with_separator = False) {
-    SimpleRefHolder<QoreRegex> re(new QoreRegex(*regex_sep, options, xsink));
+StringRegexSplitIterator::constructor(string source, string separator_pattern, int options = 0,
+        bool with_separator = False) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreRegex> re(new QoreRegex(*separator_pattern, options, xsink));
     if (*xsink) {
         return;
     }
     ReferenceHolder<StringRegexSplitIterator> it(
-        new StringRegexSplitIterator(src, *re, with_separator, xsink), xsink);
+        new StringRegexSplitIterator(source, *re, with_separator, xsink), xsink);
     if (*xsink) {
         return;
     }

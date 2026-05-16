@@ -61,12 +61,12 @@ qclass BinaryInputStream [arg=BinaryInputStream* is; ns=Qore; vparent=InputStrea
 
 //! Creates the BinaryInputStream based on the \ref binary given
 /**
-    @param src the \ref binary or string to read bytes from
+    @param source the \ref binary or string to read bytes from
 
     @since %Qore 0.9.4 this constructor also accepts strings
  */
-BinaryInputStream::constructor(data src) {
-   SimpleRefHolder<BinaryInputStream> bis(new BinaryInputStream(src));
+BinaryInputStream::constructor(data source) [flags=NAMED_ARGS] {
+   SimpleRefHolder<BinaryInputStream> bis(new BinaryInputStream(source));
    self->setPrivate(CID_BINARYINPUTSTREAM, bis.release());
 }
 
@@ -92,7 +92,7 @@ BinaryInputStream::constructor(data src) {
     @throw INPUT-STREAM-ERROR \a limit is not positive
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-*binary BinaryInputStream::read(int limit) {
+*binary BinaryInputStream::read(int limit) [flags=NAMED_ARGS] {
    return is->readHelper(limit, xsink);
 }
 

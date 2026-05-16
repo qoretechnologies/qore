@@ -55,17 +55,18 @@ sw.writei4(0xf4f4);
 qclass StreamWriter [arg=StreamWriter* sw; ns=Qore; internal_members=OutputStream os];
 
 //! Creates the StreamWriter for writing data to the given @ref OutputStream.
-/** @param os the @ref OutputStream for writing data
+/** @param output_stream the @ref OutputStream for writing data
     @param encoding character encoding of the StreamWriter; all passed string data will be converted to this encoding before being written to the output stream; if not present, the @ref default_encoding "default character encoding" is assumed
  */
-StreamWriter::constructor(Qore::OutputStream[OutputStream] os, *string encoding) {
-   SimpleRefHolder<StreamWriter> writer(new StreamWriter(xsink, os.release(), encoding ? QEM.findCreate(encoding) : QCS_DEFAULT));
+StreamWriter::constructor(Qore::OutputStream[OutputStream] output_stream, *string encoding) [flags=NAMED_ARGS] {
+   SimpleRefHolder<StreamWriter> writer(new StreamWriter(xsink, output_stream.release(),
+       encoding ? QEM.findCreate(encoding) : QCS_DEFAULT));
    if (*xsink)
       return;
    self->setPrivate(CID_STREAMWRITER, writer.release());
    qore_object_private* o = qore_object_private::get(*self);
    const qore_class_private* cls = qore_class_private::get(*QC_STREAMWRITER);
-   o->setValueIntern(cls, "os", static_cast<QoreObject *>(obj_os->refSelf()), xsink);
+   o->setValueIntern(cls, "os", static_cast<QoreObject *>(obj_output_stream->refSelf()), xsink);
 }
 
 //! Returns the @ref character_encoding "character encoding" for the StreamWriter.
@@ -94,14 +95,14 @@ OutputStream StreamWriter::getOutputStream() {
 sw.print(str);
     @endcode
 
-    @param str the string to be written to the output stream; string data is converted to the StreamWriter's @ref character_encoding "character encoding" if necessary before writing
+    @param text the string to be written to the output stream; string data is converted to the StreamWriter's @ref character_encoding "character encoding" if necessary before writing
 
     @throw ENCODING-CONVERSION-ERROR error converting from the string's @ref character_encoding "character encoding" to the StreamWriter's @ref character_encoding "character encoding"
 
     @note equivalent to write(string)
  */
-nothing StreamWriter::print(string str) {
-   sw->print(str, xsink);
+nothing StreamWriter::print(string text) [flags=NAMED_ARGS] {
+   sw->print(text, xsink);
 }
 
 //! Writes a formatted string with soft field widths to an output stream; string data is converted to the StreamWriter's @ref character_encoding "character encoding" if necessary before writing.
@@ -112,13 +113,13 @@ nothing StreamWriter::print(string str) {
 sw.printf("%5s\n", "hello there"); # outputs "hello there\n", exceeding field width
     @endcode
 
-    @param fmt the format string; see @ref string_formatting for more information about the format string
+    @param format the format string; see @ref string_formatting for more information about the format string
 
     @throw ENCODING-CONVERSION-ERROR error converting from the string's @ref character_encoding "character encoding" to the StreamWriter's @ref character_encoding "character encoding"
 
     @see StreamWriter::f_printf() for a similar method that enforces field widths
  */
-nothing StreamWriter::printf(string[doc] fmt, ...) {
+nothing StreamWriter::printf(string[doc] format, ...) {
    sw->printf(args, xsink);
 }
 
@@ -137,7 +138,7 @@ sw.vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello there: 2\n", excee
 
     @see StreamWriter::f_vprintf() for a similar method that enforces field widths
  */
-nothing StreamWriter::vprintf(string[doc] fmt, any[doc] fmt_args) {
+nothing StreamWriter::vprintf(string[doc] format, any[doc] format_args) [flags=NAMED_ARGS] {
    sw->vprintf(args, xsink);
 }
 
@@ -149,13 +150,13 @@ nothing StreamWriter::vprintf(string[doc] fmt, any[doc] fmt_args) {
 sw.f_printf("%5s\n", "hello there"); # outputs "hello\n", enforcing field width
     @endcode
 
-    @param fmt the format string; see @ref string_formatting for more information about the format string
+    @param format the format string; see @ref string_formatting for more information about the format string
 
     @throw ENCODING-CONVERSION-ERROR error converting from the string's @ref character_encoding "character encoding" to the StreamWriter's @ref character_encoding "character encoding"
 
     @see StreamWriter::printf() for a similar method that does not enforce field widths
  */
-nothing StreamWriter::f_printf(string[doc] fmt, ...) {
+nothing StreamWriter::f_printf(string[doc] format, ...) {
    sw->f_printf(args, xsink);
 }
 
@@ -174,7 +175,7 @@ sw.f_vprintf("%5s: %d\n", ("hello there", 2)); # outputs "hello: 2\n", enforcing
 
     @see StreamWriter::printf() for a similar method that does not enforce field widths
  */
-nothing StreamWriter::f_vprintf(string[doc] fmt, any[doc] fmt_args) {
+nothing StreamWriter::f_vprintf(string[doc] format, any[doc] format_args) [flags=NAMED_ARGS] {
    sw->f_vprintf(args, xsink);
 }
 
@@ -184,12 +185,12 @@ nothing StreamWriter::f_vprintf(string[doc] fmt, any[doc] fmt_args) {
 sw.write("string");
     @endcode
 
-    @param str the string to write
+    @param text the string to write
 
     @note equivalent to print(string)
  */
-nothing StreamWriter::write(string str) {
-   sw->print(str, xsink);
+nothing StreamWriter::write(string text) [flags=NAMED_ARGS] {
+   sw->print(text, xsink);
 }
 
 //! Writes a @ref binary to the output stream.
@@ -198,10 +199,10 @@ nothing StreamWriter::write(string str) {
 sw.write(<010203>);
     @endcode
 
-    @param b the binary to write
+    @param data the binary to write
  */
-nothing StreamWriter::write(binary b) {
-   sw->write(b, xsink);
+nothing StreamWriter::write(binary data) [flags=NAMED_ARGS] {
+   sw->write(data, xsink);
 }
 
 //! Writes a 1-byte signed integer to the output stream.
@@ -210,10 +211,10 @@ nothing StreamWriter::write(binary b) {
 sw.writei1(val);
     @endcode
 
-    @param c the integer to write; only the least-significant 8 bits will be written to the file
+    @param value the integer to write; only the least-significant 8 bits will be written to the file
  */
-nothing StreamWriter::writei1(int c) {
-   sw->writei1(c, xsink);
+nothing StreamWriter::writei1(int value) [flags=NAMED_ARGS] {
+   sw->writei1(value, xsink);
 }
 
 //! Writes a 2-byte (16 bit) integer to the output stream in binary big-endian format.
@@ -222,10 +223,10 @@ nothing StreamWriter::writei1(int c) {
 sw.writei2(val);
     @endcode
 
-    @param s the integer to write in binary big-endian format; only the least-significant 16 bits of the integer will be written to the file
+    @param value the integer to write in binary big-endian format; only the least-significant 16 bits of the integer will be written to the file
  */
-nothing StreamWriter::writei2(int s) {
-   sw->writei2(s, xsink);
+nothing StreamWriter::writei2(int value) [flags=NAMED_ARGS] {
+   sw->writei2(value, xsink);
 }
 
 //! Writes a 4-byte (32 bit) integer to the output stream in binary big-endian format.
@@ -234,10 +235,10 @@ nothing StreamWriter::writei2(int s) {
 sw.writei4(val);
     @endcode
 
-    @param i the integer to write in binary big-endian format; only the least-significant 32 bits of the integer will be written to the file
+    @param value the integer to write in binary big-endian format; only the least-significant 32 bits of the integer will be written to the file
  */
-nothing StreamWriter::writei4(int i) {
-   sw->writei4(i, xsink);
+nothing StreamWriter::writei4(int value) [flags=NAMED_ARGS] {
+   sw->writei4(value, xsink);
 }
 
 //! Writes an 8-byte (64 bit) integer to the output stream in binary big-endian format.
@@ -246,10 +247,10 @@ nothing StreamWriter::writei4(int i) {
 sw.writei8(val);
     @endcode
 
-    @param i the integer to write in binary big-endian format; only the least-significant 64 bits of the integer will be written to the file
+    @param value the integer to write in binary big-endian format; only the least-significant 64 bits of the integer will be written to the file
  */
-nothing StreamWriter::writei8(int i) {
-   sw->writei8(i, xsink);
+nothing StreamWriter::writei8(int value) [flags=NAMED_ARGS] {
+   sw->writei8(value, xsink);
 }
 
 //! Writes a 2-byte (16 bit) integer to the output stream in binary little-endian format.
@@ -258,10 +259,10 @@ nothing StreamWriter::writei8(int i) {
 sw.writei2LSB(val);
     @endcode
 
-    @param s the integer to write in binary little-endian format; only the least-significant 16 bits of the integer will be written to the file
+    @param value the integer to write in binary little-endian format; only the least-significant 16 bits of the integer will be written to the file
  */
-nothing StreamWriter::writei2LSB(int s) {
-   sw->writei2LSB(s, xsink);
+nothing StreamWriter::writei2LSB(int value) [flags=NAMED_ARGS] {
+   sw->writei2LSB(value, xsink);
 }
 
 //! Writes a 4-byte (32 bit) integer to the output stream in binary little-endian format.
@@ -270,10 +271,10 @@ nothing StreamWriter::writei2LSB(int s) {
 sw.writei4LSB(val);
     @endcode
 
-    @param i the integer to write in binary little-endian format; only the least-significant 32 bits of the integer will be written to the file
+    @param value the integer to write in binary little-endian format; only the least-significant 32 bits of the integer will be written to the file
  */
-nothing StreamWriter::writei4LSB(int i) {
-   sw->writei4LSB(i, xsink);
+nothing StreamWriter::writei4LSB(int value) [flags=NAMED_ARGS] {
+   sw->writei4LSB(value, xsink);
 }
 
 //! Writes an 8-byte (64 bit) integer to the output stream in binary little-endian format.
@@ -282,8 +283,8 @@ nothing StreamWriter::writei4LSB(int i) {
 sw.writei8LSB(val);
     @endcode
 
-    @param i the integer to write in binary little-endian format; only the least-significant 64 bits of the integer will be written to the file
+    @param value the integer to write in binary little-endian format; only the least-significant 64 bits of the integer will be written to the file
  */
-nothing StreamWriter::writei8LSB(int i) {
-   sw->writei8LSB(i, xsink);
+nothing StreamWriter::writei8LSB(int value) [flags=NAMED_ARGS] {
+   sw->writei8LSB(value, xsink);
 }
