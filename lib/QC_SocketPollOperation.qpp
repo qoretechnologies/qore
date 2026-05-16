@@ -71,18 +71,19 @@ qclass SocketPollOperation [private_members=string goal; arg=SocketPollOperation
     @param goal the type of goal; currently one of:
     - \c connect
     - \c connect-ssl
-    @param opts required keys depend on \a goal
+    @param options required keys depend on \a goal
     - for \a goal_type \c connect and \c connect-ssl:
       - \c url (string): the URL to connect to
 
     @throw INVALID-GOAL thrown if the goal is invalid
 */
-SocketPollOperation::constructor(Socket[QoreSocketObject] socket, string goal, *hash<auto> opts) {
+SocketPollOperation::constructor(Socket[QoreSocketObject] socket, string goal, *hash<auto> options)
+        [flags=NAMED_ARGS] {
     ReferenceHolder<SocketPollOperationBase> poller(xsink);
     if (*goal == "connect") {
-        poller = get_connect_poll_operation(xsink, false, opts, socket);
+        poller = get_connect_poll_operation(xsink, false, options, socket);
     } else if (*goal == "connect-ssl") {
-        poller = get_connect_poll_operation(xsink, true, opts, socket);
+        poller = get_connect_poll_operation(xsink, true, options, socket);
     } else {
         xsink->raiseException("INVALID-GOAL", "goal '%s' not recognized; expecting one of: 'connect', 'connect-ssl'",
             goal->c_str());

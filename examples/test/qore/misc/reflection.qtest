@@ -769,6 +769,11 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("AsyncIoController", "submitTask", ("task", "cancel_callback"));
         assertNamedClassMethodVariantCount("AsyncIoController", "setMaxCallbackWorkers", ("max_workers",));
         assertNamedClassMethodVariantCount("AsyncIoController", "setMaxIoThreads", ("max_threads",));
+        assertNamedClassMethodVariantCount("AbstractPollOperation", "onComplete", ("result",));
+        assertNamedConstructorVariantCount("DelegatingPollOperation", ("operation", "on_complete", "done_counter"));
+        assertNamedClassMethodVariantCount("DelegatingPollOperation", "onComplete", ("result",));
+        assertNamedConstructorVariantCount("FilePollOperation", ("file", "path", "as_string", "num_bytes"));
+        assertNamedConstructorVariantCount("SocketPollOperation", ("socket", "goal", "options"));
         assertNamedConstructorVariantCount("TimeZone", ("region",));
         assertNamedConstructorVariantCount("TimeZone", ("seconds_east",));
         assertNamedClassMethodVariantCount("TimeZone", "date", ("seconds", "microseconds"));

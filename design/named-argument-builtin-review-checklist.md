@@ -361,6 +361,9 @@ These examples are from the core migration and should be reused as precedent:
   abbreviated names such as `fileName`, `eol`, and `trim`.
 - Error propagation APIs should use `error`, `description`, and `argument`
   instead of abbreviations such as `err`, `desc`, and `arg`.
+- Poll-operation wrappers should expose role names, not implementation names:
+  use `operation`, `done_counter`, `as_string`, and `options` instead of
+  `inner`, `done`, `to_string`, and `opts`.
 - Do not mark an overload when it makes an already-enabled named call ambiguous
   with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
   step, value)` must remain positional because it conflicts with the named
