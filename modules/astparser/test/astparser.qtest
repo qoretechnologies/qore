@@ -1,10 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 %requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
@@ -380,6 +377,7 @@ sub test() {
         addTestCase("astparser module not available", \testNoModule());
 %else
         addTestCase("Basic parsing", \testBasicParsing());
+        addTestCase("Named argument calls", \testNamedArgumentCalls());
         addTestCase("Parse file", \testParseFile());
         addTestCase("Diagnostics", \testDiagnostics());
         addTestCase("Modern module parsing", \testModernModuleParsing());
@@ -578,6 +576,49 @@ sub test() {
         *AstTree tree = parser.parseString(SimpleClassCode);
         testAssertion("parseString returns tree", \exists(), (tree,));
         testAssertion("no parse errors", \equals(), (parser.getErrorCount(), 0));
+    }
+
+    testNamedArgumentCalls() {
+        string code = "%modern\n"
+            "class Base {\n"
+            "    constructor(int alpha, int beta) {}\n"
+            "}\n"
+            "class Child inherits Base {\n"
+            "    constructor() : Base(alpha: 1, beta: 2) {\n"
+            "        setup(first: 1, second: \"x\");\n"
+            "    }\n"
+            "    nothing setup(int first, string second) {}\n"
+            "}\n"
+            "sub target(int alpha, int beta, int gamma) {}\n"
+            "sub test() {\n"
+            "    target(alpha: 1);\n"
+            "    target(1, beta: 2, gamma: 3);\n"
+            "    target(alpha: 1,);\n"
+            "    \"abcdef\".substr(start: 1, len: 2);\n"
+            "    new Child();\n"
+            "}\n";
+
+        AstParser parser();
+        *AstTree tree = parser.parseString(code);
+        assertTrue(exists(tree), "named call parseString returns tree");
+        assertEq(0, parser.getErrorCount(), "named calls parse without errors");
+
+        string badCode = "%modern\nsub test() {\n    target(alpha: 1, 2);\n}\n";
+        AstParser badParser();
+        *AstTree badTree = badParser.parseString(badCode);
+        assertTrue(exists(badTree), "invalid named call still returns partial tree");
+        assertGt(0, badParser.getErrorCount(), "positional-after-named call reports an error");
+
+        *list diags = badParser.getDiagnostics();
+        assertTrue(exists(diags), "invalid named call diagnostics returned");
+        bool found;
+        foreach hash diag in (diags) {
+            if (diag.message =~ /positional argument cannot follow a named argument/) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found, "invalid named call diagnostic explains positional-after-named rule");
     }
 
     testParseFile() {

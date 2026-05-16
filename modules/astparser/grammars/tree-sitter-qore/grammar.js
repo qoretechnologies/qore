@@ -907,7 +907,13 @@ module.exports = grammar({
 
     argument_list: $ => seq(
       '(',
-      optional(seq(commaSep1(choice($.named_argument, $._expression)), optional(','))),
+      optional(seq(
+        choice(
+          commaSep1($.named_argument),
+          seq(commaSep1($._expression), optional(seq(',', commaSep1($.named_argument)))),
+        ),
+        optional(','),
+      )),
       ')',
     ),
 

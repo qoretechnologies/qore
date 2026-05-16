@@ -29,6 +29,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -39,6 +40,16 @@
 
 // The tree-sitter Qore language function, defined in the generated parser.c
 extern "C" const TSLanguage* tree_sitter_qore();
+
+static bool isPositionalAfterNamedArgError(TSNode node) {
+    TSNode parent = ts_node_parent(node);
+    if (ts_node_is_null(parent) || std::strcmp(ts_node_type(parent), "argument_list")) {
+        return false;
+    }
+
+    TSNode previous = ts_node_prev_named_sibling(node);
+    return !ts_node_is_null(previous) && !std::strcmp(ts_node_type(previous), "named_argument");
+}
 
 AstParser::AstParser() {
     parser = ts_parser_new();
@@ -416,6 +427,9 @@ void AstParser::collectErrors(TSNode node, const std::string& source) {
             std::string msg = "Missing ";
             msg += ts_node_type(node);
             reportError(loc, msg.c_str());
+        } else if (isPositionalAfterNamedArgError(node)) {
+            reportError(loc, "positional argument cannot follow a named argument in a named call; put all "
+                "positional arguments before the first named argument");
         } else {
             // Extract a snippet of the source around the error for context
             uint32_t start = ts_node_start_byte(node);
