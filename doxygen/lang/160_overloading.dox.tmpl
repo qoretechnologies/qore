@@ -45,6 +45,30 @@ describe(size: 1.5, unit: "cm");  # selects the second variant
     defaultable parameters are preferred. If the call is still ambiguous, the normal overload ambiguity diagnostics
     apply.
 
+    Argument names are evaluated against each variant independently. A name that is valid for one overload does not
+    make other overloads eligible:
+
+    @code{.py}
+string sub open(string path, string encoding = "UTF-8") {
+    return "file";
+}
+
+string sub open(string host, int port) {
+    return "socket";
+}
+
+open(path: "/tmp/data.txt");       # selects open(path, encoding)
+open(host: "localhost", port: 80); # selects open(host, port)
+    @endcode
+
+    A positional argument still binds by position before named arguments are applied, so a later named argument cannot
+    target the same parameter:
+
+    @code{.py}
+open("/tmp/data.txt", encoding: "ISO-8859-1"); # valid
+open("/tmp/data.txt", path: "/tmp/other.txt"); # parse-time error
+    @endcode
+
     @see @ref require-types "%require-types"
 
     @section overloaded_methods Overloaded Class Methods

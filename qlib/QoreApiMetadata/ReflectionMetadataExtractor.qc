@@ -214,6 +214,8 @@ public class ReflectionMetadataExtractor {
         # extract params
         list<hash<ParameterInfo>> params =
             ReflectionMetadataExtractor::extractParams(variant);
+        list<string> named_params =
+            ReflectionMetadataExtractor::extractNamedParams(variant);
 
         # check deprecation
         int flags = variant.getCodeFlags();
@@ -236,6 +238,8 @@ public class ReflectionMetadataExtractor {
             "signature": sig,
             "return_type": variant.getReturnTypeString(),
             "params": params,
+            "named_callable": variant.isNamedCallable() ? True : False,
+            "named_parameters": named_params,
             "access": access,
             "is_static": is_static,
             "is_abstract": is_abstract,
@@ -254,6 +258,8 @@ public class ReflectionMetadataExtractor {
         # extract params
         list<hash<ParameterInfo>> params =
             ReflectionMetadataExtractor::extractParams(variant);
+        list<string> named_params =
+            ReflectionMetadataExtractor::extractNamedParams(variant);
 
         # check deprecation
         int flags = variant.getCodeFlags();
@@ -278,6 +284,8 @@ public class ReflectionMetadataExtractor {
             "signature": sig,
             "return_type": string(variant.getReturnTypeString()),
             "params": params,
+            "named_callable": variant.isNamedCallable() ? True : False,
+            "named_parameters": named_params,
             "is_deprecated": is_deprecated,
             "functional_domain": domain,
         };
@@ -307,6 +315,19 @@ public class ReflectionMetadataExtractor {
                 "default_value": p_default,
             });
             params += pi;
+        }
+        return params;
+    }
+
+    #! Extract named-argument parameter names from a variant
+    private static list<string> extractNamedParams(auto variant) {
+        list<string> params = ();
+        if (!variant.isNamedCallable()) {
+            return params;
+        }
+
+        foreach auto name in (variant.getNamedParameterNames()) {
+            params += string(name);
         }
         return params;
     }

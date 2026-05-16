@@ -3099,6 +3099,56 @@ protected:
         fputc(']', fp);
     }
 
+    bool hasNamedArgsFlag() const {
+        for (strlist_t::const_iterator i = flags.begin(), e = flags.end(); i != e; ++i) {
+            if (*i == "NAMED_ARGS") {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool hasMetadataNamedParameters() const {
+        for (paramlist_t::const_iterator i = params.begin(), e = params.end(); i != e; ++i) {
+            if (i->type == "...") {
+                break;
+            }
+            if (!i->name.empty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void serializeMetadataNamedParametersJson(FILE* fp) const {
+        fputc('[', fp);
+        bool first = true;
+        for (paramlist_t::const_iterator i = params.begin(), e = params.end(); i != e; ++i) {
+            if (i->type == "...") {
+                break;
+            }
+            if (i->name.empty()) {
+                continue;
+            }
+            if (!first) {
+                fputc(',', fp);
+            }
+            first = false;
+            fprintf(fp, "\"%s\"", json_escape_string(i->name).c_str());
+        }
+        fputc(']', fp);
+    }
+
+    void serializeMetadataNamedArgsJson(FILE* fp) const {
+        fprintf(fp, ",\"named_callable\":%s", (hasNamedArgsFlag() && hasMetadataNamedParameters()) ? "true" : "false");
+        fputs(",\"named_parameters\":", fp);
+        if (hasNamedArgsFlag()) {
+            serializeMetadataNamedParametersJson(fp);
+        } else {
+            fputs("[]", fp);
+        }
+    }
+
     std::string buildMetadataSignature(const char* prefix = nullptr) const {
         std::string sig = (return_type.empty() ? "nothing" : return_type) + " ";
         if (prefix) {
@@ -3438,6 +3488,7 @@ public:
         fprintf(fp, ",\"description\":\"%s\"", json_escape_string(docs).c_str());
         fputs(",\"params\":", fp);
         serializeMetadataParamsJson(fp);
+        serializeMetadataNamedArgsJson(fp);
         fputs(",\"flags\":", fp);
         serializeMetadataFlagsJson(fp);
         fputs(",\"domains\":", fp);
@@ -5342,6 +5393,7 @@ public:
         fprintf(fp, ",\"description\":\"%s\"", json_escape_string(docs).c_str());
         fputs(",\"params\":", fp);
         serializeMetadataParamsJson(fp);
+        serializeMetadataNamedArgsJson(fp);
 
         const char* access_str = "public";
         if (attr & QCA_PRIVATE) {
@@ -6986,7 +7038,7 @@ public:
         }
         log(LL_INFO, "creating metadata file %s -> %s\n", fileName, opts.metadata_fn.c_str());
 
-        fprintf(fp.get(), "{\"schema_version\":\"1.0\",\"source_file\":\"%s\"",
+        fprintf(fp.get(), "{\"schema_version\":\"1.1\",\"source_file\":\"%s\"",
             json_escape_string(fileName).c_str());
 
         // classes

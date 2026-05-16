@@ -15,6 +15,69 @@ by merging three data sources:
 The merge pipeline (in `SymbolMerger`) prioritizes: AST docs > qpp docs > reflection
 structure. This gives QLS access to documentation and type information for all Qore APIs.
 
+## Named Argument Metadata
+
+Function and method variant metadata must expose whether a variant supports named
+argument calls. This is required for QLS signature help, completion snippets, and
+generated examples: parameter names are not always valid call-site names for builtin
+variants, because builtin APIs opt in with `NAMED_ARGS` on a variant-by-variant basis.
+
+For every function, method, and constructor variant, metadata includes:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `named_callable` | `bool` | `True` when callers may use named-argument syntax for this variant |
+| `named_parameters` | `list<string>` | Parameter names accepted in named calls, excluding unnamed parameters and varargs |
+
+Examples:
+
+```json
+{
+  "name": "ws_encode_frame",
+  "signature": "binary ws_encode_frame(data message, int opcode, softbool masked, softbool fin = True, int rsv_bits = 0)",
+  "params": [
+    {"name": "message", "type_name": "data"},
+    {"name": "opcode", "type_name": "int"},
+    {"name": "masked", "type_name": "softbool"},
+    {"name": "fin", "type_name": "softbool", "default_value": "True"},
+    {"name": "rsv_bits", "type_name": "int", "default_value": "0"}
+  ],
+  "flags": ["RET_VALUE_ONLY", "NAMED_ARGS"],
+  "named_callable": true,
+  "named_parameters": ["message", "opcode", "masked", "fin", "rsv_bits"]
+}
+```
+
+```json
+{
+  "name": "printf",
+  "signature": "int printf(string fmt, ...)",
+  "params": [
+    {"name": "fmt", "type_name": "string"},
+    {"name": "", "type_name": "..."}
+  ],
+  "flags": [],
+  "named_callable": false,
+  "named_parameters": []
+}
+```
+
+### Source-Specific Rules
+
+- qpp `.meta.json`: `named_callable` is emitted from the `NAMED_ARGS` code flag.
+  `named_parameters` is the fixed qpp parameter-name list, excluding the varargs tail.
+- Reflection metadata: `named_callable` comes from
+  `Reflection::AbstractVariant::isNamedCallable()`, and `named_parameters` comes from
+  `Reflection::AbstractVariant::getNamedParameterNames()`.
+- QM/QC metadata: user-defined functions and methods are named-callable when the target
+  can be resolved at parse time. The metadata marks source variants as named-callable
+  except for varargs-only signatures; `named_parameters` contains fixed source parameter
+  names.
+
+Consumers should use `named_callable` before offering named-call snippets or diagnostics.
+They should use `named_parameters`, not just `params`, for builtin APIs because a builtin
+variant can have parameter names in documentation while remaining positional-only.
+
 ## Problem
 
 Previously, only the core `qore` repo generated `.meta.json` files from its 132+ qpp

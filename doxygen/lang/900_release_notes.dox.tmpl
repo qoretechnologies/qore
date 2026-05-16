@@ -242,6 +242,7 @@ sub connect(string host, int port = 443, *int timeout = NOTHING) {
 }
 
 connect(host: "example.com", timeout: 30);
+connect("example.com", port: 8443, timeout: 10);
     @endcode
 
     Named arguments may follow positional arguments, are evaluated in source order, and use normal default-argument
@@ -252,6 +253,32 @@ connect(host: "example.com", timeout: 30);
 
     <b>Compatibility note:</b> parameter names become part of the public calling interface for named callers.
     Renaming a public parameter can now break callers that use named arguments.
+
+    Named arguments are also supported for methods, constructors, and base constructors when the target is resolved at
+    parse time:
+
+    @code{.py}
+class Reader {
+    constructor(string path, string encoding = "UTF-8", bool strict = True) {
+    }
+}
+
+class CsvReader inherits Reader {
+    constructor(string path, string encoding = "UTF-8")
+        : Reader(path: path, encoding: encoding, strict: False) {
+    }
+}
+
+Reader r(path: "data.csv", encoding: "UTF-8");
+    @endcode
+
+    Builtin functions and methods opt in per variant with the new
+    @ref NAMED_ARGS "NAMED_ARGS" code flag, allowing examples such as:
+
+    @code{.py}
+string decoded = binary_to_string(value: body, encoding: "UTF-8");
+binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: False, fin: True);
+    @endcode
     @endparblock
 
     @par Removal of %strict-types Support

@@ -522,6 +522,8 @@ public class AstMetadataExtractor {
             "description": meth_desc,
             "return_description": meth_ret_desc,
             "params": params,
+            "named_callable": AstMetadataExtractor::isNamedCallable(params),
+            "named_parameters": AstMetadataExtractor::extractNamedParams(params),
             "throws": meth_throws,
             "access": meth_access,
             "is_static": m.isStatic ? True : False,
@@ -607,6 +609,8 @@ public class AstMetadataExtractor {
             "description": func_desc,
             "return_description": func_ret_desc,
             "params": params,
+            "named_callable": AstMetadataExtractor::isNamedCallable(params),
+            "named_parameters": AstMetadataExtractor::extractNamedParams(params),
             "throws": func_throws,
             "is_deprecated": func_depr,
             "since": func_since,
@@ -767,6 +771,25 @@ public class AstMetadataExtractor {
         }
         sig += ")";
         return sig;
+    }
+
+    #! Return parameter names that are valid in named-argument calls
+    private static list<string> extractNamedParams(list<hash<ParameterInfo>> params) {
+        list<string> names = ();
+        foreach hash<ParameterInfo> p in (params) {
+            if (p.type_name == "..." || p.name == "...") {
+                break;
+            }
+            if (p.name.length()) {
+                names += p.name;
+            }
+        }
+        return names;
+    }
+
+    #! Source variants are named-callable unless they are varargs-only
+    private static bool isNamedCallable(list<hash<ParameterInfo>> params) {
+        return params.size() != 1 || (params[0].type_name != "..." && params[0].name != "...");
     }
 }
 

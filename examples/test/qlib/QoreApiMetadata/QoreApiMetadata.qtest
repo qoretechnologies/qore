@@ -55,6 +55,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("doc comment: star-prefixed lines", \testStarPrefixedLines());
         addTestCase("ast: class extraction", \testAstClassExtraction());
         addTestCase("ast: function extraction", \testAstFunctionExtraction());
+        addTestCase("ast: named argument metadata", \testAstNamedArgumentMetadata());
         addTestCase("ast: hashdecl extraction", \testAstHashdeclExtraction());
         addTestCase("ast: enum extraction", \testAstEnumExtraction());
         addTestCase("ast: namespace hierarchy", \testAstNamespaceHierarchy());
@@ -63,11 +64,13 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("ast: empty source", \testAstEmptySource());
         addTestCase("reflection: builtin class", \testReflectionBuiltinClass());
         addTestCase("reflection: builtin functions", \testReflectionBuiltinFunctions());
+        addTestCase("reflection: named argument metadata", \testReflectionNamedArgumentMetadata());
         addTestCase("reflection: namespace hierarchy", \testReflectionNamespaceHierarchy());
         addTestCase("reflection: method variants", \testReflectionMethodVariants());
         addTestCase("reflection: typed hashes", \testReflectionTypedHashes());
         addTestCase("reflection: no documentation", \testReflectionNoDocs());
         addTestCase("qpp doc index: build from meta files", \testQppBuildFromMetaFiles());
+        addTestCase("qpp doc index: named argument metadata", \testQppNamedArgumentMetadata());
         addTestCase("qpp doc index: build from directory", \testQppBuildFromDirectory());
         addTestCase("qpp doc index: class indexing", \testQppClassIndexing());
         addTestCase("qpp doc index: function indexing", \testQppFunctionIndexing());
@@ -532,6 +535,38 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertRegex("add", fi.signature);
     }
 
+    testAstNamedArgumentMetadata() {
+        string source = "%modern\n"
+            "\n"
+            "class Reader {\n"
+            "    constructor(string path, string encoding = \"UTF-8\") {\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            "string sub render(string source, string target, bool overwrite = False) {\n"
+            "    return target;\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(1, result.functions.size());
+        hash<QoreApiMetadata::FunctionInfo> fi = result.functions[0];
+        assertTrue(fi.named_callable);
+        assertEq(("source", "target", "overwrite"), fi.named_parameters);
+
+        assertEq(1, result.classes.size());
+        bool found_constructor = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (result.classes[0].instance_methods) {
+            if (m.name == "constructor") {
+                found_constructor = True;
+                assertTrue(m.named_callable);
+                assertEq(("path", "encoding"), m.named_parameters);
+            }
+        }
+        assertTrue(found_constructor);
+    }
+
     testAstHashdeclExtraction() {
         string source = "%modern\n"
             "\n"
@@ -756,6 +791,35 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertTrue(result.constants.size() > 100);
     }
 
+    testReflectionNamedArgumentMetadata() {
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime("Qore");
+
+        bool found_type = False;
+        foreach hash<QoreApiMetadata::FunctionInfo> f in (result.functions) {
+            if (f.name == "type") {
+                found_type = True;
+                assertTrue(f.named_callable);
+                assertEq(("value",), f.named_parameters);
+                break;
+            }
+        }
+        assertTrue(found_type);
+
+        hash<QoreApiMetadata::ClassInfo> ci =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractClass("Semaphore");
+        bool found_acquire = False;
+        foreach hash<QoreApiMetadata::MethodInfo> m in (ci.instance_methods) {
+            if (m.name == "acquire") {
+                found_acquire = True;
+                assertTrue(m.named_callable);
+                assertEq(("timeout_ms",), m.named_parameters);
+                break;
+            }
+        }
+        assertTrue(found_acquire);
+    }
+
     testReflectionNamespaceHierarchy() {
         hash<QoreApiMetadata::NamespaceInfo> result =
             QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime("Qore");
@@ -863,6 +927,22 @@ class QoreApiMetadataTest inherits QUnit::Test {
         # should have indexed Mutex methods
         assertTrue(exists index."Qore::Thread::Mutex::lock");
         assertEq("method", index."Qore::Thread::Mutex::lock".symbol_type);
+    }
+
+    testQppNamedArgumentMetadata() {
+        string meta_dir = getMetaDir();
+        string semaphore_path = meta_dir + "/QC_Semaphore.meta.json";
+        if (!is_readable(semaphore_path)) {
+            testSkip("build meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles((semaphore_path,));
+
+        assertTrue(exists index."Qore::Thread::Semaphore::acquire");
+        hash<auto> acquire = index."Qore::Thread::Semaphore::acquire";
+        assertTrue(acquire.named_callable);
+        assertEq(("timeout_ms",), acquire.named_parameters);
     }
 
     testQppBuildFromDirectory() {

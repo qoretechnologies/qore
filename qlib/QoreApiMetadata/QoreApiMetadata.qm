@@ -88,6 +88,10 @@ module QoreApiMetadata {
 
     @section qoreapimetadata_relnotes Release Notes
 
+    @subsection qoreapimetadata_v1_2 v1.2
+    - added named-argument metadata on function and method variants:
+      \c named_callable and \c named_parameters
+
     @subsection qoreapimetadata_v1_1 v1.1
     - added @ref QoreApiMetadata::DoxygenToMarkdown "DoxygenToMarkdown" converter class
     - all doc comment text fields are now automatically converted from doxygen to Markdown
@@ -110,7 +114,7 @@ module QoreApiMetadata {
 #! Main namespace for the QoreApiMetadata module
 public namespace QoreApiMetadata {
     #! Schema version for serialized metadata
-    public const SCHEMA_VERSION = "1.0";
+    public const SCHEMA_VERSION = "1.1";
 
     #! Function/method parameter metadata
     public hashdecl ParameterInfo {
@@ -180,6 +184,10 @@ public namespace QoreApiMetadata {
         *string return_description;
         #! Method parameters
         list<hash<ParameterInfo>> params = ();
+        #! Whether this method variant accepts named-argument calls
+        bool named_callable = False;
+        #! Parameter names accepted in named-argument calls
+        list<string> named_parameters = ();
         #! Exceptions this method can throw
         *list<hash<ThrowInfo>> throws;
         #! Access level: "public", "private", "private:internal"
@@ -274,6 +282,10 @@ public namespace QoreApiMetadata {
         *string return_description;
         #! Function parameters
         list<hash<ParameterInfo>> params = ();
+        #! Whether this function variant accepts named-argument calls
+        bool named_callable = False;
+        #! Parameter names accepted in named-argument calls
+        list<string> named_parameters = ();
         #! Exceptions this function can throw
         *list<hash<ThrowInfo>> throws;
         #! Whether this function is deprecated
