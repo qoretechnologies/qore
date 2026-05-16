@@ -79,7 +79,7 @@ abstract nothing AbstractSQLStatement::prepare(string sql, ...);
 stmt.prepareRaw("select * from table");
     @endcode
 */
-abstract nothing AbstractSQLStatement::prepareRaw(string sql);
+abstract nothing AbstractSQLStatement::prepareRaw(string sql) [flags=NAMED_ARGS];
 
 //! Binds placeholder buffer specifications and values to buffers defined in AbstractSQLStatement::prepare()
 /** If the statement has not previously been prepared with the DB API, it will be implicitly prepared by this method call. This means that this call will cause a connection to be dedicated from a DatasourcePool object or the transaction lock to be grabbed with a Datasource object, depending on the argument to AbstractSQLStatement::constructor().
@@ -118,7 +118,7 @@ abstract nothing AbstractSQLStatement::bind(...);
 
     @note You can also bind directly when calling AbstractSQLStatement::exec() or AbstractSQLStatement::execArgs() as a shortcut as well, in which case it's not necessary to make an extra call to this method.
 
-    @param vargs Arguments to placeholder specifications (if required by the underlying DBI driver) and bind by value arguments
+    @param arguments Arguments to placeholder specifications (if required by the underlying DBI driver) and bind by value arguments
 
     @par Example:
     @code{.py}
@@ -136,7 +136,7 @@ foreach hash<auto> h in (l) {
 
     @see AbstractSQLStatement::bind(), AbstractSQLStatement::bindPlaceholders(), AbstractSQLStatement::bindPlaceholdersArgs(), AbstractSQLStatement::bindValues(), and AbstractSQLStatement::bindValuesArgs()
 */
-abstract nothing AbstractSQLStatement::bindArgs(softlist<auto> vargs);
+abstract nothing AbstractSQLStatement::bindArgs(softlist<auto> arguments) [flags=NAMED_ARGS];
 
 //! Binds placeholder buffer specifications to buffers defined in AbstractSQLStatement::prepare()
 /** If the statement has not previously been prepared with the DB API, it will be implicitly prepared by this method call. This means that this call will cause a connection to be dedicated from a DatasourcePool object or the transaction lock to be grabbed with a Datasource object, depending on the argument to AbstractSQLStatement::constructor().
@@ -175,7 +175,7 @@ abstract nothing AbstractSQLStatement::bindPlaceholders(...);
     @note You can also bind buffer specifications directly when calling AbstractSQLStatement::exec() or AbstractSQLStatement::execArgs() as a shortcut as well, in which case it's not necessary to make an extra call to this method.\n\n
     Not all DBI drivers require binding placeholders specification.
 
-    @param vargs Arguments to placeholder specifications (if required by the underlying DBI driver)
+    @param arguments Arguments to placeholder specifications (if required by the underlying DBI driver)
 
     @par Example:
     @code{.py}
@@ -191,7 +191,7 @@ date d = stmt.getOutput().sd;
 
     @see AbstractSQLStatement::bind(), AbstractSQLStatement::bindArgs(), AbstractSQLStatement::bindPlaceholders(), AbstractSQLStatement::bindValues(), and AbstractSQLStatement::bindValuesArgs()
 */
-abstract nothing AbstractSQLStatement::bindPlaceholdersArgs(softlist<auto> vargs);
+abstract nothing AbstractSQLStatement::bindPlaceholdersArgs(softlist<auto> arguments) [flags=NAMED_ARGS];
 
 //! Binds values to value buffer specifications to buffers defined in AbstractSQLStatement::prepare()
 /** If the statement has not previously been prepared with the DB API, it will be implicitly prepared by this method call. This means that this call will cause a connection to be dedicated from a DatasourcePool object or the transaction lock to be grabbed with a Datasource object, depending on the argument to AbstractSQLStatement::constructor().
@@ -230,7 +230,7 @@ abstract nothing AbstractSQLStatement::bindValues(...);
 
     @note You can also bind directly when calling AbstractSQLStatement::exec() or AbstractSQLStatement::execArgs() as a shortcut as well, in which case it's not necessary to make an extra call to this method.
 
-    @param vargs Arguments to bind by value arguments
+    @param arguments Arguments to bind by value arguments
 
     @par Example:
     @code{.py}
@@ -246,7 +246,7 @@ foreach hash<auto> h in (l) {
 
     @note Exceptions could be thrown by the DBI driver when the statement is prepared or when attempting to bind the given arguments to buffer specifications; see the relevant DBI driver docs for more information
 */
-abstract nothing AbstractSQLStatement::bindValuesArgs(softlist<auto> vargs);
+abstract nothing AbstractSQLStatement::bindValuesArgs(softlist<auto> arguments) [flags=NAMED_ARGS];
 
 //! Executes the bound statement with any bound buffers, also optionally allows binding placeholder buffer specifications and values to buffers defined in AbstractSQLStatement::prepare() before executing the statement
 /** If the statement has not previously been prepared with the DB API, it will be implicitly prepared by this method call. This means that this call will cause a connection to be dedicated from a DatasourcePool object or the transaction lock to be grabbed with a Datasource object, depending on the argument to AbstractSQLStatement::constructor().
@@ -288,7 +288,7 @@ abstract nothing AbstractSQLStatement::exec(...);
 
     To retrieve rows from a select statement call either AbstractSQLStatement::next() and AbstractSQLStatement::fetchRow(), or AbstractSQLStatement::fetchRows() or AbstractSQLStatement::fetchColumns() as needed.
 
-    @param vargs Optional arguments to placeholder specifications (if required by the underlying DBI driver) and bind by value arguments can be given in the call to the method; if present, arguments are bound before the statement is executed
+    @param arguments Optional arguments to placeholder specifications (if required by the underlying DBI driver) and bind by value arguments can be given in the call to the method; if present, arguments are bound before the statement is executed
 
     @par Example:
     @code{.py}
@@ -305,7 +305,7 @@ foreach hash<auto> h in (l) {
 
     @see AbstractSQLStatement::exec()
 */
-abstract nothing AbstractSQLStatement::execArgs(softlist<auto> vargs);
+abstract nothing AbstractSQLStatement::execArgs(softlist<auto> arguments) [flags=NAMED_ARGS];
 
 //! Returns the number of rows affected by the last call to AbstractSQLStatement::exec()
 /** @return the number of rows affected by the last call to AbstractSQLStatement::exec()
@@ -496,7 +496,7 @@ list<auto> l = stmt.fetchRows(-1);
     - There is no need to call AbstractSQLStatement::next() when calling this method; the method automatically iterates through the given number of rows
     - Exceptions could be thrown by the DBI driver when the statement is prepared or when attempting to bind the given arguments to buffer specifications or when the statement is executed or when row values are retrieved; see the relevant DBI driver docs for more information
 */
-abstract list<auto> AbstractSQLStatement::fetchRows(softint rows = -1);
+abstract list<auto> AbstractSQLStatement::fetchRows(softint rows = -1) [flags=NAMED_ARGS];
 
 //! Retrieves a block of rows as a hash of lists with the maximum number of rows determined by the argument passed; automatically advances the row pointer; with this call it is not necessary to call AbstractSQLStatement::next().
 /** If the argument passed is omitted or less than or equal to zero, then all available rows from the current row position are retrieved, also if fewer rows are available than requested then only the rows available are retrieved.
@@ -516,7 +516,7 @@ hash<auto> h = stmt.fetchColumns(-1);
     - There is no need to call AbstractSQLStatement::next() when calling this method; the method automatically iterates through the given number of rows
     - Exceptions could be thrown by the DBI driver when the statement is prepared or when attempting to bind the given arguments to buffer specifications or when the statement is executed or when row values are retrieved; see the relevant DBI driver docs for more information
 */
-abstract hash<auto> AbstractSQLStatement::fetchColumns(softint rows = -1);
+abstract hash<auto> AbstractSQLStatement::fetchColumns(softint rows = -1) [flags=NAMED_ARGS];
 
 //! Describes columns in the statement result.
 /**
@@ -561,8 +561,8 @@ bool b = stmt.currentThreadInTransaction();
 abstract bool AbstractSQLStatement::currentThreadInTransaction();
 
 //! Returns the value of the given column for the current row
-/** @param member the column name
+/** @param key the column name
 
     @since %Qore 1.12.1
 */
-abstract auto AbstractSQLStatement::memberGate(string member);
+abstract auto AbstractSQLStatement::memberGate(string key) [flags=NAMED_ARGS];

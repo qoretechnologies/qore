@@ -96,7 +96,7 @@ qclass SQLStatement [dom=DATABASE; arg=QoreSQLStatement* stmt; ns=Qore::SQL; vpa
 //! Creates the SQLStatement object based on the given Datasource object that provides the connection to the database
 /** This method will throw an exception only if the object passed as an argument uses a driver that does not support the prepared statement interface added in %Qore version 0.8.1.
 
-    @param ds The Datasource object to use for the DB connection for the SQLStatement object
+    @param datasource The Datasource object to use for the DB connection for the SQLStatement object
 
     @par Example:
     @code{.py}
@@ -107,19 +107,20 @@ SQLStatement stmt(db);
 
     @since %Qore 0.8.1
  */
-SQLStatement::constructor(Datasource[ManagedDatasource] ds) {
-   if (!ds->getDriver()->hasStatementAPI()) {
-      xsink->raiseException("SQLSTATEMENT-ERROR", "DBI driver '%s' does not support the prepared statement API", ds->getDriver()->getName());
+SQLStatement::constructor(Datasource[ManagedDatasource] datasource) [flags=NAMED_ARGS] {
+   if (!datasource->getDriver()->hasStatementAPI()) {
+      xsink->raiseException("SQLSTATEMENT-ERROR", "DBI driver '%s' does not support the prepared statement API",
+         datasource->getDriver()->getName());
       return;
    }
 
-   self->setPrivate(CID_SQLSTATEMENT, new QoreSQLStatement(*ds));
+   self->setPrivate(CID_SQLSTATEMENT, new QoreSQLStatement(*datasource));
 }
 
 //! Creates the SQLStatement object based on the given DatasourcePool object that provides the connection to the database
 /** This method will throw an exception only if the object passed as an argument uses a driver that does not support the prepared statement interface added in %Qore version 0.8.1.
 
-    @param dsp The DatasourcePool object to use for the DB connection for the SQLStatement object
+    @param datasource_pool The DatasourcePool object to use for the DB connection for the SQLStatement object
 
     @par Example:
     @code{.py}
@@ -130,13 +131,14 @@ SQLStatement stmt(db);
 
     @since %Qore 0.8.1
  */
-SQLStatement::constructor(DatasourcePool[DatasourcePool] dsp) {
-   if (!dsp->getDriver()->hasStatementAPI()) {
-      xsink->raiseException("SQLSTATEMENT-ERROR", "DBI driver '%s' does not support the prepared statement API", dsp->getDriver()->getName());
+SQLStatement::constructor(DatasourcePool[DatasourcePool] datasource_pool) [flags=NAMED_ARGS] {
+   if (!datasource_pool->getDriver()->hasStatementAPI()) {
+      xsink->raiseException("SQLSTATEMENT-ERROR", "DBI driver '%s' does not support the prepared statement API",
+         datasource_pool->getDriver()->getName());
       return;
    }
 
-   self->setPrivate(CID_SQLSTATEMENT, new QoreSQLStatement(*dsp));
+   self->setPrivate(CID_SQLSTATEMENT, new QoreSQLStatement(*datasource_pool));
 }
 
 //! Closes the statement if it is open and destroys the object
@@ -193,7 +195,7 @@ nothing SQLStatement::prepare(string sql, ...) {
 stmt.prepareRaw("select * from table");
     @endcode
  */
-nothing SQLStatement::prepareRaw(string sql) {
+nothing SQLStatement::prepareRaw(string sql) [flags=NAMED_ARGS] {
    stmt->prepareRaw(*sql, xsink);
 }
 
@@ -236,7 +238,7 @@ nothing SQLStatement::bind(...) {
 
     @note You can also bind directly when calling SQLStatement::exec() or SQLStatement::execArgs() as a shortcut as well, in which case it's not necessary to make an extra call to this method.
 
-    @param vargs Arguments to placeholder specifications (if required by the underlying DBI driver) and bind by value arguments
+    @param arguments Arguments to placeholder specifications (if required by the underlying DBI driver) and bind by value arguments
 
     @par Example:
     @code{.py}
@@ -254,8 +256,8 @@ foreach hash<auto> h in (l) {
 
     @see SQLStatement::bind(), SQLStatement::bindPlaceholders(), SQLStatement::bindPlaceholdersArgs(), SQLStatement::bindValues(), and SQLStatement::bindValuesArgs()
  */
-nothing SQLStatement::bindArgs(softlist<auto> vargs) {
-   stmt->bind(*vargs, xsink);
+nothing SQLStatement::bindArgs(softlist<auto> arguments) [flags=NAMED_ARGS] {
+   stmt->bind(*arguments, xsink);
 }
 
 //! Binds placeholder buffer specifications to buffers defined in SQLStatement::prepare()
@@ -297,7 +299,7 @@ nothing SQLStatement::bindPlaceholders(...) {
     @note You can also bind buffer specifications directly when calling SQLStatement::exec() or SQLStatement::execArgs() as a shortcut as well, in which case it's not necessary to make an extra call to this method.\n\n
     Not all DBI drivers require binding placeholders specification.
 
-    @param vargs Arguments to placeholder specifications (if required by the underlying DBI driver)
+    @param arguments Arguments to placeholder specifications (if required by the underlying DBI driver)
 
     @par Example:
     @code{.py}
@@ -313,8 +315,8 @@ date d = stmt.getOutput().sd;
 
     @see SQLStatement::bind(), SQLStatement::bindArgs(), SQLStatement::bindPlaceholders(), SQLStatement::bindValues(), and SQLStatement::bindValuesArgs()
  */
-nothing SQLStatement::bindPlaceholdersArgs(softlist<auto> vargs) {
-   stmt->bindPlaceholders(*vargs, xsink);
+nothing SQLStatement::bindPlaceholdersArgs(softlist<auto> arguments) [flags=NAMED_ARGS] {
+   stmt->bindPlaceholders(*arguments, xsink);
 }
 
 //! Binds values to value buffer specifications to buffers defined in SQLStatement::prepare()
@@ -356,7 +358,7 @@ nothing SQLStatement::bindValues(...) {
 
     @note You can also bind directly when calling SQLStatement::exec() or SQLStatement::execArgs() as a shortcut as well, in which case it's not necessary to make an extra call to this method.
 
-    @param vargs Arguments to bind by value arguments
+    @param arguments Arguments to bind by value arguments
 
     @par Example:
     @code{.py}
@@ -372,8 +374,8 @@ foreach hash<auto> h in (l) {
 
     @note Exceptions could be thrown by the DBI driver when the statement is prepared or when attempting to bind the given arguments to buffer specifications; see the relevant DBI driver docs for more information
  */
-nothing SQLStatement::bindValuesArgs(softlist<auto> vargs) {
-   stmt->bindValues(*vargs, xsink);
+nothing SQLStatement::bindValuesArgs(softlist<auto> arguments) [flags=NAMED_ARGS] {
+   stmt->bindValues(*arguments, xsink);
 }
 
 //! Executes the bound statement with any bound buffers, also optionally allows binding placeholder buffer specifications and values to buffers defined in SQLStatement::prepare() before executing the statement
@@ -418,7 +420,7 @@ nothing SQLStatement::exec(...) {
 
     To retrieve rows from a select statement call either SQLStatement::next() and SQLStatement::fetchRow(), or SQLStatement::fetchRows() or SQLStatement::fetchColumns() as needed.
 
-    @param vargs Optional arguments to placeholder specifications (if required by the underlying DBI driver) and bind by value arguments can be given in the call to the method; if present, arguments are bound before the statement is executed
+    @param arguments Optional arguments to placeholder specifications (if required by the underlying DBI driver) and bind by value arguments can be given in the call to the method; if present, arguments are bound before the statement is executed
 
     @par Example:
     @code{.py}
@@ -435,8 +437,8 @@ foreach hash<auto> h in (l) {
 
     @see SQLStatement::exec()
  */
-nothing SQLStatement::execArgs(softlist<auto> vargs) {
-   stmt->exec(vargs, xsink);
+nothing SQLStatement::execArgs(softlist<auto> arguments) [flags=NAMED_ARGS] {
+   stmt->exec(arguments, xsink);
 }
 
 //! Returns the number of rows affected by the last call to SQLStatement::exec()
@@ -654,7 +656,7 @@ list<auto> l = stmt.fetchRows(-1);
     - There is no need to call SQLStatement::next() when calling this method; the method automatically iterates through the given number of rows
     - Exceptions could be thrown by the DBI driver when the statement is prepared or when attempting to bind the given arguments to buffer specifications or when the statement is executed or when row values are retrieved; see the relevant DBI driver docs for more information
  */
-list<auto> SQLStatement::fetchRows(softint rows = -1) {
+list<auto> SQLStatement::fetchRows(softint rows = -1) [flags=NAMED_ARGS] {
    return stmt->fetchRows((int)rows, xsink);
 }
 
@@ -676,7 +678,7 @@ hash<auto> h = stmt.fetchColumns(-1);
     - There is no need to call SQLStatement::next() when calling this method; the method automatically iterates through the given number of rows
     - Exceptions could be thrown by the DBI driver when the statement is prepared or when attempting to bind the given arguments to buffer specifications or when the statement is executed or when row values are retrieved; see the relevant DBI driver docs for more information
  */
-hash<auto> SQLStatement::fetchColumns(softint rows = -1) {
+hash<auto> SQLStatement::fetchColumns(softint rows = -1) [flags=NAMED_ARGS] {
    return stmt->fetchColumns((int)rows, xsink);
 }
 
@@ -743,7 +745,7 @@ while (stmt.next()) {
 
     @since %Qore 0.8.6
  */
-auto SQLStatement::memberGate(string key) [flags=RET_VALUE_ONLY] {
+auto SQLStatement::memberGate(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    ReferenceHolder<QoreHashNode> h(stmt->fetchRow(xsink), xsink);
    if (*xsink)
       return QoreValue();

@@ -232,16 +232,16 @@ qclass DatasourcePool [dom=DATABASE; arg=DatasourcePool* ds; ns=Qore::SQL; vpare
 
 //! Creates the DatasourcePool object; attempts to load a DBI driver if the driver is not already present in %Qore
 /** @param driver The name of the DBI driver for the Datasource. See @ref sql_constants for builtin constants for DBI drivers shipped with %Qore, or see the DBI driver documentation to use an add-on driver (this string should be the name of the driver to be loaded)
-    @param user The user name for the new connection. Also see Datasource::setUserName() for a method that allows this parameter to be set after the constructor.
-    @param pass The password for the new connection. Also see Datasource::setPassword() for a method that allows this parameter to be set after the constructor.
-    @param db The database name for the new connection. Also see Datasource::setDBName() for a method that allows this parameter to be set after the constructor.
+    @param username The user name for the new connection. Also see Datasource::setUserName() for a method that allows this parameter to be set after the constructor.
+    @param password The password for the new connection. Also see Datasource::setPassword() for a method that allows this parameter to be set after the constructor.
+    @param database The database name for the new connection. Also see Datasource::setDBName() for a method that allows this parameter to be set after the constructor.
     @param encoding The database-specific name of the @ref character_encoding "character encoding" to use for the new connection. Also see Datasource::setDBCharset() for a method that allows this parameter to be set after the constructor. If no value is passed for this parameter, then the database character encoding corresponding to the @ref default_encoding "default character encoding" will be used instead.
     @param host The host name for the new connection. Also see Datasource::setHostName() for a method that allows this parameter to be set after the constructor.
-    @param min The minimum number of connections in the pool (this number of connections is opened in the constructor)
-    @param max The maximum number of connections in the pool (not more than this number of connections will be opened)
+    @param min_connections The minimum number of connections in the pool (this number of connections is opened in the constructor)
+    @param max_connections The maximum number of connections in the pool (not more than this number of connections will be opened)
     @param port The port number for the new connection. Also see Datasource::setPort() for a method that allows this parameter to be set after the constructor.
     @param queue An optional @ref Qore::Thread::Queue "Queue" object to receive datasource events; note that the @ref Qore::Thread::Queue "Queue" passed cannot have any maximum size set or a \c QUEUE-ERROR will be thrown; passing @ref nothing will clear any event queue
-    @param arg an optional argument to be included in the \c arg key of datasource events
+    @param argument an optional argument to be included in the \c arg key of datasource events
 
     @par Example:
     @code{.py}
@@ -252,14 +252,16 @@ DatasourcePool db(DSPGSQL, "user", "pass", "database", "utf8", "localhost", 3, 1
     @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR invalid min, max, or port argument
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
  */
-DatasourcePool::constructor(string driver, *string user, *string pass, *string db, *string encoding, *string host, softint min = 3, softint max = 10, softint port = 0, *Qore::Thread::Queue[Queue] queue, auto arg) {
-   if (!port && min == 3 && max == 10 && driver->find(':') != -1) {
+DatasourcePool::constructor(string driver, *string username, *string password, *string database, *string encoding,
+      *string host, softint min_connections = 3, softint max_connections = 10, softint port = 0,
+      *Qore::Thread::Queue[Queue] queue, auto argument) {
+   if (!port && min_connections == 3 && max_connections == 10 && driver->find(':') != -1) {
       ReferenceHolder<QoreHashNode> h(parseDatasource(driver->getBuffer(), xsink), xsink);
       if (!h) {
          assert(*xsink);
          return;
       }
-      dsp_constructor_hash(*h, self, queue.release(), arg, xsink);
+      dsp_constructor_hash(*h, self, queue.release(), argument, xsink);
       return;
    }
 
@@ -269,13 +271,14 @@ DatasourcePool::constructor(string driver, *string user, *string pass, *string d
       return;
    }
 
-   if (min <= 0) {
-      xsink->raiseException(DSPC_ERR, "minimum connections must be > 0 (value given: " QLLD ")", min);
+   if (min_connections <= 0) {
+      xsink->raiseException(DSPC_ERR, "minimum connections must be > 0 (value given: " QLLD ")", min_connections);
       return;
    }
 
-   if (max < min) {
-      xsink->raiseException(DSPC_ERR, "maximum connections must be >= min(%d) (value given: " QLLD ")", min, max);
+   if (max_connections < min_connections) {
+      xsink->raiseException(DSPC_ERR, "maximum connections must be >= min(" QLLD ") (value given: " QLLD ")",
+         min_connections, max_connections);
       return;
    }
 
@@ -284,9 +287,10 @@ DatasourcePool::constructor(string driver, *string user, *string pass, *string d
       return;
    }
 
-   SimpleRefHolder<DatasourcePool> ds(new DatasourcePool(xsink, db_driver, user ? user->getBuffer() : 0, pass ? pass->getBuffer() : 0,
-							 db ? db->getBuffer() : 0, encoding ? encoding->getBuffer() : 0, host ? host->getBuffer() : 0,
-							 min, max, port, 0, queue.release(), arg.refSelf()));
+   SimpleRefHolder<DatasourcePool> ds(new DatasourcePool(xsink, db_driver, username ? username->getBuffer() : 0,
+                         password ? password->getBuffer() : 0, database ? database->getBuffer() : 0,
+                         encoding ? encoding->getBuffer() : 0, host ? host->getBuffer() : 0, min_connections,
+                         max_connections, port, 0, queue.release(), argument.refSelf()));
    if (!*xsink)
       self->setPrivate(CID_DATASOURCEPOOL, ds.release());
    else
@@ -294,9 +298,9 @@ DatasourcePool::constructor(string driver, *string user, *string pass, *string d
 }
 
 //! Creates a DatasourcePool object from a single string giving all parameters that can be parsed by parse_datasource()
-/** @param desc a datasource description string in the format that can be parsed by parse_datasource()
+/** @param description a datasource description string in the format that can be parsed by parse_datasource()
     @param queue An optional @ref Qore::Thread::Queue "Queue" object to receive datasource events; note that the @ref Qore::Thread::Queue "Queue" passed cannot have any maximum size set or a \c QUEUE-ERROR will be thrown; passing @ref nothing will clear any event queue
-    @param arg an optional argument to be included in the \c arg key of datasource events
+    @param argument an optional argument to be included in the \c arg key of datasource events
 
     @par Example:
     @code{.py}
@@ -309,18 +313,18 @@ DatasourcePool ds("pgsql:user/pass@db01(utf8)%localhost:5432");
 
     @since %Qore 0.8.6
  */
-DatasourcePool::constructor(string desc, *Qore::Thread::Queue[Queue] queue, auto arg) {
-    ReferenceHolder<QoreHashNode> h(parseDatasource(desc->getBuffer(), xsink), xsink);
+DatasourcePool::constructor(string description, *Qore::Thread::Queue[Queue] queue, auto argument) {
+    ReferenceHolder<QoreHashNode> h(parseDatasource(description->getBuffer(), xsink), xsink);
     if (!h) {
         assert(*xsink);
         return;
     }
 
-    dsp_constructor_hash(*h, self, queue.release(), arg, xsink);
+    dsp_constructor_hash(*h, self, queue.release(), argument, xsink);
 }
 
 //! Creates a DatasourcePool object from a hash argument giving parameters for the constructor
-/** @param opts a hash giving parameters for the new datasource with the following possible keys (the \c "type" key is mandatory, also usable with the output of the parse_datasource() function):
+/** @param options a hash giving parameters for the new datasource with the following possible keys (the \c "type" key is mandatory, also usable with the output of the parse_datasource() function):
     - \c type: (@ref string_or_nothing_type "*string") The name of the database driver to use; this key is mandatory; if not present, an exception will be raised. See @ref sql_constants for builtin constants for DBI drivers shipped with Qore, or see the DBI driver documentation to use an add-on driver (this string should be the name of the driver to be loaded)
     - \c user: (@ref string_or_nothing_type "*string") The user name for the new connection
     - \c pass: (@ref string_or_nothing_type "*string") The password for the new connection
@@ -330,7 +334,7 @@ DatasourcePool::constructor(string desc, *Qore::Thread::Queue[Queue] queue, auto
     - \c port: (@ref softint_type "softint") The port number for the new connection
     - \c options: (@ref hash_type "hash") An optional hash having \c "min" and \c "max" keys giving the minimum and maximum number of connections in the pool, respectively; all other options will be passed to the database driver
     @param queue An optional @ref Qore::Thread::Queue "Queue" object to receive datasource events; note that the @ref Qore::Thread::Queue "Queue" passed cannot have any maximum size set or a \c QUEUE-ERROR will be thrown; passing @ref nothing will clear any event queue
-    @param arg an optional argument to be included in the \c arg key of datasource events
+    @param argument an optional argument to be included in the \c arg key of datasource events
 
     @par Example:
     @code{.py}
@@ -341,8 +345,8 @@ Datasource db(("type": DSPGSQL, "user": "username", "pass": "password", "db": "d
     @throw DATASOURCEPOOL-CONSTRUCTOR-ERROR missing or invalid \c "driver" key, other key name not assigned to a string; \c "port" value is \<= 0; invalid \c "min" or \c "max" keys
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
  */
-DatasourcePool::constructor(hash<auto> opts, *Qore::Thread::Queue[Queue] queue, auto arg) {
-   dsp_constructor_hash(opts, self, queue.release(), arg, xsink);
+DatasourcePool::constructor(hash<auto> options, *Qore::Thread::Queue[Queue] queue, auto argument) {
+   dsp_constructor_hash(options, self, queue.release(), argument, xsink);
 }
 
 //! Throws an exception if any transactions are in progress and returns immediately; the object is destroyed after any in-progress requests are completed
@@ -420,7 +424,7 @@ auto DatasourcePool::exec(string sql, ...) {
     This method also accepts all bind parameters (<tt>%%d</tt>, <tt>%%v</tt>, <tt>%%s</tt>, etc) as documented in @ref sql_binding "Binding by Value and Placeholder"
 
     @param sql The %SQL command to execute on the server
-    @param vargs Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
 
     @return The return value depends on the DBI driver; normally, for commands with placeholders, a hash is returned holding the values acquired from executing the %SQL statement. For all other commands, normally an integer row count is returned. However, some DBI drivers also allow select statements to be executed through this interface, which would also return a hash (column names) of lists (values for each column).
 
@@ -431,8 +435,8 @@ int rows = db.vexec("insert into example_table value (%v, %v, %v)", arg_list);
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
  */
-auto DatasourcePool::vexec(string sql, *softlist<auto> vargs) {
-   return ds->exec(sql, vargs, xsink);
+auto DatasourcePool::vexec(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+   return ds->exec(sql, arguments, xsink);
 }
 
 //! Allocates a persistent connection to the current thread from the pool (if one has not already been allocated) and executes an %SQL command on the server and returns either the row count (for example, for updates and inserts) or the data retrieved (for example, if a stored procedure is executed that returns values)
@@ -452,7 +456,7 @@ db.execRaw("create table my_tab (id number, some_text varchar2(30))");
 
     @note see the documentation for the DBI driver being used for additional possible exceptions
  */
-auto DatasourcePool::execRaw(string sql) {
+auto DatasourcePool::execRaw(string sql) [flags=NAMED_ARGS] {
    return ds->execRaw(sql, xsink);
 }
 
@@ -556,7 +560,7 @@ auto DatasourcePool::selectRows(string sql, ...) {
     This method does not retain the datasource connection for the current thread if one was not already allocated before this method is called, so to execute select statements that begin a transaction (such as \c "select for update"), execute DatasourcePool::beginTransaction() first to ensure that the connection is dedicated to the calling thread.
 
     @param sql The %SQL command to execute on the server
-    @param vargs Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
 
     @return Normally returns a hash (the keys are the column names) of list (each hash key's value is a list giving the row data), however some DBI drivers allow any %SQL statement to be executed through this method (not only select statements), in this case other data types can be returned.  If no rows are found, a hash of column names assigned to empty lists is returned.
 
@@ -576,8 +580,8 @@ if (query.firstValue())
     - <hash>::contextIterator()
     - @ref context
  */
-auto DatasourcePool::vselect(string sql, *softlist<auto> vargs) {
-   return ds->select(sql, vargs, xsink);
+auto DatasourcePool::vselect(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+   return ds->select(sql, arguments, xsink);
 }
 
 //! Executes a select statement on the server and returns the first row as a hash (column names and values), taking a list for all bind arguments
@@ -588,7 +592,7 @@ auto DatasourcePool::vselect(string sql, *softlist<auto> vargs) {
     This method does not retain the datasource connection for the current thread if one was not already allocated before this method is called, so to execute select statements that begin a transaction (such as \c "select for update"), execute DatasourcePool::beginTransaction() first to ensure that the connection is dedicated to the calling thread.
 
     @param sql The %SQL command to execute on the server
-    @param vargs Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
 
     @return This method normally returns a hash (the keys are the column names) of row data or @ref nothing if no row is found for the query when executed with an %SQL select statement, however some DBI drivers allow any %SQL statement to be executed through this method (not only select statements), in this case other data types can be returned
 
@@ -601,8 +605,8 @@ auto DatasourcePool::vselect(string sql, *softlist<auto> vargs) {
 
     @see DatasourcePool::selectRow()
  */
-auto DatasourcePool::vselectRow(string sql, *softlist<auto> vargs) {
-   return ds->selectRow(sql, vargs, xsink);
+auto DatasourcePool::vselectRow(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+   return ds->selectRow(sql, arguments, xsink);
 }
 
 //! Executes a select statement on the server and returns the results in a list (rows) of hashes (column names and values), taking a list for all bind arguments
@@ -617,7 +621,7 @@ auto DatasourcePool::vselectRow(string sql, *softlist<auto> vargs) {
     This method does not retain the datasource connection for the current thread if one was not already allocated before this method is called, so to execute select statements that begin a transaction (such as \c "select for update"), execute DatasourcePool::beginTransaction() first to ensure that the connection is dedicated to the calling thread.
 
     @param sql The %SQL command to execute on the server
-    @param vargs Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
+    @param arguments Include any values to be bound (using <tt>%%v</tt> in the command string) or placeholder specifications (using <tt>:</tt><em>key_name</em> in the command string) in order after the command string
 
     @return Normally returns a list (rows) of hash (where the keys are the column names of each row) or @ref nothing if no rows are found for the query, however some DBI drivers allow any %SQL statement to be executed through this method (not only select statements), in this case other data types can be returned
 
@@ -630,8 +634,8 @@ auto DatasourcePool::vselectRow(string sql, *softlist<auto> vargs) {
 
     @see DatasourcePool::selectRows()
  */
-auto DatasourcePool::vselectRows(string sql, *softlist<auto> vargs) {
-   return ds->selectRows(sql, vargs, xsink);
+auto DatasourcePool::vselectRows(string sql, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+   return ds->selectRows(sql, arguments, xsink);
 }
 
 //! Manually allocates a persistent connection from the pool to the calling thread
@@ -909,14 +913,14 @@ hash<auto> DatasourcePool::getOptionHash() [flags=CONSTANT] {
 }
 
 //! Returns the current value for the given option
-/** @param opt the option to get
+/** @param option the option to get
 
     @throw DBI-OPTION-ERROR unknown or unsupported option passed to driver
 
     @since %Qore 0.8.6
  */
-auto DatasourcePool::getOption(string opt) [flags=RET_VALUE_ONLY] {
-   return ds->getOption(opt->getBuffer(), xsink);
+auto DatasourcePool::getOption(string option) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return ds->getOption(option->getBuffer(), xsink);
 }
 
 //! Returns a @ref datasource_hash "datasource hash" describing the configuration of the current object
@@ -968,16 +972,16 @@ code cb = sub (string dsstr, int us, int to) {
 ds.setWarningCallback(5s, cb);
     @endcode
 
-    @param ms the period of time with a resolution of milliseconds after which the callback will be called if a connection cannot be allocated in the given time period
-    @param callback a @ref closure "closure" or @ref call_reference "call reference" taking three or four arguments: (@ref string_type "string" \a desc, @ref int_type "int" \a time, @ref int_type "int" \a warning_timeout[, @ref any_type "any" \a arg]) which will be passed a datasource description string for the pool, an integer giving the amount of time it took to acquire the connection in microseconds (divide by 1000 to get milliseconds), an integer giving the warning timeout threshold in milliseconds, and optionally the \a arg value passed to this method
-    @param arg an optional argument that will be passed to the warning callback
+    @param warning_ms the period of time with a resolution of milliseconds after which the callback will be called if a connection cannot be allocated in the given time period
+    @param callback a @ref closure "closure" or @ref call_reference "call reference" taking three or four arguments: (@ref string_type "string" \a desc, @ref int_type "int" \a time, @ref int_type "int" \a warning_timeout[, @ref any_type "any" \a argument]) which will be passed a datasource description string for the pool, an integer giving the amount of time it took to acquire the connection in microseconds (divide by 1000 to get milliseconds), an integer giving the warning timeout threshold in milliseconds, and optionally the \a argument value passed to this method
+    @param argument an optional argument that will be passed to the warning callback
 
     @note that the warning timeout has a resolution of milliseconds, but the actual wait time is reported in microseconds (1 ms = 1000 us)
 
     @since %Qore 0.8.9
 */
-DatasourcePool::setWarningCallback(timeout ms, code callback, auto arg) {
-   ds->setWarningCallback(ms, callback->refRefSelf(), arg.refSelf(), xsink);
+DatasourcePool::setWarningCallback(timeout warning_ms, code callback, auto argument) [flags=NAMED_ARGS] {
+   ds->setWarningCallback(warning_ms, callback->refRefSelf(), argument.refSelf(), xsink);
 }
 
 //! Returns a hash with usage information about the DatasourcePool object
@@ -1008,12 +1012,14 @@ hash<auto> h = ds.getUsageInfo();
 ds.setErrorTimeout(30s);
     @endcode
 
+    @param timeout_ms the timeout period for waiting for a connection to come free; values less than or equal to zero mean that requests for a connection will wait indefinitely
+
     @since %Qore 0.8.9
 */
-DatasourcePool::setErrorTimeout(timeout ts) {
-   if (ts < 0)
-      ts = 0;
-   ds->setErrorTimeout(ts);
+DatasourcePool::setErrorTimeout(timeout timeout_ms) [flags=NAMED_ARGS] {
+   if (timeout_ms < 0)
+      timeout_ms = 0;
+   ds->setErrorTimeout(timeout_ms);
 }
 
 //! Returns the error timeout period for waiting for a connection to come free as an integer giving milliseconds; note that timeout values less than or equal to zero mean that requests for a connection will wait indefinitely
@@ -1033,17 +1039,17 @@ int DatasourcePool::getErrorTimeout() [flags=CONSTANT] {
 //! Sets a queue object for DBI events on the pool
 /**
     @param queue the @ref Qore::Thread::Queue "Queue" object to receive datasource events; note that the @ref Qore::Thread::Queue "Queue" passed cannot have any maximum size set or a \c QUEUE-ERROR will be thrown; passing @ref nothing will clear any event queue
-    @param arg an argument to be included in the \c arg key of datasource events
+    @param argument an argument to be included in the \c arg key of datasource events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
 
     @since %Qore 0.8.9
  */
-nothing DatasourcePool::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg) {
+nothing DatasourcePool::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument) [flags=NAMED_ARGS] {
    if (queue->getMax() != -1)
       return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which could cause internal I/O to freeze in the Datasource object if used; use a Queue object with no maximum size for datasource event monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
-   ds->setEventQueue(queue.release(), arg.refSelf(), xsink);
+   ds->setEventQueue(queue.release(), argument.refSelf(), xsink);
 }
 
 //! Clears the queue object for DBI events on the pool

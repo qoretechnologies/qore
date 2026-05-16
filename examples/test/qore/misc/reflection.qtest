@@ -890,6 +890,42 @@ class ReflectionTest inherits QUnit::Test {
             ("warning_ms", "warning_bytes", "queue", "argument", "min_ms"));
         assertNamedClassMethodVariantCount("FtpClient", "setTimeout", ("timeout_ms",));
         assertNamedClassMethodVariantCount("FtpClient", "sendControlMessage", ("command", "argument"));
+        foreach string class_name in (("AbstractDatasource", "Datasource", "DatasourcePool")) {
+            assertNamedClassMethodVariantCount(class_name, "vexec", ("sql", "arguments"));
+            assertNamedClassMethodVariantCount(class_name, "execRaw", ("sql",));
+            assertNamedClassMethodVariantCount(class_name, "vselect", ("sql", "arguments"));
+            assertNamedClassMethodVariantCount(class_name, "vselectRow", ("sql", "arguments"));
+            assertNamedClassMethodVariantCount(class_name, "vselectRows", ("sql", "arguments"));
+            assertNamedClassMethodVariantCount(class_name, "getOption", ("option",));
+        }
+        assertNamedClassMethodVariantCount("Datasource", "setAutoCommit", ("auto_commit",));
+        assertNamedClassMethodVariantCount("Datasource", "setUserName", ("username",));
+        assertNamedClassMethodVariantCount("Datasource", "setPassword", ("password",));
+        assertNamedClassMethodVariantCount("Datasource", "setDBName", ("database",));
+        assertNamedClassMethodVariantCount("Datasource", "setDBCharset", ("encoding",));
+        assertNamedClassMethodVariantCount("Datasource", "setDBEncoding", ("encoding",));
+        assertNamedClassMethodVariantCount("Datasource", "setHostName", ("host",));
+        assertNamedClassMethodVariantCount("Datasource", "setPort", ("port",));
+        assertNamedClassMethodVariantCount("Datasource", "setTransactionLockTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Datasource", "setOption", ("option", "value"));
+        assertNamedClassMethodVariantCount("Datasource", "setEventQueue", ("queue", "argument"));
+        assertNamedClassStaticMethodVariantCount("Datasource", "makeConfigString", ("config",));
+        assertNamedClassMethodVariantCount("DatasourcePool", "setWarningCallback",
+            ("warning_ms", "callback", "argument"));
+        assertNamedClassMethodVariantCount("DatasourcePool", "setErrorTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("DatasourcePool", "setEventQueue", ("queue", "argument"));
+        foreach string class_name in (("AbstractSQLStatement", "SQLStatement")) {
+            assertNamedClassMethodVariantCount(class_name, "prepareRaw", ("sql",));
+            assertNamedClassMethodVariantCount(class_name, "bindArgs", ("arguments",));
+            assertNamedClassMethodVariantCount(class_name, "bindPlaceholdersArgs", ("arguments",));
+            assertNamedClassMethodVariantCount(class_name, "bindValuesArgs", ("arguments",));
+            assertNamedClassMethodVariantCount(class_name, "execArgs", ("arguments",));
+            assertNamedClassMethodVariantCount(class_name, "fetchRows", ("rows",));
+            assertNamedClassMethodVariantCount(class_name, "fetchColumns", ("rows",));
+            assertNamedClassMethodVariantCount(class_name, "memberGate", ("key",));
+        }
+        assertNamedConstructorVariantCount("SQLStatement", ("datasource",));
+        assertNamedConstructorVariantCount("SQLStatement", ("datasource_pool",));
         assertNamedConstructorVariantCount("TimeZone", ("region",));
         assertNamedConstructorVariantCount("TimeZone", ("seconds_east",));
         assertNamedClassMethodVariantCount("TimeZone", "date", ("seconds", "microseconds"));

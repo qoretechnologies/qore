@@ -357,6 +357,19 @@ These examples are from the core migration and should be reused as precedent:
   `getAsString(file, opts.encoding)`, `put(dynamic_stream, file)`,
   `FtpClient(options.url)`, `setTimeout(options."timeout")`, and
   `FtpPoller` calls through its `ftp` member.
+- SQL/Datasource APIs should expose database connection roles and list-taking
+  bind helpers clearly: use `username`, `password`, `database`, `description`,
+  `options`, `queue`, `argument`, `option`, `value`, `auto_commit`,
+  `min_connections`, `max_connections`, `warning_ms`, `timeout_ms`, and
+  `arguments`. The fixed list-taking methods (`vexec`, `vselect`,
+  `bindArgs`, `execArgs`, etc.) can opt in with `arguments`; true varargs SQL
+  helpers such as `exec(sql, ...)`, `select(sql, ...)`, `prepare(sql, ...)`,
+  `bind(...)`, and `exec(...)` remain positional until a specific builtin
+  varargs named-call convention is designed and tested. Datasource and
+  DatasourcePool constructors currently remain positional because their
+  overload sets still produce the more informative `NAMED-CALL-NOT-SUPPORTED`
+  error for named calls at runtime. For SQLStatement constructors, use
+  `datasource` and `datasource_pool` to keep overload selection readable.
 - HTTP readiness APIs use `timeout_ms` for blocking readiness waits and
   `notifier` for `registerReadyNotifier()`. HTTP connection constructors should
   keep the endpoint and TLS decision explicit (`target_host`, `target_port`,

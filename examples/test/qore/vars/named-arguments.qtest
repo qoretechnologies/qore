@@ -143,6 +143,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             NOTHING);
         addTestCase("reviewed HTTP readiness builtin opt-in", \reviewedHttpReadinessBuiltinOptIn(),
             NOTHING);
+        addTestCase("reviewed SQL class builtin opt-in", \reviewedSqlClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed async I/O controller builtin opt-in",
             \reviewedAsyncIoControllerBuiltinOptIn(), NOTHING);
         addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
@@ -792,6 +793,15 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "HttpClientConnectionBase waitForReadyOrError exposes timeout_ms");
     }
 
+    reviewedSqlClassBuiltinOptIn() {
+        assertEq("pgsql:u/p@db", Datasource::makeConfigString(config: (
+            "type": "pgsql",
+            "user": "u",
+            "pass": "p",
+            "db": "db",
+        )), "Datasource::makeConfigString exposes config");
+    }
+
     reviewedAsyncIoControllerBuiltinOptIn() {
         AsyncIoController::setAutostop(auto_stop: True);
         AsyncIoController::setLogger(logger: NOTHING);
@@ -1200,6 +1210,18 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous or depends on runtime argument types", sub() {
             Program p(PO_NEW_STYLE);
             p.parse("abs(value: 1);", "ambiguous-builtin-named");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "Datasource::constructor\\(description: string\\)", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("Datasource ds = new Datasource(description: \"a/b@c(utf8)\");",
+                "datasource-constructor-not-opted-in");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "DatasourcePool::constructor\\(description: string\\)", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("DatasourcePool ds = new DatasourcePool(description: \"a/b@c(utf8)\");",
+                "datasource-pool-constructor-not-opted-in");
         });
 
         assertThrows("NAMED-ARG-UNKNOWN", "named argument 'missing' does not match any accessible parameter", sub() {
