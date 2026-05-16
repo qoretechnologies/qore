@@ -1,0 +1,1030 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# @file qore-i18n CLI tool for managing Qore native i18n catalogs
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires astparser
+%requires json
+%requires Util
+
+%exec-class QoreI18nCmd
+
+class QoreI18nCmd {
+    public {
+        const Version = "0.1";
+
+        const ExtractOpts = {
+            "output":       "o,output=s",
+            "locale":       "l,locale=s",
+            "marker":       "m,marker=s@",
+            "fail-dynamic": "fail-dynamic",
+            "verbose":      "v,verbose:i+",
+            "help":         "h,help",
+        };
+
+        const StatsOpts = {
+            "locale":     "l,locale=s@",
+            "format":     "f,format=s",
+            "fail-under": "fail-under=i",
+            "help":       "h,help",
+        };
+
+        const PseudoOpts = {
+            "output": "o,output=s",
+            "from":   "from=s",
+            "locale": "l,locale=s",
+            "help":   "h,help",
+        };
+
+        const PoOpts = {
+            "output": "o,output=s",
+            "locale": "l,locale=s",
+            "help":   "h,help",
+        };
+    }
+
+    private {
+        hash<auto> extract_messages = {};
+        list<hash<auto>> extract_warnings = ();
+    }
+
+    constructor() {
+        if (!ARGV) {
+            usage();
+            exit(1);
+        }
+
+        string command = shift ARGV;
+        try {
+            switch (command) {
+                case "extract":
+                    runExtract();
+                    break;
+                case "stats":
+                    runStats();
+                    break;
+                case "pseudo":
+                    runPseudo();
+                    break;
+                case "export-po":
+                    runExportPo();
+                    break;
+                case "import-po":
+                    runImportPo();
+                    break;
+                case "help":
+                case "--help":
+                case "-h":
+                    usage();
+                    break;
+                default:
+                    stderr.printf("Error: unknown command '%s'\n\n", command);
+                    usage();
+                    exit(1);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("Error: %s: %s\n", ex.err, ex.desc);
+            exit(1);
+        }
+    }
+
+    private usage() {
+        printf("qore-i18n v%s - Manage Qore native i18n catalogs\n\n", Version);
+        printf("Usage: qore-i18n <command> [options] <files...>\n\n");
+        printf("Commands:\n");
+        printf("  extract      Extract t()/tn()/tc() calls from Qore source into a native JSON catalog\n");
+        printf("  stats        Report translated/fuzzy/needs-review/stale coverage for native catalogs\n");
+        printf("  pseudo       Generate an ASCII pseudolocale catalog preserving placeholders\n");
+        printf("  export-po    Export one native-catalog locale to simple gettext PO interchange\n");
+        printf("  import-po    Import a simple gettext PO file into a native JSON catalog\n\n");
+        printf("Examples:\n");
+        printf("  qore-i18n extract -o catalogs/root.json src/app.q\n");
+        printf("  qore-i18n stats --fail-under=95 catalogs/cs.json\n");
+        printf("  qore-i18n pseudo -o catalogs/qps-ploc.json catalogs/root.json\n");
+    }
+
+    private runExtract() {
+        GetOpt g(ExtractOpts);
+        hash<auto> opt = g.parse3(\ARGV);
+        if (opt.help) {
+            extractUsage();
+            return;
+        }
+        if (!ARGV) {
+            throw "I18N-CLI-ERROR", "extract requires at least one source file";
+        }
+
+        string locale = opt.locale ?? "root";
+        hash<auto> markers = getMarkers(opt.marker);
+        extract_messages = {};
+        extract_warnings = ();
+
+        foreach string path in (cast<list<string>>(ARGV)) {
+            if (!is_readable(path)) {
+                throw "I18N-CLI-ERROR", sprintf("cannot read source file '%s'", path);
+            }
+            extractFile(path, markers, opt.verbose);
+        }
+
+        foreach hash<auto> warning in (extract_warnings) {
+            stderr.printf("%s:%d: warning: %s\n", warning.path, warning.line, warning.message);
+        }
+        if (opt{"fail-dynamic"} && extract_warnings) {
+            throw "I18N-DYNAMIC-KEY-ERROR", "dynamic i18n call arguments were found";
+        }
+
+        hash<auto> catalog = {
+            "schema_version": 1,
+            "locales": {
+                locale: {
+                    "messages": extract_messages,
+                },
+            },
+        };
+        writeOutput(opt.output, make_json(catalog, JGF_ADD_FORMATTING));
+    }
+
+    private extractUsage() {
+        printf("Usage: qore-i18n extract [options] <source-files...>\n\n");
+        printf("Options:\n");
+        printf("  -o, --output=FILE       Output native catalog JSON (default: stdout)\n");
+        printf("  -l, --locale=LOCALE     Output locale key (default: root)\n");
+        printf("  -m, --marker=NAME       Marker to extract; repeatable (default: t, tn, tc)\n");
+        printf("      --fail-dynamic      Fail if a marker call uses dynamic source/id arguments\n");
+        printf("  -v, --verbose           Increase progress output\n");
+        printf("  -h, --help              Show this help\n");
+    }
+
+    private runStats() {
+        GetOpt g(StatsOpts);
+        hash<auto> opt = g.parse3(\ARGV);
+        if (opt.help) {
+            statsUsage();
+            return;
+        }
+        if (!ARGV) {
+            throw "I18N-CLI-ERROR", "stats requires at least one catalog file";
+        }
+        string format = opt.format ?? "text";
+        if (format != "text" && format != "json") {
+            throw "I18N-CLI-ERROR", "stats --format must be 'text' or 'json'";
+        }
+
+        list<hash<auto>> rows = ();
+        foreach string path in (cast<list<string>>(ARGV)) {
+            hash<auto> catalog = loadJsonFile(path);
+            rows += getStatsRows(path, catalog, opt.locale);
+        }
+
+        if (format == "json") {
+            writeOutput(NOTHING, make_json(rows, JGF_ADD_FORMATTING));
+        } else {
+            printStats(rows);
+        }
+
+        if (exists opt{"fail-under"}) {
+            int min = opt{"fail-under"};
+            foreach hash<auto> row in (rows) {
+                if (row.coverage < min) {
+                    exit(2);
+                }
+            }
+        }
+    }
+
+    private statsUsage() {
+        printf("Usage: qore-i18n stats [options] <catalog-files...>\n\n");
+        printf("Options:\n");
+        printf("  -l, --locale=LOCALE     Locale to report; repeatable (default: all)\n");
+        printf("  -f, --format=FORMAT     text|json (default: text)\n");
+        printf("      --fail-under=N      Exit 2 if translated coverage is below N percent\n");
+        printf("  -h, --help              Show this help\n");
+    }
+
+    private runPseudo() {
+        GetOpt g(PseudoOpts);
+        hash<auto> opt = g.parse3(\ARGV);
+        if (opt.help) {
+            pseudoUsage();
+            return;
+        }
+        if (ARGV.size() != 1) {
+            throw "I18N-CLI-ERROR", "pseudo requires exactly one catalog file";
+        }
+
+        string source_locale = opt.from ?? "root";
+        string pseudo_locale = opt.locale ?? "qps-ploc";
+        hash<auto> catalog = loadJsonFile(string(ARGV[0]));
+        hash<auto> source = getLocale(catalog, source_locale);
+        hash<auto> pseudo_messages = {};
+
+        foreach string id in (keys source.messages) {
+            auto value = source.messages{id};
+            pseudo_messages{id} = makePseudoEntry(id, value);
+        }
+
+        hash<auto> out = {
+            "schema_version": 1,
+            "locales": {
+                pseudo_locale: {
+                    "messages": pseudo_messages,
+                },
+            },
+        };
+        writeOutput(opt.output, make_json(out, JGF_ADD_FORMATTING));
+    }
+
+    private pseudoUsage() {
+        printf("Usage: qore-i18n pseudo [options] <catalog-file>\n\n");
+        printf("Options:\n");
+        printf("      --from=LOCALE       Source locale to pseudo-localize (default: root)\n");
+        printf("  -l, --locale=LOCALE     Pseudolocale name (default: qps-ploc)\n");
+        printf("  -o, --output=FILE       Output native catalog JSON (default: stdout)\n");
+        printf("  -h, --help              Show this help\n");
+    }
+
+    private runExportPo() {
+        GetOpt g(PoOpts);
+        hash<auto> opt = g.parse3(\ARGV);
+        if (opt.help) {
+            exportPoUsage();
+            return;
+        }
+        if (ARGV.size() != 1) {
+            throw "I18N-CLI-ERROR", "export-po requires exactly one catalog file";
+        }
+        string locale = opt.locale ?? "root";
+        hash<auto> catalog = loadJsonFile(string(ARGV[0]));
+        hash<auto> loc = getLocale(catalog, locale);
+        writeOutput(opt.output, buildPo(locale, loc.messages));
+    }
+
+    private exportPoUsage() {
+        printf("Usage: qore-i18n export-po [options] <catalog-file>\n\n");
+        printf("Options:\n");
+        printf("  -l, --locale=LOCALE     Locale to export (default: root)\n");
+        printf("  -o, --output=FILE       Output PO file (default: stdout)\n");
+        printf("  -h, --help              Show this help\n");
+    }
+
+    private runImportPo() {
+        GetOpt g(PoOpts);
+        hash<auto> opt = g.parse3(\ARGV);
+        if (opt.help) {
+            importPoUsage();
+            return;
+        }
+        if (ARGV.size() != 1) {
+            throw "I18N-CLI-ERROR", "import-po requires exactly one PO file";
+        }
+        string locale = opt.locale ?? "root";
+        hash<auto> messages = parsePo(ReadOnlyFile::readTextFile(string(ARGV[0])));
+        hash<auto> catalog = {
+            "schema_version": 1,
+            "locales": {
+                locale: {
+                    "messages": messages,
+                },
+            },
+        };
+        writeOutput(opt.output, make_json(catalog, JGF_ADD_FORMATTING));
+    }
+
+    private importPoUsage() {
+        printf("Usage: qore-i18n import-po [options] <po-file>\n\n");
+        printf("Options:\n");
+        printf("  -l, --locale=LOCALE     Locale for the imported catalog (default: root)\n");
+        printf("  -o, --output=FILE       Output native catalog JSON (default: stdout)\n");
+        printf("  -h, --help              Show this help\n");
+    }
+
+    private hash<auto> getMarkers(*list<string> configured) {
+        hash<auto> rv = {};
+        list<string> marker_list = configured ?? ("t", "tn", "tc");
+        foreach string marker in (marker_list) {
+            if (!marker || marker.find(" ") >= 0) {
+                throw "I18N-CLI-ERROR", sprintf("invalid marker '%s'", marker);
+            }
+            rv{marker} = True;
+        }
+        return rv;
+    }
+
+    private extractFile(string path, hash<auto> markers, *int verbose) {
+        if (verbose) {
+            stderr.printf("extracting: %s\n", path);
+        }
+
+        string source = ReadOnlyFile::readTextFile(path);
+        list<string> lines = source.split("\n");
+        AstParser parser();
+        parser.setConditionalParsing(True);
+        *AstTree tree = parser.parseString(source);
+        if (!exists tree || parser.getErrorCount()) {
+            throw "I18N-PARSE-ERROR", sprintf("could not parse '%s': %N", path, parser.getDiagnostics());
+        }
+
+        list<auto> nodes = tree.getNodesInfo();
+        *list<hash<auto>> comments = tree.getComments();
+        visitNodes(nodes, lines, path, comments ?? (), markers);
+    }
+
+    private visitNodes(list<auto> nodes, list<string> lines, string path, list<hash<auto>> comments,
+            hash<auto> markers) {
+        foreach hash<auto> node in (nodes) {
+            if (node.type == "call_expression") {
+                extractCall(node, lines, path, comments, markers);
+            }
+            if (exists node.children) {
+                visitNodes(node.children, lines, path, comments, markers);
+            }
+        }
+    }
+
+    private extractCall(hash<auto> node, list<string> lines, string path, list<hash<auto>> comments,
+            hash<auto> markers) {
+        *hash<auto> function = childByField(node, "function");
+        *hash<auto> args = childByType(node, "argument_list");
+        if (!exists function || !exists args) {
+            return;
+        }
+
+        string marker = markerBaseName(extractSourceText(lines, function.loc));
+        if (!exists markers{marker}) {
+            return;
+        }
+
+        list<auto> arg_nodes = args.children ?? ();
+        int line = int(node.loc.start_line) + 1;
+        list<string> extraction_comments = i18nCommentsBefore(comments, line);
+
+        switch (marker) {
+            case "t": {
+                *string source = arg_nodes.size() >= 1 ? literalString(arg_nodes[0]) : NOTHING;
+                if (!exists source) {
+                    extract_warnings += warning(path, line, "dynamic t() source is not extractable");
+                    return;
+                }
+                addSingular(source, source, source, path, line, extraction_comments);
+                break;
+            }
+            case "tc": {
+                *string id = arg_nodes.size() >= 1 ? literalString(arg_nodes[0]) : NOTHING;
+                *string source = arg_nodes.size() >= 2 ? literalString(arg_nodes[1]) : NOTHING;
+                if (!exists id || !exists source) {
+                    extract_warnings += warning(path, line, "dynamic tc() id/source is not extractable");
+                    return;
+                }
+                addSingular(id, source, source, path, line, extraction_comments);
+                break;
+            }
+            case "tn": {
+                *string singular = arg_nodes.size() >= 2 ? literalString(arg_nodes[1]) : NOTHING;
+                *string plural = arg_nodes.size() >= 3 ? literalString(arg_nodes[2]) : NOTHING;
+                if (!exists singular || !exists plural) {
+                    extract_warnings += warning(path, line, "dynamic tn() singular/plural source is not extractable");
+                    return;
+                }
+                addPlural(singular, singular, plural, path, line, extraction_comments);
+                break;
+            }
+        }
+    }
+
+    private addSingular(string id, string source, string message,
+            string path, int line, list<string> extraction_comments) {
+        if (exists extract_messages{id}) {
+            auto entry = extract_messages{id};
+            entry = mergeMetadata(entry, path, line, extraction_comments);
+            extract_messages{id} = entry;
+            return;
+        }
+
+        extract_messages{id} = {
+            "source": source,
+            "message": message,
+            "state": "translated",
+            "source_refs": (sprintf("%s:%d", path, line),),
+        };
+        if (extraction_comments) {
+            extract_messages{id}.extraction_comments = extraction_comments;
+        }
+    }
+
+    private addPlural(string id, string singular, string plural,
+            string path, int line, list<string> extraction_comments) {
+        if (exists extract_messages{id}) {
+            auto entry = extract_messages{id};
+            entry = mergeMetadata(entry, path, line, extraction_comments);
+            extract_messages{id} = entry;
+            return;
+        }
+
+        extract_messages{id} = {
+            "source": singular,
+            "plural_source": plural,
+            "forms": {
+                "one": singular,
+                "other": plural,
+            },
+            "state": "translated",
+            "source_refs": (sprintf("%s:%d", path, line),),
+        };
+        if (extraction_comments) {
+            extract_messages{id}.extraction_comments = extraction_comments;
+        }
+    }
+
+    private auto mergeMetadata(auto entry, string path, int line, list<string> extraction_comments) {
+        if (entry.typeCode() != NT_HASH) {
+            return entry;
+        }
+        string ref = sprintf("%s:%d", path, line);
+        if (!exists entry.source_refs) {
+            entry.source_refs = (ref,);
+        } else if (!containsString(entry.source_refs, ref)) {
+            entry.source_refs += ref;
+        }
+        if (extraction_comments) {
+            if (!exists entry.extraction_comments) {
+                entry.extraction_comments = extraction_comments;
+            } else {
+                foreach string comment in (extraction_comments) {
+                    if (!containsString(entry.extraction_comments, comment)) {
+                        entry.extraction_comments += comment;
+                    }
+                }
+            }
+        }
+        return entry;
+    }
+
+    private hash<auto> warning(string path, int line, string message) {
+        return {
+            "path": path,
+            "line": line,
+            "message": message,
+        };
+    }
+
+    private *hash<auto> childByField(hash<auto> node, string field) {
+        if (!exists node.children) {
+            return NOTHING;
+        }
+        foreach hash<auto> child in (node.children) {
+            if (exists child.field && child.field == field) {
+                return child;
+            }
+        }
+        return NOTHING;
+    }
+
+    private *hash<auto> childByType(hash<auto> node, string type) {
+        if (!exists node.children) {
+            return NOTHING;
+        }
+        foreach hash<auto> child in (node.children) {
+            if (child.type == type) {
+                return child;
+            }
+        }
+        return NOTHING;
+    }
+
+    private string markerBaseName(string name) {
+        name = trim(name);
+        int i = name.rfind("::");
+        if (i >= 0) {
+            name = name.substr(i + 2);
+        }
+        i = name.rfind(".");
+        if (i >= 0) {
+            name = name.substr(i + 1);
+        }
+        return name;
+    }
+
+    private *string literalString(hash<auto> node) {
+        if (exists node.text) {
+            string text = string(node.text);
+            if (isQuotedString(text)) {
+                return decodeQuotedString(text);
+            }
+        }
+        if (!exists node.children) {
+            return NOTHING;
+        }
+
+        if (node.type == "string") {
+            string rv = "";
+            foreach hash<auto> child in (node.children) {
+                *string part = literalString(child);
+                if (!exists part) {
+                    return NOTHING;
+                }
+                rv += part;
+            }
+            return rv;
+        }
+
+        if (node.children.size() == 1) {
+            return literalString(node.children[0]);
+        }
+        return NOTHING;
+    }
+
+    private bool isQuotedString(string text) {
+        return text.size() >= 2
+            && ((text.substr(0, 1) == "\"" && text.substr(text.size() - 1, 1) == "\"")
+                || (text.substr(0, 1) == "'" && text.substr(text.size() - 1, 1) == "'"));
+    }
+
+    private string decodeQuotedString(string raw) {
+        string body = raw.substr(1, raw.size() - 2);
+        string out = "";
+        for (int i = 0; i < body.size(); ++i) {
+            string ch = body.substr(i, 1);
+            if (ch != "\\" || i + 1 >= body.size()) {
+                out += ch;
+                continue;
+            }
+            string next = body.substr(++i, 1);
+            switch (next) {
+                case "n": out += "\n"; break;
+                case "r": out += "\r"; break;
+                case "t": out += "\t"; break;
+                case "\\": out += "\\"; break;
+                case "\"": out += "\""; break;
+                case "'": out += "'"; break;
+                default: out += next; break;
+            }
+        }
+        return out;
+    }
+
+    private list<string> i18nCommentsBefore(list<hash<auto>> comments, int line) {
+        list<string> rv = ();
+        foreach hash<auto> comment in (comments) {
+            int comment_line = int(comment.loc.lastLine);
+            if (comment_line >= line || line - comment_line > 3) {
+                continue;
+            }
+            *list<string> m = regex_extract(trim(string(comment.text)), "^#\\s*i18n:\\s*(.*)$");
+            if (exists m && m) {
+                rv += m[0];
+            }
+        }
+        return rv;
+    }
+
+    private string extractSourceText(list<string> lines, hash<auto> loc) {
+        int fl = int(loc.start_line);
+        int fc = int(loc.start_column);
+        int ll = int(loc.end_line);
+        int lc = int(loc.end_column);
+        if (fl < 0 || fl >= lines.size()) {
+            return "";
+        }
+        if (ll >= lines.size()) {
+            ll = lines.size() - 1;
+        }
+        if (fl == ll) {
+            string line = lines[fl];
+            if (fc < 0) {
+                fc = 0;
+            }
+            if (lc > line.size()) {
+                lc = line.size();
+            }
+            return fc >= line.size() ? "" : line.substr(fc, lc - fc);
+        }
+
+        string rv = "";
+        for (int i = fl; i <= ll; ++i) {
+            string line = lines[i];
+            if (i == fl) {
+                rv += line.substr(fc);
+            } else if (i == ll) {
+                rv += "\n" + line.substr(0, lc);
+            } else {
+                rv += "\n" + line;
+            }
+        }
+        return rv;
+    }
+
+    private hash<auto> loadJsonFile(string path) {
+        if (!is_readable(path)) {
+            throw "I18N-CLI-ERROR", sprintf("cannot read catalog file '%s'", path);
+        }
+        hash<auto> catalog = parse_json(ReadOnlyFile::readTextFile(path));
+        if (catalog.schema_version != 1 || !exists catalog.locales) {
+            throw "I18N-CATALOG-ERROR", sprintf("'%s' is not a native i18n schema v1 catalog", path);
+        }
+        return catalog;
+    }
+
+    private hash<auto> getLocale(hash<auto> catalog, string locale) {
+        if (!exists catalog.locales{locale}) {
+            throw "I18N-CATALOG-ERROR", sprintf("catalog does not contain locale '%s'", locale);
+        }
+        hash<auto> loc = catalog.locales{locale};
+        if (!exists loc.messages) {
+            throw "I18N-CATALOG-ERROR", sprintf("catalog locale '%s' does not contain messages", locale);
+        }
+        return loc;
+    }
+
+    private list<hash<auto>> getStatsRows(string path, hash<auto> catalog, *list<string> locales) {
+        list<hash<auto>> rows = ();
+        list<string> locale_names = locales ?? cast<list<string>>(keys catalog.locales);
+        foreach string locale in (locale_names) {
+            hash<auto> loc = getLocale(catalog, locale);
+            hash<auto> row = getStatsRow(path, locale, loc.messages);
+            rows += row;
+        }
+        return rows;
+    }
+
+    private hash<auto> getStatsRow(string path, string locale, hash<auto> messages) {
+        hash<auto> row = {
+            "file": path,
+            "locale": locale,
+            "total": 0,
+            "translated": 0,
+            "fuzzy": 0,
+            "needs_review": 0,
+            "stale": 0,
+            "untranslated": 0,
+            "coverage": 100,
+        };
+
+        foreach string id in (keys messages) {
+            ++row.total;
+            string state = messageState(messages{id});
+            switch (state) {
+                case "translated": ++row.translated; break;
+                case "fuzzy": ++row.fuzzy; break;
+                case "needs-review": ++row.needs_review; break;
+                case "stale": ++row.stale; break;
+                default: ++row.untranslated; break;
+            }
+        }
+        row.coverage = row.total ? int(row.translated * 100 / row.total) : 100;
+        return row;
+    }
+
+    private string messageState(auto value) {
+        if (value.typeCode() == NT_STRING) {
+            return "translated";
+        }
+        if (value.typeCode() == NT_HASH) {
+            return value.state ?? "translated";
+        }
+        return "untranslated";
+    }
+
+    private printStats(list<hash<auto>> rows) {
+        printf("%-28s %-14s %7s %7s %7s %12s %7s %8s\n",
+            "file", "locale", "total", "ok", "fuzzy", "needs-review", "stale", "coverage");
+        foreach hash<auto> row in (rows) {
+            printf("%-28s %-14s %7d %7d %7d %12d %7d %7d%%\n",
+                basename(row.file), row.locale, row.total, row.translated, row.fuzzy,
+                row.needs_review, row.stale, row.coverage);
+        }
+    }
+
+    private auto makePseudoEntry(string id, auto value) {
+        if (value.typeCode() == NT_STRING) {
+            return pseudoString(string(value));
+        }
+        if (value.typeCode() != NT_HASH) {
+            return value;
+        }
+
+        hash<auto> out = {};
+        if (exists value.source) {
+            out.source = value.source;
+        }
+        if (exists value.plural_source) {
+            out.plural_source = value.plural_source;
+        }
+        if (exists value.forms) {
+            hash<auto> forms = {};
+            foreach string key in (keys value.forms) {
+                forms{key} = pseudoString(string(value.forms{key}));
+            }
+            out.forms = forms;
+        } else {
+            out.message = pseudoString(string(value.message ?? id));
+        }
+        out.state = "translated";
+        return out;
+    }
+
+    private string pseudoString(string text) {
+        string out = "[!! ";
+        bool placeholder = False;
+        for (int i = 0; i < text.size(); ++i) {
+            string ch = text.substr(i, 1);
+            if (ch == "{") {
+                placeholder = True;
+                out += ch;
+                continue;
+            }
+            if (ch == "}") {
+                placeholder = False;
+                out += ch;
+                continue;
+            }
+            out += placeholder ? ch : pseudoChar(ch);
+        }
+        return out + " !!]";
+    }
+
+    private string pseudoChar(string ch) {
+        switch (ch.lwr()) {
+            case "a":
+            case "e":
+            case "i":
+            case "o":
+            case "u":
+                return ch + ch;
+        }
+        return ch;
+    }
+
+    private string buildPo(string locale, hash<auto> messages) {
+        string out = "";
+        out += "msgid \"\"\n";
+        out += "msgstr \"\"\n";
+        out += poQuotedLine("Content-Type: text/plain; charset=UTF-8\\n");
+        out += poQuotedLine("Language: " + locale + "\\n");
+        out += "\n";
+
+        foreach string id in (keys messages) {
+            auto value = messages{id};
+            hash<auto> entry = normalizedEntry(id, value);
+            if (exists entry.extraction_comments) {
+                foreach string comment in (entry.extraction_comments) {
+                    out += "#. " + comment + "\n";
+                }
+            }
+            if (exists entry.source_refs) {
+                out += "#: " + entry.source_refs.join(" ") + "\n";
+            }
+            if (entry.state != "translated") {
+                out += "#, fuzzy\n";
+                out += "#. qore-state: " + entry.state + "\n";
+            }
+            if (id != entry.source) {
+                out += "msgctxt " + poString(id) + "\n";
+            }
+            out += "msgid " + poString(entry.source) + "\n";
+            if (exists entry.forms) {
+                out += "msgid_plural " + poString(entry.plural_source) + "\n";
+                out += "msgstr[0] " + poString(entry.forms.one ?? "") + "\n";
+                out += "msgstr[1] " + poString(entry.forms.other ?? "") + "\n";
+            } else {
+                out += "msgstr " + poString(entry.message ?? "") + "\n";
+            }
+            out += "\n";
+        }
+        return out;
+    }
+
+    private hash<auto> normalizedEntry(string id, auto value) {
+        if (value.typeCode() == NT_STRING) {
+            return {
+                "source": id,
+                "message": string(value),
+                "state": "translated",
+            };
+        }
+        hash<auto> entry = value;
+        if (!exists entry.source) {
+            entry.source = id;
+        }
+        if (!exists entry.state) {
+            entry.state = "translated";
+        }
+        return entry;
+    }
+
+    private string poQuotedLine(string text) {
+        return poString(text) + "\n";
+    }
+
+    private string poString(string text) {
+        string out = "\"";
+        for (int i = 0; i < text.size(); ++i) {
+            string ch = text.substr(i, 1);
+            switch (ch) {
+                case "\\": out += "\\\\"; break;
+                case "\"": out += "\\\""; break;
+                case "\n": out += "\\n"; break;
+                case "\r": out += "\\r"; break;
+                case "\t": out += "\\t"; break;
+                default: out += ch; break;
+            }
+        }
+        return out + "\"";
+    }
+
+    private hash<auto> parsePo(string data) {
+        list<string> lines = data.split("\n");
+        hash<auto> messages = {};
+        hash<auto!> entry = {};
+        string active = "";
+
+        foreach string raw_line in (lines) {
+            string line = trim(raw_line);
+            if (!line) {
+                *hash<auto!> finished = makePoMessage(entry);
+                if (exists finished) {
+                    messages{finished.id} = finished.value;
+                }
+                entry = {};
+                active = "";
+                continue;
+            }
+            if (line.startsWith("#,")) {
+                entry.flags = splitWords(line.substr(2));
+                continue;
+            }
+            if (line.startsWith("#:")) {
+                entry.source_refs = splitWords(line.substr(2));
+                continue;
+            }
+            if (line.startsWith("#.")) {
+                string comment = trim(line.substr(2));
+                if (comment.startsWith("qore-state:")) {
+                    entry.state = trim(comment.substr(11));
+                } else {
+                    if (!exists entry.extraction_comments) {
+                        entry.extraction_comments = ();
+                    }
+                    entry.extraction_comments += comment;
+                }
+                continue;
+            }
+            if (line.startsWith("msgctxt ")) {
+                entry.context = parsePoLiteral(line.substr(8));
+                active = "context";
+                continue;
+            }
+            if (line.startsWith("msgid_plural ")) {
+                entry.plural = parsePoLiteral(line.substr(13));
+                active = "plural";
+                continue;
+            }
+            if (line.startsWith("msgid ")) {
+                if (exists entry.id) {
+                    *hash<auto!> finished = makePoMessage(entry);
+                    if (exists finished) {
+                        messages{finished.id} = finished.value;
+                    }
+                    entry = {};
+                }
+                entry.id = parsePoLiteral(line.substr(6));
+                active = "id";
+                continue;
+            }
+            if (line.startsWith("msgstr[0] ")) {
+                entry.str0 = parsePoLiteral(line.substr(10));
+                active = "str0";
+                continue;
+            }
+            if (line.startsWith("msgstr[1] ")) {
+                entry.str1 = parsePoLiteral(line.substr(10));
+                active = "str1";
+                continue;
+            }
+            if (line.startsWith("msgstr ")) {
+                entry.str = parsePoLiteral(line.substr(7));
+                active = "str";
+                continue;
+            }
+            if (line.startsWith("\"")) {
+                entry = appendPoContinuation(entry, active, parsePoLiteral(line));
+            }
+        }
+
+        *hash<auto!> finished = makePoMessage(entry);
+        if (exists finished) {
+            messages{finished.id} = finished.value;
+        }
+        return messages;
+    }
+
+    private list<string> splitWords(string s) {
+        list<string> out = ();
+        foreach string part in (trim(s).split(" ")) {
+            part = trim(part);
+            if (part) {
+                out += part;
+            }
+        }
+        return out;
+    }
+
+    private hash<auto!> appendPoContinuation(hash<auto!> entry, string active, string value) {
+        switch (active) {
+            case "context": entry.context += value; break;
+            case "id": entry.id += value; break;
+            case "plural": entry.plural += value; break;
+            case "str0": entry.str0 += value; break;
+            case "str1": entry.str1 += value; break;
+            case "str": entry.str += value; break;
+        }
+        return entry;
+    }
+
+    private *hash<auto!> makePoMessage(hash<auto!> entry) {
+        if (!exists entry.id || (!entry.id && !exists entry.context)) {
+            return NOTHING;
+        }
+
+        string id = entry.context ?? entry.id;
+        string state = entry.state ?? (exists entry.flags && containsString(entry.flags, "fuzzy") ? "fuzzy" : "translated");
+        hash<auto!> value = {};
+        if (exists entry.plural) {
+            value = {
+                "source": entry.id,
+                "plural_source": entry.plural,
+                "forms": {
+                    "one": entry.str0 ?? entry.id,
+                    "other": entry.str1 ?? entry.plural,
+                },
+                "state": state,
+            };
+        } else {
+            value = {
+                "source": entry.id,
+                "message": entry.str ?? entry.id,
+                "state": state,
+            };
+        }
+        if (exists entry.source_refs) {
+            value.source_refs = entry.source_refs;
+        }
+        if (exists entry.extraction_comments) {
+            value.extraction_comments = entry.extraction_comments;
+        }
+        return {"id": id, "value": value};
+    }
+
+    private string parsePoLiteral(string value) {
+        value = trim(value);
+        if (!isQuotedString(value)) {
+            return value;
+        }
+        return decodeQuotedString(value);
+    }
+
+    private bool containsString(list<auto> values, string needle) {
+        foreach auto value in (values) {
+            if (string(value) == needle) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    private writeOutput(*string path, string data) {
+        if (exists path) {
+            File f();
+            f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(data);
+            f.close();
+        } else {
+            print(data);
+            if (!data.endsWith("\n")) {
+                printf("\n");
+            }
+        }
+    }
+}

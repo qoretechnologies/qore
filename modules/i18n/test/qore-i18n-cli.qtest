@@ -1,0 +1,126 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  qore-i18n-cli.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/Util.qm
+
+%try-module astparser
+%define NoAstParser
+%endtry
+
+%try-module i18n
+%define NoI18n
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class QoreI18nCliTest
+
+class QoreI18nCliTest inherits QUnit::Test {
+    private {
+        string tool = get_script_dir() + "/../../../bin/qore-i18n";
+    }
+
+    constructor() : Test("qore-i18n CLI", "1.0") {
+        addTestCase("extract, stats, pseudo, and PO round trip", \cliWorkflowTest());
+        set_return_value(main());
+    }
+
+    cliWorkflowTest() {
+%ifdef NoAstParser
+        testSkip("astparser module not available");
+%endif
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string root = normalize_dir(dirname(get_script_path()) + DirSep + "../../..");
+        string qore_bin = root + DirSep + "build/qore";
+        if (!is_executable(qore_bin)) {
+            qore_bin = root + DirSep + "build-ci/qore";
+        }
+        if (!is_executable(qore_bin)) {
+            testSkip("built qore executable not available");
+            return;
+        }
+
+        string source = tmp_location() + "/qore-i18n-cli-source-" + getpid() + ".q";
+        string catalog = tmp_location() + "/qore-i18n-cli-catalog-" + getpid() + ".json";
+        string pseudo = tmp_location() + "/qore-i18n-cli-pseudo-" + getpid() + ".json";
+        string po = tmp_location() + "/qore-i18n-cli-catalog-" + getpid() + ".po";
+        string imported = tmp_location() + "/qore-i18n-cli-imported-" + getpid() + ".json";
+        on_exit {
+            unlink(source);
+            unlink(catalog);
+            unlink(pseudo);
+            unlink(po);
+            unlink(imported);
+        }
+
+        writeTextFile(source,
+            "%modern\n"
+            "# i18n: greeting shown on dashboard\n"
+            "sub main() { t(\"Hello, {name}\"); tn(count, \"1 file\", \"{count} files\"); }\n");
+
+        runTool(qore_bin, sprintf("extract -o %s %s", shellQuote(catalog), shellQuote(source)));
+        hash<auto> extracted = parse_json(ReadOnlyFile::readTextFile(catalog));
+        assertEq(1, extracted.schema_version);
+        assertEq("Hello, {name}", extracted.locales.root.messages."Hello, {name}".message);
+        assertEq("{count} files", extracted.locales.root.messages."1 file".plural_source);
+
+        I18n::MessageCatalog runtime(catalog);
+        assertEq("Hello, Eva", runtime.t("Hello, {name}", "root", {"name": "Eva"}));
+        assertEq("2 files", runtime.tn(2, "1 file", "{count} files", "root"));
+
+        string stats = runTool(qore_bin, sprintf("stats --format=json %s", shellQuote(catalog)));
+        list<hash<auto>> rows = parse_json(stats);
+        assertEq(1, rows.size());
+        assertEq(2, rows[0].total);
+        assertEq(100, rows[0].coverage);
+
+        runTool(qore_bin, sprintf("pseudo -o %s %s", shellQuote(pseudo), shellQuote(catalog)));
+        hash<auto> pseudo_catalog = parse_json(ReadOnlyFile::readTextFile(pseudo));
+        assertEq("[!! Heelloo, {name} !!]", pseudo_catalog.locales."qps-ploc".messages."Hello, {name}".message);
+
+        runTool(qore_bin, sprintf("export-po -o %s %s", shellQuote(po), shellQuote(catalog)));
+        string po_text = ReadOnlyFile::readTextFile(po);
+        assertTrue(po_text.find("msgid \"Hello, {name}\"") >= 0);
+        assertTrue(po_text.find("msgid_plural \"{count} files\"") >= 0);
+
+        runTool(qore_bin, sprintf("import-po -l cs -o %s %s", shellQuote(imported), shellQuote(po)));
+        hash<auto> imported_catalog = parse_json(ReadOnlyFile::readTextFile(imported));
+        assertEq("Hello, {name}", imported_catalog.locales.cs.messages."Hello, {name}".message);
+        assertEq("{count} files", imported_catalog.locales.cs.messages."1 file".forms.other);
+    }
+
+    private string runTool(string qore_bin, string args) {
+        string module_dir = "build/modules/astparser:build/modules/i18n";
+        if (exists ENV.QORE_MODULE_DIR) {
+            module_dir += ":" + ENV.QORE_MODULE_DIR;
+        }
+        string lib_path = ENV.LD_LIBRARY_PATH ?? "build";
+        return backquote(sprintf("QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s %s 2>&1",
+            shellQuote(module_dir), shellQuote(lib_path), shellQuote(qore_bin), shellQuote(tool), args));
+    }
+
+    private string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+
+    private writeTextFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+}

@@ -370,6 +370,7 @@ set(QORE_BIN_FILES
     bin/qdbg-server
     bin/qdbg-remote
     bin/qdbg-vsc-adapter
+    bin/qore-i18n
     bin/qore-openapi3-gen
     bin/qore-asyncapi-gen
     bin/qdiff

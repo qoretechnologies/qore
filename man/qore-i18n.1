@@ -1,0 +1,98 @@
+.\" qore-i18n.1 - man page for qore-i18n
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QORE-I18N 1 "2026 May 16" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qore\-i18n \- manage Qore native internationalization catalogs
+.SH SYNOPSIS
+.B qore\-i18n
+\fIcommand\fP
+[\fIoptions\fP]
+\fIfile\fP...
+.SH DESCRIPTION
+\fBqore\-i18n\fR manages Qore native i18n catalog files.  The tool can
+extract static \fBt()\fP, \fBtn()\fP, and \fBtc()\fP marker calls from Qore
+source using the \fBastparser\fP module, report catalog coverage, generate an
+ASCII pseudolocale, and exchange simple messages through gettext PO files.
+.SH COMMANDS
+.TP
+.B extract
+Extract static marker calls into a native JSON catalog.
+.TP
+.B stats
+Report translated, fuzzy, needs-review, and stale counts per locale.
+.TP
+.B pseudo
+Generate a pseudolocale catalog while preserving placeholders.
+.TP
+.B export-po
+Export one catalog locale to simple gettext PO interchange.
+.TP
+.B import-po
+Import a simple gettext PO file into a native JSON catalog.
+.SH EXTRACT OPTIONS
+.TP
+.BR \-o ", " \-\-output =\fIfile\fP
+Write native catalog JSON to \fIfile\fP (default: stdout).
+.TP
+.BR \-l ", " \-\-locale =\fIlocale\fP
+Output locale key (default: \fBroot\fP).
+.TP
+.BR \-m ", " \-\-marker =\fIname\fP
+Marker to extract; repeatable (default: \fBt\fP, \fBtn\fP, \fBtc\fP).
+.TP
+.BR \-\-fail\-dynamic
+Fail if a marker call uses a dynamic source or id argument.
+.SH STATS OPTIONS
+.TP
+.BR \-l ", " \-\-locale =\fIlocale\fP
+Locale to report; repeatable (default: all locales).
+.TP
+.BR \-f ", " \-\-format =\fIformat\fP
+Output format: \fBtext\fP (default) or \fBjson\fP.
+.TP
+.BR \-\-fail\-under =\fIn\fP
+Exit with status 2 when translated coverage is below \fIn\fP percent.
+.SH PSEUDO OPTIONS
+.TP
+.BR \-\-from =\fIlocale\fP
+Source locale to pseudo-localize (default: \fBroot\fP).
+.TP
+.BR \-l ", " \-\-locale =\fIlocale\fP
+Pseudolocale name (default: \fBqps-ploc\fP).
+.TP
+.BR \-o ", " \-\-output =\fIfile\fP
+Write native catalog JSON to \fIfile\fP (default: stdout).
+.SH PO OPTIONS
+.TP
+.BR \-l ", " \-\-locale =\fIlocale\fP
+Locale to export or import (default: \fBroot\fP).
+.TP
+.BR \-o ", " \-\-output =\fIfile\fP
+Write output to \fIfile\fP (default: stdout).
+.SH EXAMPLES
+Extract a root catalog:
+.RS
+.B qore\-i18n extract \-o catalogs/root.json src/app.q
+.RE
+.PP
+Fail CI below 95 percent translated coverage:
+.RS
+.B qore\-i18n stats \-\-fail\-under=95 catalogs/cs.json
+.RE
+.PP
+Generate a pseudolocale:
+.RS
+.B qore\-i18n pseudo \-o catalogs/qps\-ploc.json catalogs/root.json
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR qore\-openapi3\-gen (1),
+.BR qore\-asyncapi\-gen (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.
