@@ -890,6 +890,58 @@ class ReflectionTest inherits QUnit::Test {
             ("warning_ms", "warning_bytes", "queue", "argument", "min_ms"));
         assertNamedClassMethodVariantCount("FtpClient", "setTimeout", ("timeout_ms",));
         assertNamedClassMethodVariantCount("FtpClient", "sendControlMessage", ("command", "argument"));
+        assertNamedConstructorVariantCount("HTTPClient", ("options",));
+        assertNamedClassMethodVariantCount("HTTPClient", "addDefaultHeaders", ("headers",));
+        assertNamedClassMethodVariantCount("HTTPClient", "getURL", ("code",));
+        assertNamedClassMethodVariantCount("HTTPClient", "hasHttp2StreamData", ("stream_id",));
+        assertNamedClassMethodVariantCount("HTTPClient", "isDataAvailable", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "isHttp2DataAvailable", ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "isHttp2StreamClosed", ("stream_id",));
+        assertNamedClassMethodVariantCount("HTTPClient", "isHttp3StreamClosed", ("stream_id",));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHTTPChunk", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHTTPChunkedBody", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHTTPChunkedBodyBinary", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHttp2StreamData", ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "readHttp3StreamData", ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "readServerSentEvent", ("content_encoding", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "recvBinary", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendHttp2Connect",
+            ("path", "headers", "protocol", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendHttp2StreamData",
+            ("stream_id", "data", "end_stream", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendHttp3Connect",
+            ("path", "headers", "protocol", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendHttp3StreamData",
+            ("stream_id", "data", "end_stream", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "setAssumedEncoding", ("encoding",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setConnectTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setConnectionPath", ("uri_path",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setDefaultPath", ("path",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setEncoding", ("encoding",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setEncodingPassthru", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setErrorPassthru", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setEventQueue", ("queue", "argument", "with_data"));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHTTPVersion", ("version",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp2Enabled", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp2Mode", ("mode",), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp2Settings", ("settings",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp2StreamPriority",
+            ("stream_id", "weight", "dependency", "exclusive"));
+        assertNamedClassMethodVariantCount("HTTPClient", "setHttp3Mode", ("mode",), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "setMaxRedirects", ("max_redirects",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setNoDelay", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setPreEncodedUrls", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setProxySecure", ("secure",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setProxyURL", ("url",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setProxyUserPassword", ("username", "password"));
+        assertNamedClassMethodVariantCount("HTTPClient", "setRedirectPassthru", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setSecure", ("secure",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setURL", ("url",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setUseConnectionManager", ("enabled",));
+        assertNamedClassMethodVariantCount("HTTPClient", "setUserPassword", ("username", "password"));
+        assertNamedClassMethodVariantCount("HTTPClient", "setWarningQueue",
+            ("warning_ms", "warning_bytes", "queue", "argument", "min_ms"));
         foreach string class_name in (("AbstractDatasource", "Datasource", "DatasourcePool")) {
             assertNamedClassMethodVariantCount(class_name, "vexec", ("sql", "arguments"));
             assertNamedClassMethodVariantCount(class_name, "execRaw", ("sql",));

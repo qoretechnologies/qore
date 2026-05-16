@@ -143,6 +143,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
             NOTHING);
         addTestCase("reviewed HTTP readiness builtin opt-in", \reviewedHttpReadinessBuiltinOptIn(),
             NOTHING);
+        addTestCase("reviewed HTTPClient class builtin opt-in", \reviewedHttpClientClassBuiltinOptIn(),
+            NOTHING);
         addTestCase("reviewed SQL class builtin opt-in", \reviewedSqlClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed async I/O controller builtin opt-in",
             \reviewedAsyncIoControllerBuiltinOptIn(), NOTHING);
@@ -800,6 +802,104 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "pass": "p",
             "db": "db",
         )), "Datasource::makeConfigString exposes config");
+    }
+
+    reviewedHttpClientClassBuiltinOptIn() {
+        HTTPClient client = new HTTPClient(options: {
+            "url": "http://example.com/base",
+            "timeout": 1s,
+            "connect_timeout": 1s,
+        });
+
+        client.setHTTPVersion(version: "1.1");
+        assertEq("1.1", client.getHTTPVersion(), "HTTPClient setHTTPVersion exposes version");
+
+        client.setHttp2Enabled(enabled: True);
+        assertTrue(client.isHttp2Enabled(), "HTTPClient setHttp2Enabled exposes enabled");
+        client.setHttp2Mode(mode: "disabled");
+        assertEq("disabled", client.getHttp2Mode(), "HTTPClient setHttp2Mode string variant exposes mode");
+        client.setHttp2Mode(mode: HTTP2Mode::Auto);
+        assertEq("auto", client.getHttp2Mode(), "HTTPClient setHttp2Mode enum variant exposes mode");
+
+        client.setHttp3Mode(mode: "disabled");
+        assertEq("disabled", client.getHttp3Mode(), "HTTPClient setHttp3Mode string variant exposes mode");
+        client.setHttp3Mode(mode: HTTP3Mode::Auto);
+        assertEq("auto", client.getHttp3Mode(), "HTTPClient setHttp3Mode enum variant exposes mode");
+
+        client.setHttp2Settings(settings: NOTHING);
+        client.setTimeout(timeout_ms: 1234);
+        assertEq(1234, client.getTimeout(), "HTTPClient setTimeout exposes timeout_ms");
+        client.setConnectTimeout(timeout_ms: 5678);
+        assertEq(5678, client.getConnectTimeout(), "HTTPClient setConnectTimeout exposes timeout_ms");
+        client.setEncoding(encoding: "UTF-8");
+        assertEq("UTF-8", client.getEncoding(), "HTTPClient setEncoding exposes encoding");
+        client.setAssumedEncoding(encoding: "utf-8");
+        assertEq("utf-8", client.getAssumedEncoding(), "HTTPClient setAssumedEncoding exposes encoding");
+
+        client.setURL(url: "http://example.com/next");
+        assertTrue(client.getURL(code: URL_NORMAL).startsWith(prefix: "http://example.com/next"),
+            "HTTPClient setURL and getURL expose url and code");
+        client.setProxyURL(url: "http://proxy.example.com:8080/");
+        assertTrue(client.getProxyURL().startsWith(prefix: "http://proxy.example.com:8080"),
+            "HTTPClient setProxyURL exposes url");
+        client.setProxySecure(secure: True);
+        assertTrue(client.isProxySecure(), "HTTPClient setProxySecure exposes secure");
+        client.setSecure(secure: False);
+
+        client.setMaxRedirects(max_redirects: 2);
+        assertEq(2, client.getMaxRedirects(), "HTTPClient setMaxRedirects exposes max_redirects");
+        client.setUseConnectionManager(enabled: False);
+        assertTrue(client.getUseConnectionManager(), "HTTPClient setUseConnectionManager exposes enabled");
+        client.setNoDelay(enabled: True);
+        assertTrue(client.getNoDelay(), "HTTPClient setNoDelay exposes enabled");
+
+        client.setUserPassword(username: "user", password: "pass");
+        assertEq("user", client.getUsername(), "HTTPClient setUserPassword exposes username");
+        assertEq("pass", client.getPassword(), "HTTPClient setUserPassword exposes password");
+        client.setProxyUserPassword(username: "proxy_user", password: "proxy_pass");
+        assertEq("proxy_user", client.getProxyUsername(), "HTTPClient setProxyUserPassword exposes username");
+        assertEq("proxy_pass", client.getProxyPassword(), "HTTPClient setProxyUserPassword exposes password");
+
+        client.addDefaultHeaders(headers: {"X-Named-Args": "1"});
+        assertEq("1", client.getDefaultHeaders()."X-Named-Args",
+            "HTTPClient addDefaultHeaders exposes headers");
+        client.setDefaultPath(path: "/default");
+        assertEq("/default", client.getDefaultPath(), "HTTPClient setDefaultPath exposes path");
+        client.setConnectionPath(uri_path: "/connection");
+        assertEq("/connection", client.getConnectionPath(), "HTTPClient setConnectionPath exposes uri_path");
+
+        client.setErrorPassthru(enabled: True);
+        assertTrue(client.getErrorPassthru(), "HTTPClient setErrorPassthru exposes enabled");
+        client.setRedirectPassthru(enabled: True);
+        assertTrue(client.getRedirectPassthru(), "HTTPClient setRedirectPassthru exposes enabled");
+        client.setEncodingPassthru(enabled: True);
+        assertTrue(client.getEncodingPassthru(), "HTTPClient setEncodingPassthru exposes enabled");
+        client.setPreEncodedUrls(enabled: True);
+        assertTrue(client.getPreEncodedUrls(), "HTTPClient setPreEncodedUrls exposes enabled");
+
+        Queue queue();
+        client.setEventQueue(queue: queue, argument: "event", with_data: False);
+        client.setWarningQueue(warning_ms: 1, warning_bytes: 1024, queue: queue, argument: "warning",
+            min_ms: 1ms);
+        client.clearWarningQueue();
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub httpclient_named_unexecuted() { HTTPClient hc(); hash<auto> info; binary data = <00>; "
+            "hc.setHttp2StreamPriority(stream_id: 1, weight: 16, dependency: 0, exclusive: False); "
+            "hc.sendHttp2Connect(path: \"/chat\", headers: NOTHING, protocol: \"websocket\", info: \\info); "
+            "hc.sendHttp3Connect(path: \"/chat\", headers: NOTHING, protocol: \"websocket\", info: \\info); "
+            "hc.sendHttp2StreamData(stream_id: 1, data: data, end_stream: False, timeout_ms: 0); "
+            "hc.sendHttp3StreamData(stream_id: 1, data: data, end_stream: False, timeout_ms: 0); "
+            "hc.readHttp2StreamData(stream_id: 1, timeout_ms: 0); "
+            "hc.readHttp3StreamData(stream_id: 1, timeout_ms: 0); "
+            "hc.hasHttp2StreamData(stream_id: 1); "
+            "hc.isHttp2StreamClosed(stream_id: 1); hc.isHttp3StreamClosed(stream_id: 1); "
+            "hc.isHttp2DataAvailable(stream_id: 1, timeout_ms: 0); hc.isDataAvailable(timeout_ms: 0); "
+            "hc.readHTTPChunk(timeout_ms: 0); hc.readHTTPChunkedBody(timeout_ms: 0); "
+            "hc.readHTTPChunkedBodyBinary(timeout_ms: 0); "
+            "hc.readServerSentEvent(content_encoding: \"gzip\", timeout_ms: 0); "
+            "hc.recvBinary(size: 1, timeout_ms: 0); }",
+            "httpclient-class-named");
     }
 
     reviewedAsyncIoControllerBuiltinOptIn() {

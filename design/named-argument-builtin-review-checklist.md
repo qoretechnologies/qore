@@ -357,6 +357,19 @@ These examples are from the core migration and should be reused as precedent:
   `getAsString(file, opts.encoding)`, `put(dynamic_stream, file)`,
   `FtpClient(options.url)`, `setTimeout(options."timeout")`, and
   `FtpPoller` calls through its `ftp` member.
+- HTTPClient constructor and configuration APIs should expose stable public
+  names rather than implementation abbreviations: `options`, `headers`,
+  `version`, `enabled`, `secure`, `username`, `password`, `argument`,
+  `warning_bytes`, `max_redirects`, and `uri_path`. HTTP/2 and HTTP/3 stream
+  helpers use `stream_id`, `data`, `end_stream`, `timeout_ms`, `protocol`,
+  `info`, and `content_encoding`. Passive read/status methods can opt in with
+  these names, but keep the timeout-only `readServerSentEvent(timeout_ms)`
+  compatibility overload positional because it is ambiguous with
+  `readServerSentEvent(content_encoding, timeout_ms)` in named-call parsing.
+  Keep the main request-sending and callback overloads (`send`, `post`,
+  `startPollSendRecv`, `sendWithCallbacks`, `sendChunked`, etc.) as a separate
+  review batch until callback names, stream roles, and `getbody`/response-body
+  semantics are renamed consistently.
 - SQL/Datasource APIs should expose database connection roles and list-taking
   bind helpers clearly: use `username`, `password`, `database`, `description`,
   `options`, `queue`, `argument`, `option`, `value`, `auto_commit`,
