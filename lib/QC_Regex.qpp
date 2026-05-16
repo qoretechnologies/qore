@@ -74,7 +74,7 @@ Regex r_multi("^line", RE_MultiLine | RE_Caseless);
     @throw REGEX-COMPILATION-ERROR the pattern is not a valid regular expression
     @throw REGEX-OPTION-ERROR the options contain invalid option bits
  */
-Regex::constructor(string pattern, softint options = 0) {
+Regex::constructor(string pattern, softint options = 0) [flags=NAMED_ARGS] {
     SimpleRefHolder<QoreRegexClass> regex(new QoreRegexClass(*pattern, options, xsink));
     if (*xsink) {
         return;
@@ -95,7 +95,7 @@ Regex::copy() {
 }
 
 //! Tests if the given string matches the compiled pattern
-/** @param str the string to test against the pattern
+/** @param subject the string to test against the pattern
     @return @ref True if the string matches the pattern, @ref False otherwise
 
     @par Example:
@@ -108,12 +108,12 @@ if (r.match("555-1234")) {
 
     @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
  */
-bool Regex::match(string str) [flags=RET_VALUE_ONLY] {
-    return r->match(str, xsink);
+bool Regex::match(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return r->match(subject, xsink);
 }
 
 //! Extracts captured groups from the string using the compiled pattern
-/** @param str the string to extract from
+/** @param subject the string to extract from
     @return a list of captured groups, or @ref nothing if the pattern does not match
 
     @par Example:
@@ -125,8 +125,8 @@ Regex r("(\\w+)@(\\w+)\\.(\\w+)");
 
     @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
  */
-*list<*string> Regex::extractGroups(string str) [flags=RET_VALUE_ONLY] {
-    return r->extract(str, xsink);
+*list<*string> Regex::extractGroups(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return r->extract(subject, xsink);
 }
 
 //! Returns the compiled pattern string
@@ -156,7 +156,7 @@ int Regex::getOptions() [flags=CONSTANT] {
 }
 
 //! Returns the number of times the pattern matches in the given string
-/** @param str the string to search for matches
+/** @param subject the string to search for matches
 
     @return the number of non-overlapping matches found; 0 if no match
 
@@ -171,8 +171,8 @@ int n = r.count("abc 123 def 456"); # returns 2
 
     @since %Qore 2.3
 */
-int Regex::count(string str) [flags=RET_VALUE_ONLY] {
-    return r->countMatches(str, xsink);
+int Regex::count(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return r->countMatches(subject, xsink);
 }
 
 //! Extracts named capture groups from a string and returns a hash keyed by group name
@@ -181,7 +181,7 @@ int Regex::count(string str) [flags=RET_VALUE_ONLY] {
 
     Named groups are defined with \c (?<name>...) or \c (?P<name>...) syntax.
 
-    @param str the string to match against
+    @param subject the string to match against
 
     @return for non-global: \c *hash<string, *string> where keys are group names and values are matched text
     (or @ref nothing for unmatched optional groups); for global: \c *list<hash<string, *string>>; returns
@@ -199,8 +199,8 @@ auto h = r.extractNamedGroups("2026-04-08");
 
     @since %Qore 2.3
 */
-auto Regex::extractNamedGroups(string str) [flags=RET_VALUE_ONLY] {
-    return r->extractNamedGroups(str, xsink);
+auto Regex::extractNamedGroups(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return r->extractNamedGroups(subject, xsink);
 }
 
 //! Returns detailed match information including positions, groups, and named groups
@@ -208,7 +208,7 @@ auto Regex::extractNamedGroups(string str) [flags=RET_VALUE_ONLY] {
     Without the @ref RE_Global option, returns at most one match. With @ref RE_Global,
     returns all non-overlapping matches.
 
-    @param str the string to match against
+    @param subject the string to match against
 
     @return a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes; @ref nothing if no match
 
@@ -225,6 +225,6 @@ Regex r("(?<word>\\w+)", RE_Global);
 
     @since %Qore 2.3
 */
-*list<hash<RegexMatchInfo>> Regex::extractDetailed(string str) [flags=RET_VALUE_ONLY] {
-    return r->extractDetailed(str, xsink);
+*list<hash<RegexMatchInfo>> Regex::extractDetailed(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return r->extractDetailed(subject, xsink);
 }

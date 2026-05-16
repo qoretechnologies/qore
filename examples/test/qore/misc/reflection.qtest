@@ -759,6 +759,18 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedConstructorVariantCount("StringRegexSplitIterator",
             ("source", "separator_pattern", "options", "with_separator"));
 
+        foreach string class_name in (("Regex", "RegexExtract")) {
+            assertNamedConstructorVariantCount(class_name, ("pattern", "options"));
+            foreach string method_name in (("match", "count", "extractGroups", "extractNamedGroups",
+                    "extractDetailed")) {
+                assertNamedClassMethodVariantCount(class_name, method_name, ("subject",));
+            }
+        }
+        assertNamedConstructorVariantCount("RegexSubst", ("pattern", "replacement", "options"));
+        assertNamedClassMethodVariantCount("RegexSubst", "subst", ("subject",));
+        assertNamedClassMethodVariantCount("RegexSubst", "subst", ("subject", "replacement"));
+        assertNamedClassMethodVariantCount("RegexSubst", "subst", ("subject", "callback"));
+
         assertNamedPseudoMethodVariantCount(ValuePseudoClass, "fullType", ("with_namespaces",));
         assertNamedPseudoMethodVariantCount(ValuePseudoClass, "toString", ("encoding",));
         assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "find", ("pattern", "byte_offset"));

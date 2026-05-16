@@ -121,6 +121,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
         addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed regex class builtin opt-in", \reviewedRegexClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed pseudo-method opt-in", \reviewedPseudoMethodOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
@@ -676,6 +677,40 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertTrue(regex_it.next(), "StringRegexSplitIterator named constructor creates iterator");
         assertEq("left", regex_it.getValue(),
             "StringRegexSplitIterator exposes source and separator_pattern");
+    }
+
+    reviewedRegexClassBuiltinOptIn() {
+        Regex regex = new Regex(pattern: "([a-z]+)(\\d+)", options: 0);
+        assertTrue(regex.match(subject: "alpha42"), "Regex constructor and match expose pattern and subject");
+        assertEq(2, regex.count(subject: "alpha42 beta7"), "Regex count exposes subject");
+        assertEq(("alpha", "42"), regex.extractGroups(subject: "alpha42"),
+            "Regex extractGroups exposes subject");
+
+        Regex named_regex = new Regex(pattern: "(?<word>[a-z]+)", options: 0);
+        auto named = named_regex.extractNamedGroups(subject: "alpha");
+        assertEq("alpha", named.word, "Regex extractNamedGroups exposes subject");
+        auto detailed = named_regex.extractDetailed(subject: "alpha");
+        assertEq("alpha", detailed[0].match, "Regex extractDetailed exposes subject");
+
+        RegexExtract extractor = new RegexExtract(pattern: "([a-z]+)(\\d+)", options: 0);
+        assertTrue(extractor.match(subject: "beta7"), "RegexExtract constructor and match expose subject");
+        assertEq(("beta", "7"), extractor.extractGroups(subject: "beta7"),
+            "RegexExtract extractGroups exposes subject");
+        assertEq(2, extractor.count(subject: "beta7 gamma8"), "RegexExtract count exposes subject");
+
+        RegexExtract named_extractor = new RegexExtract(pattern: "(?<word>[a-z]+)", options: 0);
+        named = named_extractor.extractNamedGroups(subject: "beta");
+        assertEq("beta", named.word, "RegexExtract extractNamedGroups exposes subject");
+        detailed = named_extractor.extractDetailed(subject: "beta");
+        assertEq("beta", detailed[0].match, "RegexExtract extractDetailed exposes subject");
+
+        RegexSubst subst = new RegexSubst(pattern: "\\d+", replacement: "NUM", options: RE_Global);
+        assertEq("aNUMbNUM", subst.subst(subject: "a1b2"), "RegexSubst default replacement exposes subject");
+        assertEq("aXbX", subst.subst(subject: "a1b2", replacement: "X"),
+            "RegexSubst replacement override exposes replacement");
+        assertEq("a[1]b[2]", subst.subst(subject: "a1b2",
+            callback: string sub(hash<RegexMatchInfo> m) { return "[" + m.match + "]"; }),
+            "RegexSubst callback replacement exposes callback");
     }
 
     reviewedPseudoMethodOptIn() {

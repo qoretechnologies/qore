@@ -91,7 +91,7 @@ RegexSubst r_both("error", "warning", RE_Caseless | RE_Global);
     @throw REGEX-COMPILATION-ERROR the pattern is not a valid regular expression
     @throw REGEX-OPTION-ERROR the options contain invalid option bits
  */
-RegexSubst::constructor(string pattern, string replacement, softint options = 0) {
+RegexSubst::constructor(string pattern, string replacement, softint options = 0) [flags=NAMED_ARGS] {
     SimpleRefHolder<QoreRegexSubstClass> regex(new QoreRegexSubstClass(*pattern, *replacement, options, xsink));
     if (*xsink) {
         return;
@@ -112,7 +112,7 @@ RegexSubst::copy() {
 }
 
 //! Performs substitution on the given string using the default replacement
-/** @param str the string to perform substitution on
+/** @param subject the string to perform substitution on
     @return a new string with the substitution(s) applied
 
     @par Example:
@@ -125,12 +125,12 @@ string result = r.subst("test 123 and 456");
     @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
     @throw REGEX-SUBST-ERROR infinite recursion detected (empty pattern with global flag)
  */
-string RegexSubst::subst(string str) [flags=RET_VALUE_ONLY] {
-    return r->subst(str, xsink);
+string RegexSubst::subst(string subject) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return r->subst(subject, xsink);
 }
 
 //! Performs substitution on the given string using a different replacement
-/** @param str the string to perform substitution on
+/** @param subject the string to perform substitution on
     @param replacement the replacement string to use instead of the default
 
     @return a new string with the substitution(s) applied
@@ -146,8 +146,8 @@ string result = r.subst("test 123", "XXX");
     @throw ENCODING-CONVERSION-ERROR the string could not be converted to UTF-8
     @throw REGEX-SUBST-ERROR infinite recursion detected (empty pattern with global flag)
  */
-string RegexSubst::subst(string str, string replacement) [flags=RET_VALUE_ONLY] {
-    return r->subst(str, replacement, xsink);
+string RegexSubst::subst(string subject, string replacement) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return r->subst(subject, replacement, xsink);
 }
 
 //! Returns the compiled pattern string
@@ -193,7 +193,7 @@ int RegexSubst::getOptions() [flags=CONSTANT] {
 /** The callback receives a @ref Qore::RegexMatchInfo "RegexMatchInfo" hash and must return a string to use
     as the replacement text. With the @ref RE_Global option, the callback is called for each match.
 
-    @param str the string to perform substitutions on
+    @param subject the string to perform substitutions on
     @param callback a callback that takes a @ref Qore::RegexMatchInfo "RegexMatchInfo" hash and returns the
     replacement string
 
@@ -214,6 +214,6 @@ string result = r.subst("abc 123 def 456", string sub (hash<RegexMatchInfo> m) {
 
     @since %Qore 2.3
 */
-string RegexSubst::subst(string str, code<string(hash<RegexMatchInfo>)> callback) [flags=RET_VALUE_ONLY] {
-    return r->substCallback(str, callback, xsink);
+string RegexSubst::subst(string subject, code<string(hash<RegexMatchInfo>)> callback) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return r->substCallback(subject, callback, xsink);
 }

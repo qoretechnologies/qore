@@ -112,6 +112,9 @@ Keep consistent names across related APIs:
 - Crypto: `algorithm`, `digest`, `key`, `iv`, `mac`, `mac_size`, `aad`.
 - Time: `date_value`, `seconds`, `milliseconds`, `microseconds`.
 - Object helpers: `object_value`, `class_name`, `method`, `arguments`.
+- Regex helpers: `pattern`, `replacement`, `options`, `callback`, and
+  `subject` for the text being matched, extracted, searched, or substituted.
+  Avoid exposing internal names such as `str`.
 
 If a rename is needed, update all of the following in the same commit:
 
