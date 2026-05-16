@@ -675,6 +675,13 @@ public class NamedArgumentsTest inherits QUnit::Test {
         promise.set(value: "resolved");
         assertEq("resolved", future.get(timeout_ms: 0), "Promise set and Future get expose names");
 
+        ThreadPool thread_pool = new ThreadPool(max_threads: 2, min_idle_threads: 0, max_idle_threads: 1,
+            idle_release_timeout: 1s);
+        Counter thread_pool_counter(1);
+        thread_pool.submit(task: sub () { thread_pool_counter.dec(); }, cancel_callback: NOTHING);
+        assertEq(0, thread_pool_counter.waitForZero(timeout_ms: 10s), "ThreadPool submit exposes task");
+        thread_pool.stopWait();
+
         Mutex cond_mutex();
         Condition cond();
         cond_mutex.lock();

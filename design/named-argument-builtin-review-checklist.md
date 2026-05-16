@@ -326,5 +326,9 @@ These examples are from the core migration and should be reused as precedent:
   `description` for exception text, `permits` for semaphore counts,
   `semaphore` for `AutoSemaphore`, and `lock` for read/write lock guard
   constructors.
+- ThreadPool uses explicit capacity and lifecycle names:
+  `max_threads`, `min_idle_threads`, `max_idle_threads`,
+  `idle_release_timeout`, `task`, and `cancel_callback`. Do not expose terse
+  implementation names such as `max`, `minidle`, `maxidle`, or `release_ms`.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.
