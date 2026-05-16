@@ -175,7 +175,7 @@ const Closure = "closure";
 
 //! Converts the argument to a boolean value
 /**
-    @param arg the argument to convert to a boolean
+    @param value the argument to convert to a boolean
 
     @return the boolean value corresponding to the argument
 
@@ -186,8 +186,8 @@ bool b = boolean(1); # returns True
 
     @note this function behaves differently when @ref strict-bool-eval "%strict-bool-eval" is set
 */
-bool boolean(any arg) [flags=CONSTANT] {
-   return arg.getAsBool();
+bool boolean(any value) [flags=CONSTANT,NAMED_ARGS] {
+   return value.getAsBool();
 }
 
 //! Converts the string to an integer value with respect to the <b>base</b>.
@@ -195,7 +195,7 @@ bool boolean(any arg) [flags=CONSTANT] {
     Base 0 means to interpret as a code literal, so that the actual base is 8, 10, or 16.\n
     (Does the same as \link <string>::toInt(int base) \endlink).
 
-    @param str the string to convert to an integer
+    @param value the string to convert to an integer
     @param base the base of the integer in the string; this value must be 0 or 2 - 36 inclusive or an \c INVALID-BASE exception will be thrown
 
     @return the integer value corresponding to the arguments
@@ -219,15 +219,15 @@ int("0x21", 0);  // returns 33 (base = 16)
 
     @since %Qore 0.8.5, this variant with the <b>base</b> argument is supported
   */
-int int(string str, int base = 10) [flags=RET_VALUE_ONLY] {
+int int(string value, int base = 10) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (base < 0 || base == 1 || base > 36)
         return xsink->raiseException("INVALID-BASE", "base " QLLD " is invalid; base must be 0 or 2 - 36 inclusive", base);
-    return strtoll(str->getBuffer(), 0, (int)base);
+    return strtoll(value->getBuffer(), 0, (int)base);
 }
 
 //! Converts the argument to an integer value
 /**
-    @param i the argument to convert to an integer; @ref NULL values are converted to 0
+    @param value the argument to convert to an integer; @ref NULL values are converted to 0
 
     @return the integer value corresponding to the argument; 0 if @ref NULL is passed
 
@@ -237,13 +237,13 @@ int i = int("1");
 int j = int(NULL); // returns 0
     @endcode
 */
-int int(*softint i) [flags=CONSTANT] {
-    return i;
+int int(*softint value) [flags=CONSTANT,NAMED_ARGS] {
+    return value;
 }
 
 //! Converts the argument to a floating-point (float) value
 /**
-    @param f the argument to convert to a float
+    @param value the argument to convert to a float
 
     @return the float value corresponding to the argument
 
@@ -252,8 +252,8 @@ int int(*softint i) [flags=CONSTANT] {
 float i = float("3.1415");
     @endcode
 */
-float float(softfloat f) [flags=CONSTANT] {
-   return f;
+float float(softfloat value) [flags=CONSTANT,NAMED_ARGS] {
+   return value;
 }
 
 //! Always returns 0.0
@@ -267,7 +267,7 @@ float float() [flags=CONSTANT] {
 
 //! Converts the argument to a @ref number "number" value
 /**
-    @param n the argument to convert to a @ref number "number"
+    @param value the argument to convert to a @ref number "number"
 
     @return the @ref number "number" value corresponding to the argument
 
@@ -276,8 +276,8 @@ float float() [flags=CONSTANT] {
 number n = number("2.23040945718005e35");
     @endcode
 */
-number number(softnumber n) [flags=CONSTANT] {
-   return n->refSelf();
+number number(softnumber value) [flags=CONSTANT,NAMED_ARGS] {
+   return value->refSelf();
 }
 
 //! Always returns 0.0
@@ -291,8 +291,8 @@ number number() [flags=CONSTANT] {
 
 //! Converts the argument to a string
 /**
-    @param str the argument to convert to a string
-    @param enc the encoding of the string returned
+    @param value the argument to convert to a string
+    @param encoding the encoding of the string returned
 
     @return the string value corresponding to the argument(s)
 
@@ -301,15 +301,15 @@ number number() [flags=CONSTANT] {
 string str = string(100);
     @endcode
 
-    @since the \c enc argument was added in %Qore 0.8.12
+    @since the \c encoding argument was added in %Qore 0.8.12
 */
-string string(softstring str, *string enc) [flags=CONSTANT] {
-   if (enc) {
-      const QoreEncoding* e = QEM.findCreate(enc->getBuffer());
-      if (e != str->getEncoding())
-         return str->convertEncoding(e, xsink);
+string string(softstring value, *string encoding) [flags=CONSTANT,NAMED_ARGS] {
+   if (encoding) {
+      const QoreEncoding* e = QEM.findCreate(encoding->getBuffer());
+      if (e != value->getEncoding())
+         return value->convertEncoding(e, xsink);
    }
-   return str->refSelf();
+   return value->refSelf();
 }
 
 //! Always returns an empty string
@@ -335,14 +335,18 @@ binary binary() [flags=CONSTANT] {
 //! Always returns an empty binary object (of zero length)
 /** The binary() function is used for type conversions, therefore this variant is not tagged with @ref NOOP
 
+    @param value ignored @ref NULL value
+
     @see binary(softstring)
 */
-binary binary(null[doc] x) [flags=CONSTANT] {
+binary binary(null[doc] value) [flags=CONSTANT,NAMED_ARGS] {
    return new BinaryNode;
 }
 
 //! Returns a binary data type of the string passed; data types other than string will first be converted to a string and then returned as binary data
 /** This function is useful if, for example, a string type actually contains binary data; using this function will ensure that all data in the string (even if it contains embedded nulls) is maintained in the binary object (Qore strings must normally be terminated by a single null, so some %Qore string operations do not work on binary data with embedded nulls).
+
+    @param value the string value to convert to binary data
 
     @par Example:
     @code{.py}
@@ -351,17 +355,19 @@ binary b = binary(str);
 
     @see <string>::toBinary()
 */
-binary binary(softstring str) [flags=CONSTANT] {
+binary binary(softstring value) [flags=CONSTANT,NAMED_ARGS] {
    BinaryNode *b = new BinaryNode;
-   b->append(str->getBuffer(), str->strlen());
+   b->append(value->getBuffer(), value->strlen());
    return b;
 }
 
 //! Always returns the same binary object passed
 /** The binary() function is used for type conversions, therefore this variant is not tagged with @ref NOOP
+
+    @param value the binary object to return
 */
-binary binary(binary bin) [flags=CONSTANT] {
-   return bin->refSelf();
+binary binary(binary value) [flags=CONSTANT,NAMED_ARGS] {
+   return value->refSelf();
 }
 
 //! Returns a list of the arguments passed at the top level
@@ -400,13 +406,13 @@ list<auto> list(...) [flags=CONSTANT] {
 hash<auto> h = hash(obj);
     @endcode
 */
-hash<auto> hash(object obj) [flags=RET_VALUE_ONLY] {
+hash<auto> hash(object obj) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    return qore_object_private::get(*obj)->getRuntimeMemberHash(xsink);
 }
 
 //! Returns a hash by taking even numbered list elements (starting with 0) and converting them to strings for the hash keys, and the odd numbered elements following the keys as the key value
 /**
-    @param l the list to process in a manner similar to perl's hash initialization
+    @param value the list to process in a manner similar to perl's hash initialization
 
     @return a hash by taking even numbered list elements (starting with 0) and converting them to strings for the hash keys, and the odd numbered elements following the keys as the key value
 
@@ -415,11 +421,11 @@ hash<auto> hash(object obj) [flags=RET_VALUE_ONLY] {
 hash<auto> h = hash(("a", 1, "b", "two"));
     @endcode
 */
-hash<auto> hash(list<auto> l) [flags=RET_VALUE_ONLY] {
+hash<auto> hash(list<auto> value) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
 
     bool valid = true;
-    ConstListIterator li(l);
+    ConstListIterator li(value);
     while (valid && ((valid = li.next()))) {
         QoreStringValueHelper str(li.getValue());
         h->setKeyValue(str->c_str(), ((valid = li.next())) ? li.getReferencedValue() : QoreValue(), xsink);
@@ -442,7 +448,7 @@ hash<auto> hash(list<auto> l) [flags=RET_VALUE_ONLY] {
 hash<auto> h = hash(keysv, values);
     @endcode
 */
-hash<auto> hash(list<softstring> keys, list<auto> values) [flags=RET_VALUE_ONLY] {
+hash<auto> hash(list<softstring> keys, list<auto> values) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
 
     ConstListIterator ki(keys);
@@ -468,15 +474,15 @@ hash<auto> hash(list<softstring> keys, list<auto> values) [flags=RET_VALUE_ONLY]
 hash h2 = hash(h1);
     @endcode
 
-    @param h the hash to return
+    @param value the hash to return
 
     @return the same hash passed as an argument with all complex types stripped
 
     @since
     - %Qore 0.8.13 this function was modified to remove type information at runtime from typed hashes
 */
-hash hash(hash h) [flags=CONSTANT] {
-    return h->hashRefSelf();
+hash hash(hash value) [flags=CONSTANT,NAMED_ARGS] {
+    return value->hashRefSelf();
 }
 
 //! Always returns the same hash passed
@@ -488,7 +494,7 @@ hash<auto> hash() [flags=CONSTANT] {
 
 //! Returns a string giving the data type of the argument passed; see @ref string_type_constants for the values returned by this function
 /**
-    @param arg the argument to check
+    @param value the argument to check
 
     @return a string giving the data type of the argument passed; see @ref string_type_constants for the values returned by this function
 
@@ -503,13 +509,13 @@ string type = type(v);
 
     @see pseudo-method <value>::typeCode()
 */
-string type(auto arg) [flags=CONSTANT] {
-    return new QoreStringNode(arg.getTypeName());
+string type(auto value) [flags=CONSTANT,NAMED_ARGS] {
+    return new QoreStringNode(value.getTypeName());
 }
 
 //! Returns a string giving the data type of the argument passed; see @ref string_type_constants for the values returned by this function
 /**
-    @param arg the argument to check
+    @param value the argument to check
 
     @return a string giving the data type of the argument passed; see @ref string_type_constants for the values returned by this function
 
@@ -522,13 +528,13 @@ string type = typename(v);
     - This function is identical to type(any) and to calling pseudo-method <value>::type()
     - It is faster and more efficient to use <value>::typeCode() for comparing data types
 */
-string typename(auto arg) [flags=CONSTANT] {
-    return new QoreStringNode(arg.getTypeName());
+string typename(auto value) [flags=CONSTANT,NAMED_ARGS] {
+    return new QoreStringNode(value.getTypeName());
 }
 
 //! Returns a string created from the binary data passed, taking an optional second argument giving the string encoding; if no second argument is passed then the @ref default_encoding "default character encoding" is assumed
 /**
-    @param b the binary object to convert directly to a string
+    @param value the binary object to convert directly to a string
     @param encoding the character encoding tag for the string return value; if not present, the @ref default_encoding "default character encoding" is assumed
 
     @return a string created from the binary data passed
@@ -538,12 +544,12 @@ string typename(auto arg) [flags=CONSTANT] {
 string str = binary_to_string(b, "iso-8859-1");
     @endcode
 */
-string binary_to_string(binary b, *string encoding) [flags=CONSTANT] {
+string binary_to_string(binary value, *string encoding) [flags=CONSTANT,NAMED_ARGS] {
     const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
-    if (!b->size()) {
+    if (!value->size()) {
         return new QoreStringNode(qe);
     }
-    return new QoreStringNode((const char*)b->getPtr(), b->size(), qe);
+    return new QoreStringNode((const char*)value->getPtr(), value->size(), qe);
 }
 
 //! Returns complex types converted to the most specific types possible using internal type folding
@@ -555,13 +561,13 @@ tmp += 2;
 list<int> int_list = auto_cast(tmp);
     @endcode
 
-    @param val the value to convert
+    @param value the value to convert
 
     @return a copy of the input value with complex types converted to the most specific types possible using internal type folding
 
     @since %Qore 0.9.3
  */
-auto auto_cast(auto val) [flags=CONSTANT] {
-    return auto_cast(val);
+auto auto_cast(auto value) [flags=CONSTANT,NAMED_ARGS] {
+    return auto_cast(value);
 }
 ///@}

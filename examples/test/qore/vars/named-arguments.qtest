@@ -101,6 +101,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("overload selection by name", \overloadSelectionByName(), NOTHING);
         addTestCase("builtin opt-in", \builtinOptIn(), NOTHING);
         addTestCase("reviewed math builtin opt-in", \reviewedMathBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed type builtin opt-in", \reviewedTypeBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -157,6 +158,16 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq(1.0, na_math_atan2(1.0, 1.0) / (M_PI / 4), "canonical atan2 names are accepted");
     }
 
+    reviewedTypeBuiltinOptIn() {
+        assertEq(True, boolean(value: 1), "boolean conversion uses value");
+        assertEq(254, int(base: 16, value: "fe"), "integer conversion exposes base and value");
+        assertEq(3.5, float(value: "3.5"), "float conversion uses value");
+        assertEq("string", type(value: "x"), "type inspection uses value");
+        assertEq("integer", typename(value: 1), "typename inspection uses value");
+        assertEq("A", binary_to_string(encoding: "USASCII", value: binary(value: "A")),
+            "binary conversion exposes value and encoding");
+    }
+
     parseFailures() {
         assertThrows("NAMED-ARG-DUPLICATE", "duplicate named argument 'a'", sub() {
             Program p(PO_NEW_STYLE);
@@ -185,7 +196,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {
             Program p(PO_NEW_STYLE);
-            p.parse("type(arg: 1);", "builtin-not-opted-in");
+            p.parse("length(arg: 1);", "builtin-not-opted-in");
         });
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "varargs-only variants cannot accept named arguments", sub() {

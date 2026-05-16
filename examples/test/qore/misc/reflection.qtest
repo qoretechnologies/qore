@@ -147,8 +147,32 @@ class ReflectionTest inherits QUnit::Test {
         assertEq((), vargv.getNamedParameterNames());
 
         FunctionVariant typev = Function::forName("type").getVariants()[0];
-        assertFalse(typev.isNamedCallable());
-        assertEq((), typev.getNamedParameterNames());
+        assertEq(("value",), typev.getParamNames());
+        assertTrue(typev.isNamedCallable());
+        assertEq(("value",), typev.getNamedParameterNames());
+
+        bool found_int_with_base = False;
+        foreach FunctionVariant v in (Function::forName("int").getVariants()) {
+            if (v.getParamNames() == ("value", "base")) {
+                found_int_with_base = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("value", "base"), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("value",)) {
+                assertTrue(v.isNamedCallable());
+                assertEq(("value",), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_int_with_base);
+
+        bool found_hash_keys_values = False;
+        foreach FunctionVariant v in (Function::forName("hash").getVariants()) {
+            if (v.getParamNames() == ("keys", "values")) {
+                found_hash_keys_values = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("keys", "values"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_hash_keys_values);
 
         bool found_two_arg_substr = False;
         bool found_three_arg_substr = False;
