@@ -1099,6 +1099,35 @@ static bool i18n_get_datetime_style(const QoreHashNode* opts, const char* key, i
     return true;
 }
 
+static bool i18n_get_optional_datetime_skeleton(const QoreHashNode* opts, std::string& skeleton, bool& present,
+        ExceptionSink* xsink) {
+    present = false;
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue("skeleton");
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+    if (!i18n_qore_value_to_utf8_string(value, skeleton, xsink, "skeleton")) {
+        return false;
+    }
+    if (skeleton.empty() || skeleton.size() > 128) {
+        xsink->raiseException("I18N-FORMAT-ERROR",
+            "opts.skeleton must be between 1 and 128 bytes");
+        return false;
+    }
+    if (!opts->getKeyValue("date_style").isNullOrNothing() || !opts->getKeyValue("time_style").isNullOrNothing()) {
+        xsink->raiseException("I18N-FORMAT-ERROR",
+            "opts.skeleton cannot be combined with opts.date_style or opts.time_style");
+        return false;
+    }
+
+    present = true;
+    return true;
+}
+
 static std::string i18n_get_datetime_timezone_id(const DateTimeNode* dt) {
     const AbstractQoreZoneInfo* zone = dt->getZone();
     if (!zone) {
@@ -1121,24 +1150,41 @@ static QoreStringNode* i18n_format_datetime_value(const DateTimeNode* dt, const 
         return nullptr;
     }
 
-    icu::DateFormat::EStyle date_style;
-    icu::DateFormat::EStyle time_style;
-    if (!i18n_get_datetime_style(opts, "date_style", icu::DateFormat::kMedium, date_style, xsink)
-        || !i18n_get_datetime_style(opts, "time_style", icu::DateFormat::kShort, time_style, xsink)) {
-        return nullptr;
-    }
-    if (date_style == icu::DateFormat::kNone && time_style == icu::DateFormat::kNone) {
-        xsink->raiseException("I18N-FORMAT-ERROR", "date_style and time_style cannot both be 'none'");
-        return nullptr;
-    }
-
     icu::Locale locale = i18n_make_locale(locale_arg, xsink);
     if (*xsink) {
         return nullptr;
     }
 
-    std::unique_ptr<icu::DateFormat> formatter(icu::DateFormat::createDateTimeInstance(date_style, time_style,
-        locale));
+    std::unique_ptr<icu::DateFormat> formatter;
+    std::string skeleton;
+    bool has_skeleton = false;
+    if (!i18n_get_optional_datetime_skeleton(opts, skeleton, has_skeleton, xsink)) {
+        return nullptr;
+    }
+
+    if (has_skeleton) {
+        UErrorCode status = U_ZERO_ERROR;
+        icu::UnicodeString skeleton_u = icu::UnicodeString::fromUTF8(icu::StringPiece(skeleton));
+        formatter.reset(icu::DateFormat::createInstanceForSkeleton(skeleton_u, locale, status));
+        if (U_FAILURE(status)) {
+            xsink->raiseException("I18N-ICU-ERROR", "cannot create date/time skeleton formatter '%s' for locale '%s': %s",
+                skeleton.c_str(), locale.getName(), i18n_icu_error_name(status));
+            return nullptr;
+        }
+    } else {
+        icu::DateFormat::EStyle date_style;
+        icu::DateFormat::EStyle time_style;
+        if (!i18n_get_datetime_style(opts, "date_style", icu::DateFormat::kMedium, date_style, xsink)
+            || !i18n_get_datetime_style(opts, "time_style", icu::DateFormat::kShort, time_style, xsink)) {
+            return nullptr;
+        }
+        if (date_style == icu::DateFormat::kNone && time_style == icu::DateFormat::kNone) {
+            xsink->raiseException("I18N-FORMAT-ERROR", "date_style and time_style cannot both be 'none'");
+            return nullptr;
+        }
+
+        formatter.reset(icu::DateFormat::createDateTimeInstance(date_style, time_style, locale));
+    }
     if (!formatter) {
         xsink->raiseException("I18N-ICU-ERROR", "cannot create date/time formatter for locale '%s'",
             locale.getName());
@@ -1779,7 +1825,7 @@ string format_datetime(date dt, string locale) [flags=RET_VALUE_ONLY] {
 /** @param dt absolute date/time value
     @param locale BCP 47 locale tag, including supported calendar/hour-cycle extensions
     @param opts optional hash; \c date_style and \c time_style may be \c "none", \c "short", \c "medium", \c "long",
-        or \c "full"
+        or \c "full"; alternatively pass \c skeleton for CLDR skeleton formatting such as \c "yMMMd"
     @return locale-formatted date/time
 
     @throw I18N-DATETIME-ERROR if \a dt is relative

@@ -158,8 +158,12 @@ class I18nTest inherits QUnit::Test {
         date instant = 2020-05-04T15:06:07Z;
         assertEq("May 4, 2020",
             I18n::format_datetime(instant, "en-US", {"date_style": "medium", "time_style": "none"}));
+        assertEq("May 4, 2020", I18n::format_datetime(instant, "en-US", {"skeleton": "yMMMd"}));
         assertRegex("^3:06.*PM$",
             I18n::format_datetime(instant, "en-US", {"date_style": "none", "time_style": "short"}));
+        assertThrows("I18N-FORMAT-ERROR", auto sub() {
+            return I18n::format_datetime(instant, "en-US", {"skeleton": "yMMMd", "date_style": "medium"});
+        });
 
         assertLt(0, I18n::compare_strings("a", "b", "en-US"));
         assertEq(0, I18n::compare_strings("a", "a", "en-US"));

@@ -165,6 +165,7 @@ printf("%s\n", I18n::format_number("1234.50", "en-US"));
 printf("%s\n", I18n::format_currency("12.5", "USD", "en-US"));
 printf("%s\n", I18n::format_datetime(2020-05-04T15:06:07Z, "en-US",
     {"date_style": "medium", "time_style": "none"}));
+printf("%s\n", I18n::format_datetime(2020-05-04T15:06:07Z, "en-US", {"skeleton": "yMMMd"}));
 assertLt(0, I18n::compare_strings("a", "b", "en-US"));
 binary key = I18n::get_sort_key("file-001", "en-US-u-kn-true");
     @endcode
