@@ -364,6 +364,9 @@ These examples are from the core migration and should be reused as precedent:
 - Poll-operation wrappers should expose role names, not implementation names:
   use `operation`, `done_counter`, `as_string`, and `options` instead of
   `inner`, `done`, `to_string`, and `opts`.
+- Pool APIs should use `options` for configuration hashes and `argument` for
+  user callback payloads; keep established units such as `warning_ms` when they
+  are already documented user-facing names.
 - Do not mark an overload when it makes an already-enabled named call ambiguous
   with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
   step, value)` must remain positional because it conflicts with the named

@@ -153,7 +153,7 @@ on_exit pool.release();
 qclass AbstractConnectionPool [dom=THREAD_CLASS; arg=ConnectionPool* cp; ns=Qore::Thread];
 
 //! Creates the pool
-/** @param opts pool configuration options
+/** @param options pool configuration options
 
     @throw CONNECTIONPOOL-ERROR if options are invalid
 
@@ -162,16 +162,16 @@ qclass AbstractConnectionPool [dom=THREAD_CLASS; arg=ConnectionPool* cp; ns=Qore
     not call init() automatically because subclass members needed by createResource()
     are not yet assigned when the base constructor runs.
 */
-AbstractConnectionPool::constructor(*hash<ConnectionPoolOptions> opts) {
+AbstractConnectionPool::constructor(*hash<ConnectionPoolOptions> options) [flags=NAMED_ARGS] {
     // Extract and validate options
     int min_val = 0, max_val = 0;
     int64 timeout_val = 120000, idle_timeout_val = 0;
 
-    if (opts) {
-        min_val = (int)opts->getKeyValue("min").getAsBigInt();
-        max_val = (int)opts->getKeyValue("max").getAsBigInt();
-        timeout_val = opts->getKeyValue("timeout_ms").getAsBigInt();
-        idle_timeout_val = opts->getKeyValue("idle_timeout_ms").getAsBigInt();
+    if (options) {
+        min_val = (int)options->getKeyValue("min").getAsBigInt();
+        max_val = (int)options->getKeyValue("max").getAsBigInt();
+        timeout_val = options->getKeyValue("timeout_ms").getAsBigInt();
+        idle_timeout_val = options->getKeyValue("idle_timeout_ms").getAsBigInt();
     }
 
     if (min_val < 0) {
@@ -233,7 +233,7 @@ abstract AbstractPoolableResource AbstractConnectionPool::createResource();
 
     @param resource the resource to reset
 */
-nothing AbstractConnectionPool::resetResource(AbstractPoolableResource resource) {
+nothing AbstractConnectionPool::resetResource(AbstractPoolableResource resource) [flags=NAMED_ARGS] {
     const_cast<QoreObject*>(resource)->evalMethod("reset", nullptr, xsink).discard(xsink);
 }
 
@@ -245,7 +245,7 @@ nothing AbstractConnectionPool::resetResource(AbstractPoolableResource resource)
 
     @note Called outside the pool lock so it is safe to perform blocking I/O.
 */
-nothing AbstractConnectionPool::destroyResource(AbstractPoolableResource resource) {
+nothing AbstractConnectionPool::destroyResource(AbstractPoolableResource resource) [flags=NAMED_ARGS] {
     const_cast<QoreObject*>(resource)->evalMethod("close", nullptr, xsink).discard(xsink);
 }
 
@@ -322,15 +322,15 @@ nothing AbstractConnectionPool::shutdown() {
 
 //! Sets a warning callback for long wait times
 /** @param warning_ms minimum wait time in milliseconds before the callback is triggered
-    @param callback the callback code to invoke with (hash<ConnectionPoolStats>, arg)
-    @param arg optional argument passed to the callback
+    @param callback the callback code to invoke with (hash<ConnectionPoolStats>, argument)
+    @param argument optional argument passed to the callback
 */
-nothing AbstractConnectionPool::setWarningCallback(int warning_ms, code callback, auto arg) {
+nothing AbstractConnectionPool::setWarningCallback(int warning_ms, code callback, auto argument) [flags=NAMED_ARGS] {
     // the callback will be destroyed when the object is destroyed
     ReferenceHolder<ResolvedCallReferenceNode> callbackHolder(xsink);
     // resolve the callback
     callbackHolder = dynamic_cast<ResolvedCallReferenceNode*>(callback->refRefSelf());
-    cp->setWarningCallback(warning_ms, callbackHolder.release(), arg.refSelf(), xsink);
+    cp->setWarningCallback(warning_ms, callbackHolder.release(), argument.refSelf(), xsink);
 }
 
 //! Clears the warning callback

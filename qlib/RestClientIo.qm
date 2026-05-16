@@ -3898,7 +3898,7 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
                 *hash<Qore::Thread::ConnectionPoolOptions> pool_opts,
                 *HttpClientIo::HttpClientConnectionManager shared_mgr)
                 : RestClientIo(client_opts, shared_mgr),
-                  AbstractConnectionPool(pool_opts) {
+                  AbstractConnectionPool(options: pool_opts) {
             saved_client_opts = client_opts;
         }
 

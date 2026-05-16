@@ -66,7 +66,7 @@ class TestPool inherits Qore::Thread::AbstractConnectionPool {
     }
 
     constructor(*hash<Qore::Thread::ConnectionPoolOptions> opts)
-            : AbstractConnectionPool(opts) {
+            : AbstractConnectionPool(options: opts) {
         self.init();
     }
 
@@ -94,7 +94,7 @@ class DestroyTrackingPool inherits Qore::Thread::AbstractConnectionPool {
     }
 
     constructor(*hash<Qore::Thread::ConnectionPoolOptions> opts)
-            : AbstractConnectionPool(opts) {
+            : AbstractConnectionPool(options: opts) {
         self.init();
     }
 
@@ -412,13 +412,13 @@ class ConnectionPoolTest inherits QUnit::Test {
         bool callback_fired = False;
         *hash<Qore::Thread::ConnectionPoolStats> callback_stats;
         string callback_arg_val;
-        pool.setWarningCallback(10,
-            sub (hash<Qore::Thread::ConnectionPoolStats> stats, auto arg) {
+        pool.setWarningCallback(warning_ms: 10,
+            callback: sub (hash<Qore::Thread::ConnectionPoolStats> stats, auto arg) {
                 callback_fired = True;
                 callback_stats = stats;
                 callback_arg_val = arg;
             },
-            "test-arg",
+            argument: "test-arg",
         );
 
         # Acquire the only resource on the main thread
