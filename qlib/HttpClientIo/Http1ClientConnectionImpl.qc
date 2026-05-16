@@ -126,7 +126,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
         return sid;
     }
@@ -171,7 +171,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
         return sid;
     }
@@ -220,7 +220,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             poll_op.pushSendData();  # NOTHING = EOF sentinel
         }
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
     }
 
@@ -274,7 +274,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
         return sid;
     }
@@ -294,7 +294,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
         }
         if (ctl) {
             try {
-                ctl.cancelAndClose(self.getSocket());
+                ctl.cancelAndClose(sock: self.getSocket());
             } catch () {
                 # Ignore close errors during close
             }

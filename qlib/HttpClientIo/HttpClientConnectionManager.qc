@@ -1009,7 +1009,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         try {
-            controller.cancelByOwner(owner_id);
+            controller.cancelByOwner(owner: owner_id);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "closeAll: cancelByOwner error: %s: %s", ex.err, ex.desc);
         }
@@ -1024,7 +1024,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # "LOCK-ERROR: TID N deleted RWLock while TID M was holding the lock".
         # Per-owner (not global) so a manager destructor doesn't block on
         # unrelated long-running callbacks on the shared controller.
-        controller.flushCallbacksByOwner(owner_id);
+        controller.flushCallbacksByOwner(owner: owner_id);
 
         # Copy the pool and release the lock before closing connections
         hash<string, list<HttpClientConnection>> pool_copy;
@@ -1054,7 +1054,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # time (not pop time), so this call waits for every callback
         # queued by the cancellations above, not just those already
         # picked up by a worker.
-        controller.flushCallbacksByOwner(owner_id);
+        controller.flushCallbacksByOwner(owner: owner_id);
     }
 
     #! Removes idle connections older than the idle timeout
@@ -1758,7 +1758,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # wrong parent.  Force dispatch explicitly so HttpClientPollOperation::
         # onComplete() fires and handleConnectionResult() removes idle-closed,
         # errored, and proactively-timed-out connections from the pool.
-        controller.submit(<SocketPollOperationInfo>{
+        controller.submit(info: <SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
             "key": controller_key,

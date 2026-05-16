@@ -198,7 +198,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
         if (ctl) {
             try {
-                ctl.cancelAndClose(self.getSocket());
+                ctl.cancelAndClose(sock: self.getSocket());
             } catch () {
                 # Ignore close errors during close
             }
@@ -272,7 +272,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         while (True) {
             int rv = poll_op.sendStreamData(stream_id, data, end_stream);
             if (ctl) {
-                ctl.wakeSocket(sock);
+                ctl.wakeSocket(sock: sock);
             }
             if (rv != 1) {
                 return rv;
@@ -320,7 +320,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, streaming);
 
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
 
         return stream_id;
@@ -357,7 +357,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             sse_install_eligible);
 
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
 
         return stream_id;
@@ -394,7 +394,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             queue, max_concurrent_streams, notifier);
 
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
 
         return stream_id;
@@ -440,7 +440,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
         # Wake the controller so it forces a continuePoll() cycle with the new fd
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
 
         return True;

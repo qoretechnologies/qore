@@ -84,9 +84,9 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @param logger an optional logger for diagnostic output
     */
     constructor(bool autostop, *LoggerInterface logger) : LoggerWrapper(logger) {
-        Qore::AsyncIoController::setAutostop(autostop);
+        Qore::AsyncIoController::setAutostop(auto_stop: autostop);
         if (logger) {
-            Qore::AsyncIoController::setLogger(logger);
+            Qore::AsyncIoController::setLogger(logger: logger);
         }
     }
 
@@ -95,7 +95,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     */
     constructor(*LoggerInterface logger) : LoggerWrapper(logger) {
         if (logger) {
-            Qore::AsyncIoController::setLogger(logger);
+            Qore::AsyncIoController::setLogger(logger: logger);
         }
     }
 
@@ -121,7 +121,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         operations complete (after a 2-second grace period to avoid unnecessary stop/restart cycles)
     */
     setAutostop(bool autostop = True) {
-        Qore::AsyncIoController::setAutostop(autostop);
+        Qore::AsyncIoController::setAutostop(auto_stop: autostop);
     }
 
     #! Returns the autostop flag
@@ -160,7 +160,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @return @ref True "True" if the I/O thread became ready within the timeout
     */
     bool waitReady(*timeout to) {
-        return Qore::AsyncIoController::waitReady(to);
+        return Qore::AsyncIoController::waitReady(timeout_ms: to);
     }
 
     #! Waits until the I/O thread has processed all currently submitted operations
@@ -170,7 +170,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @throw ASYNC-IO-ERROR if called from an async I/O controller I/O thread
     */
     bool waitForProcessing(*timeout to) {
-        return Qore::AsyncIoController::waitForProcessing(to);
+        return Qore::AsyncIoController::waitForProcessing(timeout_ms: to);
     }
 
     #! Submits a socket poll operation to the I/O controller
@@ -192,7 +192,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
             throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'owner' value; required for proper shutdown via "
                 "cancelByOwner(); got: %y", info);
         }
-        return Qore::AsyncIoController::submit(info, replace);
+        return Qore::AsyncIoController::submit(operation_info: info, replace_existing: replace);
     }
 
     #! Waits for an @ref Qore::EventNotifier "EventNotifier" to be signaled via the I/O thread
@@ -235,7 +235,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @return @ref True "True" if an operation was found and canceled
     */
     bool cancel(Socket sock) {
-        return Qore::AsyncIoController::cancel(sock);
+        return Qore::AsyncIoController::cancel(io_object: sock);
     }
 
     #! Cancels the operation and closes the socket
@@ -248,14 +248,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @since Qore 2.3
     */
     bool cancelAndClose(Socket sock) {
-        return Qore::AsyncIoController::cancelAndClose(sock);
+        return Qore::AsyncIoController::cancelAndClose(io_object: sock);
     }
 
     #! Wakes the I/O thread for a specific socket with pending data
     /** @param sock the I/O object whose operation needs re-polling
     */
     wakeSocket(AbstractPollableIoObjectBase sock) {
-        Qore::AsyncIoController::wakeSocket(sock);
+        Qore::AsyncIoController::wakeSocket(io_object: sock);
     }
 
     #! Cancels any operation in progress for the given Socket; throws if not found
@@ -278,7 +278,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @return @ref True "True" if an operation was found and canceled
     */
     bool cancelByKey(string key) {
-        return Qore::AsyncIoController::cancelByKey(key);
+        return Qore::AsyncIoController::cancelByKey(key: key);
     }
 
     #! Cancels all operations belonging to a specific owner
@@ -286,7 +286,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @return the number of operations that were canceled
     */
     int cancelByOwner(string owner) {
-        return Qore::AsyncIoController::cancelByOwner(owner);
+        return Qore::AsyncIoController::cancelByOwner(owner: owner);
     }
 
     #! Waits for all pending onComplete/abort callbacks to be processed
@@ -313,7 +313,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @param owner the owner identifier to wait for
     */
     flushCallbacksByOwner(string owner) {
-        Qore::AsyncIoController::flushCallbacksByOwner(owner);
+        Qore::AsyncIoController::flushCallbacksByOwner(owner: owner);
     }
 
     #! Sets the logger for the controller
@@ -321,7 +321,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     */
     setLogger(*LoggerInterface logger) {
         LoggerWrapper::setLogger(logger);
-        Qore::AsyncIoController::setLogger(logger);
+        Qore::AsyncIoController::setLogger(logger: logger);
     }
 
     #! Sets the maximum number of callback and task worker threads
@@ -334,7 +334,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @param max_workers maximum worker count; \c 0 means automatic sizing
     */
     setMaxCallbackWorkers(int max_workers = 0) {
-        Qore::AsyncIoController::setMaxCallbackWorkers(max_workers);
+        Qore::AsyncIoController::setMaxCallbackWorkers(max_workers: max_workers);
     }
 
     #! Submits a task to the controller's callback thread pool for execution
@@ -346,7 +346,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         (e.g., during controller shutdown)
     */
     submitTask(code<nothing()> task, *code<nothing()> cancel) {
-        Qore::AsyncIoController::submitTask(task, cancel);
+        Qore::AsyncIoController::submitTask(task: task, cancel_callback: cancel);
     }
 
     #! Adds a timer that fires at the given deadline
@@ -355,11 +355,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         @b not invoked on the I/O thread, so it is free to block, acquire locks, or perform
         Qore-level I/O.
 
-        For non-callable \c udata (numbers, strings, hashes, …) see
+        For non-callable \c user_data (numbers, strings, hashes, …) see
         @ref Qore::AsyncIoController::setTimerCallback() "AsyncIoController::setTimerCallback()";
         when installed, that single callback receives a @ref Qore::TimerEventInfo
         "hash<TimerEventInfo>" for each fire.  With no callback installed, non-callable
-        \c udata is silently dropped.
+        \c user_data is silently dropped.
 
         @param deadline the absolute time when the timer should fire
         @param callback the closure to call when the timer fires
@@ -376,7 +376,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         the timer had already fired or was not found
     */
     bool cancelTimer(int timer_id) {
-        return Qore::AsyncIoController::cancelTimer(timer_id);
+        return Qore::AsyncIoController::cancelTimer(timer_id: timer_id);
     }
 
 }

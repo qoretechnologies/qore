@@ -122,7 +122,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         }
         if (ctl) {
             try {
-                ctl.cancelAndClose(self.getSocket());
+                ctl.cancelAndClose(sock: self.getSocket());
             } catch () {
                 # Ignore close errors during close
             }
@@ -164,7 +164,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.sendStreamData(stream_id, data, end_stream);
 
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
     }
 
@@ -237,7 +237,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, streaming, notifier, sse_install_eligible);
 
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
 
         return stream_id;
@@ -274,7 +274,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, notifier);
 
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
 
         return stream_id;

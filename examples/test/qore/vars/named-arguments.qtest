@@ -126,6 +126,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
             NOTHING);
         addTestCase("reviewed HTTP readiness builtin opt-in", \reviewedHttpReadinessBuiltinOptIn(),
             NOTHING);
+        addTestCase("reviewed async I/O controller builtin opt-in",
+            \reviewedAsyncIoControllerBuiltinOptIn(), NOTHING);
         addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
         addTestCase("reviewed iterator builtin opt-in", \reviewedIteratorBuiltinOptIn(), NOTHING);
         addTestCase("reviewed regex class builtin opt-in", \reviewedRegexClassBuiltinOptIn(), NOTHING);
@@ -732,6 +734,33 @@ public class NamedArgumentsTest inherits QUnit::Test {
         HttpClientConnectionBase base();
         assertFalse(base.waitForReadyOrError(timeout_ms: 1),
             "HttpClientConnectionBase waitForReadyOrError exposes timeout_ms");
+    }
+
+    reviewedAsyncIoControllerBuiltinOptIn() {
+        AsyncIoController::setAutostop(auto_stop: True);
+        AsyncIoController::setLogger(logger: NOTHING);
+        AsyncIoController::setTimerCallback(callback: NOTHING);
+        AsyncIoController::setMaxCallbackWorkers(max_workers: 0);
+
+        Counter counter(1);
+        AsyncIoController::submitTask(task: sub () { counter.dec(); }, cancel_callback: NOTHING);
+        assertEq(0, counter.waitForZero(timeout_ms: 10s), "AsyncIoController submitTask exposes task");
+
+        int timer_id = AsyncIoController::addTimer(deadline: now_us() + 10s,
+            user_data: "named-arguments-timer");
+        assertTrue(AsyncIoController::cancelTimer(timer_id: timer_id),
+            "AsyncIoController addTimer/cancelTimer expose timer names");
+
+        assertFalse(AsyncIoController::cancelByKey(key: "named-arguments-no-key"),
+            "AsyncIoController cancelByKey exposes key");
+        assertEq(0, AsyncIoController::cancelByOwner(owner: "named-arguments-no-owner"),
+            "AsyncIoController cancelByOwner exposes owner");
+        AsyncIoController::flushCallbacksByOwner(owner: "named-arguments-no-owner");
+
+        assertTrue(AsyncIoController::waitReady(timeout_ms: 10s),
+            "AsyncIoController waitReady exposes timeout_ms");
+        assertTrue(AsyncIoController::waitForProcessing(timeout_ms: 10s),
+            "AsyncIoController waitForProcessing exposes timeout_ms");
     }
 
     reviewedStreamBuiltinOptIn() {

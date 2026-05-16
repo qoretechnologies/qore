@@ -337,5 +337,17 @@ These examples are from the core migration and should be reused as precedent:
   `notifier` for `registerReadyNotifier()`. HTTP connection constructors should
   keep the endpoint and TLS decision explicit (`target_host`, `target_port`,
   `ssl_required`) when they are exposed to named calls.
+- Async I/O controller APIs should not expose implementation shorthand:
+  use `auto_stop`, `operation_info`, `replace_existing`, `io_object`,
+  `timeout_ms`, `user_data`, `cancel_callback`, and `max_threads` instead of
+  `autostop`, `info`, `replace`, `sock`, `to`, `udata`, `cancel`, and
+  `num_threads`.
+- Qmod call sites that pass closure or otherwise broad values into
+  `AsyncIoController::addTimer(..., user_data)` may need to remain positional
+  until named calls are supported for every auto-payload case in AOT/qmod
+  compilation.
+- Qlib wrapper/object call sites must also stay positional when the receiver is
+  not parse-time-resolved tightly enough for qmod named-call compilation, even
+  if the underlying native method now supports named arguments.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

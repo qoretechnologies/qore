@@ -360,7 +360,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         }
 
         if (!suppress_wake && ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
 
         # Return the Promise alongside the Future so the caller keeps it alive
@@ -421,7 +421,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         }
 
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
 
         return {
@@ -450,7 +450,7 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wakeSocket(getSocket());
+            ctl.wakeSocket(sock: getSocket());
         }
     }
 
