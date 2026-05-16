@@ -70,15 +70,15 @@ extern QoreClass* QC_HASHITERATOR;
 qclass ObjectIterator [arg=QoreObjectIterator* i; ns=Qore; vparent=HashIterator];
 
 //! Creates the object iterator object
-/** @param o the object to iterate
+/** @param object_value the object to iterate
 
     @par Example:
     @code{.py}
 ObjectIterator i(obj);
     @endcode
  */
-ObjectIterator::constructor(object o) {
-   self->setPrivate(CID_OBJECTITERATOR, new QoreObjectIterator(o));
+ObjectIterator::constructor(object object_value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_OBJECTITERATOR, new QoreObjectIterator(object_value));
 }
 
 //! Creates an empty object iterator object

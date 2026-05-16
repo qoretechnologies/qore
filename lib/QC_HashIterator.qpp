@@ -59,15 +59,15 @@
 qclass HashIterator [arg=QoreHashIterator* i; ns=Qore; vparent=AbstractQuantifiedBidirectionalIterator];
 
 //! Creates the hash iterator object
-/** @param h the hash to iterate
+/** @param hash_value the hash to iterate
 
     @par Example:
     @code{.py}
 HashIterator hi(h);
     @endcode
  */
-HashIterator::constructor(hash<auto> h) {
-   self->setPrivate(CID_HASHITERATOR, new QoreHashIterator(h));
+HashIterator::constructor(hash<auto> hash_value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_HASHITERATOR, new QoreHashIterator(hash_value));
 }
 
 //! Creates an empty hash iterator object

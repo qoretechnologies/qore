@@ -59,7 +59,7 @@
 qclass ListIterator [arg=QoreListIterator* i; ns=Qore; vparent=AbstractQuantifiedBidirectionalIterator];
 
 //! Creates the list iterator object
-/** @param l the list to iterate
+/** @param list_value the list to iterate
 
     @par Example:
     @code{.py}
@@ -68,8 +68,8 @@ ListIterator li(l);
 
     @note the constructor's argument is @ref softlist_type "softlist" so that it can also accept @ref nothing
  */
-ListIterator::constructor(softlist<auto> l) {
-   self->setPrivate(CID_LISTITERATOR, new QoreListIterator(l));
+ListIterator::constructor(softlist<auto> list_value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_LISTITERATOR, new QoreListIterator(list_value));
 }
 
 //! Creates a copy of the ListIterator object, iterating the same object as the original and in the same position
@@ -215,7 +215,7 @@ int ListIterator::max() [flags=CONSTANT] {
 }
 
 //! sets the new position in the list; if the position is invalid then the method returns @ref False, meaning the iterator is not valid, otherwise it returns @ref True
-/** @param pos the new position for the iterator with 0 as the first element
+/** @param position the new position for the iterator with 0 as the first element
 
     @return @ref False, meaning the iterator is not valid, otherwise it returns @ref True
 
@@ -227,10 +227,10 @@ if (!i.set(pos))
 
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-bool ListIterator::set(int pos) {
+bool ListIterator::set(int position) [flags=NAMED_ARGS] {
    if (i->check(xsink))
       return QoreValue();
-   return !i->set(pos);
+   return !i->set(position);
 }
 
 //! returns @ref True "True" if the iterator is currently pointing at a valid element, @ref False "False" if not

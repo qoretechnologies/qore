@@ -115,8 +115,10 @@ Keep consistent names across related APIs:
 - Regex helpers: `pattern`, `replacement`, `options`, `callback`, and
   `subject` for the text being matched, extracted, searched, or substituted.
   Avoid exposing internal names such as `str`.
-- Iterator helpers: `source` for source text or streams, `value` for a single
-  yielded or override value, and `start`, `stop`, `step` for numeric ranges.
+- Iterator helpers: `source` for source text or streams, `list_value`,
+  `hash_value`, and `object_value` for container/object iterators, `position`
+  for repositioning, `value` for a single yielded or override value, and
+  `start`, `stop`, `step` for numeric ranges.
   Keep overlapping range value-override overloads positional-only when marking
   both the numeric and override variants would make named calls ambiguous.
 

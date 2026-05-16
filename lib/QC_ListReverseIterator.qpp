@@ -85,7 +85,7 @@ public:
 qclass ListReverseIterator [arg=QoreListReverseIterator* i; ns=Qore; vparent=ListIterator];
 
 //! Creates the list iterator object
-/** @param l the list to iterate
+/** @param list_value the list to iterate
 
     @par Example:
     @code{.py}
@@ -94,8 +94,8 @@ ListReverseIterator li(l);
 
     @note the constructor's argument is @ref softlist_type "softlist" so that it can also accept @ref nothing
  */
-ListReverseIterator::constructor(softlist<auto> l) {
-   self->setPrivate(CID_LISTREVERSEITERATOR, new QoreListReverseIterator(l));
+ListReverseIterator::constructor(softlist<auto> list_value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_LISTREVERSEITERATOR, new QoreListReverseIterator(list_value));
 }
 
 //! Creates a copy of the ListReverseIterator object, iterating the same object as the original and in the same position

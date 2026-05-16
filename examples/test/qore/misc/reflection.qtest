@@ -779,6 +779,29 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("xrange", ("stop",));
         assertNamedConstructorVariantCount("StringCharIterator", ("source",));
 
+        foreach string class_name in (("ListIterator", "ListReverseIterator", "ListHashIterator",
+                "ListHashReverseIterator")) {
+            assertNamedConstructorVariantCount(class_name, ("list_value",));
+        }
+        assertNamedClassMethodVariantCount("ListIterator", "set", ("position",));
+        foreach string class_name in (("ListHashIterator", "HashListIterator")) {
+            assertNamedClassMethodVariantCount(class_name, "set", ("position",));
+            assertNamedClassMethodVariantCount(class_name, "getKeyValue", ("key",));
+            assertNamedClassMethodVariantCount(class_name, "memberGate", ("key",));
+        }
+        foreach string class_name in (("ListHashReverseIterator", "HashListReverseIterator")) {
+            assertNamedClassMethodVariantCount(class_name, "memberGate", ("key",));
+        }
+        foreach string class_name in (("HashIterator", "HashReverseIterator", "HashKeyIterator",
+                "HashKeyReverseIterator", "HashPairIterator", "HashPairReverseIterator", "HashListIterator",
+                "HashListReverseIterator")) {
+            assertNamedConstructorVariantCount(class_name, ("hash_value",));
+        }
+        foreach string class_name in (("ObjectIterator", "ObjectReverseIterator", "ObjectKeyIterator",
+                "ObjectKeyReverseIterator", "ObjectPairIterator", "ObjectPairReverseIterator")) {
+            assertNamedConstructorVariantCount(class_name, ("object_value",));
+        }
+
         assertNamedPseudoMethodVariantCount(ValuePseudoClass, "fullType", ("with_namespaces",));
         assertNamedPseudoMethodVariantCount(ValuePseudoClass, "toString", ("encoding",));
         assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "find", ("pattern", "byte_offset"));

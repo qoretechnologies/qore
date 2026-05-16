@@ -93,7 +93,7 @@ public:
 qclass ListHashReverseIterator [arg=QoreListHashReverseIterator* i; ns=Qore; vparent=ListHashIterator];
 
 //! Creates the list hash iterator object
-/** @param l the list of hashes to iterate
+/** @param list_value the list of hashes to iterate
 
     @par Example:
     @code{.py}
@@ -102,8 +102,8 @@ ListHashIterator i(l);
 
     @note the constructor's argument is @ref softlist_type "softlist" so that it can also accept @ref nothing
  */
-ListHashReverseIterator::constructor(softlist<auto> l) {
-   self->setPrivate(CID_LISTHASHREVERSEITERATOR, new QoreListHashReverseIterator(l));
+ListHashReverseIterator::constructor(softlist<auto> list_value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_LISTHASHREVERSEITERATOR, new QoreListHashReverseIterator(list_value));
 }
 
 //! Creates a copy of the ListHashReverseIterator object, iterating the same object as the original and in the same position
@@ -205,7 +205,7 @@ while (i.next()) {
 
     @note equivalent to ListHashIterator::getKeyValue() when called explicitly
  */
-auto ListHashReverseIterator::memberGate(string key) [flags=RET_VALUE_ONLY] {
+auto ListHashReverseIterator::memberGate(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    if (i->check(xsink))
       return QoreValue();
 

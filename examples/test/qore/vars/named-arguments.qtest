@@ -711,6 +711,65 @@ public class NamedArgumentsTest inherits QUnit::Test {
         StringCharIterator char_it = new StringCharIterator(source: "a");
         assertTrue(char_it.next(), "StringCharIterator named constructor creates iterator");
         assertEq(ord("a"), char_it.getValue(), "StringCharIterator exposes source");
+
+        list<auto> values = (10, 20);
+        ListIterator list_it = new ListIterator(list_value: values);
+        assertTrue(list_it.next(), "ListIterator named constructor creates iterator");
+        assertTrue(list_it.set(position: 1), "ListIterator exposes position");
+        assertEq(20, list_it.getValue(), "ListIterator exposes list_value");
+        ListReverseIterator list_rev_it = new ListReverseIterator(list_value: values);
+        assertTrue(list_rev_it.next(), "ListReverseIterator exposes list_value");
+        assertEq(20, list_rev_it.getValue(), "ListReverseIterator starts from the end");
+
+        hash<auto> hash_value = {"first": 1, "second": 2};
+        HashIterator hash_it = new HashIterator(hash_value: hash_value);
+        assertTrue(hash_it.next(), "HashIterator exposes hash_value");
+        HashReverseIterator hash_rev_it = new HashReverseIterator(hash_value: hash_value);
+        assertTrue(hash_rev_it.next(), "HashReverseIterator exposes hash_value");
+        HashKeyIterator hash_key_it = new HashKeyIterator(hash_value: hash_value);
+        assertTrue(hash_key_it.next(), "HashKeyIterator exposes hash_value");
+        HashKeyReverseIterator hash_key_rev_it = new HashKeyReverseIterator(hash_value: hash_value);
+        assertTrue(hash_key_rev_it.next(), "HashKeyReverseIterator exposes hash_value");
+        HashPairIterator hash_pair_it = new HashPairIterator(hash_value: hash_value);
+        assertTrue(hash_pair_it.next(), "HashPairIterator exposes hash_value");
+        HashPairReverseIterator hash_pair_rev_it = new HashPairReverseIterator(hash_value: hash_value);
+        assertTrue(hash_pair_rev_it.next(), "HashPairReverseIterator exposes hash_value");
+
+        list<auto> rows = ({"value": "first"}, {"value": "second"});
+        ListHashIterator list_hash_it = new ListHashIterator(list_value: rows);
+        assertTrue(list_hash_it.next(), "ListHashIterator exposes list_value");
+        assertEq("first", list_hash_it.getKeyValue(key: "value"), "ListHashIterator exposes key");
+        assertTrue(list_hash_it.set(position: 1), "ListHashIterator exposes position");
+        assertEq("second", list_hash_it.memberGate(key: "value"), "ListHashIterator memberGate exposes key");
+        ListHashReverseIterator list_hash_rev_it = new ListHashReverseIterator(list_value: rows);
+        assertTrue(list_hash_rev_it.next(), "ListHashReverseIterator exposes list_value");
+        assertEq("second", list_hash_rev_it.memberGate(key: "value"),
+            "ListHashReverseIterator memberGate exposes key");
+
+        hash<auto> columns = {"value": ("first", "second"), "fixed": "constant"};
+        HashListIterator hash_list_it = new HashListIterator(hash_value: columns);
+        assertTrue(hash_list_it.next(), "HashListIterator exposes hash_value");
+        assertEq("first", hash_list_it.getKeyValue(key: "value"), "HashListIterator exposes key");
+        hash_list_it.set(position: 1);
+        assertEq("second", hash_list_it.memberGate(key: "value"), "HashListIterator memberGate exposes key");
+        HashListReverseIterator hash_list_rev_it = new HashListReverseIterator(hash_value: columns);
+        assertTrue(hash_list_rev_it.next(), "HashListReverseIterator exposes hash_value");
+        assertEq("second", hash_list_rev_it.memberGate(key: "value"),
+            "HashListReverseIterator memberGate exposes key");
+
+        NA_Child obj();
+        ObjectIterator object_it = new ObjectIterator(object_value: obj);
+        assertTrue(object_it.next(), "ObjectIterator exposes object_value");
+        ObjectReverseIterator object_rev_it = new ObjectReverseIterator(object_value: obj);
+        assertTrue(object_rev_it.next(), "ObjectReverseIterator exposes object_value");
+        ObjectKeyIterator object_key_it = new ObjectKeyIterator(object_value: obj);
+        assertTrue(object_key_it.next(), "ObjectKeyIterator exposes object_value");
+        ObjectKeyReverseIterator object_key_rev_it = new ObjectKeyReverseIterator(object_value: obj);
+        assertTrue(object_key_rev_it.next(), "ObjectKeyReverseIterator exposes object_value");
+        ObjectPairIterator object_pair_it = new ObjectPairIterator(object_value: obj);
+        assertTrue(object_pair_it.next(), "ObjectPairIterator exposes object_value");
+        ObjectPairReverseIterator object_pair_rev_it = new ObjectPairReverseIterator(object_value: obj);
+        assertTrue(object_pair_rev_it.next(), "ObjectPairReverseIterator exposes object_value");
     }
 
     reviewedRegexClassBuiltinOptIn() {

@@ -69,7 +69,7 @@
 qclass HashListIterator [arg=QoreHashListIterator* i; ns=Qore; vparent=AbstractQuantifiedBidirectionalIterator];
 
 //! Creates the hash list iterator object
-/** @param h the hash of lists to iterate
+/** @param hash_value the hash of lists to iterate
 
     @par Example:
     @code{.py}
@@ -78,8 +78,8 @@ HashListIterator i(h);
 
     @note a hash with non-list values will be iterated as if each key value were a single element list
  */
-HashListIterator::constructor(hash<auto> h) {
-   self->setPrivate(CID_HASHLISTITERATOR, new QoreHashListIterator(h));
+HashListIterator::constructor(hash<auto> hash_value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_HASHLISTITERATOR, new QoreHashListIterator(hash_value));
 }
 
 //! Creates an empty hash list iterator object
@@ -262,22 +262,22 @@ int HashListIterator::max() [flags=CONSTANT] {
 }
 
 //! sets the new position in the result list; if the position is invalid then the method returns @ref False, meaning the iterator is not valid, otherwise it returns @ref True
-/** @param pos the new position for the iterator with 0 as the first element
+/** @param position the new position for the iterator with 0 as the first element
 
     @return @ref False, meaning the iterator is not valid, otherwise it returns @ref True
 
     @par Example:
     @code{.py}
-if (!i.set(pos))
-    throw "INVALID-POSITION", sprintf("%d is an invalid position", pos);
+if (!i.set(position))
+    throw "INVALID-POSITION", sprintf("%d is an invalid position", position);
     @endcode
 
     @throw ITERATOR-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-bool HashListIterator::set(int pos) {
+bool HashListIterator::set(int position) [flags=NAMED_ARGS] {
    if (i->check(xsink))
       return false;
-   return !i->set(pos);
+   return !i->set(position);
 }
 
 //! This method allows the iterator to be dereferenced directly as a hash for the current row being iterated, as memberGate methods are called implicitly when an unknown member is accessed from outside the class.
@@ -298,7 +298,7 @@ while (i.next()) {
 
     @note equivalent to HashListIterator::getKeyValue() when called explicitly
  */
-auto HashListIterator::memberGate(string key) [flags=RET_VALUE_ONLY] {
+auto HashListIterator::memberGate(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    if (i->check(xsink))
       return QoreValue();
 
@@ -323,7 +323,7 @@ while (i.next()) {
 
     @note HashListIterator::memberGate() allows for the iterator to act as if it is a hash with members equal to the current row being iterated
  */
-auto HashListIterator::getKeyValue(string key) [flags=RET_VALUE_ONLY] {
+auto HashListIterator::getKeyValue(string key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    if (i->check(xsink))
       return QoreValue();
 
