@@ -105,6 +105,13 @@ int sub ftest(int i, ...) {
     return 1;
 }
 
+int sub named_reflection_target(int alpha, *string beta = NOTHING) {
+    return 1;
+}
+
+nothing sub named_reflection_varargs_only(...) {
+}
+
 class ReflectionTest inherits QUnit::Test {
     constructor() : QUnit::Test("ReflectionTest", "1.0") {
         addTestCase("ns path test", \nsPathTest());
@@ -117,6 +124,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("issue 3141", \issue3141Test());
         addTestCase("issue 3035", \issue3035Test());
         addTestCase("reflection tests", \reflectionTests());
+        addTestCase("named-call reflection tests", \namedCallReflectionTests());
         addTestCase("sandbox tests", \sandboxTests());
         addTestCase("pseudo-class tests", \pseudoClassTests());
         addTestCase("type member pseudo-method dispatch", \typeMemberPseudoMethodDispatchTest());
@@ -127,6 +135,36 @@ class ReflectionTest inherits QUnit::Test {
 
     nsPathTest() {
         assertEq("Qore::Reflection::AbstractVariant", Class::forName("AbstractVariant").getPathName());
+    }
+
+    namedCallReflectionTests() {
+        FunctionVariant uv = Function::forName("named_reflection_target").getVariants()[0];
+        assertTrue(uv.isNamedCallable());
+        assertEq(("alpha", "beta"), uv.getNamedParameterNames());
+
+        FunctionVariant vargv = Function::forName("named_reflection_varargs_only").getVariants()[0];
+        assertFalse(vargv.isNamedCallable());
+        assertEq((), vargv.getNamedParameterNames());
+
+        FunctionVariant typev = Function::forName("type").getVariants()[0];
+        assertFalse(typev.isNamedCallable());
+        assertEq((), typev.getNamedParameterNames());
+
+        bool found_two_arg_substr = False;
+        bool found_three_arg_substr = False;
+        foreach FunctionVariant v in (Function::forName("substr").getVariants()) {
+            if (v.getParamNames() == ("str", "start")) {
+                found_two_arg_substr = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str", "start"), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("str", "start", "len")) {
+                found_three_arg_substr = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("str", "start", "len"), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_two_arg_substr);
+        assertTrue(found_three_arg_substr);
     }
 
     modNameTests() {

@@ -178,6 +178,11 @@ bool QoreExternalVariant::isBuiltin() const {
     return !reinterpret_cast<const AbstractQoreFunctionVariant*>(this)->isUser();
 }
 
+bool QoreExternalVariant::isNamedCallable() const {
+    const AbstractQoreFunctionVariant* v = reinterpret_cast<const AbstractQoreFunctionVariant*>(this);
+    return v->isNamedCallable() && (!v->hasVarargs() || v->numParams());
+}
+
 bool QoreExternalVariant::hasBody() const {
     return reinterpret_cast<const AbstractQoreFunctionVariant*>(this)->hasBody();
 }

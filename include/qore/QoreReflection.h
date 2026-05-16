@@ -55,6 +55,9 @@ public:
     //! returns true if the variant is builtin
     DLLEXPORT bool isBuiltin() const;
 
+    //! returns true if the variant accepts named-argument calls
+    DLLEXPORT bool isNamedCallable() const;
+
     //! returns true if the variant has a function body
     DLLEXPORT bool hasBody() const;
 
