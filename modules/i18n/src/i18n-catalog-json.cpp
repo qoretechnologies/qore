@@ -428,6 +428,10 @@ private:
             }
         } else if (data[pos] >= '1' && data[pos] <= '9') {
             while (pos < len && data[pos] >= '0' && data[pos] <= '9') {
+                if (pos != start && !((pos - start) % 100)
+                    && qore_check_cancel(xsink, "parsing i18n catalog JSON number")) {
+                    return QoreValue();
+                }
                 ++pos;
             }
         } else {
@@ -444,6 +448,10 @@ private:
                 return QoreValue();
             }
             while (pos < len && data[pos] >= '0' && data[pos] <= '9') {
+                if (pos != start && !((pos - start) % 100)
+                    && qore_check_cancel(xsink, "parsing i18n catalog JSON number fraction")) {
+                    return QoreValue();
+                }
                 ++pos;
             }
         }
@@ -459,6 +467,10 @@ private:
                 return QoreValue();
             }
             while (pos < len && data[pos] >= '0' && data[pos] <= '9') {
+                if (pos != start && !((pos - start) % 100)
+                    && qore_check_cancel(xsink, "parsing i18n catalog JSON number exponent")) {
+                    return QoreValue();
+                }
                 ++pos;
             }
         }

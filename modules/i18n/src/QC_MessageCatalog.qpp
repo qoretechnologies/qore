@@ -927,7 +927,14 @@ private:
                 return false;
             }
 
+            size_t placeholder_count = 0;
             for (const std::string& placeholder : placeholders) {
+                if (placeholder_count && !(placeholder_count % 100)
+                    && qore_check_cancel(xsink, "validating i18n catalog plural placeholder set")) {
+                    return false;
+                }
+                ++placeholder_count;
+
                 if (!i18n_catalog_contains_placeholder(allowed, placeholder)) {
                     xsink->raiseException("I18N-CATALOG-ERROR",
                         "plural message '%s' form '%s' introduces unknown placeholder '{%s}'",
@@ -936,7 +943,14 @@ private:
                 }
             }
 
+            size_t required_count = 0;
             for (const std::string& placeholder : required) {
+                if (required_count && !(required_count % 100)
+                    && qore_check_cancel(xsink, "validating i18n catalog required placeholder set")) {
+                    return false;
+                }
+                ++required_count;
+
                 if (!i18n_catalog_contains_placeholder(placeholders, placeholder)) {
                     xsink->raiseException("I18N-CATALOG-ERROR",
                         "plural message '%s' form '%s' must preserve placeholder '{%s}'",
@@ -1061,7 +1075,14 @@ private:
             return nullptr;
         }
 
+        size_t form_count = 0;
         for (const auto& entry : msg.plural_forms) {
+            if (form_count && !(form_count % 100)
+                && qore_check_cancel(xsink, "checking i18n catalog exact plural forms")) {
+                return nullptr;
+            }
+            ++form_count;
+
             if (!entry.first.empty() && entry.first[0] == '=') {
                 I18nCatalogDecimalInfo exact;
                 if (!i18n_catalog_parse_decimal_string(entry.first.c_str() + 1, exact, xsink,

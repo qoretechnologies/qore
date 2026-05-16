@@ -537,6 +537,10 @@ static std::vector<I18nLanguageRange> i18n_parse_accept_language_header(const st
                 std::string params = item.substr(semi + 1);
                 size_t pstart = 0;
                 while (pstart <= params.size()) {
+                    if (pstart && !(pstart % 100) && qore_check_cancel(xsink,
+                            "parsing Accept-Language parameters")) {
+                        return ranges;
+                    }
                     size_t psemi = params.find(';', pstart);
                     std::string raw_param = params.substr(pstart,
                         psemi == std::string::npos ? std::string::npos : psemi - pstart);
@@ -833,6 +837,10 @@ static std::vector<std::string> i18n_discover_catalog_files(const std::string& d
         }
 
         for (size_t l = 0; l < locales.size(); ++l) {
+            if (l && !(l % 100) && qore_check_cancel(xsink, "checking i18n catalog locale candidates")) {
+                return files;
+            }
+
             const std::string rels[] = {
                 domain + "/" + locales[l] + ".json",
                 domain + "." + locales[l] + ".json",
