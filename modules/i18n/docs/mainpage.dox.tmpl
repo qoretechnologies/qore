@@ -97,6 +97,17 @@ I18n::MessageCatalog layered_catalog(("base.json", "override.json"));
     File-loading APIs and constructors are tagged with the \c FILESYSTEM functional domain and enforce a bounded file
     size. JSON parsing is strict, rejects duplicate object keys, and validates UTF-8 strings.
 
+    Discovery uses \c QORE_CATALOG_DIR by default and can be overridden explicitly. Returned files are already ordered
+    for deterministic composition: lower precedence first, with \c root before more-specific locale files.
+
+    @code{.py}
+list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {
+    "search_path": ("/opt/qore/catalogs",),
+    "override_path": "/etc/qore/catalogs",
+});
+I18n::MessageCatalog billing_catalog(files);
+    @endcode
+
     Runtime state policy follows gettext's conservative behavior by default: \c fuzzy, \c needs-review, and
     \c stale entries are stored but not used at runtime. Pass \c {"use_unreviewed": True} to the constructor to preview
     those entries in development.
@@ -169,7 +180,7 @@ printf("backend=%s icu=%s cldr=%s\n", info.backend, info.icu_version, info.cldr_
 
     @section i18n_scope Current Scope
 
-    This module is the implementation target for issue #5334. Catalog search-path discovery, extraction tooling,
-    rich message formatting, date/time skeleton formatting, request-locale propagation, and machine-translation workflow
-    support are planned follow-up phases in the same issue.
+    This module is the implementation target for issue #5334. Extraction tooling, rich message formatting, date/time
+    skeleton formatting, request-locale propagation, and machine-translation workflow support are planned follow-up
+    phases in the same issue.
 */

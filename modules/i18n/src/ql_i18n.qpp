@@ -27,6 +27,7 @@
 
 #include "i18n-module.h"
 
+#include "qore/SystemEnvironment.h"
 #include "qore/intern/QoreTimeZoneManager.h"
 
 #include <unicode/bytestream.h>
@@ -49,7 +50,10 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
+
+#include <sys/stat.h>
 
 static constexpr int64 I18N_CATALOG_SCHEMA_VERSION = 1;
 
@@ -627,6 +631,206 @@ static bool i18n_qore_value_to_utf8_string(QoreValue value, std::string& out, Ex
 
     out = str->c_str();
     return true;
+}
+
+static bool i18n_validate_catalog_domain(const std::string& domain, ExceptionSink* xsink) {
+    if (domain.empty() || domain.size() > 128) {
+        xsink->raiseException("I18N-CATALOG-ERROR",
+            "catalog domain must be between 1 and 128 ASCII bytes");
+        return false;
+    }
+    if (domain == "." || domain == ".." || domain.find("..") != std::string::npos) {
+        xsink->raiseException("I18N-CATALOG-ERROR", "catalog domain cannot contain path traversal components");
+        return false;
+    }
+
+    for (size_t i = 0; i < domain.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "validating i18n catalog domain")) {
+            return false;
+        }
+        unsigned char c = static_cast<unsigned char>(domain[i]);
+        if (!(std::isalnum(c) || c == '_' || c == '-' || c == '.')) {
+            xsink->raiseException("I18N-CATALOG-ERROR",
+                "catalog domain may only contain ASCII letters, digits, '.', '_', and '-'");
+            return false;
+        }
+    }
+    return true;
+}
+
+static void i18n_push_catalog_search_path(std::vector<std::string>& paths, const std::string& path) {
+    if (!path.empty() && std::find(paths.begin(), paths.end(), path) == paths.end()) {
+        paths.push_back(path);
+    }
+}
+
+static bool i18n_split_catalog_path_list(std::vector<std::string>& paths, const std::string& path_list,
+        ExceptionSink* xsink) {
+#ifdef _WIN32
+    static constexpr char path_sep = ';';
+#else
+    static constexpr char path_sep = ':';
+#endif
+
+    size_t start = 0;
+    while (start <= path_list.size()) {
+        if (start && !(start % 100) && qore_check_cancel(xsink, "parsing i18n catalog search path")) {
+            return false;
+        }
+
+        size_t sep = path_list.find(path_sep, start);
+        std::string entry = path_list.substr(start, sep == std::string::npos ? std::string::npos : sep - start);
+        i18n_push_catalog_search_path(paths, entry);
+        if (sep == std::string::npos) {
+            break;
+        }
+        start = sep + 1;
+    }
+    return true;
+}
+
+static bool i18n_append_catalog_paths_option(std::vector<std::string>& paths, const QoreHashNode* opts,
+        const char* key, ExceptionSink* xsink) {
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+    if (value.getType() == NT_STRING) {
+        std::string path;
+        if (!i18n_qore_value_to_utf8_string(value, path, xsink, key)) {
+            return false;
+        }
+        i18n_push_catalog_search_path(paths, path);
+        return true;
+    }
+    if (value.getType() != NT_LIST) {
+        xsink->raiseException("I18N-CATALOG-ERROR", "opts.%s must be a string or list<string>; got type '%s'",
+            key, value.getTypeName());
+        return false;
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    for (size_t i = 0; i < list->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking i18n catalog search path option")) {
+            return false;
+        }
+        QoreStringValueHelper str(list->retrieveEntry(i), QCS_UTF8, xsink);
+        if (*xsink) {
+            return false;
+        }
+        i18n_push_catalog_search_path(paths, str->c_str());
+    }
+    return true;
+}
+
+static bool i18n_append_env_catalog_search_path(std::vector<std::string>& paths, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> env_path(SystemEnvironment::getAsStringNode("QORE_CATALOG_DIR"));
+    if (!env_path) {
+        return true;
+    }
+
+    TempEncodingHelper tmp(*env_path, QCS_UTF8, xsink);
+    if (*xsink) {
+        return false;
+    }
+    return i18n_split_catalog_path_list(paths, tmp->c_str(), xsink);
+}
+
+static std::vector<std::string> i18n_get_catalog_search_paths(const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::vector<std::string> paths;
+
+    if (opts && !opts->getKeyValue("search_path").isNullOrNothing()) {
+        if (!i18n_append_catalog_paths_option(paths, opts, "search_path", xsink)) {
+            return paths;
+        }
+    } else if (!i18n_append_env_catalog_search_path(paths, xsink)) {
+        return paths;
+    }
+
+    i18n_append_catalog_paths_option(paths, opts, "override_path", xsink);
+    return paths;
+}
+
+static std::string i18n_join_catalog_path(const std::string& dir, const std::string& rel) {
+    if (dir.empty()) {
+        return rel;
+    }
+
+    char last = dir[dir.size() - 1];
+    if (last == '/' || last == '\\') {
+        return dir + rel;
+    }
+    return dir + "/" + rel;
+}
+
+static bool i18n_regular_file_exists(const std::string& path) {
+    struct stat sbuf;
+    return !stat(path.c_str(), &sbuf) && S_ISREG(sbuf.st_mode);
+}
+
+static std::vector<std::string> i18n_discover_catalog_files(const std::string& domain, const std::string& locale,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::vector<std::string> files;
+    if (!i18n_validate_catalog_domain(domain, xsink)) {
+        return files;
+    }
+
+    std::vector<std::string> paths = i18n_get_catalog_search_paths(opts, xsink);
+    if (*xsink) {
+        return files;
+    }
+
+    std::vector<std::string> locales = i18n_locale_fallback_chain(locale, xsink);
+    if (*xsink) {
+        return files;
+    }
+    std::reverse(locales.begin(), locales.end());
+
+    std::unordered_set<std::string> seen;
+    for (size_t p = 0; p < paths.size(); ++p) {
+        if (p && !(p % 100) && qore_check_cancel(xsink, "discovering i18n catalog files")) {
+            return files;
+        }
+
+        for (size_t l = 0; l < locales.size(); ++l) {
+            const std::string rels[] = {
+                domain + "/" + locales[l] + ".json",
+                domain + "." + locales[l] + ".json",
+            };
+
+            for (const std::string& rel : rels) {
+                std::string path = i18n_join_catalog_path(paths[p], rel);
+                if (seen.find(path) != seen.end()) {
+                    continue;
+                }
+                seen.insert(path);
+                if (i18n_regular_file_exists(path)) {
+                    files.push_back(std::move(path));
+                }
+            }
+        }
+    }
+
+    return files;
+}
+
+static QoreListNode* i18n_string_vector_to_list(const std::vector<std::string>& values, ExceptionSink* xsink,
+        const char* activity) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, activity)) {
+            return nullptr;
+        }
+        rv->push(new QoreStringNode(values[i], QCS_UTF8), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return rv.release();
 }
 
 static std::string i18n_string_arg_to_utf8(const QoreStringNode* str, ExceptionSink* xsink, const char* arg_name,
@@ -1437,6 +1641,57 @@ string negotiate_locale(string header, list<string> available) [flags=RET_VALUE_
 */
 string negotiate_locale(string header, list<string> available, string default_locale) [flags=RET_VALUE_ONLY] {
     return i18n_negotiate_locale(header, available, default_locale, xsink);
+}
+
+//! Returns the configured native catalog search path.
+/** If \c opts.search_path is present, it is returned instead of \c QORE_CATALOG_DIR. \c opts.override_path entries are
+    appended after the base search path and therefore have higher precedence for catalog composition.
+
+    @param opts optional hash with \c search_path and \c override_path string or list<string> entries
+    @return search path entries in low-to-high precedence order
+
+    @throw I18N-CATALOG-ERROR if options have invalid types
+*/
+list<string> get_catalog_search_path(*hash<auto> opts) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    std::vector<std::string> paths = i18n_get_catalog_search_paths(opts, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return i18n_string_vector_to_list(paths, xsink, "returning i18n catalog search path");
+}
+
+//! Discovers native catalog JSON files for a domain and requested locale.
+/** Discovery checks \c QORE_CATALOG_DIR by default. Pass \c opts.search_path to use an explicit base path list, and
+    \c opts.override_path to append application/Qorus override paths. Returned files are ordered for direct
+    MessageCatalog construction: lower precedence first, with locale files ordered \c root before more-specific
+    locales.
+
+    For each search directory, both \c domain/locale.json and \c domain.locale.json are recognized. The domain is
+    restricted to ASCII letters, digits, \c '.', \c '_', and \c '-' to prevent path traversal.
+
+    @param domain catalog domain
+    @param locale requested locale
+    @param opts optional hash with \c search_path and \c override_path string or list<string> entries
+    @return existing native catalog JSON file paths in load order
+
+    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+list<string> discover_catalog_files(string domain, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY;dom=FILESYSTEM,EXTERNAL_INFO] {
+    std::string domain_str = i18n_string_arg_to_utf8(domain, xsink, "domain", 128);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string locale_str = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    std::vector<std::string> files = i18n_discover_catalog_files(domain_str, locale_str, opts, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return i18n_string_vector_to_list(files, xsink, "returning discovered i18n catalog files");
 }
 
 //! Formats a decimal number with explicit locale data.

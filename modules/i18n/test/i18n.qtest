@@ -33,6 +33,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("message catalog layer precedence", \messageCatalogLayerPrecedenceTest());
         addTestCase("message catalog JSON file loading", \messageCatalogJsonFileLoadingTest());
         addTestCase("message catalog JSON validation", \messageCatalogJsonValidationTest());
+        addTestCase("message catalog discovery", \messageCatalogDiscoveryTest());
         addTestCase("message catalog validation", \messageCatalogValidationTest());
 
         set_return_value(main());
@@ -313,6 +314,13 @@ class I18nTest inherits QUnit::Test {
             "}\n";
     }
 
+    private nothing writeTextFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
     messageCatalogLookupTest() {
 %ifdef NoI18n
         testSkip("i18n module not available");
@@ -447,6 +455,45 @@ class I18nTest inherits QUnit::Test {
         bad.file.close();
         assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
             return new I18n::MessageCatalog(bad.path);
+        });
+    }
+
+    messageCatalogDiscoveryTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        string base_dir = make_tmp_dir("qore-i18n-base-");
+        string override_dir = make_tmp_dir("qore-i18n-override-");
+        on_exit remove_tree(base_dir);
+        on_exit remove_tree(override_dir);
+
+        mkdir(base_dir + "/billing");
+        mkdir(override_dir + "/billing");
+
+        string base_root = base_dir + "/billing/root.json";
+        string base_cs = base_dir + "/billing/cs.json";
+        string override_cs = override_dir + "/billing/cs.json";
+        writeTextFile(base_root, createCatalogJson("Root"));
+        writeTextFile(base_cs, createCatalogJson("Ahoj"));
+        writeTextFile(override_cs, createCatalogJson("Cau"));
+
+        list<string> search_path = I18n::get_catalog_search_path({
+            "search_path": (base_dir,),
+            "override_path": override_dir,
+        });
+        assertEq((base_dir, override_dir), search_path);
+
+        list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {
+            "search_path": (base_dir,),
+            "override_path": override_dir,
+        });
+        assertEq((base_root, base_cs, override_cs), files);
+
+        I18n::MessageCatalog catalog(files);
+        assertEq("Cau, Eva", catalog.t("Hello, {name}", "cs", {"name": "Eva"}));
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return I18n::discover_catalog_files("../billing", "cs", {"search_path": (base_dir,)});
         });
     }
 
