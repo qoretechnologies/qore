@@ -28,6 +28,8 @@
 #include "i18n-module.h"
 
 #include <unicode/bytestream.h>
+#include <unicode/coll.h>
+#include <unicode/currunit.h>
 #include <unicode/locid.h>
 #include <unicode/numberformatter.h>
 #include <unicode/plurrule.h>
@@ -38,6 +40,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <memory>
 #include <string>
@@ -620,6 +623,24 @@ static bool i18n_qore_value_to_utf8_string(QoreValue value, std::string& out, Ex
     return true;
 }
 
+static std::string i18n_string_arg_to_utf8(const QoreStringNode* str, ExceptionSink* xsink, const char* arg_name,
+        size_t max_len = 1024 * 1024) {
+    TempEncodingHelper tmp(str, QCS_UTF8, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+    if (!tmp) {
+        xsink->raiseException("I18N-STRING-ERROR", "%s could not be converted to UTF-8", arg_name);
+        return std::string();
+    }
+    if (tmp->strlen() > max_len) {
+        xsink->raiseException("I18N-STRING-ERROR", "%s is too long; maximum supported length is %zu bytes",
+            arg_name, max_len);
+        return std::string();
+    }
+    return tmp->c_str();
+}
+
 static icu::Locale i18n_make_locale(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
     std::string tag = i18n_qore_string_to_utf8(locale_arg, xsink, "locale");
     if (*xsink) {
@@ -663,6 +684,194 @@ static UPluralType i18n_get_plural_type(const QoreHashNode* opts, ExceptionSink*
     xsink->raiseException("I18N-PLURAL-TYPE-ERROR",
         "unsupported plural type '%s'; expected 'cardinal' or 'ordinal'", type.c_str());
     return UPLURAL_TYPE_CARDINAL;
+}
+
+static bool i18n_get_optional_fraction_digits(const QoreHashNode* opts, const char* key, int32_t& out,
+        bool& present, ExceptionSink* xsink) {
+    present = false;
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+    if (value.getType() != NT_INT) {
+        xsink->raiseException("I18N-FORMAT-ERROR", "opts.%s must be an int; got type '%s'", key,
+            value.getTypeName());
+        return false;
+    }
+
+    int64 i = value.getAsBigInt();
+    if (i < 0 || i > 100) {
+        xsink->raiseException("I18N-FORMAT-ERROR", "opts.%s must be between 0 and 100", key);
+        return false;
+    }
+
+    out = static_cast<int32_t>(i);
+    present = true;
+    return true;
+}
+
+static bool i18n_get_optional_bool(const QoreHashNode* opts, const char* key, bool& out, bool& present) {
+    present = false;
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+
+    out = value.getAsBool();
+    present = true;
+    return true;
+}
+
+static bool i18n_apply_number_options(icu::number::UnlocalizedNumberFormatter& formatter,
+        const I18nDecimalInfo& decimal, const QoreHashNode* opts, bool currency, ExceptionSink* xsink) {
+    int32_t min_fraction = 0;
+    int32_t max_fraction = 0;
+    bool has_min_fraction = false;
+    bool has_max_fraction = false;
+    if (!i18n_get_optional_fraction_digits(opts, "min_fraction_digits", min_fraction, has_min_fraction, xsink)
+        || !i18n_get_optional_fraction_digits(opts, "max_fraction_digits", max_fraction, has_max_fraction, xsink)) {
+        return false;
+    }
+
+    if (has_min_fraction && has_max_fraction && min_fraction > max_fraction) {
+        xsink->raiseException("I18N-FORMAT-ERROR",
+            "opts.min_fraction_digits cannot be greater than opts.max_fraction_digits");
+        return false;
+    }
+
+    if (has_min_fraction && has_max_fraction) {
+        formatter = formatter.precision(icu::number::Precision::minMaxFraction(min_fraction, max_fraction));
+    } else if (has_min_fraction) {
+        formatter = formatter.precision(icu::number::Precision::minFraction(min_fraction));
+    } else if (has_max_fraction) {
+        formatter = formatter.precision(icu::number::Precision::maxFraction(max_fraction));
+    } else if (!currency) {
+        formatter = formatter.precision(icu::number::Precision::fixedFraction(decimal.fraction_digits));
+    }
+
+    bool grouping = false;
+    bool has_grouping = false;
+    i18n_get_optional_bool(opts, "grouping", grouping, has_grouping);
+    if (has_grouping && !grouping) {
+        formatter = formatter.grouping(UNUM_GROUPING_OFF);
+    }
+    return true;
+}
+
+static QoreStringNode* i18n_format_number_value(QoreValue value, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    I18nDecimalInfo decimal;
+    if (!i18n_value_to_decimal_info(value, decimal, xsink)) {
+        return nullptr;
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    icu::number::UnlocalizedNumberFormatter formatter = icu::number::NumberFormatter::with();
+    if (!i18n_apply_number_options(formatter, decimal, opts, false, xsink)) {
+        return nullptr;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::number::FormattedNumber formatted = formatter.locale(locale).formatDecimal(
+        icu::StringPiece(decimal.formatted), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot format number '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    icu::UnicodeString formatted_text = formatted.toString(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot render formatted number '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    std::string rv;
+    formatted_text.toUTF8String(rv);
+    return new QoreStringNode(rv, QCS_UTF8);
+}
+
+static QoreStringNode* i18n_format_currency_value(QoreValue value, const QoreStringNode* currency_arg,
+        const QoreStringNode* locale_arg, const QoreHashNode* opts, ExceptionSink* xsink) {
+    I18nDecimalInfo decimal;
+    if (!i18n_value_to_decimal_info(value, decimal, xsink)) {
+        return nullptr;
+    }
+
+    std::string currency_code = i18n_string_arg_to_utf8(currency_arg, xsink, "currency", 16);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::CurrencyUnit currency(icu::StringPiece(currency_code), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-CURRENCY-ERROR", "invalid currency code '%s': %s",
+            currency_code.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    icu::number::UnlocalizedNumberFormatter formatter = icu::number::NumberFormatter::with().unit(currency);
+    if (!i18n_apply_number_options(formatter, decimal, opts, true, xsink)) {
+        return nullptr;
+    }
+
+    icu::number::FormattedNumber formatted = formatter.locale(locale).formatDecimal(
+        icu::StringPiece(decimal.formatted), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot format currency value '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    icu::UnicodeString formatted_text = formatted.toString(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot render formatted currency value '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    std::string rv;
+    formatted_text.toUTF8String(rv);
+    return new QoreStringNode(rv, QCS_UTF8);
+}
+
+static std::unique_ptr<icu::Collator> i18n_make_collator(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    std::unique_ptr<icu::Collator> collator(icu::Collator::createInstance(locale, status));
+    if (U_FAILURE(status) || !collator) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create collator for locale '%s': %s",
+            locale.getName(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+    return collator;
+}
+
+static icu::UnicodeString i18n_utf8_to_unicode_string(const std::string& value) {
+    return icu::UnicodeString::fromUTF8(icu::StringPiece(value));
 }
 
 static std::string i18n_select_plural_category(QoreValue value, const QoreStringNode* locale_arg,
@@ -1026,6 +1235,163 @@ string negotiate_locale(string header, list<string> available) [flags=RET_VALUE_
 */
 string negotiate_locale(string header, list<string> available, string default_locale) [flags=RET_VALUE_ONLY] {
     return i18n_negotiate_locale(header, available, default_locale, xsink);
+}
+
+//! Formats a decimal number with explicit locale data.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag, including supported Unicode numbering-system extensions
+    @return locale-formatted decimal number
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if formatting options are invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+
+    @par Example:
+    @code{.py}
+assertEq("1,234.50", I18n::format_number("1234.50", "en-US"));
+    @endcode
+*/
+string format_number(auto value, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_format_number_value(value, locale, nullptr, xsink);
+}
+
+//! Formats a decimal number with explicit locale data and options.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag
+    @param opts optional hash; supported keys are \c min_fraction_digits, \c max_fraction_digits, and \c grouping
+    @return locale-formatted decimal number
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if \a opts is invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+*/
+string format_number(auto value, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_format_number_value(value, locale, opts, xsink);
+}
+
+//! Formats a currency value with explicit locale data.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param currency ISO 4217 currency code such as \c "USD" or \c "EUR"
+    @param locale BCP 47 locale tag
+    @return locale-formatted currency value
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-CURRENCY-ERROR if \a currency is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if formatting options are invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+*/
+string format_currency(auto value, string currency, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_format_currency_value(value, currency, locale, nullptr, xsink);
+}
+
+//! Formats a currency value with explicit locale data and options.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param currency ISO 4217 currency code such as \c "USD" or \c "EUR"
+    @param locale BCP 47 locale tag
+    @param opts optional hash; supported keys are \c min_fraction_digits, \c max_fraction_digits, and \c grouping
+    @return locale-formatted currency value
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-CURRENCY-ERROR if \a currency is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if \a opts is invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+*/
+string format_currency(auto value, string currency, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_format_currency_value(value, currency, locale, opts, xsink);
+}
+
+//! Compares two strings using explicit locale collation.
+/** @param left left string
+    @param right right string
+    @param locale BCP 47 locale tag, including supported Unicode collation extensions
+    @return \c -1 if \a left sorts before \a right, \c 1 if after, or \c 0 if equal under the collator
+
+    @throw I18N-STRING-ERROR if either string cannot be converted to UTF-8
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a collator
+*/
+int compare_strings(string left, string right, string locale) [flags=RET_VALUE_ONLY] {
+    std::string left_str = i18n_string_arg_to_utf8(left, xsink, "left");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string right_str = i18n_string_arg_to_utf8(right, xsink, "right");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::unique_ptr<icu::Collator> collator = i18n_make_collator(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    icu::Collator::EComparisonResult result = collator->compare(i18n_utf8_to_unicode_string(left_str),
+        i18n_utf8_to_unicode_string(right_str));
+    return result == icu::Collator::LESS ? -1 : result == icu::Collator::GREATER ? 1 : 0;
+}
+
+//! Returns an ICU sort key for a string and explicit locale.
+/** Sort keys are binary data intended for cache-local ordering only.
+
+    @param value string to convert
+    @param locale BCP 47 locale tag, including supported Unicode collation extensions
+    @return binary ICU sort key
+
+    @throw I18N-STRING-ERROR if \a value cannot be converted to UTF-8 or the sort key is too large
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a collator
+
+    @note Sort keys are not stable across ICU/CLDR versions, locales, or collation options. Persistent keys must be
+    tagged with the locale, options, backend, ICU/CLDR versions, and collation version.
+*/
+binary get_sort_key(string value, string locale) [flags=RET_VALUE_ONLY] {
+    std::string value_str = i18n_string_arg_to_utf8(value, xsink, "value");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::unique_ptr<icu::Collator> collator = i18n_make_collator(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    icu::UnicodeString uvalue = i18n_utf8_to_unicode_string(value_str);
+    int32_t len = collator->getSortKey(uvalue, nullptr, 0);
+    if (len < 0 || len > 1024 * 1024) {
+        xsink->raiseException("I18N-STRING-ERROR", "generated sort key is too large");
+        return QoreValue();
+    }
+
+    std::vector<uint8_t> data(static_cast<size_t>(len));
+    int32_t actual = collator->getSortKey(uvalue, data.data(), len);
+    if (actual < 0 || actual > len) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot generate sort key");
+        return QoreValue();
+    }
+
+    BinaryNode* rv = new BinaryNode;
+    rv->append(data.data(), static_cast<size_t>(actual));
+    return rv;
+}
+
+//! Returns the ICU collation version for an explicit locale.
+/** @param locale BCP 47 locale tag
+    @return collation version string
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a collator
+*/
+string get_collation_version(string locale) [flags=RET_VALUE_ONLY] {
+    std::unique_ptr<icu::Collator> collator = i18n_make_collator(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    UVersionInfo version;
+    collator->getVersion(version);
+    return new QoreStringNode(i18n_version_to_string(version), QCS_UTF8);
 }
 
 //! Returns the CLDR plural category for a value and locale using cardinal rules.

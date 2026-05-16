@@ -118,6 +118,22 @@ printf("%s\n", locale); # fr
     Negotiation also uses ICU likely-subtags so broad requests such as \c sr can match an available
     \c sr-Cyrl catalog.
 
+    @section i18n_formatting Formatting and Collation
+
+    Number and currency formatting use explicit locale arguments and do not change existing core machine-format
+    functions. Collation APIs expose compare, binary sort-key, and collation-version primitives; sort keys are for
+    cache-local ordering unless they are tagged with locale, collation options, backend, ICU/CLDR versions, and
+    collation version.
+
+    @code{.py}
+%requires i18n
+
+printf("%s\n", I18n::format_number("1234.50", "en-US"));
+printf("%s\n", I18n::format_currency("12.5", "USD", "en-US"));
+assertLt(0, I18n::compare_strings("a", "b", "en-US"));
+binary key = I18n::get_sort_key("file-001", "en-US-u-kn-true");
+    @endcode
+
     @section i18n_versions Backend Versions
 
     The module exposes ICU and CLDR data versions so deployments can report the locale-data backend in diagnostics:
@@ -130,6 +146,6 @@ printf("backend=%s icu=%s cldr=%s\n", info.backend, info.icu_version, info.cldr_
     @section i18n_scope Current Scope
 
     This module is the implementation target for issue #5334. Catalog file loading, extraction tooling, rich message
-    formatting, locale-aware number/date/currency formatting, collation, request-locale propagation, and
-    machine-translation workflow support are planned follow-up phases in the same issue.
+    formatting, locale-aware date/time formatting, request-locale propagation, and machine-translation workflow support
+    are planned follow-up phases in the same issue.
 */

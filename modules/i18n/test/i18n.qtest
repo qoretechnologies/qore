@@ -22,6 +22,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("visible fraction digits", \visibleFractionDigitsTest());
         addTestCase("ordinal plural categories", \ordinalPluralCategoryTest());
         addTestCase("locale negotiation utilities", \localeNegotiationTest());
+        addTestCase("locale formatting and collation", \localeFormattingAndCollationTest());
         addTestCase("plural form selection", \pluralFormTest());
         addTestCase("plural validation errors", \validationErrorTest());
         addTestCase("message catalog lookup", \messageCatalogLookupTest());
@@ -127,6 +128,25 @@ class I18nTest inherits QUnit::Test {
         assertThrows("I18N-ACCEPT-LANGUAGE-ERROR", auto sub() {
             return I18n::parse_accept_language("en;q=1.5");
         });
+    }
+
+    localeFormattingAndCollationTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        assertEq("1,234.50", I18n::format_number("1234.50", "en-US"));
+        assertEq("1234.50", I18n::format_number("1234.50", "en-US", {"grouping": False}));
+        assertEq("1.00", I18n::format_number(1, "en-US", {"min_fraction_digits": 2}));
+        assertRegex("^\\$12\\.50$", I18n::format_currency("12.5", "USD", "en-US"));
+
+        assertLt(0, I18n::compare_strings("a", "b", "en-US"));
+        assertEq(0, I18n::compare_strings("a", "a", "en-US"));
+        assertRegex("^[0-9]+\\.[0-9]+", I18n::get_collation_version("en-US"));
+
+        binary a_key = I18n::get_sort_key("a", "en-US");
+        binary b_key = I18n::get_sort_key("b", "en-US");
+        assertTrue(a_key.size() > 0);
+        assertNeq(a_key, b_key);
     }
 
     pluralFormTest() {
