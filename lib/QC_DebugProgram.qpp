@@ -155,18 +155,18 @@ int DebugProgram::getInterruptedCount() [flags=CONSTANT] {
 
 //! Add program to debugging
 /**
- *
+ * @param program the program to add to debugging
  */
-nothing DebugProgram::addProgram(ProgramControl[QoreProgram] pgm) {
-   dpgm->addProgram(*pgm, xsink);
+nothing DebugProgram::addProgram(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+   dpgm->addProgram(*program, xsink);
 }
 
 //! Remove program from debugging
 /**
- *
+ * @param program the program to remove from debugging
  */
-nothing DebugProgram::removeProgram(ProgramControl[QoreProgram] pgm) {
-   dpgm->removeProgram(*pgm);
+nothing DebugProgram::removeProgram(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+   dpgm->removeProgram(*program);
 }
 
 //! Get all programs being debugged
@@ -224,16 +224,21 @@ abstract DebugProgram::onExit(ProgramControl[QoreProgram] pgm, int statement, re
 
 //! Break particular program thread
 /**
+  * @param program the program to interrupt
+  * @param thread_id the target thread ID to interrupt
+  *
   * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set), -2 if the program has not been set as a debug target, or -3 if the given thread is not active in the target program or cannot run debugger callbacks
   */
-int DebugProgram::breakProgramThread(ProgramControl[QoreProgram] pgm, int tid) {
-   return dpgm->breakProgramThread(*pgm, tid);
+int DebugProgram::breakProgramThread(ProgramControl[QoreProgram] program, int thread_id) [flags=NAMED_ARGS] {
+   return dpgm->breakProgramThread(*program, thread_id);
 }
 
 //! Break program, i.e. all threads
 /**
+  * @param program the program to interrupt
+  *
   * @return 0 if the operation was successful, returns -1 if the program does not allow debugging (i.e. @ref Qore::PO_NO_DEBUGGING is set), -2 if the program has not been set as a debug target, or -3 if no active target program thread can run debugger callbacks
   */
-int DebugProgram::breakProgram(ProgramControl[QoreProgram] pgm) {
-   return dpgm->breakProgram(*pgm);
+int DebugProgram::breakProgram(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+   return dpgm->breakProgram(*program);
 }

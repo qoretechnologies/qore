@@ -725,6 +725,10 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Breakpoint", "removeThreadId", ("thread_id",));
         assertNamedClassMethodVariantCount("Breakpoint", "isThreadId", ("thread_id",));
         assertNamedClassStaticMethodVariantCount("Breakpoint", "resolveBreakpointId", ("breakpoint_id",));
+        assertNamedClassMethodVariantCount("DebugProgram", "addProgram", ("program",));
+        assertNamedClassMethodVariantCount("DebugProgram", "removeProgram", ("program",));
+        assertNamedClassMethodVariantCount("DebugProgram", "breakProgram", ("program",));
+        assertNamedClassMethodVariantCount("DebugProgram", "breakProgramThread", ("program", "thread_id"));
 
         assertNamedConstructorVariantCount("AutoGate", ("gate",));
         assertNamedConstructorVariantCount("AutoLock", ("mutex",));
