@@ -326,7 +326,12 @@ static std::vector<std::string> i18n_locale_fallback_chain(const std::string& ra
 
     if (locale != "root") {
         chain.push_back(locale);
+        size_t count = 0;
         while (true) {
+            if (count && !(count % 100) && qore_check_cancel(xsink, "building locale fallback chain")) {
+                return chain;
+            }
+            ++count;
             size_t pos = locale.rfind('-');
             if (pos == std::string::npos) {
                 break;
@@ -337,6 +342,87 @@ static std::vector<std::string> i18n_locale_fallback_chain(const std::string& ra
     }
     chain.push_back("root");
     return chain;
+}
+
+static std::string i18n_add_likely_subtags_to_locale(const std::string& raw, ExceptionSink* xsink,
+        bool strip_extensions = false) {
+    std::string tag = i18n_canonicalize_locale_tag(raw, xsink, strip_extensions);
+    if (*xsink || tag == "root") {
+        return tag;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::forLanguageTag(icu::StringPiece(tag), status);
+    if (U_FAILURE(status) || locale.isBogus()) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "invalid locale '%s': %s", raw.c_str(),
+            i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    locale.addLikelySubtags(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "cannot add likely subtags to locale '%s': %s", raw.c_str(),
+            i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    std::string likely = locale.toLanguageTag<std::string>(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "cannot canonicalize likely-subtag locale '%s': %s",
+            raw.c_str(), i18n_icu_error_name(status));
+        return std::string();
+    }
+    return strip_extensions ? i18n_strip_unicode_extensions(likely) : likely;
+}
+
+static void i18n_push_locale_candidate(std::vector<std::string>& candidates, const std::string& candidate,
+        bool include_root) {
+    if (candidate.empty() || (candidate == "root" && !include_root)
+        || std::find(candidates.begin(), candidates.end(), candidate) != candidates.end()) {
+        return;
+    }
+    candidates.push_back(candidate);
+}
+
+static std::vector<std::string> i18n_locale_lookup_candidates(const std::string& raw, ExceptionSink* xsink,
+        bool include_root) {
+    std::vector<std::string> candidates;
+    for (const std::string& candidate : i18n_locale_fallback_chain(raw, xsink)) {
+        if (*xsink) {
+            return candidates;
+        }
+        i18n_push_locale_candidate(candidates, candidate, include_root);
+    }
+
+    std::string likely = i18n_add_likely_subtags_to_locale(raw, xsink, true);
+    if (*xsink || likely == "root") {
+        return candidates;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::forLanguageTag(icu::StringPiece(likely), status);
+    if (U_FAILURE(status) || locale.isBogus()) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "invalid likely-subtag locale '%s': %s", likely.c_str(),
+            i18n_icu_error_name(status));
+        return candidates;
+    }
+
+    const std::string language = locale.getLanguage();
+    const std::string script = locale.getScript();
+    const std::string region = locale.getCountry();
+
+    i18n_push_locale_candidate(candidates, likely, include_root);
+    if (!language.empty() && !region.empty()) {
+        i18n_push_locale_candidate(candidates, language + "-" + region, include_root);
+    }
+    if (!language.empty() && !script.empty()) {
+        i18n_push_locale_candidate(candidates, language + "-" + script, include_root);
+    }
+    if (!language.empty()) {
+        i18n_push_locale_candidate(candidates, language, include_root);
+    }
+
+    return candidates;
 }
 
 struct I18nLanguageRange {
@@ -499,12 +585,14 @@ static QoreStringNode* i18n_negotiate_locale(const QoreStringNode* header, const
             return new QoreStringNode(default_str, QCS_UTF8);
         }
 
-        for (const std::string& candidate : i18n_locale_fallback_chain(ranges[i].locale, xsink)) {
+        std::vector<std::string> candidates = i18n_locale_lookup_candidates(ranges[i].locale, xsink,
+            ranges[i].locale == "root");
+        if (*xsink) {
+            return nullptr;
+        }
+        for (const std::string& candidate : candidates) {
             if (*xsink) {
                 return nullptr;
-            }
-            if (candidate == "root" && ranges[i].locale != "root") {
-                continue;
             }
             auto match = available_map.find(candidate);
             if (match != available_map.end()) {
@@ -822,6 +910,29 @@ string canonicalize_locale(string locale) [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(canonical, QCS_UTF8);
 }
 
+//! Returns the likely-subtag form of a locale tag.
+/** @param locale locale tag
+    @return canonical locale tag with likely language, script, and region subtags added
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or ICU cannot maximize the locale
+
+    @par Example:
+    @code{.py}
+assertEq("sr-Cyrl-RS", I18n::add_likely_subtags("sr"));
+    @endcode
+*/
+string add_likely_subtags(string locale) [flags=RET_VALUE_ONLY] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string likely = i18n_add_likely_subtags_to_locale(tag, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(likely, QCS_UTF8);
+}
+
 //! Returns the catalog fallback chain for a locale tag.
 /** Unicode formatting extensions are stripped from catalog identity.
 
@@ -843,6 +954,9 @@ list<string> get_locale_fallback_chain(string locale) [flags=RET_VALUE_ONLY] {
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
     for (size_t i = 0; i < chain.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "returning locale fallback chain")) {
+            return QoreValue();
+        }
         rv->push(new QoreStringNode(chain[i], QCS_UTF8), xsink);
         if (*xsink) {
             return QoreValue();

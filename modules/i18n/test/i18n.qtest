@@ -105,6 +105,7 @@ class I18nTest inherits QUnit::Test {
 %endif
         assertEq("en-US", I18n::canonicalize_locale("en_US"));
         assertEq("he", I18n::canonicalize_locale("iw"));
+        assertEq("sr-Cyrl-RS", I18n::add_likely_subtags("sr"));
         assertEq(("fr-CA", "fr", "root"), I18n::get_locale_fallback_chain("fr-CA-u-nu-latn"));
 
         list<hash<auto>> ranges = I18n::parse_accept_language("da, en-gb;q=0.8, en;q=0.7");
@@ -119,6 +120,8 @@ class I18nTest inherits QUnit::Test {
         assertEq("root", I18n::negotiate_locale("de-AT", ("en", "fr", "root")));
         assertEq("fr", I18n::negotiate_locale("de-AT", ("en", "fr"), "fr"));
         assertEq("fr", I18n::negotiate_locale("*, en;q=0.5", ("en", "fr"), "fr"));
+        assertEq("sr-Cyrl", I18n::negotiate_locale("sr", ("sr-Cyrl", "en"), "en"));
+        assertEq("zh-Hant", I18n::negotiate_locale("zh-TW", ("zh-Hant", "en"), "en"));
 
         assertThrows("I18N-ACCEPT-LANGUAGE-ERROR", auto sub() {
             return I18n::parse_accept_language("en;q=1.5");

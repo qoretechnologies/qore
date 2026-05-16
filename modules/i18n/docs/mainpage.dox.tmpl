@@ -92,6 +92,7 @@ printf("%s\n", catalog.tc("workflow.greeting", "Hello, {name}", "cs", {"name": "
 %requires i18n
 
 printf("%s\n", I18n::canonicalize_locale("en_US")); # en-US
+printf("%s\n", I18n::add_likely_subtags("sr"));     # sr-Cyrl-RS
 printf("%y\n", I18n::get_locale_fallback_chain("fr-CA-u-nu-latn"));
 
 string locale = I18n::negotiate_locale(
@@ -103,6 +104,8 @@ printf("%s\n", locale); # fr
 
     \c I18n::parse_accept_language() returns a preference-sorted list of hashes containing \c locale, \c q, \c index,
     and \c wildcard keys. Header parsing is bounded and rejects malformed \c q values instead of guessing.
+    Negotiation also uses ICU likely-subtags so broad requests such as \c sr can match an available
+    \c sr-Cyrl catalog.
 
     @section i18n_versions Backend Versions
 
@@ -116,6 +119,6 @@ printf("backend=%s icu=%s cldr=%s\n", info.backend, info.icu_version, info.cldr_
     @section i18n_scope Current Scope
 
     This module is the implementation target for issue #5334. Catalog file loading, extraction tooling, rich message
-    formatting, locale-aware number/date/currency formatting, collation, likely-subtags, request-locale propagation,
-    and machine-translation workflow support are planned follow-up phases in the same issue.
+    formatting, locale-aware number/date/currency formatting, collation, request-locale propagation, and
+    machine-translation workflow support are planned follow-up phases in the same issue.
 */
