@@ -210,6 +210,10 @@ These examples are from the core migration and should be reused as precedent:
   opted in.
 - Crypto `alg` was renamed to `algorithm`; `key_len` was renamed to
   `key_length`.
+- Fixed vector formatter variants use `format` and `values`; varargs
+  formatters such as `sprintf(fmt, ...)`, `printf(fmt, ...)`, and
+  `f_sprintf(fmt, ...)` remain positional until a safe varargs convention is
+  designed.
 - Filesystem `glob_str` was renamed to `pattern`; `rename(old_path, new_path)`
   was renamed to `rename(source_path, target_path)`; `symlink(old_path,
   new_path)` was renamed to `symlink(target_path, link_path)`.

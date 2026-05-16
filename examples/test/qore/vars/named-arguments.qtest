@@ -195,6 +195,19 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "regex_subst exposes replacement");
         assertEq("a:b", join(separator: ":", values: ("a", "b")), "join list variant exposes separator and values");
         assertEq("x:2", vsprintf(format: "%s:%d", values: ("x", 2)), "vsprintf exposes format and values");
+
+        string ref = "  line\n";
+        assertEq("  line", chomp(str: \ref), "reference chomp exposes str");
+        assertEq("  line", ref, "reference chomp updates the lvalue");
+        assertEq("line", trim(str: \ref, chars: " "), "reference trim exposes str and chars");
+        ref = "  line";
+        assertEq("line", ltrim(str: \ref, chars: " "), "reference ltrim exposes str and chars");
+        ref = "line  ";
+        assertEq("line", rtrim(str: \ref, chars: " "), "reference rtrim exposes str and chars");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("vprintf(format: \"%s\", values: (\"x\")); f_vprintf(format: \"%s\", values: (\"x\"));",
+            "vprintf-named");
     }
 
     reviewedUtilityBuiltinOptIn() {

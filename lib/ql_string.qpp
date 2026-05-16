@@ -1787,7 +1787,7 @@ string chomp(string str) [flags=CONSTANT,NAMED_ARGS] {
 chomp(\str);
     @endcode
  */
-*string chomp(reference<string> str) {
+*string chomp(reference<string> str) [flags=NAMED_ARGS] {
    QoreTypeSafeReferenceHelper ref(str, xsink);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
@@ -1839,7 +1839,7 @@ string trim(string str, *string chars) [flags=CONSTANT,NAMED_ARGS] {
 trim(\str);
     @endcode
  */
-*string trim(reference<string> str, *string chars) {
+*string trim(reference<string> str, *string chars) [flags=NAMED_ARGS] {
    QoreTypeSafeReferenceHelper ref(str, xsink);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
@@ -1891,7 +1891,7 @@ string ltrim(string str, *string chars) [flags=CONSTANT,NAMED_ARGS] {
 ltrim(\str);
     @endcode
  */
-*string ltrim(reference<string> str, *string chars) {
+*string ltrim(reference<string> str, *string chars) [flags=NAMED_ARGS] {
    QoreTypeSafeReferenceHelper ref(str, xsink);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
@@ -1941,7 +1941,7 @@ rtrim(\str);
 
     @bug it is not possible to trim multi-byte characters from strings using this function; each byte is treated as a character.  No encoding conversions are done even if the \a chars argument has a different @ref character_encoding "character encoding" than the \a str argument.
  */
-*string rtrim(reference<string> str, *string chars) {
+*string rtrim(reference<string> str, *string chars) [flags=NAMED_ARGS] {
    QoreTypeSafeReferenceHelper ref(str, xsink);
    if (!ref || ref.getType() != NT_STRING)
       return QoreValue();
@@ -2293,8 +2293,8 @@ string printf() [flags=NOOP;dom=TERMINAL_IO] {
 /**
     This function will truncate output longer than any field width given in the @ref string_formatting "format string"
 
-    @param fmt the @ref string_formatting "format string"
-    @param varg the argument(s) corresponding to format specifiers in the format string
+    @param format the @ref string_formatting "format string"
+    @param values the argument(s) corresponding to format specifiers in the format string
 
     @return the formatted string output corresponding to the arguments given
 
@@ -2309,7 +2309,7 @@ f_vprintf("%5s %3d", ("a long string", 5000)); # will print out "a lon 500"
 
     @since %Qore 0.8.4
  */
-string f_vprintf(string[doc] fmt, auto[doc] varg) [dom=TERMINAL_IO] {
+string f_vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TERMINAL_IO] {
    AbstractQoreNode* node;
    print_node(stdout, node = q_vsprintf(args, 1, 0, xsink));
    return node;
@@ -2319,8 +2319,8 @@ string f_vprintf(string[doc] fmt, auto[doc] varg) [dom=TERMINAL_IO] {
 /**
     This function will not truncate output longer than any field width given in the @ref string_formatting "format string"
 
-    @param fmt the @ref string_formatting "format string"
-    @param varg the argument(s) corresponding to format specifiers in the format string
+    @param format the @ref string_formatting "format string"
+    @param values the argument(s) corresponding to format specifiers in the format string
 
     @return the formatted string output corresponding to the arguments given
 
@@ -2333,7 +2333,7 @@ vprintf("%5s %3d", ("a long string", 5000)); # will print out "a long string 500
     - @ref string_formatting for information on the formatting string
     - f_vprintf() for a similar function that enforces field widths
  */
-string vprintf(string[doc] fmt, auto[doc] varg) [dom=TERMINAL_IO] {
+string vprintf(string[doc] format, auto[doc] values) [flags=NAMED_ARGS;dom=TERMINAL_IO] {
    AbstractQoreNode* node;
    print_node(stdout, node = q_vsprintf(args, 0, 0, xsink));
    return node;

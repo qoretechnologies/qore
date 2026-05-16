@@ -247,6 +247,18 @@ class ReflectionTest inherits QUnit::Test {
         assertTrue(found_regex_subst_replacement);
         assertTrue(found_regex_subst_callback);
 
+        foreach string name in (("chomp",)) {
+            assertNamedCallableVariantCount(name, ("str",), 2);
+        }
+
+        foreach string name in (("trim", "ltrim", "rtrim")) {
+            assertNamedCallableVariantCount(name, ("str", "chars"), 2);
+        }
+
+        foreach string name in (("vprintf", "f_vprintf")) {
+            assertNamedCallableVariantCount(name, ("format", "values"));
+        }
+
         bool found_abs = False;
         foreach FunctionVariant v in (Function::forName("abs").getVariants()) {
             if (v.getParamNames() == ("value",)) {
