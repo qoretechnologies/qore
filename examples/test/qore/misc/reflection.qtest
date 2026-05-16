@@ -785,6 +785,13 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("TermIOS", "getCC", ("offset",));
         assertNamedClassMethodVariantCount("TermIOS", "setCC", ("offset", "value"));
         assertNamedClassMethodVariantCount("TermIOS", "isEqual", ("termios",));
+        assertNamedClassMethodVariantCount("LoggerInterfaceBase", "logArgs",
+            ("level", "message", "format_args"));
+        assertNamedClassMethodVariantCount("LoggerInterfaceBase", "isEnabledFor", ("level",));
+        assertNamedConstructorVariantCount("SSLCertificate", ("pem",));
+        assertNamedConstructorVariantCount("SSLCertificate", ("der",));
+        assertNamedConstructorVariantCount("SSLPrivateKey", ("pem", "password"));
+        assertNamedConstructorVariantCount("SSLPrivateKey", ("der",));
         assertNamedConstructorVariantCount("ParseOptions", ("parse_options",));
         assertNamedConstructorVariantCount("ParseOptions", ("name",));
         assertNamedConstructorVariantCount("ParseOptions", ("names",));

@@ -353,5 +353,8 @@ These examples are from the core migration and should be reused as precedent:
   opt-in: use `seconds`, `microseconds`, `milliseconds`, `date_value`,
   `date_string`, and `offset` instead of `secs`, `us`, `ms`, `d`, `dtstr`,
   and `cc`.
+- Constructor parameters named after wire formats such as `pem` and `der` are
+  acceptable when the overloads map directly to those formats; expand related
+  credentials such as `pass` to `password` before opt-in.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

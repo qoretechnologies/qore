@@ -97,6 +97,23 @@ class NA_Child inherits NA_Base {
     }
 }
 
+class NA_Logger inherits LoggerInterfaceBase {
+    public {
+        list<hash<auto>> messages();
+    }
+
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        push messages, {
+            "level": level,
+            "message": format_args ? vsprintf(message, format_args) : message,
+        };
+    }
+
+    bool isEnabledFor(int level) {
+        return level >= 1000;
+    }
+}
+
 public class NamedArgumentsTest inherits QUnit::Test {
     constructor() : Test("Named arguments test", "1.0") {
         addTestCase("defaults and mixed arguments", \defaultsAndMixedArguments(), NOTHING);
@@ -458,6 +475,13 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "parse_url exposes keep_brackets");
         assertEq("example.com", parseURL(url: "https://example.com/path").host, "parseURL exposes url");
         assertEq(3, get_value_byte_size(value: "abc"), "byte size helper exposes value");
+
+        LoggerInterfaceBase logger = new NA_Logger();
+        assertFalse(logger.isEnabledFor(level: 999), "LoggerInterfaceBase exposes level");
+        assertTrue(logger.isEnabledFor(level: 1000), "LoggerInterfaceBase exposes level");
+        logger.logArgs(level: 1000, message: "hello %s", format_args: ("world",));
+        assertEq("hello world", cast<NA_Logger>(logger).messages[0].message,
+            "LoggerInterfaceBase exposes format_args");
     }
 
     reviewedCryptoBuiltinOptIn() {
@@ -481,6 +505,11 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq(16, pbkdf2(digest: "sha256", password: "password", salt: "salt", iterations: 1,
             key_length: 16).size(), "pbkdf2 exposes key_length");
         assertEq(4, get_random_bytes(size: 4).size(), "random helper exposes size");
+        assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", sub () { new SSLCertificate(pem: "not a certificate"); });
+        assertThrows("SSLCERTIFICATE-CONSTRUCTOR-ERROR", sub () { new SSLCertificate(der: <00>); });
+        assertThrows("SSLPRIVATEKEY-CONSTRUCTOR-ERROR",
+            sub () { new SSLPrivateKey(pem: "not a key", password: "secret"); });
+        assertThrows("SSLPRIVATEKEY-CONSTRUCTOR-ERROR", sub () { new SSLPrivateKey(der: <00>); });
     }
 
     reviewedFileBuiltinOptIn() {

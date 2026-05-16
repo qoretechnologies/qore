@@ -88,14 +88,14 @@ qclass SSLCertificate [
 
     @par Example:
     @code{.py}
-SSLCertificate cert(pem_cert_string);
+SSLCertificate cert(pem: pem_cert_string);
     @endcode
 
     @throw SSLCERTIFICATE-CONSTRUCTOR-ERROR invalid X.509 certificate data
 
     @since 0.8.4: the deprecated functionality where the if the string passed was less than 200 bytes long, it was assumed to be a file name has been removed; the string is assumed to be the PEM-encoded X.509 Certificate itself
  */
-SSLCertificate::constructor(string pem) {
+SSLCertificate::constructor(string pem) [flags=NAMED_ARGS] {
     // create assuming a certificate in PEM format
     SimpleRefHolder<QoreSSLCertificate> qc(new QoreSSLCertificate(pem, xsink));
     if (!*xsink) {
@@ -108,12 +108,12 @@ SSLCertificate::constructor(string pem) {
 
     @par Example:
     @code{.py}
-SSLCertificate cert(der_cert);
+SSLCertificate cert(der: der_cert);
     @endcode
 
     @throw SSLCERTIFICATE-CONSTRUCTOR-ERROR invalid X.509 certificate data
  */
-SSLCertificate::constructor(binary der) {
+SSLCertificate::constructor(binary der) [flags=NAMED_ARGS] {
     SimpleRefHolder<QoreSSLCertificate> qc(new QoreSSLCertificate(der, xsink));
     if (!*xsink) {
         self->setPrivate(CID_SSLCERTIFICATE, qc.release());

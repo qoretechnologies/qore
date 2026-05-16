@@ -44,8 +44,8 @@ class LoggerInterfaceBaseDummy {};
     @par Example:
     @code{.py}
 class MyLogger inherits LoggerInterfaceBase {
-    logArgs(int level, string message, *softlist<auto> args) {
-        printf("LOG [%d]: %s\n", level, vsprintf(message, args));
+    logArgs(int level, string message, *softlist<auto> format_args) {
+        printf("LOG [%d]: %s\n", level, vsprintf(message, format_args));
     }
     bool isEnabledFor(int level) {
         return level >= LoggerLevel::getLevelInfo().getValue();
@@ -60,11 +60,11 @@ qclass LoggerInterfaceBase [arg=LoggerInterfaceBaseDummy* lib; ns=Qore];
 //! Logs a message with an integer level and format arguments
 /** @param level the integer log level
     @param message the log message format string
-    @param args optional format arguments
+    @param format_args optional format arguments
 
     @since %Qore 2.3
 */
-abstract nothing LoggerInterfaceBase::logArgs(int level, string message, *softlist<auto> args);
+abstract nothing LoggerInterfaceBase::logArgs(int level, string message, *softlist<auto> format_args) [flags=NAMED_ARGS];
 
 //! Returns @ref True "True" if logging is enabled for the given integer level
 /** @param level the integer log level to check
@@ -72,4 +72,4 @@ abstract nothing LoggerInterfaceBase::logArgs(int level, string message, *softli
 
     @since %Qore 2.3
 */
-abstract bool LoggerInterfaceBase::isEnabledFor(int level);
+abstract bool LoggerInterfaceBase::isEnabledFor(int level) [flags=NAMED_ARGS];
