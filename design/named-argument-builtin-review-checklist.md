@@ -359,9 +359,15 @@ These examples are from the core migration and should be reused as precedent:
 - File APIs should use `path` for filesystem names and reuse stream naming
   such as `line_separator` and `trim_line`; avoid exposing legacy camel-case or
   abbreviated names such as `fileName`, `eol`, and `trim`.
+- Error propagation APIs should use `error`, `description`, and `argument`
+  instead of abbreviations such as `err`, `desc`, and `arg`.
 - Do not mark an overload when it makes an already-enabled named call ambiguous
   with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
   step, value)` must remain positional because it conflicts with the named
   `RangeIterator(start, stop, step)` constructor.
+- Qlib split-module or helper-method calls may still need to remain positional
+  when qmod cannot resolve a `Promise` parameter's method signature; this
+  preserves the more informative `NAMED-CALL-NOT-SUPPORTED` behavior rather
+  than introducing a qmod build failure.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

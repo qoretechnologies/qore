@@ -727,6 +727,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("RWLock", "readLock", ("timeout_ms",));
         assertNamedClassMethodVariantCount("RWLock", "writeLock", ("timeout_ms",));
         assertNamedClassMethodVariantCount("Promise", "set", ("value",));
+        assertNamedClassMethodVariantCount("Promise", "setError", ("error", "description", "argument"));
         assertNamedClassMethodVariantCount("Future", "get", ("timeout_ms",));
         assertNamedClassMethodVariantCount("FutureImpl", "get", ("timeout_ms",));
         assertNamedConstructorVariantCount("ThreadPool",

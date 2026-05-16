@@ -4127,7 +4127,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         if (pending_stream) {
             cancelPendingStream();
         }
-        promise.setError("HTTPCLIENT-CANCELLED", "async request was canceled", NOTHING);
+        promise.setError(error: "HTTPCLIENT-CANCELLED", description: "async request was canceled", argument: NOTHING);
         if (completion_notifier) {
             completion_notifier.notify();
         }

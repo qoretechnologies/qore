@@ -730,6 +730,12 @@ public class NamedArgumentsTest inherits QUnit::Test {
         Future future = promise.getFuture();
         promise.set(value: "resolved");
         assertEq("resolved", future.get(timeout_ms: 0), "Promise set and Future get expose names");
+        Promise error_promise();
+        Future error_future = error_promise.getFuture();
+        error_promise.setError(error: "NAMED-PROMISE-ERROR", description: "named promise error",
+            argument: "detail");
+        assertThrows("NAMED-PROMISE-ERROR", "named promise error",
+            sub() { error_future.get(timeout_ms: 0); });
 
         ThreadPool thread_pool = new ThreadPool(max_threads: 2, min_idle_threads: 0, max_idle_threads: 1,
             idle_release_timeout: 1s);

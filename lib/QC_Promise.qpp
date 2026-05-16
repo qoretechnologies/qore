@@ -58,7 +58,7 @@ background sub() {
         auto data = fetch_data_from_api();
         p.set(value: data);
     } catch (hash<ExceptionInfo> ex) {
-        p.setError(ex.err, ex.desc, ex.arg);
+        p.setError(error: ex.err, description: ex.desc, argument: ex.arg);
     }
 }();
 # The exception is re-thrown to the consumer
@@ -89,7 +89,7 @@ for (int i = 0; i < 10; ++i) {
     Promise p();
     push futures, p.getFuture();
     background sub(Promise p, int id) {
-        on_error p.setError($1.err, $1.desc);
+        on_error p.setError(error: $1.err, description: $1.desc);
         p.set(value: process_item(id));
     }(p, i);
 }
@@ -150,19 +150,19 @@ nothing Promise::set(auto value) [flags=NAMED_ARGS] {
 }
 
 //! Rejects the Future with an error
-/** @param err the error code string
-    @param desc the error description string
-    @param arg an optional error argument
+/** @param error the error code string
+    @param description the error description string
+    @param argument an optional error argument
 
     @par Example:
     @code{.py}
-p.setError("MY-ERROR", "something went wrong");
+p.setError(error: "MY-ERROR", description: "something went wrong");
     @endcode
 
     @throw PROMISE-ERROR Promise has already been resolved or rejected
  */
-nothing Promise::setError(string err, string desc, auto arg) {
-    p->setError(err->c_str(), desc->c_str(), arg.refSelf(), xsink);
+nothing Promise::setError(string error, string description, auto argument) [flags=NAMED_ARGS] {
+    p->setError(error->c_str(), description->c_str(), argument.refSelf(), xsink);
 }
 
 //! Returns the Future associated with this Promise
