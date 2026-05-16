@@ -1357,7 +1357,7 @@ public auto sub parse_to_qore_value(string arg) {
 }
 
 bool sub parse_to_qore_value_yaml_candidate(string arg) {
-    DataLineIterator it(arg);
+    DataLineIterator it(source: arg);
     while (it.next()) {
         string line = trim(it.getValue());
         if (!line.size() || line =~ /^#/) {

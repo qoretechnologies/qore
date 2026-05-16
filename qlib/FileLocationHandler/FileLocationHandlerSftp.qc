@@ -110,7 +110,7 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         string file;
         object sftp = getSftpClient(scheme, location, opts, \file);
 
-        StreamPipe pipe(False);
+        StreamPipe pipe(sync_close: False);
 
         # run the I/O operation in the background
         background sub () {
@@ -138,7 +138,7 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         string file;
         object sftp = getSftpClient(scheme, location, opts, \file);
 
-        StreamPipe pipe(False);
+        StreamPipe pipe(sync_close: False);
 
         # run the I/O operation in the background
         background sub () {
@@ -189,7 +189,7 @@ class FileLocationHandlerSftp inherits AbstractFileLocationHandler {
         string file;
         object sftp = getSftpClient(scheme, location, opts, \file);
 
-        StreamPipe pipe(False);
+        StreamPipe pipe(sync_close: False);
 
         WaitGroup io_counter();
         io_counter.add();

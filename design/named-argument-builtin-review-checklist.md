@@ -198,6 +198,36 @@ LD_LIBRARY_PATH=build QORE_MODULE_DIR=build/modules/reflection:build/modules/ast
   build/qore examples/test/qore/misc/reflection.qtest
 ```
 
+## Using Named Calls in Qore Module Code
+
+Use named calls in qlib or module source only when they remain parse-time
+resolvable and improve readability without adding casts or temporary variables
+solely for the call syntax.
+
+Good qlib precedents:
+
+```qore
+DataLineIterator it(source: str);
+StreamPipe pipe(sync_close: False);
+hash<auto> urlh = parse_datasource(datasource: ds_str);
+```
+
+Avoid converting calls whose argument types are intentionally dynamic:
+
+```qore
+# Keep positional: opts.eol is an option-hash member with runtime type.
+new DataLineIterator(data, opts.eol);
+
+# Keep positional: body is auto/data even if guarded by a runtime type check.
+new BinaryInputStream(body);
+```
+
+When applying this work to binary modules, treat dynamic hash members, `auto`,
+`data`, and broad option payloads as positional unless an explicit static type
+already exists for the expression. If the named-call error message says the
+call depends on runtime argument types, preserve the more informative error and
+leave the call positional rather than obscuring the code with casts.
+
 ## Audit Requirements
 
 Run the repository audit checklist before each commit that changes QPP/C++ or

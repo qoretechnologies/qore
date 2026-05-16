@@ -272,7 +272,7 @@ public class CsvReadDataProvider inherits DataProvider::AbstractDataProvider {
             return;
         }
         # create a dummy interator with no input
-        i = new CsvIterator(new StringInputStream(""), copts.encoding, copts{CsvIterationOptionList});
+        i = new CsvIterator(new StringInputStream(source: ""), copts.encoding, copts{CsvIterationOptionList});
     }
 
     #! Returns the object name

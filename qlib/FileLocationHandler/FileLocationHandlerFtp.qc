@@ -42,7 +42,7 @@ class FileLocationHandlerFtpOutputStreamWrapper inherits OutputStreamWrapper {
         }
 
         BinaryOutputStream bos = cast<BinaryOutputStream>(getStream());
-        client.put(new BinaryInputStream(bos.getData()), file);
+        client.put(new BinaryInputStream(source: bos.getData()), file);
         bos.close();
         closed = True;
     }
@@ -129,7 +129,7 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
         @note This method can throw any exception related to making an FTP transfer
     */
     private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
-        return new BinaryInputStream(getBinaryFileImpl(scheme, location, opts));
+        return new BinaryInputStream(source: getBinaryFileImpl(scheme, location, opts));
     }
 
     #! Writes data to a file at the given location

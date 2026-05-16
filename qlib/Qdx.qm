@@ -1117,7 +1117,9 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
 
             @note table cell docs may span multiple lines as long as the lines end in a \c "\" character
         */
-        constructor(Qore::InputStream is, *string encoding, *string eol, bool do_trim = True) : InputStreamLineIterator(is, encoding, eol, do_trim) {
+        constructor(Qore::InputStream is, *string encoding, *string eol, bool do_trim = True)
+                : InputStreamLineIterator(input_stream: is, encoding: encoding, line_separator: eol,
+                    trim_line: do_trim) {
             self.do_trim = do_trim;
         }
 
@@ -1195,7 +1197,9 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
             @ref character_encoding "character encoding" from the data's and an error occurs during encoding
             conversion
          */
-        constructor(Qore::InputStream is, *string encoding, *string eol, bool do_trim = False) : InputStreamLineIterator(is, encoding, eol, do_trim) {
+        constructor(Qore::InputStream is, *string encoding, *string eol, bool do_trim = False)
+                : InputStreamLineIterator(input_stream: is, encoding: encoding, line_separator: eol,
+                    trim_line: do_trim) {
         }
 
         /** Creates the object for iterating over the given @ref Qore::StreamReader "StreamReader"
@@ -1211,7 +1215,8 @@ printf("open_parens: %d, close_parens: %d\n", counts.open_parens, counts.close_p
             @ref character_encoding "character encoding" from the data's and an error occurs during encoding
             conversion
          */
-        constructor(Qore::StreamReader sr, *string eol, bool do_trim = False) : InputStreamLineIterator(sr, eol, do_trim) {
+        constructor(Qore::StreamReader sr, *string eol, bool do_trim = False)
+                : InputStreamLineIterator(stream_reader: sr, line_separator: eol, trim_line: do_trim) {
         }
 
         #! Returns the processed version of the current line in the input data or throws an \c ITERATOR-ERROR exception if the iterator is invalid

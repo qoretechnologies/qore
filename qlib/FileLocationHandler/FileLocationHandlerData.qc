@@ -84,7 +84,7 @@ class FileLocationHandlerData inherits AbstractFileLocationHandler {
         @return an input stream of the file's contents, if it can be retrieved
     */
     private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
-        return new StringInputStream(location);
+        return new StringInputStream(source: location);
     }
 
     #! Not supported for data:// locations; throws an exception

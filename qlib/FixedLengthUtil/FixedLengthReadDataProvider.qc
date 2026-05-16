@@ -174,7 +174,7 @@ public class FixedLengthReadDataProvider inherits DataProvider::AbstractDataProv
             return;
         }
         # create a dummy interator with no input
-        i = new FixedLengthIterator(new StringInputStream(""), copts.spec, copts{FixedLengthReadOptionList});
+        i = new FixedLengthIterator(new StringInputStream(source: ""), copts.spec, copts{FixedLengthReadOptionList});
     }
 
     #! Returns the object name

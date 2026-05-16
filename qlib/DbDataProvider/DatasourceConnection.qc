@@ -179,7 +179,7 @@ public class DatasourceConnection inherits ConnectionProvider::AbstractConnectio
         if (!ds_str.val()) {
             throw "DATASOURCE-PARSE-ERROR", "empty datasource string after 'db://' prefix";
         }
-        hash<auto> urlh = parse_datasource(ds_str);
+        hash<auto> urlh = parse_datasource(datasource: ds_str);
         urlh.protocol = "db";
         return urlh;
     }

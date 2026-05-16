@@ -4159,7 +4159,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             if (body instanceof StringInputStream) {
                 StringInputStream input_stream = cast<StringInputStream>(body);
                 if ((string stream_encoding = input_stream.getEncoding()) != s.getEncoding()) {
-                    body = new EncodingConversionInputStream(input_stream, stream_encoding, s.getEncoding());
+                    body = new EncodingConversionInputStream(input_stream: input_stream,
+                        source_encoding: stream_encoding, target_encoding: s.getEncoding());
                 }
             } else if ((body instanceof string) || (body instanceof binary)) {
                 body = new BinaryInputStream(body);
