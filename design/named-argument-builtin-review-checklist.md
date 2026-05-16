@@ -130,6 +130,9 @@ Keep consistent names across related APIs:
 - Parse-option helpers: `parse_options` for integer `PO_*` masks, `name` and
   `names` for string option names, and `other` for another `ParseOptions`
   object. Do not expose the internal abbreviation `po`.
+- Scanner helpers: `source` for scanned text, `literal` for raw token text,
+  `count` for advancing multiple codepoints, `char_offset`/`byte_offset` for
+  relative lookups, and `byte_length` for extracted byte ranges.
 
 If a rename is needed, update all of the following in the same commit:
 

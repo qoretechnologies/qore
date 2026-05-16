@@ -750,6 +750,13 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("StringInputStream", "read", ("limit",));
         assertNamedConstructorVariantCount("StringOutputStream", ("encoding",));
         assertNamedClassMethodVariantCount("StringOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("Scanner", ("source",));
+        assertNamedClassMethodVariantCount("Scanner", "advanceN", ("count",));
+        assertNamedClassMethodVariantCount("Scanner", "extractRange", ("byte_offset", "byte_length"));
+        assertNamedClassMethodVariantCount("Scanner", "match", ("literal",));
+        assertNamedClassMethodVariantCount("Scanner", "peekAt", ("char_offset",));
+        assertNamedClassMethodVariantCount("Scanner", "peekByteAt", ("byte_offset",));
+        assertNamedClassMethodVariantCount("Scanner", "startsWith", ("literal",));
         assertNamedConstructorVariantCount("StreamReader", ("input_stream", "encoding"));
         assertNamedClassMethodVariantCount("StreamReader", "readString", ("limit",));
         assertNamedClassMethodVariantCount("StreamReader", "readLine", ("line_separator", "trim_line"));

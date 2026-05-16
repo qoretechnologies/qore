@@ -214,6 +214,16 @@ public class NamedArgumentsTest inherits QUnit::Test {
         ref = "line  ";
         assertEq("line", rtrim(str: \ref, chars: " "), "reference rtrim exposes str and chars");
 
+        Scanner scanner = new Scanner(source: "hello");
+        assertEq("ell", scanner.extractRange(byte_offset: 1, byte_length: 3),
+            "Scanner constructor and extractRange expose source and byte ranges");
+        assertTrue(scanner.startsWith(literal: "he"), "Scanner startsWith exposes literal");
+        assertTrue(scanner.match(literal: "he"), "Scanner match exposes literal");
+        assertEq(ord("l"), scanner.peekByteAt(byte_offset: 0), "Scanner peekByteAt exposes byte_offset");
+        assertEq(ord("o"), scanner.peekAt(char_offset: 2), "Scanner peekAt exposes char_offset");
+        assertEq(2, scanner.advanceN(count: 2), "Scanner advanceN exposes count");
+        assertEq(ord("o"), scanner.peek(), "Scanner named calls leave expected cursor position");
+
         Program p(PO_NEW_STYLE);
         p.parse("vprintf(format: \"%s\", values: (\"x\")); f_vprintf(format: \"%s\", values: (\"x\"));",
             "vprintf-named");
