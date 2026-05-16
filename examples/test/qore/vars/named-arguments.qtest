@@ -108,6 +108,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed pwd builtin opt-in", \reviewedPwdBuiltinOptIn(), NOTHING);
         addTestCase("reviewed compression builtin opt-in", \reviewedCompressionBuiltinOptIn(), NOTHING);
         addTestCase("reviewed time builtin opt-in", \reviewedTimeBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed object builtin opt-in", \reviewedObjectBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -332,6 +333,19 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq("2019-12-30", format_date(format: "YYYY-MM-DD",
             date_value: get_date_from_iso_week(year: 2020, week: 1, day: 1)),
             "ISO week helper exposes year, week, and day");
+    }
+
+    reviewedObjectBuiltinOptIn() {
+        NA_Child child = new NA_Child(1, 2);
+        assertEq("13:14", call_object_method_args(object_value: child, method: "method", arguments: (13, 14)),
+            "object method helper exposes object_value and arguments");
+        assertEq("15:16", call_static_method_args(class_name: "NA_Child", method: "staticMethod",
+            arguments: (15, 16)), "static method helper exposes class_name and arguments");
+        assertEq("17:18", cast<NA_Child>(create_object_args(class_name: "NA_Child", arguments: (17, 18))).child_value,
+            "object creation helper exposes class_name and arguments");
+        assertEq("cde", call_pseudo_args(value: "abcdef", method: "substr", arguments: (2, 3)),
+            "pseudo-method helper exposes value and arguments");
+        assertTrue(inlist("method", get_method_list(object_value: child)), "method list exposes object_value");
     }
 
     parseFailures() {
