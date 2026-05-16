@@ -56,18 +56,19 @@ qclass EncodingConversionOutputStream [arg=EncodingConversionOutputStream* os; n
 
 //! Creates the EncodingConversionOutputStream based on the \ref OutputStream given
 /**
-    @param os the destination \ref OutputStream to write bytes to
-    @param sourceEncoding the encoding of the characters that will be written to this stream
-    @param destEncoding the destination character encoding that will be written to the underlying OutputStream os
+    @param output_stream the destination \ref OutputStream to write bytes to
+    @param source_encoding the encoding of the characters that will be written to this stream
+    @param target_encoding the destination character encoding that will be written to the underlying OutputStream
     @throw ENCODING-CONVERSION-ERROR if either of the encodings is unsupported
  */
-EncodingConversionOutputStream::constructor(Qore::OutputStream[OutputStream] os, string sourceEncoding, string destEncoding) {
+EncodingConversionOutputStream::constructor(Qore::OutputStream[OutputStream] output_stream, string source_encoding,
+        string target_encoding) [flags=NAMED_ARGS] {
    SimpleRefHolder<EncodingConversionOutputStream> ecos(new EncodingConversionOutputStream(
-         os.release(), QEM.findCreate(sourceEncoding), QEM.findCreate(destEncoding), xsink));
+         output_stream.release(), QEM.findCreate(source_encoding), QEM.findCreate(target_encoding), xsink));
    self->setPrivate(CID_ENCODINGCONVERSIONOUTPUTSTREAM, ecos.release());
    qore_object_private* o = qore_object_private::get(*self);
    const qore_class_private* cls = qore_class_private::get(*QC_ENCODINGCONVERSIONOUTPUTSTREAM);
-   o->setValueIntern(cls, "os", static_cast<QoreObject *>(obj_os->refSelf()), xsink);
+   o->setValueIntern(cls, "os", static_cast<QoreObject *>(obj_output_stream->refSelf()), xsink);
 }
 
 //! Flushes any buffered (unwritten) bytes, closes the output stream and releases all resources.
@@ -94,6 +95,6 @@ nothing EncodingConversionOutputStream::close() {
     @throw OUTPUT-STREAM-CLOSED-ERROR the output stream has already been closed
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread that created the object
  */
-nothing EncodingConversionOutputStream::write(binary data) {
+nothing EncodingConversionOutputStream::write(binary data) [flags=NAMED_ARGS] {
    os->writeHelper(data, xsink);
 }

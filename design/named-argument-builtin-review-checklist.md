@@ -121,6 +121,12 @@ Keep consistent names across related APIs:
   `start`, `stop`, `step` for numeric ranges.
   Keep overlapping range value-override overloads positional-only when marking
   both the numeric and override variants would make named calls ambiguous.
+- Stream helpers: `input_stream` and `output_stream` for stream dependencies,
+  `source_encoding` and `target_encoding` for conversion direction,
+  `transform` for `Transform` objects, `sync_close` for pipe close behavior,
+  `buffer_size` for stream buffers, and `line_separator`/`trim_line` for line
+  parsing controls. Avoid exposing internal names such as `is`, `os`, `t`,
+  `eol`, or `bufsize`.
 
 If a rename is needed, update all of the following in the same commit:
 
@@ -137,6 +143,7 @@ Add `NAMED_ARGS` to the existing flag list:
 [flags=RET_VALUE_ONLY,NAMED_ARGS]
 [flags=CONSTANT,NAMED_ARGS]
 [flags=NAMED_ARGS;dom=FILESYSTEM]
+abstract nothing ClassName::method(string value) [flags=NAMED_ARGS];
 ```
 
 If the implementation gains cancellation checks or any other possible exception

@@ -752,6 +752,31 @@ class ReflectionTest inherits QUnit::Test {
                 "writei8LSB")) {
             assertNamedClassMethodVariantCount("StreamWriter", name, ("value",));
         }
+        assertNamedClassMethodVariantCount("InputStream", "read", ("limit",));
+        assertNamedClassMethodVariantCount("InputStream", "readNonBlock", ("limit",));
+        assertNamedClassMethodVariantCount("InputStream", "readWithTimeout", ("limit", "timeout_ms"));
+        assertNamedClassMethodVariantCount("OutputStream", "write", ("data",));
+        assertNamedClassMethodVariantCount("StdoutOutputStream", "write", ("data",));
+        assertNamedClassMethodVariantCount("StderrOutputStream", "write", ("data",));
+        assertNamedClassMethodVariantCount("PipeInputStream", "read", ("limit",));
+        assertNamedClassMethodVariantCount("PipeInputStream", "reportError", ("exception_info",));
+        assertNamedClassMethodVariantCount("PipeOutputStream", "write", ("data",));
+        assertNamedClassMethodVariantCount("PipeOutputStream", "reportError", ("exception_info",));
+        assertNamedConstructorVariantCount("StreamPipe", ("sync_close", "timeout_ms", "buffer_size"));
+        assertNamedConstructorVariantCount("TransformInputStream", ("input_stream", "transform"));
+        assertNamedClassMethodVariantCount("TransformInputStream", "read", ("limit",));
+        assertNamedConstructorVariantCount("TransformOutputStream", ("output_stream", "transform"));
+        assertNamedClassMethodVariantCount("TransformOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("EncodingConversionInputStream",
+            ("input_stream", "source_encoding", "target_encoding"));
+        assertNamedClassMethodVariantCount("EncodingConversionInputStream", "read", ("limit",));
+        assertNamedConstructorVariantCount("EncodingConversionOutputStream",
+            ("output_stream", "source_encoding", "target_encoding"));
+        assertNamedClassMethodVariantCount("EncodingConversionOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("InputStreamLineIterator",
+            ("input_stream", "encoding", "line_separator", "trim_line", "buffer_size"));
+        assertNamedConstructorVariantCount("InputStreamLineIterator",
+            ("stream_reader", "line_separator", "trim_line"));
         assertNamedConstructorVariantCount("DataLineIterator", ("source", "line_separator", "trim_line"));
         assertNamedClassMethodVariantCount("AbstractLineIterator", "getSplitLine",
             ("separator", "quote", "line_separator", "trim_unquoted"));

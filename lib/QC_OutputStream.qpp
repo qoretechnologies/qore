@@ -69,7 +69,7 @@ abstract nothing OutputStream::close();
     os.write(<0405>);
     @endcode
  */
-abstract nothing OutputStream::write(binary data);
+abstract nothing OutputStream::write(binary data) [flags=NAMED_ARGS];
 
 //! Returns @ref True if this stream supports non-blocking I/O
 /**

@@ -60,7 +60,7 @@ private PipeInputStream::constructor() {
 /**
     @throw INPUT-STREAM-ERROR \a limit is not positive
  */
-*binary PipeInputStream::read(int limit) {
+*binary PipeInputStream::read(int limit) [flags=NAMED_ARGS] {
     if (limit <= 0) {
         xsink->raiseException("INPUT-STREAM-ERROR", "PipeInputStream::read() called with non-positive limit %lld", limit);
         return 0;
@@ -88,8 +88,8 @@ nothing PipeInputStream::finishClose() {
 
 //! Causes all operations on both pipe streams to wake up and throw an exception.
 /** Normally used from the background thread to report an error to the main thread.
-    @param ex the exception, must contain strings 'err' and 'desc'
+    @param exception_info the exception, must contain strings 'err' and 'desc'
  */
-nothing PipeInputStream::reportError(hash ex) {
-    is->reportError(ex);
+nothing PipeInputStream::reportError(hash exception_info) [flags=NAMED_ARGS] {
+    is->reportError(exception_info);
 }

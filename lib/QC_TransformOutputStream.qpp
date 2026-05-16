@@ -55,17 +55,18 @@ qclass TransformOutputStream [arg=TransformOutputStream* os; ns=Qore; vparent=Ou
 
 //! Creates the TransformOutputStream
 /**
-    @param os the underlying @ref OutputStream where the transformed data will be written to
-    @param t the transformation to apply
+    @param output_stream the underlying @ref OutputStream where the transformed data will be written to
+    @param transform the transformation to apply
 */
-TransformOutputStream::constructor(Qore::OutputStream[OutputStream] os, Qore::Transform[Transform] t) {
+TransformOutputStream::constructor(Qore::OutputStream[OutputStream] output_stream, Qore::Transform[Transform] transform)
+        [flags=NAMED_ARGS] {
     // here we pass the references to os and t to "tos"
-    SimpleRefHolder<TransformOutputStream> tos(new TransformOutputStream(os.release(), t.release()));
+    SimpleRefHolder<TransformOutputStream> tos(new TransformOutputStream(output_stream.release(), transform.release()));
     self->setPrivate(CID_TRANSFORMOUTPUTSTREAM, tos.release());
     qore_object_private* o = qore_object_private::get(*self);
     const qore_class_private* cls = qore_class_private::get(*QC_TRANSFORMOUTPUTSTREAM);
-    o->setValueIntern(cls, "os", static_cast<QoreObject *>(obj_os->refSelf()), xsink);
-    o->setValueIntern(cls, "t", static_cast<QoreObject *>(obj_t->refSelf()), xsink);
+    o->setValueIntern(cls, "os", static_cast<QoreObject *>(obj_output_stream->refSelf()), xsink);
+    o->setValueIntern(cls, "t", static_cast<QoreObject *>(obj_transform->refSelf()), xsink);
 }
 
 //! Flushes any buffered (unwritten) bytes, closes the output stream and releases all resources.
@@ -87,6 +88,6 @@ nothing TransformOutputStream::close() {
     @throw STREAM-THREAD-ERROR this exception is thrown if this method is called from any thread other than the thread
     that created the object
 */
-nothing TransformOutputStream::write(binary data) {
+nothing TransformOutputStream::write(binary data) [flags=NAMED_ARGS] {
     os->writeHelper(data, xsink);
 }

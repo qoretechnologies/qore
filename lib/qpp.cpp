@@ -1278,8 +1278,9 @@ int parse_params_and_flags(const char* fileName, unsigned &lineNumber, strmap_t&
     }
 
     // get flags if any
-    if (cs - i > 2) {
-        std::string fstr(sc, i + 1, cs - i - 2);
+    if (cs > i + 1) {
+        std::string fstr(sc, i + 1, cs - i - 1);
+        trim(fstr);
         size_t f = fstr.find('[');
         if (f != std::string::npos) {
             fstr.erase(0, f + 1);

@@ -71,7 +71,7 @@ InputStream::constructor() {
     }
     @endcode
 */
-abstract *binary InputStream::read(int limit);
+abstract *binary InputStream::read(int limit) [flags=NAMED_ARGS];
 
 //! Peeks the next byte available from the input stream; returns -1 if no more data available
 /**
@@ -137,7 +137,7 @@ int InputStream::getPollableDescriptor() [flags=CONSTANT] {
 
     @since %Qore 2.2
 */
-*binary InputStream::readNonBlock(int limit) {
+*binary InputStream::readNonBlock(int limit) [flags=NAMED_ARGS] {
     return is->readNonBlockHelper(limit, xsink);
 }
 
@@ -153,6 +153,6 @@ int InputStream::getPollableDescriptor() [flags=CONSTANT] {
 
     @since %Qore 2.2
 */
-*binary InputStream::readWithTimeout(int limit, int timeout_ms) {
+*binary InputStream::readWithTimeout(int limit, int timeout_ms) [flags=NAMED_ARGS] {
     return is->readWithTimeoutHelper(limit, timeout_ms, xsink);
 }

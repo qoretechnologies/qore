@@ -106,14 +106,14 @@ extern QoreClass* QC_PIPEOUTPUTSTREAM;
 qclass StreamPipe [arg=StreamPipe* pipe; ns=Qore; flags=final; internal_members=OutputStream os,InputStream is];
 
 //! Creates the StreamPipe
-/** @param syncClose if True, then the output stream's close() method blocks until the input stream's @ref PipeInputStream::finishClose() "finishClose()" method is called
+/** @param sync_close if True, then the output stream's close() method blocks until the input stream's @ref PipeInputStream::finishClose() "finishClose()" method is called
     @param timeout_ms a timeout period with a resolution of milliseconds (a @ref relative_dates
            "relative date/time value"; integer arguments will be assumed to be milliseconds);
            if not given or negative the operations will never time out
-    @param bufferSize the size of the internal buffer
+    @param buffer_size the size of the internal buffer
  */
-StreamPipe::constructor(bool syncClose = True, timeout timeout_ms = -1, int bufferSize = 4096) {
-    SimpleRefHolder<StreamPipe> pipe(new StreamPipe(syncClose, timeout_ms, bufferSize, xsink));
+StreamPipe::constructor(bool sync_close = True, timeout timeout_ms = -1, int buffer_size = 4096) [flags=NAMED_ARGS] {
+    SimpleRefHolder<StreamPipe> pipe(new StreamPipe(sync_close, timeout_ms, buffer_size, xsink));
     qore_object_private* o = qore_object_private::get(*self);
     const qore_class_private* cls = qore_class_private::get(*QC_STREAMPIPE);
     pipe->ref();

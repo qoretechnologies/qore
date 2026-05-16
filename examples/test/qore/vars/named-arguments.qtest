@@ -664,6 +664,39 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq(binary("abcdefA"), writer_out.getData(),
             "StreamWriter exposes output_stream, text, data, format_args, and value names");
 
+        StreamPipe pipe = new StreamPipe(sync_close: False, timeout_ms: 1s, buffer_size: 1024);
+        PipeOutputStream pipe_out = pipe.getOutputStream();
+        PipeInputStream pipe_in = pipe.getInputStream();
+        pipe_out.write(data: binary("xy"));
+        pipe_out.close();
+        assertEq(binary("xy"), pipe_in.read(limit: 10), "StreamPipe and pipe streams expose names");
+
+        EncodingConversionInputStream ecis = new EncodingConversionInputStream(
+            input_stream: new BinaryInputStream(source: binary("abc")), source_encoding: "UTF-8",
+            target_encoding: "UTF-8");
+        assertEq(binary("abc"), ecis.read(limit: 10),
+            "EncodingConversionInputStream exposes input_stream and encoding names");
+
+        BinaryOutputStream conversion_out();
+        EncodingConversionOutputStream ecos = new EncodingConversionOutputStream(output_stream: conversion_out,
+            source_encoding: "UTF-8", target_encoding: "UTF-8");
+        ecos.write(data: binary("cd"));
+        ecos.close();
+        assertEq(binary("cd"), conversion_out.getData(),
+            "EncodingConversionOutputStream exposes output_stream and encoding names");
+
+        InputStreamLineIterator isli = new InputStreamLineIterator(
+            input_stream: new StringInputStream(source: "first\nsecond"), encoding: "UTF-8",
+            line_separator: "\n", trim_line: True, buffer_size: 64);
+        assertTrue(isli.next(), "InputStreamLineIterator input stream variant accepts named arguments");
+        assertEq("first", isli.getValue(), "InputStreamLineIterator trims named line separator");
+
+        InputStreamLineIterator srli = new InputStreamLineIterator(
+            stream_reader: new StreamReader(input_stream: new StringInputStream(source: "third\nfourth"),
+                encoding: "UTF-8"), line_separator: "\n", trim_line: True);
+        assertTrue(srli.next(), "InputStreamLineIterator StreamReader variant accepts named arguments");
+        assertEq("third", srli.getValue(), "InputStreamLineIterator StreamReader variant trims named separator");
+
         DataLineIterator dli = new DataLineIterator(source: "a,b\nc,d", line_separator: "\n", trim_line: True);
         assertTrue(dli.next(), "DataLineIterator named constructor creates iterator");
         assertEq(("a", "b"), dli.getSplitLine(separator: ",", quote: "'", line_separator: "\n",
