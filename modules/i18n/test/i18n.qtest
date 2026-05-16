@@ -22,6 +22,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("visible fraction digits", \visibleFractionDigitsTest());
         addTestCase("ordinal plural categories", \ordinalPluralCategoryTest());
         addTestCase("locale negotiation utilities", \localeNegotiationTest());
+        addTestCase("thread locale control", \threadLocaleControlTest());
         addTestCase("locale formatting and collation", \localeFormattingAndCollationTest());
         addTestCase("plural form selection", \pluralFormTest());
         addTestCase("plural validation errors", \validationErrorTest());
@@ -128,6 +129,18 @@ class I18nTest inherits QUnit::Test {
         assertThrows("I18N-ACCEPT-LANGUAGE-ERROR", auto sub() {
             return I18n::parse_accept_language("en;q=1.5");
         });
+    }
+
+    threadLocaleControlTest() {
+%ifdef NoI18n
+        testSkip("i18n module not available");
+%endif
+        I18n::clear_thread_locale();
+        assertEq("root", I18n::get_thread_locale());
+        I18n::set_thread_locale("cs_CZ-u-nu-latn");
+        assertEq("cs-CZ", I18n::get_thread_locale());
+        I18n::clear_thread_locale();
+        assertEq("root", I18n::get_thread_locale());
     }
 
     localeFormattingAndCollationTest() {

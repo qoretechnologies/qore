@@ -118,6 +118,17 @@ printf("%s\n", locale); # fr
     Negotiation also uses ICU likely-subtags so broad requests such as \c sr can match an available
     \c sr-Cyrl catalog.
 
+    The module also exposes a thread-local ambient locale for request/task integration:
+
+    @code{.py}
+I18n::set_thread_locale("cs-CZ");
+assertEq("cs-CZ", I18n::get_thread_locale());
+I18n::clear_thread_locale();
+    @endcode
+
+    Explicit-locale APIs remain the stable default. Raw \c Queue handoff does not propagate the ambient locale; pass an
+    explicit context object or locale string across queue boundaries.
+
     @section i18n_formatting Formatting and Collation
 
     Number and currency formatting use explicit locale arguments and do not change existing core machine-format

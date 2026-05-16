@@ -53,6 +53,8 @@
 
 static constexpr int64 I18N_CATALOG_SCHEMA_VERSION = 1;
 
+static thread_local std::string i18n_thread_locale;
+
 static const char* i18n_icu_error_name(UErrorCode status) {
     return u_errorName(status);
 }
@@ -1239,6 +1241,43 @@ string add_likely_subtags(string locale) [flags=RET_VALUE_ONLY] {
         return QoreValue();
     }
     return new QoreStringNode(likely, QCS_UTF8);
+}
+
+//! Sets the current thread's ambient i18n locale.
+/** Explicit-locale APIs should be preferred for stable behavior. The ambient locale is intended for request or task
+    context integration and is not propagated through raw queue handoff by this module.
+
+    @param locale BCP 47 locale tag
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+nothing set_thread_locale(string locale) [dom=LOCALE_CONTROL] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string canonical = i18n_canonicalize_locale_tag(tag, xsink, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    i18n_thread_locale = canonical;
+}
+
+//! Returns the current thread's ambient i18n locale.
+/** @return the current thread locale, or \c "root" if none has been set
+
+    @note Raw \c Queue handoff does not propagate this ambient locale; pass an explicit context object or locale string
+    across queue boundaries.
+*/
+string get_thread_locale() [flags=RET_VALUE_ONLY] {
+    return new QoreStringNode(i18n_thread_locale.empty() ? "root" : i18n_thread_locale, QCS_UTF8);
+}
+
+//! Clears the current thread's ambient i18n locale.
+/** After this call, I18n::get_thread_locale() returns \c "root".
+*/
+nothing clear_thread_locale() [dom=LOCALE_CONTROL] {
+    i18n_thread_locale.clear();
 }
 
 //! Returns the catalog fallback chain for a locale tag.
