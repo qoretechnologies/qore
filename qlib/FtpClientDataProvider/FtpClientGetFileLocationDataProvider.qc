@@ -80,7 +80,7 @@ public class FtpClientGetFileLocationDataProvider inherits AbstractDataProvider 
             stream.close();
             stream.waitForIo();
         }
-        ftp.get(path, stream);
+        ftp.get(remote_path: path, output_stream: stream);
         return {
             "path": path,
         };

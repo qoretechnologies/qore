@@ -42,7 +42,7 @@ class FileLocationHandlerFtpOutputStreamWrapper inherits OutputStreamWrapper {
         }
 
         BinaryOutputStream bos = cast<BinaryOutputStream>(getStream());
-        client.put(new BinaryInputStream(source: bos.getData()), file);
+        client.put(input_stream: new BinaryInputStream(source: bos.getData()), remote_path: file);
         bos.close();
         closed = True;
     }
@@ -91,7 +91,7 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
     private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
         string file;
         FtpClient f = getFtpClient(scheme, location, opts, \file);
-        return f.getAsBinary(file);
+        return f.getAsBinary(remote_path: file);
     }
 
     #! Retrieves an I/O poller to retrieve a binary file from the given location
@@ -200,11 +200,11 @@ class FileLocationHandlerFtp inherits AbstractFileLocationHandler {
         if (!file) {
             throw "LOCATION-ERROR", sprintf("FTP location %y missing file path", location);
         }
-        FtpClient f(location);
+        FtpClient f(url: location);
         f.connect();
         string dir = dirname(url_info.path);
         if (dir) {
-            f.cwd(dir);
+            f.cwd(path: dir);
         }
         return f;
     }

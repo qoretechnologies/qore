@@ -343,6 +343,20 @@ These examples are from the core migration and should be reused as precedent:
   abbreviations such as `cmd` and `arg`. Qlib orchestrator calls with dynamic
   ternary command names or stored broad payload values may still need to remain
   positional when qmod reports `NAMED-CALL-NOT-SUPPORTED`.
+- FtpClient APIs use public path and stream roles: `url`, `path`,
+  `local_path`, `remote_path`, `input_stream`, `output_stream`,
+  `source_path`, `target_path`, `username`, `password`, `host`, `family`,
+  `host_lookup`, `queue`, `argument`, `with_data`, `warning_ms`,
+  `warning_bytes`, `min_ms`, `timeout_ms`, `command`, and `argument`. Avoid
+  exposing implementation abbreviations such as `is`, `os`, `from`, `to`,
+  `user`, `pass`, `cmd`, `arg`, and `warning_bs`.
+- FtpClient qlib calls that depend on dynamic hash values, ternary-created
+  stream values, or class members may need to remain positional in qmod
+  modules. Confirm with `FileLocationHandler-qmod`,
+  `FtpClientDataProvider-qmod`, and `FtpPoller-qmod`; current examples include
+  `getAsString(file, opts.encoding)`, `put(dynamic_stream, file)`,
+  `FtpClient(options.url)`, `setTimeout(options."timeout")`, and
+  `FtpPoller` calls through its `ftp` member.
 - HTTP readiness APIs use `timeout_ms` for blocking readiness waits and
   `notifier` for `registerReadyNotifier()`. HTTP connection constructors should
   keep the endpoint and TLS decision explicit (`target_host`, `target_port`,

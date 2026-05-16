@@ -80,9 +80,9 @@ class FtpPollerTest inherits QUnit::Test {
 
         port = serv.getPort();
 
-        FtpClient ftp_client("ftp://user:pass@127.0.0.1:" + port);
+        FtpClient ftp_client(url: "ftp://user:pass@127.0.0.1:" + port);
         Queue queue();
-        ftp_client.setWarningQueue(20000, 20000, queue, "test");
+        ftp_client.setWarningQueue(warning_ms: 20000, warning_bytes: 20000, queue: queue, argument: "test");
         assertNothing(ftp_client.connect());
 
         TmpDir tmp_dir();

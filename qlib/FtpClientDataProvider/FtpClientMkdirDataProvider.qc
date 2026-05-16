@@ -73,7 +73,7 @@ public class FtpClientMkdirDataProvider inherits AbstractDataProvider {
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string path = FtpClientDataProvider::getPath(ftp, req.path);
-        ftp.mkdir(path);
+        ftp.mkdir(remote_path: path);
         return {
             "path": path,
         };
