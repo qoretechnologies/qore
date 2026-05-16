@@ -104,6 +104,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed type builtin opt-in", \reviewedTypeBuiltinOptIn(), NOTHING);
         addTestCase("reviewed string builtin opt-in", \reviewedStringBuiltinOptIn(), NOTHING);
         addTestCase("reviewed utility builtin opt-in", \reviewedUtilityBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed list builtin opt-in", \reviewedListBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -210,6 +211,26 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "ws_unmask_data exposes data and mask");
     }
 
+    reviewedListBuiltinOptIn() {
+        code<int(auto, auto)> descending = int sub(auto left, auto right) {
+            return right <=> left;
+        };
+
+        assertEq((1, 2, 3), sort(values: (3, 1, 2)), "sort exposes values");
+        assertEq((3, 2, 1), sort(comparator: descending, values: (1, 3, 2)), "sort exposes comparator");
+        assertEq((3, 2, 1), sort_descending(values: (1, 3, 2)), "sort_descending exposes values");
+        assertEq((1, 2, 3), sort_stable(values: (3, 1, 2)), "sort_stable exposes values");
+        assertEq((3, 2, 1), sort_descending_stable(values: (1, 3, 2)),
+            "sort_descending_stable exposes values");
+        assertEq(1, min(values: (3, 1, 2)), "min exposes values");
+        assertEq(3, max(values: (1, 3, 2)), "max exposes values");
+        assertEq((1, 3), range(start: 1, stop: 5, step: 2), "range exposes start, stop, and step");
+        assertEq((0, 1, 2), range(stop: 3), "range exposes stop");
+        assertEq((3, 2, 1), reverse(values: (1, 2, 3)), "reverse exposes values");
+        assertTrue(inlist(value: "1", values: (1, 2)), "inlist exposes value and values");
+        assertFalse(inlist_hard(value: "1", values: (1, 2)), "inlist_hard exposes value and values");
+    }
+
     parseFailures() {
         assertThrows("NAMED-ARG-DUPLICATE", "duplicate named argument 'a'", sub() {
             Program p(PO_NEW_STYLE);
@@ -238,7 +259,12 @@ public class NamedArgumentsTest inherits QUnit::Test {
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "have not opted in to named arguments", sub() {
             Program p(PO_NEW_STYLE);
-            p.parse("sort(arg: 1);", "builtin-not-opted-in");
+            p.parse("sprintf(fmt: \"%s\", value: \"x\");", "builtin-not-opted-in");
+        });
+
+        assertThrows("NAMED-ARG-UNKNOWN", "accessible named parameters are 'values' and 'comparator'", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("sort(arg: 1);", "builtin-unknown-name");
         });
 
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "varargs-only variants cannot accept named arguments", sub() {

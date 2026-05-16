@@ -44,7 +44,11 @@ ResolvedCallReferenceNode* getCallReference(const QoreString* str, ExceptionSink
 bool inlist_intern(const QoreValue arg, const QoreListNode* l, ExceptionSink* xsink) {
     assert(xsink);
     ConstListIterator li(l);
+    size_t iter = 0;
     while (li.next()) {
+        if (iter && !(iter % 100) && qore_check_cancel(xsink, "list membership comparison")) {
+            return false;
+        }
         bool b = QoreLogicalEqualsOperatorNode::softEqual(arg, li.getValue(), xsink);
         if (*xsink) {
             return false;
@@ -52,6 +56,7 @@ bool inlist_intern(const QoreValue arg, const QoreListNode* l, ExceptionSink* xs
         if (b) {
             return true;
         }
+        ++iter;
     }
     return false;
 }
@@ -63,25 +68,41 @@ QoreListNode* range_intern(int64 start, int64 stop, int64 step, ExceptionSink* x
     }
 
     bool broken_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_RANGE);
-    QoreListNode* l = new QoreListNode(bigIntTypeInfo);
+    ReferenceHolder<QoreListNode> l(new QoreListNode(bigIntTypeInfo), xsink);
     if (start < stop) {
         if (broken_range) {
             ++stop;
         }
 
+        size_t iter = 0;
         for (int64 i = start; i < stop; i += step) {
+            if (iter && !(iter % 100) && qore_check_cancel(xsink, "range generation")) {
+                return nullptr;
+            }
             l->push(i, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            ++iter;
         }
     } else {
         if (broken_range) {
             --stop;
         }
 
+        size_t iter = 0;
         for (int64 i = start; i > stop; i -= step) {
+            if (iter && !(iter % 100) && qore_check_cancel(xsink, "range generation")) {
+                return nullptr;
+            }
             l->push(i, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            ++iter;
         }
     }
-    return l;
+    return l.release();
 }
 
 /** @defgroup list_functions List Functions
@@ -104,7 +125,7 @@ auto sort(auto arg) [flags=NOOP] {
 list<auto> nl = sort(l);
     @endcode
 
-    @param l the list to sort
+    @param values the list to sort
 
     @return the sorted list
 
@@ -117,8 +138,8 @@ list<auto> nl = sort(l);
     - sortDescendingStable(list)
     - sortDescending(list)
 */
-list<auto> sort(list<auto> l) [flags=CONSTANT] {
-   return l->sort(xsink);
+list<auto> sort(list<auto> values) [flags=CONSTANT,NAMED_ARGS] {
+   return values->sort(xsink);
 }
 
 //! Performs an unstable sort in ascending order and returns the new list
@@ -129,8 +150,8 @@ list<auto> sort(list<auto> l) [flags=CONSTANT] {
 list<auto> nl = sort(l, "my_sort_function");
     @endcode
 
-    @param l the list to sort
-    @param func the name of a function accessible in the current scope that accepts 2 arguments of the data type in
+    @param values the list to sort
+    @param comparator the name of a function accessible in the current scope that accepts 2 arguments of the data type in
     the list; the function must return -1, 0, or 1 if the first is less than the second, if the first and second are
     equal, or if the first is greater than the second, respectively
 
@@ -145,9 +166,9 @@ list<auto> nl = sort(l, "my_sort_function");
     - sortDescendingStable(list, string)
     - sortDescending(list, string)
 */
-list<auto> sort(list<auto> l, string func) [flags=RET_VALUE_ONLY] {
-   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(func, xsink), xsink);
-   return !fr ? QoreValue() : l->sort(*fr, xsink);
+list<auto> sort(list<auto> values, string comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(comparator, xsink), xsink);
+   return !fr ? QoreValue() : values->sort(*fr, xsink);
 }
 
 //! Performs an unstable sort in ascending order and returns the new list
@@ -160,8 +181,8 @@ code<int(auto, auto)> sort_func = int sub (hash l, hash r) { return l.id <=> r.i
 list<auto> nl = sort(l, sort_func);
     @endcode
 
-    @param l the list to sort
-    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    @param values the list to sort
+    @param comparator a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
     type in the list; the code must return -1, 0, or 1 if the first is less than the second, if the first and second
     are equal, or if the first is greater than the second, respectively
 
@@ -178,8 +199,8 @@ list<auto> nl = sort(l, sort_func);
 
     @since %Qore 2.1 for typed code parameter
 */
-list<auto> sort(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
-   return l->sort(f, xsink);
+list<auto> sort(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return values->sort(comparator, xsink);
 }
 
 //! Performs an unstable sort in ascending order and returns the new list
@@ -298,7 +319,7 @@ auto sort_descending(auto arg) [flags=NOOP] {
 list<auto> nl = sort_descending(l);
     @endcode
 
-    @param l the list to sort
+    @param values the list to sort
 
     @return the sorted list
 
@@ -313,8 +334,8 @@ list<auto> nl = sort_descending(l);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescending()
 */
-list<auto> sort_descending(list<auto> l) [flags=CONSTANT] {
-   return l->sortDescending(xsink);
+list<auto> sort_descending(list<auto> values) [flags=CONSTANT,NAMED_ARGS] {
+   return values->sortDescending(xsink);
 }
 
 //! Performs an unstable sort in descending order and returns the new list
@@ -325,8 +346,8 @@ list<auto> sort_descending(list<auto> l) [flags=CONSTANT] {
 list<auto> nl = sort_descending(l, "my_sort_function");
     @endcode
 
-    @param l the list to sort
-    @param func the name of a function accessible in the current scope that accepts 2 arguments of the data type in
+    @param values the list to sort
+    @param comparator the name of a function accessible in the current scope that accepts 2 arguments of the data type in
     the list; the function must return -1, 0, or 1 if the first is less than the second, if the first and second are
     equal, or if the first is greater than the second, respectively
 
@@ -343,9 +364,9 @@ list<auto> nl = sort_descending(l, "my_sort_function");
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescending()
 */
-list<auto> sort_descending(list<auto> l, string func) [flags=CONSTANT] {
-   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(func, xsink), xsink);
-   return !fr ? QoreValue() : l->sortDescending(*fr, xsink);
+list<auto> sort_descending(list<auto> values, string comparator) [flags=CONSTANT,NAMED_ARGS] {
+   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(comparator, xsink), xsink);
+   return !fr ? QoreValue() : values->sortDescending(*fr, xsink);
 }
 
 //! Performs an unstable sort in descending order and returns the new list
@@ -358,8 +379,8 @@ code<int(auto, auto)> sort_func = int sub (hash l, hash r) { return l.id <=> r.i
 list<auto> nl = sort_descending(l, sort_func);
     @endcode
 
-    @param l the list to sort
-    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    @param values the list to sort
+    @param comparator a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
     type in the list; the code must return -1, 0, or 1 if the first is less than the second, if the first and second
     are equal, or if the first is greater than the second, respectively
 
@@ -377,8 +398,8 @@ list<auto> nl = sort_descending(l, sort_func);
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescending()
     @since %Qore 2.1 for typed code parameter
 */
-list<auto> sort_descending(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
-   return l->sortDescending(f, xsink);
+list<auto> sort_descending(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return values->sortDescending(comparator, xsink);
 }
 
 //! Performs an unstable sort in descending order and returns the new list
@@ -491,7 +512,7 @@ auto sort_stable(auto arg) [flags=NOOP] {
 list<auto> nl = sort_stable(l);
     @endcode
 
-    @param l the list to sort
+    @param values the list to sort
 
     @return the sorted list
 
@@ -502,8 +523,8 @@ list<auto> nl = sort_stable(l);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortStable()
 */
-list<auto> sort_stable(list<auto> l) [flags=CONSTANT] {
-   return l->sortStable(xsink);
+list<auto> sort_stable(list<auto> values) [flags=CONSTANT,NAMED_ARGS] {
+   return values->sortStable(xsink);
 }
 
 //! Performs a stable sort in ascending order and returns the new list
@@ -514,8 +535,8 @@ list<auto> sort_stable(list<auto> l) [flags=CONSTANT] {
 list<auto> nl = sort_stable(l, "my_sort_function");
     @endcode
 
-    @param l the list to sort
-    @param func the name of a function accessible in the current scope that accepts 2 arguments of the data type in
+    @param values the list to sort
+    @param comparator the name of a function accessible in the current scope that accepts 2 arguments of the data type in
     the list; the function must return -1, 0, or 1 if the first is less than the second, if the first and second are
     equal, or if the first is greater than the second, respectively
 
@@ -528,9 +549,9 @@ list<auto> nl = sort_stable(l, "my_sort_function");
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortStable()
 */
-list<auto> sort_stable(list<auto> l, string func) [flags=RET_VALUE_ONLY] {
-   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(func, xsink), xsink);
-   return !fr ? QoreValue() : l->sortStable(*fr, xsink);
+list<auto> sort_stable(list<auto> values, string comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(comparator, xsink), xsink);
+   return !fr ? QoreValue() : values->sortStable(*fr, xsink);
 }
 
 //! Performs a stable sort in ascending order and returns the new list
@@ -543,8 +564,8 @@ code<int(auto, auto)> sort_func = int sub (hash<auto> l, hash<auto> r) { return 
 list<auto> nl = sort_stable(l, sort_func);
     @endcode
 
-    @param l the list to sort
-    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    @param values the list to sort
+    @param comparator a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
     type in the list; the code must return -1, 0, or 1 if the first is less than the second, if the first and second
     are equal, or if the first is greater than the second, respectively
 
@@ -558,8 +579,8 @@ list<auto> nl = sort_stable(l, sort_func);
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortStable()
     @since %Qore 2.1 for typed code parameter
 */
-list<auto> sort_stable(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
-   return l->sortStable(f, xsink);
+list<auto> sort_stable(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return values->sortStable(comparator, xsink);
 }
 
 //! Performs a stable sort in ascending order and returns the new list
@@ -682,7 +703,7 @@ auto sort_descending_stable(auto arg) [flags=NOOP] {
 list<auto> nl = sort_descending_stable(l);
     @endcode
 
-    @param l the list to sort
+    @param values the list to sort
 
     @return the sorted list
 
@@ -693,8 +714,8 @@ list<auto> nl = sort_descending_stable(l);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescendingStable()
 */
-list<auto> sort_descending_stable(list<auto> l) [flags=CONSTANT] {
-   return l->sortDescendingStable(xsink);
+list<auto> sort_descending_stable(list<auto> values) [flags=CONSTANT,NAMED_ARGS] {
+   return values->sortDescendingStable(xsink);
 }
 
 //! Performs a stable sort in descending order and returns the new list
@@ -705,8 +726,8 @@ list<auto> sort_descending_stable(list<auto> l) [flags=CONSTANT] {
 list<auto> nl = sort_descending_stable(l, "my_sort_function");
     @endcode
 
-    @param l the list to sort
-    @param func the name of a function accessible in the current scope that accepts 2 arguments of the data type in
+    @param values the list to sort
+    @param comparator the name of a function accessible in the current scope that accepts 2 arguments of the data type in
     the list; the function must return -1, 0, or 1 if the first is less than the second, if the first and second are
     equal, or if the first is greater than the second, respectively
 
@@ -719,9 +740,9 @@ list<auto> nl = sort_descending_stable(l, "my_sort_function");
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescendingStable()
 */
-list<auto> sort_descending_stable(list<auto> l, string func) [flags=RET_VALUE_ONLY] {
-   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(func, xsink), xsink);
-   return !fr ? QoreValue() : l->sortDescendingStable(*fr, xsink);
+list<auto> sort_descending_stable(list<auto> values, string comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(comparator, xsink), xsink);
+   return !fr ? QoreValue() : values->sortDescendingStable(*fr, xsink);
 }
 
 //! Performs a stable sort in descending order and returns the new list
@@ -734,8 +755,8 @@ code<int(auto, auto)> sort_func = int sub (hash l, hash r) { return l.id <=> r.i
 list<auto> nl = sort_descending_stable(l, sort_func);
     @endcode
 
-    @param l the list to sort
-    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    @param values the list to sort
+    @param comparator a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
     type in the list; the code must return -1, 0, or 1 if the first is less than the second, if the first and second
     are equal, or if the first is greater than the second, respectively
 
@@ -749,8 +770,8 @@ list<auto> nl = sort_descending_stable(l, sort_func);
     @since %Qore 0.8.12 as a replacement for deprecated camel-case sortDescendingStable()
     @since %Qore 2.1 for typed code parameter
 */
-list<auto> sort_descending_stable(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
-   return l->sortDescendingStable(f, xsink);
+list<auto> sort_descending_stable(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return values->sortDescendingStable(comparator, xsink);
 }
 
 //! Performs a stable sort in descending order and returns the new list
@@ -779,14 +800,14 @@ list<auto> sort_descending_stable(list<auto> l, code f) [flags=RET_VALUE_ONLY,DE
 auto v = min(l);
     @endcode
 
-    @param l the list to process
+    @param values the list to process
 
     @return the minumum value in a list
 
     @see max(list)
 */
-auto min(list<auto> l) [flags=CONSTANT] {
-   return l->min(xsink);
+auto min(list<auto> values) [flags=CONSTANT,NAMED_ARGS] {
+   return values->min(xsink);
 }
 
 //! Returns the minumum value in a list
@@ -797,8 +818,8 @@ auto min(list<auto> l) [flags=CONSTANT] {
 auto v = min(l, "my_sort_function");
     @endcode
 
-    @param l the list to sort
-    @param func the name of a function accessible in the current scope that accepts 2 arguments of the data type in
+    @param values the list to sort
+    @param comparator the name of a function accessible in the current scope that accepts 2 arguments of the data type in
     the list; the function must return -1, 0, or 1 if the first is less than the second, if the first and second are
     equal, or if the first is greater than the second, respectively
 
@@ -806,9 +827,9 @@ auto v = min(l, "my_sort_function");
 
     @see max(list, string)
 */
-auto min(list<auto> l, string func) [flags=RET_VALUE_ONLY] {
-   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(func, xsink), xsink);
-   return !fr ? QoreValue() : l->min(*fr, xsink);
+auto min(list<auto> values, string comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(comparator, xsink), xsink);
+   return !fr ? QoreValue() : values->min(*fr, xsink);
 }
 
 //! Returns the minimum value in a list
@@ -821,8 +842,8 @@ code<int(auto, auto)> cmp_func = int sub (hash l, hash r) { return l.id <=> r.id
 auto v = min(l, cmp_func);
     @endcode
 
-    @param l the list to process
-    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    @param values the list to process
+    @param comparator a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
     type in the list; the @ref call_reference "call reference" or a @ref closure "closure" must return -1, 0, or 1 if
     the first is less than the second, if the first and second are equal, or if the first is greater than the second,
     respectively
@@ -833,8 +854,8 @@ auto v = min(l, cmp_func);
 
     @since %Qore 2.1 for typed code parameter
 */
-auto min(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
-   return l->min(f, xsink);
+auto min(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return values->min(comparator, xsink);
 }
 
 //! Returns the minimum value in a list
@@ -882,14 +903,14 @@ auto min(...) [flags=CONSTANT] {
 auto v = max(l);
     @endcode
 
-    @param l the list to process
+    @param values the list to process
 
     @return the maximum value in a list
 
     @see min(list)
 */
-auto max(list<auto> l) [flags=CONSTANT] {
-   return l->max(xsink);
+auto max(list<auto> values) [flags=CONSTANT,NAMED_ARGS] {
+   return values->max(xsink);
 }
 
 //! Returns the maximum value in a list
@@ -900,8 +921,8 @@ auto max(list<auto> l) [flags=CONSTANT] {
 auto v = max(l, "my_sort_function");
     @endcode
 
-    @param l the list to sort
-    @param func the name of a function accessible in the current scope that accepts 2 arguments of the data type in
+    @param values the list to sort
+    @param comparator the name of a function accessible in the current scope that accepts 2 arguments of the data type in
     the list; the function must return -1, 0, or 1 if the first is less than the second, if the first and second are
     equal, or if the first is greater than the second, respectively
 
@@ -909,9 +930,9 @@ auto v = max(l, "my_sort_function");
 
     @see min(list, string)
 */
-auto max(list<auto> l, string func) [flags=RET_VALUE_ONLY] {
-   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(func, xsink), xsink);
-   return !fr ? QoreValue() : l->max(*fr, xsink);
+auto max(list<auto> values, string comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   ReferenceHolder<ResolvedCallReferenceNode> fr(getCallReference(comparator, xsink), xsink);
+   return !fr ? QoreValue() : values->max(*fr, xsink);
 }
 
 //! Returns the maximum value in a list
@@ -924,8 +945,8 @@ code<int(auto, auto)> cmp_func = int sub (hash l, hash r) { return l.id <=> r.id
 auto v = max(l, cmp_func);
     @endcode
 
-    @param l the list to process
-    @param f a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
+    @param values the list to process
+    @param comparator a @ref call_reference "call reference" or a @ref closure "closure" that accepts 2 arguments of the data
     type in the list; the @ref call_reference "call reference" or a @ref closure "closure" must return -1, 0, or 1 if
     the first is less than the second, if the first and second are equal, or if the first is greater than the second,
     respectively
@@ -936,8 +957,8 @@ auto v = max(l, cmp_func);
 
     @since %Qore 2.1 for typed code parameter
 */
-auto max(list<auto> l, code<int(auto, auto)> f) [flags=RET_VALUE_ONLY] {
-   return l->max(f, xsink);
+auto max(list<auto> values, code<int(auto, auto)> comparator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return values->max(comparator, xsink);
 }
 
 //! Returns the maximum value in a list
@@ -991,14 +1012,14 @@ nothing reverse() [flags=NOOP] {
 list<auto> nl = reverse(l);
     @endcode
 
-    @param l the list to reverse
+    @param values the list to reverse
 
     @return the given list with all elements in reverse order
 
     @see reverse(string)
 */
-list<auto> reverse(list<auto> l) [flags=CONSTANT] {
-   return l->reverse();
+list<auto> reverse(list<auto> values) [flags=CONSTANT,NAMED_ARGS] {
+   return values->reverse();
 }
 
 //! This function variant does nothing at all
@@ -1025,16 +1046,16 @@ if (inlist(str, strlist))
     printf("%y is in %y\n", str, strlist);
     @endcode
 
-    @param arg the argument to look for in the list
-    @param l the list to search for the first argument \a arg
+    @param value the value to look for in the list
+    @param values the list to search for the first argument \a value
 
     @return @ref True if the first argument is a member of the second argument list using soft comparisons (with
     implicit type conversions), @ref False if not
 
     @see inlist_hard(auto, softlist<auto>)
 */
-bool inlist(auto arg, softlist<auto> l) [flags=RET_VALUE_ONLY] {
-   return inlist_intern(arg, l, xsink);
+bool inlist(auto value, softlist<auto> values) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return inlist_intern(value, values, xsink);
 }
 
 //! This function variant does nothing at all
@@ -1061,19 +1082,23 @@ if (inlist_hard(str, strlist))
     printf("%y is in %y\n", str, strlist);
     @endcode
 
-    @param arg the argument to look for in the list
-    @param l the list to search for the first argument \a arg
+    @param value the value to look for in the list
+    @param values the list to search for the first argument \a value
 
     @return @ref True if the first argument is a member of the second argument list using hard comparisons (without
     any implicit type conversions), @ref False if not
 
     @see inlist(auto, softlist<auto>)
 */
-bool inlist_hard(auto arg, softlist<auto> l) [flags=RET_VALUE_ONLY] {
-    bool arg_is_nothing = arg.isNothing();
+bool inlist_hard(auto value, softlist<auto> values) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    bool arg_is_nothing = value.isNothing();
 
-    ConstListIterator li(l);
+    ConstListIterator li(values);
+    size_t iter = 0;
     while (li.next()) {
+        if (iter && !(iter % 100) && qore_check_cancel(xsink, "list membership comparison")) {
+            return QoreValue();
+        }
         QoreValue lp = li.getValue();
 
         bool b;
@@ -1084,7 +1109,7 @@ bool inlist_hard(auto arg, softlist<auto> l) [flags=RET_VALUE_ONLY] {
         } else if (arg_is_nothing) {
             b = false;
         } else {
-            b = arg.isEqualHard(lp);
+            b = value.isEqualHard(lp);
             if (*xsink) {
                 return QoreValue();
             }
@@ -1093,6 +1118,7 @@ bool inlist_hard(auto arg, softlist<auto> l) [flags=RET_VALUE_ONLY] {
         if (b) {
             return true;
         }
+        ++iter;
     }
     return false;
 }
@@ -1127,7 +1153,7 @@ range(10, -10, 5); # (10, 5, 0, -5, -10)
     - %Qore 0.8.6
     - %Qore 0.9.5 does not include the upper limit in the range unless @ref broken-range "%broken-range" is set
 */
-list<int> range(int start, int stop, int step = 1) [flags=RET_VALUE_ONLY] {
+list<int> range(int start, int stop, int step = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return range_intern(start, stop, step, xsink);
 }
 
@@ -1154,7 +1180,7 @@ range(-3); # (0, -1, -2, -3)
     - %Qore 0.8.6
     - %Qore 0.9.5 does not include the upper limit in the range unless @ref broken-range "%broken-range" is set
  */
-list<int> range(int stop) [flags=CONSTANT] {
+list<int> range(int stop) [flags=CONSTANT,NAMED_ARGS] {
     return range_intern(0, stop, 1, xsink);
 }
 ///@}

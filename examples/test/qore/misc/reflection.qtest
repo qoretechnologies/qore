@@ -321,6 +321,62 @@ class ReflectionTest inherits QUnit::Test {
         FunctionVariant ws_unmaskv = Function::forName("ws_unmask_data").getVariant(BinaryType, BinaryType);
         assertTrue(ws_unmaskv.isNamedCallable());
         assertEq(("data", "mask"), ws_unmaskv.getNamedParameterNames());
+
+        foreach string name in (("sort", "sort_descending", "sort_stable", "sort_descending_stable", "min", "max")) {
+            bool found_values = False;
+            bool found_comparator = False;
+            foreach FunctionVariant v in (Function::forName(name).getVariants()) {
+                if (v.getParamNames() == ("values",)) {
+                    found_values = True;
+                    assertTrue(v.isNamedCallable());
+                    assertEq(("values",), v.getNamedParameterNames());
+                } else if (v.getParamNames() == ("values", "comparator")) {
+                    found_comparator = True;
+                    assertTrue(v.isNamedCallable());
+                    assertEq(("values", "comparator"), v.getNamedParameterNames());
+                } else if (!v.numParams() || v.getParamNames() == ("arg",) || v.getParamNames() == ("...",)
+                        || v.getParamNames() == ("l",) || v.getParamNames() == ("l", "func")
+                        || v.getParamNames() == ("l", "f")) {
+                    assertFalse(v.isNamedCallable());
+                    assertEq((), v.getNamedParameterNames());
+                }
+            }
+            assertTrue(found_values);
+            assertTrue(found_comparator);
+        }
+
+        int found_range = 0;
+        foreach FunctionVariant v in (Function::forName("range").getVariants()) {
+            if (v.getParamNames() == ("stop",)) {
+                ++found_range;
+                assertTrue(v.isNamedCallable());
+                assertEq(("stop",), v.getNamedParameterNames());
+            } else if (v.getParamNames() == ("start", "stop", "step")) {
+                ++found_range;
+                assertTrue(v.isNamedCallable());
+                assertEq(("start", "stop", "step"), v.getNamedParameterNames());
+            }
+        }
+        assertEq(2, found_range);
+
+        FunctionVariant reversev = Function::forName("reverse").getVariant(new Type("list<auto>"));
+        assertTrue(reversev.isNamedCallable());
+        assertEq(("values",), reversev.getNamedParameterNames());
+
+        foreach string name in (("inlist", "inlist_hard")) {
+            bool found_values = False;
+            foreach FunctionVariant v in (Function::forName(name).getVariants()) {
+                if (v.getParamNames() == ("value", "values")) {
+                    found_values = True;
+                    assertTrue(v.isNamedCallable());
+                    assertEq(("value", "values"), v.getNamedParameterNames());
+                } else {
+                    assertFalse(v.isNamedCallable());
+                    assertEq((), v.getNamedParameterNames());
+                }
+            }
+            assertTrue(found_values);
+        }
     }
 
     modNameTests() {
