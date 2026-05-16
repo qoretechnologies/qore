@@ -531,6 +531,47 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("get_app_registry", ("key",));
         assertNamedCallableVariantCount("get_call_reference", ("identifier",));
         assertNamedCallableVariantCount("get_value_byte_size", ("value",));
+
+        foreach string name in (("MD2", "MD4", "MD5", "SHA", "SHA1", "SHA224", "SHA256", "SHA384", "SHA512",
+                "DSS", "DSS1", "MDC2", "RIPEMD160", "MD2_bin", "MD4_bin", "MD5_bin", "SHA_bin", "SHA1_bin",
+                "SHA224_bin", "SHA256_bin", "SHA384_bin", "SHA512_bin", "DSS_bin", "DSS1_bin", "MDC2_bin",
+                "RIPEMD160_binary")) {
+            assertNamedCallableVariantCount(name, ("data",));
+        }
+
+        foreach string name in (("MD2_hmac", "MD4_hmac", "MD5_hmac", "SHA_hmac", "SHA1_hmac", "SHA224_hmac",
+                "SHA256_hmac", "SHA384_hmac", "SHA512_hmac", "DSS_hmac", "DSS1_hmac", "MDC2_hmac",
+                "RIPEMD160_hmac")) {
+            assertNamedCallableVariantCount(name, ("data", "key"));
+        }
+
+        foreach string name in (("blowfish_encrypt_cbc", "des_encrypt_cbc", "des_ede_encrypt_cbc",
+                "des_ede3_encrypt_cbc", "desx_encrypt_cbc", "rc4_encrypt", "rc2_encrypt_cbc",
+                "cast5_encrypt_cbc", "rc5_encrypt_cbc", "blowfish_decrypt_cbc", "des_decrypt_cbc",
+                "des_ede_decrypt_cbc", "des_ede3_decrypt_cbc", "desx_decrypt_cbc", "rc4_decrypt",
+                "rc2_decrypt_cbc", "cast5_decrypt_cbc", "rc5_decrypt_cbc")) {
+            assertNamedCallableVariantCount(name, ("data", "key", "iv"));
+        }
+
+        foreach string name in (("blowfish_decrypt_cbc_to_string", "des_decrypt_cbc_to_string",
+                "des_ede_decrypt_cbc_to_string", "des_ede3_decrypt_cbc_to_string", "desx_decrypt_cbc_to_string",
+                "rc4_decrypt_to_string", "rc2_decrypt_cbc_to_string", "cast5_decrypt_cbc_to_string",
+                "rc5_decrypt_cbc_to_string")) {
+            assertNamedCallableVariantCount(name, ("data", "key", "iv", "encoding"));
+        }
+
+        assertNamedCallableVariantCount("digest", ("digest", "data"));
+        assertNamedCallableVariantCount("hmac", ("digest", "data", "key"));
+        assertNamedCallableVariantCount("get_encryptor", ("algorithm", "key", "iv", "mac", "mac_size", "aad"));
+        assertNamedCallableVariantCount("get_decryptor", ("algorithm", "key", "iv", "mac", "aad"));
+        assertNamedCallableVariantCount("encrypt", ("algorithm", "data", "key", "iv", "mac", "mac_size", "aad"));
+        assertNamedCallableVariantCount("decrypt_to_binary", ("algorithm", "data", "key", "iv", "mac", "aad"));
+        assertNamedCallableVariantCount("decrypt_to_string",
+            ("algorithm", "data", "key", "iv", "mac", "aad", "encoding"));
+        assertNamedCallableVariantCount("get_cipher_info", ("cipher",));
+        assertNamedCallableVariantCount("has_digest", ("digest",));
+        assertNamedCallableVariantCount("pbkdf2", ("digest", "password", "salt", "iterations", "key_length"));
+        assertNamedCallableVariantCount("get_random_bytes", ("size",));
     }
 
     modNameTests() {

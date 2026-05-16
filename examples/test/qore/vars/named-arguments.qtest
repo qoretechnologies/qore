@@ -114,6 +114,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed time builtin opt-in", \reviewedTimeBuiltinOptIn(), NOTHING);
         addTestCase("reviewed object builtin opt-in", \reviewedObjectBuiltinOptIn(), NOTHING);
         addTestCase("reviewed misc builtin opt-in", \reviewedMiscBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed crypto builtin opt-in", \reviewedCryptoBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -396,6 +397,29 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "parse_url exposes keep_brackets");
         assertEq("example.com", parseURL(url: "https://example.com/path").host, "parseURL exposes url");
         assertEq(3, get_value_byte_size(value: "abc"), "byte size helper exposes value");
+    }
+
+    reviewedCryptoBuiltinOptIn() {
+        string data = "named crypto payload";
+        string key = "1234567812345abcabcdefghijklmnopqrstuvwxyz";
+
+        assertEq(MD5(data), MD5(data: data), "digest helper exposes data");
+        assertEq(MD5_bin(data), MD5_bin(data: data), "binary digest helper exposes data");
+        assertEq(MD5_hmac(data, key), MD5_hmac(data: data, key: key), "HMAC helper exposes data and key");
+        assertEq(digest("md5", data), digest(digest: "md5", data: data), "generic digest exposes digest and data");
+        assertEq(hmac("sha256", data, key), hmac(digest: "sha256", data: data, key: key),
+            "generic HMAC exposes digest, data, and key");
+        assertTrue(has_digest(digest: "sha256"), "digest inspection exposes digest");
+
+        binary encrypted = encrypt(algorithm: "blowfish", data: data, key: key);
+        assertEq(data, decrypt_to_string(algorithm: "blowfish", data: encrypted, key: key, encoding: "utf-8"),
+            "generic crypto helpers expose algorithm and data");
+        assertTrue(get_encryptor(algorithm: "blowfish", key: key) != NOTHING, "get_encryptor exposes algorithm");
+        assertTrue(get_decryptor(algorithm: "blowfish", key: key) != NOTHING, "get_decryptor exposes algorithm");
+        assertTrue(get_cipher_info(cipher: "blowfish") != NOTHING, "get_cipher_info exposes cipher");
+        assertEq(16, pbkdf2(digest: "sha256", password: "password", salt: "salt", iterations: 1,
+            key_length: 16).size(), "pbkdf2 exposes key_length");
+        assertEq(4, get_random_bytes(size: 4).size(), "random helper exposes size");
     }
 
     parseFailures() {

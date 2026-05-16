@@ -362,9 +362,13 @@ static QoreValue apply_transformation(SimpleRefHolder<Transform>& t, SimpleRefHo
     size_t rv_maxsize = rv->size();
     size_t rvsize = 0;
     size_t offset = 0;
+    int iter = 0;
 
     // decrypt data
     while (offset != data_len) {
+        if (++iter % 10 == 0 && qore_check_cancel(xsink, "applying crypto transformation")) {
+            return QoreValue();
+        }
         // get block size
         size_t bs = data_len - offset;
 
@@ -388,7 +392,11 @@ static QoreValue apply_transformation(SimpleRefHolder<Transform>& t, SimpleRefHo
     }
 
     // close the stream
+    iter = 0;
     while (true) {
+        if (++iter % 10 == 0 && qore_check_cancel(xsink, "finalizing crypto transformation")) {
+            return QoreValue();
+        }
         // ensure we always have buffer space for the encryption algorithm
         {
             size_t new_max = rvsize + (EVP_MAX_BLOCK_LENGTH * 2);
@@ -850,7 +858,7 @@ binary bin = blowfish_encrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary blowfish_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary blowfish_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("BLOWFISH-ENCRYPT-PARAM-ERROR", args, xsink)
@@ -885,7 +893,7 @@ binary bin = blowfish_decrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary blowfish_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary blowfish_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("BLOWFISH-DECRYPT-PARAM-ERROR", args, xsink)
@@ -923,7 +931,7 @@ string str = blowfish_decrypt_cbc_to_string(data, key, NOTHING, "iso-8859-1");
 
     @since %Qore 0.8.4 added the encoding parameter to specify the output encoding of the string
  */
-string blowfish_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY] {
+string blowfish_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("BLOWFISH-DECRYPT-PARAM-ERROR", args, xsink, true)
@@ -959,7 +967,7 @@ binary bin = des_encrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary des_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary des_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DES-ENCRYPT-PARAM-ERROR", args, xsink)
@@ -996,7 +1004,7 @@ binary bin = des_decrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary des_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary des_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DES-DECRYPT-PARAM-ERROR", args, xsink)
@@ -1036,7 +1044,7 @@ string bin = des_decrypt_cbc_to_string(data, key, NOTHING, "iso-8859-1");
 
     @since %Qore 0.8.4 added the encoding parameter to specify the output encoding of the string
  */
-string des_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY] {
+string des_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DES-DECRYPT-PARAM-ERROR", args, xsink, true)
@@ -1073,7 +1081,7 @@ binary bin = des_ede_encrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary des_ede_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary des_ede_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DES-ENCRYPT-PARAM-ERROR", args, xsink)
@@ -1110,7 +1118,7 @@ binary bin = des_ede_decrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary des_ede_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary des_ede_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DES-DECRYPT-PARAM-ERROR", args, xsink)
@@ -1150,7 +1158,7 @@ string bin = des_ede_decrypt_cbc_to_string(data, key, NOTHING, "iso-8859-1");
 
     @since %Qore 0.8.4 added the encoding parameter to specify the output encoding of the string
  */
-string des_ede_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY] {
+string des_ede_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DES-DECRYPT-PARAM-ERROR", args, xsink, true)
@@ -1187,7 +1195,7 @@ binary bin = des_ede3_encrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary des_ede3_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary des_ede3_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DES-ENCRYPT-PARAM-ERROR", args, xsink)
@@ -1224,7 +1232,7 @@ binary bin = des_ede3_decrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary des_ede3_decrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary des_ede3_decrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DES-DECRYPT-PARAM-ERROR", args, xsink)
@@ -1264,7 +1272,7 @@ string bin = des_ede3_decrypt_cbc_to_string(data, key, NOTHING, "iso-8859-1");
 
     @since %Qore 0.8.4 added the encoding parameter to specify the output encoding of the string
  */
-string des_ede3_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY] {
+string des_ede3_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DES-DECRYPT-PARAM-ERROR", args, xsink, true)
@@ -1301,7 +1309,7 @@ binary bin = desx_encrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary desx_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary desx_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DESX-ENCRYPT-PARAM-ERROR", args, xsink)
@@ -1338,7 +1346,7 @@ binary bin = desx_decrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary desx_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary desx_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DESX-DECRYPT-PARAM-ERROR", args, xsink)
@@ -1378,7 +1386,7 @@ string str = desx_decrypt_cbc_to_string(data, key, NOTHING, "iso-8859-1");
 
     @since %Qore 0.8.4 added the encoding parameter to specify the output encoding of the string
  */
-string desx_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY] {
+string desx_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("DESX-DECRYPT-PARAM-ERROR", args, xsink, true)
@@ -1416,7 +1424,7 @@ binary bin = rc4_encrypt(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary rc4_encrypt(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary rc4_encrypt(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("RC4-ENCRYPT-PARAM-ERROR", args, xsink)
@@ -1453,7 +1461,7 @@ binary bin = rc4_decrypt(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary rc4_decrypt(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary rc4_decrypt(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("RC4-DECRYPT-PARAM-ERROR", args, xsink)
@@ -1493,7 +1501,7 @@ string str = rc4_decrypt_to_string(encrypted_data, key, NOTHING, "iso-8859-1");
 
     @since %Qore 0.8.4 added the encoding parameter to specify the output encoding of the string
  */
-string rc4_decrypt_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY] {
+string rc4_decrypt_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("RC4-DECRYPT-PARAM-ERROR", args, xsink, true)
@@ -1528,7 +1536,7 @@ binary bin = rc2_encrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary rc2_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary rc2_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("RC2-ENCRYPT-PARAM-ERROR", args, xsink)
@@ -1563,7 +1571,7 @@ binary bin = rc2_decrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary rc2_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary rc2_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("RC2-DECRYPT-PARAM-ERROR", args, xsink)
@@ -1601,7 +1609,7 @@ string str = rc2_decrypt_cbc_to_string(data, key);
 
     @since %Qore 0.8.4 added the encoding parameter to specify the output encoding of the string
  */
-string rc2_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY] {
+string rc2_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("RC2-DECRYPT-PARAM-ERROR", args, xsink, true)
@@ -1636,7 +1644,7 @@ binary bin = cast5_encrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary cast5_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary cast5_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("CAST5-ENCRYPT-PARAM-ERROR", args, xsink)
@@ -1671,7 +1679,7 @@ binary bin = cast5_decrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary cast5_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary cast5_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("CAST5-DECRYPT-PARAM-ERROR", args, xsink)
@@ -1709,7 +1717,7 @@ string bin = cast5_decrypt_cbc_to_string(data, key, NOTHING, "iso-8859-1");
 
     @since %Qore 0.8.4 added the encoding parameter to specify the output encoding of the string
  */
-string cast5_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY] {
+string cast5_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     CryptoHelper ch;
 
     if (ch.setSingleKey("CAST5-DECRYPT-PARAM-ERROR", args, xsink, true)
@@ -1747,7 +1755,7 @@ binary bin = rc2_encrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary rc5_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary rc5_encrypt_cbc(data[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifndef OPENSSL_NO_RC5
     CryptoHelper ch;
 
@@ -1789,7 +1797,7 @@ binary bin = rc2_decrypt_cbc(data, key);
     - @ref Qore::get_decryptor()
     - @ref Qore::get_encryptor()
  */
-binary rc5_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY] {
+binary rc5_decrypt_cbc(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifndef OPENSSL_NO_RC5
     CryptoHelper ch;
 
@@ -1834,7 +1842,7 @@ string str = rc2_decrypt_cbc_to_string(data, key, NOTHING, "iso-8859-1");
 
     @since %Qore 0.8.4 added the encoding parameter to specify the output encoding of the string
  */
-string rc5_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY] {
+string rc5_decrypt_cbc_to_string(binary[doc] data, data[doc] key, data[doc] iv = Qore::DefaultIV, *string[doc] encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifndef OPENSSL_NO_RC5
     CryptoHelper ch;
 
@@ -1890,7 +1898,7 @@ string str = MD2("hello"); # returns "a9046c73e00331af68917d3804f70655"
     - MD2_bin()
     - digest()
  */
-string MD2(data[doc] data) {
+string MD2(data[doc] data) [flags=NAMED_ARGS] {
 #if !defined(OPENSSL_NO_MD2) && !defined(NO_MD2)
     DigestHelper dh(args);
     if (dh.doDigest(MD2_ERR, EVP_md2(), xsink)) {
@@ -1920,7 +1928,7 @@ string str = MD4("hello"); # returns "866437cb7a794bce2b727acc0362ee27"
     - MD4_bin()
     - digest()
  */
-string MD4(data[doc] data) [flags=RET_VALUE_ONLY] {
+string MD4(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     DigestHelper dh(args);
     if (dh.doDigest(MD4_ERR, EVP_md4(), xsink)) {
         return QoreValue();
@@ -1950,7 +1958,7 @@ string str = MD5("hello"); # returns "5d41402abc4b2a76b9719d911017c592"
     - MD5_bin()
     - digest()
 */
-string MD5(data[doc] data) [flags=RET_VALUE_ONLY] {
+string MD5(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     DigestHelper dh(args);
     if (dh.doDigest(MD5_ERR, EVP_md5(), xsink)) {
         return QoreValue();
@@ -1977,7 +1985,7 @@ string str = SHA("hello"); returns "ac62a630ca850b4ea07eda664eaecf9480843152"
     - SHA_bin()
     - digest()
 */
-string SHA(data[doc] data) [flags=RET_VALUE_ONLY] {
+string SHA(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifdef HAVE_OPENSSL_SHA
     DigestHelper dh(args);
     if (dh.doDigest(SHA_ERR, EVP_sha(), xsink)) {
@@ -2010,7 +2018,7 @@ string str = SHA1("hello"); # "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"
     - SHA1_bin()
     - digest()
  */
-string SHA1(data[doc] data) [flags=RET_VALUE_ONLY] {
+string SHA1(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     DigestHelper dh(args);
     if (dh.doDigest(SHA1_ERR, EVP_sha1(), xsink)) {
         return QoreValue();
@@ -2041,7 +2049,7 @@ string str = SHA224("hello"); # returns "ea09ae9cc6768c50fcee903ed054556e5bfc834
     - digest()
     - SHA224_bin()
 */
-string SHA224(data[doc] data) [flags=RET_VALUE_ONLY] {
+string SHA224(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(args);
     if (dh.doDigest(SHA224_ERR, EVP_sha224(), xsink)) {
@@ -2076,7 +2084,7 @@ string str = SHA256("hello"); # returns "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5
     - SHA256_bin()
     - digest()
 */
-string SHA256(data[doc] data) [flags=RET_VALUE_ONLY] {
+string SHA256(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(args);
     if (dh.doDigest(SHA256_ERR, EVP_sha256(), xsink)) {
@@ -2111,7 +2119,7 @@ string str = SHA384("hello"); # returns "59e1748777448c69de6b800d7a33bbfb9ff1b46
     - SHA384_bin()
     - digest()
 */
-string SHA384(data[doc] data) [flags=RET_VALUE_ONLY] {
+string SHA384(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA512) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(args);
     if (dh.doDigest(SHA384_ERR, EVP_sha384(), xsink)) {
@@ -2146,7 +2154,7 @@ string str = SHA512("hello"); # returns "9b71d224bd62f3785d96d46ad3ea3d73319bfbc
     - SHA512_bin()
     - digest()
 */
-string SHA512(data[doc] data) [flags=RET_VALUE_ONLY] {
+string SHA512(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA512) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(args);
     if (dh.doDigest(SHA512_ERR, EVP_sha512(), xsink)) {
@@ -2178,7 +2186,7 @@ string str = DSS("hello"); # returns "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"
 
     @note this digest algorithm is considered outdated and is included for backwards-compatibility only when %Qore is built with an older openssl library
 */
-string DSS(data[doc] data) [flags=RET_VALUE_ONLY] {
+string DSS(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifndef HAVE_OPENSSL_INIT_CRYPTO
     DigestHelper dh(args);
     if (dh.doDigest(DSS_ERR, EVP_dss(), xsink)) {
@@ -2210,7 +2218,7 @@ string str = DSS1("hello"); # returns "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d"
 
     @note this digest algorithm is considered outdated and is included for backwards-compatibility only when %Qore is built with an older openssl library
  */
-string DSS1(data[doc] data) [flags=RET_VALUE_ONLY] {
+string DSS1(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifndef HAVE_OPENSSL_INIT_CRYPTO
     DigestHelper dh(args);
     if (dh.doDigest(DSS1_ERR, EVP_dss1(), xsink)) {
@@ -2243,7 +2251,7 @@ string str = MDC2("hello"); # returns "4517036cf97b2407d6fe22aa5ab878a3"
     - MDC2_bin()
     - digest()
  */
-string MDC2(data[doc] data) [flags=RET_VALUE_ONLY] {
+string MDC2(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifdef OPENSSL_HAVE_MDC2
     DigestHelper dh(args);
     if (dh.doDigest(MDC2_ERR, EVP_mdc2(), xsink)) {
@@ -2273,7 +2281,7 @@ string str = RIPEMD160("hello"); # returns "108f07b8382412612c048d07d13f81411844
     - RIPEMD160_bin()
     - digest()
 */
-string RIPEMD160(data[doc] data) [flags=RET_VALUE_ONLY] {
+string RIPEMD160(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     DigestHelper dh(args);
     if (dh.doDigest(RIPEMD160_ERR, EVP_ripemd160(), xsink)) {
         return QoreValue();
@@ -2302,7 +2310,7 @@ binary bin = MD2_bin("hello");
     - MD2()
     - digest()
 */
-binary MD2_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary MD2_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifdef OPENSSL_HAVE_MDC2
     DigestHelper dh(args);
     if (dh.doDigest(MD2_ERR, EVP_mdc2(), xsink)) {
@@ -2332,7 +2340,7 @@ binary bin = MD4_bin("hello");
     - MD4()
     - digest()
 */
-binary MD4_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary MD4_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     DigestHelper dh(args);
     if (dh.doDigest(MD4_ERR, EVP_md4(), xsink)) {
         return QoreValue();
@@ -2358,7 +2366,7 @@ binary bin = MD5_bin("hello");
     - MD5()
     - digest()
 */
-binary MD5_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary MD5_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     DigestHelper dh(args);
     if (dh.doDigest(MD5_ERR, EVP_md5(), xsink)) {
         return QoreValue();
@@ -2385,7 +2393,7 @@ binary bin = SHA_bin("hello");
     - SHA()
     - digest()
 */
-binary SHA_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary SHA_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifdef HAVE_OPENSSL_SHA
     DigestHelper dh(args);
     if (dh.doDigest(SHA_ERR, EVP_sha(), xsink)) {
@@ -2416,7 +2424,7 @@ binary bin = SHA1_bin("hello");
     - SHA1()
     - digest()
 */
-binary SHA1_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary SHA1_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     DigestHelper dh(args);
     if (dh.doDigest(SHA1_ERR, EVP_sha1(), xsink)) {
         return QoreValue();
@@ -2445,7 +2453,7 @@ binary bin = SHA224_bin("hello");
     - SHA224()
     - digest()
 */
-binary SHA224_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary SHA224_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(args);
     if (dh.doDigest(SHA224_ERR, EVP_sha224(), xsink)) {
@@ -2478,7 +2486,7 @@ binary bin = SHA256_bin("hello");
     - SHA256()
     - digest()
 */
-binary SHA256_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary SHA256_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(args);
     if (dh.doDigest(SHA256_ERR, EVP_sha256(), xsink)) {
@@ -2511,7 +2519,7 @@ binary bin = SHA384_bin("hello");
     - SHA384()
     - digest()
 */
-binary SHA384_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary SHA384_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA512) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(args);
     if (dh.doDigest(SHA384_ERR, EVP_sha384(), xsink)) {
@@ -2544,7 +2552,7 @@ binary bin = SHA512_bin("hello");
     - SHA512()
     - digest()
 */
-binary SHA512_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary SHA512_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA512) && defined(HAVE_OPENSSL_SHA512)
     DigestHelper dh(args);
     if (dh.doDigest(SHA512_ERR, EVP_sha512(), xsink)) {
@@ -2576,7 +2584,7 @@ binary bin = DSS_bin("hello");
 
     @note this digest algorithm is considered outdated and is included for backwards-compatibility only when %Qore is built with an older openssl library
 */
-binary DSS_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary DSS_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifndef HAVE_OPENSSL_INIT_CRYPTO
     DigestHelper dh(args);
     if (dh.doDigest(DSS_ERR, EVP_dss(), xsink)) {
@@ -2608,7 +2616,7 @@ binary bin = DSS1_bin("hello");
 
     @note this digest algorithm is considered outdated and is included for backwards-compatibility only when %Qore is built with an older openssl library
 */
-binary DSS1_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary DSS1_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifndef HAVE_OPENSSL_INIT_CRYPTO
     DigestHelper dh(args);
     if (dh.doDigest(DSS1_ERR, EVP_dss1(), xsink)) {
@@ -2641,7 +2649,7 @@ binary bin = MDC2_bin("hello");
     - MDC2_bin()
     - digest()
 */
-binary MDC2_bin(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary MDC2_bin(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 #ifdef OPENSSL_HAVE_MDC2
     DigestHelper dh(args);
     if (dh.doDigest(MDC2_ERR, EVP_mdc2(), xsink)) {
@@ -2671,7 +2679,7 @@ binary bin = RIPEMD160_bin("hello");
     - RIPEMD160()
     - digest()
 */
-binary RIPEMD160_binary(data[doc] data) [flags=RET_VALUE_ONLY] {
+binary RIPEMD160_binary(data[doc] data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     DigestHelper dh(args);
     if (dh.doDigest(RIPEMD160_ERR, EVP_ripemd160(), xsink)) {
         return QoreValue();
@@ -2726,7 +2734,7 @@ string str = MD2_hmac("Hello There This is a Test - 1234567890", "a key");
     - hmac()
     - MD2_bin()
  */
-string MD2_hmac(data[doc] data, data key) {
+string MD2_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
 #if !defined(OPENSSL_NO_MD2) && !defined(NO_MD2)
     HMACHelper dh(args);
     const char* ptr;
@@ -2760,7 +2768,7 @@ string str = MD4_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
  */
-string MD4_hmac(data[doc] data, data key) {
+string MD4_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
     HMACHelper dh(args);
     const char* ptr;
     size_t len;
@@ -2791,7 +2799,7 @@ string str = MD5_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
  */
-string MD5_hmac(data[doc] data, data key) {
+string MD5_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
     HMACHelper dh(args);
     const char* ptr;
     size_t len;
@@ -2822,7 +2830,7 @@ string str = SHA_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
  */
-string SHA_hmac(data[doc] data, data key) {
+string SHA_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
 #ifdef HAVE_OPENSSL_SHA
     HMACHelper dh(args);
     const char* ptr;
@@ -2859,7 +2867,7 @@ string str = SHA1_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
  */
-string SHA1_hmac(data[doc] data, data key) {
+string SHA1_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
     HMACHelper dh(args);
     const char* ptr;
     size_t len;
@@ -2891,7 +2899,7 @@ string str = SHA224_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
  */
-string SHA224_hmac(data[doc] data, data key) {
+string SHA224_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     HMACHelper dh(args);
     const char* ptr;
@@ -2928,7 +2936,7 @@ string str = SHA256_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
 */
-string SHA256_hmac(data[doc] data, data key) {
+string SHA256_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     HMACHelper dh(args);
     const char* ptr;
@@ -2965,7 +2973,7 @@ string str = SHA384_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
 */
-string SHA384_hmac(data[doc] data, data key) {
+string SHA384_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     HMACHelper dh(args);
     const char* ptr;
@@ -3002,7 +3010,7 @@ string str = SHA512_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
 */
-string SHA512_hmac(data[doc] data, data key) {
+string SHA512_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
 #if !defined(OPENSSL_NO_SHA256) && defined(HAVE_OPENSSL_SHA512)
     HMACHelper dh(args);
     const char* ptr;
@@ -3038,7 +3046,7 @@ string str = DSS_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
 */
-string DSS_hmac(data[doc] data, data key) {
+string DSS_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
 #ifndef HAVE_OPENSSL_INIT_CRYPTO
     HMACHelper dh(args);
     const char* ptr;
@@ -3074,7 +3082,7 @@ string str = DSS1_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
 */
-string DSS1_hmac(data[doc] data, data key) {
+string DSS1_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
 #ifndef HAVE_OPENSSL_INIT_CRYPTO
     HMACHelper dh(args);
     const char* ptr;
@@ -3108,7 +3116,7 @@ string str = MDC2_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
 */
-string MDC2_hmac(data[doc] data, data key) {
+string MDC2_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
 #ifdef OPENSSL_HAVE_MDC2
     HMACHelper dh(args);
     const char* ptr;
@@ -3142,7 +3150,7 @@ string str = RIPEMD160_hmac("Hello There This is a Test - 1234567890", "a key");
 
     @see hmac()
 */
-string RIPEMD160_hmac(data[doc] data, data key) {
+string RIPEMD160_hmac(data[doc] data, data key) [flags=NAMED_ARGS] {
     HMACHelper dh(args);
     const char* ptr;
     size_t len;
@@ -3175,7 +3183,7 @@ binary bin = digest("md2", "Hello There This is a Test - 1234567890");
 
     @since %Qore 0.9.3
 */
-binary digest(string digest, data data) [flags=RET_VALUE_ONLY] {
+binary digest(string digest, data data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     const EVP_MD* md = q_get_digest(digest, xsink);
     if (!md) {
         return QoreValue();
@@ -3212,7 +3220,7 @@ binary bin = hmac("ripemd160", "Hello There This is a Test - 1234567890", "a key
 
     @since %Qore 0.9.3
 */
-binary hmac(string digest, data data, data key) [flags=RET_VALUE_ONLY] {
+binary hmac(string digest, data data, data key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     HMACHelper dh(data);
 
     // get key data
@@ -3240,12 +3248,16 @@ hash<string, bool> digest_map = map {$1: True}, get_digests();
 
     @since %Qore 0.9.3
 */
-list<string> get_digests() [flags=CONSTANT] {
+list<string> get_digests() [flags=RET_VALUE_ONLY] {
     ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
 
     ReferenceHolder<QoreHashNode> h(init_digest_map_hash(), xsink);
     ConstHashIterator i(*h);
+    int iter = 0;
     while (i.next()) {
+        if (++iter % 100 == 0 && qore_check_cancel(xsink, "building digest list")) {
+            return QoreValue();
+        }
         rv->push(new QoreStringNode(i.getKey()), xsink);
     }
 
@@ -3259,7 +3271,7 @@ Qore::FileOutputStream of("my-file.txt.enc");
 Qore::TransformOutputStream ts(of, get_encryptor(Qore::CRYPTO_ALG_BLOWFISH, key));
     @endcode
 
-    @param alg the transformation algorithm; see @ref crypto_transformations for possible values
+    @param algorithm the transformation algorithm; see @ref crypto_transformations for possible values
     @param key the encryption key
     @param iv the initialization vector
     @param mac a reference to a @ref binary_type "binary" lvalue that will store the <a href="https://en.wikipedia.org/wiki/Message_authentication_code">Message Authentication Code (MAC)</a> when the transformation is closed, if the algorithm produces one; it is not an error to provide a reference here for cryptographic algorithms that do not generate a MAC, however in such cases, nothing will be written to the reference; in case this argument is passed, the \a mac_size argument must also be passed or a \c MAC-ERROR exception will be thrown
@@ -3284,7 +3296,7 @@ Qore::TransformOutputStream ts(of, get_encryptor(Qore::CRYPTO_ALG_BLOWFISH, key)
 
     @since %Qore 0.8.13
  */
-Transform get_encryptor(string alg, data key, data iv = Qore::DefaultIV, *reference<binary> mac, *int mac_size, *data aad) [flags=RET_VALUE_ONLY] {
+Transform get_encryptor(string algorithm, data key, data iv = Qore::DefaultIV, *reference<binary> mac, *int mac_size, *data aad) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     std::string key_storage;
     const char* keystr;
     size_t key_len;
@@ -3306,7 +3318,7 @@ Transform get_encryptor(string alg, data key, data iv = Qore::DefaultIV, *refere
         q_get_data(aad, aadstr, aad_len, aad_storage);
     }
 
-    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), true, keystr,
+    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), true, keystr,
         (unsigned)key_len, ivstr, (unsigned)iv_len, nullptr, 0, (unsigned)mac_size, mac, aadstr, (unsigned)aad_len,
         xsink));
     return *xsink ? nullptr : new QoreObject(QC_TRANSFORM, getProgram(), t.release());
@@ -3319,7 +3331,7 @@ Qore::FileOutputStream of("my-file.txt.enc");
 Qore::TransformOutputStream ts(of, get_decryptor(Qore::CRYPTO_ALG_BLOWFISH, key));
     @endcode
 
-    @param alg the transformation algorithm; see @ref crypto_transformations for possible values
+    @param algorithm the transformation algorithm; see @ref crypto_transformations for possible values
     @param key the encryption key
     @param iv the initialization vector
     @param mac a message authentication code to be used to decrypt the message if required by the cryptographic algorithm, if not required, this argument is ignored
@@ -3342,7 +3354,7 @@ Qore::TransformOutputStream ts(of, get_decryptor(Qore::CRYPTO_ALG_BLOWFISH, key)
 
     @since %Qore 0.8.13
  */
-Transform get_decryptor(string alg, data key, data iv = Qore::DefaultIV, *data mac, *data aad) [flags=RET_VALUE_ONLY] {
+Transform get_decryptor(string algorithm, data key, data iv = Qore::DefaultIV, *data mac, *data aad) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     std::string key_storage;
     const char* keystr;
     size_t key_len;
@@ -3365,7 +3377,7 @@ Transform get_decryptor(string alg, data key, data iv = Qore::DefaultIV, *data m
     if (aad)
         q_get_data(aad, aadstr, aad_len, aad_storage);
 
-    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
+    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
     return *xsink ? nullptr : new QoreObject(QC_TRANSFORM, getProgram(), t.release());
 }
 
@@ -3375,7 +3387,7 @@ Transform get_decryptor(string alg, data key, data iv = Qore::DefaultIV, *data m
 binary bin = encrypt(Qore::CRYPTO_ALG_BLOWFISH, data, key);
     @endcode
 
-    @param alg the transformation algorithm; see @ref crypto_transformations for possible values
+    @param algorithm the transformation algorithm; see @ref crypto_transformations for possible values
     @param data the data to encrypt
     @param key the encryption key
     @param iv the initialization vector or cryptographic nonce
@@ -3401,7 +3413,7 @@ binary bin = encrypt(Qore::CRYPTO_ALG_BLOWFISH, data, key);
 
     @since %Qore 0.8.13
  */
-binary encrypt(string alg, data data, data key, data iv = Qore::DefaultIV, *reference<binary> mac, *int mac_size, *data aad) [flags=RET_VALUE_ONLY] {
+binary encrypt(string algorithm, data data, data key, data iv = Qore::DefaultIV, *reference<binary> mac, *int mac_size, *data aad) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     std::string data_storage;
     const char* datastr;
     size_t data_len;
@@ -3428,7 +3440,7 @@ binary encrypt(string alg, data data, data key, data iv = Qore::DefaultIV, *refe
         q_get_data(aad, aadstr, aad_len, aad_storage);
     }
 
-    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), true, keystr,
+    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), true, keystr,
             (unsigned)key_len, ivstr, (unsigned)iv_len, nullptr, 0, (unsigned)mac_size, mac, aadstr,
             (unsigned)aad_len, xsink));
     if (*xsink) {
@@ -3445,7 +3457,7 @@ binary encrypt(string alg, data data, data key, data iv = Qore::DefaultIV, *refe
 binary bin = decrypt_to_binary(Qore::CRYPTO_ALG_BLOWFISH, data, key);
     @endcode
 
-    @param alg the transformation algorithm; see @ref crypto_transformations for possible values
+    @param algorithm the transformation algorithm; see @ref crypto_transformations for possible values
     @param data the data to decrypt
     @param key the encryption key
     @param iv the initialization vector or cryptographic nonce
@@ -3469,7 +3481,7 @@ binary bin = decrypt_to_binary(Qore::CRYPTO_ALG_BLOWFISH, data, key);
 
     @since %Qore 0.8.13
  */
-binary decrypt_to_binary(string alg, data data, data key, data iv = Qore::DefaultIV, *data mac, *data aad) [flags=RET_VALUE_ONLY] {
+binary decrypt_to_binary(string algorithm, data data, data key, data iv = Qore::DefaultIV, *data mac, *data aad) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     std::string data_storage;
     const char* datastr;
     size_t data_len;
@@ -3497,7 +3509,7 @@ binary decrypt_to_binary(string alg, data data, data key, data iv = Qore::Defaul
     if (aad)
         q_get_data(aad, aadstr, aad_len, aad_storage);
 
-    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
+    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -3511,7 +3523,7 @@ binary decrypt_to_binary(string alg, data data, data key, data iv = Qore::Defaul
 string str = decrypt_to_string(Qore::CRYPTO_ALG_BLOWFISH, data, key);
     @endcode
 
-    @param alg the transformation algorithm; see @ref crypto_transformations for possible values
+    @param algorithm the transformation algorithm; see @ref crypto_transformations for possible values
     @param data the data to decrypt
     @param key the encryption key
     @param iv the initialization vector or cryptographic nonce
@@ -3536,7 +3548,7 @@ string str = decrypt_to_string(Qore::CRYPTO_ALG_BLOWFISH, data, key);
 
     @since %Qore 0.8.13
  */
-string decrypt_to_string(string alg, data data, data key, data iv = Qore::DefaultIV, *data mac, *data aad, *string encoding) [flags=RET_VALUE_ONLY] {
+string decrypt_to_string(string algorithm, data data, data key, data iv = Qore::DefaultIV, *data mac, *data aad, *string encoding) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     std::string data_storage;
     const char* datastr;
     size_t data_len;
@@ -3564,7 +3576,7 @@ string decrypt_to_string(string alg, data data, data key, data iv = Qore::Defaul
     if (aad)
         q_get_data(aad, aadstr, aad_len, aad_storage);
 
-    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(alg->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
+    SimpleRefHolder<Transform> t(EncryptionTransforms::getCryptoTransform(algorithm->c_str(), false, keystr, (unsigned)key_len, ivstr, (unsigned)iv_len, macstr, (unsigned)mac_len, 0, nullptr, aadstr, (unsigned)aad_len, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -3609,13 +3621,17 @@ hash<auto> h = get_crypto_info();
 
     @since %Qore 0.8.13
  */
-hash<auto> get_crypto_info() [flags=CONSTANT] {
+hash<auto> get_crypto_info() [flags=RET_VALUE_ONLY] {
 #ifdef OPENSSL_3_PLUS
     return init_cipher_map_hash();
 #else
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
 
+    int iter = 0;
     for (auto& i : crypto_map) {
+        if (++iter % 100 == 0 && qore_check_cancel(xsink, "building crypto info")) {
+            return QoreValue();
+        }
         rv->setKeyValue(i.first.c_str(), i.second.getInfo(), nullptr);
     }
 
@@ -3637,7 +3653,7 @@ hash<auto> get_crypto_info() [flags=CONSTANT] {
 
     @since %Qore 1.4.0
 */
-*hash<auto> get_cipher_info(string cipher) [flags=RET_VALUE_ONLY] {
+*hash<auto> get_cipher_info(string cipher) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     TempEncodingHelper temp(cipher, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -3672,7 +3688,7 @@ hash<auto> get_crypto_info() [flags=CONSTANT] {
 
     @since %Qore 1.4.0
 */
-bool has_digest(string digest) [flags=RET_VALUE_ONLY] {
+bool has_digest(string digest) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     TempEncodingHelper temp(digest, QCS_DEFAULT, xsink);
     if (*xsink) {
         return QoreValue();
@@ -3693,11 +3709,11 @@ binary key = pbkdf2("sha256", "my password", salt, 600000, 32);
     @param password the password or passphrase to derive from
     @param salt the cryptographic salt (use @ref get_random_bytes() to generate; recommended minimum 16 bytes)
     @param iterations the number of iterations (recommended minimum: 600,000 for SHA-256 per OWASP 2024 guidelines)
-    @param key_len the desired output key length in bytes (e.g. 32 for a 256-bit key)
+    @param key_length the desired output key length in bytes (e.g. 32 for a 256-bit key)
 
     @return the derived key as binary data of the requested length
 
-    @throw PBKDF2-ERROR invalid arguments (iterations or key_len <= 0) or error deriving key
+    @throw PBKDF2-ERROR invalid arguments (iterations or key_length <= 0) or error deriving key
     @throw DIGEST-ERROR unknown or unsupported digest algorithm
     @throw ENCODING-CONVERSION-ERROR this error is thrown if the digest string cannot be converted to the
     @ref default_encoding "default character encoding"
@@ -3711,7 +3727,7 @@ binary key = pbkdf2("sha256", "my password", salt, 600000, 32);
 
     @since %Qore 2.3
 */
-binary pbkdf2(string digest, data password, data salt, int iterations, int key_len) [flags=RET_VALUE_ONLY] {
+binary pbkdf2(string digest, data password, data salt, int iterations, int key_length) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (iterations <= 0) {
         xsink->raiseException("PBKDF2-ERROR", "iterations must be > 0; got " QLLD, iterations);
         return QoreValue();
@@ -3720,12 +3736,12 @@ binary pbkdf2(string digest, data password, data salt, int iterations, int key_l
         xsink->raiseException("PBKDF2-ERROR", "iterations value " QLLD " exceeds maximum %d", iterations, INT_MAX);
         return QoreValue();
     }
-    if (key_len <= 0) {
-        xsink->raiseException("PBKDF2-ERROR", "key_len must be > 0; got " QLLD, key_len);
+    if (key_length <= 0) {
+        xsink->raiseException("PBKDF2-ERROR", "key_length must be > 0; got " QLLD, key_length);
         return QoreValue();
     }
-    if (key_len > INT_MAX) {
-        xsink->raiseException("PBKDF2-ERROR", "key_len value " QLLD " exceeds maximum %d", key_len, INT_MAX);
+    if (key_length > INT_MAX) {
+        xsink->raiseException("PBKDF2-ERROR", "key_length value " QLLD " exceeds maximum %d", key_length, INT_MAX);
         return QoreValue();
     }
 
@@ -3749,7 +3765,7 @@ binary pbkdf2(string digest, data password, data salt, int iterations, int key_l
 
     // allocate output buffer
     SimpleRefHolder<BinaryNode> rv(new BinaryNode);
-    rv->preallocate(key_len);
+    rv->preallocate(key_length);
 
 #ifdef OPENSSL_3_PLUS
     EVP_KDF* kdf = EVP_KDF_fetch(nullptr, "PBKDF2", nullptr);
@@ -3774,7 +3790,7 @@ binary pbkdf2(string digest, data password, data salt, int iterations, int key_l
     params[3] = OSSL_PARAM_construct_uint("iter", &iter_val);
     params[4] = OSSL_PARAM_construct_end();
 
-    if (EVP_KDF_derive(ctx, (unsigned char*)rv->getPtr(), key_len, params) <= 0) {
+    if (EVP_KDF_derive(ctx, (unsigned char*)rv->getPtr(), key_length, params) <= 0) {
         unsigned long err = ERR_get_error();
         char buf[121];
         ERR_error_string(err, buf);
@@ -3791,7 +3807,7 @@ binary pbkdf2(string digest, data password, data salt, int iterations, int key_l
     }
 
     int rc = PKCS5_PBKDF2_HMAC(pass_ptr, (int)pass_len, (const unsigned char*)salt_ptr, (int)salt_len,
-        (int)iterations, md, (int)key_len, (unsigned char*)rv->getPtr());
+        (int)iterations, md, (int)key_length, (unsigned char*)rv->getPtr());
     if (rc != 1) {
         unsigned long err = ERR_get_error();
         char buf[121];
@@ -3821,7 +3837,7 @@ binary b = get_random_bytes(16);
 
     @since %Qore 0.8.13
 */
-binary get_random_bytes(int size) [flags=RET_VALUE_ONLY] {
+binary get_random_bytes(int size) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     SimpleRefHolder<BinaryNode> rv(new BinaryNode);
     if (size > 0) {
         rv->preallocate(size);
