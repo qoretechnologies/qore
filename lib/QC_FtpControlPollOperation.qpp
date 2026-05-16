@@ -686,12 +686,12 @@ qclass FtpControlPollOperation [
     @param port the FTP server port (default: 21)
     @param secure if True, use FTPS (AUTH TLS on the control channel)
     @param secure_data if True, use encrypted data channel (PBSZ 0 + PROT P)
-    @param user FTP username (default: "anonymous")
-    @param pass FTP password (default: "qore@nohost.com")
+    @param username FTP username (default: "anonymous")
+    @param password FTP password (default: "qore@nohost.com")
     @throw SOCKET-CONNECT-ERROR error connecting to the FTP server
 */
 FtpControlPollOperation::constructor(string host, int port = 21, bool secure = False,
-        bool secure_data = False, *string user, *string pass) {
+        bool secure_data = False, *string username, *string password) [flags=NAMED_ARGS] {
     // Create control socket — the QoreObject owns the initial ref and the
     // connect op owns the only extra ref; the FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
@@ -729,8 +729,8 @@ FtpControlPollOperation::constructor(string host, int port = 21, bool secure = F
     // QoreObject owns the QoreSocketObject. The priv does NOT ref/deref it.
     FtpControlPollOperationPriv* ftp_priv = new FtpControlPollOperationPriv(self, sock_priv,
         connect_op, (bool)secure, (bool)secure_data,
-        user ? user->c_str() : nullptr,
-        pass ? pass->c_str() : nullptr);
+        username ? username->c_str() : nullptr,
+        password ? password->c_str() : nullptr);
 
     self->setPrivate(CID_FTPCONTROLPOLLOPERATION, ftp_priv);
 
@@ -787,13 +787,13 @@ auto FtpControlPollOperation::getOutput() {
 /** Must be called when the operation is in the ready state (after login completes).
     After calling this, re-submit the operation to the async controller.
 
-    @param cmd the FTP command (e.g. "TYPE", "EPSV", "RETR")
-    @param arg optional command argument
+    @param command the FTP command (e.g. "TYPE", "EPSV", "RETR")
+    @param argument optional command argument
 
     @throw FTP-COMMAND-ERROR if the operation is not in the ready state
 */
-nothing FtpControlPollOperation::submitCommand(string cmd, *string arg) {
-    priv->submitCommand(cmd->c_str(), arg ? arg->c_str() : nullptr, xsink);
+nothing FtpControlPollOperation::submitCommand(string command, *string argument) [flags=NAMED_ARGS] {
+    priv->submitCommand(command->c_str(), argument ? argument->c_str() : nullptr, xsink);
     // Update goal
     if (!*xsink) {
         self->setMemberValue("goal", QC_FTPCONTROLPOLLOPERATION, new QoreStringNode("ftp-command"), xsink);
@@ -1078,14 +1078,15 @@ qclass FtpPortAcceptPollOperation [
 ];
 
 //! Creates the operation from a listener socket and its accept poll op
-/** @param listener_sock the listening Socket object
-    @param accept_op the SocketAcceptPollOperation from listener.startPollAccept()
+/** @param listener_socket the listening Socket object
+    @param accept_operation the SocketAcceptPollOperation from listener.startPollAccept()
     @param secure_data if True, upgrade accepted socket to SSL
 */
-FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_sock, AbstractPollOperation accept_op, bool secure_data = False) {
+FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_socket,
+        AbstractPollOperation accept_operation, bool secure_data = False) [flags=NAMED_ARGS] {
     // Get C++ accept op
     SocketPollOperationBase* accept_base = static_cast<SocketPollOperationBase*>(
-        const_cast<QoreObject*>(accept_op)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+        const_cast<QoreObject*>(accept_operation)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
     if (*xsink || !accept_base) {
         if (!*xsink) {
             xsink->raiseException("FTP-CONNECT-ERROR", "invalid accept operation");
@@ -1105,8 +1106,8 @@ FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_sock, 
         nullptr : nullptr;  // not set yet — need to create wrapper
     // Actually, we need the caller to pass the Socket QoreObject. Use the inner obj ref:
     {
-        // Get the Socket QoreObject from the accept_op's sock member
-        ValueHolder sock_val(const_cast<QoreObject*>(accept_op)->getReferencedMemberNoMethod("sock", xsink), xsink);
+        // Get the Socket QoreObject from the accept_operation's sock member
+        ValueHolder sock_val(const_cast<QoreObject*>(accept_operation)->getReferencedMemberNoMethod("sock", xsink), xsink);
         if (!*xsink && sock_val->getType() == NT_OBJECT) {
             self->setMemberValue("sock", QC_FTPPORTACCEPTPOLLOPERATION, sock_val.release(), xsink);
         }
@@ -1123,7 +1124,7 @@ FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_sock, 
     }
 
     self->setPrivate(CID_FTPPORTACCEPTPOLLOPERATION,
-        new FtpPortAcceptPollOperationPriv(self, accept_base, *listener_sock,
+        new FtpPortAcceptPollOperationPriv(self, accept_base, *listener_socket,
             (bool)secure_data));
 }
 

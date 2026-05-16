@@ -337,6 +337,12 @@ These examples are from the core migration and should be reused as precedent:
 - Event-loop APIs use the polled object role as the name (`socket`, `file`, or
   `notifier`) plus `events`; timer APIs use `deadline`, `user_data`, and
   `timer_id`. Do not expose `udata` as a public formal parameter name.
+- FTP poll-operation APIs should use endpoint and credential names at the call
+  site: `host`, `port`, `secure`, `secure_data`, `username`, and `password`;
+  command submission should use `command` and `argument`, not implementation
+  abbreviations such as `cmd` and `arg`. Qlib orchestrator calls with dynamic
+  ternary command names or stored broad payload values may still need to remain
+  positional when qmod reports `NAMED-CALL-NOT-SUPPORTED`.
 - HTTP readiness APIs use `timeout_ms` for blocking readiness waits and
   `notifier` for `registerReadyNotifier()`. HTTP connection constructors should
   keep the endpoint and TLS decision explicit (`target_host`, `target_port`,

@@ -849,6 +849,14 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("DelegatingPollOperation", "onComplete", ("result",));
         assertNamedConstructorVariantCount("FilePollOperation", ("file", "path", "as_string", "num_bytes"));
         assertNamedConstructorVariantCount("SocketPollOperation", ("socket", "goal", "options"));
+        assertNamedConstructorVariantCount("FtpControlPollOperation",
+            ("host", "port", "secure", "secure_data", "username", "password"));
+        assertNamedClassMethodVariantCount("FtpControlPollOperation", "submitCommand",
+            ("command", "argument"));
+        assertNamedConstructorVariantCount("FtpDataPollOperation", ("host", "port", "secure_data"));
+        assertNamedConstructorVariantCount("FtpDataPollOperation", ("host", "port", "data", "secure_data"));
+        assertNamedConstructorVariantCount("FtpPortAcceptPollOperation",
+            ("listener_socket", "accept_operation", "secure_data"));
         assertNamedConstructorVariantCount("TimeZone", ("region",));
         assertNamedConstructorVariantCount("TimeZone", ("seconds_east",));
         assertNamedClassMethodVariantCount("TimeZone", "date", ("seconds", "microseconds"));

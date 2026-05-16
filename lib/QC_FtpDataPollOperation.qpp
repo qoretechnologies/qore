@@ -616,7 +616,7 @@ qclass FtpDataPollOperation [
     @param port the data channel port (from PASV/EPSV response)
     @param secure_data if True, upgrade data socket to TLS after connect
 */
-FtpDataPollOperation::constructor(string host, int port, bool secure_data = False) {
+FtpDataPollOperation::constructor(string host, int port, bool secure_data = False) [flags=NAMED_ARGS] {
     // Create data socket; the QoreObject owns the initial ref and the connect
     // op owns the only extra ref. The FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
@@ -657,7 +657,7 @@ FtpDataPollOperation::constructor(string host, int port, bool secure_data = Fals
     @param data the data to send
     @param secure_data if True, upgrade data socket to TLS after connect
 */
-FtpDataPollOperation::constructor(string host, int port, binary data, bool secure_data = False) {
+FtpDataPollOperation::constructor(string host, int port, binary data, bool secure_data = False) [flags=NAMED_ARGS] {
     // Create data socket; the QoreObject owns the initial ref and the connect
     // op owns the only extra ref. The FTP priv keeps a raw pointer.
     QoreSocketObject* sock_priv = new QoreSocketObject;
