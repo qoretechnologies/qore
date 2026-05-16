@@ -382,6 +382,11 @@ These examples are from the core migration and should be reused as precedent:
 - Filesystem class methods should expose path role names. For `Dir`, use
   `owner` / `group` for ownership changes and `filename` for file-name-only
   operations such as `removeFile()`.
+- For `File`, use `value` for width-specific integer writes,
+  `lock_type` / `length` for file locking, `target_file` for `redirect()`,
+  and `format` / `values` for explicit formatting-list methods. Keep true
+  varargs `printf()` / `f_printf()` variants positional until varargs named
+  calls are reviewed separately.
 - Do not mark an overload when it makes an already-enabled named call ambiguous
   with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
   step, value)` must remain positional because it conflicts with the named

@@ -548,9 +548,9 @@ public class ProviderIndexUtil {
 %else
         string path = getIndexPath(type);
         File f();
-        f.open2(path, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+        f.open2(path: path, flags: O_CREAT | O_TRUNC | O_WRONLY, mode: 0644);
         string yaml = make_yaml(h, BlockStyle);
-        f.write(yaml);
+        f.write(data: yaml);
         return <ProviderIndexInfo>{
             "path": path,
             "size": yaml.size(),

@@ -673,6 +673,33 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Dir", "openDir", ("subdir", "encoding"));
         assertNamedClassMethodVariantCount("Dir", "removeFile", ("filename",));
 
+        assertNamedConstructorVariantCount("File", ("encoding",));
+        assertNamedClassMethodVariantCount("File", "open", ("path", "flags", "mode", "encoding"));
+        assertNamedClassMethodVariantCount("File", "open2", ("path", "flags", "mode", "encoding"));
+        assertNamedClassMethodVariantCount("File", "write", ("data",), 2);
+        assertNamedClassMethodVariantCount("File", "print", ("data",));
+        foreach string name in (("writei1", "writei2", "writei4", "writei8", "writei2LSB", "writei4LSB",
+                "writei8LSB")) {
+            assertNamedClassMethodVariantCount("File", name, ("value",));
+        }
+        assertNamedClassMethodVariantCount("File", "vprintf", ("format", "values"));
+        assertNamedClassMethodVariantCount("File", "f_vprintf", ("format", "values"));
+        assertNamedClassMethodVariantCount("File", "setCharset", ("encoding",));
+        assertNamedClassMethodVariantCount("File", "lock", ("lock_type", "start", "length", "whence"));
+        assertNamedClassMethodVariantCount("File", "lockBlocking", ("lock_type", "start", "length", "whence"));
+        assertNamedClassMethodVariantCount("File", "chown", ("owner", "group"));
+        assertNamedClassMethodVariantCount("File", "getTerminalAttributes", ("termios",));
+        assertNamedClassMethodVariantCount("File", "setTerminalAttributes", ("action", "termios"));
+        assertNamedClassMethodVariantCount("File", "redirect", ("target_file",));
+        foreach string name in (("printf", "f_printf")) {
+            foreach AbstractMethodVariant v in (Class::forName("File").getMethod(name).getVariants()) {
+                if (v.getParamNames() == ("fmt", "...")) {
+                    assertFalse(v.isNamedCallable());
+                    assertEq((), v.getNamedParameterNames());
+                }
+            }
+        }
+
         foreach string name in (("basename", "dirname")) {
             assertNamedCallableVariantCount(name, ("path",));
         }

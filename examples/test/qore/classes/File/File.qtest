@@ -25,6 +25,7 @@ class FileTest inherits QUnit::Test {
         addTestCase("non-blocking I/O", \testNonBlockingIo());
         addTestCase("poll xml parse", \pollXmlParseTest());
         addTestCase("FileTest", \fileTest());
+        addTestCase("File named calls", \namedCallTest());
         addTestCase("issue 3061", \issue3061());
         addTestCase("redirect test", \redirectTest());
         set_return_value(main());
@@ -121,6 +122,42 @@ class FileTest inherits QUnit::Test {
         assertEq(Data, f.read(-1));
     }
 
+    namedCallTest() {
+        string path = sprintf(tmp_location() + DirSep + get_random_string());
+        string binpath = sprintf(tmp_location() + DirSep + get_random_string());
+        on_exit {
+            if (is_file(path))
+                unlink(path);
+            if (is_file(binpath))
+                unlink(binpath);
+        }
+
+        File f(encoding: "UTF-8");
+        f.open2(path: path, flags: O_CREAT | O_RDWR | O_TRUNC, mode: 0600, encoding: "UTF-8");
+        assertEq(3, f.write(data: "abc"));
+        assertEq(3, f.print(data: "def"));
+        assertEq(2, f.vprintf(format: "%s%d", values: ("x", 1)));
+        assertEq(3, f.f_vprintf(format: "%3s", values: ("abcdef",)));
+        f.setCharset(encoding: "UTF-8");
+%ifdef HAVE_FILE_LOCKING
+        assertEq(0, f.lock(lock_type: F_UNLCK, start: 0, length: 0, whence: SEEK_SET));
+%endif
+        f.setPos(0);
+        assertEq("abcdefx1abc", f.read(-1));
+        f.close();
+
+        File opened(encoding: "UTF-8");
+        assertEq(0, opened.open(path: path, flags: O_RDONLY, mode: 0600, encoding: "UTF-8"));
+        opened.close();
+
+        File bin();
+        bin.open2(path: binpath, flags: O_CREAT | O_WRONLY | O_TRUNC, mode: 0600);
+        bin.writei1(value: 0x12);
+        bin.writei2LSB(value: 0x3456);
+        bin.close();
+        assertEq(<125634>, File::readBinaryFile(binpath));
+    }
+
     issue3061() {
         # create a temporary Qore script
         string fn = sprintf("%s/%s", tmp_location(), get_random_string());
@@ -147,9 +184,9 @@ class FileTest inherits QUnit::Test {
         assertEq("test", File::readTextFile(file, NOTHING, 4));
         assertEq("test".toBinary(), File::readBinaryFile(file, 4));
 
-        stderr.redirect(f);
+        stderr.redirect(target_file: f);
         stderr.setPos(0);
-        stderr.write("test2");
+        stderr.write(data: "test2");
 
         assertEq("test2", ReadOnlyFile::readTextFile(file));
     }
