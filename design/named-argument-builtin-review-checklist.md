@@ -356,5 +356,12 @@ These examples are from the core migration and should be reused as precedent:
 - Constructor parameters named after wire formats such as `pem` and `der` are
   acceptable when the overloads map directly to those formats; expand related
   credentials such as `pass` to `password` before opt-in.
+- File APIs should use `path` for filesystem names and reuse stream naming
+  such as `line_separator` and `trim_line`; avoid exposing legacy camel-case or
+  abbreviated names such as `fileName`, `eol`, and `trim`.
+- Do not mark an overload when it makes an already-enabled named call ambiguous
+  with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
+  step, value)` must remain positional because it conflicts with the named
+  `RangeIterator(start, stop, step)` constructor.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

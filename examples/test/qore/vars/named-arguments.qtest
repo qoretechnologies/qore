@@ -828,6 +828,33 @@ public class NamedArgumentsTest inherits QUnit::Test {
         sos.write(data: binary("ab"));
         assertEq("ab", sos.getData(), "StringOutputStream constructor and write expose names");
 
+        string stream_file = sprintf("%s%sqore-na-stream-%d-%s.txt", tmp_location(), DirSep, getpid(),
+            get_random_bytes(size: 4).toHex());
+        string line_file = sprintf("%s%sqore-na-lines-%d-%s.txt", tmp_location(), DirSep, getpid(),
+            get_random_bytes(size: 4).toHex());
+        on_exit unlink(path: stream_file);
+        on_exit unlink(path: line_file);
+
+        FileOutputStream file_out = new FileOutputStream(path: stream_file, append: False, mode: 0600,
+            encoding: "UTF-8");
+        file_out.write(data: binary("abcdef"));
+        file_out.close();
+        FileInputStream file_in = new FileInputStream(path: stream_file, timeout_ms: -1,
+            nonblocking_open: False);
+        assertEq(binary("ab"), file_in.read(limit: 2), "FileInputStream constructor and read expose names");
+        assertEq(binary("cd"), file_in.readWithTimeout(limit: 2, timeout_ms: -1),
+            "FileInputStream readWithTimeout exposes names");
+        assertEq(binary("ef"), file_in.readNonBlock(limit: 2), "FileInputStream readNonBlock exposes limit");
+
+        FileOutputStream line_out = new FileOutputStream(path: line_file, append: False, mode: 0600,
+            encoding: "UTF-8");
+        line_out.write(data: binary("first\nsecond"));
+        line_out.close();
+        FileLineIterator fli = new FileLineIterator(path: line_file, encoding: "UTF-8",
+            line_separator: "\n", trim_line: True, nonblocking_open: False);
+        assertTrue(fli.next(), "FileLineIterator constructor exposes path and line_separator");
+        assertEq("first", fli.getValue(), "FileLineIterator trims named line separator");
+
         StreamReader sr = new StreamReader(input_stream: new StringInputStream(source: "line1\nline2"),
             encoding: "UTF-8");
         assertEq("line1", sr.readLine(line_separator: "\n", trim_line: True),

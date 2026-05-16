@@ -69,7 +69,7 @@ qclass RangeIterator [arg=RangeIterator* i; ns=Qore; vparent=AbstractIterator];
 
     @par Example:
     @code{.py}
-RangeIterator i(5, 10, 2);
+RangeIterator i(start: 5, stop: 10, step: 2);
     @endcode
 
     @see xrange()
@@ -89,7 +89,7 @@ RangeIterator::constructor(int start, int stop, int step = 1) [flags=NAMED_ARGS]
 
     @par Example:
     @code{.py}
-RangeIterator i(5, 10, 2);
+RangeIterator i(5, 10, 2, "tick");
     @endcode
 
     @see xrange()

@@ -63,15 +63,17 @@ qclass FileOutputStream [system_constructor=FILEOUTPUTSTREAM_system_constructor;
 
 //! Creates the FileOutputStream by opening or creating a file
 /**
-    @param fileName the name of the file to open
+    @param path the name of the file to open
     @param append if true, then bytes will be written to the end of the file
     @param mode permission bits for when the file is to be created (default: 0644)
     @param encoding the @ref character_encoding "character encoding" of the file; if not present, defaults to the @ref default_encoding "default encoding"
 
     @note raw binary data is written to the output stream, so it's up to the caller to ensure that only valid character data for the given encoding is written to the @ref FileOutputStream object
  */
-FileOutputStream::constructor(string fileName, bool append = False, softint mode = 0644, *string encoding) {
-   SimpleRefHolder<FileOutputStream> fos(new FileOutputStream(fileName, append, mode, encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, xsink));
+FileOutputStream::constructor(string path, bool append = False, softint mode = 0644, *string encoding)
+        [flags=NAMED_ARGS] {
+   SimpleRefHolder<FileOutputStream> fos(new FileOutputStream(path, append, mode,
+      encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, xsink));
    self->setPrivate(CID_FILEOUTPUTSTREAM, fos.release());
 }
 
@@ -92,9 +94,9 @@ nothing FileOutputStream::close() {
 
     @par Example:
     @code{.py}
-    FileOutputStream fos("file.ext");
-    fos.write(<01>);
-    fos.write(<0203>);
+    FileOutputStream fos(path: "file.ext");
+    fos.write(data: <01>);
+    fos.write(data: <0203>);
     fos.close();
     # file.ext now contains three bytes: 01 02 03
     @endcode
@@ -105,14 +107,14 @@ nothing FileOutputStream::close() {
 
     @note raw binary data is written to the output stream, so it's up to the caller to ensure that only valid character data for the given encoding is written to the @ref FileOutputStream object
  */
-nothing FileOutputStream::write(binary data) {
+nothing FileOutputStream::write(binary data) [flags=NAMED_ARGS] {
    os->writeHelper(data, xsink);
 }
 
 //! Returns the @ref character_encoding "character encoding" for the @ref FileOutputStream
 /** @par Example:
     @code{.py}
-FileOutputStream fos(filname);
+FileOutputStream fos(path: filename);
 string encoding = fos.getEncoding();
     @endcode
 
