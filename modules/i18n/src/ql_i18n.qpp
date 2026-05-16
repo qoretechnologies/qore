@@ -333,6 +333,39 @@ static std::string i18n_canonicalize_locale_tag(const std::string& raw, Exceptio
     return strip_extensions ? i18n_strip_unicode_extensions(canonical) : canonical;
 }
 
+static QoreHashNode* i18n_make_locale_context_hash(const std::string& locale, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("locale", new QoreStringNode(locale, QCS_UTF8), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return h.release();
+}
+
+static std::string i18n_get_locale_from_context(const QoreHashNode* context, ExceptionSink* xsink) {
+    QoreValue locale_value = context->getKeyValue("locale");
+    if (locale_value.getType() != NT_STRING) {
+        xsink->raiseException("I18N-LOCALE-CONTEXT-ERROR",
+            "locale context must contain a string 'locale' key; got type '%s'", locale_value.getTypeName());
+        return std::string();
+    }
+
+    QoreStringValueHelper str(locale_value, QCS_UTF8, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+    if (!str->c_str()[0]) {
+        xsink->raiseException("I18N-LOCALE-CONTEXT-ERROR", "locale context locale cannot be empty");
+        return std::string();
+    }
+
+    std::string canonical = i18n_canonicalize_locale_tag(str->c_str(), xsink, true);
+    if (*xsink) {
+        return std::string();
+    }
+    return canonical;
+}
+
 static std::vector<std::string> i18n_locale_fallback_chain(const std::string& raw, ExceptionSink* xsink) {
     std::vector<std::string> chain;
     std::string locale = i18n_canonicalize_locale_tag(raw, xsink, true);
@@ -1664,6 +1697,52 @@ nothing set_thread_locale(string locale) [dom=LOCALE_CONTROL] {
 */
 string get_thread_locale() [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(i18n_thread_locale.empty() ? "root" : i18n_thread_locale, QCS_UTF8);
+}
+
+//! Creates a locale context hash for explicit propagation across task boundaries.
+/** The returned hash has a canonical \c "locale" key and is data-only. Pass it explicitly to background work,
+    thread-pool tasks, or request dispatch code, then call I18n::apply_locale_context() in the destination thread.
+
+    @param locale BCP 47 locale tag
+    @return hash containing the canonical catalog locale
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+hash<auto> make_locale_context(string locale) [flags=RET_VALUE_ONLY] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string canonical = i18n_canonicalize_locale_tag(tag, xsink, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return i18n_make_locale_context_hash(canonical, xsink);
+}
+
+//! Captures the current thread's ambient locale as a locale context hash.
+/** @return hash containing the current thread locale, or \c "root" if none has been set
+*/
+hash<auto> capture_locale_context() [flags=RET_VALUE_ONLY] {
+    return i18n_make_locale_context_hash(i18n_thread_locale.empty() ? "root" : i18n_thread_locale, xsink);
+}
+
+//! Applies a previously captured or constructed locale context to the current thread.
+/** @param context hash returned by I18n::make_locale_context() or I18n::capture_locale_context()
+
+    @throw I18N-LOCALE-CONTEXT-ERROR if \a context is malformed
+    @throw I18N-LOCALE-ERROR if the context locale is invalid
+*/
+nothing apply_locale_context(hash<auto> context) [dom=LOCALE_CONTROL] {
+    std::string canonical = i18n_get_locale_from_context(context, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (canonical == "root") {
+        i18n_thread_locale.clear();
+    } else {
+        i18n_thread_locale = canonical;
+    }
 }
 
 //! Clears the current thread's ambient i18n locale.

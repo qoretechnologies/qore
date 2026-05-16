@@ -147,11 +147,13 @@ printf("%s\n", locale); # fr
     @code{.py}
 I18n::set_thread_locale("cs-CZ");
 assertEq("cs-CZ", I18n::get_thread_locale());
+hash<auto> locale_context = I18n::capture_locale_context();
 I18n::clear_thread_locale();
+I18n::apply_locale_context(locale_context);
     @endcode
 
     Explicit-locale APIs remain the stable default. Raw \c Queue handoff does not propagate the ambient locale; pass an
-    explicit context object or locale string across queue boundaries.
+    explicit context object from \c I18n::capture_locale_context() or a locale string across queue boundaries.
 
     @section i18n_formatting Formatting and Collation
 

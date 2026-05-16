@@ -144,8 +144,17 @@ class I18nTest inherits QUnit::Test {
         assertEq("root", I18n::get_thread_locale());
         I18n::set_thread_locale("cs_CZ-u-nu-latn");
         assertEq("cs-CZ", I18n::get_thread_locale());
+        hash<auto> locale_context = I18n::capture_locale_context();
+        assertEq("cs-CZ", locale_context.locale);
         I18n::clear_thread_locale();
         assertEq("root", I18n::get_thread_locale());
+        I18n::apply_locale_context(locale_context);
+        assertEq("cs-CZ", I18n::get_thread_locale());
+        I18n::apply_locale_context(I18n::make_locale_context("root"));
+        assertEq("root", I18n::get_thread_locale());
+        assertThrows("I18N-LOCALE-CONTEXT-ERROR", sub() {
+            I18n::apply_locale_context({});
+        });
     }
 
     localeFormattingAndCollationTest() {
