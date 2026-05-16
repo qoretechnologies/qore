@@ -465,6 +465,72 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("call_static_method_args", ("class_name", "method", "arguments"));
         assertNamedCallableVariantCount("call_pseudo_args", ("value", "method", "arguments"));
         assertNamedCallableVariantCount("create_object_args", ("class_name", "arguments"));
+
+        assertNamedCallableVariantCount("set_signal_handler", ("signal", "handler"));
+        assertNamedCallableVariantCount("remove_signal_handler", ("signal",));
+        assertNamedCallableVariantCount("set_async_io_logger", ("logger",));
+        assertNamedCallableVariantCount("backquote", ("command", "return_code"));
+        assertNamedCallableVariantCount("call_function_args", ("name", "arguments"));
+        assertNamedCallableVariantCount("call_function_args", ("callable", "arguments"));
+        assertNamedCallableVariantCount("call_builtin_function_args", ("name", "arguments"));
+        assertNamedCallableVariantCount("parse", ("code", "label", "warning_mask", "source", "offset", "format_label"));
+
+        foreach string name in (("exists_function", "function_type", "reload_module")) {
+            assertNamedCallableVariantCount(name, ("name",));
+        }
+
+        assertNamedCallableVariantCount("load_module", ("name", "warning_mask"));
+        assertNamedCallableVariantCount("load_module_warn", ("name", "warning_mask"));
+        assertNamedCallableVariantCount("load_user_module_with_program", ("name", "program"));
+
+        foreach string name in (("html_encode", "html_decode")) {
+            assertNamedCallableVariantCount(name, ("str",));
+        }
+
+        assertNamedCallableVariantCount("decode_url", ("url",));
+        assertNamedCallableVariantCount("encode_url", ("url", "encode_all"));
+        assertNamedCallableVariantCount("decode_uri_request", ("uri",));
+        assertNamedCallableVariantCount("encode_uri_request", ("url",));
+        assertNamedCallableVariantCount("parse_url", ("url", "keep_brackets"));
+        assertNamedCallableVariantCount("parse_url", ("url", "options"));
+        assertNamedCallableVariantCount("parseURL", ("url", "keep_brackets"));
+        assertNamedCallableVariantCount("get_safe_url", ("url",));
+
+        assertNamedCallableVariantCount("get_class_name", ("object_value",));
+        assertNamedCallableVariantCount("has_key", ("container", "key"), 2);
+        assertNamedCallableVariantCount("hash_values", ("hash_value",));
+        assertNamedCallableVariantCount("get_byte", ("data", "offset"), 2);
+
+        foreach string name in (("get_word_16", "get_word_32", "get_word_64", "get_word_16_lsb",
+                "get_word_32_lsb", "get_word_64_lsb")) {
+            assertNamedCallableVariantCount(name, ("data", "offset"), 2);
+        }
+
+        assertNamedCallableVariantCount("make_base64_string", ("data", "max_line_length"), 2);
+        assertNamedCallableVariantCount("make_base64_url_string", ("data",), 2);
+        assertNamedCallableVariantCount("parse_base64_string", ("base64_string",));
+        assertNamedCallableVariantCount("parse_base64_string_to_string", ("base64_string", "encoding"));
+        assertNamedCallableVariantCount("parse_base64_url_string", ("base64_url_string",));
+        assertNamedCallableVariantCount("parse_base64_url_string_to_string", ("base64_url_string", "encoding"));
+        assertNamedCallableVariantCount("make_hex_string", ("data",), 2);
+        assertNamedCallableVariantCount("parse_hex_string", ("hex_string",));
+        assertNamedCallableVariantCount("hextoint", ("hex_string",));
+        assertNamedCallableVariantCount("strtoint", ("value", "base"));
+
+        assertNamedCallableVariantCount("splice", ("value", "start"), 2);
+        assertNamedCallableVariantCount("splice", ("value", "start", "length"));
+        assertNamedCallableVariantCount("splice", ("value", "start", "length", "replacement"), 2);
+        assertNamedCallableVariantCount("set_return_value", ("value",));
+        assertNamedCallableVariantCount("get_ex_pos", ("exception_info",));
+        assertNamedCallableVariantCount("get_local_vars", ("frame",));
+        assertNamedCallableVariantCount("set_local_var_value", ("frame", "name", "value"));
+        assertNamedCallableVariantCount("set_global_var_value", ("name", "value"));
+        assertNamedCallableVariantCount("get_module_option", ("module", "option"));
+        assertNamedCallableVariantCount("set_module_option", ("module", "option", "value"));
+        assertNamedCallableVariantCount("set_app_registry", ("key", "value"));
+        assertNamedCallableVariantCount("get_app_registry", ("key",));
+        assertNamedCallableVariantCount("get_call_reference", ("identifier",));
+        assertNamedCallableVariantCount("get_value_byte_size", ("value",));
     }
 
     modNameTests() {

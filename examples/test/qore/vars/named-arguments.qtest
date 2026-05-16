@@ -24,6 +24,10 @@ int sub na_mark(int v) {
     return v;
 }
 
+string sub na_misc_concat(string left, string right) {
+    return sprintf("%s%s", left, right);
+}
+
 string sub na_pair(int a, int b) {
     return sprintf("%d:%d", a, b);
 }
@@ -109,10 +113,11 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed compression builtin opt-in", \reviewedCompressionBuiltinOptIn(), NOTHING);
         addTestCase("reviewed time builtin opt-in", \reviewedTimeBuiltinOptIn(), NOTHING);
         addTestCase("reviewed object builtin opt-in", \reviewedObjectBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed misc builtin opt-in", \reviewedMiscBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
-        set_return_value(main());
+        set_return_value(value: main());
     }
 
     defaultsAndMixedArguments() {
@@ -346,6 +351,51 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq("cde", call_pseudo_args(value: "abcdef", method: "substr", arguments: (2, 3)),
             "pseudo-method helper exposes value and arguments");
         assertTrue(inlist("method", get_method_list(object_value: child)), "method list exposes object_value");
+    }
+
+    reviewedMiscBuiltinOptIn() {
+        assertEq("&lt;x&gt;", html_encode(str: "<x>"), "HTML helpers expose str");
+        assertEq("<x>", html_decode(str: "&lt;x&gt;"), "HTML decode exposes str");
+        assertEq("a b", decode_url(url: "a%20b"), "URL decode exposes url");
+        assertEq("a%20b", encode_url(url: "a b"), "URL encode exposes url");
+        assertEq("a b", decode_uri_request(uri: "a%20b"), "URI request decode exposes uri");
+        assertEq("a%20b", encode_uri_request(url: "a b"), "URI request encode exposes url");
+
+        assertTrue(exists_function(name: "type"), "function inspection exposes name");
+        assertEq("builtin", function_type(name: "type"), "function_type exposes name");
+        assertEq("named", call_function_args(name: "na_misc_concat", arguments: ("nam", "ed")),
+            "call_function_args exposes name and arguments");
+        assertEq("named", call_function_args(callable: \na_misc_concat(), arguments: ("nam", "ed")),
+            "call_function_args exposes callable and arguments");
+        assertEq("cde", call_builtin_function_args(name: "substr", arguments: ("abcdef", 2, 3)),
+            "call_builtin_function_args exposes arguments");
+
+        NA_Child child = new NA_Child();
+        assertEq("NA_Child", get_class_name(object_value: child), "class name helper exposes object_value");
+        assertTrue(has_key(container: {"k": 1}, key: "k"), "has_key exposes container");
+        assertEq(("v",), hash_values(hash_value: {"k": "v"}), "hash_values exposes hash_value");
+        assertEq(98, get_byte(data: "abc", offset: 1), "byte helper exposes data and offset");
+
+        assertEq("YWI=", make_base64_string(data: "ab"), "base64 helper exposes data");
+        assertEq("ab", parse_base64_string_to_string(base64_string: "YWI=", encoding: "utf-8"),
+            "base64 parser exposes base64_string");
+        assertEq("ab", binary_to_string(value: parse_base64_url_string(base64_url_string: "YWI="),
+            encoding: "utf-8"), "base64-url parser exposes base64_url_string");
+        assertEq("ab", make_hex_string(data: <ab>), "hex helper exposes data");
+        assertEq(<ab>, parse_hex_string(hex_string: "ab"), "hex parser exposes hex_string");
+        assertEq(171, hextoint(hex_string: "ab"), "hextoint exposes hex_string");
+        assertEq(65, strtoint(value: "101", base: 8), "strtoint exposes value and base");
+
+        assertEq("aZZdef", splice(value: "abcdef", start: 1, length: 2, replacement: "ZZ"),
+            "string splice exposes value and replacement");
+        assertEq((1, 9, 4), splice(value: (1, 2, 3, 4), start: 1, length: 2, replacement: (9)),
+            "list splice exposes value and replacement");
+        assertEq("https://user:<masked>@example.com/x", get_safe_url(url: "https://user:pass@example.com/x"),
+            "safe URL helper exposes url");
+        assertEq("example.com", parse_url(url: "https://example.com/path", keep_brackets: False).host,
+            "parse_url exposes keep_brackets");
+        assertEq("example.com", parseURL(url: "https://example.com/path").host, "parseURL exposes url");
+        assertEq(3, get_value_byte_size(value: "abc"), "byte size helper exposes value");
     }
 
     parseFailures() {
