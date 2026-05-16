@@ -35,8 +35,8 @@ jq -r '
 ' build/ql_*.meta.json | sed 's#build/##' | sort
 ```
 
-For core builtin methods, list fixed-arity variants that are not yet
-named-callable:
+For core builtin methods and constructors, list fixed-arity variants that are
+not yet named-callable:
 
 ```bash
 jq -r '
@@ -45,11 +45,12 @@ jq -r '
     | select((($x.flags//[])|index("NOOP"))|not)
     | select((($x.flags//[])|index("RUNTIME_NOOP"))|not)
     | select((($x.flags//[])|index("DEPRECATED"))|not)
-    | [input_filename, $c.name, $kind, $x.name, $x.signature,
+    | [input_filename, $c.name, $kind, ($x.name // "constructor"), $x.signature,
        (($x.flags//[])|join("+")),
        (($x.params//[])|map(.name+":"+.type_name)|join(", "))] | @tsv;
   .classes[]? as $c
-  | ( ($c.instance_methods[]? | row($c; "instance"; .)),
+  | ( ($c.constructors[]? | row($c; "constructor"; .)),
+      ($c.instance_methods[]? | row($c; "instance"; .)),
       ($c.static_methods[]? | row($c; "static"; .)) )
 ' build/QC_*.meta.json build/Pseudo_QC_*.meta.json | sed 's#build/##' | sort
 ```
@@ -112,6 +113,9 @@ Keep consistent names across related APIs:
 - Crypto: `algorithm`, `digest`, `key`, `iv`, `mac`, `mac_size`, `aad`.
 - Time: `date_value`, `seconds`, `milliseconds`, `microseconds`.
 - Object helpers: `object_value`, `class_name`, `method`, `arguments`.
+- Command-line parser helpers: `options` for the option specification hash and
+  `arguments` for the command-line argument list. Avoid internal abbreviations
+  such as `opts` and `pgm_args`.
 - Regex helpers: `pattern`, `replacement`, `options`, `callback`, and
   `subject` for the text being matched, extracted, searched, or substituted.
   Avoid exposing internal names such as `str`.
@@ -387,6 +391,14 @@ These examples are from the core migration and should be reused as precedent:
   and `format` / `values` for explicit formatting-list methods. Keep true
   varargs `printf()` / `f_printf()` variants positional until varargs named
   calls are reviewed separately.
+- GetOpt APIs use `options` for the option-specification hash and `arguments`
+  for the command-line argument list. This applies to the constructor, the
+  mutating `reference<list<string>>` instance parsing methods, and static
+  helpers such as `GetOpt::parseEx()`. Keep the same-name by-value instance
+  overloads positional-only: marking both the reference and by-value overloads
+  makes named calls ambiguous, while marking only the reference overload gives a
+  useful typed error for by-value named calls and preserves the clearer
+  `arguments: \ARGV` use case.
 - Do not mark an overload when it makes an already-enabled named call ambiguous
   with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
   step, value)` must remain positional because it conflicts with the named

@@ -19,6 +19,7 @@ class Test inherits QUnit::Test {
 
     constructor() : QUnit::Test("GetOpt", "1.0") {
         addTestCase("GetOpt::parse(list)", \parseList());
+        addTestCase("GetOpt named calls", \namedCallTest());
         set_return_value(main());
     }
 
@@ -31,5 +32,39 @@ class Test inherits QUnit::Test {
 
         h = g.parse2(\l);
         testAssertionValue("GetOpt::parse2(list)", (), l);
+    }
+
+    namedCallTest() {
+        list l = Args;
+        GetOpt g(options: O);
+
+        hash h = g.parse(arguments: \l);
+        assertEq("ooo", h.outd);
+        assertEq((), l);
+
+        l = Args;
+        h = g.parse2(arguments: \l);
+        assertEq("ooo", h.outd);
+        assertEq((), l);
+
+        l = Args;
+        h = g.parse3(arguments: \l);
+        assertEq("ooo", h.outd);
+        assertEq((), l);
+
+        l = Args;
+        h = GetOpt::parse(options: O, arguments: \l);
+        assertEq("ooo", h.outd);
+        assertEq((), l);
+
+        l = Args;
+        h = GetOpt::parseEx(options: O, arguments: \l);
+        assertEq("ooo", h.outd);
+        assertEq((), l);
+
+        l = Args;
+        h = GetOpt::parseExit(options: O, arguments: \l);
+        assertEq("ooo", h.outd);
+        assertEq((), l);
     }
 }

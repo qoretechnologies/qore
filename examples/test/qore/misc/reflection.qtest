@@ -886,6 +886,19 @@ class ReflectionTest inherits QUnit::Test {
             assertNamedClassMethodVariantCount("ParseOptions", name, ("parse_options",));
         }
         assertNamedClassMethodVariantCount("ParseOptions", "equals", ("other",));
+        assertNamedConstructorVariantCount("GetOpt", ("options",));
+        foreach string name in (("parse", "parse2", "parse3")) {
+            AbstractMethod method = Class::forName("GetOpt").getMethod(name);
+            AbstractMethodVariant reference_variant = method.getVariant(new Type("reference<list<string>>"));
+            assertTrue(reference_variant.isNamedCallable());
+            assertEq(("arguments",), reference_variant.getNamedParameterNames());
+            AbstractMethodVariant list_variant = method.getVariant(new Type("softlist<auto>"));
+            assertFalse(list_variant.isNamedCallable());
+            assertEq((), list_variant.getNamedParameterNames());
+        }
+        foreach string name in (("parse", "parseEx", "parseExit")) {
+            assertNamedClassStaticMethodVariantCount("GetOpt", name, ("options", "arguments"));
+        }
         assertNamedConstructorVariantCount("Queue", ("max_size",));
         assertNamedClassMethodVariantCount("Queue", "push", ("value", "timeout_ms"));
         assertNamedClassMethodVariantCount("Queue", "insert", ("value", "timeout_ms"));
