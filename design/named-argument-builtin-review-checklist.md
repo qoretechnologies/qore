@@ -377,6 +377,8 @@ These examples are from the core migration and should be reused as precedent:
   when arguments are dynamic hash values or command payloads; qmod currently
   rejects those named calls with `NAMED-CALL-NOT-SUPPORTED` even though the
   native Breakpoint methods themselves support named arguments.
+- Expression-like constructors should use the complete public owner name
+  `program` rather than implementation abbreviations such as `pgm`.
 - Do not mark an overload when it makes an already-enabled named call ambiguous
   with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
   step, value)` must remain positional because it conflicts with the named
