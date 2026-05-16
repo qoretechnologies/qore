@@ -204,7 +204,7 @@ bool b = h.hasKey(key);
 
     @see <hash>::hasKeyValue(softstring)
  */
-bool <hash>::hasKey(softstring key) [flags=RET_VALUE_ONLY] {
+bool <hash>::hasKey(softstring key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    TempEncodingHelper str(key, QCS_DEFAULT, xsink);
    if (!str)
       return false;
@@ -227,7 +227,7 @@ bool b = h.hasKeyValue(key);
 
     @see <hash>::hasKey(softstring)
  */
-bool <hash>::hasKeyValue(softstring key) [flags=RET_VALUE_ONLY] {
+bool <hash>::hasKeyValue(softstring key) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
    TempEncodingHelper str(key, QCS_DEFAULT, xsink);
    if (!str)
       return false;
@@ -365,24 +365,28 @@ HashListIterator <hash>::contextIterator() [flags=CONSTANT] {
 //! Returns @ref True "True" if the hash argument passed has the same keys in the same order as the current hash, @ref False "False" if not
 /** @par Example:
     @code{.py}
-bool b = h.compareKeys(oh);
+bool b = h.compareKeys(other_hash);
     @endcode
 
     Values are not compraed, only the key names and order
 
-    @param oh a hash to compare the keys against
+    @param other_hash a hash to compare the keys against
 
     @return @ref True "True" if the hash argument passed has the same keys in the same order as the current hash, @ref False "False" if not
 
     @since %Qore 0.8.8
  */
-bool <hash>::compareKeys(hash<auto> oh) [flags=CONSTANT] {
-   if (h->size() != oh->size())
+bool <hash>::compareKeys(hash<auto> other_hash) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   if (h->size() != other_hash->size())
       return false;
 
    ConstHashIterator hi1(h);
-   ConstHashIterator hi2(oh);
+   ConstHashIterator hi2(other_hash);
+   size_t i = 0;
    while (hi1.next()) {
+      if (i && !(i % 100) && qore_check_cancel(xsink, "comparing hash keys"))
+         return false;
+      ++i;
       hi2.next();
       if (strcmp(hi1.getKey(), hi2.getKey()))
          return false;

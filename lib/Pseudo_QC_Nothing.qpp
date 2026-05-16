@@ -235,7 +235,7 @@ bool b = h.hasKey(key);
 
     @since %Qore 0.8.7
  */
-bool <nothing>::hasKey(softstring[doc] key) [flags=CONSTANT] {
+bool <nothing>::hasKey(softstring[doc] key) [flags=CONSTANT,NAMED_ARGS] {
    return false;
 }
 
@@ -255,7 +255,7 @@ bool b = h.hasKeyValue(key);
 
     @since %Qore 0.8.7
  */
-bool <nothing>::hasKeyValue(softstring[doc] key) [flags=CONSTANT] {
+bool <nothing>::hasKeyValue(softstring[doc] key) [flags=CONSTANT,NAMED_ARGS] {
    return false;
 }
 

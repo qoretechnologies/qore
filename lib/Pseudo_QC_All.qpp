@@ -142,7 +142,7 @@ str = m.fullType();
     - %Qore 0.8.13
     - %Qore 1.0 added the \a with_namespaces argument
 */
-string <value>::fullType(*bool with_namespaces) [flags=CONSTANT] {
+string <value>::fullType(*bool with_namespaces) [flags=CONSTANT,NAMED_ARGS] {
     return new QoreStringNode(v.getFullTypeName(with_namespaces));
 }
 
@@ -327,7 +327,7 @@ int <value>::lsize() [flags=CONSTANT] {
     return false;
     @since %Qore 0.8.6
 */
-string <value>::toString(*string encoding) [flags=CONSTANT] {
+string <value>::toString(*string encoding) [flags=CONSTANT,NAMED_ARGS] {
     QoreStringNodeValueHelper str(v, encoding ? QEM.findCreate(encoding) : QCS_DEFAULT, xsink);
     return *xsink ? QoreValue() : str.getReferencedValue();
 }

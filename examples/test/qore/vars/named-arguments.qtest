@@ -119,6 +119,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed file builtin opt-in", \reviewedFileBuiltinOptIn(), NOTHING);
         addTestCase("reviewed library builtin opt-in", \reviewedLibraryBuiltinOptIn(), NOTHING);
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed pseudo-method opt-in", \reviewedPseudoMethodOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -559,6 +560,59 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "sub ql_thread_named_resource() { set_thread_resource(resource: sub(auto arg) {}, argument: NOTHING); "
             "remove_thread_resource(resource: sub() {}); }",
             "thread-named");
+    }
+
+    reviewedPseudoMethodOptIn() {
+        assertEq((1).fullType(False), (1).fullType(with_namespaces: False),
+            "value pseudo-method exposes with_namespaces");
+        assertEq((True).toString("UTF-8"), (True).toString(encoding: "UTF-8"),
+            "value pseudo-method exposes encoding");
+
+        binary bin = binary("abcabc");
+        assertEq(1, bin.find(pattern: binary("bc"), byte_offset: 0), "binary find exposes pattern and byte_offset");
+        assertEq(4, bin.rfind(pattern: binary("bc"), byte_offset: -1), "binary rfind exposes pattern and byte_offset");
+        assertEq(bin.split(binary("bc")), bin.split(separator: binary("bc")),
+            "binary split exposes separator");
+        assertEq("YQ==", binary("a").toBase64(max_line_length: -1), "binary toBase64 exposes max_line_length");
+        assertEq("6162", binary("ab").toHexArray(byte_prefix: NOTHING, byte_suffix: NOTHING, bytes_per_line: 0,
+            line_separator: NOTHING), "binary toHexArray exposes formatting arguments");
+        assertEq("bc", bin.substr(start: 1, length: 2).toString(encoding: "UTF-8"),
+            "binary substr exposes start and length");
+
+        assertEq(date(seconds: 0).format("YYYY"), date(seconds: 0).format(format: "YYYY"),
+            "date format exposes format");
+        assertEq((255).toBase(16), (255).toBase(base: 16), "int toBase exposes base");
+        assertEq((255).encodeMsb(2), (255).encodeMsb(size: 2), "int encodeMsb exposes size");
+        assertEq((255).encodeLsb(2), (255).encodeLsb(size: 2), "int encodeLsb exposes size");
+        assertEq((1234).format(".,0"), (1234).format(format: ".,0"), "int format exposes format");
+        assertEq((1234).format(2, ".", ","), (1234).format(precision: 2, decimal_separator: ".",
+            thousands_separator: ","), "int format exposes precision and separators");
+        assertEq((12.5).toBase(10), (12.5).toBase(base: 10), "float toBase exposes base");
+        assertEq((12.5).format(".,1"), (12.5).format(format: ".,1"), "float format exposes format");
+        assertEq((12.5n).toString(NF_Default), (12.5n).toString(format_flags: NF_Default),
+            "number toString exposes format_flags");
+        assertEq((12.5n).format(2, ".", ","), (12.5n).format(precision: 2, decimal_separator: ".",
+            thousands_separator: ","), "number format exposes precision and separators");
+
+        hash<auto> h = {"a": 1};
+        assertTrue(h.hasKey(key: "a"), "hash hasKey exposes key");
+        assertTrue(h.hasKeyValue(key: "a"), "hash hasKeyValue exposes key");
+        assertTrue(h.compareKeys(other_hash: {"a": 2}), "hash compareKeys exposes other_hash");
+        assertFalse(NOTHING.hasKey(key: "a"), "nothing hasKey exposes key");
+        assertFalse(NOTHING.hasKeyValue(key: "a"), "nothing hasKeyValue exposes key");
+
+        assertEq("a:b:c", ("a", "b", "c").join(separator: ":"), "list join exposes separator");
+        assertTrue((1, 2, 3).contains(value: 2), "list contains exposes value");
+        assertTrue((1, 2, 3).rangeIterator(value: "x") != NOTHING, "list rangeIterator exposes value");
+
+        assertTrue(self.hasCallableMethod(method: "reviewedPseudoMethodOptIn"),
+            "object hasCallableMethod exposes method");
+        assertTrue(self.hasCallableNormalMethod(method: "reviewedPseudoMethodOptIn"),
+            "object hasCallableNormalMethod exposes method");
+        assertFalse(self.hasCallableStaticMethod(method: "reviewedPseudoMethodOptIn"),
+            "object hasCallableStaticMethod exposes method");
+        assertTrue(self.getCallReference(identifier: "reviewedPseudoMethodOptIn") != NOTHING,
+            "object getCallReference exposes identifier");
     }
 
     parseFailures() {

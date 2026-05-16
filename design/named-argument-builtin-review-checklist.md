@@ -35,6 +35,25 @@ jq -r '
 ' build/ql_*.meta.json | sed 's#build/##' | sort
 ```
 
+For core builtin methods, list fixed-arity variants that are not yet
+named-callable:
+
+```bash
+jq -r '
+  def row($c; $kind; $x): select(($x.params|length)>0)
+    | select((($x.flags//[])|index("NAMED_ARGS"))|not)
+    | select((($x.flags//[])|index("NOOP"))|not)
+    | select((($x.flags//[])|index("RUNTIME_NOOP"))|not)
+    | select((($x.flags//[])|index("DEPRECATED"))|not)
+    | [input_filename, $c.name, $kind, $x.name, $x.signature,
+       (($x.flags//[])|join("+")),
+       (($x.params//[])|map(.name+":"+.type_name)|join(", "))] | @tsv;
+  .classes[]? as $c
+  | ( ($c.instance_methods[]? | row($c; "instance"; .)),
+      ($c.static_methods[]? | row($c; "static"; .)) )
+' build/QC_*.meta.json build/Pseudo_QC_*.meta.json | sed 's#build/##' | sort
+```
+
 For a binary module, use the same query against that module's generated
 `*.meta.json` files after building the module.
 
@@ -227,5 +246,11 @@ These examples are from the core migration and should be reused as precedent:
   thread-local data hashes use `data`, thread-local key lists use `key_list`,
   worker counts use `thread_count`, thread init uses `callback`, resource
   callback arguments use `argument`, and `TimeZone` parameters use `timezone`.
+- Pseudo-methods should not expose internal abbreviations: use `separator`
+  instead of `sep` or `str` when the value separates output, `precision` instead
+  of `prec`, `decimal_separator` and `thousands_separator` instead of
+  `decimal_sep` and `thousands_sep`, `pattern` and `byte_offset` for binary
+  searches, `length` instead of `len` for binary slices, `other_hash` instead of
+  `oh`, and `method` instead of generic `name` for callable-method checks.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

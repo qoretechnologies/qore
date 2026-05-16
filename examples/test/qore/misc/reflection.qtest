@@ -149,6 +149,18 @@ class ReflectionTest inherits QUnit::Test {
         assertEq(expected_count, found);
     }
 
+    assertNamedPseudoMethodVariantCount(PseudoClass cls, string name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach AbstractMethodVariant v in (cls.getMethod(name).getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
     namedCallReflectionTests() {
         FunctionVariant uv = Function::forName("named_reflection_target").getVariants()[0];
         assertTrue(uv.isNamedCallable());
@@ -667,6 +679,41 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("parallel_map", ("callable", "items", "thread_count"));
         assertNamedCallableVariantCount("parallel_foreach", ("callable", "items", "thread_count"));
         assertNamedCallableVariantCount("channel_select", ("cases", "timeout"));
+
+        assertNamedPseudoMethodVariantCount(ValuePseudoClass, "fullType", ("with_namespaces",));
+        assertNamedPseudoMethodVariantCount(ValuePseudoClass, "toString", ("encoding",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "find", ("pattern", "byte_offset"));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "rfind", ("pattern", "byte_offset"));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "split", ("separator",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toHexArray",
+            ("byte_prefix", "byte_suffix", "bytes_per_line", "line_separator"));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toBase64", ("max_line_length",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toBase64Url", ("max_line_length",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "substr", ("start",));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "substr", ("start", "length"));
+        assertNamedPseudoMethodVariantCount(BinaryPseudoClass, "toString", ("encoding",));
+        assertNamedPseudoMethodVariantCount(DatePseudoClass, "format", ("format",));
+        foreach PseudoClass cls in ((IntPseudoClass, FloatPseudoClass, NumberPseudoClass)) {
+            assertNamedPseudoMethodVariantCount(cls, "format", ("format",));
+            assertNamedPseudoMethodVariantCount(cls, "format",
+                ("precision", "decimal_separator", "thousands_separator"));
+            assertNamedPseudoMethodVariantCount(cls, "toBase", ("base",));
+        }
+        assertNamedPseudoMethodVariantCount(IntPseudoClass, "encodeMsb", ("size",));
+        assertNamedPseudoMethodVariantCount(IntPseudoClass, "encodeLsb", ("size",));
+        assertNamedPseudoMethodVariantCount(NumberPseudoClass, "toString", ("format_flags",));
+        assertNamedPseudoMethodVariantCount(HashPseudoClass, "hasKey", ("key",));
+        assertNamedPseudoMethodVariantCount(HashPseudoClass, "hasKeyValue", ("key",));
+        assertNamedPseudoMethodVariantCount(HashPseudoClass, "compareKeys", ("other_hash",));
+        assertNamedPseudoMethodVariantCount(NothingPseudoClass, "hasKey", ("key",));
+        assertNamedPseudoMethodVariantCount(NothingPseudoClass, "hasKeyValue", ("key",));
+        assertNamedPseudoMethodVariantCount(ListPseudoClass, "join", ("separator",));
+        assertNamedPseudoMethodVariantCount(ListPseudoClass, "contains", ("value",));
+        assertNamedPseudoMethodVariantCount(ListPseudoClass, "rangeIterator", ("value",));
+        assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "hasCallableMethod", ("method",));
+        assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "hasCallableNormalMethod", ("method",));
+        assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "hasCallableStaticMethod", ("method",));
+        assertNamedPseudoMethodVariantCount(ObjectPseudoClass, "getCallReference", ("identifier",));
     }
 
     modNameTests() {

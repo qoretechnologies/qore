@@ -352,7 +352,7 @@ string str = d.format("Day, Mon D, YYYY-MM-DD HH:mm:SS");
 
     @note equivalent to format_date(string, date)
 */
-string <date>::format(string format) [flags=CONSTANT] {
+string <date>::format(string format) [flags=CONSTANT,NAMED_ARGS] {
    QoreStringNode *rv = new QoreStringNode;
    dt->format(*rv, format->getBuffer());
    return rv;

@@ -157,11 +157,11 @@ auto <list>::last() [flags=CONSTANT] {
 }
 
 //! Creates a string from the list and a separator string given as an argument
-/** Each element in the list will be converted to a string if necessary to be concatenated to the return value string; additionally if any string argument has a different @ref character_encoding "character encoding" than \a str, then it will be converted to <em>str</em>'s @ref character_encoding "character encoding" before concatentation to the return value string
+/** Each element in the list will be converted to a string if necessary to be concatenated to the return value string; additionally if any string argument has a different @ref character_encoding "character encoding" than \a separator, then it will be converted to <em>separator</em>'s @ref character_encoding "character encoding" before concatentation to the return value string
 
-    @param str the separator string
+    @param separator the separator string
 
-    @return a string created from a list and a separator string, each element in the list will be present in the return value separated by the separator string; the string returned with have the same @ref character_encoding "character encoding" as \a str
+    @return a string created from a list and a separator string, each element in the list will be present in the return value separated by the separator string; the string returned with have the same @ref character_encoding "character encoding" as \a separator
 
     @par Example:
     @code{.py}
@@ -174,8 +174,8 @@ string str = ("a", "b", "c").join(":"); # returns "a:b:c"
 
     @since %Qore 0.8.5
  */
-string <list>::join(string str) [flags=RET_VALUE_ONLY] {
-   return join_intern(str, l, 0, xsink);
+string <list>::join(string separator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return join_intern(separator, l, 0, xsink);
 }
 
 //! Returns the number of elements in the list
@@ -195,13 +195,13 @@ int <list>::lsize() [flags=CONSTANT] {
    return l->size();
 }
 
-//! Returns @ref True if the list contains arg, @ref False if it does not.
+//! Returns @ref True if the list contains a value, @ref False if it does not.
 /** This call uses "soft" comparisons (where types may be converted).
     The computational complexity is <tt>O(n)</tt> (n = the length of the list).
 
-    @param arg any value to check its presence in the list
+    @param value any value to check its presence in the list
 
-    @return @ref True if the list contains arg, @ref False if it does not
+    @return @ref True if the list contains the value, @ref False if it does not
 
     @par Example:
     @code{.py}
@@ -209,8 +209,8 @@ list<int> l = (1, 2, 3);
 bool b = l.contains(5); # returns False
     @endcode
 */
-bool <list>::contains(auto arg) [flags=RET_VALUE_ONLY] {
-   return inlist_intern(arg, l, xsink);
+bool <list>::contains(auto value) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   return inlist_intern(value, l, xsink);
 }
 
 //! Returns a @ref Qore::ListIterator "ListIterator" object for the list
@@ -233,7 +233,7 @@ AbstractIterator <list>::iterator() [flags=CONSTANT] {
 map printf("+ %y\n", $1), l.ranegIterator();
     @endcode
 
-    @param val an optional value to be returned instead of the default integer value
+    @param value an optional value to be returned instead of the default integer value
 
     @return a @ref Qore::RangeIterator "RangeIterator" object for the list elements
 
@@ -241,11 +241,11 @@ map printf("+ %y\n", $1), l.ranegIterator();
     - %Qore 0.8.8
     - %Qore 0.8.11.1 this pseudo-method takes the optional \a val argument
  */
-AbstractIterator <list>::rangeIterator(auto val) [flags=CONSTANT] {
+AbstractIterator <list>::rangeIterator(auto value) [flags=CONSTANT,NAMED_ARGS] {
    if (l->empty())
       return new QoreObject(QC_SINGLEVALUEITERATOR, 0, new SingleValueIterator);
 
-   ReferenceHolder<RangeIterator> r(new RangeIterator(0, l->size(), 1, val, xsink), xsink);
+   ReferenceHolder<RangeIterator> r(new RangeIterator(0, l->size(), 1, value, xsink), xsink);
    if (*xsink)
       return QoreValue();
 
