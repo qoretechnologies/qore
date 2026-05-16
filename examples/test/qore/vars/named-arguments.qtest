@@ -105,6 +105,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed string builtin opt-in", \reviewedStringBuiltinOptIn(), NOTHING);
         addTestCase("reviewed utility builtin opt-in", \reviewedUtilityBuiltinOptIn(), NOTHING);
         addTestCase("reviewed list builtin opt-in", \reviewedListBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed pwd builtin opt-in", \reviewedPwdBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -229,6 +230,13 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq((3, 2, 1), reverse(values: (1, 2, 3)), "reverse exposes values");
         assertTrue(inlist(value: "1", values: (1, 2)), "inlist exposes value and values");
         assertFalse(inlist_hard(value: "1", values: (1, 2)), "inlist_hard exposes value and values");
+    }
+
+    reviewedPwdBuiltinOptIn() {
+        Program p(PO_NEW_STYLE);
+        p.parse("getpwuid(uid: 0); getpwuid2(uid: 0); getpwnam(name: \"root\"); getpwnam2(name: \"root\"); "
+            "getgrgid(gid: 0); getgrgid2(gid: 0); getgrnam(name: \"root\"); getgrnam2(name: \"root\");",
+            "pwd-named");
     }
 
     parseFailures() {

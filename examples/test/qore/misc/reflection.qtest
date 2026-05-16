@@ -377,6 +377,24 @@ class ReflectionTest inherits QUnit::Test {
             }
             assertTrue(found_values);
         }
+
+        foreach string name in (("getpwuid", "getpwuid2")) {
+            FunctionVariant v = Function::forName(name).getVariant(SoftIntType);
+            assertTrue(v.isNamedCallable());
+            assertEq(("uid",), v.getNamedParameterNames());
+        }
+
+        foreach string name in (("getgrgid", "getgrgid2")) {
+            FunctionVariant v = Function::forName(name).getVariant(SoftIntType);
+            assertTrue(v.isNamedCallable());
+            assertEq(("gid",), v.getNamedParameterNames());
+        }
+
+        foreach string name in (("getpwnam", "getpwnam2", "getgrnam", "getgrnam2")) {
+            FunctionVariant v = Function::forName(name).getVariant(StringType);
+            assertTrue(v.isNamedCallable());
+            assertEq(("name",), v.getNamedParameterNames());
+        }
     }
 
     modNameTests() {
