@@ -143,7 +143,11 @@ DateTimeNode* make_date_with_mask(const AbstractQoreZoneInfo* tz, const QoreStri
     const char* se = s + mask.strlen();
 
     try {
+        int iter = 0;
         while (*s) {
+            if (++iter % 100 == 0 && qore_check_cancel(xsink, "parsing date mask")) {
+                return nullptr;
+            }
             // break if we run out of data in either the mask or the date string
             if (s >= se)
                 break;
@@ -486,7 +490,7 @@ date now_utc() [flags=CONSTANT] {
 //! Returns a formatted string for a date argument passed
 /**
     @param format a string giving the format for the date; see @ref date_formatting for more information about this string
-    @param dt the date to use for the string output
+    @param date_value the date to use for the string output
 
     @return a formatted string for a date argument passed
 
@@ -498,9 +502,9 @@ string str = format_date("Day, Mon D, YYYY-MM-DD HH:mm:SS", 2004-02-01T12:30:00)
 
     @bug there is no locale support; day and month names and abbreviations are only returned in English
 */
-string format_date(string format, date dt) [flags=CONSTANT] {
+string format_date(string format, date date_value) [flags=CONSTANT,NAMED_ARGS] {
    QoreStringNode *rv = new QoreStringNode;
-   dt->format(*rv, format->getBuffer());
+   date_value->format(*rv, format->getBuffer());
    return rv;
 }
 
@@ -549,8 +553,8 @@ date localtime() [flags=CONSTANT] {
 
 //! Returns the date and time in the local time zone corresponding to the integer arguments passed, which are interpreted as the number of seconds and microseconds since Jan 1, 1970, 00:00:00 Z (UTC)
 /**
-    @param secs the number of seconds and microseconds since Jan 1, 1970, 00:00:00 Z (UTC)
-    @param us a microsecond offset for the time returned
+    @param seconds the number of seconds since Jan 1, 1970, 00:00:00 Z (UTC)
+    @param microseconds a microsecond offset for the time returned
 
     @return the date and time in the local time zone corresponding to the arguments passed
 
@@ -561,13 +565,13 @@ date dt = localtime(10);
 
     @see gmtime(softint, softint)
 */
-date localtime(softint secs, softint us = 0) [flags=CONSTANT] {
-   return DateTimeNode::makeAbsolute(currentTZ(), secs, (int)us);
+date localtime(softint seconds, softint microseconds = 0) [flags=CONSTANT,NAMED_ARGS] {
+   return DateTimeNode::makeAbsolute(currentTZ(), seconds, (int)microseconds);
 }
 
 //! Returns the date and time in the local time zone corresponding to the date argument passed
 /**
-    @param dt a date to process; if the date passed is in the local time zone, then the same value is returned
+    @param date_value a date to process; if the date passed is in the local time zone, then the same value is returned
 
     @return the date and time in the local time zone corresponding to the date argument passed
 
@@ -578,8 +582,8 @@ date dt = localtime(2012-01-19T15:00:00-07:00);
 
     @see gmtime(date)
 */
-date localtime(date dt) [flags=CONSTANT] {
-   return DateTimeNode::makeAbsolute(currentTZ(), dt->getEpochSecondsUTC(), dt->getMicrosecond());
+date localtime(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+   return DateTimeNode::makeAbsolute(currentTZ(), date_value->getEpochSecondsUTC(), date_value->getMicrosecond());
 }
 
 //! Returns the current UTC (GMT) time with a resolution of a second
@@ -601,8 +605,8 @@ date gmtime() [flags=CONSTANT] {
 
 //! Returns a date/time value in UTC (GMT) from arguments giving the number of seconds and microseconds since Jan 1, 1970, 00:00:00 Z (UTC)
 /**
-    @param secs the number of seconds and microseconds since Jan 1, 1970, 00:00:00 Z (UTC)
-    @param us a microsecond offset for the time returned
+    @param seconds the number of seconds since Jan 1, 1970, 00:00:00 Z (UTC)
+    @param microseconds a microsecond offset for the time returned
 
     @return a date/time value in UTC (GMT) from arguments giving the number of seconds and microseconds since Jan 1, 1970, 00:00:00 Z (UTC)
 
@@ -613,13 +617,13 @@ date dt = gmtime(10);
 
     @see localtime(softint, softint)
 */
-date gmtime(softint secs, softint us = 0) [flags=CONSTANT] {
-   return DateTimeNode::makeAbsolute(NULL, secs, (int)us);
+date gmtime(softint seconds, softint microseconds = 0) [flags=CONSTANT,NAMED_ARGS] {
+   return DateTimeNode::makeAbsolute(NULL, seconds, (int)microseconds);
 }
 
 //! Returns the date and time in UTC (GMT) corresponding to the date argument passed
 /**
-    @param dt a date to process; if the date passed is already in UTC, then the same value is returned
+    @param date_value a date to process; if the date passed is already in UTC, then the same value is returned
 
     @return the date and time in UTC (GMT) corresponding to the date argument passed
 
@@ -630,13 +634,13 @@ date dt = gmtime(2012-01-19T15:00:00-07:00);
 
     @see localtime(date)
 */
-date gmtime(date dt) [flags=CONSTANT] {
-   return DateTimeNode::makeAbsolute(NULL, dt->getEpochSecondsUTC(), dt->getMicrosecond());
+date gmtime(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+   return DateTimeNode::makeAbsolute(NULL, date_value->getEpochSecondsUTC(), date_value->getMicrosecond());
 }
 
 //! Returns the number of seconds since January 1, 1970 00:00:00 in the local time zone for the given date
 /**
-    @param dt The date to process
+    @param date_value The date to process
 
     @return the number of seconds since January 1, 1970 00:00:00 in the local time zone for the given date
 
@@ -647,8 +651,8 @@ int secs = timegm(dt);
 
     @see get_epoch_seconds(date)
 */
-int timegm(date dt) [flags=CONSTANT] {
-   return dt->getEpochSeconds();
+int timegm(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+   return date_value->getEpochSeconds();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -659,7 +663,7 @@ nothing timegm() [flags=RUNTIME_NOOP] {
 
 //! Returns the number of seconds of the date and time in local time passed since Jan 1, 1970, 00:00:00 Z (UTC); negative values are returned for dates before the epoch
 /**
-    @param dt The date to process
+    @param date_value The date to process
 
     @return the number of seconds of the date and time in local time passed since Jan 1, 1970, 00:00:00 Z (UTC); negative values are returned for dates before the epoch
 
@@ -672,8 +676,8 @@ int i = get_epoch_seconds(2012-01-19T08:02:15+01:00);
 
     @note This function is equivalent to mktime(date)
 */
-int get_epoch_seconds(date dt) [flags=CONSTANT] {
-    return dt->getEpochSecondsUTC();
+int get_epoch_seconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getEpochSecondsUTC();
 }
 
 //! This function variant does nothing at all
@@ -685,7 +689,7 @@ nothing get_epoch_seconds() [flags=RUNTIME_NOOP] {
 
 //! Returns the number of milliseconds of the date and time in local time passed since Jan 1, 1970, 00:00:00 Z (UTC)
 /**
-    @param dt The date to process
+    @param date_value The date to process
 
     @return the number of milliseconds of the date and time in local time passed since Jan 1, 1970, 00:00:00 Z (UTC);
     negative values are returned for dates before the epoch
@@ -697,13 +701,13 @@ int i = get_epoch_milliseconds(2012-01-19T08:02:15+01:00);
 
     @since %Qore 2.0
 */
-int get_epoch_milliseconds(date dt) [flags=CONSTANT] {
-    return dt->getEpochMillisecondsUTC();
+int get_epoch_milliseconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getEpochMillisecondsUTC();
 }
 
 //! Returns the number of microseconds of the date and time in local time passed since Jan 1, 1970, 00:00:00 Z (UTC)
 /**
-    @param dt The date to process
+    @param date_value The date to process
 
     @return the number of microseconds of the date and time in local time passed since Jan 1, 1970, 00:00:00 Z (UTC);
     negative values are returned for dates before the epoch
@@ -715,13 +719,13 @@ int i = get_epoch_microseconds(2012-01-19T08:02:15+01:00);
 
     @since %Qore 2.0
 */
-int get_epoch_microseconds(date dt) [flags=CONSTANT] {
-    return dt->getEpochMicrosecondsUTC();
+int get_epoch_microseconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getEpochMicrosecondsUTC();
 }
 
 //! Returns the number of seconds of the date and time in local time passed since Jan 1, 1970, 00:00:00 Z (UTC); negative values are returned for dates before the epoch
 /**
-    @param dt The date to process
+    @param date_value The date to process
 
     @return the number of seconds of the date and time in local time passed since Jan 1, 1970, 00:00:00 Z (UTC); negative values are returned for dates before the epoch
 
@@ -734,8 +738,8 @@ int i = mktime(2012-01-19T08:02:15+01:00);
 
     @note This function is equivalent to get_epoch_seconds(date)
 */
-int mktime(date dt) [flags=CONSTANT] {
-    return dt->getEpochSecondsUTC();
+int mktime(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getEpochSecondsUTC();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -764,7 +768,7 @@ date y = years(100);
     - milliseconds(softint)
     - microseconds(softint)
 */
-date years(softint years) [flags=CONSTANT] {
+date years(softint years) [flags=CONSTANT,NAMED_ARGS] {
     return new DateTimeNode((int)years, 0, 0, 0, 0, 0, 0, true);
 }
 
@@ -794,7 +798,7 @@ date rd = months(100);
     - milliseconds(softint)
     - microseconds(softint)
 */
-date months(softint months) [flags=CONSTANT] {
+date months(softint months) [flags=CONSTANT,NAMED_ARGS] {
     return new DateTimeNode(0, (int)months, 0, 0, 0, 0, 0, true);
 }
 
@@ -824,7 +828,7 @@ date rd = days(100);
     - milliseconds(softint)
     - microseconds(softint)
 */
-date days(softint days) [flags=CONSTANT] {
+date days(softint days) [flags=CONSTANT,NAMED_ARGS] {
     return new DateTimeNode(0, 0, (int)days, 0, 0, 0, 0, true);
 }
 
@@ -854,7 +858,7 @@ date rd = hours(100);
     - milliseconds(softint)
     - microseconds(softint)
 */
-date hours(softint hours) [flags=CONSTANT] {
+date hours(softint hours) [flags=CONSTANT,NAMED_ARGS] {
     return new DateTimeNode(0, 0, 0, (int)hours, 0, 0, 0, true);
 }
 
@@ -884,7 +888,7 @@ date rd = minutes(100);
     - milliseconds(softint)
     - microseconds(softint)
 */
-date minutes(softint minutes) [flags=CONSTANT] {
+date minutes(softint minutes) [flags=CONSTANT,NAMED_ARGS] {
     return new DateTimeNode(0, 0, 0, 0, (int)minutes, 0, 0, true);
 }
 
@@ -914,7 +918,7 @@ date rd = seconds(100);
     - milliseconds(softint)
     - microseconds(softint)
 */
-date seconds(softint seconds) [flags=CONSTANT] {
+date seconds(softint seconds) [flags=CONSTANT,NAMED_ARGS] {
     return new DateTimeNode(0, 0, 0, 0, 0, (int)seconds, 0, true);
 }
 
@@ -926,7 +930,7 @@ nothing seconds() [flags=RUNTIME_NOOP] {
 
 //! Returns a @ref relative_dates "relative date/time value" in milliseconds based on the integer argument passed to be used in date arithmetic
 /**
-    @param ms the number of milliseconds to return
+    @param milliseconds the number of milliseconds to return
 
     @return a @ref relative_dates "relative date/time value" in milliseconds based on the integer argument passed to be used in date arithmetic
 
@@ -944,15 +948,15 @@ date rd = milliseconds(100);
     - seconds(softint)
     - microseconds(softint)
 */
-date milliseconds(softint ms) [flags=CONSTANT] {
-    int64 secs = ms / 1000;
-    ms -= (secs * 1000);
+date milliseconds(softint milliseconds) [flags=CONSTANT,NAMED_ARGS] {
+    int64 secs = milliseconds / 1000;
+    milliseconds -= (secs * 1000);
     int64 minutes = secs / 60;
     secs -= (minutes * 60);
     int64 hours = minutes / 60;
     minutes -= (hours * 60);
 
-    return new DateTimeNode(0, 0, 0, (int)hours, (int)minutes, (int)secs, (int)ms, true);
+    return new DateTimeNode(0, 0, 0, (int)hours, (int)minutes, (int)secs, (int)milliseconds, true);
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -963,7 +967,7 @@ nothing milliseconds() [flags=RUNTIME_NOOP] {
 
 //! Returns a @ref relative_dates "relative date/time value" in microseconds based on the integer argument passed to be used in date arithmetic
 /**
-    @param us the number of microseconds to return
+    @param microseconds the number of microseconds to return
 
     @return a @ref relative_dates "relative date/time value" in microseconds based on the integer argument passed to be used in date arithmetic
 
@@ -981,20 +985,20 @@ date rd = microseconds(100);
     - seconds(softint)
     - milliseconds(softint)
 */
-date microseconds(softint us) [flags=CONSTANT] {
-    int64 secs = us / 10000000;
-    us -= (secs * 10000000);
+date microseconds(softint microseconds) [flags=CONSTANT,NAMED_ARGS] {
+    int64 secs = microseconds / 10000000;
+    microseconds -= (secs * 10000000);
     int64 minutes = secs / 60;
     secs -= (minutes * 60);
     int64 hours = minutes / 60;
     minutes -= (hours * 60);
 
-    return DateTimeNode::makeRelative(0, 0, 0, hours, minutes, secs, (int)us);
+    return DateTimeNode::makeRelative(0, 0, 0, hours, minutes, secs, (int)microseconds);
 }
 
 //! Returns an integer corresponding to the literal year value in the date (does not calculate a duration)
 /**
-    @param dt the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
+    @param date_value the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
 
     @return an integer corresponding to the year value in the date
 
@@ -1005,8 +1009,8 @@ int n = get_years(dt);
 
     @note equivalent to pseudo-method <date>::years()
 */
-int get_years(date dt) [flags=CONSTANT] {
-    return dt->getYear();
+int get_years(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getYear();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1017,7 +1021,7 @@ nothing get_years() [flags=RUNTIME_NOOP] {
 
 //! Returns an integer corresponding to the literal month value in the date (does not calculate a duration)
 /**
-    @param dt the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
+    @param date_value the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
 
     @return an integer corresponding to the month value in the date
 
@@ -1028,8 +1032,8 @@ int n = get_months(dt);
 
     @note equivalent to pseudo-method <date>::months()
 */
-int get_months(date dt) [flags=CONSTANT] {
-    return dt->getMonth();
+int get_months(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getMonth();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1040,7 +1044,7 @@ nothing get_months() [flags=RUNTIME_NOOP] {
 
 //! Returns an integer corresponding to the literal day value in the date (does not calculate a duration)
 /**
-    @param dt the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
+    @param date_value the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
 
     @return an integer corresponding to the day value in the date
 
@@ -1051,8 +1055,8 @@ int n = get_days(dt);
 
     @note equivalent to pseudo-method <date>::days()
 */
-int get_days(date dt) [flags=CONSTANT] {
-    return dt->getDay();
+int get_days(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getDay();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1063,7 +1067,7 @@ nothing get_days() [flags=RUNTIME_NOOP] {
 
 //! Returns an integer corresponding to the literal hour value in the date (does not calculate a duration)
 /**
-    @param dt the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
+    @param date_value the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
 
     @return an integer corresponding to the hour value in the date
 
@@ -1074,8 +1078,8 @@ int n = get_hours(dt);
 
     @note equivalent to pseudo-method <date>::hours()
 */
-int get_hours(date dt) [flags=CONSTANT] {
-    return dt->getHour();
+int get_hours(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getHour();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1086,7 +1090,7 @@ nothing get_hours() [flags=RUNTIME_NOOP] {
 
 //! Returns an integer corresponding to the literal minute value in the date (does not calculate a duration)
 /**
-    @param dt the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
+    @param date_value the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
 
     @return an integer corresponding to the minute value in the date
 
@@ -1097,8 +1101,8 @@ int n = get_minutes(dt);
 
     @note equivalent to pseudo-method <date>::minutes()
 */
-int get_minutes(date dt) [flags=CONSTANT] {
-    return dt->getMinute();
+int get_minutes(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getMinute();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1109,7 +1113,7 @@ nothing get_minutes() [flags=RUNTIME_NOOP] {
 
 //! Returns an integer corresponding to the literal second value in the date (does not calculate a duration)
 /**
-    @param dt the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
+    @param date_value the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
 
     @return an integer corresponding to the literal second value in the date (does not calculate a duration)
 
@@ -1122,8 +1126,8 @@ int n = get_seconds(dt);
     - equivalent to pseudo-method <date>::seconds()
     - to get the number of seconds of duration in a date/time value, use @ref get_duration_seconds() instead
 */
-int get_seconds(date dt) [flags=CONSTANT] {
-    return dt->getSecond();
+int get_seconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getSecond();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1134,7 +1138,7 @@ nothing get_seconds() [flags=RUNTIME_NOOP] {
 
 //! Returns an integer corresponding to the literal millisecond value in the date (does not calculate a duration)
 /**
-    @param dt the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
+    @param date_value the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
 
     @return an integer corresponding to the literal millisecond value in the date (does not calculate a duration)
 
@@ -1147,8 +1151,8 @@ int n = get_milliseconds(dt);
     - equivalent to pseudo-method <date>::milliseconds()
     - to get the number of milliseconds of duration in a date/time value, use @ref get_duration_milliseconds() instead
 */
-int get_milliseconds(date dt) [flags=CONSTANT] {
-    return dt->getMillisecond();
+int get_milliseconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getMillisecond();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1159,7 +1163,7 @@ nothing get_milliseconds() [flags=RUNTIME_NOOP] {
 
 //! Returns an integer corresponding to the literal microsecond value in the date (does not calculate a duration)
 /**
-    @param dt the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
+    @param date_value the date value; can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date
 
     @return an integer corresponding to the literal microsecond value in the date (does not calculate a duration)
 
@@ -1172,13 +1176,13 @@ int n = get_microseconds(dt);
     - equivalent to pseudo-method <date>::microseconds()
     - to get the number of microseconds of duration in a date/time value, use @ref get_duration_microseconds() instead
 */
-int get_microseconds(date dt) [flags=CONSTANT] {
-    return dt->getMicrosecond();
+int get_microseconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getMicrosecond();
 }
 
 //! Returns midnight on the date passed (strips the time component on the new value)
 /**
-    @param dt the date to process
+    @param date_value the date to process
 
     @return midnight on the date passed (strips the time component on the new value)
 
@@ -1189,8 +1193,8 @@ date midnight = get_midnight(dt);
 
     @note equivalent to pseudo-method <date>::midnight()
 */
-date get_midnight(date dt) [flags=CONSTANT] {
-    DateTimeNode* rv = new DateTimeNode(*dt);
+date get_midnight(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    DateTimeNode* rv = new DateTimeNode(*date_value);
     rv->setTime(0, 0, 0);
     return rv;
 }
@@ -1203,7 +1207,7 @@ nothing get_midnight() [flags=RUNTIME_NOOP] {
 
 //! Returns an integer representing the ordinal day number in the year (corresponding to the <a href="http://en.wikipedia.org/wiki/ISO_8601#Ordinal_dates">ISO-8601 day number</a>) for the @ref absolute_dates "absolute date" value passed
 /**
-    @param dt an @ref absolute_dates "absolute date" value to get the ordinal day number
+    @param date_value an @ref absolute_dates "absolute date" value to get the ordinal day number
 
     @return an integer representing the ordinal day number in the year (corresponding to the <a href="http://en.wikipedia.org/wiki/ISO_8601#Ordinal_dates">ISO-8601 day number</a>) for the @ref absolute_dates "absolute date" value passed; if a @ref relative_dates "relative date" value is passed, then this function will return 0
 
@@ -1221,7 +1225,7 @@ nothing getDayNumber() [flags=RUNTIME_NOOP,DEPRECATED] {
 
 //! Returns an integer representing the ordinal day number in the year (corresponding to the <a href="http://en.wikipedia.org/wiki/ISO_8601#Ordinal_dates">ISO-8601 day number</a>) for the @ref absolute_dates "absolute date" value passed
 /**
-    @param dt an @ref absolute_dates "absolute date" value to get the ordinal day number
+    @param date_value an @ref absolute_dates "absolute date" value to get the ordinal day number
 
     @return an integer representing the ordinal day number in the year (corresponding to the <a href="http://en.wikipedia.org/wiki/ISO_8601#Ordinal_dates">ISO-8601 day number</a>) for the @ref absolute_dates "absolute date" value passed; if a @ref relative_dates "relative date" value is passed, then this function will return 0
 
@@ -1234,8 +1238,8 @@ int dn = get_day_number(dt);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getDayNumber()
 */
-int get_day_number(date dt) [flags=CONSTANT] {
-    return dt->getDayNumber();
+int get_day_number(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getDayNumber();
 }
 
 //! Returns an integer representing the day of the week for the @ref absolute_dates "absolute date" value passed (0=Sunday, 6=Saturday)
@@ -1260,7 +1264,7 @@ nothing getDayOfWeek() [flags=RUNTIME_NOOP,DEPRECATED] {
 
 //! Returns an integer representing the day of the week for the @ref absolute_dates "absolute date" value passed (0=Sunday, 6=Saturday)
 /**
-    @param dt an @ref absolute_dates "absolute date" value to get the number for the day of the week
+    @param date_value an @ref absolute_dates "absolute date" value to get the number for the day of the week
 
     @return an integer representing the day of the week for the @ref absolute_dates "absolute date" value passed (0=Sunday, 6=Saturday); if a @ref relative_dates "relative date" value is passed, then this function will return 0
 
@@ -1275,8 +1279,8 @@ int dn = get_day_of_week(dt);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getDayOfWeek()
 */
-int get_day_of_week(date dt) [flags=CONSTANT] {
-    return dt->getDayOfWeek();
+int get_day_of_week(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getDayOfWeek();
 }
 
 //! Returns an integer representing the ISO-8601 day of the week for the @ref absolute_dates "absolute date" value passed (1=Monday, 7=Sunday)
@@ -1302,7 +1306,7 @@ nothing getISODayOfWeek() [flags=RUNTIME_NOOP,DEPRECATED] {
 
 //! Returns an integer representing the ISO-8601 day of the week for the @ref absolute_dates "absolute date" value passed (1=Monday, 7=Sunday)
 /**
-    @param dt an @ref absolute_dates "absolute date" value to get the number for the day of the week
+    @param date_value an @ref absolute_dates "absolute date" value to get the number for the day of the week
 
     @return an integer representing the day of the week for the @ref absolute_dates "absolute date" value passed (1=Monday, 7=Sunday); if a @ref relative_dates "relative date" value is passed, then this function will return 7
 
@@ -1317,8 +1321,8 @@ int dn = get_iso_day_of_week(dt);
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getISODayOfWeek()
 */
-int get_iso_day_of_week(date dt) [flags=CONSTANT] {
-    int d = dt->getDayOfWeek();
+int get_iso_day_of_week(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    int d = date_value->getDayOfWeek();
     return (!d ? 7 : d);
 }
 
@@ -1355,7 +1359,7 @@ nothing getISOWeekHash() [flags=RUNTIME_NOOP,DEPRECATED] {
 //! Returns an @ref IsoWeekInfo "IsoWeekInfo" hash representing the ISO-8601 calendar week information for the @ref absolute_dates "absolute date" passed (hash keys: \c "year", \c "week", \c "day")
 /** @note that the ISO-8601 year does not always correspond with the calendar year at the end and the beginning of every year (for example 2006-01-01 in ISO-8601 calendar week format is: year=2005, week=52, day=7)
 
-    @param dt the date to get information for
+    @param date_value the date to get information for
 
     @return an @ref IsoWeekInfo "IsoWeekInfo" hash representing the ISO-8601 calendar week information for the @ref absolute_dates "absolute date" passed (hash keys: \c "year", \c "week", \c "day"); if a @ref relative_dates "relative date" value is passed, then this function will return year=1970, week=1, day=1
 
@@ -1370,9 +1374,9 @@ hash<IsoWeekInfo> h = get_iso_week_hash(2007-05-15); # returns year=2007, week=2
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getISOWeekHash()
 */
-hash<IsoWeekInfo> get_iso_week_hash(date dt) [flags=CONSTANT] {
+hash<IsoWeekInfo> get_iso_week_hash(date date_value) [flags=CONSTANT,NAMED_ARGS] {
     int year, week, day;
-    dt->getISOWeek(year, week, day);
+    date_value->getISOWeek(year, week, day);
 
     QoreHashNode* h = new QoreHashNode(hashdeclIsoWeekInfo, xsink);
     qore_hash_private* ph = qore_hash_private::get(*h);
@@ -1414,7 +1418,7 @@ nothing getISOWeekString() [flags=RUNTIME_NOOP,DEPRECATED] {
 
 //! Returns a string representing the ISO-8601 calendar week information for the @ref absolute_dates "absolute date" passed (ex: 2006-01-01 = "2005-W52-7")
 /**
-    @param dt the date to get information for
+    @param date_value the date to get information for
 
     @return a string representing the ISO-8601 calendar week information for the @ref absolute_dates "absolute date" passed (ex: 2006-01-01 = "2005-W52-7"); if a @ref relative_dates "relative date" value is passed, then this function will return \c "1970-W01-1"
 
@@ -1429,9 +1433,9 @@ string str = get_iso_week_string(2007-05-15); # returns "2007-W20-2"
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getISOWeekString()
 */
-string get_iso_week_string(date dt) [flags=CONSTANT] {
+string get_iso_week_string(date date_value) [flags=CONSTANT,NAMED_ARGS] {
     int year, week, day;
-    dt->getISOWeek(year, week, day);
+    date_value->getISOWeek(year, week, day);
     QoreStringNode *str = new QoreStringNode();
     str->sprintf("%04d-W%02d-%d", year, week, day);
     return str;
@@ -1474,7 +1478,7 @@ date d = getDateFromISOWeek(2007, 3); # returns 2007-01-15
 
     @since %Qore 0.8.12 as a replacement for deprecated camel-case getDateFromISOWeek()
 */
-date get_date_from_iso_week(softint year, softint week, softint day = 1) [flags=RET_VALUE_ONLY] {
+date get_date_from_iso_week(softint year, softint week, softint day = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return DateTimeNode::getDateFromISOWeek(year, week, day, xsink);
 }
 
@@ -1553,7 +1557,7 @@ int clock_getmicros() [flags=CONSTANT] {
 }
 
 //! Converts an integer argument representing the offset in milliseconds from January 1, 1970 in the local time zone to a date in the local time zone
-/** @param ms an integer argument representing the offset in milliseconds from January 1, 1970 in the local time zone
+/** @param milliseconds an integer argument representing the offset in milliseconds from January 1, 1970 in the local time zone
 
     @return a date in the local time zone corresponding to the argument passed which is an offset in milliseconds from January 1, 1970 in the local time zone
 
@@ -1564,8 +1568,8 @@ date date = date_ms(1); # returns 1970-01-01T00:00:00.001 in the local time zone
 
     @see date_us(softint)
 */
-date date_ms(softint ms) [flags=CONSTANT] {
-    return new DateTimeNode(ms / 1000, (int)(ms % 1000));
+date date_ms(softint milliseconds) [flags=CONSTANT,NAMED_ARGS] {
+    return new DateTimeNode(milliseconds / 1000, (int)(milliseconds % 1000));
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1575,7 +1579,7 @@ nothing date_ms() [flags=RUNTIME_NOOP] {
 }
 
 //! Converts an integer argument representing the offset in microseconds from January 1, 1970 in the local time zone to a date in the local time zone
-/** @param us an integer argument representing the offset in microseconds from January 1, 1970 in the local time zone
+/** @param microseconds an integer argument representing the offset in microseconds from January 1, 1970 in the local time zone
 
     @return a date in the local time zone corresponding to the argument passed which is an offset in microseconds from January 1, 1970 in the local time zone
 
@@ -1586,14 +1590,14 @@ date date = date_us(1); # returns 1970-01-01T00:00:00.000001 in the local time z
 
     @see date_ms(softint)
 */
-date date_us(softint us) [flags=CONSTANT] {
-    return DateTimeNode::makeAbsoluteLocal(currentTZ(), us / 1000000, (int)(us % 1000000));
+date date_us(softint microseconds) [flags=CONSTANT,NAMED_ARGS] {
+    return DateTimeNode::makeAbsoluteLocal(currentTZ(), microseconds / 1000000, (int)(microseconds % 1000000));
 }
 
 //! Returns an integer value representing the the number of seconds of duration in the value of the date passed (can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date)
 /** The duration in seconds is calculated and any fractional seconds are truncated (no rounding is performed)
 
-    @param dt a @ref relative_dates "relative" or @ref absolute_dates "absolute" date argument
+    @param date_value a @ref relative_dates "relative" or @ref absolute_dates "absolute" date argument
 
     @return an integer value representing the the number of seconds of duration in the value of the date passed; if the argument is a @ref relative_dates "relative date", the value is normalized to seconds and the integer seconds value is returned, if the argument is an @ref absolute_dates "absolute date", the duration in seconds is calculated from the present time; so if the present time is sent as an argument, 0 is returned, if a future date is used, the number of seconds from the present time to the future date is returned, if an @ref absolute_dates "absolute date" in the past is passed as an argument, also 0 is returned (the function does not calculate second differences for @ref absolute_dates "absolute dates" in the past (for this use @ref date_time_arithmetic instead); this function can only return a negative value if passed a relative date/time value
 
@@ -1612,14 +1616,14 @@ int us = get_duration_seconds(PT2M15S3u); # returns 135
     - get_duration_milliseconds()
     - get_duration_microseconds()
 */
-int get_duration_seconds(date dt) [flags=CONSTANT] {
-    return dt->getRelativeSeconds();
+int get_duration_seconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getRelativeSeconds();
 }
 
 //! Returns an integer value representing the the number of milliseconds of duration in the value of the date passed (can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date)
 /** The duration in milliseconds is calculated and any fractional milliseconds are truncated (no rounding is performed)
 
-    @param dt a @ref relative_dates "relative" or @ref absolute_dates "absolute" date argument
+    @param date_value a @ref relative_dates "relative" or @ref absolute_dates "absolute" date argument
 
     @return an integer value representing the the number of milliseconds of duration in the value of the date passed; if the argument is a @ref relative_dates "relative date", the value is normalized to milliseconds and the integer milliseconds value is returned, if the argument is an @ref absolute_dates "absolute date", the duration in milliseconds is calculated from the present time; so if the present time is sent as an argument, 0 is returned, if a future date is used, the number of milliseconds from the present time to the future date is returned, if an @ref absolute_dates "absolute date" in the past is passed as an argument, also 0 is returned (the function does not calculate millisecond differences for @ref absolute_dates "absolute dates" in the past (for this use @ref date_time_arithmetic instead); this function can only return a negative value if passed a relative date/time value
 
@@ -1637,13 +1641,13 @@ int ms = get_duration_milliseconds(PT2M15S3u); # returns 135000
     - get_duration_seconds()
     - get_duration_microseconds()
 */
-int get_duration_milliseconds(date dt) [flags=CONSTANT] {
-    return dt->getRelativeMilliseconds();
+int get_duration_milliseconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getRelativeMilliseconds();
 }
 
 //! Returns an integer value representing the the number of microseconds of duration in the value of the date passed (can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date)
 /**
-    @param dt a @ref relative_dates "relative" or @ref absolute_dates "absolute" date argument
+    @param date_value a @ref relative_dates "relative" or @ref absolute_dates "absolute" date argument
 
     @return an integer value representing the the number of microseconds of duration in the value of the date passed; if the argument is a @ref relative_dates "relative date", the value is normalized to microseconds and the integer microseconds value is returned, if the argument is an @ref absolute_dates "absolute date", the duration in microseconds is calculated from the present time; so if the present time is sent as an argument, 0 is returned, if a future date is used, the number of microseconds from the present time to the future date is returned, if an @ref absolute_dates "absolute date" in the past is passed as an argument, also 0 is returned (the function does not calculate microsecond differences for @ref absolute_dates "absolute dates" in the past (for this use @ref date_time_arithmetic instead); this function can only return a negative value if passed a relative date/time value
 
@@ -1661,14 +1665,14 @@ int us = get_duration_microseconds(PT2M15S3u); # returns 135000003
     - get_duration_seconds()
     - get_duration_milliseconds()
 */
-int get_duration_microseconds(date dt) [flags=CONSTANT] {
-    return dt->getRelativeMicroseconds();
+int get_duration_microseconds(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getRelativeMicroseconds();
 }
 
 //! Returns a floating-point value representing the the number of seconds of duration in the value of the date passed (can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date)
 /** The duration in seconds is calculated and any fractional seconds are returned as digits to the right of the decimal point.
 
-    @param dt a @ref relative_dates "relative" or @ref absolute_dates "absolute" date argument
+    @param date_value a @ref relative_dates "relative" or @ref absolute_dates "absolute" date argument
 
     @return a floating-point value representing the the number of seconds of duration in the value of the date passed; if the argument is a @ref relative_dates "relative date", the value is normalized to seconds and the floating-point seconds value is returned with microseconds providing the digits to the right of the decimal place, if the argument is an @ref absolute_dates "absolute date", the duration in seconds is calculated from the present time; so if the present time is sent as an argument, 0 is returned, if a future date is used, the number of seconds from the present time to the future date is returned, if an @ref absolute_dates "absolute date" in the past is passed as an argument, also 0 is returned (the function does not calculate second differences for @ref absolute_dates "absolute dates" in the past (for this use @ref date_time_arithmetic instead); this function can only return a negative value if passed a relative date/time value
 
@@ -1688,13 +1692,13 @@ float dt = get_duration_seconds_f(PT2M15S3u); # returns 135.000003
 
     @since %Qore 0.8.12
 */
-float get_duration_seconds_f(date dt) [flags=CONSTANT] {
-    return dt->getRelativeSecondsDouble();
+float get_duration_seconds_f(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->getRelativeSecondsDouble();
 }
 
 //! Returns a @ref DateTimeInfo hash for the given date argument (can be either a @ref relative_dates "relative" or @ref absolute_dates "absolute" date)
 /**
-    @param dt the date to return information for
+    @param date_value the date to return information for
 
     @return a @ref DateTimeInfo hash for the given date argument
 
@@ -1705,8 +1709,8 @@ hash<DateTimeInfo> h = date_info(date);
 
     @note equivalent to <date>::info()
 */
-hash<DateTimeInfo> date_info(date dt) [flags=CONSTANT] {
-    return date_info(*dt);
+hash<DateTimeInfo> date_info(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_info(*date_value);
 }
 
 //! Returns a @ref DateTimeInfo hash for the current date and time
@@ -1728,7 +1732,7 @@ hash<DateTimeInfo> date_info() [flags=CONSTANT] {
 
 //! Returns @ref True if the argument is an @ref relative_dates "relative date/time value", @ref False if not
 /**
-    @param dt the date to check
+    @param date_value the date to check
 
     @return @ref True if the argument is an @ref relative_dates "relative date/time value", @ref False if not
 
@@ -1739,8 +1743,8 @@ bool b = is_date_relative(dt)
 
     @see is_date_absolute()
 */
-bool is_date_relative(date dt) [flags=CONSTANT] {
-    return dt->isRelative();
+bool is_date_relative(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->isRelative();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1752,7 +1756,7 @@ bool is_date_relative() [flags=NOOP] {
 
 //! Returns @ref True if the argument is an @ref absolute_dates "absolute date/time value", @ref False if not
 /**
-    @param dt the date to check
+    @param date_value the date to check
 
     @return @ref True if the argument is an @ref absolute_dates "absolute date/time value", @ref False if not
 
@@ -1763,8 +1767,8 @@ bool b = is_date_absolute(dt)
 
     @see is_date_relative()
 */
-bool is_date_absolute(date dt) [flags=CONSTANT] {
-    return dt->isAbsolute();
+bool is_date_absolute(date date_value) [flags=CONSTANT,NAMED_ARGS] {
+    return date_value->isAbsolute();
 }
 
 //! This function variant does nothing at all; it is only included for backwards-compatibility with qore prior to version 0.8.0 for functions that would ignore type errors in arguments
@@ -1777,17 +1781,17 @@ bool is_date_absolute() [flags=NOOP] {
 //! Returns the date passed
 /** This function is included because the date() function is used to convert values to dates (similar to a C/C++ cast)
 
-    @param dt the date to return
+    @param value the date to return
 
     @return the date passed
  */
-date date(date dt) [flags=CONSTANT] {
-    return dt->refSelf();
+date date(date value) [flags=CONSTANT,NAMED_ARGS] {
+    return value->refSelf();
 }
 
 //! Converts the argument to a date and returns the date
 /**
-    @param dtstr string a string to be converted literally to an @ref absolute_dates "absolute date/time value"; if no time zone information is present, the local time zone is assumed
+    @param date_string string a string to be converted literally to an @ref absolute_dates "absolute date/time value"; if no time zone information is present, the local time zone is assumed
 
     Supports the following date string formats:
     - <b>ISO-8601</b>: \c "YYYY-MM-DDTHH:mm:SS[.ffffff][Z|±HH[:MM[:SS]]]" (and compact variants without separators)
@@ -1824,14 +1828,14 @@ date d = date("Mon, 06 Nov 1994 08:49:37 +0500");
 
     @since %Qore 2.3.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported
  */
-date date(string dtstr) [flags=CONSTANT] {
-    DateTimeNodeValueHelper date(dtstr, xsink);
+date date(string date_string) [flags=CONSTANT,NAMED_ARGS] {
+    DateTimeNodeValueHelper date(date_string, xsink);
     return *xsink ? 0 : date.getReferencedValue();
 }
 
 //! The argument is assumed to be the number of seconds and fractions of a second
 /**
-    @param f the number of seconds and fractions of a second
+    @param seconds the number of seconds and fractions of a second
 
     @return a @ref relative_dates "relative date/time value" corresponding to the number of seconds and fractions of a second in the argument
 
@@ -1842,13 +1846,13 @@ date d = date(f);
 
     @since %Qore 0.8.13 the return value is a @ref relative_dates "relative date/time value" in seconds
  */
-date date(softfloat f) [flags=CONSTANT] {
-    return DateTimeNode::makeRelativeFromSeconds((int64)f, (int)((f - (double)((int)f)) * 1000000));
+date date(softfloat seconds) [flags=CONSTANT,NAMED_ARGS] {
+    return DateTimeNode::makeRelativeFromSeconds((int64)seconds, (int)((seconds - (double)((int)seconds)) * 1000000));
 }
 
 //! The argument is assumed to be the number of seconds
 /**
-    @param i the number of seconds
+    @param seconds the number of seconds
 
     @return a @ref relative_dates "relative date/time value" corresponding to the number of seconds
 
@@ -1859,8 +1863,8 @@ date d = date(i);
 
     @since %Qore 0.8.13 the return value is a @ref relative_dates "relative date/time value" in seconds
  */
-date date(int i) [flags=CONSTANT] {
-    return DateTimeNode::makeRelativeFromSeconds(i);
+date date(int seconds) [flags=CONSTANT,NAMED_ARGS] {
+    return DateTimeNode::makeRelativeFromSeconds(seconds);
 }
 
 //! This function just returns 1970-01-01Z
@@ -1877,16 +1881,16 @@ date date() [flags=CONSTANT] {
 
     @return 1970-01-01Z
  */
-date date(null[doc] null) [flags=CONSTANT] {
+date date(null[doc] value) [flags=CONSTANT,NAMED_ARGS] {
     return zero_date();
 }
 
 //! Returns the @ref date "date/time" value corresponding to parsing a string argument according to a @ref date_mask "format mask"
 /**
-    @param dtstr a string giving a date
+    @param date_string a string giving a date
     @param mask the mask for the date value; see @ref date_mask for information on the format of the @ref date_mask "format mask"
 
-    @return the @ref date "date/time" value corresponding to parsing the \a dtstr string argument according to \a mask serving as a @ref date_mask "format mask"
+    @return the @ref date "date/time" value corresponding to parsing the \a date_string string argument according to \a mask serving as a @ref date_mask "format mask"
 
     @par Example:
     @code{.py}
@@ -1897,7 +1901,7 @@ date dt = date("20100401 234520 230394", "YYYYMMDD HHmmSS ssssss"); # returns 20
 
     @see @ref Qore::TimeZone::date(string, string) for a method that allows the date to be parsed in a particular @ref time_zones "time zone"
 */
-date date(string dtstr, string mask) [flags=RET_VALUE_ONLY] {
-    return make_date_with_mask(currentTZ(), *dtstr, *mask, xsink);
+date date(string date_string, string mask) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    return make_date_with_mask(currentTZ(), *date_string, *mask, xsink);
 }
 ///@}

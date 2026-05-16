@@ -429,6 +429,36 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("unlz4_to_string", ("compressed_data", "max_output_size", "encoding"));
         assertNamedCallableVariantCount("get_compressor", ("algorithm", "level"));
         assertNamedCallableVariantCount("get_decompressor", ("algorithm",));
+
+        assertNamedCallableVariantCount("date", ("value",), 2);
+        assertNamedCallableVariantCount("date", ("date_string",));
+        assertNamedCallableVariantCount("date", ("date_string", "mask"));
+        assertNamedCallableVariantCount("date", ("seconds",), 2);
+        assertNamedCallableVariantCount("date_ms", ("milliseconds",));
+        assertNamedCallableVariantCount("date_us", ("microseconds",));
+        assertNamedCallableVariantCount("format_date", ("format", "date_value"));
+
+        foreach string name in (("localtime", "gmtime")) {
+            assertNamedCallableVariantCount(name, ("seconds", "microseconds"));
+            assertNamedCallableVariantCount(name, ("date_value",));
+        }
+
+        foreach string name in (("timegm", "mktime", "date_info", "is_date_relative", "is_date_absolute",
+                "get_epoch_seconds", "get_epoch_milliseconds", "get_epoch_microseconds", "get_years", "get_months",
+                "get_days", "get_hours", "get_minutes", "get_seconds", "get_milliseconds", "get_microseconds",
+                "get_midnight", "get_day_number", "get_day_of_week", "get_iso_day_of_week", "get_iso_week_hash",
+                "get_iso_week_string", "get_duration_seconds", "get_duration_milliseconds",
+                "get_duration_microseconds", "get_duration_seconds_f")) {
+            assertNamedCallableVariantCount(name, ("date_value",));
+        }
+
+        foreach string name in (("years", "months", "days", "hours", "minutes", "seconds")) {
+            assertNamedCallableVariantCount(name, (name,));
+        }
+
+        assertNamedCallableVariantCount("milliseconds", ("milliseconds",));
+        assertNamedCallableVariantCount("microseconds", ("microseconds",));
+        assertNamedCallableVariantCount("get_date_from_iso_week", ("year", "week", "day"));
     }
 
     modNameTests() {

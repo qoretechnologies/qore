@@ -107,6 +107,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed list builtin opt-in", \reviewedListBuiltinOptIn(), NOTHING);
         addTestCase("reviewed pwd builtin opt-in", \reviewedPwdBuiltinOptIn(), NOTHING);
         addTestCase("reviewed compression builtin opt-in", \reviewedCompressionBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed time builtin opt-in", \reviewedTimeBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -289,6 +290,48 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "get_compressor exposes algorithm");
         assertTrue(get_decompressor(algorithm: COMPRESSION_ALG_ZLIB) != NOTHING,
             "get_decompressor exposes algorithm");
+    }
+
+    reviewedTimeBuiltinOptIn() {
+        date absolute = date(date_string: "2020-01-02T03:04:05Z");
+        assertEq(absolute, date(value: absolute), "date conversion exposes value");
+        assertEq(10s, date(seconds: 10), "numeric date conversion exposes seconds");
+        assertEq("2020-01-02", format_date(format: "YYYY-MM-DD", date_value: absolute),
+            "format_date exposes date_value");
+
+        date masked = date(date_string: "20200102 030405", mask: "YYYYMMDD HHmmSS");
+        assertEq("2020-01-02", format_date(format: "YYYY-MM-DD", date_value: masked),
+            "masked date parsing exposes date_string and mask");
+
+        date epoch = gmtime(seconds: 10, microseconds: 500000);
+        assertEq(10, get_epoch_seconds(date_value: epoch), "gmtime exposes seconds and microseconds");
+        assertEq(10, timegm(date_value: epoch), "timegm exposes date_value");
+        assertEq(10, mktime(date_value: epoch), "mktime exposes date_value");
+        assertEq(epoch, gmtime(date_value: epoch), "gmtime date variant exposes date_value");
+        assertEq(10, get_epoch_seconds(date_value: localtime(seconds: 10, microseconds: 0)),
+            "localtime exposes seconds and microseconds");
+
+        date relative = days(days: 1) + hours(hours: 2) + minutes(minutes: 3) + seconds(seconds: 4)
+            + milliseconds(milliseconds: 5) + microseconds(microseconds: 6);
+        assertTrue(is_date_relative(date_value: relative), "relative date inspection exposes date_value");
+        assertFalse(is_date_absolute(date_value: relative), "absolute date inspection exposes date_value");
+        assertEq(1, get_days(date_value: days(days: 1)), "get_days exposes date_value");
+        assertEq(2, get_hours(date_value: hours(hours: 2)), "get_hours exposes date_value");
+        assertEq(3, get_minutes(date_value: minutes(minutes: 3)), "get_minutes exposes date_value");
+        assertEq(4, get_seconds(date_value: seconds(seconds: 4)), "get_seconds exposes date_value");
+        assertEq(5, get_milliseconds(date_value: milliseconds(milliseconds: 5)),
+            "get_milliseconds exposes date_value");
+        assertEq(6, get_microseconds(date_value: microseconds(microseconds: 6)),
+            "get_microseconds exposes date_value");
+        assertEq(86400, get_duration_seconds(date_value: days(days: 1)),
+            "duration helpers expose date_value");
+
+        assertEq("2020-01-02", format_date(format: "YYYY-MM-DD",
+            date_value: get_midnight(date_value: absolute)), "get_midnight exposes date_value");
+        assertEq(2020, date_info(date_value: absolute).year, "date_info exposes date_value");
+        assertEq("2019-12-30", format_date(format: "YYYY-MM-DD",
+            date_value: get_date_from_iso_week(year: 2020, week: 1, day: 1)),
+            "ISO week helper exposes year, week, and day");
     }
 
     parseFailures() {
