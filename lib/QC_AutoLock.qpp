@@ -82,7 +82,7 @@ qclass AutoLock [dom=THREAD_CLASS; arg=QoreAutoLock* al; ns=Qore::Thread];
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-AutoLock::constructor(Mutex[SmartMutex] mutex) {
+AutoLock::constructor(Mutex[SmartMutex] mutex) [flags=NAMED_ARGS] {
     // Always poll for cancel/interrupt checking
     const int poll_ms = 500;  // 500ms polling interval
     while (true) {

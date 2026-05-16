@@ -187,7 +187,7 @@ printf("finally some_value is 0\n");
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, timeout timeout_ms = 0) {
+int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return condition_wait_impl(c, *lock, timeout_ms, xsink);
 }
 
@@ -226,7 +226,7 @@ while (some_value > 0) {
 
     @since %Qore 2.3
  */
-int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, date<relative> timeout_date) {
+int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, date<relative> timeout_date) [flags=NAMED_ARGS] {
     int64 timeout_ms = timeout_date->getRelativeMilliseconds();
     // ensure positive sub-millisecond timeouts don't truncate to 0
     // (0 is the "indefinite wait" sentinel)
@@ -249,7 +249,6 @@ int Condition::wait(AbstractSmartLock[AbstractSmartLock] lock, date<relative> ti
 printf("%d thread(s) waiting on the Condition\n", cond.wait_count(m));
     @endcode
  */
-int Condition::wait_count(AbstractSmartLock[AbstractSmartLock] lock) {
+int Condition::wait_count(AbstractSmartLock[AbstractSmartLock] lock) [flags=NAMED_ARGS] {
     return c->wait_count(*lock);
 }
-

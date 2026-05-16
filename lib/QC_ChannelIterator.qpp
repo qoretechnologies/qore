@@ -74,7 +74,7 @@ qclass ChannelIterator [dom=THREAD_CLASS; arg=QoreChannelIterator* i; ns=Qore::T
 ChannelIterator it(channel);
     @endcode
  */
-ChannelIterator::constructor(Channel[QoreChannel] channel) {
+ChannelIterator::constructor(Channel[QoreChannel] channel) [flags=NAMED_ARGS] {
     self->setPrivate(CID_CHANNELITERATOR, new QoreChannelIterator(channel.release(), true));
 }
 

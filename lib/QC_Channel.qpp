@@ -203,7 +203,7 @@ Channel unlimited(-1);  # unlimited buffer (like Queue but with close semantics)
 
     @since %Qore 2.3
  */
-Channel::constructor(int capacity = 0) {
+Channel::constructor(int capacity = 0) [flags=NAMED_ARGS] {
     if (capacity < -1) {
         xsink->raiseException("CHANNEL-ERROR",
             "Channel::constructor() called with invalid capacity " QLLD
@@ -244,7 +244,7 @@ ch.send(42);
     @throw CHANNEL-TIMEOUT timed out waiting to send
     @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
  */
-nothing Channel::send(auto value, timeout timeout_ms = 0) {
+nothing Channel::send(auto value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     ch->send(value.refSelf(), timeout_ms, xsink);
 }
 
@@ -262,7 +262,7 @@ auto val = ch.recv();
     @throw CHANNEL-TIMEOUT timed out waiting to receive
     @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
  */
-auto Channel::recv(timeout timeout_ms = 0) {
+auto Channel::recv(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     bool timed_out = false;
     bool has_value = false;
     QoreValue rv = ch->recv(timeout_ms, xsink, timed_out, has_value);
@@ -285,7 +285,7 @@ if (ch.trySend(42)) {
 }
     @endcode
  */
-bool Channel::trySend(auto value) {
+bool Channel::trySend(auto value) [flags=NAMED_ARGS] {
     QoreValue v = value.refSelf();
     if (ch->trySend(v)) {
         return true;

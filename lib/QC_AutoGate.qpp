@@ -74,7 +74,7 @@ AutoGate ag(gate);
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
 */
-AutoGate::constructor(Gate[QoreGate] gate) {
+AutoGate::constructor(Gate[QoreGate] gate) [flags=NAMED_ARGS] {
     // Always poll for cancel/interrupt checking
     const int poll_ms = 500;  // 500ms polling interval
     while (true) {

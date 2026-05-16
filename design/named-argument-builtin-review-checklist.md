@@ -269,5 +269,10 @@ These examples are from the core migration and should be reused as precedent:
   Leave varargs formatting methods such as `printf(format, ...)` and
   `f_printf(format, ...)` positional-only; fixed-arity `vprintf()` variants can
   opt in with `format` and `format_args`.
+- Thread synchronization classes prefer call-site nouns: `max_size` for queue
+  capacity, `initial_value` for counters, `value` for queue/channel payloads,
+  `description` for exception text, `permits` for semaphore counts,
+  `semaphore` for `AutoSemaphore`, and `lock` for read/write lock guard
+  constructors.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.

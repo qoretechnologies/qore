@@ -119,6 +119,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed file builtin opt-in", \reviewedFileBuiltinOptIn(), NOTHING);
         addTestCase("reviewed library builtin opt-in", \reviewedLibraryBuiltinOptIn(), NOTHING);
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
         addTestCase("reviewed pseudo-method opt-in", \reviewedPseudoMethodOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
@@ -561,6 +562,64 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "sub ql_thread_named_resource() { set_thread_resource(resource: sub(auto arg) {}, argument: NOTHING); "
             "remove_thread_resource(resource: sub() {}); }",
             "thread-named");
+    }
+
+    reviewedThreadClassBuiltinOptIn() {
+        Queue q = new Queue(max_size: 2);
+        q.push(value: "tail", timeout_ms: 0);
+        q.insert(value: "head", timeout_ms: 0);
+        assertEq("head", q.get(timeout_ms: 0), "Queue get exposes timeout_ms");
+        assertEq("tail", q.pop(timeout_ms: 0), "Queue constructor and insert/push expose names");
+        q.setError(error: "NAMED-QUEUE-ERROR", description: "named queue error");
+        q.clearError();
+
+        Channel ch = new Channel(capacity: 1);
+        assertTrue(ch.trySend(value: "payload"), "Channel trySend exposes value");
+        assertEq("payload", ch.recv(timeout_ms: 0), "Channel recv exposes timeout_ms");
+        ch.send(value: "iter", timeout_ms: 0);
+        ch.close();
+        ChannelIterator it = new ChannelIterator(channel: ch);
+        assertTrue(it.next(), "ChannelIterator constructor exposes channel");
+        assertEq("iter", it.getValue(), "ChannelIterator receives channel values");
+
+        Semaphore sem = new Semaphore(permits: 1);
+        sem.acquire(timeout_ms: -1);
+        sem.release(permits: 1);
+        AutoSemaphore as = new AutoSemaphore(semaphore: sem);
+        as.release();
+        as.acquire(timeout_ms: -1);
+
+        Counter counter = new Counter(initial_value: 0);
+        assertEq(0, counter.waitForZero(timeout_ms: -1), "Counter exposes initial_value and timeout_ms");
+
+        Mutex mutex();
+        {
+            AutoLock lock = new AutoLock(mutex: mutex);
+            lock.unlock();
+        }
+
+        Gate gate();
+        AutoGate gate_lock = new AutoGate(gate: gate);
+        delete gate_lock;
+
+        {
+            RWLock rwlock();
+            AutoReadLock read_lock = new AutoReadLock(lock: rwlock);
+        }
+        {
+            RWLock rwlock();
+            AutoWriteLock write_lock = new AutoWriteLock(lock: rwlock);
+        }
+
+        Mutex cond_mutex();
+        Condition cond();
+        cond_mutex.lock();
+        on_exit cond_mutex.unlock();
+        assertEq(ETIMEDOUT, cond.wait(lock: cond_mutex, timeout_ms: 1),
+            "Condition wait exposes lock and timeout_ms");
+        assertEq(ETIMEDOUT, cond.wait(lock: cond_mutex, timeout_date: 1ms),
+            "Condition wait exposes timeout_date");
+        assertEq(0, cond.wait_count(lock: cond_mutex), "Condition wait_count exposes lock");
     }
 
     reviewedStreamBuiltinOptIn() {

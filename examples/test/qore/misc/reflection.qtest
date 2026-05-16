@@ -704,6 +704,32 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("parallel_foreach", ("callable", "items", "thread_count"));
         assertNamedCallableVariantCount("channel_select", ("cases", "timeout"));
 
+        assertNamedConstructorVariantCount("AutoGate", ("gate",));
+        assertNamedConstructorVariantCount("AutoLock", ("mutex",));
+        assertNamedConstructorVariantCount("AutoReadLock", ("lock",));
+        assertNamedConstructorVariantCount("AutoWriteLock", ("lock",));
+        assertNamedConstructorVariantCount("AutoSemaphore", ("semaphore",));
+        assertNamedClassMethodVariantCount("AutoSemaphore", "acquire", ("timeout_ms",));
+        assertNamedConstructorVariantCount("Channel", ("capacity",));
+        assertNamedClassMethodVariantCount("Channel", "send", ("value", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Channel", "recv", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Channel", "trySend", ("value",));
+        assertNamedConstructorVariantCount("ChannelIterator", ("channel",));
+        assertNamedClassMethodVariantCount("Condition", "wait", ("lock", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Condition", "wait", ("lock", "timeout_date"));
+        assertNamedClassMethodVariantCount("Condition", "wait_count", ("lock",));
+        assertNamedConstructorVariantCount("Counter", ("initial_value",));
+        assertNamedClassMethodVariantCount("Counter", "waitForZero", ("timeout_ms",));
+        assertNamedConstructorVariantCount("Queue", ("max_size",));
+        assertNamedClassMethodVariantCount("Queue", "push", ("value", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Queue", "insert", ("value", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Queue", "get", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Queue", "pop", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Queue", "setError", ("error", "description"));
+        assertNamedConstructorVariantCount("Semaphore", ("permits",));
+        assertNamedClassMethodVariantCount("Semaphore", "acquire", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Semaphore", "release", ("permits",));
+
         assertNamedConstructorVariantCount("BinaryInputStream", ("source",));
         assertNamedClassMethodVariantCount("BinaryInputStream", "read", ("limit",));
         assertNamedClassMethodVariantCount("BinaryOutputStream", "write", ("data",));
@@ -1442,8 +1468,8 @@ class ReflectionTest inherits QUnit::Test {
         assertEq(("lock", "timeout_ms"), v.getParamNames());
         assertEq("object<::Qore::Thread::AbstractSmartLock> lock, timeout timeout_ms = 0", v.getParamString());
         assertEq("public int Condition::wait(object<::Qore::Thread::AbstractSmartLock> lock, timeout timeout_ms = 0)", v.toString());
-        assertEq(0, v.getCodeFlags());
-        assertEq((), v.getCodeFlagList());
+        assertEq(CF_NAMED_ARGS, v.getCodeFlags());
+        assertEq(("NAMED_ARGS",), v.getCodeFlagList());
 
         v = Class::forName("File").getMethod("printf").getVariants()[0];
         assertEq(CF_USES_EXTRA_ARGS, v.getCodeFlags());
