@@ -165,6 +165,36 @@ class ReflectionTest inherits QUnit::Test {
         }
         assertTrue(found_two_arg_substr);
         assertTrue(found_three_arg_substr);
+
+        bool found_abs = False;
+        foreach FunctionVariant v in (Function::forName("abs").getVariants()) {
+            if (v.getParamNames() == ("value",)) {
+                found_abs = True;
+                assertTrue(v.isNamedCallable());
+                assertEq(("value",), v.getNamedParameterNames());
+            } else if (!v.numParams()) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
+        assertTrue(found_abs);
+
+        FunctionVariant powv = Function::forName("pow").getVariant(IntType, IntType);
+        assertTrue(powv.isNamedCallable());
+        assertEq(("base", "exponent"), powv.getNamedParameterNames());
+
+        int found_round = 0;
+        foreach FunctionVariant v in (Function::forName("round").getVariants()) {
+            if (v.getParamNames() == ("value", "precision")) {
+                ++found_round;
+                assertTrue(v.isNamedCallable());
+                assertEq(("value", "precision"), v.getNamedParameterNames());
+            } else if (!v.numParams()) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
+        assertEq(3, found_round);
     }
 
     modNameTests() {

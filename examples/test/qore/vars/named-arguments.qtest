@@ -44,6 +44,26 @@ string sub na_pick(float size, string unit = "m") {
     return sprintf("size:%s:%s", size, unit);
 }
 
+number sub na_math_floor(number value, int precision) {
+    return floor(precision: precision, value: value);
+}
+
+int sub na_math_compare(float left, float right, float epsilon) {
+    return compare(left: left, right: right, epsilon: epsilon);
+}
+
+int sub na_math_compare_number(number left, number right, number epsilon) {
+    return compare(left: left, right: right, epsilon: epsilon);
+}
+
+float sub na_math_hypot(float x, float y) {
+    return hypot(x: x, y: y);
+}
+
+float sub na_math_atan2(float x, float y) {
+    return atan2(x: x, y: y);
+}
+
 class NA_Base {
     public {
         string base_value;
@@ -80,6 +100,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("source evaluation order", \sourceEvaluationOrder(), NOTHING);
         addTestCase("overload selection by name", \overloadSelectionByName(), NOTHING);
         addTestCase("builtin opt-in", \builtinOptIn(), NOTHING);
+        addTestCase("reviewed math builtin opt-in", \reviewedMathBuiltinOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -127,6 +148,15 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq("cde", "abcdef".substr(start: 2, len: 3), "opted-in string pseudo-method accepts named arguments");
     }
 
+    reviewedMathBuiltinOptIn() {
+        assertEq(8, pow(base: cast<int>(2), exponent: cast<int>(3)), "math builtin uses reviewed public names");
+        assertEq(0, na_math_compare_number(357.27n, na_math_floor(357.271n, 2), 0.000000000001n),
+            "renamed optional precision can be reordered");
+        assertEq(0, na_math_compare(10.0, 10.05, 0.1), "reviewed compare names are accepted");
+        assertEq(5.0, na_math_hypot(3.0, 4.0), "canonical hypot names are accepted");
+        assertEq(1.0, na_math_atan2(1.0, 1.0) / (M_PI / 4), "canonical atan2 names are accepted");
+    }
+
     parseFailures() {
         assertThrows("NAMED-ARG-DUPLICATE", "duplicate named argument 'a'", sub() {
             Program p(PO_NEW_STYLE);
@@ -161,6 +191,11 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertThrows("NAMED-CALL-NOT-SUPPORTED", "varargs-only variants cannot accept named arguments", sub() {
             Program p(PO_NEW_STYLE);
             p.parse("sub f(...) {} f(a: 1);", "varargs-only");
+        });
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", "ambiguous or depends on runtime argument types", sub() {
+            Program p(PO_NEW_STYLE);
+            p.parse("abs(value: 1);", "ambiguous-builtin-named");
         });
 
         assertThrows("NAMED-ARG-UNKNOWN", "named argument 'missing' does not match any accessible parameter", sub() {
