@@ -45,8 +45,8 @@
     @code{.py}
 Promise p();
 Future f = p.getFuture();
-background sub() { p.set(42); }();
-auto result = f.get();  # blocks until set, returns 42
+background sub() { p.set(value: 42); }();
+auto result = f.get(timeout_ms: 0);  # blocks until set, returns 42
     @endcode
 
     @par Example: Error propagation
@@ -56,13 +56,13 @@ Future f = p.getFuture();
 background sub() {
     try {
         auto data = fetch_data_from_api();
-        p.set(data);
+        p.set(value: data);
     } catch (hash<ExceptionInfo> ex) {
         p.setError(ex.err, ex.desc, ex.arg);
     }
 }();
 # The exception is re-thrown to the consumer
-auto data = f.get();  # throws the same exception if setError() was called
+auto data = f.get(timeout_ms: 0);  # throws the same exception if setError() was called
     @endcode
 
     @par Example: Promise destroyed without set
@@ -74,7 +74,7 @@ Future f;
     # p goes out of scope without calling set() or setError()
 }
 try {
-    f.get();
+    f.get(timeout_ms: 0);
 } catch (hash<ExceptionInfo> ex) {
     printf("%s: %s\n", ex.err, ex.desc);
     # prints: PROMISE-ERROR: Promise destroyed without setting a value
@@ -90,7 +90,7 @@ for (int i = 0; i < 10; ++i) {
     push futures, p.getFuture();
     background sub(Promise p, int id) {
         on_error p.setError($1.err, $1.desc);
-        p.set(process_item(id));
+        p.set(value: process_item(id));
     }(p, i);
 }
 
@@ -140,12 +140,12 @@ Promise::copy() {
 
     @par Example:
     @code{.py}
-p.set(42);
+p.set(value: 42);
     @endcode
 
     @throw PROMISE-ERROR Promise has already been resolved or rejected
  */
-nothing Promise::set(auto value) {
+nothing Promise::set(auto value) [flags=NAMED_ARGS] {
     p->set(value.refSelf(), xsink);
 }
 

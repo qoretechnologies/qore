@@ -104,7 +104,7 @@ FutureImpl::copy() {
 /** @param timeout_ms timeout; 0 means wait indefinitely
     @return the value set by the associated Promise
  */
-auto FutureImpl::get(timeout timeout_ms = 0) {
+auto FutureImpl::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return f->get(timeout_ms, xsink);
 }
 

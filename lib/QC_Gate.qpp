@@ -107,7 +107,7 @@ Gate::copy() {
 
     @par Example:
     @code{.py}
-if (gate.enter(1500ms))
+if (gate.enter(timeout_ms: 1500ms))
     throw "TIMEOUT-ERROR", "gate acquisition timed out after 1.5s";
     @endcode
 
@@ -117,7 +117,7 @@ if (gate.enter(1500ms))
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-int Gate::enter(timeout timeout_ms) {
+int Gate::enter(timeout timeout_ms) [flags=NAMED_ARGS] {
    // Always poll for cancel/interrupt checking
    const int poll_ms = 500;  // 500ms polling interval
    int64 remaining = timeout_ms;

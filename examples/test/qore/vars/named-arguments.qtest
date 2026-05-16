@@ -637,24 +637,43 @@ public class NamedArgumentsTest inherits QUnit::Test {
         Counter counter = new Counter(initial_value: 0);
         assertEq(0, counter.waitForZero(timeout_ms: -1), "Counter exposes initial_value and timeout_ms");
 
+        WaitGroup wg();
+        assertEq(0, wg.wait(timeout_ms: 0), "WaitGroup wait exposes timeout_ms");
+        wg.add(count: 1);
+        assertEq(1, wg.getCount(), "WaitGroup add exposes count");
+        wg.done();
+
         Mutex mutex();
+        assertEq(0, mutex.lock(timeout_ms: 0), "Mutex lock exposes timeout_ms");
+        mutex.unlock();
         {
             AutoLock lock = new AutoLock(mutex: mutex);
             lock.unlock();
         }
 
         Gate gate();
+        assertEq(0, gate.enter(timeout_ms: 0), "Gate enter exposes timeout_ms");
+        gate.exit();
         AutoGate gate_lock = new AutoGate(gate: gate);
         delete gate_lock;
 
         {
             RWLock rwlock();
+            assertEq(0, rwlock.readLock(timeout_ms: 0), "RWLock readLock exposes timeout_ms");
+            rwlock.readUnlock();
             AutoReadLock read_lock = new AutoReadLock(lock: rwlock);
         }
         {
             RWLock rwlock();
+            assertEq(0, rwlock.writeLock(timeout_ms: 0), "RWLock writeLock exposes timeout_ms");
+            rwlock.writeUnlock();
             AutoWriteLock write_lock = new AutoWriteLock(lock: rwlock);
         }
+
+        Promise promise();
+        Future future = promise.getFuture();
+        promise.set(value: "resolved");
+        assertEq("resolved", future.get(timeout_ms: 0), "Promise set and Future get expose names");
 
         Mutex cond_mutex();
         Condition cond();
