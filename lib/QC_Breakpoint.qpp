@@ -107,9 +107,9 @@ Breakpoint::destructor() {
 
 //! Set enabled state to breakpoint.
 /**
- *
+ * @param enabled the enabled state to set
  */
-nothing Breakpoint::setEnabled(bool enabled) {
+nothing Breakpoint::setEnabled(bool enabled) [flags=NAMED_ARGS] {
    bkpt->enabled = enabled;
 }
 
@@ -123,9 +123,11 @@ bool Breakpoint::getEnabled() {
 
 //! Defines policy how thread list is evaluated. See @ref breakpoint_policy_options
 /**
+   @param policy the thread-list policy to set
+
    @throw BREAKPOINT-ERROR if policy is wrong value
  */
-nothing Breakpoint::setPolicy(softint policy) {
+nothing Breakpoint::setPolicy(softint policy) [flags=NAMED_ARGS] {
    switch (policy) {
    case BKP_PO_NONE:
    case BKP_PO_ACCEPT:
@@ -147,10 +149,10 @@ int Breakpoint::getPolicy() {
 //! Assign @ref Qore::Program "Program" to breakpoint.
 /**
  *
- *  @param new_pgm Program to be assigned
+ *  @param program the program to assign to the breakpoint
  */
-nothing Breakpoint::assignProgram(ProgramControl[QoreProgram] pgm) {
-   bkpt->assignProgram(*pgm, xsink);
+nothing Breakpoint::assignProgram(ProgramControl[QoreProgram] program) [flags=NAMED_ARGS] {
+   bkpt->assignProgram(*program, xsink);
 }
 
 //! Unassign @ref Qore::Program "Program" from breakpoint and deletes all statement references
@@ -176,10 +178,10 @@ ProgramControl Breakpoint::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
 
 //! Assign breakpoint to a statement.
 /**
- *
+ * @param statement_id the statement ID to assign to the breakpoint
  */
-nothing Breakpoint::assignStatement(int statementId) {
-   AbstractStatement *s = bkpt->resolveStatementId(statementId, xsink);
+nothing Breakpoint::assignStatement(int statement_id) [flags=NAMED_ARGS] {
+   AbstractStatement *s = bkpt->resolveStatementId(statement_id, xsink);
    if (!xsink->isEvent()) {
       bkpt->assignStatement(s, xsink);
    }
@@ -187,10 +189,10 @@ nothing Breakpoint::assignStatement(int statementId) {
 
 //! Unassign breakpoint from statement
 /**
- *
+ * @param statement_id the statement ID to unassign from the breakpoint
  */
-nothing Breakpoint::unassignStatement(int statementId) {
-   AbstractStatement *s = bkpt->resolveStatementId(statementId, xsink);
+nothing Breakpoint::unassignStatement(int statement_id) [flags=NAMED_ARGS] {
+   AbstractStatement *s = bkpt->resolveStatementId(statement_id, xsink);
    if (!xsink->isEvent()) {
       bkpt->unassignStatement(s, xsink);
    }
@@ -220,41 +222,44 @@ list<int> Breakpoint::getThreadIds() {
 
 //! Set list of the thread IDs
 /**
- *
+ * @param thread_ids the thread IDs to set
  */
-nothing Breakpoint::setThreadIds(softlist<softint> tidList) {
+nothing Breakpoint::setThreadIds(softlist<softint> thread_ids) [flags=NAMED_ARGS] {
     TidList_t tl;
-    for (size_t i = 0, e = tidList->size(); i < e; ++i) {
-        QoreValue n = tidList->retrieveEntry(i);
+    for (size_t i = 0, e = thread_ids->size(); i < e; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "setting breakpoint thread IDs")) {
+            return QoreValue();
+        }
+        QoreValue n = thread_ids->retrieveEntry(i);
         if (!n.isNothing()) {
             tl.push_back((int)n.getAsBigInt());
         }
     }
-    bkpt->setThreadIds(tl, xsink);  // TODO: or just pass tidList ???
+    bkpt->setThreadIds(tl, xsink);
 }
 
 //! Add thread ID to the list
 /**
- *
+ * @param thread_id the thread ID to add
  */
-nothing Breakpoint::addThreadId(int tid) {
-   bkpt->addThreadId(tid, xsink);
+nothing Breakpoint::addThreadId(int thread_id) [flags=NAMED_ARGS] {
+   bkpt->addThreadId(thread_id, xsink);
 }
 
 //! Remove thread ID from the list
 /**
- *
+ * @param thread_id the thread ID to remove
  */
-nothing Breakpoint::removeThreadId(int tid) {
-   bkpt->removeThreadId(tid, xsink);
+nothing Breakpoint::removeThreadId(int thread_id) [flags=NAMED_ARGS] {
+   bkpt->removeThreadId(thread_id, xsink);
 }
 
 //! Check if thread is ID in list
 /**
- *
+ * @param thread_id the thread ID to check
  */
-bool Breakpoint::isThreadId(softint tid) {
-   return bkpt->isThreadId(tid, xsink);
+bool Breakpoint::isThreadId(softint thread_id) [flags=NAMED_ARGS] {
+   return bkpt->isThreadId(thread_id, xsink);
 }
 
 //! Clear list of the thread IDs
@@ -274,13 +279,14 @@ int Breakpoint::getBreakpointId() [flags=RET_VALUE_ONLY;] {
 
 //! Get instance of breakpoint id
 /**
+   @param breakpoint_id the breakpoint ID to resolve
+
    @throw BREAKPOINT-ERROR if the breakpointId cannot identify @ref Breakpoint instance
 
  */
-static Breakpoint Breakpoint::resolveBreakpointId(int breakpointId) {
-   QoreBreakpoint* b = QoreBreakpoint::resolveBreakpointId(breakpointId);
+static Breakpoint Breakpoint::resolveBreakpointId(int breakpoint_id) [flags=NAMED_ARGS] {
+   QoreBreakpoint* b = QoreBreakpoint::resolveBreakpointId(breakpoint_id);
    if (!b)
-      return xsink->raiseException("BREAKPOINT-ERROR", "wrong breakpointId (%d)", breakpointId);
+      return xsink->raiseException("BREAKPOINT-ERROR", "wrong breakpointId (%d)", breakpoint_id);
    return b->getQoreObject();
 }
-

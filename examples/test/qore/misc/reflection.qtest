@@ -173,6 +173,18 @@ class ReflectionTest inherits QUnit::Test {
         assertEq(expected_count, found);
     }
 
+    assertNamedClassStaticMethodVariantCount(string class_name, string name, auto params, int expected_count = 1) {
+        int found = 0;
+        foreach AbstractMethodVariant v in (Class::forName(class_name).getStaticMethod(name).getVariants()) {
+            if (v.getParamNames() == params) {
+                ++found;
+                assertTrue(v.isNamedCallable());
+                assertEq(params, v.getNamedParameterNames());
+            }
+        }
+        assertEq(expected_count, found);
+    }
+
     assertNamedConstructorVariantCount(string class_name, auto params, int expected_count = 1) {
         int found = 0;
         foreach AbstractMethodVariant v in (Class::forName(class_name).getConstructorMethod().getVariants()) {
@@ -703,6 +715,16 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("parallel_map", ("callable", "items", "thread_count"));
         assertNamedCallableVariantCount("parallel_foreach", ("callable", "items", "thread_count"));
         assertNamedCallableVariantCount("channel_select", ("cases", "timeout"));
+        assertNamedClassMethodVariantCount("Breakpoint", "setEnabled", ("enabled",));
+        assertNamedClassMethodVariantCount("Breakpoint", "setPolicy", ("policy",));
+        assertNamedClassMethodVariantCount("Breakpoint", "assignProgram", ("program",));
+        assertNamedClassMethodVariantCount("Breakpoint", "assignStatement", ("statement_id",));
+        assertNamedClassMethodVariantCount("Breakpoint", "unassignStatement", ("statement_id",));
+        assertNamedClassMethodVariantCount("Breakpoint", "setThreadIds", ("thread_ids",));
+        assertNamedClassMethodVariantCount("Breakpoint", "addThreadId", ("thread_id",));
+        assertNamedClassMethodVariantCount("Breakpoint", "removeThreadId", ("thread_id",));
+        assertNamedClassMethodVariantCount("Breakpoint", "isThreadId", ("thread_id",));
+        assertNamedClassStaticMethodVariantCount("Breakpoint", "resolveBreakpointId", ("breakpoint_id",));
 
         assertNamedConstructorVariantCount("AutoGate", ("gate",));
         assertNamedConstructorVariantCount("AutoLock", ("mutex",));

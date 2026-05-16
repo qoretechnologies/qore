@@ -367,6 +367,13 @@ These examples are from the core migration and should be reused as precedent:
 - Pool APIs should use `options` for configuration hashes and `argument` for
   user callback payloads; keep established units such as `warning_ms` when they
   are already documented user-facing names.
+- Debugger APIs should expose complete public names: use `program`,
+  `statement_id`, `thread_id`, `thread_ids`, and `breakpoint_id` instead of
+  implementation abbreviations such as `pgm`, `tid`, and `bkpt`.
+- Debugger qlib command handlers may still need positional Breakpoint calls
+  when arguments are dynamic hash values or command payloads; qmod currently
+  rejects those named calls with `NAMED-CALL-NOT-SUPPORTED` even though the
+  native Breakpoint methods themselves support named arguments.
 - Do not mark an overload when it makes an already-enabled named call ambiguous
   with a shorter/defaulted variant. For example, `RangeIterator(start, stop,
   step, value)` must remain positional because it conflicts with the named
