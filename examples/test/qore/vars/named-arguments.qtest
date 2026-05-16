@@ -121,6 +121,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
         addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed iterator builtin opt-in", \reviewedIteratorBuiltinOptIn(), NOTHING);
         addTestCase("reviewed regex class builtin opt-in", \reviewedRegexClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed pseudo-method opt-in", \reviewedPseudoMethodOptIn(), NOTHING);
         addTestCase("parse failures", \parseFailures(), NOTHING);
@@ -677,6 +678,39 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertTrue(regex_it.next(), "StringRegexSplitIterator named constructor creates iterator");
         assertEq("left", regex_it.getValue(),
             "StringRegexSplitIterator exposes source and separator_pattern");
+    }
+
+    reviewedIteratorBuiltinOptIn() {
+        Sequence seq = new Sequence(start: 10);
+        assertEq(10, seq.getCurrent(), "Sequence constructor exposes start");
+
+        SingleValueIterator single_it = new SingleValueIterator(value: "only");
+        assertTrue(single_it.next(), "SingleValueIterator named constructor creates iterator");
+        assertEq("only", single_it.getValue(), "SingleValueIterator exposes value");
+
+        RangeIterator range_it = new RangeIterator(0, 1, 1, "tick");
+        assertTrue(range_it.next(), "RangeIterator value override constructor creates iterator");
+        assertEq("tick", range_it.getValue(), "RangeIterator keeps value override positional");
+
+        RangeIterator numeric_range_it = new RangeIterator(start: 0, stop: 1, step: 1);
+        assertTrue(numeric_range_it.next(), "RangeIterator allows value to be omitted");
+        assertEq(0, numeric_range_it.getValue(), "RangeIterator omitted value yields numeric values");
+
+        RangeIterator stop_it = new RangeIterator(stop: 1);
+        assertTrue(stop_it.next(), "RangeIterator stop-only constructor exposes stop");
+        assertEq(0, stop_it.getValue(), "RangeIterator stop-only constructor starts at zero");
+
+        RangeIterator xrange_it = xrange(0, 1, 1, "x");
+        assertTrue(xrange_it.next(), "xrange keeps value override positional");
+        assertEq("x", xrange_it.getValue(), "xrange value override is preserved");
+        RangeIterator numeric_xrange_it = xrange(start: 0, stop: 1, step: 1);
+        assertTrue(numeric_xrange_it.next(), "xrange allows value to be omitted");
+        assertEq(0, numeric_xrange_it.getValue(), "xrange omitted value yields numeric values");
+        assertTrue(xrange(stop: 1).next(), "xrange stop-only variant exposes stop");
+
+        StringCharIterator char_it = new StringCharIterator(source: "a");
+        assertTrue(char_it.next(), "StringCharIterator named constructor creates iterator");
+        assertEq(ord("a"), char_it.getValue(), "StringCharIterator exposes source");
     }
 
     reviewedRegexClassBuiltinOptIn() {

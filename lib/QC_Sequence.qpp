@@ -49,13 +49,14 @@ Sequence::constructor() {
 }
 
 //! Creates a new Sequence object with a starting value
-/** 
+/** @param start the starting value
+
     @par Example:
     @code{.py}
 Sequence seq(20);
     @endcode
  */
-Sequence::constructor(softint start) {
+Sequence::constructor(softint start) [flags=NAMED_ARGS] {
    self->setPrivate(CID_SEQUENCE, new QoreSequence((int)start));
 }
 

@@ -56,15 +56,15 @@
 qclass SingleValueIterator [arg=SingleValueIterator* i; ns=Qore; vparent=AbstractIterator];
 
 //! creates the single value iterator with the value passed as an argument
-/** @param v the value to iterate
+/** @param value the value to iterate
 
     @par Example:
     @code{.py}
 SingleValueIterator i(v);
     @endcode
  */
-SingleValueIterator::constructor(auto v) {
-   self->setPrivate(CID_SINGLEVALUEITERATOR, new SingleValueIterator(v));
+SingleValueIterator::constructor(auto value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_SINGLEVALUEITERATOR, new SingleValueIterator(value));
 }
 
 //! Creates a copy of the SingleValueIterator object, iterating the same object as the original and in the same position

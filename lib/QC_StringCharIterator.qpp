@@ -132,10 +132,10 @@ foreach int cp in (text.codePointIterator()) {
 qclass StringCharIterator [arg=StringCharIterator* i; ns=Qore; vparent=AbstractIterator];
 
 //! Creates the iterator from a source string.
-/** @param src the string to iterate over (captured by reference)
+/** @param source the string to iterate over (captured by reference)
  */
-StringCharIterator::constructor(string src) {
-    self->setPrivate(CID_STRINGCHARITERATOR, new StringCharIterator(src));
+StringCharIterator::constructor(string source) [flags=NAMED_ARGS] {
+    self->setPrivate(CID_STRINGCHARITERATOR, new StringCharIterator(source));
 }
 
 //! Creates a copy of the iterator, positioned at the start.
