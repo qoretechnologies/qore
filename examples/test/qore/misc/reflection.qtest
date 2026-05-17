@@ -876,6 +876,15 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedConstructorVariantCount("HttpAcceptPollOperationBase",
             ("listener", "accept_operation", "ssl_required", "certificate", "private_key", "ssl_verify_flags",
                 "accept_all_certificates", "http_version", "perform_ssl_handshake"));
+        assertNamedConstructorVariantCount("Http2PollOperationBase",
+            ("socket", "initial_read_operation", "headers_only"));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "injectSendOp", ("send_operation",));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "injectReadOp", ("read_operation",));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "registerStreamQueue",
+            ("stream_id", "queue", "notifier"));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "registerStreamFrameState",
+            ("stream_id", "queue"));
+        assertNamedClassMethodVariantCount("Http2PollOperationBase", "onStreamData", ("stream_id",));
         assertNamedConstructorVariantCount("AsyncIoController", ("auto_stop",));
         assertNamedClassMethodVariantCount("AsyncIoController", "submit",
             ("operation_info", "replace_existing"));

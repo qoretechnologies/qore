@@ -403,7 +403,10 @@ These examples are from the core migration and should be reused as precedent:
   `socket`, `timeout_ms`, `operation`, `min_status`,
   `max_status`, `error_code`, `header_name`, `header_prefix`,
   `websocket_key`, `accept_operation`, `certificate`, `private_key`,
-  `accept_all_certificates`, `http_version`, and `perform_ssl_handshake`.
+  `accept_all_certificates`, `http_version`, `perform_ssl_handshake`,
+  `initial_read_operation`, `send_operation`, and `read_operation`.
+  Stream registration helpers should use `stream_id`, `queue`, and
+  `notifier`.
 - Async I/O controller APIs should not expose implementation shorthand:
   use `auto_stop`, `operation_info`, `replace_existing`, `io_object`,
   `timeout_ms`, `user_data`, `cancel_callback`, and `max_threads` instead of

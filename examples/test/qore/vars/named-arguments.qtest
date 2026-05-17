@@ -961,6 +961,17 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "ssl_verify_flags: 0, accept_all_certificates: False, http_version: \"1.1\", "
             "perform_ssl_handshake: True); }",
             "http-poll-constructors-named");
+        Program p2(PO_NEW_STYLE);
+        p2.parse("sub http2_poll_operation_base_named(Socket socket, object initial_read_operation, "
+            "object send_operation, object read_operation, Queue queue, *EventNotifier notifier) { "
+            "Http2PollOperationBase h2(socket: socket, initial_read_operation: initial_read_operation, "
+            "headers_only: True); "
+            "h2.injectSendOp(send_operation: send_operation); "
+            "h2.injectReadOp(read_operation: read_operation); "
+            "h2.registerStreamQueue(stream_id: 1, queue: queue, notifier: notifier); "
+            "h2.registerStreamFrameState(stream_id: 1, queue: queue); "
+            "h2.onStreamData(stream_id: 1); }",
+            "http2-poll-operation-base-named");
     }
 
     reviewedSqlClassBuiltinOptIn() {
