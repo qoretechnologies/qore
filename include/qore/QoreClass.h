@@ -627,6 +627,19 @@ public:
     */
     DLLEXPORT QoreObject* execConstructor(const QoreListNode* args, ExceptionSink* xsink) const;
 
+    //! creates a new object with explicit object type information and executes the constructor on it
+    /** if a Qore-language exception occurs, 0 is returned.
+        @param args the arguments for the method
+        @param object_type_info the parameterized object type info to apply to the new object
+        @param xsink Qore-language exception information is added here
+
+        @return the object created
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT QoreObject* execConstructor(const QoreListNode* args, const QoreTypeInfo* object_type_info,
+        ExceptionSink* xsink) const;
+
     //! Creates a new object and executes the constructor and returns the new object
     /** The object created will be an instance of the first argument, which may be a different class than the current
         class.
@@ -1004,6 +1017,15 @@ public:
 
     //! returns the number of formal type parameters declared by this class
     DLLEXPORT size_t getTypeParameterCount() const;
+
+    //! returns the name of the formal type parameter at the given index or nullptr if the index is invalid
+    /** @param index the zero-based type parameter index
+
+        @return the formal type parameter name or nullptr if the index is invalid
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterName(size_t index) const;
 
     //! returns the "or nothing" type information structure for this class
     DLLEXPORT const QoreTypeInfo* getOrNothingTypeInfo() const;

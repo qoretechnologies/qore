@@ -119,6 +119,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("type tests", \typeTests());
         addTestCase("typed code tests", \typedCodeTests());
         addTestCase("union type tests", \unionTypeTests());
+        addTestCase("generic reflection tests", \genericReflectionTests());
         addTestCase("pgm tests", \pgmTests());
         addTestCase("issue 3145", \issue3145Test());
         addTestCase("issue 3141", \issue3141Test());
@@ -2155,6 +2156,58 @@ class ReflectionTest inherits QUnit::Test {
             assertFalse(t.isUnion());
             assertNothing(t.getUnionMemberTypes());
         }
+    }
+
+    genericReflectionTests() {
+        Class queue_class = Class::forName("Queue");
+        assertEq(("T",), queue_class.getTypeParameters());
+        assertNothing(Class::forName("Mutex").getTypeParameters());
+        NormalMethodVariant push_variant = queue_class.getMethod("push").getVariants()[0];
+        assertEq("T value, timeout timeout_ms = 0", push_variant.getParamString());
+        assertEq("nothing", push_variant.getReturnType().getName());
+
+        NormalMethodVariant future_get_variant = Class::forName("Future").getMethod("get").getVariants()[0];
+        assertEq("T", future_get_variant.getReturnType().getName());
+        assertEq("timeout timeout_ms = 0", future_get_variant.getParamString());
+
+        Type queue_int("Queue<int>");
+        assertTrue(queue_int.isParameterized());
+        assertEq("object<Queue<int>>", queue_int.getName());
+        list<Type> queue_args = queue_int.getTypeArguments();
+        assertEq(1, queue_args.size());
+        assertTrue(IntType.isEqual(queue_args[0]));
+
+        Type future_queue("Future<Queue<int>>");
+        assertTrue(future_queue.isParameterized());
+        assertEq("object<Future<object<Queue<int>>>>", future_queue.getName());
+        list<Type> future_args = future_queue.getTypeArguments();
+        assertEq(1, future_args.size());
+        assertTrue(future_args[0].isParameterized());
+        assertEq("object<Queue<int>>", future_args[0].getName());
+        assertTrue(IntType.isEqual(future_args[0].getTypeArguments()[0]));
+
+        assertFalse(IntType.isParameterized());
+        assertNothing(IntType.getTypeArguments());
+
+        object typed_queue = queue_class.callConstructor(arguments: (), type_args: (IntType,));
+        typed_queue.push(value: 1);
+        assertThrows("RUNTIME-OVERLOAD-ERROR", sub() { typed_queue.push(value: "bad"); });
+        assertEq(1, typed_queue.pop(timeout_ms: 0));
+
+        object raw_queue = queue_class.callConstructor(arguments: ());
+        raw_queue.push(value: "raw");
+        assertEq("raw", raw_queue.pop(timeout_ms: 0));
+
+        assertThrows("TYPE-ARGUMENT-ERROR", sub() {
+            queue_class.callConstructor(arguments: (), type_args: ());
+        });
+        assertThrows("TYPE-ARGUMENT-ERROR", sub() {
+            queue_class.callConstructor(arguments: (), type_args: (IntType, StringType));
+        });
+        Class mutex_class = Class::forName("Mutex");
+        assertThrows("TYPE-ARGUMENT-ERROR", sub() {
+            mutex_class.callConstructor(arguments: (), type_args: (IntType,));
+        });
     }
 
     pgmTests() {

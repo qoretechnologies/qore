@@ -44,6 +44,8 @@ class FutureTest inherits QUnit::Test {
         addTestCase("generic Queue<T>", \testGenericQueue());
         addTestCase("generic Channel<T>", \testGenericChannel());
         addTestCase("generic Promise<T>/Future<T>", \testGenericPromiseFuture());
+        addTestCase("generic runtime type identity", \testGenericRuntimeTypeIdentity());
+        addTestCase("generic synchronization serialization policy", \testGenericSerializationPolicy());
         addTestCase("generic thread class type errors", \testGenericThreadClassTypeErrors());
         set_return_value(main());
     }
@@ -434,6 +436,55 @@ class FutureTest inherits QUnit::Test {
         assertEq(42, i);
         assertTrue(f.isDone());
         assertFalse(f.isError());
+    }
+
+    testGenericRuntimeTypeIdentity() {
+        Queue<int> qi();
+        Queue<auto> qa();
+        Queue raw_q();
+
+        assertTrue(qi instanceof Queue<int>);
+        assertFalse(qi instanceof Queue<auto>);
+        assertTrue(qi instanceof Queue);
+
+        assertFalse(qa instanceof Queue<int>);
+        assertTrue(qa instanceof Queue<auto>);
+        assertTrue(qa instanceof Queue);
+
+        assertTrue(raw_q instanceof Queue<auto>);
+
+        Queue raw_from_int = qi;
+        assertTrue(raw_from_int instanceof Queue<int>);
+        assertFalse(raw_from_int instanceof Queue<auto>);
+
+        Queue<int> cast_int = cast<Queue<int>>(qi);
+        assertTrue(cast_int instanceof Queue<int>);
+        assertThrows("RUNTIME-TYPE-ERROR", sub() {
+            Queue<int> bad_int = cast<Queue<int>>(qa);
+        });
+        assertThrows("RUNTIME-TYPE-ERROR", sub() {
+            Queue<auto> bad_auto = cast<Queue<auto>>(qi);
+        });
+
+        Promise<int> p();
+        Future<int> f = p.getFuture();
+        assertTrue(f instanceof Future<int>);
+        assertFalse(f instanceof Future<auto>);
+        assertTrue(f instanceof Future);
+    }
+
+    testGenericSerializationPolicy() {
+        Queue<int> q();
+        assertThrows("SERIALIZATION-ERROR", sub() { Serializable::serialize(q); });
+
+        Channel<int> ch();
+        assertThrows("SERIALIZATION-ERROR", sub() { Serializable::serialize(ch); });
+
+        Promise<int> p();
+        assertThrows("SERIALIZATION-ERROR", sub() { Serializable::serialize(p); });
+
+        Future<int> f = p.getFuture();
+        assertThrows("SERIALIZATION-ERROR", sub() { Serializable::serialize(f); });
     }
 
     testGenericThreadClassTypeErrors() {

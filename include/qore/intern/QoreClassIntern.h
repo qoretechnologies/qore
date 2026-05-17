@@ -2283,6 +2283,10 @@ public:
         return type_params.size();
     }
 
+    DLLLOCAL const char* getTypeParamName(size_t index) const {
+        return index < type_params.size() ? type_params[index].c_str() : nullptr;
+    }
+
     DLLLOCAL bool rawAcceptsParameterized() const {
         return raw_accepts_parameterized;
     }

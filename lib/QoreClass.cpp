@@ -4014,6 +4014,12 @@ QoreObject* QoreClass::execConstructor(const QoreListNode* args, ExceptionSink* 
     return priv->execConstructor(xsink, rc, nullptr, args);
 }
 
+QoreObject* QoreClass::execConstructor(const QoreListNode* args, const QoreTypeInfo* object_type_info,
+        ExceptionSink* xsink) const {
+    RuntimeConfig& rc = rc_get_current_ref();
+    return priv->execConstructor(xsink, rc, nullptr, args, nullptr, false, object_type_info);
+}
+
 QoreObject* QoreClass::execConstructor(const QoreClass& obj_cls, const QoreListNode* args, bool allow_abstract,
         ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
@@ -5375,6 +5381,10 @@ bool QoreClass::hasTypeParameters() const {
 
 size_t QoreClass::getTypeParameterCount() const {
     return priv->getTypeParamCount();
+}
+
+const char* QoreClass::getTypeParameterName(size_t index) const {
+    return priv->getTypeParamName(index);
 }
 
 const QoreTypeInfo* QoreClass::getOrNothingTypeInfo() const {

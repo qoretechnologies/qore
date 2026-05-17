@@ -138,6 +138,15 @@ bool qore_type_code_has_varargs(const QoreTypeInfo* ti) {
     return code_type && code_type->hasVarArgs();
 }
 
+bool qore_type_is_parameterized(const QoreTypeInfo* ti) {
+    return QoreTypeInfo::getParameterizedClassType(ti) != nullptr;
+}
+
+const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti) {
+    const QoreParameterizedClassTypeInfo* parameterized_type = QoreTypeInfo::getParameterizedClassType(ti);
+    return parameterized_type ? &parameterized_type->getTypeArgs() : nullptr;
+}
+
 bool qore_type_is_union(const QoreTypeInfo* ti) {
     return QoreTypeInfo::getUnionType(ti) != nullptr;
 }

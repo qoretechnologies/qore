@@ -100,6 +100,71 @@ int check_constructor(const QoreClass* cls, ExceptionSink* xsink) {
     return 0;
 }
 
+static QoreString get_type_parameter_names(const QoreClass* cls) {
+    QoreString rv;
+    for (size_t i = 0, e = cls->getTypeParameterCount(); i < e; ++i) {
+        if (i) {
+            rv.concat(", ");
+        }
+        rv.concat(cls->getTypeParameterName(i));
+    }
+    return rv;
+}
+
+static const QoreTypeInfo* get_parameterized_class_type_info(const QoreReflectionClass* c,
+        const QoreListNode* type_args, ExceptionSink* xsink) {
+    if (!type_args) {
+        return nullptr;
+    }
+
+    size_t expected = c->cls->getTypeParameterCount();
+    size_t actual = type_args->size();
+
+    if (!expected) {
+        if (actual) {
+            xsink->raiseException("TYPE-ARGUMENT-ERROR", "class '%s' is not generic and does not accept type "
+                "arguments; got %zu type argument%s", c->cls->getNamespacePath(), actual,
+                actual == 1 ? "" : "s");
+        }
+        return nullptr;
+    }
+
+    if (actual != expected) {
+        QoreString names = get_type_parameter_names(c->cls);
+        xsink->raiseException("TYPE-ARGUMENT-ERROR", "class '%s' declares %zu type parameter%s (%s); got "
+            "%zu type argument%s", c->cls->getNamespacePath(), expected, expected == 1 ? "" : "s",
+            names.c_str(), actual, actual == 1 ? "" : "s");
+        return nullptr;
+    }
+
+    type_vec_t args;
+    args.reserve(actual);
+    for (size_t i = 0; i < actual; ++i) {
+        QoreValue v = type_args->retrieveEntry(i);
+        if (v.getType() != NT_OBJECT) {
+            xsink->raiseException("TYPE-ARGUMENT-ERROR", "type argument %zu for class '%s' must be a "
+                "Qore::Reflection::Type object; got type '%s' instead", i, c->cls->getNamespacePath(),
+                v.getTypeName());
+            return nullptr;
+        }
+
+        const QoreObject* obj = v.get<const QoreObject>();
+        ReferenceHolder<QoreType> t(static_cast<QoreType*>(obj->tryGetReferencedPrivateData(CID_TYPE, xsink)),
+            xsink);
+        if (!t) {
+            if (!*xsink) {
+                xsink->raiseException("TYPE-ARGUMENT-ERROR", "type argument %zu for class '%s' must be a "
+                    "Qore::Reflection::Type object; got object of class '%s' instead", i,
+                    c->cls->getNamespacePath(), obj->getClassName());
+            }
+            return nullptr;
+        }
+        args.push_back(t->typeInfo);
+    }
+
+    return c->cls->getTypeInfo(args);
+}
+
 static QoreHashNode* find_method_intern(const QoreStringNode* name, QoreReflectionClass* c, method_type_e type,
     ExceptionSink* xsink) {
     TempEncodingHelper nname(name, QCS_DEFAULT, xsink);
@@ -242,6 +307,38 @@ string Class::getPathName() [flags=RET_VALUE_ONLY] {
     // the class ptr must be valid
     const char* mod = c->cls->getModuleName();
     return mod ? new QoreStringNode(mod) : QoreValue();
+}
+
+//! Returns the formal type parameter names for this class, or @ref nothing if the class is not generic
+/** @par Example:
+    @code{.py}
+*list<string> params = Class::forName("Queue").getTypeParameters();
+# returns ("T",)
+    @endcode
+
+    @return the formal type parameter names for this class, or @ref nothing if the class is not generic
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+
+    @since %Qore 2.4
+*/
+*list<string> Class::getTypeParameters() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, c->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    size_t param_count = c->cls->getTypeParameterCount();
+    if (!param_count) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; i < param_count; ++i) {
+        rv->push(new QoreStringNode(c->cls->getTypeParameterName(i)), xsink);
+    }
+    return rv.release();
 }
 
 //! Returns information about the given method if it's accessible in the class hierarchy or throws an exception if the method does not exist
@@ -1103,6 +1200,60 @@ object Class::newObjectArgs(*softlist argv) {
     }
 
     return c->cls->execConstructor(argv, xsink);
+}
+
+//! creates an object of the current class with the arguments for the constructor and optional type arguments
+/** @par Example:
+    @code{.py}
+Class cls = Class::forName("Queue");
+object q = cls.callConstructor((), (IntType,));
+    @endcode
+
+    @param arguments the arguments for the constructor
+    @param type_args optional type arguments for a parameterized generic class
+
+    @return an object if the current class based on the constructor arguments passed
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+    @throw CREATE-OBJECT-ERROR class implements features restricted by current parse options / sandboxing restrictions
+    @throw CONSTRUCTOR-IS-PRIVATE attempt to instantiate an object with a private constructor from outside the class
+    @throw ABSTRACT-CLASS-ERROR thrown if the class has abstract methods
+    @throw MISSING-TYPE-ARGUMENTS thrown if the class is generic and explicit type arguments are required
+    @throw TYPE-ARGUMENT-ERROR thrown if \a type_args does not match the class's formal type parameters
+
+    @note see the class documentation for the class to be instantiated for a list of additional exceptions that can be
+    thrown
+
+    @since %Qore 2.4
+
+    @see
+    - newObject()
+    - newObjectArgs()
+    - create_object()
+    - create_object_args()
+*/
+object Class::callConstructor(*softlist<auto> arguments, *softlist<Type> type_args) [flags=NAMED_ARGS] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, c->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // the class ptr must be valid
+    if (check_constructor(c->cls, xsink)) {
+        return QoreValue();
+    }
+
+    if (c->cls->runtimeCheckInstantiateClass(xsink)) {
+        return QoreValue();
+    }
+
+    const QoreTypeInfo* object_type_info = get_parameterized_class_type_info(c, type_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    return c->cls->execConstructor(arguments, object_type_info, xsink);
 }
 
 //! Returns the type object for this class
