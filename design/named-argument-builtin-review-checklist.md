@@ -436,8 +436,10 @@ These examples are from the core migration and should be reused as precedent:
   `function_name`, `variable_name`, `found`, `breakpoint`, `statement_id`,
   `list_breakpoints`, `file`, `line`, and `params`.
 - Debugger callback hooks (`onAttach()`, `onStep()`, etc.) are override
-  surfaces; review them separately from direct control methods before enabling
-  named arguments.
+  surfaces; review them separately from direct control methods. When enabled,
+  the base `DebugProgram` names should be complete and stable: `program`,
+  `run_state`, `run_to_statement_id`, `block_statement_id`, `statement_id`,
+  `breakpoint_id`, `flow`, `return_value`, `exception`, and `dismiss`.
 - Debugger qlib command handlers may still need positional Breakpoint calls
   when arguments are dynamic hash values or command payloads; qmod currently
   rejects those named calls with `NAMED-CALL-NOT-SUPPORTED` even though the

@@ -94,8 +94,8 @@ const DebugFlowContinue = RC_CONTINUE;
 
     class MyDebugProgram dbg() inherits DebugProgram {
     private:
-       onAttach(ProgramControl pgm, reference rs) {
-          rs = DebugStep;
+       onAttach(ProgramControl program, reference run_state, reference run_to_statement_id) {
+          run_state = DebugStep;
        }
     }
 
@@ -178,49 +178,83 @@ list DebugProgram::getAllPrograms() {
 }
 //! Executed when new thread is attached to program being debugged
 /**
- *
+    @param program the program being debugged
+    @param run_state a reference to the run state to return to the program
+    @param run_to_statement_id a reference to the statement ID to run to
  */
-abstract DebugProgram::onAttach(ProgramControl[QoreProgram] pgm, reference rs, reference rtsid);
+abstract nothing DebugProgram::onAttach(ProgramControl[QoreProgram] program, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
-//! Executed when thread is datached from program being debugged
+//! Executed when a thread is detached from the program being debugged
 /**
- *
+    @param program the program being debugged
+    @param run_state a reference to the run state to return to the program
+    @param run_to_statement_id a reference to the statement ID to run to
  */
-abstract DebugProgram::onDetach(ProgramControl[QoreProgram] pgm, reference rs, reference rtsid);
+abstract nothing DebugProgram::onDetach(ProgramControl[QoreProgram] program, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
 //! Executed when step is performed
 /**
- *
+    @param program the program being debugged
+    @param block_statement_id the statement ID for the current statement block
+    @param statement_id the statement ID for the current statement, if available
+    @param breakpoint_id the breakpoint ID, if a breakpoint triggered the callback
+    @param flow a reference to the flow-control action to return to the program
+    @param run_state a reference to the run state to return to the program
+    @param run_to_statement_id a reference to the statement ID to run to
  */
-abstract DebugProgram::onStep(ProgramControl[QoreProgram] pgm, int blockStatement, *int statement, *int breakpointId, reference flow, reference rs, reference rtsid);
+abstract nothing DebugProgram::onStep(ProgramControl[QoreProgram] program, int block_statement_id, *int statement_id, *int breakpoint_id, reference flow, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
 //! Executed when a function is entered.
 /**
+    @param program the program being debugged
+    @param statement_id the statement ID for the entered function
+    @param run_state a reference to the run state to return to the program
+    @param run_to_statement_id a reference to the statement ID to run to
+
     @see
        @ref Qore::ProgramControl::getStatementIdInfo "ProgramControl::getStatementIdInfo"
  */
-abstract DebugProgram::onFunctionEnter(ProgramControl[QoreProgram] pgm, int statement, reference rs, reference rtsid);
+abstract nothing DebugProgram::onFunctionEnter(ProgramControl[QoreProgram] program, int statement_id, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
 //! Executed when a function is exited.
 /**
+    @param program the program being debugged
+    @param statement_id the statement ID for the exited function
+    @param return_value a reference to the return value
+    @param run_state a reference to the run state to return to the program
+    @param run_to_statement_id a reference to the statement ID to run to
+
     @see
        @ref Qore::ProgramControl::getStatementIdInfo "ProgramControl::getStatementIdInfo"
  */
-abstract DebugProgram::onFunctionExit(ProgramControl[QoreProgram] pgm, int statement, reference returnValue, reference rs, reference rtsid);
+abstract nothing DebugProgram::onFunctionExit(ProgramControl[QoreProgram] program, int statement_id, reference return_value, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
 //! Executed when an exception is raised.
 /**
+    @param program the program being debugged
+    @param statement_id the statement ID where the exception was raised
+    @param exception the exception hash
+    @param dismiss a reference to the flag indicating if the exception should be dismissed
+    @param run_state a reference to the run state to return to the program
+    @param run_to_statement_id a reference to the statement ID to run to
+
     @see
        @ref Qore::ProgramControl::getStatementIdInfo "ProgramControl::getStatementIdInfo"
  */
-abstract DebugProgram::onException(ProgramControl[QoreProgram] pgm, int statement, hash ex, reference dismiss, reference rs, reference rtsid);
+abstract nothing DebugProgram::onException(ProgramControl[QoreProgram] program, int statement_id, hash exception, reference dismiss, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
 //! Executed when a program/thread is exited.
 /**
+    @param program the program being debugged
+    @param statement_id the statement ID where the program or thread exited
+    @param return_value a reference to the return value
+    @param run_state a reference to the run state to return to the program
+    @param run_to_statement_id a reference to the statement ID to run to
+
     @see
        @ref Qore::ProgramControl::getStatementIdInfo "ProgramControl::getStatementIdInfo"
  */
-abstract DebugProgram::onExit(ProgramControl[QoreProgram] pgm, int statement, reference returnValue, reference rs, reference rtsid);
+abstract nothing DebugProgram::onExit(ProgramControl[QoreProgram] program, int statement_id, reference return_value, reference run_state, reference run_to_statement_id) [flags=NAMED_ARGS];
 
 //! Break particular program thread
 /**

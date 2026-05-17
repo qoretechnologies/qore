@@ -152,6 +152,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
         addTestCase("reviewed ProgramControl class builtin opt-in", \reviewedProgramControlBuiltinOptIn(),
             NOTHING);
+        addTestCase("reviewed DebugProgram callback builtin opt-in", \reviewedDebugProgramBuiltinOptIn(),
+            NOTHING);
         addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed event-loop class builtin opt-in", \reviewedEventLoopClassBuiltinOptIn(),
             NOTHING);
@@ -750,6 +752,43 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "pc.findFunctionVariants(function_name: \"main\"); "
             "ProgramControl::resolveProgramId(program_id: pc.getProgramId()); }",
             "program-control-named");
+    }
+
+    reviewedDebugProgramBuiltinOptIn() {
+        ParseOptions opts("allow-debugger");
+        opts.set(parse_options: PO_NEW_STYLE);
+        Program p(opts);
+        p.parse("class NamedDebugProgram inherits DebugProgram { "
+            "onAttach(ProgramControl pgm, reference rs, reference rtsid) {} "
+            "onDetach(ProgramControl pgm, reference rs, reference rtsid) {} "
+            "onStep(ProgramControl pgm, int blockStatementId, *int statementId, *int breakpointId, "
+            "reference flow, reference rs, reference rtsid) {} "
+            "onFunctionEnter(ProgramControl pgm, int statementId, reference rs, reference rtsid) {} "
+            "onFunctionExit(ProgramControl pgm, int statementId, reference result, reference rs, "
+            "reference rtsid) {} "
+            "onException(ProgramControl pgm, int statementId, hash ex, reference dismiss, reference rs, "
+            "reference rtsid) {} "
+            "onExit(ProgramControl pgm, int statementId, reference result, reference rs, reference rtsid) {} "
+            "} "
+            "sub debug_program_callbacks_named(DebugProgram dbg, ProgramControl pc) { "
+            "int run_state = DebugRun; int run_to_statement_id = 0; int flow = DebugFlowContinue; "
+            "auto return_value = NOTHING; bool dismiss = False; "
+            "dbg.onAttach(program: pc, run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onDetach(program: pc, run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onStep(program: pc, block_statement_id: 1, statement_id: NOTHING, breakpoint_id: NOTHING, "
+            "flow: \\flow, run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onFunctionEnter(program: pc, statement_id: 1, run_state: \\run_state, "
+            "run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onFunctionExit(program: pc, statement_id: 1, return_value: \\return_value, "
+            "run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onException(program: pc, statement_id: 1, exception: (\"err\": \"NAMED-DEBUG\"), "
+            "dismiss: \\dismiss, run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "dbg.onExit(program: pc, statement_id: 1, return_value: \\return_value, "
+            "run_state: \\run_state, run_to_statement_id: \\run_to_statement_id); "
+            "} "
+            "sub debug_program_named() { "
+            "debug_program_callbacks_named(new NamedDebugProgram(), ProgramControl::getProgram()); }",
+            "debug-program-named");
     }
 
     reviewedThreadClassBuiltinOptIn() {
