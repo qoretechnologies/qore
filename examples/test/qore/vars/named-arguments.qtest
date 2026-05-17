@@ -1019,6 +1019,28 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "h2c.installFrameState(stream_id: 1, message_queue: queue); "
             "h2c.installSseState(stream_id: 1, queue: queue, notifier: notifier, initial_body: NOTHING); }",
             "http2-client-poll-operation-base-named");
+        Program p5(PO_NEW_STYLE);
+        p5.parse("sub http3_client_poll_operation_base_named(Socket socket, "
+            "AbstractHttpPollConnection connection, Promise promise, EventNotifier notifier, "
+            "Queue queue, object channel) { "
+            "Http3ClientPollOperationBase h3(socket: socket, host: \"localhost\", port: 443, "
+            "connection: connection, family: AF_UNSPEC, connect_timeout: 1s); "
+            "h3.setQuicStreamLimit(stream_limit: 10); "
+            "h3.checkCapacity(max_streams: 10); "
+            "h3.endSubmitOk(stream_id: 1); "
+            "h3.setStreamStreaming(stream_id: 1); "
+            "h3.registerStreamWithPromise(stream_id: 1, promise: promise); "
+            "h3.registerStreamWithPromiseAndNotifier(stream_id: 1, promise: promise, notifier: notifier); "
+            "h3.registerStreamWithChannel(stream_id: 1, channel: channel, notifier: NOTHING, "
+            "sse_install_eligible: False); "
+            "h3.registerStreamWithQueue(stream_id: 1, queue: queue, notifier: notifier); "
+            "h3.cancelStream(stream_id: 1); "
+            "h3.waitStreamCapacity(timeout_ms: 10); "
+            "h3.setSubmitError(error_code: \"HTTP3-ERROR\", description: \"failure\"); "
+            "h3.registerStreamNotify(stream_id: 1); "
+            "h3.installFrameState(stream_id: 1, message_queue: queue); "
+            "h3.installSseState(stream_id: 1, queue: queue, notifier: notifier, initial_body: NOTHING); }",
+            "http3-client-poll-operation-base-named");
     }
 
     reviewedSqlClassBuiltinOptIn() {
