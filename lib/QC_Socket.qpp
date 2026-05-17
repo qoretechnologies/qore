@@ -2604,7 +2604,7 @@ AbstractPollOperation Socket::startPollSend(binary data) [flags=NAMED_ARGS] {
 
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to send an HTTP response in non-blocking mode
 /** @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
+    @param status_description the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response; any \c "Content-Length" header here will be
     ignored and replaced with the actual body size
@@ -2634,8 +2634,8 @@ AbstractPollOperation Socket::startPollSend(binary data) [flags=NAMED_ARGS] {
 
     @since %Qore 2.2
 */
-AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string status_desc, string http_version,
-        *hash<auto> headers, *data body) {
+AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string status_description,
+        string http_version, *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSE-ERROR",
@@ -2647,7 +2647,7 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
     QoreString hdr(s->getEncoding());
 
     // Write HTTP response status line
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Get body data and size
@@ -2693,7 +2693,7 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
     read operations in the HTTP keep-alive path.
 
     @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
+    @param status_description the HTTP status description (e.g. "OK", "Not Found", "Internal Server Error")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response
     @param body optional message body to send with the response
@@ -2709,8 +2709,8 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_desc,
-        string http_version, *hash<auto> headers, *data body, timeout idle_timeout) {
+AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
+        string http_version, *hash<auto> headers, *data body, timeout idle_timeout) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEANDREADHEADER-ERROR",
@@ -2722,7 +2722,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
     QoreString hdr(s->getEncoding());
 
     // Write HTTP response status line
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Get body data and size
@@ -2772,7 +2772,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
     I/O thread.
 
     @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Not Found")
+    @param status_description the HTTP status description (e.g. "OK", "Not Found")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response; must include Content-Length
     @param body the InputStream to read the response body from
@@ -2790,8 +2790,8 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
     @since %Qore 2.3
 */
 AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
-        string status_desc, string http_version, *hash<auto> headers,
-        InputStream[InputStream] body, softint content_length, timeout idle_timeout) {
+        string status_description, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body, softint content_length, timeout idle_timeout) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR",
@@ -2808,7 +2808,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
 
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Add headers (body size is set from Content-Length header, not body itself)
@@ -2872,7 +2872,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
     The handler thread returns immediately; all I/O happens on the I/O thread.
 
     @param status_code the HTTP status code (e.g. 200)
-    @param status_desc the HTTP status description (e.g. "OK")
+    @param status_description the HTTP status description (e.g. "OK")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers (Transfer-Encoding is set automatically)
     @param body the InputStream to read the response body from; EOF signals end of chunks
@@ -2883,8 +2883,8 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
     @since %Qore 2.3
 */
 AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int status_code,
-        string status_desc, string http_version, *hash<auto> headers,
-        InputStream[InputStream] body, timeout idle_timeout) {
+        string status_description, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body, timeout idle_timeout) [flags=NAMED_ARGS] {
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR",
             "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
@@ -2907,7 +2907,7 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int 
     hdr_copy->removeKey("Content-Length", xsink);
 
     QoreString hdr_str(s->getEncoding());
-    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr_str.concat("\r\n");
     qore_socket_private::do_headers(hdr_str, *hdr_copy, 0);
 
@@ -2962,7 +2962,7 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int 
     The handler thread returns immediately; all I/O happens on the I/O thread.
 
     @param status_code the HTTP status code (e.g. 200, 404, 500); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Not Found")
+    @param status_description the HTTP status description (e.g. "OK", "Not Found")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response; must include Content-Length
     @param body the InputStream to read the response body from
@@ -2977,8 +2977,8 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int 
     @since %Qore 2.3
 */
 AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_code,
-        string status_desc, string http_version, *hash<auto> headers,
-        InputStream[InputStream] body, softint content_length) {
+        string status_description, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body, softint content_length) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR",
@@ -2995,7 +2995,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
 
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
-    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr.concat("\r\n");
 
     // Add headers
@@ -3052,7 +3052,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
     on the I/O thread.
 
     @param status_code the HTTP status code (e.g. 200, 400); must be between 100 and 599
-    @param status_desc the HTTP status description (e.g. "OK", "Bad Request")
+    @param status_description the HTTP status description (e.g. "OK", "Bad Request")
     @param http_version the HTTP version string (e.g. "1.1")
     @param headers optional HTTP headers to include in the response
     @param body the InputStream to read the response body from
@@ -3064,8 +3064,8 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
     @since %Qore 2.3
 */
 AbstractPollOperation Socket::startPollSendHttpChunkedResponseWithStream(int status_code,
-        string status_desc, string http_version, *hash<auto> headers,
-        InputStream[InputStream] body) {
+        string status_description, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body) [flags=NAMED_ARGS] {
     if (status_code < 100 || status_code >= 600) {
         xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR",
             "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
@@ -3085,7 +3085,7 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseWithStream(int sta
     hdr_copy->removeKey("Content-Length", xsink);
 
     QoreString hdr_str(s->getEncoding());
-    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_description->c_str());
     hdr_str.concat("\r\n");
     qore_socket_private::do_headers(hdr_str, *hdr_copy, 0);
 
@@ -4920,7 +4920,7 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
 */
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, string body,
-        *reference<hash> info, timeout timeout_ms = -1) {
+        *reference<hash> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     QoreStringNodeValueHelper tstr(body, s->getEncoding(), xsink);
     if (*xsink) {
@@ -4964,7 +4964,7 @@ sock.sendHTTPMessage("POST", "/RPC2", "1.1", ("Content-Type" : "text/xml"), xml)
     @see Socket::sendHTTPResponse(), Socket::readHTTPHeader()
 */
 nothing Socket::sendHTTPMessage(string method, string path, string http_version, hash<auto> headers, *binary body,
-        *reference<hash<auto>> info, timeout timeout_ms = -1) {
+        *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     socket_exec_send_http_message(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(), headers,
         body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
@@ -4981,7 +4981,7 @@ sock.sendHTTPMessageWithCallback(send_callback, "POST", "/RPC2", "1.1", ("Conten
     @par Events:
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
-    @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
+    @param send_callback The callback giving the chunked HTTP data to send; this callback must return either a string or a binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of message trailers can be sent or simply @ref nothing which will close the chunked message
     @param method the HTTP method name to send (i.e. POST, HEAD, etc)
     @param path the path component of the URL
     @param http_version the HTTP protocol version (\c "1.0" or \c "1.1")
@@ -4999,11 +4999,11 @@ sock.sendHTTPMessageWithCallback(send_callback, "POST", "/RPC2", "1.1", ("Conten
 
     @since %Qore 0.8.10
 */
-nothing Socket::sendHTTPMessageWithCallback(code scb, string method, string path, string http_version,
-        hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPMessageWithCallback(code send_callback, string method, string path, string http_version,
+        hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     socket_exec_send_http_message_callback(self, s, *ohrh, method->c_str(), path->c_str(), http_version->c_str(),
-        headers, scb, timeout_ms, xsink);
+        headers, send_callback, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and an optional message body
@@ -5019,7 +5019,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any string to be sent)
     @param headers a hash of additional headers to send (key-value pairs)
     @param body if present (and does not have a length of zero), the body to be sent with the message (if present, the \c "Content-Length" header will be automatically set); string data will be automatically converted to the Socket's encoding if necessary
@@ -5031,8 +5031,8 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SEND-ERROR send failed
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        string body, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, string body, timeout timeout_ms = -1) {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5041,7 +5041,7 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     if (*xsink) {
         return QoreValue();
     }
-    socket_exec_send_http_response(self, s, nullptr, status_code, status_desc->c_str(), http_version->c_str(),
+    socket_exec_send_http_response(self, s, nullptr, status_code, status_description->c_str(), http_version->c_str(),
         headers, tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
@@ -5060,7 +5060,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs)
@@ -5084,8 +5084,8 @@ sock.sendHTTPResponse(200, "OK", "1.1", ("Connection":"Keep-Alive"));
 
     @since %Qore 0.9.4
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        string body, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, string body, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5095,7 +5095,7 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     if (*xsink) {
         return QoreValue();
     }
-    socket_exec_send_http_response(self, s, *ohrh, status_code, status_desc->c_str(), http_version->c_str(),
+    socket_exec_send_http_response(self, s, *ohrh, status_code, status_description->c_str(), http_version->c_str(),
         headers, tstr->c_str(), tstr->size(), *tstr, timeout_ms, xsink);
 }
 
@@ -5112,7 +5112,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs)
@@ -5129,13 +5129,13 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @throw SOCKET-TIMEOUT the data requested was not received in the timeout period
     @throw SOCKET-SEND-ERROR send failed
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        *binary body, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, *binary body, timeout timeout_ms = -1) {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
 
-    socket_exec_send_http_response(self, s, nullptr, status_code, status_desc->c_str(), http_version->c_str(),
+    socket_exec_send_http_response(self, s, nullptr, status_code, status_description->c_str(), http_version->c_str(),
         headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
@@ -5152,7 +5152,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs)
@@ -5174,14 +5174,14 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection":"Keep-Alive"}, bin);
 
     @since %Qore 0.9.4
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        *binary body, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, *binary body, *reference<hash<auto>> info, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    socket_exec_send_http_response(self, s, *ohrh, status_code, status_desc->c_str(), http_version->c_str(),
+    socket_exec_send_http_response(self, s, *ohrh, status_code, status_description->c_str(), http_version->c_str(),
         headers, body ? body->getPtr() : nullptr, body ? body->size() : 0, nullptr, timeout_ms, xsink);
 }
 
@@ -5197,7 +5197,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
     @ref EVENT_PACKET_SENT
 
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any string to be sent)
     @param headers a hash of additional headers to send (key-value pairs); note that the \c "Transfer-Encoding" header
     must be set to \c "chunked" manually with this call
@@ -5212,7 +5212,7 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
     connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions
     and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
     clear (i.e. \c 2m = two minutes, etc.)
-    @param tcb An optional trailer callback for message trailers to write in the outgoing chunked message; the
+    @param trailers_callback An optional trailer callback for message trailers to write in the outgoing chunked message; the
     callback takes no arguments and must return either @ref nothing or @ref hash_type "hash" giving a hash of trailers
     for the final chunk
 
@@ -5228,8 +5228,9 @@ sock.sendHTTPResponse(200, "OK", "1.1", {"Connection": "Keep-Alive", "Transfer-E
 
     @since %Qore 0.9.4
 */
-nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string http_version, hash<auto> headers,
-        Qore::InputStream[InputStream] input_stream, int max_chunk_size = 4096, *reference<hash<auto>> info, timeout timeout_ms = -1, *code tcb) {
+nothing Socket::sendHTTPResponse(softint status_code, string status_description, string http_version,
+        hash<auto> headers, Qore::InputStream[InputStream] input_stream, int max_chunk_size = 4096,
+        *reference<hash<auto>> info, timeout timeout_ms = -1, *code trailers_callback) [flags=NAMED_ARGS] {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
@@ -5240,9 +5241,9 @@ nothing Socket::sendHTTPResponse(softint status_code, string status_desc, string
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    socket_exec_send_http_response_input_stream(self, s, *ohrh, status_code, status_desc->c_str(),
+    socket_exec_send_http_response_input_stream(self, s, *ohrh, status_code, status_description->c_str(),
         http_version->c_str(), headers, *input_stream, const_cast<QoreObject*>(obj_input_stream), max_chunk_size,
-        tcb, timeout_ms, xsink);
+        trailers_callback, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body to send with chunked transfer encoding provided by a callback
@@ -5256,11 +5257,11 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
     @par Events:
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
-    @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a
+    @param send_callback The callback giving the chunked HTTP data to send; this callback must return either a string or a
     binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of
     message trailers can be sent or simply @ref nothing which will close the chunked message
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs); note that the \c "Transfer-Encoding" header
@@ -5281,14 +5282,14 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
 
     @since %Qore 0.8.10
 */
-nothing Socket::sendHTTPResponseWithCallback(code scb, softint status_code, string status_desc, string http_version,
-        hash<auto> headers, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponseWithCallback(code send_callback, softint status_code, string status_description,
+        string http_version, hash<auto> headers, timeout timeout_ms = -1) {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
 
-    socket_exec_send_http_response_callback(self, s, nullptr, status_code, status_desc->c_str(),
-        http_version->c_str(), headers, scb, timeout_ms, xsink);
+    socket_exec_send_http_response_callback(self, s, nullptr, status_code, status_description->c_str(),
+        http_version->c_str(), headers, send_callback, timeout_ms, xsink);
 }
 
 //! Sends an HTTP response with user-defined headers given as a hash and a message body to send with chunked transfer encoding provided by a callback
@@ -5302,11 +5303,11 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
     @par Events:
     @ref EVENT_PACKET_SENT, @ref EVENT_HTTP_SEND_MESSAGE
 
-    @param scb The callback giving the chunked HTTP data to send; this callback must return either a string or a
+    @param send_callback The callback giving the chunked HTTP data to send; this callback must return either a string or a
     binary value each time it is called to give the chunked data to send; when all data has been sent, then a hash of
     message trailers can be sent or simply @ref nothing which will close the chunked message
     @param status_code the HTTP status code to send (i.e. \c 200, \c 404, etc)
-    @param status_desc the descriptive text for the status code.
+    @param status_description the descriptive text for the status code.
     @param http_version the HTTP protocol version (normally \c "1.0" or \c "1.1", however this method allows any
     string to be sent)
     @param headers a hash of additional headers to send (key-value pairs); note that the \c "Transfer-Encoding" header
@@ -5330,15 +5331,16 @@ sock.sendHTTPResponseWithCallback(send_callback, 200, "OK", "1.1", {"Connection"
 
     @since %Qore 0.9.4
 */
-nothing Socket::sendHTTPResponseWithCallback(code scb, softint status_code, string status_desc, string http_version,
-        hash<auto> headers, *reference<hash<auto>> info, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPResponseWithCallback(code send_callback, softint status_code, string status_description,
+        string http_version, hash<auto> headers, *reference<hash<auto>> info,
+        timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (check_response_code(status_code, xsink)) {
         return QoreValue();
     }
 
     OptHashRefHelper ohrh(info, xsink);
-    socket_exec_send_http_response_callback(self, s, *ohrh, status_code, status_desc->c_str(),
-        http_version->c_str(), headers, scb, timeout_ms, xsink);
+    socket_exec_send_http_response_callback(self, s, *ohrh, status_code, status_description->c_str(),
+        http_version->c_str(), headers, send_callback, timeout_ms, xsink);
 }
 
 //! Sends an HTTP message body in chunked transfer encoding
@@ -5360,7 +5362,7 @@ sock.sendHTTPChunkedBodyFromInputStream(inputStream);
     connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions
     and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units
     clear (i.e. \c 2m = two minutes, etc.)
-    @param tcb An optional trailer callback for message trailers to write in the outgoing chunked message; the
+    @param trailers_callback An optional trailer callback for message trailers to write in the outgoing chunked message; the
     callback takes no arguments and must return either @ref nothing or @ref hash_type "hash" giving a hash of trailers
     for the final chunk
 
@@ -5374,14 +5376,14 @@ sock.sendHTTPChunkedBodyFromInputStream(inputStream);
     @since %Qore 0.8.13
 */
 nothing Socket::sendHTTPChunkedBodyFromInputStream(Qore::InputStream[InputStream] input_stream, int max_chunk_size = 4096,
-        timeout timeout_ms = -1, *code tcb) {
+        timeout timeout_ms = -1, *code trailers_callback) [flags=NAMED_ARGS] {
     if (max_chunk_size < 1) {
         xsink->raiseException("HTTP-CHUNK-ERROR", "the max chunk size must be greater than 0; value given is: " QLLD,
             max_chunk_size);
         return QoreValue();
     }
     socket_exec_send_http_chunked_body_input_stream(self, s, *input_stream, const_cast<QoreObject*>(obj_input_stream),
-        max_chunk_size, tcb, timeout_ms, xsink);
+        max_chunk_size, trailers_callback, timeout_ms, xsink);
 }
 
 //! Sends the trialer of an HTTP message body in chunked transfer encoding
@@ -5408,7 +5410,7 @@ sock.sendHTTPChunkedBodyTrailer({});
 
     @since %Qore 0.8.13
 */
-nothing Socket::sendHTTPChunkedBodyTrailer(*hash<auto> trailer, timeout timeout_ms = -1) {
+nothing Socket::sendHTTPChunkedBodyTrailer(*hash<auto> trailer, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_send_http_chunked_body_trailer(self, s, trailer, timeout_ms, xsink);
 }
 
@@ -5460,7 +5462,7 @@ hash<auto> ans = sock.readHTTPHeader(10s);
     - %Qore 0.8.8 added the \c close, \c charset, \c body-content-type, and \c accept-charset info keys as well as the encoding handling based on the detected charset
     - %Qore 0.9.3 added the \c "headers-raw" key in the output \c info hash
 */
-hash<auto> Socket::readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>> info) {
+hash<auto> Socket::readHTTPHeader(timeout timeout_ms = -1, *reference<hash<auto>> info) [flags=NAMED_ARGS] {
     OptHashRefHelper ohrh(info, xsink);
     return socket_exec_read_http_header(self, s, *ohrh, timeout_ms, xsink);
 }
@@ -5489,7 +5491,7 @@ string str = sock.readHTTPHeaderString(10s);
 
     @since %Qore 0.8.8
 */
-string Socket::readHTTPHeaderString(timeout timeout_ms = -1) {
+string Socket::readHTTPHeaderString(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_header_string(self, s, timeout_ms, xsink);
 }
 
@@ -5515,7 +5517,7 @@ hash<auto> ans = sock.readHTTPChunkedBody(20s);
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
-hash<auto> Socket::readHTTPChunkedBody(timeout timeout_ms = -1) {
+hash<auto> Socket::readHTTPChunkedBody(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, false, false, "readHTTPChunkedBody", xsink);
 }
 
@@ -5541,7 +5543,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyBinary(20s);
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
-hash<auto> Socket::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
+hash<auto> Socket::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false, "readHTTPChunkedBodyBinary", xsink);
 }
 
@@ -5572,7 +5574,7 @@ hash<auto> ans = sock.readHTTPChunk(20s);
     @throw SOCKET-SSL-ERROR There was an SSL error while reading data from the socket
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
 */
-hash<auto> Socket::readHTTPChunk(timeout timeout_ms = -1) {
+hash<auto> Socket::readHTTPChunk(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, true, "readHTTPChunk", xsink);
 }
 
@@ -5587,7 +5589,7 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @par Events:
     @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED
 
-    @param os The output stream to write the response body to; the stream must be I/O-thread-safe
+    @param output_stream The output stream to write the response body to; the stream must be I/O-thread-safe
     @param timeout_ms The timeout in milliseconds (1/1000 second). If no timeout or if a negative timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection.  If a timeout occurs, a \c "SOCKET-TIMEOUT" exception is raised. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return a hash of any HTTP footers received (with footer keys converted to lower case)
@@ -5600,9 +5602,10 @@ hash<auto> ans = sock.readHTTPChunkedBodyToOutputStream(outputStream, 20s);
     @throw READ-HTTP-CHUNK-ERROR negative value given for chunk size by server
     @throw SOCKET-WRITE-ERROR the OutputStream is not I/O-thread-safe
 */
-hash<auto> Socket::readHTTPChunkedBodyToOutputStream(Qore::OutputStream[OutputStream] os, timeout timeout_ms = -1) {
+hash<auto> Socket::readHTTPChunkedBodyToOutputStream(Qore::OutputStream[OutputStream] output_stream,
+        timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false,
-        "readHTTPChunkedBodyToOutputStream", xsink, *os);
+        "readHTTPChunkedBodyToOutputStream", xsink, *output_stream);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)
@@ -5616,7 +5619,7 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
     @par Events:
     @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED
 
-    @param rcb The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+    @param receive_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
     - \c "data": the string or binary data
     - \c "chunked": True if the data was received with chunked transfer encoding, False if not
     .
@@ -5634,9 +5637,9 @@ sock.readHTTPChunkedBodyWithCallback(recv_callback, 20s);
 
     @since %Qore 0.8.10
 */
-Socket::readHTTPChunkedBodyWithCallback(code rcb, timeout timeout_ms = -1) {
+Socket::readHTTPChunkedBodyWithCallback(code receive_callback, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> ignored(socket_exec_read_http_chunked_body(self, s, timeout_ms, false, false,
-        "readHTTPChunkedBodyWithCallback", xsink, nullptr, rcb), xsink);
+        "readHTTPChunkedBodyWithCallback", xsink, nullptr, receive_callback), xsink);
 }
 
 //! Reads in an HTTP message body sent in chunked transfer encoding and returns it with any footers received as a string in the \c "body" key of a hash (including footers received)
@@ -5650,7 +5653,7 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
     @par Events:
     @ref EVENT_HTTP_CHUNK_SIZE, @ref EVENT_HTTP_FOOTERS_RECEIVED
 
-    @param rcb The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
+    @param receive_callback The receive callback for the data received; first this method is called with a hash of the message headers, and then with any message body; if a chunked HTTP message is received, then the callback is called once for each chunk; when the message has been received, then the receive callback is called with a hash representing any trailer data received in a chunked transfer or @ref nothing if the data was received in a normal message body or if there was no trailer data in a chunked transfer.  The argument to this callback is always a hash; data calls have the following keys:
     - \c "data": the string or binary data
     - \c "chunked": True if the data was received with chunked transfer encoding, False if not
     .
@@ -5672,9 +5675,9 @@ sock.readHTTPChunkedBodyBinaryWithCallback(recv_callback, 20s);
 
     @since %Qore 0.8.10
 */
-Socket::readHTTPChunkedBodyBinaryWithCallback(code rcb, timeout timeout_ms = -1) {
+Socket::readHTTPChunkedBodyBinaryWithCallback(code receive_callback, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreHashNode> ignored(socket_exec_read_http_chunked_body(self, s, timeout_ms, true, false,
-        "readHTTPChunkedBodyBinaryWithCallback", xsink, nullptr, rcb), xsink);
+        "readHTTPChunkedBodyBinaryWithCallback", xsink, nullptr, receive_callback), xsink);
 }
 
 //! Read a server sent event message
@@ -5694,7 +5697,7 @@ Socket::readHTTPChunkedBodyBinaryWithCallback(code rcb, timeout timeout_ms = -1)
 
     @since %Qore 2.0
 */
-hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) {
+hash<SseMessageInfo> Socket::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     if (!content_encoding || (*content_encoding == "identity")) {
         return socket_exec_read_server_sent_event(self, s, timeout_ms, xsink);
     }

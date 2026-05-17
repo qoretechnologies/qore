@@ -1008,6 +1008,71 @@ class ReflectionTest inherits QUnit::Test {
             ("node", "service", "family", "flags", "socket_type", "protocol", "timeout_ms"));
         assertNamedClassStaticMethodVariantCount("Socket", "parseServerSentEvent", ("event_text",));
         assertNamedClassStaticMethodVariantCount("Socket", "poll", ("items", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponse",
+            ("status_code", "status_description", "http_version", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponseAndReadHeader",
+            ("status_code", "status_description", "http_version", "headers", "body", "idle_timeout"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponseWithStreamAndReadHeader",
+            ("status_code", "status_description", "http_version", "headers", "body", "content_length",
+                "idle_timeout"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpChunkedResponseAndReadHeader",
+            ("status_code", "status_description", "http_version", "headers", "body", "idle_timeout"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpResponseWithStream",
+            ("status_code", "status_description", "http_version", "headers", "body", "content_length"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttpChunkedResponseWithStream",
+            ("status_code", "status_description", "http_version", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPMessage",
+            ("method", "path", "http_version", "headers", "body", "info", "timeout_ms"), 2);
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPMessageWithCallback",
+            ("send_callback", "method", "path", "http_version", "headers", "info", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPResponse",
+            ("status_code", "status_description", "http_version", "headers", "body", "info", "timeout_ms"), 2);
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPResponse",
+            ("status_code", "status_description", "http_version", "headers", "input_stream", "max_chunk_size",
+                "info", "timeout_ms", "trailers_callback"));
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPResponseWithCallback",
+            ("send_callback", "status_code", "status_description", "http_version", "headers", "info",
+                "timeout_ms"));
+        int socket_response_no_info_count = 0;
+        foreach AbstractMethodVariant v in (Class::forName("Socket").getMethod("sendHTTPResponse").getVariants()) {
+            if (v.getParamNames()
+                    == ("status_code", "status_description", "http_version", "headers", "body", "timeout_ms")) {
+                ++socket_response_no_info_count;
+                assertFalse(v.isNamedCallable());
+            }
+        }
+        assertEq(2, socket_response_no_info_count);
+        int socket_response_callback_no_info_count = 0;
+        foreach AbstractMethodVariant v in (
+                Class::forName("Socket").getMethod("sendHTTPResponseWithCallback").getVariants()) {
+            if (v.getParamNames()
+                    == ("send_callback", "status_code", "status_description", "http_version", "headers",
+                        "timeout_ms")) {
+                ++socket_response_callback_no_info_count;
+                assertFalse(v.isNamedCallable());
+            }
+        }
+        assertEq(1, socket_response_callback_no_info_count);
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPChunkedBodyFromInputStream",
+            ("input_stream", "max_chunk_size", "timeout_ms", "trailers_callback"));
+        assertNamedClassMethodVariantCount("Socket", "sendHTTPChunkedBodyTrailer", ("trailer", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "readHTTPHeader", ("timeout_ms", "info"));
+        foreach string name in ("readHTTPHeaderString", "readHTTPChunkedBody", "readHTTPChunkedBodyBinary",
+                "readHTTPChunk") {
+            assertNamedClassMethodVariantCount("Socket", name, ("timeout_ms",));
+        }
+        assertNamedClassMethodVariantCount("Socket", "readHTTPChunkedBodyToOutputStream",
+            ("output_stream", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "readHTTPChunkedBodyWithCallback",
+            ("receive_callback", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "readHTTPChunkedBodyBinaryWithCallback",
+            ("receive_callback", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "readServerSentEvent", ("content_encoding", "timeout_ms"));
+        foreach AbstractMethodVariant v in (Class::forName("Socket").getMethod("readServerSentEvent").getVariants()) {
+            if (v.getParamNames() == ("timeout_ms",)) {
+                assertFalse(v.isNamedCallable());
+            }
+        }
         assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "waitForReady", ("timeout_ms",));
         assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "registerReadyNotifier", ("notifier",));
         assertNamedClassMethodVariantCount("HttpClientConnectionBase", "waitForReadyOrError", ("timeout_ms",));

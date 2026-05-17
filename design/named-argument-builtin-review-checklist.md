@@ -506,8 +506,14 @@ These examples are from the core migration and should be reused as precedent:
   `max_request_body_size`, `node`, `items`, and `event_text`; avoid exposing
   internal names such as `str`, `bin`, `socktype`, `iface`, `reuseaddr`, `os`,
   `i`, `cert`, `key`, `pass`, `arg`, `nd`, `ms`, `set`, and `warning_bs`.
-  Keep the timeout-only `readServerSentEvent(timeout_ms)` compatibility
-  overload positional when the fuller overload can provide named calls.
+  HTTP helpers should use `status_description`, `send_callback`,
+  `receive_callback`, `trailers_callback`, `output_stream`, `info`, and
+  `idle_timeout` instead of `status_desc`, `scb`, `rcb`, `tcb`, or `os`.
+  Keep HTTP response compatibility overloads without an `info` output reference
+  positional when the fuller `info` overload can provide the same named-call
+  behavior without ambiguity. Keep the timeout-only
+  `readServerSentEvent(timeout_ms)` compatibility overload positional when the
+  fuller overload can provide named calls.
 - `SandboxManager` should expose explicit limit and policy names:
   `max_bytes`, `max_cpu_time_ms`, `max_wall_time_ms`, `max_threads`,
   `max_depth`, `path`, `access_modes`, `allow`, `host_pattern`, `cidr`,

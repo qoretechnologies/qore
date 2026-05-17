@@ -162,6 +162,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             NOTHING);
         addTestCase("reviewed Socket low-level builtin opt-in", \reviewedSocketLowLevelBuiltinOptIn(),
             NOTHING);
+        addTestCase("reviewed Socket HTTP builtin opt-in", \reviewedSocketHttpBuiltinOptIn(), NOTHING);
         addTestCase("reviewed HTTP readiness builtin opt-in", \reviewedHttpReadinessBuiltinOptIn(),
             NOTHING);
         addTestCase("reviewed HTTPClient class builtin opt-in", \reviewedHttpClientClassBuiltinOptIn(),
@@ -1099,6 +1100,58 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "socket_type: SOCK_STREAM, protocol: 0, timeout_ms: 0); "
             "}",
             "socket-low-level-named");
+    }
+
+    reviewedSocketHttpBuiltinOptIn() {
+        Program p(PO_NEW_STYLE);
+        p.parse("sub socket_http_named(Socket s) { hash<auto> info; hash<auto> headers = {}; binary data = <00>; "
+            "StringOutputStream output_stream(); StringInputStream input_stream(source: \"body\"); "
+            "code send_callback = sub () { return NOTHING; }; code receive_callback = sub (hash<auto> h) {}; "
+            "code trailers_callback = *hash<auto> sub () { return NOTHING; }; "
+            "s.startPollSendHttpResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: \"body\"); "
+            "s.startPollSendHttpResponseAndReadHeader(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: data, idle_timeout: 1s); "
+            "s.startPollSendHttpResponseWithStreamAndReadHeader(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: input_stream, content_length: 4, idle_timeout: 1s); "
+            "s.startPollSendHttpChunkedResponseAndReadHeader(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: input_stream, idle_timeout: 1s); "
+            "s.startPollSendHttpResponseWithStream(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: input_stream, content_length: 4); "
+            "s.startPollSendHttpChunkedResponseWithStream(status_code: 200, status_description: \"OK\", "
+            "http_version: \"1.1\", headers: headers, body: input_stream); "
+            "s.sendHTTPMessage(method: \"POST\", path: \"/path\", http_version: \"1.1\", headers: headers, "
+            "body: \"body\", info: \\info, timeout_ms: 0); "
+            "s.sendHTTPMessage(method: \"POST\", path: \"/path\", http_version: \"1.1\", headers: headers, "
+            "body: data, info: \\info, timeout_ms: 0); "
+            "s.sendHTTPMessageWithCallback(send_callback: send_callback, method: \"POST\", path: \"/path\", "
+            "http_version: \"1.1\", headers: headers, info: \\info, timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: \"body\", timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: \"body\", info: \\info, timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: data, timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, body: data, info: \\info, timeout_ms: 0); "
+            "s.sendHTTPResponse(status_code: 200, status_description: \"OK\", http_version: \"1.1\", "
+            "headers: headers, input_stream: input_stream, max_chunk_size: 1024, info: \\info, "
+            "timeout_ms: 0, trailers_callback: trailers_callback); "
+            "s.sendHTTPResponseWithCallback(send_callback: send_callback, status_code: 200, "
+            "status_description: \"OK\", http_version: \"1.1\", headers: headers, timeout_ms: 0); "
+            "s.sendHTTPResponseWithCallback(send_callback: send_callback, status_code: 200, "
+            "status_description: \"OK\", http_version: \"1.1\", headers: headers, info: \\info, timeout_ms: 0); "
+            "s.sendHTTPChunkedBodyFromInputStream(input_stream: input_stream, max_chunk_size: 1024, "
+            "timeout_ms: 0, trailers_callback: trailers_callback); "
+            "s.sendHTTPChunkedBodyTrailer(trailer: headers, timeout_ms: 0); "
+            "s.readHTTPHeader(timeout_ms: 0, info: \\info); s.readHTTPHeaderString(timeout_ms: 0); "
+            "s.readHTTPChunkedBody(timeout_ms: 0); s.readHTTPChunkedBodyBinary(timeout_ms: 0); "
+            "s.readHTTPChunk(timeout_ms: 0); "
+            "s.readHTTPChunkedBodyToOutputStream(output_stream: output_stream, timeout_ms: 0); "
+            "s.readHTTPChunkedBodyWithCallback(receive_callback: receive_callback, timeout_ms: 0); "
+            "s.readHTTPChunkedBodyBinaryWithCallback(receive_callback: receive_callback, timeout_ms: 0); "
+            "s.readServerSentEvent(content_encoding: \"identity\", timeout_ms: 0); }",
+            "socket-http-named");
     }
 
     reviewedHttpReadinessBuiltinOptIn() {
