@@ -823,9 +823,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # bug in per-stream wait handling (incorrect deadline, non-firing
         # future, cancel deadlock) could cause infinite hangs even when each
         # individual f.get() call is supposed to be bounded.  We saw this
-        # empirically in Qorus issue 1704 where a 120s request_timeout failed
-        # to fire and the workflow thread parked in FutureImpl::get() for
-        # 30+ min.  The budget gives us a hard ceiling regardless of per-stream
+        # empirically where a 120s request_timeout failed to fire and the
+        # calling thread parked in FutureImpl::get() for 30+ min.  The
+        # budget gives us a hard ceiling regardless of per-stream
         # behavior — but it must be GENEROUS enough to cover the legitimate
         # retry path (request_timeout for the first attempt + connect_timeout
         # for each retry on a fresh connection), otherwise it will pre-empt
