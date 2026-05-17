@@ -160,6 +160,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed event-loop class builtin opt-in", \reviewedEventLoopClassBuiltinOptIn(),
             NOTHING);
+        addTestCase("reviewed Socket low-level builtin opt-in", \reviewedSocketLowLevelBuiltinOptIn(),
+            NOTHING);
         addTestCase("reviewed HTTP readiness builtin opt-in", \reviewedHttpReadinessBuiltinOptIn(),
             NOTHING);
         addTestCase("reviewed HTTPClient class builtin opt-in", \reviewedHttpClientClassBuiltinOptIn(),
@@ -1019,6 +1021,84 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertTrue((notifier_events[0].events & SOCK_POLLIN) != 0, "EventLoop returns notifier readiness");
         loop.del(notifier: notifier);
         notifier.acknowledge();
+    }
+
+    reviewedSocketLowLevelBuiltinOptIn() {
+        Socket sock();
+        sock.setEncoding(encoding: "UTF-8");
+        assertEq("UTF-8", sock.getEncoding(), "Socket setEncoding exposes encoding");
+        sock.setCharset(encoding: "UTF-8");
+        assertEq("UTF-8", sock.getCharset(), "Socket setCharset exposes encoding");
+        sock.setAlpnProtocols(protocols: ("h2", "http/1.1"));
+        assertEq(0, sock.setUserTimeout(timeout_ms: 1000), "Socket setUserTimeout exposes timeout_ms");
+        assertEq(1000, sock.getUserTimeout(), "Socket user timeout is stored on unopened sockets");
+        sock.acceptAllCertificates(accept_all: True);
+        assertTrue(sock.getAcceptAllCertificates(), "Socket acceptAllCertificates exposes accept_all");
+        assertFalse(sock.captureRemoteCertificates(enabled: True),
+            "Socket captureRemoteCertificates exposes enabled and returns previous value");
+        assertEq("hello", Socket::parseServerSentEvent(event_text: "data: hello\n\n").data,
+            "Socket parseServerSentEvent exposes event_text");
+        assertEq((), Socket::poll(items: (), timeout_ms: 0), "Socket poll exposes items and timeout_ms");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub socket_low_level_named(Socket s, InputStream input_stream, OutputStream output_stream, "
+            "Queue queue, SSLCertificate certificate, SSLPrivateKey private_key) { "
+            "binary bin = <00>; string text = \"x\"; "
+            "s.startPollConnect(target: \"example.com:80\"); "
+            "s.startPollConnectSsl(target: \"example.com:443\"); "
+            "s.startPollSend(data: text); s.startPollSend(data: bin); "
+            "s.startPollRecvString(size: 1); s.startPollRecvBinary(size: 1); "
+            "s.startPollReadHttpBody(content_length: 0, chunked: False, connection_close: False); "
+            "s.startPollRecvUntilBytesString(pattern: \"\\r\\n\"); "
+            "s.startPollRecvUntilBytesBinary(pattern: \"\\r\\n\"); "
+            "s.startPollRecvFrom(max_size: 128); "
+            "s.startPollSendTo(host: \"127.0.0.1\", port: 9, data: bin, family: AF_INET); "
+            "s.connect(target: \"example.com:80\", timeout_ms: 0); "
+            "s.connectINET(host: \"example.com\", service: \"80\", timeout_ms: 0, family: AF_UNSPEC, "
+            "socket_type: SOCK_STREAM, protocol: 0); "
+            "s.connectUNIX(path: \"/tmp/qore-na-socket\", socket_type: SOCK_STREAM, protocol: 0); "
+            "s.connectSSL(target: \"example.com:443\", timeout_ms: 0); "
+            "s.connectINETSSL(host: \"example.com\", service: \"443\", timeout_ms: 0, family: AF_UNSPEC, "
+            "socket_type: SOCK_STREAM, protocol: 0); "
+            "s.connectUNIXSSL(path: \"/tmp/qore-na-socket\", socket_type: SOCK_STREAM, protocol: 0); "
+            "s.bind(target: \"127.0.0.1:0\", reuse_address: True); "
+            "s.bind(port: 0, reuse_address: True); "
+            "s.bindUNIX(path: \"/tmp/qore-na-socket\", socket_type: SOCK_STREAM, protocol: 0); "
+            "s.bindINET(bind_address: NOTHING, service: \"0\", reuse_address: True, family: AF_UNSPEC, "
+            "socket_type: SOCK_STREAM, protocol: 0); "
+            "s.accept(timeout_ms: 0); s.acceptSSL(timeout_ms: 0); s.listen(backlog: 1); "
+            "s.send(data: bin, timeout_ms: 0); s.send(data: text, timeout_ms: 0); "
+            "s.sendBinary(data: bin, timeout_ms: 0); s.sendBinary(data: text, timeout_ms: 0); "
+            "s.send2(data: bin, timeout_ms: 0); s.send2(data: text, timeout_ms: 0); "
+            "s.sendBinary2(data: bin, timeout_ms: 0); s.sendBinary2(data: text, timeout_ms: 0); "
+            "s.sendFromInputStream(input_stream: input_stream, size: -1, timeout_ms: 0); "
+            "s.sendi1(value: 1, timeout_ms: 0); s.sendi2(value: 1, timeout_ms: 0); "
+            "s.sendi4(value: 1, timeout_ms: 0); s.sendi8(value: 1, timeout_ms: 0); "
+            "s.sendi2LSB(value: 1, timeout_ms: 0); s.sendi4LSB(value: 1, timeout_ms: 0); "
+            "s.sendi8LSB(value: 1, timeout_ms: 0); "
+            "s.recv(size: 1, timeout_ms: 0); s.recvBinary(size: 1, timeout_ms: 0); "
+            "s.recvToOutputStream(output_stream: output_stream, size: -1, timeout_ms: 0); "
+            "s.recvi1(timeout_ms: 0); s.recvi2(timeout_ms: 0); s.recvi4(timeout_ms: 0); "
+            "s.recvi8(timeout_ms: 0); s.recvi2LSB(timeout_ms: 0); s.recvi4LSB(timeout_ms: 0); "
+            "s.recvi8LSB(timeout_ms: 0); s.recvu1(timeout_ms: 0); s.recvu2(timeout_ms: 0); "
+            "s.recvu4(timeout_ms: 0); s.recvu2LSB(timeout_ms: 0); s.recvu4LSB(timeout_ms: 0); "
+            "s.setSendTimeout(timeout_ms: 0); s.setRecvTimeout(timeout_ms: 0); "
+            "s.isDataAvailable(timeout_ms: 0); s.isWriteFinished(timeout_ms: 0); "
+            "s.setCertificate(certificate: certificate); s.setCertificate(pem: \"\"); s.setCertificate(der: bin); "
+            "s.setPrivateKey(private_key: private_key); s.setPrivateKey(pem: \"\", password: NOTHING); "
+            "s.setPrivateKey(der: bin); "
+            "s.setCertificateAndPrivateKey(certificate: certificate, private_key: private_key); "
+            "s.setEventQueue(queue: queue, argument: NOTHING, with_data: False); "
+            "s.setNoDelay(enabled: True); s.getPeerInfo(host_lookup: False); s.getSocketInfo(host_lookup: False); "
+            "s.upgradeClientToSSL(timeout_ms: 0); s.upgradeServerToSSL(timeout_ms: 0); "
+            "s.setWarningQueue(warning_ms: 1, warning_bytes: 1, queue: queue, argument: NOTHING, min_ms: 1s); "
+            "s.setSslVerifyMode(mode: SSL_VERIFY_NONE); "
+            "s.setMaxChunkedBodySize(max_body_size: 0); "
+            "s.setHttp2MaxRequestBodySize(max_request_body_size: 0); "
+            "Socket::resolveAddrInfo(node: NOTHING, service: \"80\", family: AF_UNSPEC, flags: 0, "
+            "socket_type: SOCK_STREAM, protocol: 0, timeout_ms: 0); "
+            "}",
+            "socket-low-level-named");
     }
 
     reviewedHttpReadinessBuiltinOptIn() {

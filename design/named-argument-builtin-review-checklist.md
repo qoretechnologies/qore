@@ -496,6 +496,18 @@ These examples are from the core migration and should be reused as precedent:
   `as_string`, `max_bytes`, and `max_file_len`. Use `argument` for the
   `setEventQueue()` input even though the resulting event hash key remains
   `arg`.
+- Socket low-level APIs should expose network and stream roles instead of
+  implementation shorthand: use `target`, `host`, `port`, `service`,
+  `bind_address`, `reuse_address`, `path`, `family`, `socket_type`,
+  `protocol`, `timeout_ms`, `backlog`, `data`, `input_stream`,
+  `output_stream`, `size`, `value`, `encoding`, `protocols`, `certificate`,
+  `private_key`, `pem`, `der`, `password`, `queue`, `argument`, `with_data`,
+  `enabled`, `warning_bytes`, `min_ms`, `accept_all`, `max_body_size`,
+  `max_request_body_size`, `node`, `items`, and `event_text`; avoid exposing
+  internal names such as `str`, `bin`, `socktype`, `iface`, `reuseaddr`, `os`,
+  `i`, `cert`, `key`, `pass`, `arg`, `nd`, `ms`, `set`, and `warning_bs`.
+  Keep the timeout-only `readServerSentEvent(timeout_ms)` compatibility
+  overload positional when the fuller overload can provide named calls.
 - `SandboxManager` should expose explicit limit and policy names:
   `max_bytes`, `max_cpu_time_ms`, `max_wall_time_ms`, `max_threads`,
   `max_depth`, `path`, `access_modes`, `allow`, `host_pattern`, `cidr`,

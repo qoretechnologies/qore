@@ -2507,7 +2507,7 @@ Socket::destructor() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollConnect(string target) {
+AbstractPollOperation Socket::startPollConnect(string target) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, false, target->c_str(), s),
         xsink);
@@ -2536,7 +2536,7 @@ AbstractPollOperation Socket::startPollConnect(string target) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollConnectSsl(string target) {
+AbstractPollOperation Socket::startPollConnectSsl(string target) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, true, target->c_str(), s),
         xsink);
@@ -2558,7 +2558,7 @@ AbstractPollOperation Socket::startPollConnectSsl(string target) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollSend(string data) {
+AbstractPollOperation Socket::startPollSend(string data) [flags=NAMED_ARGS] {
     SimpleRefHolder<QoreStringNode> tmp;
     if (data->getEncoding() != s->getEncoding()) {
         tmp = data->convertEncoding(s->getEncoding(), xsink);
@@ -2588,7 +2588,7 @@ AbstractPollOperation Socket::startPollSend(string data) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollSend(binary data) {
+AbstractPollOperation Socket::startPollSend(binary data) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketSendPollOperation(xsink, data->binRefSelf(), s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3163,7 +3163,7 @@ AbstractPollOperation Socket::startPollAccept() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvString(int size) {
+AbstractPollOperation Socket::startPollRecvString(int size) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvPollOperation(xsink, size, s, true), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3187,7 +3187,7 @@ AbstractPollOperation Socket::startPollRecvString(int size) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvBinary(int size) {
+AbstractPollOperation Socket::startPollRecvBinary(int size) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvPollOperation(xsink, size, s, false), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3242,7 +3242,8 @@ AbstractPollOperation Socket::startPollRecvData() {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollReadHttpBody(int content_length, bool chunked, bool connection_close) {
+AbstractPollOperation Socket::startPollReadHttpBody(int content_length, bool chunked,
+        bool connection_close) [flags=NAMED_ARGS] {
     // Use status_code=200 and is_head=false since this reads request bodies (not responses)
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -3272,7 +3273,7 @@ AbstractPollOperation Socket::startPollReadHttpBody(int content_length, bool chu
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvUntilBytesString(string pattern) {
+AbstractPollOperation Socket::startPollRecvUntilBytesString(string pattern) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvUntilBytesPollOperation(xsink, pattern, s, true), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3296,7 +3297,7 @@ AbstractPollOperation Socket::startPollRecvUntilBytesString(string pattern) {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) {
+AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvUntilBytesPollOperation(xsink, pattern, s, false), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3330,7 +3331,7 @@ AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollRecvFrom(*int max_size) [dom=NETWORK] {
+AbstractPollOperation Socket::startPollRecvFrom(*int max_size) [flags=NAMED_ARGS; dom=NETWORK] {
     size_t ms = max_size ? (size_t)max_size : 65535;
     if (ms == 0 || ms > 65535) {
         ms = 65535;
@@ -3364,7 +3365,8 @@ AbstractPollOperation Socket::startPollRecvFrom(*int max_size) [dom=NETWORK] {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendTo(string host, int port, binary data, *int family) [dom=NETWORK] {
+AbstractPollOperation Socket::startPollSendTo(
+        string host, int port, binary data, *int family) [flags=NAMED_ARGS; dom=NETWORK] {
     int fam = family ? (int)family : AF_UNSPEC;
 
     s->ref();
@@ -3542,7 +3544,7 @@ sock.connect("/tmp/socket");@endcode
     @see Socket::connectUNIX(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and
     Socket::connectUNIXSSL()
 */
-nothing Socket::connect(string target, timeout timeout_ms = -1) {
+nothing Socket::connect(string target, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_connect(self, s, target->c_str(), timeout_ms, false, xsink);
 }
 
@@ -3568,15 +3570,16 @@ sock.connectINET("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s);@endcode
     @param service The service name (ex: \c "http" or port number (given as or converted to a string) to connect to
     @param timeout_ms If a timeout value is passed and the connection takes longer to establish than the timeout, a \c "SOCKET-CONNECT-ERROR" exception is thrown. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
     @param family The address family to use to connect to the remote socket; see @ref network_address_family_constants
-    @param socktype The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, etc)
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINETSSL(), and Socket::connectUNIXSSL()
 */
-nothing Socket::connectINET(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms,
+nothing Socket::connectINET(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC,
+        softint socket_type = SOCK_STREAM, softint protocol = 0) [flags=NAMED_ARGS] {
+    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socket_type, protocol, timeout_ms,
         false, xsink);
 }
 
@@ -3591,7 +3594,7 @@ sock.connectUNIX("/tmp/socket"); @endcode
     @ref EVENT_CONNECTING, @ref EVENT_CONNECTED
 
     @param path The socket will try to connect to a UNIX domain socket file on the local filesystem with the given name
-    @param socktype The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the socket
@@ -3600,8 +3603,9 @@ sock.connectUNIX("/tmp/socket"); @endcode
 
     @note UNIX domain sockets are not available on native Windows ports
 */
-nothing Socket::connectUNIX(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    socket_exec_connect_unix(self, s, path->c_str(), socktype, protocol, -1, false, xsink);
+nothing Socket::connectUNIX(string path, softint socket_type = SOCK_STREAM,
+        softint protocol = 0) [flags=NAMED_ARGS] {
+    socket_exec_connect_unix(self, s, path->c_str(), socket_type, protocol, -1, false, xsink);
 }
 
 //! Connects to a remote socket and attempts to establish a TLS/SSL connection; accepts an optional timeout value with a millisecond resolution
@@ -3633,7 +3637,7 @@ sock.connectSSL("/tmp/socket"); @endcode
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectUNIXSSL(), Socket::connectINETSSL(), and Socket::connectINET()
 */
-nothing Socket::connectSSL(string target, timeout timeout_ms = -1) {
+nothing Socket::connectSSL(string target, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_connect(self, s, target->c_str(), timeout_ms, true, xsink);
 }
 
@@ -3659,7 +3663,7 @@ sock.connectINETSSL("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s); @endcod
     @param service The service name (ex: \c "http" or port number (given as or converted to a string) to connect to
     @param timeout_ms If a timeout value is passed and the connection takes longer to establish than the timeout, a \c "SOCKET-CONNECT-ERROR" exception is thrown. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
     @param family The address family to use to connect to the remote socket; see @ref network_address_family_constants
-    @param socktype The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no listener, timeout exceeded, etc)
@@ -3667,8 +3671,10 @@ sock.connectINETSSL("2001:0db8:85a3:0000:0000:8a2e:0370:7334", 80, 20s); @endcod
 
     @see Socket::connect(), Socket::connectUNIX(), Socket::connectSSL(), Socket::connectINET(), and Socket::connectUNIXSSL()
 */
-nothing Socket::connectINETSSL(string host, softstring service, timeout timeout_ms = -1, softint family = AF_UNSPEC, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socktype, protocol, timeout_ms,
+nothing Socket::connectINETSSL(string host, softstring service, timeout timeout_ms = -1,
+        softint family = AF_UNSPEC, softint socket_type = SOCK_STREAM,
+        softint protocol = 0) [flags=NAMED_ARGS] {
+    socket_exec_connect_inet(self, s, host->c_str(), service->c_str(), family, socket_type, protocol, timeout_ms,
         true, xsink);
 }
 
@@ -3683,7 +3689,7 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
     @ref EVENT_CONNECTING, @ref EVENT_CONNECTED, @ref EVENT_START_SSL, @ref EVENT_SSL_ESTABLISHED
 
     @param path The socket will try to connect to a UNIX domain socket file on the local filesystem with the given name
-    @param socktype The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type The type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol The protocol number for the socket (if not sure leave this 0)
 
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the socket
@@ -3693,8 +3699,9 @@ sock.connectUNIXSSL("/tmp/socket"); @endcode
 
     @note UNIX domain sockets are not available on native Windows ports
 */
-nothing Socket::connectUNIXSSL(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    socket_exec_connect_unix(self, s, path->c_str(), socktype, protocol, -1, true, xsink);
+nothing Socket::connectUNIXSSL(string path, softint socket_type = SOCK_STREAM,
+        softint protocol = 0) [flags=NAMED_ARGS] {
+    socket_exec_connect_unix(self, s, path->c_str(), socket_type, protocol, -1, true, xsink);
 }
 
 //! Opens and binds the socket to a port, interface and port (if the bind_to string has a format "host:port"), or UNIX domain socket file.
@@ -3711,15 +3718,15 @@ nothing Socket::connectUNIXSSL(string path, softint socktype = SOCK_STREAM, soft
 if (sock.bind("/tmp/my-socket", True))
     throw "BIND-ERROR", strerror(); @endcode
 
-    @param str If a colon appears in the string, the string will be assumed to be a \c "bind_address:port" specification, and the port on the named IP address will be bound, otherwise, if the string contains no colon, the socket will be bound to a UNIX domain socket file on the local filesystem with the given name.  Note that a hostname or address in square brackets (ex: \c "[localhost]") will be looked up and bound as an IPv6 address; additionally, the method recognizes ipv6 addresses by embedded colons (:) in the address string (if surrounded by square brackets) and binds them as such.
-    @param reuseaddr If this optional argument evaluates to @ref True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state); note that this only applies to IPv4 (@ref AF_INET) and IPv6 (@ref AF_INET6) sockets; this option is ignored for UNIX (@ref AF_UNIX) sockets.
+    @param target If a colon appears in the string, the string will be assumed to be a \c "bind_address:port" specification, and the port on the named IP address will be bound, otherwise, if the string contains no colon, the socket will be bound to a UNIX domain socket file on the local filesystem with the given name.  Note that a hostname or address in square brackets (ex: \c "[localhost]") will be looked up and bound as an IPv6 address; additionally, the method recognizes ipv6 addresses by embedded colons (:) in the address string (if surrounded by square brackets) and binds them as such.
+    @param reuse_address If this optional argument evaluates to @ref True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state); note that this only applies to IPv4 (@ref AF_INET) and IPv6 (@ref AF_INET6) sockets; this option is ignored for UNIX (@ref AF_UNIX) sockets.
 
     @see Socket::bindINET() and Socket::bindUNIX()
 
     @note UNIX domain sockets are not available on native Windows ports
 */
-int Socket::bind(string str, softbool reuseaddr = False) {
-    return s->bind(str->c_str(), reuseaddr);
+int Socket::bind(string target, softbool reuse_address = False) [flags=NAMED_ARGS] {
+    return s->bind(target->c_str(), reuse_address);
 }
 
 //! Opens and binds the socket to an INET port on all interfaces
@@ -3733,12 +3740,12 @@ if (sock.bind(80, True))
     throw "BIND-ERROR", strerror(); @endcode
 
     @param port A port number to bind to on all interfaces
-    @param reuseaddr If this optional argument evaluates to @ref True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state)
+    @param reuse_address If this optional argument evaluates to @ref True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state)
 
     @see Socket::bindINET() and Socket::bindUNIX()
 */
-int Socket::bind(int port, softbool reuseaddr = False) {
-    return s->bind(port, reuseaddr);
+int Socket::bind(int port, softbool reuse_address = False) [flags=NAMED_ARGS] {
+    return s->bind(port, reuse_address);
 }
 
 //! Opens and binds the socket to the given UNIX domain socket file as given by the filename argument. If any errors occur, an exception is thrown
@@ -3749,7 +3756,7 @@ int Socket::bind(int port, softbool reuseaddr = False) {
 sock.bindUNIX("/tmp/socket"); @endcode
 
     @param path The path of the UNIX domain socket to create and bind to
-    @param socktype the type of socket; see Socket Type Constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type the type of socket; see Socket Type Constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol the protocol number for the socket; use 0 for the default protocol
 
     @throw SOCKET-BIND-ERROR Error opening socket for bind; error binding on socket
@@ -3758,8 +3765,9 @@ sock.bindUNIX("/tmp/socket"); @endcode
 
     @note UNIX domain sockets are not available on native Windows ports
 */
-nothing Socket::bindUNIX(string path, softint socktype = SOCK_STREAM, softint protocol = 0) {
-    s->bindUNIX(path->c_str(), socktype, protocol, xsink);
+nothing Socket::bindUNIX(string path, softint socket_type = SOCK_STREAM,
+        softint protocol = 0) [flags=NAMED_ARGS] {
+    s->bindUNIX(path->c_str(), socket_type, protocol, xsink);
 }
 
 //! Opens and binds the socket to the given IPv4 or IPv6 interface (or if no interface is given, then to all interfaces on the local system) and port (the port number will be derived from the service name if a numeric port number is not given)
@@ -3779,11 +3787,11 @@ sock.bindINET("localhost", 8080, False, AF_INET6); @endcode
     @code{.py} # bind to ipv6 host address fe80::21c:42ff:fe00:8, port 1001, reuse the address
 sock.bindINET("fe80::21c:42ff:fe00:8", 1001, True); @endcode
 
-    @param iface the host name or IP address to bind to
+    @param bind_address the host name or IP address to bind to
     @param service the service name (ex: "http" or port number (given as or converted to a string) to bind to
-    @param reuseaddr if this optional argument evaluates to True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state)
+    @param reuse_address if this optional argument evaluates to True, the \c SO_REUSEADDR option will be set on the socket, which will allow the socket to be bound to a port that is not yet closed (for example, in a \c TIME_WAIT state)
     @param family the address family to use to bind; see Network Address Family Constants; \c AF_UNSPEC means to try all possible addres families
-    @param socktype the type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
+    @param socket_type the type of socket; see @ref socket_type_constants; typically @ref SOCK_STREAM for TCP sockets
     @param protocol the protocol number for the socket; use 0 for the default protocol
 
     @throw SOCKET-BIND-ERROR Both hostname and service name are empty or not set; error opening socket for bind; error binding on socket.
@@ -3791,16 +3799,16 @@ sock.bindINET("fe80::21c:42ff:fe00:8", 1001, True); @endcode
 
     @see Socket::bind() and Socket::bindUNIX()
 */
-nothing Socket::bindINET(*string iface, *softstring service, softbool reuseaddr = False, softint family = AF_UNSPEC,
-        softint socktype = SOCK_STREAM, softint protocol = 0) {
-    if ((!iface || iface->empty())
+nothing Socket::bindINET(*string bind_address, *softstring service, softbool reuse_address = False,
+        softint family = AF_UNSPEC, softint socket_type = SOCK_STREAM, softint protocol = 0) [flags=NAMED_ARGS] {
+    if ((!bind_address || bind_address->empty())
         && (!service || service->empty()))
-        return xsink->raiseException("SOCKET-BIND-ERROR", "both interace (first parameter) and service (second "
+        return xsink->raiseException("SOCKET-BIND-ERROR", "both bind_address (first parameter) and service (second "
             "parameter) were either not present or empty strings; at least one of the first 2 parameters must be "
             "present for a successful call to Socket::bindINET()");
 
-    s->bindINET(iface ? iface->c_str() : nullptr, service ? service->c_str() : nullptr, reuseaddr, family,
-        socktype, protocol, xsink);
+    s->bindINET(bind_address ? bind_address->c_str() : nullptr, service ? service->c_str() : nullptr,
+        reuse_address, family, socket_type, protocol, xsink);
 }
 
 //! Accepts connections on a listening socket
@@ -3840,7 +3848,7 @@ Socket Socket::accept() {
 
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
-*Socket Socket::accept(timeout timeout_ms) {
+*Socket Socket::accept(timeout timeout_ms) [flags=NAMED_ARGS] {
     return socket_exec_accept(self, s, timeout_ms, false, true, xsink);
 }
 
@@ -3883,7 +3891,7 @@ Socket Socket::acceptSSL() {
 
     @see Socket::acceptSSL(), Socket::listen(), Socket::getPeerInfo()
 */
-*Socket Socket::acceptSSL(timeout timeout_ms) {
+*Socket Socket::acceptSSL(timeout timeout_ms) [flags=NAMED_ARGS] {
     return socket_exec_accept(self, s, timeout_ms, true, true, xsink);
 }
 
@@ -3901,7 +3909,7 @@ Socket Socket::acceptSSL() {
 
     @since %Qore 0.8.8 the \a backlog parameter was added
 */
-int Socket::listen(int backlog = 20) {
+int Socket::listen(int backlog = 20) [flags=NAMED_ARGS] {
     return checkOpenResult(s->listen((int)backlog), "listen", xsink);
 }
 
@@ -3915,7 +3923,7 @@ sock.send(data, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param bin Sends the binary data over the socket
+    @param data Sends the binary data over the socket
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -3933,8 +3941,8 @@ sock.send(data, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error like Socket::send2(); this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::send(binary bin, timeout timeout_ms = -1) {
-    return socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
+int Socket::send(binary data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    return socket_exec_send_binary(self, s, data->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends string data over the socket; string data is converted to the socket's encoding if necessary; if any errors occur, an exception is thrown
@@ -3948,7 +3956,7 @@ sock.send(str, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param str sends the string data over the socket without the trailing null ('\0') character; the string's encoding is converted to the socket's encoding if necessary
+    @param data sends the string data over the socket without the trailing null ('\0') character; the string's encoding is converted to the socket's encoding if necessary
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -3966,8 +3974,8 @@ sock.send(str, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error like Socket::send2(); this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::send(string str, timeout timeout_ms = -1) {
-    return socket_exec_send_string(self, s, str, timeout_ms, true, xsink);
+int Socket::send(string data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    return socket_exec_send_string(self, s, data, timeout_ms, true, xsink);
 }
 
 //! Sends string data over the socket without converting the string to the socket's encoding, but instead is sent exactly as-is; if any errors occur, an exception is thrown
@@ -3980,7 +3988,7 @@ sock.sendBinary(str);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param str string data to be sent (without any conversion to the socket's encoding) over the socket without the trailing null ('\0') character
+    @param data string data to be sent (without any conversion to the socket's encoding) over the socket without the trailing null ('\0') character
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -3997,8 +4005,8 @@ sock.sendBinary(str);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error like Socket::send2(); this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendBinary(string str, timeout timeout_ms = -1) {
-    return socket_exec_send_string_bytes(self, s, str, timeout_ms, xsink);
+int Socket::sendBinary(string data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    return socket_exec_send_string_bytes(self, s, data, timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -4011,7 +4019,7 @@ sock.sendBinary2(data);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param bin Sends the binary data over the socket
+    @param data Sends the binary data over the socket
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4028,8 +4036,8 @@ sock.sendBinary2(data);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error like Socket::send2(); this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendBinary(binary bin, timeout timeout_ms = -1) {
-    return socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
+int Socket::sendBinary(binary data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    return socket_exec_send_binary(self, s, data->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -4042,7 +4050,7 @@ sock.send2(data);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param bin Sends the binary data over the socket
+    @param data Sends the binary data over the socket
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
@@ -4057,8 +4065,8 @@ sock.send2(data);
 
     @since %Qore 0.8.4
 */
-nothing Socket::send2(binary bin, timeout timeout_ms = -1) {
-    socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
+nothing Socket::send2(binary data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_send_binary(self, s, data->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Sends string data over the socket; string data is converted to the socket's encoding if necessary; if any errors occur, an exception is thrown
@@ -4072,7 +4080,7 @@ sock.send2(str);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param str sends the string data over the socket without the trailing null ('\0') character; the string's encoding is converted to the socket's encoding if necessary
+    @param data sends the string data over the socket without the trailing null ('\0') character; the string's encoding is converted to the socket's encoding if necessary
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
@@ -4087,8 +4095,8 @@ sock.send2(str);
 
     @since %Qore 0.8.4
 */
-nothing Socket::send2(string str, timeout timeout_ms = -1) {
-    socket_exec_send_string(self, s, str, timeout_ms, true, xsink);
+nothing Socket::send2(string data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_send_string(self, s, data, timeout_ms, true, xsink);
 }
 
 //! Sends string data over the socket without converting the string to the socket's encoding, but instead is sent exactly as-is; if any errors occur, an exception is thrown
@@ -4101,7 +4109,7 @@ sock.sendBinary2(str);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param str string data to be sent (without any conversion to the socket's encoding) over the socket without the trailing null ('\0') character
+    @param data string data to be sent (without any conversion to the socket's encoding) over the socket without the trailing null ('\0') character
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
@@ -4115,8 +4123,8 @@ sock.sendBinary2(str);
 
     @since %Qore 0.8.4
 */
-nothing Socket::sendBinary2(string str, timeout timeout_ms = -1) {
-    socket_exec_send_string_bytes(self, s, str, timeout_ms, xsink);
+nothing Socket::sendBinary2(string data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_send_string_bytes(self, s, data, timeout_ms, xsink);
 }
 
 //! Sends binary data over the socket; if any errors occur, an exception is thrown
@@ -4129,7 +4137,7 @@ sock.sendBinary2(data);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param bin Sends the binary data over the socket
+    @param data Sends the binary data over the socket
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @throw SOCKET-NOT-OPEN The socket is not connected
@@ -4143,8 +4151,8 @@ sock.sendBinary2(data);
 
     @since %Qore 0.8.4
 */
-nothing Socket::sendBinary2(binary bin, timeout timeout_ms = -1) {
-    socket_exec_send_binary(self, s, bin->binRefSelf(), timeout_ms, xsink);
+nothing Socket::sendBinary2(binary data, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_send_binary(self, s, data->binRefSelf(), timeout_ms, xsink);
 }
 
 //! Reads data from an @ref InputStream and sends the bytes over the socket
@@ -4170,7 +4178,7 @@ sock.sendFromInputStream(input_stream, -1); # write all data available
     @since %Qore 0.8.13
 */
 nothing Socket::sendFromInputStream(Qore::InputStream[InputStream] input_stream, softint size = -1,
-        timeout timeout_ms = -1) {
+        timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_send_input_stream(self, s, *input_stream, const_cast<QoreObject*>(obj_input_stream), size,
         timeout_ms, xsink);
 }
@@ -4186,7 +4194,7 @@ sock.sendi1(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant byte will be sent
+    @param value the integer to send; only the least-significant byte will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4199,8 +4207,8 @@ sock.sendi1(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi1(softint i = 0, timeout timeout_ms = -1) {
-    char v = static_cast<char>(i);
+int Socket::sendi1(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    char v = static_cast<char>(value);
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4215,7 +4223,7 @@ sock.sendi2(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant 2 bytes will be sent
+    @param value the integer to send; only the least-significant 2 bytes will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4228,8 +4236,8 @@ sock.sendi2(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi2(softint i = 0, timeout timeout_ms = -1) {
-    short v = htons(static_cast<short>(i));
+int Socket::sendi2(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    short v = htons(static_cast<short>(value));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4244,7 +4252,7 @@ sock.sendi4(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant 4 bytes will be sent
+    @param value the integer to send; only the least-significant 4 bytes will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4257,8 +4265,8 @@ sock.sendi4(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi4(softint i = 0, timeout timeout_ms = -1) {
-    int v = htonl(static_cast<int>(i));
+int Socket::sendi4(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    int v = htonl(static_cast<int>(value));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4273,7 +4281,7 @@ sock.sendi8(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send
+    @param value the integer to send
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4286,8 +4294,8 @@ sock.sendi8(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi8(softint i = 0, timeout timeout_ms = -1) {
-    int64 v = i8MSB(i);
+int Socket::sendi8(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    int64 v = i8MSB(value);
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4302,7 +4310,7 @@ sock.sendi2LSB(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant 2 bytes will be sent
+    @param value the integer to send; only the least-significant 2 bytes will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4315,8 +4323,8 @@ sock.sendi2LSB(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi2LSB(softint i = 0, timeout timeout_ms = -1) {
-    short v = i2LSB(static_cast<short>(i));
+int Socket::sendi2LSB(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    short v = i2LSB(static_cast<short>(value));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4331,7 +4339,7 @@ sock.sendi4LSB(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send; only the least-significant 4 bytes will be sent
+    @param value the integer to send; only the least-significant 4 bytes will be sent
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4344,8 +4352,8 @@ sock.sendi4LSB(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi4LSB(softint i = 0, timeout timeout_ms = -1) {
-    int v = i4LSB(static_cast<int>(i));
+int Socket::sendi4LSB(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    int v = i4LSB(static_cast<int>(value));
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4360,7 +4368,7 @@ sock.sendi8LSB(val, 20s);
     @par Events:
     @ref EVENT_PACKET_SENT
 
-    @param i the integer to send
+    @param value the integer to send
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been sent or the remote end closes the connection; the timeout value is the longest value that a single send() operation can take with non-blocking I/O. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
     @return always returns 0 for backwards compatibility; if an error occurs, an exception is thrown
@@ -4373,8 +4381,8 @@ sock.sendi8LSB(val, 20s);
     @since %Qore 0.8.6 this method takes a timeout value and throws exceptions on error; this change was
     made because it was not possible to catch SSL errors with this method with the previous implementation
 */
-int Socket::sendi8LSB(softint i = 0, timeout timeout_ms = -1) {
-    int64 v = i8LSB(i);
+int Socket::sendi8LSB(softint value = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    int64 v = i8LSB(value);
     return socket_exec_send_bytes(self, s, &v, sizeof(v), timeout_ms, xsink);
 }
 
@@ -4404,7 +4412,7 @@ string data = sock.recv(-1); # read all data available
     - Socket::setEncoding()
     - Socket::recvBinary()
 */
-string Socket::recv(softint size = 0, timeout timeout_ms = -1) {
+string Socket::recv(softint size = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_recv_string(self, s, size, timeout_ms, xsink);
 }
 
@@ -4432,7 +4440,7 @@ binary data = sock.recvBinary(-1); # read all data available
 
     @see Socket::recv()
 */
-binary Socket::recvBinary(softint size = 0, timeout timeout_ms = -1) {
+binary Socket::recvBinary(softint size = 0, timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     return socket_exec_recv_binary(self, s, size, timeout_ms, xsink);
 }
 
@@ -4447,7 +4455,7 @@ sock.recvToOutputStream(os, -1); # read all data available
     @par Events:
     @ref EVENT_PACKET_READ
 
-    @param os The output stream to write the response body to; the stream must be I/O-thread-safe
+    @param output_stream The output stream to write the response body to; the stream must be I/O-thread-safe
     @param size the amount of data to read in bytes; to read until the remote closes the connection, use -1
     @param timeout_ms the timeout in milliseconds (1/1000 second). If no timeout is passed, then the call will not time out and will not return until all the data has been read or the remote end closes the connection. Note that like all %Qore functions and methods taking timeout values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two minutes, etc.)
 
@@ -4460,8 +4468,9 @@ sock.recvToOutputStream(os, -1); # read all data available
     @see Socket::recv()
     @since %Qore 0.8.13
 */
-nothing Socket::recvToOutputStream(Qore::OutputStream[OutputStream] os, softint size = -1, timeout timeout_ms = -1) {
-    socket_exec_recv_to_output_stream(self, s, *os, size, timeout_ms, xsink);
+nothing Socket::recvToOutputStream(Qore::OutputStream[OutputStream] output_stream, softint size = -1,
+        timeout timeout_ms = -1) [flags=NAMED_ARGS] {
+    socket_exec_recv_to_output_stream(self, s, *output_stream, size, timeout_ms, xsink);
 }
 
 //! Receives a 1-byte signed integer from the socket
@@ -4487,7 +4496,7 @@ int val = sock.recvi1();
 
     @see Socket::recvu1()
 */
-int Socket::recvi1(timeout timeout_ms = -1) {
+int Socket::recvi1(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     char b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4520,7 +4529,7 @@ int val = sock.recvi2();
 
     @see Socket::recvu2(), Socket::recvi2LSB(), Socket::recvu2LSB()
 */
-int Socket::recvi2(timeout timeout_ms = -1) {
+int Socket::recvi2(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     short b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4559,7 +4568,7 @@ int val = sock.recvi4();
 
     @see Socket::recvu4(), Socket::recvi4LSB(), Socket::recvu4LSB()
 */
-int Socket::recvi4(timeout timeout_ms = -1) {
+int Socket::recvi4(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     int b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4593,7 +4602,7 @@ int val = sock.recvi8();
 
     @see Socket::recvi8LSB()
 */
-int Socket::recvi8(timeout timeout_ms = -1) {
+int Socket::recvi8(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     int64 b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4626,7 +4635,7 @@ int val = sock.recvi2LSB();
 
     @see Socket::recvi2(), Socket::recvu2(), Socket::recvu2LSB()
 */
-int Socket::recvi2LSB(timeout timeout_ms = -1) {
+int Socket::recvi2LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     short b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4660,7 +4669,7 @@ int val = sock.recvi4LSB();
 
     @see Socket::recvi4(), Socket::recvu4(), Socket::recvu4LSB()
 */
-int Socket::recvi4LSB(timeout timeout_ms = -1) {
+int Socket::recvi4LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     int b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4694,7 +4703,7 @@ int val = sock.recvi8LSB();
 
     @see Socket::recvi8()
 */
-int Socket::recvi8LSB(timeout timeout_ms = -1) {
+int Socket::recvi8LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     int64 b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4728,7 +4737,7 @@ int val = sock.recvu1();
 
     @see Socket::recvi1()
 */
-int Socket::recvu1(timeout timeout_ms = -1) {
+int Socket::recvu1(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned char b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4761,7 +4770,7 @@ int val = sock.recvu2();
 
     @see Socket::recvi2(), Socket::recvi2LSB(), Socket::recvu2LSB()
 */
-int Socket::recvu2(timeout timeout_ms = -1) {
+int Socket::recvu2(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned short b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4795,7 +4804,7 @@ int val = sock.recvu4();
 
     @see Socket::recvi4(), Socket::recvi4LSB(), Socket::recvu4LSB()
 */
-int Socket::recvu4(timeout timeout_ms = -1) {
+int Socket::recvu4(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned int b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4829,7 +4838,7 @@ int val = sock.recvi2LSB();
 
     @see Socket::recvi2(), Socket::recvu2(), Socket::recvi2LSB()
 */
-int Socket::recvu2LSB(timeout timeout_ms = -1) {
+int Socket::recvu2LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned short b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -4863,7 +4872,7 @@ int val = sock.recvu4LSB();
 
     @see Socket::recvi4(), Socket::recvu4(), Socket::recvi4LSB()
 */
-int Socket::recvu4LSB(timeout timeout_ms = -1) {
+int Socket::recvu4LSB(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     unsigned b = 0;
     SimpleRefHolder<BinaryNode> data(socket_exec_recv_bytes(self, s, sizeof(b), timeout_ms, xsink));
     if (*xsink) {
@@ -5796,7 +5805,7 @@ if (sock.setSendTimeout(20s))
 
     @return 0 for success, -1 for error (check errno() for the actual error in this case)
 */
-int Socket::setSendTimeout(timeout timeout_ms) {
+int Socket::setSendTimeout(timeout timeout_ms) [flags=NAMED_ARGS] {
     return s->setSendTimeout(timeout_ms);
 }
 
@@ -5815,7 +5824,7 @@ if (sock.setRecvTimeout(20s))
 
     @return 0 for success, -1 for error (check errno() for the actual error in this case)
 */
-int Socket::setRecvTimeout(timeout timeout_ms) {
+int Socket::setRecvTimeout(timeout timeout_ms) [flags=NAMED_ARGS] {
     return s->setRecvTimeout(timeout_ms);
 }
 
@@ -5853,7 +5862,7 @@ string Socket::getEncoding() [flags=CONSTANT] {
 //! Sets the @ref character_encoding "character encoding" for the socket
 /** @param encoding the @ref character_encoding "character encoding" for the socket
 */
-nothing Socket::setEncoding(string encoding) {
+nothing Socket::setEncoding(string encoding) [flags=NAMED_ARGS] {
     s->setEncoding(QEM.findCreate(encoding));
 }
 
@@ -5869,7 +5878,7 @@ string Socket::getCharset() [flags=CONSTANT] {
 /** A method synonym for Socket::setEncoding(), kept for backwards-compatibility
     @param encoding The @ref character_encoding "character encoding" for the socket
 */
-nothing Socket::setCharset(string encoding) {
+nothing Socket::setCharset(string encoding) [flags=NAMED_ARGS] {
     s->setEncoding(QEM.findCreate(encoding));
 }
 
@@ -5892,7 +5901,7 @@ bool b = sock.isDataAvailable();
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end closed the connection without sending any data
 */
-bool Socket::isDataAvailable(timeout timeout_ms = 0) {
+bool Socket::isDataAvailable(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return socket_exec_is_data_available(self, s, (int)timeout_ms, xsink);
 }
 
@@ -5914,7 +5923,7 @@ bool b = sock.isWriteFinished();
     @throw SOCKET-NOT-OPEN The socket is not connected
     @throw SOCKET-CLOSED The remote end closed the connection without sending any data
 */
-bool Socket::isWriteFinished(timeout timeout_ms = 0) {
+bool Socket::isWriteFinished(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return socket_exec_wait_readiness(self, s, (int)timeout_ms, NB_SEND, SOCK_POLLOUT, "isWriteFinished",
         "waiting-write", "write-ready", xsink);
 }
@@ -5981,7 +5990,7 @@ sock.setAlpnProtocols(("h2", "http/1.1"));
 
     @since %Qore 2.2
 */
-nothing Socket::setAlpnProtocols(list<string> protocols) {
+nothing Socket::setAlpnProtocols(list<string> protocols) [flags=NAMED_ARGS] {
     s->setAlpnProtocols(protocols, xsink);
 }
 
@@ -6040,11 +6049,11 @@ bool Socket::isHttp2() [flags=CONSTANT] {
 sock.setCertificate(cert);
     @endcode
 
-    @param cert This must be an SSLCertificate object
+    @param certificate This must be an SSLCertificate object
 */
-nothing Socket::setCertificate(SSLCertificate[QoreSSLCertificate] cert) {
+nothing Socket::setCertificate(SSLCertificate[QoreSSLCertificate] certificate) [flags=NAMED_ARGS] {
     // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setCertificate()
-    s->setCertificate(cert.release());
+    s->setCertificate(certificate.release());
 }
 
 //! Sets the X.509 certificate to use for negotiating encrypted connections from the PEM-encoded string representing the X.509 certificate
@@ -6053,10 +6062,10 @@ nothing Socket::setCertificate(SSLCertificate[QoreSSLCertificate] cert) {
 sock.setCertificate(cert_string);
     @endcode
 
-    @param cert_pem the PEM-encoded string representing the X.509 certificate
+    @param pem the PEM-encoded string representing the X.509 certificate
 */
-nothing Socket::setCertificate(string cert_pem) {
-    SimpleRefHolder<QoreSSLCertificate> cert(new QoreSSLCertificate(cert_pem, xsink));
+nothing Socket::setCertificate(string pem) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreSSLCertificate> cert(new QoreSSLCertificate(pem, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -6070,10 +6079,10 @@ nothing Socket::setCertificate(string cert_pem) {
 sock.setCertificate(cert_der);
     @endcode
 
-    @param cert_der the DER-encoded binary object representing the X.509 certificate
+    @param der the DER-encoded binary object representing the X.509 certificate
 */
-nothing Socket::setCertificate(binary cert_der) {
-    SimpleRefHolder<QoreSSLCertificate> cert(new QoreSSLCertificate(cert_der, xsink));
+nothing Socket::setCertificate(binary der) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreSSLCertificate> cert(new QoreSSLCertificate(der, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -6087,11 +6096,11 @@ nothing Socket::setCertificate(binary cert_der) {
 sock.setPrivateKey(key);
     @endcode
 
-    @param key the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
+    @param private_key the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
 */
-nothing Socket::setPrivateKey(SSLPrivateKey[QoreSSLPrivateKey] key) {
+nothing Socket::setPrivateKey(SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
     // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setPrivateKey()
-    s->setPrivateKey(key.release());
+    s->setPrivateKey(private_key.release());
 }
 
 //! Sets the private key to use for negotiating encrypted connections along with the X.509 certificate from a PEM-encoded string representing the private key and an optional password
@@ -6100,11 +6109,11 @@ nothing Socket::setPrivateKey(SSLPrivateKey[QoreSSLPrivateKey] key) {
 sock.setPrivateKey(key_pem, password);
     @endcode
 
-    @param key_pem the PEM-encoded string representing the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
-    @param pass the password for the private key, if needed
+    @param pem the PEM-encoded string representing the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
+    @param password the password for the private key, if needed
 */
-nothing Socket::setPrivateKey(string key_pem, *string pass) {
-    SimpleRefHolder<QoreSSLPrivateKey> key(new QoreSSLPrivateKey(key_pem, pass ? pass->c_str() : 0, xsink));
+nothing Socket::setPrivateKey(string pem, *string password) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreSSLPrivateKey> key(new QoreSSLPrivateKey(pem, password ? password->c_str() : 0, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -6117,10 +6126,10 @@ nothing Socket::setPrivateKey(string key_pem, *string pass) {
 sock.setPrivateKey(key_der);
     @endcode
 
-    @param key_der the DER-encoded binary object representing the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
+    @param der the DER-encoded binary object representing the private key for the X.509 certificate to use when establishing TLS/SSL encrypted connections
 */
-nothing Socket::setPrivateKey(binary key_der) {
-    SimpleRefHolder<QoreSSLPrivateKey> key(new QoreSSLPrivateKey(key_der, xsink));
+nothing Socket::setPrivateKey(binary der) [flags=NAMED_ARGS] {
+    SimpleRefHolder<QoreSSLPrivateKey> key(new QoreSSLPrivateKey(der, xsink));
     if (*xsink)
         return QoreValue();
 
@@ -6133,14 +6142,15 @@ nothing Socket::setPrivateKey(binary key_der) {
 sock.setCertificateAndPrivateKey(cert, key);
     @endcode
 
-    @param cert This must be an SSLCertificate object
-    @param key This must be an QoreSSLPrivateKey object
+    @param certificate This must be an SSLCertificate object
+    @param private_key This must be an QoreSSLPrivateKey object
 
     @since %Qore 1.11.0
 */
-nothing Socket::setCertificateAndPrivateKey(SSLCertificate[QoreSSLCertificate] cert, SSLPrivateKey[QoreSSLPrivateKey] key) {
+nothing Socket::setCertificateAndPrivateKey(SSLCertificate[QoreSSLCertificate] certificate,
+        SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
     // pass reference from QoreObject::getReferencedPrivateData() to QoreSocketObject::setCertificateAndPrivateKey()
-    s->setCertificateAndPrivateKey(cert.release(), key.release());
+    s->setCertificateAndPrivateKey(certificate.release(), private_key.release());
 }
 
 //! Removes any @ref Qore::Thread::Queue "Queue" object from the Socket object so that @ref socket_events "socket events" are no longer added to the @ref Qore::Thread::Queue "Queue"
@@ -6163,23 +6173,24 @@ sock.setEventQueue(queue);
 
     @param queue the @ref Qore::Thread::Queue "Queue" object to receive @ref socket_events "socket events"; note that
     the Queue passed cannot have any maximum size set or a QUEUE-ERROR will be thrown
-    @param arg an argument that will be included in each event hash in the \a arg key
+    @param argument an argument that will be included in each event hash in the \c "arg" key
     @param with_data if @ref True, then the actual raw data transferred / received is also included in the events
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
 
     @see @ref event_handling for more information
 
-    @since %Qore 0.9.4 added the \a arg and \a with_data options
+    @since %Qore 0.9.4 added the \a argument and \a with_data options
 */
-nothing Socket::setEventQueue(Qore::Thread::Queue[Queue] queue, auto arg, *bool with_data) {
+nothing Socket::setEventQueue(Qore::Thread::Queue[Queue] queue, auto argument,
+        *bool with_data) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which " \
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum " \
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    s->setEventQueue(xsink, queue.release(), arg.refSelf(), with_data);
+    s->setEventQueue(xsink, queue.release(), argument.refSelf(), with_data);
 }
 
 //! Sets the boolean \c TCP_NODELAY setting for the socket
@@ -6195,14 +6206,14 @@ if (sock.setNoDelay(True))
     printf("error setting TCP_NODELAY: %s\n", strerror(errno()));
     @endcode
 
-    @param nd the boolean \c TCP_NODELAY setting for the socket
+    @param enabled the boolean \c TCP_NODELAY setting for the socket
 
     @return 0 for success, non-zero for errors; to get error information, see errno() and strerror()
 
     @see Socket::getNoDelay()
 */
-int Socket::setNoDelay(bool nd = True) {
-    return s->setNoDelay(nd);
+int Socket::setNoDelay(bool enabled = True) [flags=NAMED_ARGS] {
+    return s->setNoDelay(enabled);
 }
 
 //! Returns the \c TCP_NODELAY setting for the socket
@@ -6250,7 +6261,7 @@ sock.setUserTimeout(30000); # 30s — kernel reports a dead/unreachable peer
                             # hanging in the kernel's TCP retransmit window
     @endcode
 
-    @param ms timeout in milliseconds; 0 disables (kernel default)
+    @param timeout_ms timeout in milliseconds; 0 disables (kernel default)
 
     @return 0 on success, non-zero on \c setsockopt failure (see errno() and strerror())
 
@@ -6258,8 +6269,8 @@ sock.setUserTimeout(30000); # 30s — kernel reports a dead/unreachable peer
 
     @since %Qore 2.3
 */
-int Socket::setUserTimeout(int ms) {
-    return s->setUserTimeout((int)ms);
+int Socket::setUserTimeout(int timeout_ms) [flags=NAMED_ARGS] {
+    return s->setUserTimeout((int)timeout_ms);
 }
 
 //! Returns the \c TCP_USER_TIMEOUT value in milliseconds
@@ -6301,7 +6312,7 @@ hash<auto> h = sock.getPeerInfo();
 
     @since %Qore 0.8.8 added the \a host_lookup parameter
 */
-hash<auto> Socket::getPeerInfo(bool host_lookup = True) {
+hash<auto> Socket::getPeerInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return s->getPeerInfo(xsink, host_lookup);
 }
 
@@ -6322,7 +6333,7 @@ hash<auto> h = sock.getSocketInfo();
 
     @since %Qore 0.8.8 added the \a host_lookup parameter
 */
-hash<auto> Socket::getSocketInfo(bool host_lookup = True) {
+hash<auto> Socket::getSocketInfo(bool host_lookup = True) [flags=NAMED_ARGS] {
     return s->getSocketInfo(xsink, host_lookup);
 }
 
@@ -6341,7 +6352,7 @@ sock.upgradeClientToSSL();
 
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
-nothing Socket::upgradeClientToSSL(timeout timeout_ms = -1) {
+nothing Socket::upgradeClientToSSL(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_upgrade_ssl(self, s, timeout_ms, false, xsink);
 }
 
@@ -6360,7 +6371,7 @@ sock.upgradeServerToSSL();
 
     @since %Qore 0.8.12 the timeout_ms parameter was added
 */
-nothing Socket::upgradeServerToSSL(timeout timeout_ms = -1) {
+nothing Socket::upgradeServerToSSL(timeout timeout_ms = -1) [flags=NAMED_ARGS] {
     socket_exec_upgrade_ssl(self, s, timeout_ms, true, xsink);
 }
 
@@ -6390,7 +6401,7 @@ sock.setWarningQueue(5000, 5000, queue, "socket-1");
     - \c "us": an integer giving the number of microseconds for the operation
     - \c "timeout": an integer giving the warning threshold in microseconds
     - \c "arg": if any \c "arg" argument is passed to the @ref Qore::Socket::setWarningQueue() "Socket::setWarningQueue()" method, it will be included in the warning hash here
-    @param warning_bs value in bytes per second; if any call has performance below this threshold, a socket warning is placed on the warning queue with the following keys:
+    @param warning_bytes value in bytes per second; if any call has performance below this threshold, a socket warning is placed on the warning queue with the following keys:
     - \c "type": a string with the constant value \c "SOCKET-THROUGHPUT-WARNING"
     - \c "dir": either \c "send" or \c "recv" depending on the direction of the data flow
     - \c "bytes": the amount of bytes sent
@@ -6399,11 +6410,11 @@ sock.setWarningQueue(5000, 5000, queue, "socket-1");
     - \c "threshold": an integer giving the warning threshold in bytes per second
     - \c "arg": if any \c "arg" argument is passed to the @ref Qore::Socket::setWarningQueue() "Socket::setWarningQueue()" method, it will be included in the warning hash here
     @param queue the @ref Qore::Thread::Queue "Queue" object to receive warning events
-    @param arg an optional argument to be placed in the \c "arg" key in each warning hash (could be used to identify the socket for example)
+    @param argument an optional argument to be placed in the \c "arg" key in each warning hash (could be used to identify the socket for example)
     @param min_ms the minimum transfer time with a resolution of milliseconds for a transfer to be eligible for triggering a warning; transfers that take less than this period of time are not eligible for raising a warning
 
     @throw QUEUE-ERROR the Queue passed has a maximum size set
-    @throw SOCKET-SETWARNINGQUEUE-ERROR at least one of \a warning_ms and \a warning_bs must be > 0
+    @throw SOCKET-SETWARNINGQUEUE-ERROR at least one of \a warning_ms and \a warning_bytes must be > 0
 
     @see Socket::clearWarningQueue()
 
@@ -6411,14 +6422,15 @@ sock.setWarningQueue(5000, 5000, queue, "socket-1");
     - %Qore 0.8.9
     - %Qore 0.8.12 the minimum threshold for a warning is a transfer of at least 1024 bytes, smaller transfers will not result in a warning
 */
-nothing Socket::setWarningQueue(int warning_ms, int warning_bs, Queue[Queue] queue, auto arg, timeout min_ms = 1s) {
+nothing Socket::setWarningQueue(int warning_ms, int warning_bytes, Queue[Queue] queue, auto argument,
+        timeout min_ms = 1s) [flags=NAMED_ARGS] {
     if (queue->getMax() != -1)
         return xsink->raiseException("QUEUE-ERROR", "the Queue object passed as a maximum size of %d entr%s, which "
             "could cause internal I/O to freeze in the Socket object if used; use a Queue object with no maximum "
             "size for I/O monitoring", queue->getMax(), queue->getMax() == 1 ? "y" : "ies");
 
     // pass reference from QoreObject::getReferencedPrivateData() to function
-    s->setWarningQueue(xsink, warning_ms, warning_bs, queue.release(), arg.refSelf(), min_ms);
+    s->setWarningQueue(xsink, warning_ms, warning_bytes, queue.release(), argument.refSelf(), min_ms);
 }
 
 //! Returns performance statistics for the socket
@@ -6488,7 +6500,7 @@ sock.setSslVerifyMode(SSL_VERIFY_PEER|SSL_VERIFY_FAIL_IF_NO_PEER_CERT);
 
     @since %Qore 0.8.13
 */
-Socket::setSslVerifyMode(int mode) {
+Socket::setSslVerifyMode(int mode) [flags=NAMED_ARGS] {
     s->setSslVerifyMode((int)mode);
 }
 
@@ -6528,7 +6540,7 @@ sock.acceptAllCertificates();
 
     @since %Qore 0.8.13
 */
-Socket::acceptAllCertificates(bool accept_all = True) {
+Socket::acceptAllCertificates(bool accept_all = True) [flags=NAMED_ARGS] {
     s->acceptAllCertificates(accept_all);
 }
 
@@ -6557,7 +6569,7 @@ bool Socket::getAcceptAllCertificates() [flags=CONSTANT] {
 bool b = sock.captureRemoteCertificates();
     @endcode
 
-    @param set the flag for capturing remote X.509 certificates; by default no capture of remote certificates is performed
+    @param enabled the flag for capturing remote X.509 certificates; by default no capture of remote certificates is performed
 
     @return the old value of the flag
 
@@ -6565,8 +6577,8 @@ bool b = sock.captureRemoteCertificates();
 
     @since %Qore 0.9.3
 */
-bool Socket::captureRemoteCertificates(bool set = True) {
-    return s->captureRemoteCertificates(set);
+bool Socket::captureRemoteCertificates(bool enabled = True) [flags=NAMED_ARGS] {
+    return s->captureRemoteCertificates(enabled);
 }
 
 //! Returns any remote certificate captured or @ref nothing if there is none
@@ -6605,12 +6617,12 @@ int Socket::getConnectionId() [flags=CONSTANT] {
 /** When set, readHTTPChunkedBodyBinary() and readHTTPChunkedBody() will
     raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds this limit.
 
-    @param size maximum body size in bytes; 0 means unlimited
+    @param max_body_size maximum body size in bytes; 0 means unlimited
 
     @since %Qore 2.1
 */
-Socket::setMaxChunkedBodySize(int size) {
-    s->setMaxChunkedBodySize(size);
+Socket::setMaxChunkedBodySize(int max_body_size) [flags=NAMED_ARGS] {
+    s->setMaxChunkedBodySize(max_body_size);
 }
 
 //! Returns the maximum body size for chunked HTTP reads
@@ -6626,12 +6638,12 @@ int Socket::getMaxChunkedBodySize() [flags=CONSTANT] {
 /** When set, HTTP/2 DATA frame accumulation exceeding this limit will cause
     the stream to be reset with REFUSED_STREAM.
 
-    @param size maximum body size in bytes; 0 means unlimited
+    @param max_request_body_size maximum body size in bytes; 0 means unlimited
 
     @since %Qore 2.1
 */
-Socket::setHttp2MaxRequestBodySize(int size) {
-    s->setHttp2MaxRequestBodySize(size);
+Socket::setHttp2MaxRequestBodySize(int max_request_body_size) [flags=NAMED_ARGS] {
+    s->setHttp2MaxRequestBodySize(max_request_body_size);
 }
 
 //! Returns the maximum request body size for HTTP/2 streams
@@ -6654,7 +6666,7 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     @param family a hint for the address family, \c AF_UNSPEC means any family
     @param flags hint flags as per the \c getaddrinfo() call: \c AI_ADDRCONFIG, \c AI_ALL, \c AI_CANONNAME,
     \c AI_NUMERICHOST, \c AI_NUMERICSERV, \c AI_PASSIVE, \c AI_V4MAPPED
-    @param socktype a hint for the type of socket; 0 = any socket type
+    @param socket_type a hint for the type of socket; 0 = any socket type
     @param protocol a hint for the protocol number; 0 = the default protocol
     @param timeout_ms the timeout for the controller-backed resolution operation; -1 = never timeout
 
@@ -6664,19 +6676,19 @@ int Socket::getHttp2MaxRequestBodySize() [flags=CONSTANT] {
     @since %Qore 2.3
  */
 static list<hash<auto>> Socket::resolveAddrInfo(*string node, *softstring service,
-        softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0,
-        timeout timeout_ms = -1) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+        softint family = AF_UNSPEC, softint flags = 0, softint socket_type = SOCK_STREAM, softint protocol = 0,
+        timeout timeout_ms = -1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=EXTERNAL_INFO] {
     return qore_socket_resolve_addrinfo_asyncio(xsink, node ? node->c_str() : nullptr,
-        service ? service->c_str() : nullptr, family, flags, socktype, protocol, timeout_ms);
+        service ? service->c_str() : nullptr, family, flags, socket_type, protocol, timeout_ms);
 }
 
 //! Parse the given string as a Server Sent Event (SSE) string
-/** @param str the string to parse as a Server Sent Event (SSE) string
+/** @param event_text the string to parse as a Server Sent Event (SSE) string
 
     @return a hash of the event information
 */
-static hash<SseMessageInfo> Socket::parseServerSentEvent(string str) {
-    return QoreSocket::parseServerSentEvent(xsink, str);
+static hash<SseMessageInfo> Socket::parseServerSentEvent(string event_text) [flags=NAMED_ARGS] {
+    return QoreSocket::parseServerSentEvent(xsink, event_text);
 }
 
 //! polls multiple sockets and returns all sockets with events
@@ -6711,7 +6723,8 @@ l = Socket::poll(l, 2s);
 
     @since %Qore 0.9.11
 */
-static list<hash<SocketPollInfo>> Socket::poll(list<hash<SocketPollInfo>> items, timeout timeout_ms) {
+static list<hash<SocketPollInfo>> Socket::poll(
+        list<hash<SocketPollInfo>> items, timeout timeout_ms) [flags=NAMED_ARGS] {
     return qore_socket_private::poll(items, timeout_ms, xsink);
 }
 

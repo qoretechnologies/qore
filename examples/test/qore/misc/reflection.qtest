@@ -932,6 +932,82 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("EventLoop", "poll", ("timeout_ms",));
         assertNamedClassMethodVariantCount("EventLoop", "addTimer", ("deadline", "user_data"));
         assertNamedClassMethodVariantCount("EventLoop", "cancelTimer", ("timer_id",));
+        assertNamedClassMethodVariantCount("Socket", "startPollConnect", ("target",));
+        assertNamedClassMethodVariantCount("Socket", "startPollConnectSsl", ("target",));
+        assertNamedClassMethodVariantCount("Socket", "startPollSend", ("data",), 2);
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvString", ("size",));
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvBinary", ("size",));
+        assertNamedClassMethodVariantCount("Socket", "startPollReadHttpBody",
+            ("content_length", "chunked", "connection_close"));
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvUntilBytesString", ("pattern",));
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvUntilBytesBinary", ("pattern",));
+        assertNamedClassMethodVariantCount("Socket", "startPollRecvFrom", ("max_size",));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendTo", ("host", "port", "data", "family"));
+        assertNamedClassMethodVariantCount("Socket", "connect", ("target", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "connectINET",
+            ("host", "service", "timeout_ms", "family", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "connectUNIX", ("path", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "connectSSL", ("target", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "connectINETSSL",
+            ("host", "service", "timeout_ms", "family", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "connectUNIXSSL", ("path", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "bind", ("target", "reuse_address"));
+        assertNamedClassMethodVariantCount("Socket", "bind", ("port", "reuse_address"));
+        assertNamedClassMethodVariantCount("Socket", "bindUNIX", ("path", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "bindINET",
+            ("bind_address", "service", "reuse_address", "family", "socket_type", "protocol"));
+        assertNamedClassMethodVariantCount("Socket", "accept", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Socket", "acceptSSL", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Socket", "listen", ("backlog",));
+        foreach string name in ("send", "sendBinary", "send2", "sendBinary2") {
+            assertNamedClassMethodVariantCount("Socket", name, ("data", "timeout_ms"), 2);
+        }
+        assertNamedClassMethodVariantCount("Socket", "sendFromInputStream",
+            ("input_stream", "size", "timeout_ms"));
+        foreach string name in ("sendi1", "sendi2", "sendi4", "sendi8", "sendi2LSB", "sendi4LSB",
+                "sendi8LSB") {
+            assertNamedClassMethodVariantCount("Socket", name, ("value", "timeout_ms"));
+        }
+        assertNamedClassMethodVariantCount("Socket", "recv", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "recvBinary", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "recvToOutputStream",
+            ("output_stream", "size", "timeout_ms"));
+        foreach string name in ("recvi1", "recvi2", "recvi4", "recvi8", "recvi2LSB", "recvi4LSB",
+                "recvi8LSB", "recvu1", "recvu2", "recvu4", "recvu2LSB", "recvu4LSB") {
+            assertNamedClassMethodVariantCount("Socket", name, ("timeout_ms",));
+        }
+        foreach string name in ("setSendTimeout", "setRecvTimeout", "isDataAvailable", "isWriteFinished",
+                "upgradeClientToSSL", "upgradeServerToSSL") {
+            assertNamedClassMethodVariantCount("Socket", name, ("timeout_ms",));
+        }
+        foreach string name in ("setEncoding", "setCharset") {
+            assertNamedClassMethodVariantCount("Socket", name, ("encoding",));
+        }
+        assertNamedClassMethodVariantCount("Socket", "setAlpnProtocols", ("protocols",));
+        assertNamedClassMethodVariantCount("Socket", "setCertificate", ("certificate",));
+        assertNamedClassMethodVariantCount("Socket", "setCertificate", ("pem",));
+        assertNamedClassMethodVariantCount("Socket", "setCertificate", ("der",));
+        assertNamedClassMethodVariantCount("Socket", "setPrivateKey", ("private_key",));
+        assertNamedClassMethodVariantCount("Socket", "setPrivateKey", ("pem", "password"));
+        assertNamedClassMethodVariantCount("Socket", "setPrivateKey", ("der",));
+        assertNamedClassMethodVariantCount("Socket", "setCertificateAndPrivateKey",
+            ("certificate", "private_key"));
+        assertNamedClassMethodVariantCount("Socket", "setEventQueue", ("queue", "argument", "with_data"));
+        assertNamedClassMethodVariantCount("Socket", "setNoDelay", ("enabled",));
+        assertNamedClassMethodVariantCount("Socket", "setUserTimeout", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("Socket", "getPeerInfo", ("host_lookup",));
+        assertNamedClassMethodVariantCount("Socket", "getSocketInfo", ("host_lookup",));
+        assertNamedClassMethodVariantCount("Socket", "setWarningQueue",
+            ("warning_ms", "warning_bytes", "queue", "argument", "min_ms"));
+        assertNamedClassMethodVariantCount("Socket", "setSslVerifyMode", ("mode",));
+        assertNamedClassMethodVariantCount("Socket", "acceptAllCertificates", ("accept_all",));
+        assertNamedClassMethodVariantCount("Socket", "captureRemoteCertificates", ("enabled",));
+        assertNamedClassMethodVariantCount("Socket", "setMaxChunkedBodySize", ("max_body_size",));
+        assertNamedClassMethodVariantCount("Socket", "setHttp2MaxRequestBodySize", ("max_request_body_size",));
+        assertNamedClassStaticMethodVariantCount("Socket", "resolveAddrInfo",
+            ("node", "service", "family", "flags", "socket_type", "protocol", "timeout_ms"));
+        assertNamedClassStaticMethodVariantCount("Socket", "parseServerSentEvent", ("event_text",));
+        assertNamedClassStaticMethodVariantCount("Socket", "poll", ("items", "timeout_ms"));
         assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "waitForReady", ("timeout_ms",));
         assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "registerReadyNotifier", ("notifier",));
         assertNamedClassMethodVariantCount("HttpClientConnectionBase", "waitForReadyOrError", ("timeout_ms",));
