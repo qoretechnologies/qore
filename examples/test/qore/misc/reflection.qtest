@@ -1132,6 +1132,26 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedConstructorVariantCount("StringRegexSplitIterator",
             ("source", "separator_pattern", "options", "with_separator"));
 
+        assertNamedClassMethodVariantCount("Serializable", "serializeToData", ("flags",));
+        assertNamedClassMethodVariantCount("Serializable", "serialize", ("output_stream", "flags"));
+        assertNamedClassMethodVariantCount("Serializable", "serialize", ("flags",));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserialize",
+            ("input_stream", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserialize",
+            ("binary_data", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserialize",
+            ("string_data", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserialize",
+            ("serialization_info", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserializeToData",
+            ("input_stream", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "deserializeToData",
+            ("binary_data", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "serializeToData", ("value", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "serialize",
+            ("value", "output_stream", "flags"));
+        assertNamedClassStaticMethodVariantCount("Serializable", "serialize", ("value", "flags"));
+
         assertNamedClassMethodVariantCount("TreeMap", "put", ("path", "value"));
         assertNamedClassMethodVariantCount("TreeMap", "get", ("path", "unmatched"));
         assertNamedClassMethodVariantCount("TreeMap", "take", ("path",));

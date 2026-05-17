@@ -114,6 +114,16 @@ class NA_Logger inherits LoggerInterfaceBase {
     }
 }
 
+class NA_Serializable inherits Serializable {
+    public {
+        int value;
+    }
+
+    constructor(int value = 0) {
+        self.value = value;
+    }
+}
+
 public class NamedArgumentsTest inherits QUnit::Test {
     constructor() : Test("Named arguments test", "1.0") {
         addTestCase("defaults and mixed arguments", \defaultsAndMixedArguments(), NOTHING);
@@ -149,6 +159,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed async I/O controller builtin opt-in",
             \reviewedAsyncIoControllerBuiltinOptIn(), NOTHING);
         addTestCase("reviewed stream builtin opt-in", \reviewedStreamBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed Serializable builtin opt-in", \reviewedSerializableBuiltinOptIn(), NOTHING);
         addTestCase("reviewed iterator builtin opt-in", \reviewedIteratorBuiltinOptIn(), NOTHING);
         addTestCase("reviewed regex class builtin opt-in", \reviewedRegexClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed pseudo-method opt-in", \reviewedPseudoMethodOptIn(), NOTHING);
@@ -1076,6 +1087,45 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertTrue(regex_it.next(), "StringRegexSplitIterator named constructor creates iterator");
         assertEq("left", regex_it.getValue(),
             "StringRegexSplitIterator exposes source and separator_pattern");
+    }
+
+    reviewedSerializableBuiltinOptIn() {
+        hash<auto> value = {"a": 1};
+
+        binary binary_data = Serializable::serialize(value: value, flags: 0);
+        assertEq(value, Serializable::deserialize(binary_data: binary_data, flags: 0),
+            "Serializable static serialize and deserialize expose value and binary_data");
+
+        hash<SerializationInfo> serialization_info = Serializable::serializeToData(value: value, flags: 0);
+        assertEq(value, Serializable::deserialize(serialization_info: serialization_info, flags: 0),
+            "Serializable static serializeToData exposes value");
+
+        StringOutputStream output_stream();
+        Serializable::serialize(value: value, output_stream: output_stream, flags: 0);
+        string string_data = output_stream.getData();
+        assertEq(value, Serializable::deserialize(string_data: string_data, flags: 0),
+            "Serializable static serialize exposes output_stream and deserialize exposes string_data");
+
+        assertEq(value, Serializable::deserialize(serialization_info: Serializable::deserializeToData(
+            binary_data: binary_data, flags: 0), flags: 0),
+            "Serializable deserializeToData exposes binary_data");
+        assertEq(value, Serializable::deserialize(serialization_info: Serializable::deserializeToData(
+            input_stream: new StringInputStream(source: string_data), flags: 0), flags: 0),
+            "Serializable deserializeToData exposes input_stream");
+
+        NA_Serializable obj = new NA_Serializable(value: 7);
+        hash<SerializationInfo> object_info = obj.serializeToData(flags: 0);
+        assertEq(7, Serializable::deserialize(serialization_info: object_info, flags: 0).value,
+            "Serializable instance serializeToData exposes flags");
+
+        binary object_data = obj.serialize(flags: 0);
+        assertEq(7, Serializable::deserialize(binary_data: object_data, flags: 0).value,
+            "Serializable instance serialize exposes flags");
+
+        StringOutputStream object_stream();
+        obj.serialize(output_stream: object_stream, flags: 0);
+        assertEq(7, Serializable::deserialize(string_data: object_stream.getData(), flags: 0).value,
+            "Serializable instance serialize exposes output_stream");
     }
 
     reviewedIteratorBuiltinOptIn() {

@@ -325,6 +325,12 @@ These examples are from the core migration and should be reused as precedent:
   Leave varargs formatting methods such as `printf(format, ...)` and
   `f_printf(format, ...)` positional-only; fixed-arity `vprintf()` variants can
   opt in with `format` and `format_args`.
+- Serializable APIs should use data-shape names that disambiguate overloads:
+  `input_stream` and `output_stream` for stream transport, `binary_data`,
+  `string_data`, and `serialization_info` for deserialization inputs, `value`
+  for the value being serialized, `flags` for serialization/deserialization
+  bitfields, and `members` for the internal member hook payload. Avoid exposing
+  terse implementation names such as `stream`, `bin`, or `val`.
 - Thread synchronization classes prefer call-site nouns: `max_size` for queue
   capacity, `initial_value` for counters, `value` for queue/channel payloads,
   `description` for exception text, `permits` for semaphore counts,
