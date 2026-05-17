@@ -1,5 +1,21 @@
 # Named-Argument Builtin Review Checklist
 
+## Status
+
+The named-arguments feature is **implemented and shipped in Qore 2.3.0**; see
+[`design/named-arguments.md`](named-arguments.md) for the feature design
+(syntax, binder, overload resolution, evaluation order, reflection, `QCF_NAMED_ARGS`
+gating). This document is the **operational companion**: the review process and
+migration record for opting individual builtin variants into the named-callable
+surface.
+
+The core QPP migration is complete (the `feat: enable named ...` series through
+`d05c0eb97 docs: record named-call positional inventory`); the
+[Current Core Migration Notes](#current-core-migration-notes) and
+[Current core positional-only inventory](#current-core-positional-only-inventory)
+are the durable record of that work and the precedent for binary-module
+migrations under `~/src/qore/git/module-*`.
+
 ## Purpose
 
 This checklist captures the review process for enabling named arguments on
@@ -18,6 +34,15 @@ Build the target first so qpp metadata is current:
 ```bash
 cmake --build build --target qore
 ```
+
+Each function/method entry in the generated `*.meta.json` carries `params`
+(`{name, type_name, default_value?}`), a `flags` array (which includes
+`"NAMED_ARGS"` once a variant has opted in), and the dedicated
+`"named_callable"` (bool) and `"named_parameters"` (array) fields emitted by
+`serializeMetadataNamedArgsJson`. The inventory queries below filter on the
+`flags` array, which is sufficient; `named_callable` can be used directly as a
+cross-check (note it is `false` for a `NAMED_ARGS` variant that has no named
+parameters).
 
 For core builtin functions, list fixed-arity variants that are not yet
 named-callable:
@@ -182,7 +207,12 @@ For each converted batch, add or update:
 
 - Runtime named-call tests in `examples/test/qore/vars/named-arguments.qtest`.
 - Reflection tests in `examples/test/qore/misc/reflection.qtest` using
-  `FunctionVariant::isNamedCallable()` and `getNamedParameterNames()`.
+  `isNamedCallable()` and `getNamedParameterNames()`. Both are declared on
+  `Reflection::AbstractVariant` and inherited by `FunctionVariant`,
+  method-variant, and constructor-variant reflection classes;
+  `getNamedParameterNames()` returns an empty list when `isNamedCallable()`
+  is `False`, so assert both together rather than treating an empty list as
+  "no names available".
 - Focused functional tests for the touched subsystem.
 - Negative tests when the batch changes error behavior or intentionally leaves
   related variants unmarked.
