@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FtpPoller.qm Qore user module providing FTP polling functionality
 
-/*  FtpPoller.qm Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  FtpPoller.qm Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -563,6 +563,13 @@ public class FtpPoller {
 
     #! stops the polling operation if in progress and destroys the object
     destructor() {
+        # if the object is being destroyed in the polling thread itself (for example because the last
+        # object reference was held by an event or log callback), then we cannot wait for the polling
+        # thread to terminate or we would deadlock; just signal the poll loop to exit in this case
+        if (gettid() == tid) {
+            stopNoWait();
+            return;
+        }
         stop();
     }
 
@@ -804,9 +811,9 @@ public class FtpPoller {
         sc.add();
 
 %ifdef PO_NO_THREAD_CONTROL
-        return call_function(start_thread, \run());
+        return tid = call_function(start_thread, \run());
 %else
-        return start_thread ? call_function(start_thread, \run()) : background run();
+        return tid = (start_thread ? call_function(start_thread, \run()) : background run());
 %endif
     }
 
