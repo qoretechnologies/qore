@@ -37,7 +37,7 @@
     - @ref select
     - @ref foreach
  */
-qclass AbstractIterator [arg=AbstractIterator* i; ns=Qore];
+qclass AbstractIterator<T> [arg=AbstractIterator* i; ns=Qore; legacy_raw];
 
 //! Moves the current position to the next element; returns @ref False if there are no more elements
 /** This method will return @ref True again after it returns @ref False once if the object being iterated is not empty, otherwise it will always return @ref False.
@@ -68,7 +68,7 @@ while (i.next()) {
 
     @see AbstractIterator::valid()
  */
-abstract auto AbstractIterator::getValue();
+abstract T AbstractIterator::getValue();
 
 //! returns @ref True "True" if the iterator is currently pointing at a valid element, @ref False "False" if not
 /** @return @ref True "True" if the iterator is currently pointing at a valid element, @ref False "False" if not

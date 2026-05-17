@@ -3023,6 +3023,40 @@ const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
     return nullptr;
 }
 
+const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base) const {
+    assert(target_base);
+
+    for (const QoreTypeInfo* parent_type : parameterized_vparents) {
+        const QoreParameterizedClassTypeInfo* parent_pti = QoreTypeInfo::getParameterizedClassType(parent_type);
+        if (!parent_pti) {
+            continue;
+        }
+        if (parent_pti->getBaseClass() == target_base) {
+            return parent_type;
+        }
+        const QoreTypeInfo* indirect = qore_class_private::get(*parent_pti->getBaseClass())
+            ->getParameterizedBaseTypeInfo(parent_pti, target_base);
+        if (indirect) {
+            return indirect;
+        }
+    }
+
+    QoreClassHierarchyIterator i(*cls);
+    while (i.next()) {
+        const QoreClass& base = i.get();
+        if (&base == cls) {
+            continue;
+        }
+        const QoreTypeInfo* indirect = qore_class_private::get(base)->getConcreteParameterizedBaseTypeInfo(
+            target_base);
+        if (indirect) {
+            return indirect;
+        }
+    }
+
+    return nullptr;
+}
+
 void QoreClass::addParameterizedBuiltinVirtualBaseClass(const QoreTypeInfo* typeInfo) {
     const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
     assert(pti);

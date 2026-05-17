@@ -186,7 +186,7 @@ int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
 
     @since %Qore 2.3
 */
-qclass StringSplitIterator [arg=StringSplitIterator* i; ns=Qore; vparent=AbstractIterator];
+qclass StringSplitIterator [arg=StringSplitIterator* i; ns=Qore; vparent=AbstractIterator<string>];
 
 //! Creates the iterator with a source string and delimiter.
 /** @param source the string to iterate over (captured by reference)

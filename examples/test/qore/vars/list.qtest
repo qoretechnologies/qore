@@ -122,6 +122,14 @@ public class ListTest inherits QUnit::Test {
             FsUtil::TmpFile tmp("qore_iterfp", ".txt");
             tmp.file.printf("one\ntwo\nthree\n");
             tmp.file.close();
+            FileLineIterator typed_fli(tmp.path);
+            AbstractIterator<string> typed_file = typed_fli;
+            assertTrue(typed_file instanceof AbstractIterator<string>);
+            assertFalse(typed_file instanceof AbstractIterator<auto>);
+            assertTrue(typed_file.next());
+            string first = typed_file.getValue();
+            assertEq("one", first);
+
             FileLineIterator fli(tmp.path);
             list<string> got = ();
             foreach string line in (fli) { got += line; }
@@ -132,8 +140,16 @@ public class ListTest inherits QUnit::Test {
         string data = "alpha\nbeta\ngamma\n";
 
         DataLineIterator it(data);
+        AbstractIterator<string> typed_data = it;
+        assertTrue(typed_data instanceof AbstractIterator<string>);
+        assertFalse(typed_data instanceof AbstractIterator<auto>);
+        assertTrue(typed_data.next());
+        string first = typed_data.getValue();
+        assertEq("alpha", first);
+
+        DataLineIterator it_foreach(data);
         list<string> got = ();
-        foreach string line in (it) { got += line; }
+        foreach string line in (it_foreach) { got += line; }
         assertEq(("alpha", "beta", "gamma"), got);
 
         # map composition exercises native fast path.

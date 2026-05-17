@@ -121,6 +121,13 @@ class StringTest inherits QUnit::Test {
         list<auto> got = map $1, s.splitString(",");
         assertEq(expected, got);
 
+        AbstractIterator<string> typed = s.splitString(",");
+        assertTrue(typed instanceof AbstractIterator<string>);
+        assertFalse(typed instanceof AbstractIterator<auto>);
+        assertTrue(typed.next());
+        string first = typed.getValue();
+        assertEq("a", first);
+
         # empty source string yields one empty piece (matches eager split())
         assertEq(("",), (map $1, "".splitString(",")));
 
@@ -316,6 +323,13 @@ class StringTest inherits QUnit::Test {
         # ASCII: each byte is one codepoint
         list<auto> got = map $1, "abc".codePointIterator();
         assertEq((0x61, 0x62, 0x63), got);
+
+        AbstractIterator<int> typed = "abc".codePointIterator();
+        assertTrue(typed instanceof AbstractIterator<int>);
+        assertFalse(typed instanceof AbstractIterator<auto>);
+        assertTrue(typed.next());
+        int first = typed.getValue();
+        assertEq(0x61, first);
 
         # Empty string yields no elements
         list<auto> empty = map $1, "".codePointIterator();

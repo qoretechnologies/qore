@@ -129,7 +129,7 @@ foreach int cp in (text.codePointIterator()) {
 
     @since %Qore 2.3
 */
-qclass StringCharIterator [arg=StringCharIterator* i; ns=Qore; vparent=AbstractIterator];
+qclass StringCharIterator [arg=StringCharIterator* i; ns=Qore; vparent=AbstractIterator<int>];
 
 //! Creates the iterator from a source string.
 /** @param source the string to iterate over (captured by reference)

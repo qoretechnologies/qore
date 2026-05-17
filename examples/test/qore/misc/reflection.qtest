@@ -2170,6 +2170,18 @@ class ReflectionTest inherits QUnit::Test {
         assertEq("T", future_get_variant.getReturnType().getName());
         assertEq("timeout timeout_ms = 0", future_get_variant.getParamString());
 
+        Class abstract_iterator_class = Class::forName("AbstractIterator");
+        assertEq(("T",), abstract_iterator_class.getTypeParameters());
+        NormalMethodVariant abstract_iterator_get_variant =
+            abstract_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("T", abstract_iterator_get_variant.getReturnType().getName());
+
+        Class channel_iterator_class = Class::forName("ChannelIterator");
+        assertEq(("T",), channel_iterator_class.getTypeParameters());
+        NormalMethodVariant channel_iterator_get_variant =
+            channel_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("T", channel_iterator_get_variant.getReturnType().getName());
+
         Type queue_int("Queue<int>");
         assertTrue(queue_int.isParameterized());
         assertEq("object<Queue<int>>", queue_int.getName());
@@ -2185,6 +2197,16 @@ class ReflectionTest inherits QUnit::Test {
         assertTrue(future_args[0].isParameterized());
         assertEq("object<Queue<int>>", future_args[0].getName());
         assertTrue(IntType.isEqual(future_args[0].getTypeArguments()[0]));
+
+        Type abstract_iterator_int("AbstractIterator<int>");
+        assertTrue(abstract_iterator_int.isParameterized());
+        assertEq("object<AbstractIterator<int>>", abstract_iterator_int.getName());
+        assertTrue(IntType.isEqual(abstract_iterator_int.getTypeArguments()[0]));
+
+        Type channel_iterator_string("ChannelIterator<string>");
+        assertTrue(channel_iterator_string.isParameterized());
+        assertEq("object<ChannelIterator<string>>", channel_iterator_string.getName());
+        assertTrue(StringType.isEqual(channel_iterator_string.getTypeArguments()[0]));
 
         assertFalse(IntType.isParameterized());
         assertNothing(IntType.getTypeArguments());

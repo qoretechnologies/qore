@@ -43,6 +43,7 @@ class FutureTest inherits QUnit::Test {
         addTestCase("Custom Future subclass must implement cancel", \testCustomFutureCancel());
         addTestCase("generic Queue<T>", \testGenericQueue());
         addTestCase("generic Channel<T>", \testGenericChannel());
+        addTestCase("generic ChannelIterator<T>", \testGenericChannelIterator());
         addTestCase("generic Promise<T>/Future<T>", \testGenericPromiseFuture());
         addTestCase("generic runtime type identity", \testGenericRuntimeTypeIdentity());
         addTestCase("generic synchronization serialization policy", \testGenericSerializationPolicy());
@@ -428,6 +429,22 @@ class FutureTest inherits QUnit::Test {
         assertEq(7, i);
     }
 
+    testGenericChannelIterator() {
+        Channel<int> ch(1);
+        ch.send(value: 7);
+        ch.close();
+
+        ChannelIterator<int> it = ch.iterator();
+        assertTrue(it instanceof ChannelIterator<int>);
+        assertTrue(it instanceof AbstractIterator<int>);
+        assertFalse(it instanceof AbstractIterator<auto>);
+        assertTrue(it.next());
+
+        int i = it.getValue();
+        assertEq(7, i);
+        assertFalse(it.next());
+    }
+
     testGenericPromiseFuture() {
         Promise<int> p();
         Future<int> f = p.getFuture();
@@ -495,6 +512,11 @@ class FutureTest inherits QUnit::Test {
         Program p2();
         assertThrows("PARSE-TYPE-ERROR", \p2.parse(),
             ("%new-style\nPromise<int> p(); p.set(value: \"wrong\");", "generic-promise-type-error"));
+
+        Program p3();
+        assertThrows("PARSE-TYPE-ERROR", \p3.parse(),
+            ("%new-style\nChannel<int> ch(1); ChannelIterator<auto> it = ch.iterator();",
+                "generic-channel-iterator-type-error"));
     }
 }
 

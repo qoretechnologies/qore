@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreSandboxManager.h>
+#include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QC_ChannelIterator.h"
 
@@ -393,6 +394,11 @@ foreach auto val in (ch.iterator()) {
 }
     @endcode
  */
-ChannelIterator Channel::iterator() {
-    return new QoreObject(QC_CHANNELITERATOR, getProgram(), new QoreChannelIterator(ch));
+ChannelIterator<T> Channel::iterator() {
+    const QoreParameterizedClassTypeInfo* channel_type
+        = QoreTypeInfo::getParameterizedClassType(self->getInstantiatedTypeInfo());
+    if (channel_type && channel_type->getArgCount()) {
+        return qore_new_channel_iterator_object(getProgram(), ch, channel_type->getTypeArgs());
+    }
+    return qore_new_channel_iterator_object(getProgram(), ch);
 }

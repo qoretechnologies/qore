@@ -33,7 +33,8 @@
 //! This class defines an abstract interface for bidirectional iterators
 /**
  */
-qclass AbstractBidirectionalIterator [arg=AbstractBidirectionalIterator* i; ns=Qore; vparent=AbstractIterator];
+qclass AbstractBidirectionalIterator<T> [arg=AbstractBidirectionalIterator* i; ns=Qore;
+    vparent=AbstractIterator<T>; legacy_raw];
 
 //! Moves the current position to the previous element; returns @ref False if there are no more elements
 /** This method will return @ref True again after it returns @ref False once if the object being iterated is not empty, otherwise it will always return @ref False.

@@ -2016,6 +2016,15 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                         ok = true;
                     }
                 }
+            } else if (obj) {
+                const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
+                if (target_pti) {
+                    const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
+                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
+                    if (QoreTypeInfo::equal(mapped_type, u.ti)) {
+                        ok = true;
+                    }
+                }
             }
             break;
         }
@@ -2266,6 +2275,15 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 if (obj_pti && target_pti) {
                     const QoreTypeInfo* mapped_type = qore_class_private::get(*obj_pti->getBaseClass())
                         ->getParameterizedBaseTypeInfo(obj_pti, target_pti->getBaseClass());
+                    if (QoreTypeInfo::equal(mapped_type, u.ti)) {
+                        return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                    }
+                }
+            } else {
+                const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
+                if (target_pti) {
+                    const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
+                        ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
                     if (QoreTypeInfo::equal(mapped_type, u.ti)) {
                         return exact ? QTI_IDENT : QTI_AMBIGUOUS;
                     }

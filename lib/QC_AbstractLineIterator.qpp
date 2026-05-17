@@ -35,7 +35,7 @@
 
     @since %Qore 0.8.13
  */
-qclass AbstractLineIterator [arg=void* i; ns=Qore; vparent=AbstractIterator];
+qclass AbstractLineIterator [arg=void* i; ns=Qore; vparent=AbstractIterator<string>];
 
 //! Moves the current position to the next line; returns @ref False if there are no more lines to read.
 /** This method will return @ref True again after it returns @ref False once if data is not empty, otherwise it will always return @ref False.

@@ -209,7 +209,7 @@ const QoreTypeInfo* StringRegexSplitIterator::getElementType() const {
 
     @since %Qore 2.3
 */
-qclass StringRegexSplitIterator [arg=StringRegexSplitIterator* i; ns=Qore; vparent=AbstractIterator];
+qclass StringRegexSplitIterator [arg=StringRegexSplitIterator* i; ns=Qore; vparent=AbstractIterator<string>];
 
 //! Creates the iterator with a source string, regex pattern, options, and optional include-separator flag.
 /** @param source the string to iterate over (captured by reference; converted to UTF-8 if necessary)
