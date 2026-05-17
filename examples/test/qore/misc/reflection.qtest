@@ -772,6 +772,19 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("DebugProgram", "removeProgram", ("program",));
         assertNamedClassMethodVariantCount("DebugProgram", "breakProgram", ("program",));
         assertNamedClassMethodVariantCount("DebugProgram", "breakProgramThread", ("program", "thread_id"));
+        assertNamedClassStaticMethodVariantCount("ProgramControl", "resolveProgramId", ("program_id",));
+        assertNamedClassMethodVariantCount("ProgramControl", "isDefined", ("parse_define",));
+        assertNamedClassMethodVariantCount("ProgramControl", "getDefine", ("parse_define",));
+        assertNamedClassMethodVariantCount("ProgramControl", "existsFunction", ("function_name",));
+        assertNamedClassMethodVariantCount("ProgramControl", "getGlobalVariable", ("variable_name", "found"));
+        assertNamedClassMethodVariantCount("ProgramControl", "setGlobalVarValue", ("variable_name", "value"));
+        assertNamedClassMethodVariantCount("ProgramControl", "assignBreakpoint", ("breakpoint",));
+        assertNamedClassMethodVariantCount("ProgramControl", "getStatementIdInfo",
+            ("statement_id", "list_breakpoints"));
+        assertNamedClassMethodVariantCount("ProgramControl", "findStatementId", ("file", "line"));
+        assertNamedClassMethodVariantCount("ProgramControl", "findFunctionStatementId",
+            ("function_name", "params"));
+        assertNamedClassMethodVariantCount("ProgramControl", "findFunctionVariants", ("function_name",));
         assertNamedConstructorVariantCount("Expression", ("program", "source", "label"));
 
         assertNamedConstructorVariantCount("AutoGate", ("gate",));

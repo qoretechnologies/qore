@@ -150,6 +150,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed parse-options class builtin opt-in", \reviewedParseOptionsClassBuiltinOptIn(),
             NOTHING);
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed ProgramControl class builtin opt-in", \reviewedProgramControlBuiltinOptIn(),
+            NOTHING);
         addTestCase("reviewed thread class builtin opt-in", \reviewedThreadClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed event-loop class builtin opt-in", \reviewedEventLoopClassBuiltinOptIn(),
             NOTHING);
@@ -728,6 +730,26 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "sub ql_thread_named_resource() { set_thread_resource(resource: sub(auto arg) {}, argument: NOTHING); "
             "remove_thread_resource(resource: sub() {}); }",
             "thread-named");
+    }
+
+    reviewedProgramControlBuiltinOptIn() {
+        ParseOptions opts("allow-debugger");
+        opts.set(parse_options: PO_NEW_STYLE);
+        Program p(opts);
+        p.parse("sub program_control_named() { ProgramControl pc = ProgramControl::getProgram(); "
+            "bool variable_exists; Breakpoint breakpoint(); "
+            "pc.isDefined(parse_define: \"NAMED_PROGRAM_CONTROL\"); "
+            "pc.getDefine(parse_define: \"NAMED_PROGRAM_CONTROL\"); "
+            "pc.existsFunction(function_name: \"main\"); "
+            "pc.getGlobalVariable(variable_name: \"ARGV\", found: \\variable_exists); "
+            "pc.setGlobalVarValue(variable_name: \"named_program_control_value\", value: 1); "
+            "pc.assignBreakpoint(breakpoint: breakpoint); "
+            "pc.getStatementIdInfo(statement_id: 1, list_breakpoints: False); "
+            "pc.findStatementId(file: \"program-control-named\", line: 1); "
+            "pc.findFunctionStatementId(function_name: \"main\", params: NOTHING); "
+            "pc.findFunctionVariants(function_name: \"main\"); "
+            "ProgramControl::resolveProgramId(program_id: pc.getProgramId()); }",
+            "program-control-named");
     }
 
     reviewedThreadClassBuiltinOptIn() {

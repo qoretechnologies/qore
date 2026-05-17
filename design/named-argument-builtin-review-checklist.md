@@ -432,6 +432,9 @@ These examples are from the core migration and should be reused as precedent:
 - Debugger APIs should expose complete public names: use `program`,
   `statement_id`, `thread_id`, `thread_ids`, and `breakpoint_id` instead of
   implementation abbreviations such as `pgm`, `tid`, and `bkpt`.
+- Program-control debugger APIs should use `program_id`, `parse_define`,
+  `function_name`, `variable_name`, `found`, `breakpoint`, `statement_id`,
+  `list_breakpoints`, `file`, `line`, and `params`.
 - Debugger callback hooks (`onAttach()`, `onStep()`, etc.) are override
   surfaces; review them separately from direct control methods before enabling
   named arguments.
