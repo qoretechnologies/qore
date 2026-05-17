@@ -1,6 +1,6 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-/*  FilePoller.qm Copyright (C) 2014 - 2024 Qore Technologies s.r.o.
+/*  FilePoller.qm Copyright (C) 2014 - 2026 Qore Technologies s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -407,6 +407,13 @@ public class FilePoller {
 
     #! stops the polling operation if in progress and destroys the object
     destructor() {
+        # if the object is being destroyed in the polling thread itself (for example because the last
+        # object reference was held by an event or log callback), then we cannot wait for the polling
+        # thread to terminate or we would deadlock; just signal the poll loop to exit in this case
+        if (gettid() == tid) {
+            stopNoWait();
+            return;
+        }
         stop();
     }
 
