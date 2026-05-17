@@ -696,111 +696,88 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
-# HTTP/2 support via nghttp2 (required, >= 1.68.1)
-# Minimum 1.68.1: v1.68.1 fixes CVE-2026-27135 (GHSA-6933-cjhr-5qg6), a DoS via
-# assertion failure in nghttp2_session_terminate_session[2] when extension
-# frames (ALTSVC, PRIORITY_UPDATE) trigger a follow-on FRAME_SIZE_ERROR.
-# Encoded as NGHTTP2_VERSION_NUM 0x014401 (1.68.1).
-# Falls back to building from source via FetchContent when no system install
-# satisfies the minimum.
+# HTTP/2 support via nghttp2 (required) - always built from source via
+# FetchContent and statically linked into libqore.
+#
+# We deliberately do NOT use any system/pkg-config nghttp2: distros ship
+# divergent versions, and a header/library version skew (e.g. a newer header
+# in /usr/local with an older shared lib earlier in the linker search path)
+# silently produces "undefined reference to nghttp2_session_mem_send2" since
+# Http2Session.cpp selects the API by the compile-time NGHTTP2_VERSION_NUM.
+# Building a pinned source release guarantees the header and library always
+# match and gives a reproducible, known-good version across all platforms/CI.
+#
+# Pinned to the latest stable release. >= 1.68.1 is also a security floor:
+# v1.68.1 fixes CVE-2026-27135 (GHSA-6933-cjhr-5qg6), a DoS via assertion
+# failure in nghttp2_session_terminate_session[2] when extension frames
+# (ALTSVC, PRIORITY_UPDATE) trigger a follow-on FRAME_SIZE_ERROR.
 set(NGHTTP2_VERSION "1.69.0")
-set(NGHTTP2_FOUND_SYSTEM FALSE)
-pkg_check_modules(NGHTTP2_PKG QUIET libnghttp2>=1.68.1)
-if (NGHTTP2_PKG_FOUND)
-    message(STATUS "Found nghttp2: ${NGHTTP2_PKG_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_PKG_INCLUDE_DIRS})
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_PKG_LIBRARIES})
-    set(NGHTTP2_FOUND_SYSTEM TRUE)
+
+# Build nghttp2 from source via FetchContent.
+# nghttp2 unconditionally creates an add_custom_target(check) like ngtcp2/
+# nghttp3, so we patch it out the same way before add_subdirectory.
+message(STATUS "Building nghttp2 from source (nghttp2 ${NGHTTP2_VERSION})")
+include(FetchContent)
+
+# Save cache variables we override for the subproject build
+set(_SAVE_NG2_BUILD_TESTING ${BUILD_TESTING})
+set(_SAVE_NG2_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+set(_SAVE_NG2_BUILD_STATIC_LIBS ${BUILD_STATIC_LIBS})
+set(_SAVE_NG2_ENABLE_LIB_ONLY ${ENABLE_LIB_ONLY})
+set(_SAVE_NG2_PIC ${CMAKE_POSITION_INDEPENDENT_CODE})
+
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
+set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
+# Static lib linked into libqore.so needs -fPIC
+set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
+
+FetchContent_Declare(nghttp2
+    URL "https://github.com/nghttp2/nghttp2/releases/download/v${NGHTTP2_VERSION}/nghttp2-${NGHTTP2_VERSION}.tar.xz"
+    URL_HASH SHA256=1fb324b6ec2c56f6bde0658f4139ffd8209fa9e77ce98fd7a5f63af8d0e508ad
+    # Patch out the unconditional 'check' target to avoid duplicate-target
+    # errors when ngtcp2/nghttp3 are also fetched.
+    PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
+    EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(nghttp2)
+
+# Restore cache variables
+if (DEFINED _SAVE_NG2_BUILD_TESTING)
+    set(BUILD_TESTING ${_SAVE_NG2_BUILD_TESTING} CACHE BOOL "" FORCE)
 else()
-    # Try to find nghttp2 without pkg-config
-    find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h)
-    find_library(NGHTTP2_LIBRARY NAMES nghttp2)
-    if (NGHTTP2_INCLUDE_DIR AND NGHTTP2_LIBRARY
-            AND EXISTS "${NGHTTP2_INCLUDE_DIR}/nghttp2/nghttp2ver.h")
-        file(STRINGS "${NGHTTP2_INCLUDE_DIR}/nghttp2/nghttp2ver.h" _nghttp2_ver
-             REGEX "^#define NGHTTP2_VERSION_NUM 0x")
-        if (_nghttp2_ver MATCHES "0x([0-9a-fA-F]+)")
-            math(EXPR _nghttp2_ver_num "0x${CMAKE_MATCH_1}" OUTPUT_FORMAT DECIMAL)
-            # 0x014401 = 82945 decimal (v1.68.1)
-            if (_nghttp2_ver_num LESS 82945)
-                message(STATUS "nghttp2 version too old (need >= 1.68.1 for CVE-2026-27135); will build from source")
-            else()
-                message(STATUS "Found nghttp2: ${NGHTTP2_LIBRARY}")
-                list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_INCLUDE_DIR})
-                list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARY})
-                set(NGHTTP2_FOUND_SYSTEM TRUE)
-            endif()
-        endif()
-    endif()
+    unset(BUILD_TESTING CACHE)
+endif()
+if (DEFINED _SAVE_NG2_BUILD_SHARED_LIBS)
+    set(BUILD_SHARED_LIBS ${_SAVE_NG2_BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
+else()
+    unset(BUILD_SHARED_LIBS CACHE)
+endif()
+if (DEFINED _SAVE_NG2_BUILD_STATIC_LIBS)
+    set(BUILD_STATIC_LIBS ${_SAVE_NG2_BUILD_STATIC_LIBS} CACHE BOOL "" FORCE)
+else()
+    unset(BUILD_STATIC_LIBS CACHE)
+endif()
+if (DEFINED _SAVE_NG2_ENABLE_LIB_ONLY)
+    set(ENABLE_LIB_ONLY ${_SAVE_NG2_ENABLE_LIB_ONLY} CACHE BOOL "" FORCE)
+else()
+    unset(ENABLE_LIB_ONLY CACHE)
+endif()
+if (DEFINED _SAVE_NG2_PIC)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ${_SAVE_NG2_PIC} CACHE BOOL "" FORCE)
+else()
+    unset(CMAKE_POSITION_INDEPENDENT_CODE CACHE)
 endif()
 
-if (NOT NGHTTP2_FOUND_SYSTEM)
-    # Build nghttp2 from source via FetchContent.
-    # nghttp2 unconditionally creates an add_custom_target(check) like ngtcp2/
-    # nghttp3, so we patch it out the same way before add_subdirectory.
-    message(STATUS "nghttp2 not found on system; building from source (nghttp2 ${NGHTTP2_VERSION})")
-    include(FetchContent)
-
-    # Save cache variables we override for the subproject build
-    set(_SAVE_NG2_BUILD_TESTING ${BUILD_TESTING})
-    set(_SAVE_NG2_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
-    set(_SAVE_NG2_BUILD_STATIC_LIBS ${BUILD_STATIC_LIBS})
-    set(_SAVE_NG2_ENABLE_LIB_ONLY ${ENABLE_LIB_ONLY})
-    set(_SAVE_NG2_PIC ${CMAKE_POSITION_INDEPENDENT_CODE})
-
-    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-    set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
-    set(ENABLE_LIB_ONLY ON CACHE BOOL "" FORCE)
-    # Static lib linked into libqore.so needs -fPIC
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
-
-    FetchContent_Declare(nghttp2
-        URL "https://github.com/nghttp2/nghttp2/releases/download/v${NGHTTP2_VERSION}/nghttp2-${NGHTTP2_VERSION}.tar.xz"
-        URL_HASH SHA256=1fb324b6ec2c56f6bde0658f4139ffd8209fa9e77ce98fd7a5f63af8d0e508ad
-        # Patch out the unconditional 'check' target to avoid duplicate-target
-        # errors when ngtcp2/nghttp3 are also fetched.
-        PATCH_COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/PatchFetchContentCheckTarget.cmake
-        EXCLUDE_FROM_ALL
-    )
-    FetchContent_MakeAvailable(nghttp2)
-
-    # Restore cache variables
-    if (DEFINED _SAVE_NG2_BUILD_TESTING)
-        set(BUILD_TESTING ${_SAVE_NG2_BUILD_TESTING} CACHE BOOL "" FORCE)
-    else()
-        unset(BUILD_TESTING CACHE)
-    endif()
-    if (DEFINED _SAVE_NG2_BUILD_SHARED_LIBS)
-        set(BUILD_SHARED_LIBS ${_SAVE_NG2_BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
-    else()
-        unset(BUILD_SHARED_LIBS CACHE)
-    endif()
-    if (DEFINED _SAVE_NG2_BUILD_STATIC_LIBS)
-        set(BUILD_STATIC_LIBS ${_SAVE_NG2_BUILD_STATIC_LIBS} CACHE BOOL "" FORCE)
-    else()
-        unset(BUILD_STATIC_LIBS CACHE)
-    endif()
-    if (DEFINED _SAVE_NG2_ENABLE_LIB_ONLY)
-        set(ENABLE_LIB_ONLY ${_SAVE_NG2_ENABLE_LIB_ONLY} CACHE BOOL "" FORCE)
-    else()
-        unset(ENABLE_LIB_ONLY CACHE)
-    endif()
-    if (DEFINED _SAVE_NG2_PIC)
-        set(CMAKE_POSITION_INDEPENDENT_CODE ${_SAVE_NG2_PIC} CACHE BOOL "" FORCE)
-    else()
-        unset(CMAKE_POSITION_INDEPENDENT_CODE CACHE)
-    endif()
-
-    # nghttp2 generates nghttp2ver.h in the build tree and ships public headers
-    # under lib/includes/nghttp2/.
-    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS
-        "${nghttp2_SOURCE_DIR}/lib/includes"
-        "${nghttp2_BINARY_DIR}/lib/includes"
-    )
-    # Link against the static target produced when BUILD_STATIC_LIBS=ON.
-    list(APPEND LIBQORE_OPTIONAL_LIBS nghttp2_static)
-endif()
+# nghttp2 generates nghttp2ver.h in the build tree and ships public headers
+# under lib/includes/nghttp2/.
+list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS
+    "${nghttp2_SOURCE_DIR}/lib/includes"
+    "${nghttp2_BINARY_DIR}/lib/includes"
+)
+# Link against the static target produced when BUILD_STATIC_LIBS=ON.
+list(APPEND LIBQORE_OPTIONAL_LIBS nghttp2_static)
 
 # QUIC/HTTP/3 support via ngtcp2 + nghttp3
 # Try system packages first (pkg-config, then cmake find); fall back to
