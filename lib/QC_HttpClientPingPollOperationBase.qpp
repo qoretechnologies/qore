@@ -338,7 +338,7 @@ qclass HttpClientPingPollOperationBase [
     private_members=string goal;
     ns=Qore;
     arg=HttpClientPingPollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<*hash<auto>>
 ];
 
 //! Creates the HTTP client ping/verify poll operation base
@@ -441,7 +441,7 @@ nothing HttpClientPingPollOperationBase::abort() {
 //! Returns the output of the operation
 /** @return the HTTP response hash from the inner operation, or NOTHING if not yet complete
 */
-auto HttpClientPingPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+*hash<auto> HttpClientPingPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

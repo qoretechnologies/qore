@@ -677,7 +677,7 @@ qclass FtpControlPollOperation [
     private_members=object sock,string goal;
     ns=Qore;
     arg=FtpControlPollOperationPriv* priv;
-    vparent=SocketPollOperationBase;
+    vparent=SocketPollOperationBase<*hash<auto>>;
     dom=NETWORK
 ];
 
@@ -779,7 +779,7 @@ bool FtpControlPollOperation::goalReached() {
 /** @return a hash with \c code (int response code), \c message (string response text),
     and \c login_complete (bool) keys; or NOTHING if no response has been received yet
 */
-auto FtpControlPollOperation::getOutput() {
+*hash<auto> FtpControlPollOperation::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 
@@ -1073,7 +1073,7 @@ qclass FtpPortAcceptPollOperation [
     private_members=object sock,string goal;
     ns=Qore;
     arg=FtpPortAcceptPollOperationPriv* priv;
-    vparent=SocketPollOperationBase;
+    vparent=SocketPollOperationBase<*Socket>;
     dom=NETWORK
 ];
 
@@ -1159,7 +1159,7 @@ bool FtpPortAcceptPollOperation::goalReached() {
 //! Returns the accepted socket QoreObject
 /** @return the accepted Socket object, or NOTHING if not yet accepted
 */
-auto FtpPortAcceptPollOperation::getOutput() {
+*Socket FtpPortAcceptPollOperation::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

@@ -159,7 +159,7 @@ qclass HttpIdlePollOperationBase [
     private_members=object sock,string goal;
     ns=Qore;
     arg=HttpIdlePollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<hash<auto>>
 ];
 
 //! Creates the idle poll operation
@@ -238,7 +238,7 @@ nothing HttpIdlePollOperationBase::abort() {
 //! Returns the output of the operation
 /** @return a hash with keys: sock, state, timed_out, closed, data_available
 */
-auto HttpIdlePollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+hash<auto> HttpIdlePollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

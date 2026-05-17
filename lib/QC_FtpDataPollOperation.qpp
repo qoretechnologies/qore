@@ -607,7 +607,7 @@ qclass FtpDataPollOperation [
     private_members=object sock,string goal;
     ns=Qore;
     arg=FtpDataPollOperationPriv* priv;
-    vparent=SocketPollOperationBase;
+    vparent=SocketPollOperationBase<*binary>;
     dom=NETWORK
 ];
 
@@ -723,7 +723,7 @@ bool FtpDataPollOperation::goalReached() {
 //! Returns the received data (for RETR/LIST) or NOTHING (for STOR)
 /** @return binary data received from the data channel, or NOTHING for send operations
 */
-auto FtpDataPollOperation::getOutput() {
+*binary FtpDataPollOperation::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

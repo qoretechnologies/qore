@@ -257,7 +257,7 @@ qclass HttpKeepAlivePollOperationBase [
     private_members=object sock,string goal;
     ns=Qore;
     arg=HttpKeepAlivePollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<hash<auto>>
 ];
 
 //! Creates the keep-alive poll operation
@@ -336,7 +336,7 @@ nothing HttpKeepAlivePollOperationBase::abort() {
 //! Returns the output of the operation
 /** @return the parsed HTTP header hash if headers were read, or a state hash otherwise
 */
-auto HttpKeepAlivePollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+hash<auto> HttpKeepAlivePollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

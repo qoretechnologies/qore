@@ -177,6 +177,35 @@ class SourceTypedIterator<T> inherits AbstractIterator<T> {
     }
 }
 
+class SourcePollOperation<T> inherits AbstractPollOperation<T> {
+    private {
+        T output;
+    }
+
+    constructor(T output) {
+        self.output = output;
+    }
+
+    string getGoal() {
+        return "complete";
+    }
+
+    string getState() {
+        return "complete";
+    }
+
+    bool goalReached() {
+        return True;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+    }
+
+    T getOutput() {
+        return output;
+    }
+}
+
 class SourceObjectPairMembers {
     public {
         int count;
@@ -263,6 +292,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("static generic methods", \staticGenericMethods());
         addTestCase("generic hashdecls", \genericHashDecls());
         addTestCase("source generic iterators", \sourceGenericIterators());
+        addTestCase("source generic poll operations", \sourceGenericPollOperations());
         addTestCase("builtin iterator element types", \builtinIteratorElementTypes());
         addTestCase("source raw generic compatibility", \sourceRawGenericCompatibility());
         addTestCase("parse checks", \parseChecks());
@@ -394,6 +424,35 @@ public class GenericClassTypesTest inherits QUnit::Test {
         list<int> selected = select selected_it, $1 > 3;
         assertEq(1, selected.size());
         assertEq(7, selected[0]);
+    }
+
+    sourceGenericPollOperations() {
+        SourcePollOperation<int> op(17);
+        assertTrue(op instanceof AbstractPollOperation<int>);
+        assertFalse(op instanceof AbstractPollOperation<string>);
+
+        AbstractPollOperation<int> base = op;
+        int output = base.getOutput();
+        assertEq(17, output);
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub t(HttpIdlePollOperationBase op) { hash<auto> h = op.getOutput(); }",
+                "generic-classes");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "sub t(HttpIdlePollOperationBase op) { string s = op.getOutput(); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub t(Http2PollOperationBase op) { *hash<auto> h = op.getOutput(); }",
+                "generic-classes");
+        }
     }
 
     builtinIteratorElementTypes() {

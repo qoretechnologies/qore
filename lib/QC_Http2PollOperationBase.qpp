@@ -715,7 +715,7 @@ qclass Http2PollOperationBase [
     private_members=object sock,string goal;
     ns=Qore;
     arg=Http2PollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<*hash<auto>>
 ];
 
 //! Creates the HTTP/2 poll operation base
@@ -827,7 +827,7 @@ nothing Http2PollOperationBase::abort() {
     continueReading() calls correctly throw instead of clearing a request
     that is being dispatched.
 */
-auto Http2PollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+*hash<auto> Http2PollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

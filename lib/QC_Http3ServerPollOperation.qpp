@@ -724,7 +724,7 @@ void Http3ServerPollOperationPriv::checkStreamQueues() {
 
     @since %Qore 2.3
 */
-qclass Http3ServerPollOperation [arg=Http3ServerPollOperationPriv* priv; ns=Qore; vparent=SocketPollOperationBase; private_members=object sock,string goal,auto data_save];
+qclass Http3ServerPollOperation [arg=Http3ServerPollOperationPriv* priv; ns=Qore; vparent=SocketPollOperationBase<*hash<auto>>; private_members=object sock,string goal,auto data_save];
 
 //! Creates the HTTP/3 server poll operation
 /** @param socket the UDP socket bound and ready for QUIC connections

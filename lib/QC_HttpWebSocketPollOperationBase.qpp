@@ -843,7 +843,7 @@ qclass HttpWebSocketPollOperationBase [
     private_members=object sock,string goal,object recv_queue,object send_queue;
     ns=Qore;
     arg=HttpWebSocketPollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<hash<auto>>
 ];
 
 //! Creates the WebSocket poll operation base
@@ -942,7 +942,7 @@ nothing HttpWebSocketPollOperationBase::abort() {
 //! Returns the output of the operation
 /** @return hash with sock, state, close_code, close_reason, error_info
 */
-auto HttpWebSocketPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+hash<auto> HttpWebSocketPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

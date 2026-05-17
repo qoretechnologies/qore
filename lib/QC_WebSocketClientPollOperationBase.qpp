@@ -799,7 +799,7 @@ qclass WebSocketClientPollOperationBase [
     private_members=object sock,string goal,object recv_queue,object send_queue;
     ns=Qore;
     arg=WebSocketClientPollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<hash<auto>>
 ];
 
 //! Creates the WebSocket client poll operation base
@@ -901,7 +901,7 @@ nothing WebSocketClientPollOperationBase::abort() {
 //! Returns the output of the operation
 /** @return hash with state, close_code, close_reason, error_info
 */
-auto WebSocketClientPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+hash<auto> WebSocketClientPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 

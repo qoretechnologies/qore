@@ -454,7 +454,7 @@ qclass HttpAcceptPollOperationBase [
     private_members=object sock,string goal;
     ns=Qore;
     arg=HttpAcceptPollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<hash<auto>>
 ];
 
 //! Creates the accept poll operation
@@ -604,7 +604,7 @@ nothing HttpAcceptPollOperationBase::abort() {
 //! Returns the output of the operation
 /** @return a hash with keys: sock, ssl, is_http2, negotiated_protocol, http_version
 */
-auto HttpAcceptPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+hash<auto> HttpAcceptPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
 }
 
