@@ -556,8 +556,7 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
             std::string class_ref = qore_aot_encode_class_ref(qc);
             ctx.writer.writeStringRef(class_ref.c_str());
             if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
-                ctx.writer.writeStringRef(vrn->getTypeInfo()
-                    ? QoreTypeInfo::getPath(vrn->getTypeInfo()) : "");
+                ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(vrn->getTypeInfo()).c_str());
             }
             const QoreListNode* args = vrn->getArgs();
             size_t nargs = args ? args->size() : 0;
@@ -584,8 +583,7 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());
         if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
-            ctx.writer.writeStringRef(no->getObjectTypeInfo()
-                ? QoreTypeInfo::getPath(no->getObjectTypeInfo()) : "");
+            ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(no->getObjectTypeInfo()).c_str());
         }
         ctx.writer.writeU8(0);
         return true;
@@ -1549,8 +1547,7 @@ static bool write_expr_scoped_new_object(AOTExprWriteCtx& ctx) {
             std::string class_ref = qore_aot_encode_class_ref(socn->oc);
             ctx.writer.writeStringRef(class_ref.c_str());
             if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
-                ctx.writer.writeStringRef(socn->getObjectTypeInfo()
-                    ? QoreTypeInfo::getPath(socn->getObjectTypeInfo()) : "");
+                ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(socn->getObjectTypeInfo()).c_str());
             }
             const QoreListNode* args = socn->getArgs();
             if (args && args->size() > 255) {
@@ -1741,7 +1738,7 @@ static bool write_expr_complex_hash_new(AOTExprWriteCtx& ctx) {
     if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
         if (nch->typeInfo) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_HASH_NEW));
-            ctx.writer.writeStringRef(QoreTypeInfo::getPath(nch->typeInfo));
+            ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(nch->typeInfo).c_str());
             // Serialize constructor args
             size_t nargs = nch->args ? nch->args->size() : 0;
             if (nargs > 255) {
@@ -1819,7 +1816,7 @@ static bool write_expr_complex_list_new(AOTExprWriteCtx& ctx) {
     if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
         if (ncl->typeInfo) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_LIST_NEW));
-            ctx.writer.writeStringRef(QoreTypeInfo::getPath(ncl->typeInfo));
+            ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(ncl->typeInfo).c_str());
             // Serialize constructor arg (single QoreValue)
             if (ncl->args.hasNode()) {
                 ctx.writer.writeU8(1);
@@ -2082,7 +2079,7 @@ static bool write_expr_parse_ref(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* prn = dynamic_cast<const ParseReferenceNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::PARSE_REF));
-        ctx.writer.writeStringRef(prn->getTypeInfo() ? QoreTypeInfo::getPath(prn->getTypeInfo()) : "");
+        ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(prn->getTypeInfo()).c_str());
         return classifyAndWriteExpr(ctx.writer, prn->getLVExp(), ctx.parent_locals, ctx.parent_globals,
             ctx.const_reverse_map);
     }
@@ -2163,23 +2160,8 @@ static bool write_expr_cast_inner(AOTExprWriteCtx& ctx, QoreValue inner) {
 
 static bool read_expr_cast_inner(AOTExprReadCtx& ctx, QoreValue& inner);
 
-static const char* get_expr_cast_type_path(const QoreTypeInfo* ti) {
-    if (ti == autoNoNarrowTypeInfo) {
-        return "auto!";
-    }
-    if (ti == autoNoNarrowHashTypeInfo) {
-        return "hash<auto!>";
-    }
-    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
-        return "*hash<auto!>";
-    }
-    if (ti == autoNoNarrowListTypeInfo) {
-        return "list<auto!>";
-    }
-    if (ti == autoNoNarrowListOrNothingTypeInfo) {
-        return "*list<auto!>";
-    }
-    return QoreTypeInfo::getPath(ti);
+static std::string get_expr_cast_type_path(const QoreTypeInfo* ti) {
+    return qore_get_aot_serializable_type_path(ti);
 }
 
 // ============================================================================
@@ -2190,7 +2172,7 @@ static bool write_expr_cast_scalar(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* sc = dynamic_cast<const QoreScalarCastOperatorNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_SCALAR));
-        ctx.writer.writeStringRef(get_expr_cast_type_path(sc->getCastTypeInfo()));
+        ctx.writer.writeStringRef(get_expr_cast_type_path(sc->getCastTypeInfo()).c_str());
         ctx.writer.writeU8(sc->isOrNothing() ? 1 : 0);
         return write_expr_cast_inner(ctx, sc->getExp());
     }
@@ -2287,7 +2269,7 @@ static bool write_expr_cast_complex_hash(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* chc = dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_HASH));
-        ctx.writer.writeStringRef(QoreTypeInfo::getPath(chc->getCastTypeInfo()));
+        ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(chc->getCastTypeInfo()).c_str());
         ctx.writer.writeU8(chc->isOrNothing() ? 1 : 0);
         return write_expr_cast_inner(ctx, chc->getExp());
     }
@@ -2325,7 +2307,7 @@ static bool write_expr_cast_complex_list(AOTExprWriteCtx& ctx) {
     if (auto* clc = dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_COMPLEX_LIST));
         const QoreTypeInfo* ti = clc->getCastTypeInfo();
-        ctx.writer.writeStringRef(ti ? QoreTypeInfo::getPath(ti) : "list");
+        ctx.writer.writeStringRef(ti ? qore_get_aot_serializable_type_path(ti).c_str() : "list");
         ctx.writer.writeU8(clc->isOrNothing() ? 1 : 0);
         return write_expr_cast_inner(ctx, clc->getExp());
     }
@@ -2406,7 +2388,7 @@ static bool write_expr_cast_enum(AOTExprWriteCtx& ctx) {
     const AbstractQoreNode* node = ctx.expr.getInternalNode();
     if (auto* ec = dynamic_cast<const QoreEnumCastOperatorNode*>(node)) {
         ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_ENUM));
-        ctx.writer.writeStringRef(QoreTypeInfo::getPath(ec->getCastTypeInfo()));
+        ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(ec->getCastTypeInfo()).c_str());
         ctx.writer.writeU8(ec->isOrNothing() ? 1 : 0);
         return write_expr_cast_inner(ctx, ec->getExp());
     }
@@ -3076,13 +3058,13 @@ static bool write_expr_instanceof(AOTExprWriteCtx& ctx) {
         return false;
     }
     const QoreTypeInfo* ti = inst->getInstanceTypeInfo();
-    const char* type_path = ti ? QoreTypeInfo::getPath(ti) : "";
-    if (!type_path || !*type_path) {
+    std::string type_path = qore_get_aot_serializable_type_path(ti);
+    if (type_path.empty()) {
         return false;
     }
 
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::INSTANCEOF));
-    ctx.writer.writeStringRef(type_path);
+    ctx.writer.writeStringRef(type_path.c_str());
     return classifyAndWriteExpr(ctx.writer, inst->getExp(), ctx.parent_locals,
         ctx.parent_globals, ctx.const_reverse_map);
 }

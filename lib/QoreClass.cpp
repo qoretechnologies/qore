@@ -1338,13 +1338,15 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
         if (*xsink) {
             return -1;
         }
+        const QoreTypeInfo* member_type = qore_substitute_type_params(info.getTypeInfo(),
+            qore_object_private::get(o)->instantiated_type);
         printd(5, "qore_class_private::initMember() this: %p '%s::%s' type %s val: %s filter: %d\n", this, name.c_str(),
-            member_name, QoreTypeInfo::getPath(info.getTypeInfo()),
+            member_name, QoreTypeInfo::getPath(member_type),
             val->getFullTypeName(true),
-            QoreTypeInfo::mayRequireFilter(info.getTypeInfo(), *val));
-        if (QoreTypeInfo::mayRequireFilter(info.getTypeInfo(), *val)) {
+            QoreTypeInfo::mayRequireFilter(member_type, *val));
+        if (QoreTypeInfo::mayRequireFilter(member_type, *val)) {
             val.ensureReferencedValue();
-            QoreTypeInfo::acceptInputMember(info.getTypeInfo(), member_name, *val, xsink);
+            QoreTypeInfo::acceptInputMember(member_type, member_name, *val, xsink);
             if (*xsink) {
                 return -1;
             }

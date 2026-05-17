@@ -2589,6 +2589,27 @@ static const char* qore_type_arg_plural(size_t count) {
     return count == 1 ? "" : "s";
 }
 
+static const QoreTypeInfo* qore_resolve_parse_type_parameter(const NamedScope& cscope, bool or_nothing) {
+    if (cscope.size() != 1) {
+        return nullptr;
+    }
+
+    qore_class_private* qc = parse_get_class_priv();
+    if (!qc || !qc->hasTypeParams()) {
+        return nullptr;
+    }
+
+    const char* name = cscope.getIdentifier();
+    for (size_t i = 0, e = qc->getTypeParamCount(); i < e; ++i) {
+        const char* param = qc->getTypeParamName(i);
+        if (!strcmp(name, param)) {
+            return qore_get_type_parameter_type(qc->cls, i, param, or_nothing);
+        }
+    }
+
+    return nullptr;
+}
+
 static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const QoreParseTypeInfo& pti,
         const QoreProgramLocation* loc, int& err, bool or_nothing) {
     const QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *pti.cscope, false);
@@ -3353,6 +3374,11 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveAny(const QoreProgramLocation* loc
         return resolveSubtype(loc, err);
     }
 
+    const QoreTypeInfo* type_param = qore_resolve_parse_type_parameter(*cscope, or_nothing);
+    if (type_param) {
+        return type_param;
+    }
+
     const QoreTypeInfo* rv = or_nothing
         ? getBuiltinUserOrNothingTypeInfo(cscope->ostr)
         : getBuiltinUserTypeInfo(cscope->ostr);
@@ -3366,6 +3392,11 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveAndDelete(const QoreProgramLocatio
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* loc, const NamedScope& cscope,
         bool or_nothing, int& err) {
+    const QoreTypeInfo* type_param = qore_resolve_parse_type_parameter(cscope, or_nothing);
+    if (type_param) {
+        return type_param;
+    }
+
     // check for typedef first (both simple names and scoped names)
     TypedefEntry* td = qore_root_ns_private::parseFindTypedef(cscope);
     if (td) {

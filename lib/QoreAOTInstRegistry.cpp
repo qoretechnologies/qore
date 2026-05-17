@@ -385,7 +385,7 @@ static std::unique_ptr<QoreIRInstruction> readBase(
 // ============================================================================
 
 static bool writeTypedBase(AOTInstWriteCtx& ctx) {
-    ctx.writer.writeStringRef(ctx.inst->element_type ? QoreTypeInfo::getPath(ctx.inst->element_type) : "");
+    ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(ctx.inst->element_type).c_str());
     return true;
 }
 
@@ -1702,7 +1702,7 @@ static bool writeGuard(AOTInstWriteCtx& ctx) {
     auto* gi = static_cast<const QoreIRGuardInstruction*>(ctx.inst);
     auto it = ctx.block_idx.find(gi->deopt_target);
     ctx.writer.writeU16(it != ctx.block_idx.end() ? it->second : 0xFFFF);
-    ctx.writer.writeStringRef(gi->type_info ? QoreTypeInfo::getPath(gi->type_info) : "");
+    ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(gi->type_info).c_str());
     ctx.writer.writeU32(gi->guard_id);
     return true;
 }
@@ -1859,7 +1859,7 @@ static bool writeNewObject(AOTInstWriteCtx& ctx) {
             const type_vec_t& types = sig->getTypeList();
             for (size_t i = 0; i < types.size(); ++i) {
                 if (i > 0) variant_sig.append(",");
-                variant_sig.append(QoreTypeInfo::getPath(types[i]));
+                variant_sig.append(qore_get_aot_serializable_type_path(types[i]));
             }
             variant_sig.append(")");
         }
@@ -1867,7 +1867,7 @@ static bool writeNewObject(AOTInstWriteCtx& ctx) {
     ctx.writer.writeStringRef(variant_sig.c_str());
     if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
         ctx.writer.writeStringRef(ni->object_type_info
-            ? QoreTypeInfo::getPath(ni->object_type_info) : "");
+            ? qore_get_aot_serializable_type_path(ni->object_type_info).c_str() : "");
     }
     return true;
 }
@@ -1916,7 +1916,7 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
                     const type_vec_t& types = vsig->getTypeList();
                     for (size_t i = 0; i < types.size(); ++i) {
                         if (i > 0) vs.append(",");
-                        vs.append(QoreTypeInfo::getPath(types[i]));
+                        vs.append(qore_get_aot_serializable_type_path(types[i]));
                     }
                     vs.append(")");
                     if (vs == variant_sig) {
@@ -2697,7 +2697,7 @@ static bool writeMakeHashConstKeys(AOTInstWriteCtx& ctx) {
     for (const auto& key : mhck->keys) {
         ctx.writer.writeStringRef(key.c_str());
     }
-    ctx.writer.writeStringRef(mhck->typeInfo ? QoreTypeInfo::getPath(mhck->typeInfo) : "");
+    ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(mhck->typeInfo).c_str());
     return true;
 }
 
@@ -3099,7 +3099,7 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
 
 static bool writeMakeList(AOTInstWriteCtx& ctx) {
     auto* ml = static_cast<const QoreIRMakeListInstruction*>(ctx.inst);
-    ctx.writer.writeStringRef(ml->typeInfo ? QoreTypeInfo::getPath(ml->typeInfo) : "");
+    ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(ml->typeInfo).c_str());
     return true;
 }
 
@@ -3136,7 +3136,7 @@ static std::unique_ptr<QoreIRInstruction> readMakeList(
 
 static bool writeMakeHash(AOTInstWriteCtx& ctx) {
     auto* mh = static_cast<const QoreIRMakeHashInstruction*>(ctx.inst);
-    ctx.writer.writeStringRef(mh->typeInfo ? QoreTypeInfo::getPath(mh->typeInfo) : "");
+    ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(mh->typeInfo).c_str());
     return true;
 }
 

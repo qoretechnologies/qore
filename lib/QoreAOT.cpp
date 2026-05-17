@@ -386,7 +386,7 @@ std::string getVariantKey(const char* name, const AbstractQoreFunctionVariant* v
             if (i > 0) {
                 key.append(",");
             }
-            key.append(QoreTypeInfo::getPath(types[i]));
+            key.append(qore_get_aot_serializable_type_path(types[i]));
         }
     }
     key.append(")");
@@ -700,6 +700,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Constructor call targets preserve instantiated object typeInfo so AOT
     // execution stamps generic class instances the same way as source/JIT.
     flags |= QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO;
+    // Source-defined generic classes need their formal type parameter names
+    // preserved so source-stripped metadata can rebuild symbolic T, K, V types.
+    flags |= QORE_AOT_FEAT_CLASS_TYPE_PARAMS;
     return flags;
 }
 
@@ -10842,25 +10845,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
 
 //! Helper: get type path string for a QoreTypeInfo (empty string if null)
 static std::string getSlotTypePath(const QoreTypeInfo* ti) {
-    if (!ti) {
-        return {};
-    }
-    if (ti == autoNoNarrowTypeInfo) {
-        return "auto!";
-    }
-    if (ti == autoNoNarrowHashTypeInfo) {
-        return "hash<auto!>";
-    }
-    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
-        return "*hash<auto!>";
-    }
-    if (ti == autoNoNarrowListTypeInfo) {
-        return "list<auto!>";
-    }
-    if (ti == autoNoNarrowListOrNothingTypeInfo) {
-        return "*list<auto!>";
-    }
-    return QoreTypeInfo::getPath(ti);
+    return qore_get_aot_serializable_type_path(ti);
 }
 
 // ---- Expression Tree Serializer ----
@@ -11390,7 +11375,7 @@ class ExprTreeSerializer {
             // Get type path from the resolved type info
             const QoreTypeInfo* ti = op->getInstanceTypeInfo();
             if (ti) {
-                writeStr(QoreTypeInfo::getPath(ti));
+                writeStr(getSlotTypePath(ti));
             } else {
                 writeStr("");
             }
@@ -12171,12 +12156,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             const type_vec_t& types = sig->getTypeList();
             for (size_t i = 0; i < types.size(); ++i) {
                 if (i > 0) id.ref2.append(",");
-                id.ref2.append(QoreTypeInfo::getPath(types[i]));
+                id.ref2.append(getSlotTypePath(types[i]));
             }
             id.ref2.append(")");
         }
         if (const QoreTypeInfo* object_type_info = no->getObjectTypeInfo()) {
-            id.ref3 = QoreTypeInfo::getPath(object_type_info);
+            id.ref3 = getSlotTypePath(object_type_info);
         }
         return id;
     }
@@ -12204,12 +12189,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 const type_vec_t& types = sig->getTypeList();
                 for (size_t i = 0; i < types.size(); ++i) {
                     if (i > 0) id.ref2.append(",");
-                    id.ref2.append(QoreTypeInfo::getPath(types[i]));
+                    id.ref2.append(getSlotTypePath(types[i]));
                 }
                 id.ref2.append(")");
             }
             if (const QoreTypeInfo* object_type_info = vrn->getTypeInfo()) {
-                id.ref3 = QoreTypeInfo::getPath(object_type_info);
+                id.ref3 = getSlotTypePath(object_type_info);
             }
             return id;
         }
@@ -12217,7 +12202,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // Check complex hash BEFORE hashdecl, since hash<HashdeclType> has both
         if (QoreTypeInfo::getUniqueReturnComplexHash(vrn->getTypeInfo())) {
             id.kind = AOTExprKind::COMPLEX_HASH_NEW;
-            id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
+            id.ref1 = getSlotTypePath(vrn->getTypeInfo());
             id.call_args = vrn->getArgs();
             id.parse_args = vrn->getParseArgs();
             return id;
@@ -12234,7 +12219,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // Complex list construction (e.g., list<string> l())
         if (QoreTypeInfo::getUniqueReturnComplexList(vrn->getTypeInfo())) {
             id.kind = AOTExprKind::COMPLEX_LIST_NEW;
-            id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
+            id.ref1 = getSlotTypePath(vrn->getTypeInfo());
             id.call_args = vrn->getArgs();
             id.parse_args = vrn->getParseArgs();
             id.child_expr = vrn->getNewArgs();
@@ -12256,7 +12241,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // NewComplexHashNode: complex typed hash construction (new hash<string, int>(...))
     if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
         id.kind = AOTExprKind::COMPLEX_HASH_NEW;
-        id.ref1 = QoreTypeInfo::getPath(nch->typeInfo);
+        id.ref1 = getSlotTypePath(nch->typeInfo);
         id.parse_args = nch->args;
         return id;
     }
@@ -12264,7 +12249,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // NewComplexListNode: complex typed list construction (new list<string>(...))
     if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
         id.kind = AOTExprKind::COMPLEX_LIST_NEW;
-        id.ref1 = QoreTypeInfo::getPath(ncl->typeInfo);
+        id.ref1 = getSlotTypePath(ncl->typeInfo);
         id.child_expr = ncl->args;
         return id;
     }
@@ -12306,7 +12291,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         // ref2 = class type path (empty if no class context)
         const QoreTypeInfo* cti = ucf->getClassType();
         if (cti) {
-            id.ref2 = QoreTypeInfo::getPath(cti);
+            id.ref2 = getSlotTypePath(cti);
         }
         // Store closure function pointer for later serialization
         id.closure_func = ucf;
@@ -12541,8 +12526,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* inst = dynamic_cast<const QoreInstanceOfOperatorNode*>(node)) {
         const QoreTypeInfo* ti = inst->getInstanceTypeInfo();
-        const char* type_path = ti ? QoreTypeInfo::getPath(ti) : "";
-        if (type_path && *type_path) {
+        std::string type_path = getSlotTypePath(ti);
+        if (!type_path.empty()) {
             id.kind = AOTExprKind::INSTANCEOF;
             id.ref1 = type_path;
             id.child_expr = v;
@@ -12794,12 +12779,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                     return AOTExprSlotId();
                 }
                 if (i > 0) id.ref2.append(",");
-                id.ref2.append(QoreTypeInfo::getPath(types[i]));
+                id.ref2.append(getSlotTypePath(types[i]));
             }
             id.ref2.append(")");
         }
         if (const QoreTypeInfo* object_type_info = sc->getObjectTypeInfo()) {
-            id.ref3 = QoreTypeInfo::getPath(object_type_info);
+            id.ref3 = getSlotTypePath(object_type_info);
         }
         return id;
     }
@@ -12863,13 +12848,13 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // Cast operator nodes: classified with type path + or_nothing instead of EXPR_TREE.
     if (auto* chc = dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)) {
         id.kind = AOTExprKind::CAST_COMPLEX_HASH;
-        id.ref1 = QoreTypeInfo::getPath(chc->getCastTypeInfo());
+        id.ref1 = getSlotTypePath(chc->getCastTypeInfo());
         id.flags = chc->isOrNothing() ? 1 : 0;
         return id;
     }
     if (auto* clc = dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
         id.kind = AOTExprKind::CAST_COMPLEX_LIST;
-        id.ref1 = QoreTypeInfo::getPath(clc->getCastTypeInfo());
+        id.ref1 = getSlotTypePath(clc->getCastTypeInfo());
         id.flags = clc->isOrNothing() ? 1 : 0;
         return id;
     }
@@ -12893,7 +12878,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* ec = dynamic_cast<const QoreEnumCastOperatorNode*>(node)) {
         id.kind = AOTExprKind::CAST_ENUM;
-        id.ref1 = QoreTypeInfo::getPath(ec->getCastTypeInfo());
+        id.ref1 = getSlotTypePath(ec->getCastTypeInfo());
         id.flags = ec->isOrNothing() ? 1 : 0;
         return id;
     }
@@ -12949,7 +12934,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     }
     if (auto* prn = dynamic_cast<const ParseReferenceNode*>(node)) {
         id.kind = AOTExprKind::PARSE_REF;
-        id.ref1 = prn->getTypeInfo() ? QoreTypeInfo::getPath(prn->getTypeInfo()) : "";
+        id.ref1 = getSlotTypePath(prn->getTypeInfo());
         id.child_expr = prn->getLVExp();
         return id;
     }

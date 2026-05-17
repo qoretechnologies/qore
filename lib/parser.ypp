@@ -77,10 +77,12 @@
 #include "qore/intern/qore_list_private.h"
 
 #include <cstdio>
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -222,6 +224,127 @@ public:
     DLLLOCAL void checkName() {
         if (!strcmp(name->getIdentifier(), "auto"))
             parse_error(*loc, "a class may not have the name 'auto'; this name has a special meaning in complex types; please choose another name for your class");
+    }
+};
+
+class ClassDeclParseInfo {
+private:
+    struct decl_free {
+        DLLLOCAL void operator()(char* p) const {
+            free(p);
+        }
+    };
+
+public:
+    std::string name;
+    std::vector<std::string> type_params;
+
+    DLLLOCAL ClassDeclParseInfo(const QoreProgramLocation* loc, char* raw_decl) {
+        std::unique_ptr<char, decl_free> raw(raw_decl);
+        std::string decl(raw.get());
+
+        size_t lt = decl.find('<');
+        size_t gt = decl.rfind('>');
+        if (lt == std::string::npos || gt == std::string::npos || gt < lt) {
+            parse_error(*loc, "invalid generic class declaration '%s'; expected syntax like 'class Box<T>'",
+                decl.c_str());
+            name = decl;
+            trim(name);
+            return;
+        }
+
+        for (size_t i = gt + 1; i < decl.size(); ++i) {
+            if (decl[i] != ' ' && decl[i] != '\t' && decl[i] != '\r') {
+                parse_error(*loc, "invalid generic class declaration '%s'; unexpected text after type parameter list",
+                    decl.c_str());
+                break;
+            }
+        }
+
+        name = decl.substr(0, lt);
+        trim(name);
+        if (name.empty()) {
+            parse_error(*loc, "invalid generic class declaration '%s'; missing class name", decl.c_str());
+        }
+
+        std::string params = decl.substr(lt + 1, gt - lt - 1);
+        size_t start = 0;
+        while (start <= params.size()) {
+            size_t comma = params.find(',', start);
+            std::string param = params.substr(start,
+                comma == std::string::npos ? std::string::npos : comma - start);
+            trim(param);
+            if (param.empty()) {
+                parse_error(*loc, "invalid generic class declaration '%s'; empty type parameter name", decl.c_str());
+                break;
+            }
+            if (!isIdentifier(param)) {
+                parse_error(*loc, "invalid type parameter name '%s' in generic class declaration '%s'; type "
+                    "parameter names must be identifiers", param.c_str(), decl.c_str());
+            } else if (hasParam(param)) {
+                parse_error(*loc, "duplicate type parameter name '%s' in generic class declaration '%s'",
+                    param.c_str(), decl.c_str());
+            } else {
+                type_params.push_back(param);
+            }
+
+            if (comma == std::string::npos) {
+                break;
+            }
+            start = comma + 1;
+        }
+    }
+
+    DLLLOCAL bool isScoped() const {
+        return name.find("::") != std::string::npos;
+    }
+
+    DLLLOCAL NamedScope* takeName() const {
+        return new NamedScope(strdup(name.c_str()));
+    }
+
+    DLLLOCAL void applyTypeParams(QoreClass* qc) const {
+        for (const std::string& param : type_params) {
+            qc->addTypeParameter(param.c_str());
+        }
+    }
+
+    DLLLOCAL static void trim(std::string& str) {
+        size_t start = 0;
+        while (start < str.size() && (str[start] == ' ' || str[start] == '\t' || str[start] == '\r')) {
+            ++start;
+        }
+        size_t end = str.size();
+        while (end > start && (str[end - 1] == ' ' || str[end - 1] == '\t' || str[end - 1] == '\r')) {
+            --end;
+        }
+        str = str.substr(start, end - start);
+    }
+
+    DLLLOCAL static bool isIdentifier(const std::string& str) {
+        if (str.empty()) {
+            return false;
+        }
+        unsigned char first = static_cast<unsigned char>(str[0]);
+        if (!isalpha(first) && str[0] != '_') {
+            return false;
+        }
+        for (size_t i = 1; i < str.size(); ++i) {
+            unsigned char c = static_cast<unsigned char>(str[i]);
+            if (!isalnum(c) && str[i] != '_') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    DLLLOCAL bool hasParam(const std::string& param) const {
+        for (const std::string& existing : type_params) {
+            if (existing == param) {
+                return true;
+            }
+        }
+        return false;
     }
 };
 
@@ -2137,6 +2260,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %token <string> QORE_CAST "cast operator"
 %token <string> QORE_OR_NOTHING_CAST "cast (or nothing) operator"
 %token <string> CLASS_STRING "simple class declaration"
+%token <string> CLASS_GENERIC_STRING "generic class declaration"
 %token <datetime> DATETIME "date/time value"
 %token <String> QUOTED_WORD "quoted string"
 %token <binary> BINARY "binary constant value"
@@ -2258,7 +2382,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
  // destructor actions for elements that need deleting when parse errors occur
 %destructor { delete $$; } TRY_MODULE_ERROR REGEX REGEX_SUBST REGEX_EXTRACT REGEX_TRANS BASE_CLASS_CALL CLASS_SCOPED_REF block statement_or_block statements statement return_statement try_statement hash_element context_mods context_mod inline_methoddef class_def hashdecl_def enum_def enum_members enum_member top_namespace_decl scoped_const_decl unscoped_const_decl switch_statement case_block case_code superclass base_constructor internal_member_list private_member_list public_member_list member_list member_list2 base_constructor_list base_constructors return_value member member2 transient_member transient_member2 hashdecl_member superclass_list inheritance_list qtypedef uncqtypedef classvardecl sub_def scoped_sub_def gvardecl outofline_methoddef hash alt_hash hashdecl_inherits
 %destructor { qore_class_private::get(*$$)->deref(true, true); } class_attributes
-%destructor { free($$); } IDENTIFIER ANGLE_IDENTIFIER VAR_REF SELF_REF CONTEXT_REF COMPLEX_CONTEXT_REF BACKQUOTE SCOPED_REF SCOPED_VREF KW_IDENTIFIER_OPENPAREN QORE_CAST QORE_OR_NOTHING_CAST CLASS_STRING optname ident_openparen HASHDECL_IDENTIFIER_OPENCURLY
+%destructor { free($$); } IDENTIFIER ANGLE_IDENTIFIER VAR_REF SELF_REF CONTEXT_REF COMPLEX_CONTEXT_REF BACKQUOTE SCOPED_REF SCOPED_VREF KW_IDENTIFIER_OPENPAREN QORE_CAST QORE_OR_NOTHING_CAST CLASS_STRING CLASS_GENERIC_STRING optname ident_openparen HASHDECL_IDENTIFIER_OPENCURLY
 %destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER hashdecl_attrs list list_n call_args named_call_args named_arg_list
 %destructor { if ($$) $$->deref(nullptr); } immediate_typed_hash
 %destructor { QoreValue($$).discard(nullptr); } scalar exp exp_n exp_c myexp
@@ -3180,6 +3304,18 @@ class_def:
         qore_class_private::parseSetBaseClassList(*($5), $3);
         $$ = new ObjClassDef(loc, $2, $5);
     }
+    | nsc_modifiers CLASS_GENERIC_STRING inheritance_list '{' class_attributes '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        ClassDeclParseInfo cdi(loc, $2);
+        if (cdi.isScoped()) {
+            check_strong_encapsulation(loc, "class", cdi.name.c_str());
+        }
+        cdi.applyTypeParams($5);
+        check_classmod(loc, $1, *($5));
+        qore_class_private::parseSetBaseClassList(*($5), $3);
+        $$ = new ObjClassDef(loc, cdi.takeName(), $5);
+    }
     | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' class_attributes '}' {
         fix_start_location($1, @$, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
@@ -3197,6 +3333,20 @@ class_def:
         check_classmod(loc, $1, *qc);
         qore_class_private::parseSetBaseClassList(*qc, $3);
         $$ = new ObjClassDef(loc, $2, qc);
+    }
+    | nsc_modifiers CLASS_GENERIC_STRING inheritance_list ';' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
+        ClassDeclParseInfo cdi(loc, $2);
+        if (cdi.isScoped()) {
+            check_strong_encapsulation(loc, "class", cdi.name.c_str());
+        }
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        cdi.applyTypeParams(qc);
+        check_classmod(loc, $1, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $3);
+        $$ = new ObjClassDef(loc, cdi.takeName(), qc);
     }
     | nsc_modifiers CLASS_SCOPED_REF inheritance_list ';' {
         fix_start_location($1, @$, @2);
@@ -3217,6 +3367,20 @@ class_def:
         check_classmod(loc, $1, *qc);
         qore_class_private::parseSetBaseClassList(*qc, $3);
         $$ = new ObjClassDef(loc, $2, qc);
+    }
+    | nsc_modifiers CLASS_GENERIC_STRING inheritance_list '{' '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
+        ClassDeclParseInfo cdi(loc, $2);
+        if (cdi.isScoped()) {
+            check_strong_encapsulation(loc, "class", cdi.name.c_str());
+        }
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        cdi.applyTypeParams(qc);
+        check_classmod(loc, $1, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $3);
+        $$ = new ObjClassDef(loc, cdi.takeName(), qc);
     }
     | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' '}' {
         fix_start_location($1, @$, @2);

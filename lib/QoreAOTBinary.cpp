@@ -141,10 +141,12 @@
 
 #include <cassert>
 #include <algorithm>
+#include <cerrno>
 #include <cstring>
 #include <deque>
 #include <limits>
 #include <numeric>
+#include <cstdlib>
 #include <typeinfo>
 #include <unordered_set>
 #include <zlib.h>
@@ -1522,6 +1524,54 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return {};
     }
 
+    if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
+        const QoreClass* owner = tpi->getOwnerClass();
+        std::string rv = tpi->isOrNothing() ? "*typeparam<" : "typeparam<";
+        rv += owner ? owner->getPath() : "";
+        rv += ", ";
+        rv += std::to_string(tpi->getIndex());
+        rv += ", ";
+        rv += tpi->getParameterName();
+        rv += ">";
+        return rv;
+    }
+
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        std::string rv = pti->isOrNothing() ? "*object<" : "object<";
+        rv += pti->getBaseClass() ? pti->getBaseClass()->getPath() : "";
+        rv += "<";
+        const std::vector<const QoreTypeInfo*>& args = pti->getTypeArgs();
+        for (size_t i = 0; i < args.size(); ++i) {
+            if (i) {
+                rv += ", ";
+            }
+            rv += getAOTSerializableTypePath(args[i]);
+        }
+        rv += ">>";
+        return rv;
+    }
+
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+        std::string rv = cti->isOrNothing() ? "*code<" : "code<";
+        rv += cti->getReturnType() ? getAOTSerializableTypePath(cti->getReturnType()) : "nothing";
+        rv += "(";
+        const type_vec_t& params = cti->getParamTypes();
+        for (size_t i = 0; i < params.size(); ++i) {
+            if (i) {
+                rv += ", ";
+            }
+            rv += getAOTSerializableTypePath(params[i]);
+        }
+        if (cti->hasVarArgs()) {
+            if (!params.empty()) {
+                rv += ", ";
+            }
+            rv += "...";
+        }
+        rv += ")>";
+        return rv;
+    }
+
     if (no_narrow) {
         if (ti == autoTypeInfo) {
             return "auto!";
@@ -1588,6 +1638,10 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
     }
 
     return raw_path ? raw_path : "";
+}
+
+std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow) {
+    return getAOTSerializableTypePath(ti, no_narrow);
 }
 
 static void qoreAOTWriteContainerValueType(QoreAOTBinaryWriter& writer,
@@ -3187,6 +3241,113 @@ static bool split_aot_parameterized_type_use(const std::string& path, std::strin
     return split_aot_type_args(trimmed.substr(open + 1, close - open - 1), arg_paths);
 }
 
+static bool split_aot_code_signature(const std::string& sig, std::string& return_path,
+        std::vector<std::string>& param_paths, bool& varargs) {
+    return_path.clear();
+    param_paths.clear();
+    varargs = false;
+
+    std::string trimmed = trim_aot_type_component(sig);
+    int angle_depth = 0;
+    size_t open = std::string::npos;
+    for (size_t i = 0; i < trimmed.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT code type signature parsing")) {
+            return false;
+        }
+        char c = trimmed[i];
+        if (c == '<') {
+            ++angle_depth;
+        } else if (c == '>' && angle_depth > 0) {
+            --angle_depth;
+        } else if (c == '(' && angle_depth == 0) {
+            open = i;
+            break;
+        }
+    }
+    if (open == std::string::npos) {
+        return false;
+    }
+
+    int paren_depth = 1;
+    size_t close = std::string::npos;
+    for (size_t i = open + 1; i < trimmed.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT code type parameter parsing")) {
+            return false;
+        }
+        char c = trimmed[i];
+        if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')' && --paren_depth == 0) {
+            close = i;
+            break;
+        }
+    }
+    if (close == std::string::npos || close + 1 != trimmed.size()) {
+        return false;
+    }
+
+    return_path = trim_aot_type_component(trimmed.substr(0, open));
+    if (return_path.empty()) {
+        return false;
+    }
+
+    std::string params = trim_aot_type_component(trimmed.substr(open + 1, close - open - 1));
+    if (params.empty()) {
+        return true;
+    }
+
+    std::vector<std::string> parts;
+    if (!split_aot_type_args(params, parts)) {
+        return false;
+    }
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT code type parameter list parsing")) {
+            return false;
+        }
+        if (parts[i] == "...") {
+            if (i + 1 != parts.size()) {
+                return false;
+            }
+            varargs = true;
+            continue;
+        }
+        param_paths.push_back(parts[i]);
+    }
+    return true;
+}
+
+const QoreTypeInfo* QoreAOTTypeResolver::resolveTypeParameterType(const char* path) {
+    if (!pgm) {
+        return nullptr;
+    }
+
+    bool or_nothing = false;
+    std::vector<std::string> args;
+    if (!extract_aot_type_args(path, "typeparam", or_nothing, args) || args.size() != 3) {
+        return nullptr;
+    }
+
+    const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(pgm, args[0].c_str());
+    if (!qc || !qc->hasTypeParameters()) {
+        return nullptr;
+    }
+
+    errno = 0;
+    char* end = nullptr;
+    unsigned long long raw_index = strtoull(args[1].c_str(), &end, 10);
+    if (errno || !end || *end || raw_index >= qc->getTypeParameterCount()) {
+        return nullptr;
+    }
+
+    size_t index = static_cast<size_t>(raw_index);
+    const char* param_name = qc->getTypeParameterName(index);
+    if (!param_name || args[2] != param_name) {
+        return nullptr;
+    }
+
+    return qore_get_type_parameter_type(qc, index, param_name, or_nothing);
+}
+
 const QoreTypeInfo* QoreAOTTypeResolver::resolveUnionShorthandType(const char* path) {
     bool or_nothing = false;
     std::vector<std::string> member_paths;
@@ -3340,6 +3501,43 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char
             : qore_get_complex_reference_type(value_type);
     }
 
+    if (extract_aot_type_args(path, "code", or_nothing, args)) {
+        if (args.size() != 1) {
+            return nullptr;
+        }
+        std::string return_path;
+        std::vector<std::string> param_paths;
+        bool varargs = false;
+        if (!split_aot_code_signature(args[0], return_path, param_paths, varargs)) {
+            return nullptr;
+        }
+
+        const QoreTypeInfo* return_type = nullptr;
+        if (return_path != "nothing") {
+            std::string error;
+            return_type = resolve(return_path.c_str(), error);
+            if (!return_type || !error.empty()) {
+                return nullptr;
+            }
+        }
+
+        type_vec_t param_types;
+        param_types.reserve(param_paths.size());
+        for (size_t i = 0; i < param_paths.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT code type parameter resolution")) {
+                return nullptr;
+            }
+            const std::string& param_path = param_paths[i];
+            std::string error;
+            const QoreTypeInfo* param_type = resolve(param_path.c_str(), error);
+            if (!param_type || !error.empty()) {
+                return nullptr;
+            }
+            param_types.push_back(param_type);
+        }
+        return qore_get_complex_code_type(return_type, param_types, varargs, or_nothing);
+    }
+
     if (extract_aot_type_args(path, "union", or_nothing, args)) {
         if (args.empty() || args.size() > QORE_MAX_UNION_MEMBERS) {
             return nullptr;
@@ -3451,6 +3649,10 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& 
 
     if (!result) {
         result = resolveEnumType(path);
+    }
+
+    if (!result) {
+        result = resolveTypeParameterType(path);
     }
 
     // QoreTypeInfo::getPath() can emit compact top-level union spellings such
@@ -4532,6 +4734,18 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         }
         if ((writer.feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0) {
             writer.writeStringRef(priv->injectedClass ? priv->injectedClass->path.c_str() : "");
+        }
+        if ((writer.feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0) {
+            uint32_t type_param_count = static_cast<uint32_t>(priv->getTypeParamCount());
+            writer.writeU32(type_param_count);
+            for (uint32_t i = 0; i < type_param_count; ++i) {
+                if (i && !(i % 100)
+                        && qore_check_cancel(nullptr, "AOT class type parameter serialization")) {
+                    error = "operation cancelled during AOT class type parameter serialization";
+                    return false;
+                }
+                writer.writeStringRef(priv->getTypeParamName(i));
+            }
         }
 
         // base classes
@@ -8502,6 +8716,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
     const bool has_class_hash = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_HASH) != 0;
     const bool has_class_injection
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0;
+    const bool has_class_type_params
+        = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0;
 
     // Populate the root namespace's clmap incrementally as each class is
     // created, so standard lookup paths (runtimeFindClass, findClass,
@@ -8527,6 +8743,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
         const char* path = reader.readStringRef(ptr);
+        const std::string class_name(name ? name : "");
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         int64_t domain = QoreAOTBinaryReader::readI64(ptr);
@@ -8544,6 +8761,31 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         const char* injected_path = "";
         if (has_class_injection) {
             injected_path = reader.readStringRef(ptr);
+        }
+        std::vector<std::string> type_params;
+        if (has_class_type_params) {
+            uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
+            type_params.reserve(type_param_count);
+            std::unordered_set<std::string> seen_type_params;
+            for (uint32_t j = 0; j < type_param_count; ++j) {
+                if (j && !(j % 100)
+                        && qore_check_cancel(nullptr, "AOT class type parameter deserialization")) {
+                    error = "operation cancelled during AOT class type parameter deserialization";
+                    return false;
+                }
+                const char* type_param = reader.readStringRef(ptr);
+                std::string type_param_name(type_param ? type_param : "");
+                if (type_param_name.empty()) {
+                    error = "invalid empty type parameter for class '" + class_name + "'";
+                    return false;
+                }
+                if (!seen_type_params.insert(type_param_name).second) {
+                    error = "duplicate type parameter '" + type_param_name + "' for class '"
+                        + class_name + "'";
+                    return false;
+                }
+                type_params.push_back(std::move(type_param_name));
+            }
         }
 
         // Validate namespace index before creating the class
@@ -8564,6 +8806,11 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         priv->inject = (flags & 0x0004) != 0;
         if (flags & 0x0008) {
             priv->reexport = true;
+        }
+        if (!type_params.empty()) {
+            for (const std::string& type_param : type_params) {
+                qc->addTypeParameter(type_param.c_str());
+            }
         }
         bool class_already_existed = false;
         int add_rv = ns_list[ns_idx]->classList.add(qc);

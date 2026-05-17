@@ -2945,26 +2945,27 @@ bool LocalVar::isNoNarrowMarkerType(const QoreTypeInfo* ti, const QoreTypeInfo*&
 }
 
 const QoreTypeInfo* LocalVar::getTypeInfoForLValue() const {
+    const QoreTypeInfo* ti;
     if (!no_narrowing) {
-        return typeInfo;
+        ti = typeInfo;
+    } else {
+        // Return the NoNarrow version of the type so LValueHelper::assign() can properly strip types
+        if (typeInfo == autoHashTypeInfo) {
+            ti = autoNoNarrowHashTypeInfo;
+        } else if (typeInfo == autoHashOrNothingTypeInfo) {
+            ti = autoNoNarrowHashOrNothingTypeInfo;
+        } else if (typeInfo == autoListTypeInfo) {
+            ti = autoNoNarrowListTypeInfo;
+        } else if (typeInfo == autoListOrNothingTypeInfo) {
+            ti = autoNoNarrowListOrNothingTypeInfo;
+        } else if (typeInfo == autoTypeInfo) {
+            ti = autoNoNarrowTypeInfo;
+        } else {
+            ti = typeInfo;
+        }
     }
-    // Return the NoNarrow version of the type so LValueHelper::assign() can properly strip types
-    if (typeInfo == autoHashTypeInfo) {
-        return autoNoNarrowHashTypeInfo;
-    }
-    if (typeInfo == autoHashOrNothingTypeInfo) {
-        return autoNoNarrowHashOrNothingTypeInfo;
-    }
-    if (typeInfo == autoListTypeInfo) {
-        return autoNoNarrowListTypeInfo;
-    }
-    if (typeInfo == autoListOrNothingTypeInfo) {
-        return autoNoNarrowListOrNothingTypeInfo;
-    }
-    if (typeInfo == autoTypeInfo) {
-        return autoNoNarrowTypeInfo;
-    }
-    return typeInfo;
+
+    return ti;
 }
 
 void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation* loc) {

@@ -65,6 +65,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <pthread.h>
 #include <string>
@@ -98,6 +99,241 @@ static void ambiguousDuplicateSignatureException(const char* cname, const char* 
     parseException(*sig2->getParseLocation(), "DUPLICATE-SIGNATURE", "%s%s%s(%s) matches already declared variant " \
         "%s(%s)", cname ? cname : "", cname ? "::" : "", name, sig2->getSignatureText(), name,
         sig1->getSignatureText());
+}
+
+static void genericDuplicateSignatureException(const char* cname, const char* name,
+        const AbstractFunctionSignature* sig1, const UserSignature* sig2) {
+    parseException(*sig2->getParseLocation(), "DUPLICATE-SIGNATURE", "%s%s%s(%s) collides with already declared " \
+        "variant %s(%s) under a generic type-parameter instantiation", cname ? cname : "", cname ? "::" : "",
+        name, sig2->getSignatureText(), name, sig1->getSignatureText());
+}
+
+typedef std::pair<const QoreClass*, size_t> GenericTypeParamKey;
+typedef std::map<GenericTypeParamKey, const QoreTypeInfo*> GenericTypeParamBindings;
+
+static bool qore_type_contains_type_param(const QoreTypeInfo* ti);
+static bool qore_type_contains_type_param_key(const QoreTypeInfo* ti, const GenericTypeParamKey& key);
+static bool qore_generic_types_unify(const QoreTypeInfo* a, const QoreTypeInfo* b,
+        GenericTypeParamBindings& bindings, bool& saw_type_param);
+
+static bool qore_type_contains_type_param_vec(const type_vec_t& types) {
+    for (const QoreTypeInfo* ti : types) {
+        if (qore_type_contains_type_param(ti)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool qore_type_contains_type_param(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return false;
+    }
+    if (qore_get_type_parameter_type_info(ti)) {
+        return true;
+    }
+    if (!QoreTypeInfo::hasType(ti)) {
+        return false;
+    }
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        return qore_type_contains_type_param_vec(pti->getTypeArgs());
+    }
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+        return qore_type_contains_type_param(cti->getReturnType())
+            || qore_type_contains_type_param_vec(cti->getParamTypes());
+    }
+    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    if (qore_type_contains_type_param(subtype)) {
+        return true;
+    }
+    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    return qore_type_contains_type_param(subtype);
+}
+
+static bool qore_type_is_type_param_key(const QoreTypeInfo* ti, const GenericTypeParamKey& key) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi && tpi->getOwnerClass() == key.first && tpi->getIndex() == key.second;
+}
+
+static bool qore_type_vec_contains_type_param_key(const type_vec_t& types, const GenericTypeParamKey& key) {
+    for (const QoreTypeInfo* ti : types) {
+        if (qore_type_contains_type_param_key(ti, key)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool qore_type_contains_type_param_key(const QoreTypeInfo* ti, const GenericTypeParamKey& key) {
+    if (!ti) {
+        return false;
+    }
+    if (qore_type_is_type_param_key(ti, key)) {
+        return true;
+    }
+    if (!QoreTypeInfo::hasType(ti)) {
+        return false;
+    }
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        return qore_type_vec_contains_type_param_key(pti->getTypeArgs(), key);
+    }
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+        return qore_type_contains_type_param_key(cti->getReturnType(), key)
+            || qore_type_vec_contains_type_param_key(cti->getParamTypes(), key);
+    }
+    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    if (qore_type_contains_type_param_key(subtype, key)) {
+        return true;
+    }
+    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    return qore_type_contains_type_param_key(subtype, key);
+}
+
+static bool qore_bind_generic_type_param(const QoreTypeParameterTypeInfo* tpi, const QoreTypeInfo* other,
+        GenericTypeParamBindings& bindings, bool& saw_type_param) {
+    saw_type_param = true;
+
+    if (tpi->isOrNothing() && other && !qore_get_type_parameter_type_info(other)
+            && !QoreTypeInfo::parseAcceptsReturns(other, NT_NOTHING)) {
+        return false;
+    }
+
+    GenericTypeParamKey key(tpi->getOwnerClass(), tpi->getIndex());
+    if (!qore_type_is_type_param_key(other, key) && qore_type_contains_type_param_key(other, key)) {
+        return false;
+    }
+
+    GenericTypeParamBindings::const_iterator i = bindings.find(key);
+    if (i != bindings.end()) {
+        return qore_generic_types_unify(i->second, other, bindings, saw_type_param);
+    }
+
+    bindings.insert(GenericTypeParamBindings::value_type(key, other));
+    return true;
+}
+
+static bool qore_generic_type_vecs_unify(const type_vec_t& a, const type_vec_t& b,
+        GenericTypeParamBindings& bindings, bool& saw_type_param) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (size_t i = 0, e = a.size(); i < e; ++i) {
+        if (!qore_generic_types_unify(a[i], b[i], bindings, saw_type_param)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool qore_generic_types_unify(const QoreTypeInfo* a, const QoreTypeInfo* b,
+        GenericTypeParamBindings& bindings, bool& saw_type_param) {
+    if (QoreTypeInfo::isInputIdentical(a, b)) {
+        return true;
+    }
+
+    const QoreTypeParameterTypeInfo* tpi_a = qore_get_type_parameter_type_info(a);
+    const QoreTypeParameterTypeInfo* tpi_b = qore_get_type_parameter_type_info(b);
+    if (tpi_a) {
+        return qore_bind_generic_type_param(tpi_a, b, bindings, saw_type_param);
+    }
+    if (tpi_b) {
+        return qore_bind_generic_type_param(tpi_b, a, bindings, saw_type_param);
+    }
+
+    if (!a || !b || !QoreTypeInfo::hasType(a) || !QoreTypeInfo::hasType(b)) {
+        if (qore_type_contains_type_param(a) || qore_type_contains_type_param(b)) {
+            saw_type_param = true;
+            return true;
+        }
+        return false;
+    }
+
+    const QoreParameterizedClassTypeInfo* pc_a = QoreTypeInfo::getParameterizedClassType(a);
+    const QoreParameterizedClassTypeInfo* pc_b = QoreTypeInfo::getParameterizedClassType(b);
+    if (pc_a || pc_b) {
+        return pc_a && pc_b && pc_a->getBaseClass() == pc_b->getBaseClass()
+            && pc_a->isOrNothing() == pc_b->isOrNothing()
+            && qore_generic_type_vecs_unify(pc_a->getTypeArgs(), pc_b->getTypeArgs(), bindings, saw_type_param);
+    }
+
+    const QoreComplexCodeTypeInfo* code_a = QoreTypeInfo::getComplexCodeType(a);
+    const QoreComplexCodeTypeInfo* code_b = QoreTypeInfo::getComplexCodeType(b);
+    if (code_a || code_b) {
+        return code_a && code_b && code_a->hasVarArgs() == code_b->hasVarArgs()
+            && code_a->isOrNothing() == code_b->isOrNothing()
+            && qore_generic_types_unify(code_a->getReturnType(), code_b->getReturnType(), bindings, saw_type_param)
+            && qore_generic_type_vecs_unify(code_a->getParamTypes(), code_b->getParamTypes(), bindings,
+                saw_type_param);
+    }
+
+    const QoreTypeInfo* hash_a = QoreTypeInfo::getUniqueReturnComplexHash(a);
+    const QoreTypeInfo* hash_b = QoreTypeInfo::getUniqueReturnComplexHash(b);
+    if (hash_a || hash_b) {
+        return hash_a && hash_b && qore_generic_types_unify(hash_a, hash_b, bindings, saw_type_param);
+    }
+
+    const QoreTypeInfo* list_a = QoreTypeInfo::getUniqueReturnComplexList(a);
+    const QoreTypeInfo* list_b = QoreTypeInfo::getUniqueReturnComplexList(b);
+    if (list_a || list_b) {
+        return list_a && list_b && qore_generic_types_unify(list_a, list_b, bindings, saw_type_param);
+    }
+
+    return false;
+}
+
+static bool qore_generic_signatures_collide(const AbstractFunctionSignature* existing,
+        const AbstractFunctionSignature* candidate) {
+    GenericTypeParamBindings bindings;
+    bool saw_type_param = false;
+
+    unsigned existing_np = existing->numParams();
+    unsigned candidate_np = candidate->numParams();
+    unsigned max = QORE_MAX(existing_np, candidate_np);
+    for (unsigned pi = 0; pi < max; ++pi) {
+        if (pi >= existing_np) {
+            if (!candidate->hasDefaultArg(pi)) {
+                return false;
+            }
+            continue;
+        }
+        if (pi >= candidate_np) {
+            if (!existing->hasDefaultArg(pi)) {
+                return false;
+            }
+            continue;
+        }
+
+        if (!qore_generic_types_unify(existing->getParamTypeInfo(pi), candidate->getParamTypeInfo(pi), bindings,
+                saw_type_param)) {
+            return false;
+        }
+    }
+
+    return saw_type_param;
+}
+
+static bool qore_signature_contains_type_param(const AbstractFunctionSignature* sig) {
+    for (unsigned i = 0, e = sig->numParams(); i < e; ++i) {
+        if (qore_type_contains_type_param(sig->getParamTypeInfo(i))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static const AbstractFunctionSignature* qore_find_generic_colliding_signature(
+        const VList& vlist, const AbstractFunctionSignature* sig) {
+    for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
+        const AbstractFunctionSignature* vs = (*i)->getSignature();
+        if (vs == sig) {
+            continue;
+        }
+        if ((qore_signature_contains_type_param(vs) || qore_signature_contains_type_param(sig))
+                && qore_generic_signatures_collide(vs, sig)) {
+            return vs;
+        }
+    }
+    return nullptr;
 }
 
 static const QoreTypeInfo* getParamLocalTypeInfo(const QoreTypeInfo* ti) {
@@ -4006,7 +4242,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         if (!*xsink) {
-            const QoreTypeInfo* rt = signature.getReturnTypeInfo();
+            const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
+                self ? self->getInstantiatedTypeInfo() : nullptr);
             if (rt && QoreTypeInfo::hasType(rt)) {
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -4149,7 +4386,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         }
 
         if (!*xsink) {
-            const QoreTypeInfo* rt = signature.getReturnTypeInfo();
+            const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
+                self ? self->getInstantiatedTypeInfo() : nullptr);
             if (rt && QoreTypeInfo::hasType(rt)) {
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -4213,7 +4451,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     }
 
     if (!*xsink && val.isNothing()) {
-        const QoreTypeInfo* rt = signature.getReturnTypeInfo();
+        const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
+            self ? self->getInstantiatedTypeInfo() : nullptr);
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
         if (*xsink) {
             xsink->overrideLocation(*signature.getParseLocation());
@@ -4301,7 +4540,8 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     // if return value is NOTHING; make sure it's valid; maybe there wasn't a return statement
     // only check if there isn't an active exception
     if (!*xsink && val.isNothing()) {
-        const QoreTypeInfo* rt = signature.getReturnTypeInfo();
+        const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
+            self ? self->getInstantiatedTypeInfo() : nullptr);
 
         // check return type
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -4366,6 +4606,12 @@ void UserVariantBase::parseCommit() {
 
 int QoreFunction::parseCheckDuplicateSignatureCommitted(UserSignature* sig) {
     const AbstractFunctionSignature* vs = 0;
+    vs = qore_find_generic_colliding_signature(vlist, sig);
+    if (vs) {
+        genericDuplicateSignatureException(className(), getName(), vs, sig);
+        return -1;
+    }
+
     int rc = parseCompareResolvedSignature(vlist, sig, vs);
     if (rc == QTI_NOT_EQUAL) {
         return 0;
@@ -4388,6 +4634,16 @@ int QoreFunction::parseCompareResolvedSignature(const VList& vlist, const Abstra
     // now check already-committed variants
     for (vlist_t::const_iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
         vs = (*i)->getSignature();
+        if (vs == sig) {
+            continue;
+        }
+        if (qore_signature_contains_type_param(vs) || qore_signature_contains_type_param(sig)) {
+            if (qore_generic_signatures_collide(vs, sig)) {
+                return QTI_IDENT;
+            }
+            continue;
+        }
+
         // get the minimum number of parameters with type information that need to match
         unsigned mp = vs->getMinParamTypes();
         // get number of parameters with type information

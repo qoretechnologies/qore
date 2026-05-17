@@ -464,12 +464,12 @@ static bool write_slot_INSTANCEOF(AOTExprSlotWriteCtx& ctx) {
         return false;
     }
     const QoreTypeInfo* ti = inst->getInstanceTypeInfo();
-    const char* type_path = ctx.expr.ref1.empty()
-        ? (ti ? QoreTypeInfo::getPath(ti) : "") : ctx.expr.ref1.c_str();
-    if (!type_path || !*type_path) {
+    std::string type_path = ctx.expr.ref1.empty()
+        ? qore_get_aot_serializable_type_path(ti) : ctx.expr.ref1;
+    if (type_path.empty()) {
         return false;
     }
-    ctx.writer.writeStringRef(type_path);
+    ctx.writer.writeStringRef(type_path.c_str());
     return classifyAndWriteExpr(ctx.writer, inst->getExp(),
         ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
 }
@@ -983,9 +983,8 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
 
     // Write return type
-    const char* ret_path = sig->getReturnTypeInfo()
-        ? QoreTypeInfo::getPath(sig->getReturnTypeInfo()) : "";
-    ctx.writer.writeStringRef(ret_path);
+    std::string ret_path = qore_get_aot_serializable_type_path(sig->getReturnTypeInfo());
+    ctx.writer.writeStringRef(ret_path.c_str());
 
     // Write params: count, then (name, type_path, default) per param
     unsigned num_params = sig->numParams();
@@ -993,9 +992,8 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     for (unsigned p = 0; p < num_params; ++p) {
         const char* pname = sig->getName(p);
         ctx.writer.writeStringRef(pname ? pname : "");
-        const char* ptype = sig->getParamTypeInfo(p)
-            ? QoreTypeInfo::getPath(sig->getParamTypeInfo(p)) : "";
-        ctx.writer.writeStringRef(ptype);
+        std::string ptype = qore_get_aot_serializable_type_path(sig->getParamTypeInfo(p));
+        ctx.writer.writeStringRef(ptype.c_str());
         // Default value: write has_default flag + value if present
         bool has_default = sig->hasDefaultArg(p);
         ctx.writer.writeU8(has_default ? 1 : 0);

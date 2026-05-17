@@ -424,6 +424,7 @@ sub test() {
         addTestCase("Hover info", \testHoverInfo());
 %endif
         addTestCase("getNodesInfo line indexing", \testGetNodesInfo());
+        addTestCase("Generic class CST", \testGenericClassGetNodesInfo());
 %ifdef HasAstTreeSearcher
         addTestCase("Scope symbols", \testScopeSymbols());
         addTestCase("Doc comments", \testDocComments());
@@ -1307,6 +1308,46 @@ class TestClass {
             }
         }
         assertTrue(foundClass, "class node found in getNodesInfo");
+    }
+
+    testGenericClassGetNodesInfo() {
+        string testCode = "
+%new-style
+class Box<T> {
+    T value;
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+sub make() {
+    Box<int> bi = new Box<int>(1);
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        assertTrue(nodes.size() > 0, "nodes found");
+
+        *hash<auto> classNode = findNodeByType(nodes, "class_declaration");
+        assertTrue(exists(classNode), "class node found");
+
+        *hash<auto> nameChild = findChildByField(classNode, "name");
+        assertTrue(exists(nameChild), "class has name child");
+        assertEq("Box", nameChild.text, "class name text");
+
+        *hash<auto> typeParams = findChildByField(classNode, "type_parameters");
+        assertTrue(exists(typeParams), "class has type parameter list");
+        list<auto> params = findAllChildrenByType(typeParams, "identifier");
+        assertEq(1, params.size(), "one type parameter");
+        assertEq("T", params[0].text, "type parameter text");
     }
 
 %ifdef HasAstTreeSearcher

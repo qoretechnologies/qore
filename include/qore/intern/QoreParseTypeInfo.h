@@ -189,20 +189,24 @@ private:
             if (!hd) {
                 const QoreTypeInfo* ti = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
                 if (!ti) {
+                    recheck = true;
                     return false;
                 }
                 if (subtypes.size() == 2 && !strcmp(cscope->getIdentifier(), "hash"))
                     return recheck = true;
+                recheck = true;
                 return false;
             }
             if (subtypes.size() == 1 && !strcmp(cscope->getIdentifier(), "hash"))
                 return recheck = true;
+            recheck = true;
             return false;
         }
 
         // both have class info
         if (!strcmp(cscope->getIdentifier(), qc->getName()))
             return recheck = true;
+        recheck = true;
         return false;
     }
 
@@ -218,6 +222,9 @@ private:
             recheck = checkAmbiguous(tname, typeInfo->tname);
         } else if (typeInfo->tname.size() > tname.size()) {
             recheck = checkAmbiguous(typeInfo->tname, tname);
+        }
+        if (!recheck) {
+            recheck = true;
         }
         return false;
     }

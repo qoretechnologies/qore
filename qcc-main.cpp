@@ -1311,6 +1311,9 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_LOCAL_DECL_ORDINAL, "local-decl-ordinal"},
         {QORE_AOT_FEAT_CLASS_INJECTION, "class-injection"},
         {QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS, "variant-parse-options"},
+        {QORE_AOT_FEAT_BCA_NAMED_ARG_MAP, "bca-named-arg-map"},
+        {QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO, "new-object-typeinfo"},
+        {QORE_AOT_FEAT_CLASS_TYPE_PARAMS, "class-type-params"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));
@@ -2386,6 +2389,8 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_HASH) != 0;
     const bool has_class_injection =
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0;
+    const bool has_class_type_params =
+        (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0;
 
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = nullptr;
@@ -2404,6 +2409,23 @@ static bool dump_scan_class_defaults(const QoreAOTBinaryReader& reader,
         if (has_class_injection && !dump_skip_string_ref(reader, p, end)) {
             error = "truncated class injection target";
             return false;
+        }
+        if (has_class_type_params) {
+            uint32_t type_param_count = 0;
+            if (!dump_read_u32(p, end, type_param_count)) {
+                error = "truncated class type parameter count";
+                return false;
+            }
+            for (uint32_t j = 0; j < type_param_count; ++j) {
+                if (j && !(j % 100) && qore_check_cancel(nullptr, "AOT class type parameter dump")) {
+                    error = "operation cancelled during AOT class type parameter dump";
+                    return false;
+                }
+                if (!dump_skip_string_ref(reader, p, end)) {
+                    error = "truncated class type parameter entry";
+                    return false;
+                }
+            }
         }
 
         uint32_t num_bases = 0;

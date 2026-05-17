@@ -229,25 +229,7 @@ static const AbstractQoreZoneInfo* runtimeReadAOTDateZone(const char* zone_name)
 }
 
 static std::string getAOTTypePathForLValue(const QoreTypeInfo* ti) {
-    if (!ti) {
-        return {};
-    }
-    if (ti == autoNoNarrowTypeInfo) {
-        return "auto!";
-    }
-    if (ti == autoNoNarrowHashTypeInfo) {
-        return "hash<auto!>";
-    }
-    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
-        return "*hash<auto!>";
-    }
-    if (ti == autoNoNarrowListTypeInfo) {
-        return "list<auto!>";
-    }
-    if (ti == autoNoNarrowListOrNothingTypeInfo) {
-        return "*list<auto!>";
-    }
-    return QoreTypeInfo::getPath(ti);
+    return qore_get_aot_serializable_type_path(ti);
 }
 
 static std::string normalizeAOTTypePathForMatch(const char* s) {
@@ -272,7 +254,7 @@ static bool aotLocalTypeMatches(const LocalVar* lv, const char* type_path,
         return true;
     }
     const QoreTypeInfo* declared_ti = lv->getTypeInfo();
-    std::string declared_path = QoreTypeInfo::getPath(declared_ti);
+    std::string declared_path = qore_get_aot_serializable_type_path(declared_ti);
     std::string lvalue_path = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
     std::string normalized_type_path = normalizeAOTTypePathForMatch(type_path);
     if (normalizeAOTTypePathForMatch(declared_path.c_str()) == normalized_type_path
@@ -302,7 +284,7 @@ static bool aotLocalTypeKnownMismatch(const LocalVar* lv, const char* type_path,
         return false;
     }
 
-    std::string declared_path = QoreTypeInfo::getPath(lv->getTypeInfo());
+    std::string declared_path = qore_get_aot_serializable_type_path(lv->getTypeInfo());
     std::string lvalue_path = getAOTTypePathForLValue(lv->getTypeInfoForLValue());
     std::string serialized_path = normalizeAOTTypePathForMatch(type_path);
     if (isGenericAOTTypePath(declared_path) || isGenericAOTTypePath(lvalue_path)
@@ -431,7 +413,7 @@ static std::string makeAOTVariantSignature(const AbstractQoreFunctionVariant* v)
                 if (i > 0) {
                     rv.append(",");
                 }
-                rv.append(QoreTypeInfo::getPath(types[i]));
+                rv.append(qore_get_aot_serializable_type_path(types[i]));
             }
         }
     }
@@ -6582,7 +6564,7 @@ static void registerAOTFunctionsFromSlotMaps(
                                 if (ti > 0) {
                                     var_sig.append(",");
                                 }
-                                var_sig.append(QoreTypeInfo::getPath(types[ti]));
+                                var_sig.append(qore_get_aot_serializable_type_path(types[ti]));
                             }
                         }
                         var_sig.append(")");
@@ -6647,7 +6629,7 @@ static void registerAOTFunctionsFromSlotMaps(
                                     if (ti > 0) {
                                         var_sig.append(",");
                                     }
-                                    var_sig.append(QoreTypeInfo::getPath(types[ti]));
+                                    var_sig.append(qore_get_aot_serializable_type_path(types[ti]));
                                 }
                             }
                             var_sig.append(")");
@@ -6692,7 +6674,7 @@ static void registerAOTFunctionsFromSlotMaps(
                                     if (ti > 0) {
                                         var_sig.append(",");
                                     }
-                                    var_sig.append(QoreTypeInfo::getPath(types[ti]));
+                                    var_sig.append(qore_get_aot_serializable_type_path(types[ti]));
                                 }
                             }
                             var_sig.append(")");
@@ -6785,7 +6767,7 @@ static void registerAOTFunctionsFromSlotMaps(
                                     if (ti > 0) {
                                         var_sig.append(",");
                                     }
-                                    var_sig.append(QoreTypeInfo::getPath(types[ti]));
+                                    var_sig.append(qore_get_aot_serializable_type_path(types[ti]));
                                 }
                             }
                             var_sig.append(")");
@@ -7156,13 +7138,13 @@ static const QoreTypeInfo* retargetFallbackTypeInfo(QoreAOTTypeResolver& type_re
         }
     }
 
-    const char* path = QoreTypeInfo::getPath(ti);
-    if (!path || !*path || !strcmp(path, "no type info")) {
+    std::string path = qore_get_aot_serializable_type_path(ti);
+    if (path.empty() || path == "no type info") {
         return ti;
     }
 
     std::string error;
-    const QoreTypeInfo* resolved = type_resolver.resolve(path, error);
+    const QoreTypeInfo* resolved = type_resolver.resolve(path.c_str(), error);
     return resolved && error.empty() ? resolved : ti;
 }
 
@@ -7981,7 +7963,7 @@ static void registerFallbackFunctionsOnMainVariants(
                                     if (ti > 0) {
                                         var_sig.append(",");
                                     }
-                                    var_sig.append(QoreTypeInfo::getPath(types[ti]));
+                                    var_sig.append(qore_get_aot_serializable_type_path(types[ti]));
                                 }
                             }
                             var_sig.append(")");

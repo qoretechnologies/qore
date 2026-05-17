@@ -35,6 +35,7 @@
 
 #include "qore/intern/LocalVar.h"
 #include "qore/intern/QoreAOT.h"
+#include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreClassIntern.h"
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
@@ -167,25 +168,7 @@ llvm::Value* QoreIRToLLVM::getTypeInfoPointerArg(const QoreTypeInfo* ti) {
 }
 
 static std::string qore_ir_get_type_path(const QoreTypeInfo* ti) {
-    if (!ti) {
-        return {};
-    }
-    if (ti == autoNoNarrowTypeInfo) {
-        return "auto!";
-    }
-    if (ti == autoNoNarrowHashTypeInfo) {
-        return "hash<auto!>";
-    }
-    if (ti == autoNoNarrowHashOrNothingTypeInfo) {
-        return "*hash<auto!>";
-    }
-    if (ti == autoNoNarrowListTypeInfo) {
-        return "list<auto!>";
-    }
-    if (ti == autoNoNarrowListOrNothingTypeInfo) {
-        return "*list<auto!>";
-    }
-    return QoreTypeInfo::getPath(ti);
+    return qore_get_aot_serializable_type_path(ti);
 }
 
 llvm::Value* QoreIRToLLVM::getTypePathArg(const QoreTypeInfo* ti) {
@@ -8454,7 +8437,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                         llvm::Value* key_boxed = boxValue(key_val, inv->operands[0].id);
                                         llvm::Value* name_ptr = builder->CreateGlobalStringPtr(member_name);
                                         llvm::Value* type_ptr = builder->CreateGlobalStringPtr(
-                                            prn->getTypeInfo() ? QoreTypeInfo::getPath(prn->getTypeInfo()) : "");
+                                            qore_ir_get_type_path(prn->getTypeInfo()));
                                         auto helper = module.getOrInsertFunction(
                                             "qore_rt_create_member_hash_ref_aot",
                                             llvm::FunctionType::get(i64_type,
@@ -8633,7 +8616,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         helper_name = is_hash
                             ? "qore_rt_new_complex_hash_from_hash_by_type_path"
                             : "qore_rt_new_complex_list_from_value_by_type_path";
-                        std::string type_path = QoreTypeInfo::getPath(typeInfo);
+                        std::string type_path = qore_ir_get_type_path(typeInfo);
                         llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                         auto helper = module.getOrInsertFunction(helper_name,
                                 llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type}, false));
@@ -8751,7 +8734,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     result = builder->CreateCall(helper, {val_boxed, ti_as_ptr});
                 } else {
                     const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
-                    std::string type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+                    std::string type_path = qore_ir_get_type_path(ti);
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     auto helper = module.getOrInsertFunction("qore_rt_instanceof_by_type_path",
                         llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
@@ -12117,8 +12100,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                     llvm::Value* key_boxed = boxValue(key_val, prinst->operands[0].id);
                                     llvm::Value* name_ptr = builder->CreateGlobalStringPtr(member_name);
                                     llvm::Value* type_ptr = builder->CreateGlobalStringPtr(
-                                        prinst->node->getTypeInfo()
-                                            ? QoreTypeInfo::getPath(prinst->node->getTypeInfo()) : "");
+                                        qore_ir_get_type_path(prinst->node->getTypeInfo()));
                                     auto helper = module.getOrInsertFunction(
                                         "qore_rt_create_member_hash_ref_aot",
                                         llvm::FunctionType::get(i64_type,
@@ -12343,7 +12325,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     const char* helper_throwing_name = is_hash
                         ? "qore_rt_new_complex_hash_from_hash_by_type_path_throwing"
                         : "qore_rt_new_complex_list_from_value_by_type_path_throwing";
-                    std::string type_path = QoreTypeInfo::getPath(typeInfo);
+                    std::string type_path = qore_ir_get_type_path(typeInfo);
                     llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                     auto vc_ft = llvm::FunctionType::get(i64_type,
                             {ptr_type, i64_type, ptr_type}, false);
@@ -14255,7 +14237,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!val) { return false; }
                 llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
                 const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
-                std::string type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+                std::string type_path = qore_ir_get_type_path(ti);
                 llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
                 auto iobtp_ft = llvm::FunctionType::get(i64_type,
                         {i64_type, ptr_type, ptr_type}, false);

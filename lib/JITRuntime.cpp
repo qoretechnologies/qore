@@ -1178,6 +1178,9 @@ static void qore_rt_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreV
 
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    if (QoreObject* self = runtime_get_stack_object()) {
+        ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+    }
     QoreValue val = fromBits(value);
     ValueHolder weak_eval_holder(xsink);
     qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
@@ -3676,6 +3679,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, con
 
 static QoreHashNode* qore_rt_make_implicit_hash_for_lvalue(LocalVar* var, ExceptionSink* xsink) {
     const QoreTypeInfo* typeInfo = var ? var->getTypeInfoForLValue() : nullptr;
+    if (QoreObject* self = runtime_get_stack_object()) {
+        typeInfo = qore_substitute_type_params(typeInfo, self->getInstantiatedTypeInfo());
+    }
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_HASH)) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot convert lvalue declared as %s to a hash",
             QoreTypeInfo::getName(typeInfo));
@@ -6053,10 +6059,14 @@ private:
            the caller's program, matching CEH semantics. If nullptr, falls back
            to uvb->pgm.
 */
+static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig);
+static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
+        const QoreTypeInfo* receiver_type_info);
+
 template <typename ExecFn>
 static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call_name,
         ExecFn&& exec_fn, QoreValue& val, ExceptionSink* xsink,
-        QoreProgram* caller_pgm = nullptr) {
+        QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr) {
     // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
     // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
     // are never accessed by AST callbacks).
@@ -6135,7 +6145,8 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
             // ReturnStatement::execImpl() performs the correct type check.
             // Fast-call paths (qore_rt_call_fast et al.) bypass CodeEvaluationHelper,
             // so TLS returnTypeInfo may still hold the *caller*'s return type here.
-            const QoreTypeInfo* old_rti = saveReturnTypeInfo(uvb->getUserSignature()->getReturnTypeInfo());
+            const QoreTypeInfo* old_rti = saveReturnTypeInfo(
+                qore_rt_get_effective_return_type(uvb->getUserSignature(), receiver_type_info));
             val = stmts->exec(xsink);
             saveReturnTypeInfo(old_rti);
         }
@@ -6285,6 +6296,17 @@ static bool qore_rt_method_fast_call_eligible(const AbstractQoreFunctionVariant*
     return mvb
         ? mvb->isStaticallyFastMethodCallEligible()
         : qore_rt_user_fast_call_eligible(variant);
+}
+
+static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig,
+        const QoreTypeInfo* receiver_type_info) {
+    const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+    return receiver_type_info ? qore_substitute_type_params(rt, receiver_type_info) : rt;
+}
+
+static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig) {
+    QoreObject* self = runtime_get_stack_object();
+    return qore_rt_get_effective_return_type(sig, self ? self->getInstantiatedTypeInfo() : nullptr);
 }
 
 // --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
@@ -6438,7 +6460,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
-        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             // Missing return statement: check type and set location to method definition
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -6635,7 +6657,7 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
 
     // Apply return type coercion
     if (!*xsink) {
-        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
@@ -6726,7 +6748,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
-        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
@@ -6837,7 +6859,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
 
     // Apply return type coercion to match ReturnStatement::execImpl behavior
     if (!*xsink) {
-        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
@@ -7070,6 +7092,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         xsink->raiseException("JIT-ERROR", "no self object in fast method call");
         return toBits(QoreValue());
     }
+    const QoreTypeInfo* receiver_type_info = self->getInstantiatedTypeInfo();
 
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
@@ -7161,12 +7184,12 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
                     return 0;
                 }
                 return toBits(ir_return_value);
-            }, val, xsink, caller_pgm);
+            }, val, xsink, caller_pgm, receiver_type_info);
         } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
-            }, val, xsink, caller_pgm);
+            }, val, xsink, caller_pgm, receiver_type_info);
         } else {
             // IR fast path (standard TLS): execute IR directly without QoreListNode.
             const QoreIRFunction* callee_ir = uvb->getCachedIR();
@@ -7180,7 +7203,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
                     return 0;
                 }
                 return toBits(ir_return_value);
-            }, val, xsink, caller_pgm);
+            }, val, xsink, caller_pgm, receiver_type_info);
         }
     }
 
@@ -7216,7 +7239,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
-        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig, receiver_type_info);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             // Missing return statement: set location to method definition
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -9875,7 +9898,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
                     QoreValue ast_return_value;
                     StatementBlock* stmts = uvb->getStatementBlock();
                     if (stmts) {
-                        const QoreTypeInfo* old_rti = saveReturnTypeInfo(sig->getReturnTypeInfo());
+                        const QoreTypeInfo* old_rti = saveReturnTypeInfo(qore_rt_get_effective_return_type(sig));
                         ast_return_value = stmts->exec(xs);
                         saveReturnTypeInfo(old_rti);
                     }
@@ -9892,7 +9915,7 @@ static uint64_t qore_rt_call_direct_aot_impl(QoreAOTContext* ctx, int32_t slot,
         }
 
         if (!*xsink) {
-            const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+            const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
             if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
                 QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
                 if (*xsink) {
@@ -11058,6 +11081,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         result = toBits(QoreValue());
         return true;
     }
+    const QoreTypeInfo* receiver_type_info = o->getInstantiatedTypeInfo();
 
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
@@ -11146,12 +11170,12 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
                     return 0;
                 }
                 return toBits(ir_return_value);
-            }, val, xsink, caller_pgm);
+            }, val, xsink, caller_pgm, receiver_type_info);
         } else if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {
                 return uvb->execCachedFunction(xs, inv);
-            }, val, xsink, caller_pgm);
+            }, val, xsink, caller_pgm, receiver_type_info);
         } else {
             // IR fast path (standard TLS): execute IR directly without QoreListNode.
             execJITWithDeopt(uvb, call_name, [ir, uvb](ExceptionSink* xs, bool& inv) -> uint64_t {
@@ -11164,7 +11188,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
                     return 0;
                 }
                 return toBits(ir_return_value);
-            }, val, xsink, caller_pgm);
+            }, val, xsink, caller_pgm, receiver_type_info);
         }
     }
 
@@ -11201,7 +11225,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
-        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig, receiver_type_info);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {
@@ -11769,7 +11793,7 @@ static uint64_t qore_rt_call_static_method_direct_impl(const QoreMethod* method,
     // Apply return type coercion (e.g. softlist wrapping) to match
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
-        const QoreTypeInfo* rt = sig->getReturnTypeInfo();
+        const QoreTypeInfo* rt = qore_rt_get_effective_return_type(sig);
         if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
             QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
             if (*xsink) {

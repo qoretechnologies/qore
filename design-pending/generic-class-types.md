@@ -1,6 +1,6 @@
 # Generic Class Types - Design
 
-**Status:** Design.
+**Status:** Implementation in progress.
 
 **Target:** Pending. This document captures the language and implementation
 shape for generic Qore classes and generic builtin/QPP classes. It is written
@@ -1901,11 +1901,11 @@ new Box<int>(1)
 
 AOT changes:
 
-- Allocate a new `QORE_AOT_FEAT_*` bit (currently the next free bit is
-  `1ULL << 18`) so readers can distinguish blobs that include parameterized
-  class metadata from older ones.
-- `GuardType` can keep using `QoreTypeInfo::getPath()` if parameterized class
-  paths are canonical and resolvable.
+- `QORE_AOT_FEAT_CLASS_TYPE_PARAMS` (`1ULL << 44`) marks class records that
+  include the ordered source generic type-parameter table.
+- AOT type-path writers must use the AOT canonical type spelling, not raw
+  `QoreTypeInfo::getPath()`, so symbolic type parameters survive in guard,
+  slot-map, expression, and generated LLVM helper metadata.
 - `NewObject` must serialize the instantiated object type path in addition to
   the base class path and constructor variant signature, or replace class path
   with a canonical object type path.
@@ -1917,14 +1917,9 @@ AOT changes:
   must:
   - Emit a per-class type-parameter table (ordered list of formal names).
   - Emit method signatures with placeholder tokens instead of attempting
-    to resolve to a class. The token is length-prefixed so that class
-    paths containing `::` parse unambiguously:
-    `tparam:<index>:<owner-path-byte-length>:<owner-path>` —
-    e.g. `tparam:0:9:::Ns::Box` for type-parameter index 0 of class
-    `::Ns::Box`. Readers split on the first two `:` for the prefix and
-    index, then read exactly `<owner-path-byte-length>` bytes for the
-    path. The `tparam:` prefix is reserved across the AOT placeholder
-    family; class paths must not start with `tparam:`.
+    to resolve to a class. The implemented token form is
+    `typeparam<owner-path, index, name>` with the usual leading `*` for
+    or-nothing type parameters, for example `typeparam<::Ns::Box, 0, T>`.
   - Emit member, local, parameter, and return declarations as symbolic
     type-info trees. A direct `T` is encoded as a placeholder token; nested
     forms such as `list<T>` and `code<T(T)>` are encoded by the existing
@@ -1932,13 +1927,13 @@ AOT changes:
     positions:
 
     ```text
-    T            -> tparam:0:9:::Ns::Box
-    list<T>      -> list<tparam:0:9:::Ns::Box>
-    *list<T>     -> *list<tparam:0:9:::Ns::Box>
+    T            -> typeparam<::Ns::Box, 0, T>
+    list<T>      -> list<typeparam<::Ns::Box, 0, T>>
+    *list<T>     -> *list<typeparam<::Ns::Box, 0, T>>
     hash<string,T>
-                 -> hash<string,tparam:0:9:::Ns::Box>
-    code<T(T)>   -> code<tparam:0:9:::Ns::Box(tparam:0:9:::Ns::Box)>
-    Box<T>       -> object<::Ns::Box<tparam:0:9:::Ns::Box>>
+                 -> hash<string, typeparam<::Ns::Box, 0, T>>
+    code<T(T)>   -> code<typeparam<::Ns::Box, 0, T>(typeparam<::Ns::Box, 0, T>)>
+    Box<T>       -> object<::Ns::Box<typeparam<::Ns::Box, 0, T>>>
     ```
 
     The reader reuses the existing structured AOT type-string parser; the
@@ -2178,13 +2173,23 @@ can land first.
 
 ### Phase 3: Source-Defined Generic Classes
 
-- Parse `class C<T>`.
-- Resolve type parameter names in class member/method/constructor/local type
-  contexts.
-- Add generic substitution context for method execution.
-- Support member assignment filtering and return filtering with substituted
-  types.
-- Add source tests for `class C<T> { T get(); }`.
+- [x] Parse `class C<T>` in the core parser, mirror scanner support in
+  `modules/astparser/src/`, and update the checked-in tree-sitter grammar
+  artifacts with focused CST coverage.
+- [x] Resolve type parameter names in class member/method/constructor/local
+  type contexts before class, typedef, and hashdecl lookup.
+- [x] Add generic substitution context for instance method execution.
+- [x] Support constructor argument filtering, member assignment filtering,
+  local assignment filtering, and return filtering with substituted types in
+  AST, IR, and JIT execution.
+- [x] Reject duplicate type-parameter names and generic overload signatures
+  that collide under a concrete type-parameter instantiation.
+- [x] Add source tests for source-defined generic classes, including
+  namespaced use sites, `T` members/methods/locals, nested generic overload
+  checks, and raw source-generic construction rejection.
+- [x] Extend focused coverage to AOT cold-load / serialized-IR paths for
+  source-defined generic class construction and method calls before declaring
+  Phase 3 complete for production AOT.
 
 ### Phase 4: Optional Extensions
 
@@ -2287,6 +2292,11 @@ Add focused tests under `examples/test/`:
   - `T get()`
   - `nothing set(T)`
   - assignment rejection for wrong type
+- Source-defined generic classes:
+  - `examples/test/qore/misc/generic-classes.qtest` covers `class C<T>`,
+    `Pair<K, V>`, namespaced generic type use, constructor/method/member/local
+    substitution, generic overload collision checks, and raw construction
+    rejection. Run it in default, AST, IR, JIT, and compiled AOT modes.
 - `Queue<T>`:
   - `push()` accepts `T`
   - `push()` rejects wrong type
@@ -2347,8 +2357,9 @@ Add focused tests under `examples/test/`:
   - generated metadata for generic class params
   - generated method signatures using symbolic type params
 - astparser/tree-sitter:
-  - `class C<T>`
-  - `new C<int>()`
+  - `class C<T>` is covered by `modules/astparser/test/astparser.qtest`
+    (`Generic class CST`), including the `type_parameter_list` node.
+  - `new C<int>()` is parsed in the same CST coverage.
   - generic class types in declarations and signatures
 - Cross-`Program` type identity:
   - `class C<T>` declared independently in two `Program` instances — assert

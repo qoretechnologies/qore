@@ -671,7 +671,11 @@ public:
                 return -1;
             }
             // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
-            return val->getLValue(lvh, for_remove, getTypeInfoForLValue(), refTypeInfo);
+            const QoreTypeInfo* ti = getTypeInfoForLValue();
+            if (QoreObject* self = runtime_get_stack_object()) {
+                ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+            }
+            return val->getLValue(lvh, for_remove, ti, refTypeInfo);
         }
 
         // Prefer cvstack lookup (topmost = current function's own variable).

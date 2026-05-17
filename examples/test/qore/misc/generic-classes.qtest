@@ -1,0 +1,172 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class GenericClassTypesTest
+
+class SourceGenericBox<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+
+    T echo(T value) {
+        return value;
+    }
+
+    T localCopy(auto value) {
+        T local = value;
+        return local;
+    }
+
+    nothing set(T value) {
+        self.value = value;
+    }
+
+    nothing setAny(auto value) {
+        self.value = value;
+    }
+
+    list<T> asList(T value) {
+        return (value,);
+    }
+}
+
+class SourceGenericPair<K, V> {
+    private {
+        K key;
+        V value;
+    }
+
+    constructor(K key, V value) {
+        self.key = key;
+        self.value = value;
+    }
+
+    K getKey() {
+        return self.key;
+    }
+
+    V getValue() {
+        return self.value;
+    }
+}
+
+class SourceGenericOverloads<T> {
+    string take(T value) {
+        return "scalar";
+    }
+
+    string take(list<T> value) {
+        return "list";
+    }
+}
+
+namespace SourceGenericNs {
+    class Box<T> {
+        T echo(T value) {
+            return value;
+        }
+    }
+}
+
+public class GenericClassTypesTest inherits QUnit::Test {
+    constructor() : Test("Generic class types", "1.0") {
+        addTestCase("basic source generics", \basicSourceGenerics());
+        addTestCase("multiple type parameters", \multipleTypeParameters());
+        addTestCase("namespaced generic class types", \namespacedGenericClassTypes());
+        addTestCase("generic overloads", \genericOverloads());
+        addTestCase("runtime substitution errors", \runtimeSubstitutionErrors());
+        addTestCase("parse checks", \parseChecks());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    basicSourceGenerics() {
+        SourceGenericBox<int> ibox(1);
+        assertEq(1, ibox.get());
+        assertEq(2, ibox.echo(2));
+        ibox.set(3);
+        assertEq(3, ibox.get());
+
+        list<int> values = ibox.asList(4);
+        assertEq(4, values[0]);
+
+        SourceGenericBox<string> sbox("a");
+        assertEq("a", sbox.get());
+        assertEq("b", sbox.echo("b"));
+    }
+
+    multipleTypeParameters() {
+        SourceGenericPair<string, int> pair("id", 7);
+        assertEq("id", pair.getKey());
+        assertEq(7, pair.getValue());
+    }
+
+    namespacedGenericClassTypes() {
+        SourceGenericNs::Box<string> box();
+        assertEq("x", box.echo("x"));
+    }
+
+    genericOverloads() {
+        SourceGenericOverloads<int> overloads();
+        assertEq("scalar", overloads.take(1));
+        assertEq("list", overloads.take((1, 2)));
+    }
+
+    runtimeSubstitutionErrors() {
+        SourceGenericBox<int> box(1);
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { box.localCopy("x"); });
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { box.setAny("x"); });
+    }
+
+    parseChecks() {
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T,T> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("DUPLICATE-SIGNATURE", \p.parse(), (
+                "class C<T> { nothing set(T v) {} nothing set(int v) {} }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("DUPLICATE-SIGNATURE", \p.parse(), (
+                "class C<T> { nothing set(list<T> v) {} nothing set(list<int> v) {} }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class C<T> { nothing set(T v) {} nothing set(list<T> v) {} } "
+                "sub t() { C<int> c(); c.set(1); c.set((1, 2)); }", "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { constructor(T value) {} } sub t() { Box<int> b(\"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class RawBox<T> {} sub t() { RawBox b(); }", "generic-classes");
+            assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
+        }
+    }
+}

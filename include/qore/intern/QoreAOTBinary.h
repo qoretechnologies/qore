@@ -74,6 +74,9 @@ void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
 QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* path,
     bool defer_if_pending, bool wrap_top_level_if_ready = false);
 
+//! Returns the canonical AOT-serializable type path for \a ti.
+std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow = false);
+
 //! Magic number: "QORD" in little-endian (0x44524F51)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 
@@ -137,8 +140,9 @@ constexpr uint64_t QORE_AOT_FEAT_CLASS_INJECTION = 1ULL << 40; //!< class record
 constexpr uint64_t QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS = 1ULL << 41; //!< variant signatures carry original body parse options for source-stripped domain checks
 constexpr uint64_t QORE_AOT_FEAT_BCA_NAMED_ARG_MAP = 1ULL << 42; //!< BCA records preserve named-argument source-to-parameter evaluation maps
 constexpr uint64_t QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO = 1ULL << 43; //!< NewObject records and slots preserve instantiated object type paths
+constexpr uint64_t QORE_AOT_FEAT_CLASS_TYPE_PARAMS = 1ULL << 44; //!< class records preserve source generic type parameter names
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -716,6 +720,7 @@ private:
     const QoreTypeInfo* resolveClassType(const char* path);
     const QoreTypeInfo* resolveHashDeclType(const char* path);
     const QoreTypeInfo* resolveEnumType(const char* path);
+    const QoreTypeInfo* resolveTypeParameterType(const char* path);
     const QoreTypeInfo* resolveUnionShorthandType(const char* path);
     const QoreTypeInfo* resolveStructuredComplexType(const char* path);
     const QoreTypeInfo* resolveComplexType(const char* path);

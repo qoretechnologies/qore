@@ -1134,6 +1134,9 @@ static void applyNoNarrowContainerType(const QoreTypeInfo* ti, QoreValue& val, E
 static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
+    if (QoreObject* self = runtime_get_stack_object()) {
+        ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+    }
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", stored, xsink);
     if (xsink && *xsink) {
         stored.discard(xsink);
@@ -5125,8 +5128,11 @@ load_local_done:
 
                     // Auto-vivify according to the declared lvalue type, matching
                     // LValueHelper::doHashLValue() including hashdecl error behavior.
-                    QoreHashNode* new_h = makeImplicitHashForLValueType(lv ? lv->getTypeInfoForLValue() : nullptr,
-                        xsink);
+                    const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
+                    if (QoreObject* self = runtime_get_stack_object()) {
+                        ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+                    }
+                    QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
                     if (!new_h || (xsink && *xsink)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -5245,8 +5251,11 @@ load_local_done:
 
                     // Auto-vivify according to the declared lvalue type, matching
                     // LValueHelper::doHashLValue() including hashdecl error behavior.
-                    QoreHashNode* new_h = makeImplicitHashForLValueType(lv ? lv->getTypeInfoForLValue() : nullptr,
-                        xsink);
+                    const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
+                    if (QoreObject* self = runtime_get_stack_object()) {
+                        ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+                    }
+                    QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
                     if (!new_h || (xsink && *xsink)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
@@ -9844,8 +9853,13 @@ lvalue_path_unary_done:
                             } else {
                                 // Apply return type coercion
                                 if (!(xsink && *xsink) && direct_inst->cached_return_type) {
-                                    QoreTypeInfo::acceptAssignment(direct_inst->cached_return_type,
-                                        "<return statement>", ir_return_value, xsink);
+                                    const QoreTypeInfo* return_type = direct_inst->cached_return_type;
+                                    if (QoreObject* self = runtime_get_stack_object()) {
+                                        return_type = qore_substitute_type_params(return_type,
+                                            self->getInstantiatedTypeInfo());
+                                    }
+                                    QoreTypeInfo::acceptAssignment(return_type, "<return statement>",
+                                        ir_return_value, xsink);
                                 }
                                 res = ir_return_value;
                             }

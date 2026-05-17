@@ -68,11 +68,14 @@ module.exports = grammar({
     [$._type_keyword, $.complex_type],
     [$._type_keyword, $.simple_type],
     [$.simple_type, $.complex_type],
+    [$.simple_type, $.generic_type],
     [$.simple_type, $.scoped_identifier],
     [$.scoped_identifier],
     [$._type_keyword, $.simple_type, $.complex_type],
     // case < identifier could be comparison value or start of <Type> cast
     [$.primary_expression, $.simple_type],
+    [$.primary_expression, $.generic_type],
+    [$.primary_expression, $.simple_type, $.generic_type],
     // conditional_declaration in if/while vs as primary_expression
     [$.if_statement, $.primary_expression],
     [$.while_statement, $.primary_expression],
@@ -268,11 +271,18 @@ module.exports = grammar({
       optional($.modifiers),
       'class',
       field('name', choice($.identifier, $.scoped_identifier)),
+      optional(field('type_parameters', $.type_parameter_list)),
       optional($.superclass_list),
       choice(
         seq('{', repeat($._class_item), '}'),
         ';',  // forward declaration
       ),
+    ),
+
+    type_parameter_list: $ => seq(
+      '<',
+      commaSep1($.identifier),
+      '>',
     ),
 
     superclass_list: $ => seq(
@@ -282,7 +292,7 @@ module.exports = grammar({
 
     superclass: $ => seq(
       optional($.access_modifier),
-      choice($.scoped_identifier, $.identifier),
+      choice($.generic_type, $.scoped_identifier, $.identifier),
     ),
 
     _class_item: $ => choice(
@@ -1309,6 +1319,7 @@ module.exports = grammar({
     // ==================== Types ====================
     type: $ => prec.right(seq(
       choice(
+        $.generic_type,
         $.simple_type,
         $.complex_type,
         $.nullable_type,
@@ -1385,6 +1396,13 @@ module.exports = grammar({
         ')',
         '>',
       ),
+    ),
+
+    generic_type: $ => seq(
+      field('base', choice($.identifier, $.scoped_identifier)),
+      '<',
+      commaSep1($.type),
+      '>',
     ),
 
     // Parameter types for code<> signature, supporting varargs
