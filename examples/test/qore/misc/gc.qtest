@@ -136,6 +136,7 @@ class DgcTest inherits QUnit::Test {
         addTestCase("issue5028Test", \issue5028Test());
         addTestCase("GcTests", \gcTests());
         addTestCase("ClosureTests", \closureTests());
+        addTestCase("self-capturing closure local teardown", \selfCapturingClosureLocalTeardown());
         addTestCase("Destructor order", \dtorOrder());
         addTestCase("MiscGcTests", \miscGcTests());
         addTestCase("refLeak", \refLeakTest());
@@ -421,6 +422,25 @@ class DgcTest inherits QUnit::Test {
             t2.f = sub() {print(t2);};
         }
         assertEq(2, cnt);
+    }
+
+    selfCapturingClosureLocalTeardown() {
+        for (int i = 0; i < 100; ++i) {
+            hash<auto> h;
+            list<string> path = ("a", "b", "c");
+
+            code ah = auto sub (*hash<auto> ch, auto vc, int off = 0) {
+                if (off == path.size())
+                    return vc;
+                string k = path[off];
+                auto oh = ch{k};
+                ch{k} = ah(oh, vc, off + 1);
+                return ch;
+            };
+
+            h = ah(h, i);
+            assertEq(i, h.a.b.c);
+        }
     }
 
     dtorOrder() {

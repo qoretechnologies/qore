@@ -7153,6 +7153,10 @@ printf(\"name=%s/%s\\n\", fields.name.type.getName(), fields.name.display_name);
 printf(\"kind=%s/%s/%s\\n\", fields.kind.type, fields.kind.allowed_values[0].value,
     fields.kind.allowed_values[1].display_name);
 printf(\"op=%y\\n\", fields.op.impl({\"value\": 17}));
+hash<auto> reflected = Reflection::Class::forName(\"AOTNestedHashConst::ConstHolder\")
+    .getConstant(\"Fields\").getValue();
+hash<auto> reflected_id = reflected.id;
+printf(\"ref-id=%s/%s\\n\", reflected_id.type.getName(), reflected_id.display_name);
 ";
         hash<auto> paths = writeTempScript(test_code);
         on_exit {
@@ -7168,7 +7172,7 @@ printf(\"op=%y\\n\", fields.op.impl({\"value\": 17}));
             libqore_dir, module_path, qore_bin, paths.src));
 
         assertEq(interp_out, aot_out, "AOT nested hash constant output matches interpreted module");
-        assertEq("id=string/ID\nname=string/Name\nkind=string/a/B\nop=17\n", aot_out,
+        assertEq("id=string/ID\nname=string/Name\nkind=string/a/B\nop=17\nref-id=string/ID\n", aot_out,
             "nested hash constant entries are materialized");
     }
 

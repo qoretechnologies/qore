@@ -323,17 +323,10 @@ int ConstantEntry::parseCommitRuntimeInit() {
     return err;
 }
 
-// Collapse a chain of RuntimeConstantRefNode indirections to the concrete
-// stored value.  A constant whose initializer is itself another constant
-// (possibly transitively: const A = B; const B = C; ...) leaves each
-// entry's saved_val pointing at the next RuntimeConstantRefNode.  Unwrapping
-// only one level (the original behavior) leaked the internal NT_RTCONSTREF
-// parse-node type out through the public QoreExternalConstant API, where
-// C++/module consumers (e.g. the jni module building Java proxy classes) have
-// no way to handle it.  Follow the chain to the terminal value, but preserve
-// unresolved AOT shells / external stubs as references until the runtime host
-// supplies the value.  Parse-time recursive-constant detection (see
-// ConstantEntry::get) prevents cycles; the bound is a defensive backstop only.
+// Collapse a chain of plain RuntimeConstantRefNode indirections to the concrete
+// stored value.  This helper returns a borrowed value and is therefore only
+// suitable for paths that cannot materialize a computed reference, such as
+// ConstantEntry::getValue().
 const QoreValue& ConstantEntry::resolveRtConstRef(const QoreValue& start) {
     const QoreValue* v = &start;
     for (unsigned i = 0; v->getType() == NT_RTCONSTREF && i < 65536; ++i) {
@@ -346,16 +339,38 @@ const QoreValue& ConstantEntry::resolveRtConstRef(const QoreValue& start) {
     return *v;
 }
 
+// Collapse and evaluate RuntimeConstantRefNode values to an owned value.  AOT
+// uses RuntimeConstantRefNode subclasses for references to nested constant
+// paths; those must be evaluated polymorphically instead of manually unwrapping
+// only the base ConstantEntry.
+static QoreValue materializeRtConstRefValue(const QoreValue& start, ExceptionSink* xsink, bool& changed) {
+    changed = false;
+    QoreValue cur = start.refSelf();
+    for (unsigned i = 0; cur.getType() == NT_RTCONSTREF && i < 65536; ++i) {
+        QoreValue next = cur.eval(xsink);
+        cur.discard(nullptr);
+        if (*xsink) {
+            next.discard(nullptr);
+            return QoreValue();
+        }
+        cur = next;
+        changed = true;
+    }
+    return cur;
+}
+
 static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed) {
-    const QoreValue& resolved = ConstantEntry::resolveRtConstRef(start);
-    changed = &resolved != &start;
+    QoreValue resolved = materializeRtConstRefValue(start, xsink, changed);
+    if (*xsink) {
+        return QoreValue();
+    }
 
     // AOT constant containers can hold nested RuntimeConstantRefNode values.
     // Materialize only the containers that actually contain such references.
     if (resolved.getType() == NT_HASH) {
         const QoreHashNode* h = resolved.get<const QoreHashNode>();
         if (!h) {
-            return resolved.refSelf();
+            return resolved;
         }
 
         ReferenceHolder<QoreHashNode> rv(xsink);
@@ -364,6 +379,7 @@ static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xs
             bool child_changed;
             QoreValue v = resolveRtConstRefDeep(hi.get(), xsink, child_changed);
             if (*xsink) {
+                resolved.discard(nullptr);
                 return QoreValue();
             }
             if (child_changed) {
@@ -372,6 +388,7 @@ static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xs
                 }
                 rv->setKeyValue(hi.getKey(), v, xsink);
                 if (*xsink) {
+                    resolved.discard(nullptr);
                     return QoreValue();
                 }
             } else {
@@ -381,16 +398,17 @@ static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xs
 
         if (rv) {
             changed = true;
+            resolved.discard(nullptr);
             return rv.release();
         }
 
-        return resolved.refSelf();
+        return resolved;
     }
 
     if (resolved.getType() == NT_LIST) {
         const QoreListNode* l = resolved.get<const QoreListNode>();
         if (!l) {
-            return resolved.refSelf();
+            return resolved;
         }
 
         ReferenceHolder<QoreListNode> rv(xsink);
@@ -398,6 +416,7 @@ static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xs
             bool child_changed;
             QoreValue v = resolveRtConstRefDeep(l->retrieveEntry(i), xsink, child_changed);
             if (*xsink) {
+                resolved.discard(nullptr);
                 return QoreValue();
             }
             if (child_changed) {
@@ -406,6 +425,7 @@ static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xs
                 }
                 rv->setEntry(i, v, xsink);
                 if (*xsink) {
+                    resolved.discard(nullptr);
                     return QoreValue();
                 }
             } else {
@@ -415,13 +435,14 @@ static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xs
 
         if (rv) {
             changed = true;
+            resolved.discard(nullptr);
             return rv.release();
         }
 
-        return resolved.refSelf();
+        return resolved;
     }
 
-    return resolved.refSelf();
+    return resolved;
 }
 
 QoreValue ConstantEntry::getReferencedValue() const {
