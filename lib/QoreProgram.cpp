@@ -1194,19 +1194,6 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
     RootQoreNamespace* child_RootNS = child.priv->RootNS;
     qore_root_ns_private* parent_root = qore_root_ns_private::get(*parent_RootNS);
 
-    static FILE* dbg = ([](){
-        FILE* f = fopen("/tmp/inheritParseImports.log", "a");
-        if (f) {
-            setvbuf(f, nullptr, _IOLBF, 0);
-            fprintf(f, "==== process started ====\n");
-        }
-        return f;
-    })();
-    if (dbg) {
-        fprintf(dbg, "ENTRY child=%p parent=%p thdmap.size=%zu clmap.size=%zu\n",
-            &child, &parent, parent_root->thdmap.size(), parent_root->clmap.size());
-    }
-
     // Hashdecls: walk parent's root index, copy entries marked re-export into
     // child. Each entry was tagged via Program::importHashDecl(... reexport=True)
     // (or inherited from such) so the host explicitly opted to expose it.
@@ -1220,15 +1207,8 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
             continue;
         }
         const typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
-        if (dbg) {
-            fprintf(dbg, "  hd '%s' reexport=%d sys=%d pub=%d\n",
-                hd->getName(), hdp->isReexport(), hdp->isSystem(), hdp->isPublic());
-        }
         if (!hdp->isReexport() || hdp->isSystem()) {
             continue;
-        }
-        if (dbg) {
-            fprintf(dbg, "  -> propagating hd '%s'\n", hd->getName());
         }
         QoreNamespace* tns = qore_root_ns_private::runtimeFindCreateNamespacePath(
             *child_RootNS, *i.second.ns, true);
@@ -1244,15 +1224,8 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
         if (!c) {
             continue;
         }
-        if (dbg) {
-            fprintf(dbg, "  cl '%s' reexport=%d sys=%d\n",
-                c->getName(), qore_class_private::isReexport(*c), c->isSystem());
-        }
         if (!qore_class_private::isReexport(*c) || c->isSystem()) {
             continue;
-        }
-        if (dbg) {
-            fprintf(dbg, "  -> propagating cl '%s'\n", c->getName());
         }
         QoreNamespace* tns = qore_root_ns_private::runtimeFindCreateNamespacePath(
             *child_RootNS, *i.second.ns, true);
@@ -1260,10 +1233,6 @@ void qore_program_private::inheritParseImports(QoreProgram& child, QoreProgram& 
         qore_root_ns_private::runtimeImportClass(*child_RootNS, &xs, *tns, c, &parent,
             CSP_UNCHANGED, nullptr, false, nullptr, true);
         xs.clear();
-    }
-
-    if (dbg) {
-        fprintf(dbg, "EXIT child=%p\n", &child);
     }
 
     (void)xsink;
