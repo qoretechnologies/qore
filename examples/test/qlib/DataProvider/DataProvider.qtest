@@ -376,6 +376,44 @@ class TestBulkRecordProvider inherits AbstractDataProviderBulkRecordInterface {
     }
 }
 
+hashdecl TypedRecordIteratorRow {
+    int id;
+    string name;
+}
+
+class TypedRecordIterator inherits AbstractIterator<hash<TypedRecordIteratorRow>> {
+    private {
+        bool available = True;
+        bool valid_flag = False;
+    }
+
+    bool next() {
+        if (!available) {
+            valid_flag = False;
+            return False;
+        }
+
+        available = False;
+        valid_flag = True;
+        return True;
+    }
+
+    hash<TypedRecordIteratorRow> getValue() {
+        if (!valid_flag) {
+            throw "INVALID-ITERATOR", "iterator is not valid";
+        }
+
+        return <TypedRecordIteratorRow>{
+            "id": 1,
+            "name": "alpha",
+        };
+    }
+
+    bool valid() {
+        return valid_flag;
+    }
+}
+
 class TestIntProcessor inherits AbstractDataProcessor {
     private {
         int inc;
@@ -537,6 +575,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("data test", \dataTest());
         addTestCase("compat test", \compatTest());
         addTestCase("optional typed hash field test", \optionalTypedHashFieldTest());
+        addTestCase("generic record iterator test", \genericRecordIteratorTest());
         addTestCase("pipeline test", \pipelineTest());
         addTestCase("pipeline metrics test", \pipelineMetricsTest());
         addTestCase("pipeline output callback test", \pipelineOutputCallbackTest());
@@ -546,6 +585,20 @@ public class DataProviderTest inherits QUnit::Test {
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
+    }
+
+    genericRecordIteratorTest() {
+        DefaultRecordIterator<hash<TypedRecordIteratorRow>> i(new TypedRecordIterator());
+
+        assertTrue(i instanceof AbstractDataProviderRecordIterator<hash<TypedRecordIteratorRow>>);
+        assertTrue(i instanceof AbstractIterator<hash<TypedRecordIteratorRow>>);
+        assertTrue(i.next());
+
+        hash<TypedRecordIteratorRow> row = i.getValue();
+        assertEq("hash<TypedRecordIteratorRow>", row.fullType());
+        assertEq(1, row.id);
+        assertEq("alpha", row.name);
+        assertFalse(i.next());
     }
 
     private checkYaml() {

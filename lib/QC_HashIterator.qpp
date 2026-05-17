@@ -45,11 +45,13 @@ const TypedHashDecl* qore_get_key_value_info_hashdecl(const QoreTypeInfo* value_
     return hashdeclKeyValueInfo->getParameterizedHashDecl(type_args);
 }
 
+static const QoreTypeInfo* qore_get_hash_value_iterator_type(const QoreHashNode* h) {
+    const QoreTypeInfo* value_type = h && !h->getHashDecl() ? h->getValueTypeInfo() : autoTypeInfo;
+    return QoreTypeInfo::hasType(value_type) ? value_type : autoTypeInfo;
+}
+
 QoreObject* qore_new_hash_iterator_object(QoreProgram* pgm, const QoreHashNode* h) {
-    const QoreTypeInfo* value_type = h->getValueTypeInfo();
-    if (!QoreTypeInfo::hasType(value_type)) {
-        value_type = autoTypeInfo;
-    }
+    const QoreTypeInfo* value_type = qore_get_hash_value_iterator_type(h);
     type_vec_t type_args;
     type_args.push_back(value_type);
     QoreObject* rv = new QoreObject(QC_HASHITERATOR, pgm, new QoreHashIterator(h, value_type));
@@ -58,10 +60,7 @@ QoreObject* qore_new_hash_iterator_object(QoreProgram* pgm, const QoreHashNode* 
 }
 
 QoreObject* qore_new_hash_pair_iterator_object(QoreProgram* pgm, const QoreHashNode* h) {
-    const QoreTypeInfo* value_type = h->getValueTypeInfo();
-    if (!QoreTypeInfo::hasType(value_type)) {
-        value_type = autoTypeInfo;
-    }
+    const QoreTypeInfo* value_type = qore_get_hash_value_iterator_type(h);
     type_vec_t type_args;
     type_args.push_back(value_type);
     ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(h, value_type), nullptr);

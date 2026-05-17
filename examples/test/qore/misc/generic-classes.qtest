@@ -438,6 +438,19 @@ public class GenericClassTypesTest inherits QUnit::Test {
         assertEq(1, copied.a);
         assertEq(2, copied.b);
 
+        hash<SourceGenericResult<int>> typed_record(("value": 3, "values": (4,)));
+        auto record_value_it = typed_record.iterator();
+        assertTrue(record_value_it instanceof HashIterator<auto>);
+        assertFalse(record_value_it instanceof HashIterator<hash<SourceGenericResult<int>>>);
+
+        auto record_pair_it = typed_record.pairIterator();
+        assertTrue(record_pair_it instanceof HashPairIterator<auto>);
+        assertFalse(record_pair_it instanceof HashPairIterator<hash<SourceGenericResult<int>>>);
+        assertTrue(record_pair_it.next());
+        hash<KeyValueInfo<auto>> record_pair = record_pair_it.getValue();
+        assertTrue(record_pair.key == "value" || record_pair.key == "values");
+        assertEq("hash<KeyValueInfo<auto>>", record_pair.fullType());
+
         SourceObjectPairMembers obj();
         ObjectPairIterator object_pair_it(obj);
         assertTrue(object_pair_it.next());

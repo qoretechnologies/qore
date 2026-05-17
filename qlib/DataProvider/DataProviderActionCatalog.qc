@@ -618,9 +618,15 @@ public class DataProviderActionCatalog {
             throw "APP-ERROR", sprintf("Application is missing the following required keys: %y (app: %y)",
                 keys missing, app);
         }
-        if (*list<string> missing = (map $1.key, app{keys RequiredAppKeys}.pairIterator(), !$1.value.val())) {
+        list<string> missing_keys = ();
+        foreach hash<auto> elem in (app{keys RequiredAppKeys}.pairIterator()) {
+            if (!elem.value.val()) {
+                missing_keys += elem.key;
+            }
+        }
+        if (missing_keys) {
             throw "APP-ERROR", sprintf("Application is missing the following required keys: %y (app: %y)",
-                missing, app);
+                missing_keys, app);
         }
         if (DataProviderActionCatalog::checkName(app.name)) {
             throw "APP-ERROR", sprintf("Application name %y is illegal; only A-Za-z0-9_- are accepted", app.name);
@@ -715,9 +721,15 @@ public class DataProviderActionCatalog {
             throw "ACTION-ERROR", sprintf("action is missing the following required keys: %y (action: %y)",
                 keys missing, action);
         }
-        if (*list<string> missing = (map $1.key, action{keys RequiredActionKeys}.pairIterator(), !$1.value.val())) {
+        list<string> missing_keys = ();
+        foreach hash<auto> elem in (action{keys RequiredActionKeys}.pairIterator()) {
+            if (!elem.value.val()) {
+                missing_keys += elem.key;
+            }
+        }
+        if (missing_keys) {
             throw "ACTION-ERROR", sprintf("action is missing the following required keys: %y (action: %y)",
-                missing, action);
+                missing_keys, action);
         }
         if (!ActionCodeFlagMap.hasKey(action.action_code)) {
             throw "ACTION-ERROR", sprintf("invalid action code %y in action: %y", action.action_code, action);
@@ -833,7 +845,12 @@ public class DataProviderActionCatalog {
             if (!DataProviderActionCatalog::compareActions(action, act)) {
                 return;
             }
-            list<string> diff = map $1.key, act.pairIterator(), $1.value != action{$1.key};
+            list<string> diff = ();
+            foreach hash<auto> elem in (act.pairIterator()) {
+                if (elem.value != action{elem.key}) {
+                    diff += elem.key;
+                }
+            }
             throw "ACTION-ERROR", sprintf("Action with application %y, action %y already registered; diff: %y",
                 act.app, act.action, diff);
         }

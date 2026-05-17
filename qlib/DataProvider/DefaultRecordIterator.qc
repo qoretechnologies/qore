@@ -27,7 +27,7 @@ public namespace DataProvider {
 #! Default record iterator class for data providers that do not support custom read / search APIs
 /** @note This class supports the \c columns, \c limit, and \c offset search options
 */
-public class DefaultRecordIterator inherits AbstractDataProviderRecordIterator {
+public class DefaultRecordIterator<RecT> [legacy_raw] inherits AbstractDataProviderRecordIterator<RecT> {
     private {
         AbstractIterator i;
         *hash<auto> where_cond;
@@ -75,13 +75,15 @@ public class DefaultRecordIterator inherits AbstractDataProviderRecordIterator {
     #! returns a single record if the iterator is valid
     /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
     */
-    hash<auto> getValue() {
+    RecT getValue() {
         if (exists subrecord && search_options.columns) {
             hash<auto> rv = i.getValue();
             rv{subrecord} = rv{subrecord}{search_options.columns};
-            return rv;
+            RecT typed_rv = rv;
+            return typed_rv;
         }
-        return search_options.columns ? i.getValue(){search_options.columns} : i.getValue();
+        RecT rv = search_options.columns ? i.getValue(){search_options.columns} : i.getValue();
+        return rv;
     }
 
     #! Returns the value of the given field in the current record, if the iterator is valid

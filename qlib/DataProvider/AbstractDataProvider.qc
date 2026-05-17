@@ -3098,7 +3098,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
     private doAsyncSearchRecords(Promise p, *hash<auto> where_cond, *hash<auto> search_options) {
         try {
             AbstractDataProviderRecordIterator i = searchRecords(where_cond, search_options);
-            list<hash<auto>> results = map $1, i;
+            list<hash<auto>> results = ();
+            foreach auto record in (i) {
+                results += record;
+            }
             p.set(results);
         } catch (hash<ExceptionInfo> ex) {
             p.setError(ex.err, ex.desc, ex.arg);

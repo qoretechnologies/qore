@@ -799,7 +799,7 @@ public hash<SearchOperatorInfo> sub dp_op_not(hash<auto> arg) {
 /** this class also implements generic search APIs that can be used to filter record sets for data providers that do
     not support native search / filtering APIs
 */
-public class AbstractDataProviderRecordIterator inherits AbstractIterator {
+public class AbstractDataProviderRecordIterator<RecT> [legacy_raw] inherits AbstractIterator<RecT> {
     public {
         #! Default block size
         const DefaultBlockSize = 1000;
@@ -899,7 +899,7 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
     #! returns a single record if the iterator is valid
     /** @throw INVALID-ITERATOR the iterator is not pointing at a valid element
     */
-    abstract hash<auto> getValue();
+    abstract RecT getValue();
 
     #! Positions the iterator on the next record if possible, returns @ref True if successful
     /** @return @ref True if the iterator was advanced to the next record, @ref False if no more records are available
@@ -914,7 +914,7 @@ public class AbstractDataProviderRecordIterator inherits AbstractIterator {
         @throw FIELD-ERROR invalid or unknown field name
     */
     private auto doMemberGate(string key) {
-        hash<auto> record = getValue();
+        auto record = getValue();
         auto rv = record{key};
         if (!exists rv && !record.hasKey(key)) {
             throw "FIELD-ERROR", sprintf("the current record does not have field %y; valid fields: %y", key,
