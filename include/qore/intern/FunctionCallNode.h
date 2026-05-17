@@ -151,13 +151,18 @@ public:
 
 class NewObjectCallNode : public AbstractQoreNode, public FunctionCallBase {
 public:
-    DLLLOCAL NewObjectCallNode(const QoreClass* qc, QoreListNode* args = nullptr);
+    DLLLOCAL NewObjectCallNode(const QoreClass* qc, QoreListNode* args = nullptr,
+            const QoreTypeInfo* object_type_info = nullptr);
 
     //! Returns the class for the new object
     DLLLOCAL const QoreClass* getClass() const { return qc; }
 
+    //! Returns the resolved instantiated object type, if one was explicit in the construction expression
+    DLLLOCAL const QoreTypeInfo* getObjectTypeInfo() const { return object_type_info; }
+
 protected:
     const QoreClass* qc;
+    const QoreTypeInfo* object_type_info;
 
     using AbstractQoreNode::evalImpl;
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
@@ -183,7 +188,7 @@ protected:
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
-        return qc->getTypeInfo();
+        return object_type_info ? object_type_info : qc->getTypeInfo();
     }
 
     DLLLOCAL virtual const char* getName() const {
@@ -191,7 +196,7 @@ protected:
     }
 
     DLLLOCAL virtual AbstractQoreNode* realCopy() const {
-        return new NewObjectCallNode(qc, args ? args->listRefSelf() : nullptr);
+        return new NewObjectCallNode(qc, args ? args->listRefSelf() : nullptr, object_type_info);
     }
 
     DLLLOCAL virtual bool is_equal_soft(const AbstractQoreNode* v, ExceptionSink* xsink) const {

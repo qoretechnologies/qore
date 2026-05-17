@@ -42,14 +42,17 @@ class ScopedObjectCallNode : public AbstractFunctionCallNode {
 public:
     NamedScope* name;
     const QoreClass* oc;
+    const QoreTypeInfo* object_type_info;
     QoreString desc;
 
     DLLLOCAL ScopedObjectCallNode(const QoreProgramLocation* loc, NamedScope* n, QoreParseListNode* a)
-            : AbstractFunctionCallNode(loc, NT_SCOPE_REF, a), name(n), oc(nullptr) {
+            : AbstractFunctionCallNode(loc, NT_SCOPE_REF, a), name(n), oc(nullptr), object_type_info(nullptr) {
     }
 
-    DLLLOCAL ScopedObjectCallNode(const QoreProgramLocation* loc, const QoreClass* qc, QoreParseListNode* a)
-            : AbstractFunctionCallNode(loc, NT_SCOPE_REF, a), name(nullptr), oc(qc) {
+    DLLLOCAL ScopedObjectCallNode(const QoreProgramLocation* loc, const QoreClass* qc, QoreParseListNode* a,
+            const QoreTypeInfo* n_object_type_info = nullptr)
+            : AbstractFunctionCallNode(loc, NT_SCOPE_REF, a), name(nullptr), oc(qc),
+            object_type_info(n_object_type_info) {
     }
 
     DLLLOCAL virtual ~ScopedObjectCallNode() {
@@ -57,6 +60,10 @@ public:
     }
 
     DLLLOCAL int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
+
+    DLLLOCAL const QoreTypeInfo* getObjectTypeInfo() const {
+        return object_type_info;
+    }
 
     /* get string representation (for %n and %N), foff is for multi-line formatting offset, -1 = no line breaks
         the ExceptionSink is only needed for QoreObject where a method may be executed

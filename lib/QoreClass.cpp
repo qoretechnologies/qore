@@ -1382,9 +1382,37 @@ void qore_class_private::execBaseClassConstructor(QoreObject* self, BCEAList* bc
     }
 }
 
+static const QoreTypeInfo* qore_get_instantiated_object_type_info(const QoreClass* object_class,
+        const QoreTypeInfo* object_type_info, ExceptionSink* xsink) {
+    const QoreParameterizedClassTypeInfo* pcti = QoreTypeInfo::getParameterizedClassType(object_type_info);
+    if (pcti) {
+        if (pcti->getBaseClass() != object_class) {
+            xsink->raiseException("INTERNAL-ERROR", "cannot instantiate class '%s' with incompatible object type '%s'",
+                object_class->getName(), QoreTypeInfo::getName(object_type_info));
+            return nullptr;
+        }
+        return pcti;
+    }
+
+    if (!object_class->hasTypeParameters()) {
+        return nullptr;
+    }
+
+    const qore_class_private* priv = qore_class_private::get(*object_class);
+    if (!priv->rawConstructionDefaultsToAuto()) {
+        xsink->raiseException("MISSING-TYPE-ARGUMENTS", "cannot instantiate generic class '%s' without type "
+            "arguments; use '%s<auto>' for an explicitly value-erased instance", object_class->getName(),
+            object_class->getName());
+        return nullptr;
+    }
+
+    type_vec_t args(object_class->getTypeParameterCount(), autoTypeInfo);
+    return object_class->getTypeInfo(args);
+}
+
 QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args, const QoreClass* obj_cls,
-        bool allow_abstract) const {
+        bool allow_abstract, const QoreTypeInfo* object_type_info) const {
 #ifdef DEBUG
     if (!allow_abstract) {
         // instantiation checks have to be made at parse time
@@ -1423,8 +1451,18 @@ QoreObject* qore_class_private::execConstructor(ExceptionSink* xsink, RuntimeCon
     }
 #endif
 
+    const QoreClass* object_class = obj_cls ? obj_cls : cls;
+    const QoreTypeInfo* instantiated_type = qore_get_instantiated_object_type_info(object_class, object_type_info,
+        xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
     // create new object
-    QoreObject* self = new QoreObject(obj_cls ? obj_cls : cls, getProgram());
+    QoreObject* self = new QoreObject(object_class, getProgram());
+    if (instantiated_type) {
+        self->setInstantiatedTypeInfo(instantiated_type);
+    }
 
     ReferenceHolder<BCEAList> bceal(scl ? new BCEAList : nullptr, xsink);
 

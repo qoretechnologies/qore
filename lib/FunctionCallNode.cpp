@@ -799,9 +799,10 @@ AbstractQoreNode* ProgramFunctionCallNode::makeReferenceNodeAndDerefImpl() {
 
 //DLLEXPORT AbstractQoreNode(qore_type_t t, bool n_value, bool n_needs_eval, bool n_there_can_be_only_one = false, bool n_custom_reference_handlers = false);
 
-NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args)
+NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args,
+        const QoreTypeInfo* object_type_info)
         : AbstractQoreNode(NT_NEW_OBJECT, false, true),
-        FunctionCallBase(nullptr, args), qc(qc) {
+        FunctionCallBase(nullptr, args), qc(qc), object_type_info(object_type_info) {
     if (!qc) {
         return;
     }
@@ -840,7 +841,7 @@ QoreValue NewObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
 }
 
 QoreValue NewObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    return qore_class_private::execConstructor(*qc, rc, variant, args, xsink);
+    return qore_class_private::execConstructor(*qc, rc, variant, args, xsink, object_type_info);
 }
 
 int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -882,7 +883,7 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         // to be assigned to a constant
         //qore_class_private::parseInit(*const_cast<QoreClass*>(oc));
 
-        parse_context.typeInfo = oc->getTypeInfo();
+        parse_context.typeInfo = object_type_info ? object_type_info : oc->getTypeInfo();
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
         parse_context.analysis.known_type = parse_context.typeInfo;
         desc.sprintf("new %s", oc->getName());
@@ -926,7 +927,7 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     assert(!parse_args || args || tmp_args
         || !"ScopedObjectCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
-    return qore_class_private::execConstructor(*oc, rc, variant, args, xsink);
+    return qore_class_private::execConstructor(*oc, rc, variant, args, xsink, object_type_info);
 }
 
 QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {

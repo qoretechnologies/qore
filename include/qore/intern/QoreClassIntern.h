@@ -2986,7 +2986,8 @@ public:
     // the abstract methods
     DLLLOCAL QoreObject* execConstructor(ExceptionSink* xsink, RuntimeConfig& rc,
         const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
-        const QoreClass* obj_cls = nullptr, bool allow_abstract = false) const;
+        const QoreClass* obj_cls = nullptr, bool allow_abstract = false,
+        const QoreTypeInfo* object_type_info = nullptr) const;
 
     DLLLOCAL void addBuiltinMethod(const char* mname, MethodVariantBase* variant);
     DLLLOCAL void addBuiltinStaticMethod(const char* mname, MethodVariantBase* variant);
@@ -3478,8 +3479,9 @@ public:
     }
 
     DLLLOCAL static QoreObject* execConstructor(const QoreClass& qc, RuntimeConfig& rc,
-            const AbstractQoreFunctionVariant* variant, const QoreListNode* args, ExceptionSink* xsink) {
-        return qc.priv->execConstructor(xsink, rc, variant, args);
+            const AbstractQoreFunctionVariant* variant, const QoreListNode* args, ExceptionSink* xsink,
+            const QoreTypeInfo* object_type_info = nullptr) {
+        return qc.priv->execConstructor(xsink, rc, variant, args, nullptr, false, object_type_info);
     }
 
     DLLLOCAL static bool injected(const QoreClass& qc) {
