@@ -36,6 +36,7 @@
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/QoreTypeInfo.h"
 
 static thread_local const typed_hash_decl_private* parse_hashdecl_type_param_context = nullptr;
 
@@ -56,6 +57,23 @@ private:
 
 const typed_hash_decl_private* parse_get_hashdecl_type_param_context() {
     return parse_hashdecl_type_param_context;
+}
+
+const TypedHashDecl* TypedHashDecl::getParameterizedHashDecl(const type_vec_t& type_args) const {
+    return typed_hash_decl_private::get(*this)->getParameterizedHashDecl(type_args);
+}
+
+const QoreTypeInfo* TypedHashDecl::getTypeInfo(const type_vec_t& type_args, bool or_nothing) const {
+    const TypedHashDecl* hd = getParameterizedHashDecl(type_args);
+    return hd ? hd->getTypeInfo(or_nothing) : nullptr;
+}
+
+void TypedHashDecl::addTypeParameter(const char* param) {
+    typed_hash_decl_private::get(*this)->addTypeParameter(param);
+}
+
+const QoreTypeInfo* TypedHashDecl::getTypeParameterType(size_t index, const char* name, bool or_nothing) const {
+    return qore_get_hashdecl_type_parameter_type(this, index, name, or_nothing);
 }
 
 bool HashDeclMemberInfo::equal(const HashDeclMemberInfo& other) const {

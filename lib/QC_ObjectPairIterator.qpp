@@ -121,7 +121,7 @@ map printf("%s: %y\n", $1.key, $1.value), object.pairIterator();
 
     @since %Qore 0.8.6.2
  */
-hash<auto> ObjectPairIterator::getValue() [flags=RET_VALUE_ONLY] {
+hash<KeyValueInfo<auto>> ObjectPairIterator::getValue() [flags=RET_VALUE_ONLY] {
    if (i->check(xsink))
       return QoreValue();
    return i->getReferencedValuePair(xsink);

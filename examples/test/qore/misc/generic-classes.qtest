@@ -419,11 +419,37 @@ public class GenericClassTypesTest inherits QUnit::Test {
         assertEq(2, lhi_rows[1].id);
 
         hash<string, int> values = {"a": 1, "b": 2};
+        hash<string, int> one_value = {"a": 1};
+        HashIterator<int> value_it(one_value);
+        assertTrue(value_it.next());
+        hash<KeyValueInfo<int>> value_pair = value_it.getValuePair();
+        assertEq("a", value_pair.key);
+        assertEq(1, value_pair.value);
+        assertEq("hash<KeyValueInfo<int>>", value_pair.fullType());
+
+        HashPairIterator<int> pair_it(one_value);
+        assertTrue(pair_it.next());
+        hash<KeyValueInfo<int>> iterator_pair = pair_it.getValue();
+        assertEq("a", iterator_pair.key);
+        assertEq(1, iterator_pair.value);
+        assertEq("hash<KeyValueInfo<int>>", iterator_pair.fullType());
+
         hash<string, int> copied = map {$1.key: $1.value}, values.pairIterator();
         assertEq(1, copied.a);
         assertEq(2, copied.b);
 
         SourceObjectPairMembers obj();
+        ObjectPairIterator object_pair_it(obj);
+        assertTrue(object_pair_it.next());
+        hash<KeyValueInfo<auto>> object_pair = object_pair_it.getValue();
+        assertTrue(object_pair.key == "count" || object_pair.key == "label");
+        if (object_pair.key == "count") {
+            assertEq(3, object_pair.value);
+        } else {
+            assertEq("three", object_pair.value);
+        }
+        assertEq("hash<KeyValueInfo<auto>>", object_pair.fullType());
+
         hash<auto> object_members = map {$1.key: $1.value}, obj.pairIterator();
         assertEq(3, object_members.count);
         assertEq("three", object_members.label);

@@ -52,6 +52,48 @@ public:
     //! returns the type info object for the hashdecl
     DLLEXPORT const QoreTypeInfo* getTypeInfo(bool or_nothing = false) const;
 
+    //! returns the type info object for a parameterized form of this hashdecl
+    /** @param type_args the concrete type arguments for the hashdecl
+        @param or_nothing if true, the type also accepts NOTHING
+
+        @return the type info object for the parameterized hashdecl, or nullptr if the type arguments are invalid
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT const QoreTypeInfo* getTypeInfo(const type_vec_t& type_args, bool or_nothing = false) const;
+
+    //! returns the parameterized form of this hashdecl
+    /** @param type_args the concrete type arguments for the hashdecl
+
+        @return the parameterized hashdecl, or nullptr if the type arguments are invalid
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT const TypedHashDecl* getParameterizedHashDecl(const type_vec_t& type_args) const;
+
+    //! adds a type parameter to a built-in hashdecl
+    /** @param param the type parameter name
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void addTypeParameter(const char* param);
+
+    //! returns symbolic type information for a built-in hashdecl type parameter
+    /** @param index the type parameter index
+        @param name the type parameter name
+        @param or_nothing if true, the type also accepts NOTHING
+
+        @return symbolic type information for the type parameter
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT const QoreTypeInfo* getTypeParameterType(size_t index, const char* name,
+        bool or_nothing = false) const;
+
     //! adds an element to a built-in hashdecl
     DLLEXPORT void addMember(const char* name, const QoreTypeInfo* memberTypeInfo, QoreValue init_val);
 
@@ -214,11 +256,26 @@ DLLEXPORT extern const TypedHashDecl* hashdeclIsoWeekInfo;
 //! CallStackInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclCallStackInfo;
 
+//! QueueTryResult hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclQueueTryResult;
+
+//! ChannelTryResult hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclChannelTryResult;
+
 //! ExceptionInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclExceptionInfo;
 
 //! StatementInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclStatementInfo;
+
+//! KeyValueInfo hashdecl
+/** @since %Qore 2.3
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclKeyValueInfo;
 
 //! NetIfInfo hashdecl
 DLLEXPORT extern const TypedHashDecl* hashdeclNetIfInfo;

@@ -35,6 +35,36 @@
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QC_ChannelIterator.h"
 
+static const QoreTypeInfo* get_channel_value_type(const QoreTypeInfo* channel_type_info) {
+    const QoreParameterizedClassTypeInfo* channel_type = QoreTypeInfo::getParameterizedClassType(channel_type_info);
+    return channel_type && channel_type->getArgCount() ? channel_type->getTypeArgs()[0] : autoTypeInfo;
+}
+
+static const TypedHashDecl* get_channel_try_result_hashdecl(const QoreTypeInfo* channel_type_info) {
+    const QoreTypeInfo* value_type = get_channel_value_type(channel_type_info);
+    if (!QoreTypeInfo::hasType(value_type)) {
+        value_type = autoTypeInfo;
+    }
+    type_vec_t type_args;
+    type_args.push_back(value_type);
+    return hashdeclChannelTryResult->getParameterizedHashDecl(type_args);
+}
+
+//! Nonblocking Channel receive result
+/** @par Example:
+    @code{.py}
+*hash<ChannelTryResult<int>> result = ch.tryRecv();
+    @endcode
+
+    @since %Qore 2.3
+ */
+hashdecl Qore::Thread::ChannelTryResult<T> {
+    //! The value received from the Channel
+    T value;
+    //! True when a value was received
+    bool has_value;
+}
+
 //! A typed channel for inter-thread communication with close semantics
 /** Channel objects provide a Go-style channel for passing values between threads with backpressure
     and close semantics.
@@ -309,16 +339,26 @@ if (exists result) {
 }
     @endcode
  */
-auto Channel::tryRecv() {
+*hash<ChannelTryResult<T>> Channel::tryRecv() {
     bool has_value = false;
     QoreValue rv = ch->tryRecv(has_value);
     if (!has_value) {
         return QoreValue();
     }
-    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(get_channel_try_result_hashdecl(self->getInstantiatedTypeInfo()),
+        xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     h->setKeyValue("value", rv, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     h->setKeyValue("has_value", true, xsink);
-    return h;
+    if (*xsink) {
+        return QoreValue();
+    }
+    return h.release();
 }
 
 //! Closes the channel; remaining values can still be received

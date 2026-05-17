@@ -122,6 +122,7 @@ DLLLOCAL QoreClass* initAbstractBidirectionalIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractQuantifiedBidirectionalIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initListIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initListReverseIteratorClass(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_KeyValueInfo(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHashIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHashReverseIteratorClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHashKeyIteratorClass(QoreNamespace& ns);
@@ -226,6 +227,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclDateTimeInfo,
     * hashdeclIsoWeekInfo,
     * hashdeclCallStackInfo,
+    * hashdeclKeyValueInfo,
     * hashdeclExceptionInfo,
     * hashdeclStatementInfo,
     * hashdeclNetIfInfo,
@@ -1505,6 +1507,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initAbstractQuantifiedBidirectionalIteratorClass(qns));
     qns.addSystemClass(initListIteratorClass(qns));
     qns.addSystemClass(initListReverseIteratorClass(qns));
+    hashdeclKeyValueInfo = init_hashdecl_KeyValueInfo(qns);
     qns.addSystemClass(initHashIteratorClass(qns));
     qns.addSystemClass(initHashReverseIteratorClass(qns));
     qns.addSystemClass(initHashKeyIteratorClass(qns));
@@ -1536,6 +1539,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
 
     // add ChannelIterator + Channel to Thread namespace now that AbstractIterator is available
     // preinit Channel first so QC_CHANNEL is available for ChannelIterator's constructor parameter
+    hashdeclChannelTryResult = init_hashdecl_ChannelTryResult(*thread_ns);
     preinitChannelClass();
     thread_ns->addSystemClass(initChannelIteratorClass(*thread_ns));
     thread_ns->addSystemClass(initChannelClass(*thread_ns));

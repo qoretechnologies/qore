@@ -98,6 +98,9 @@ QoreCounter tp_thread_counter;
 
 ThreadCleanupList tclist;
 
+const TypedHashDecl* hashdeclQueueTryResult = nullptr;
+const TypedHashDecl* hashdeclChannelTryResult = nullptr;
+
 DLLLOCAL bool threads_initialized = false;
 
 // recursive mutex attribute
@@ -3487,6 +3490,7 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     // create Qore::Thread namespace
     QoreNamespace* Thread = new QoreNamespace("Qore::Thread");
 
+    hashdeclQueueTryResult = init_hashdecl_QueueTryResult(*Thread);
     Thread->addSystemClass(initQueueClass(*Thread));
     Thread->addSystemClass(initAbstractSmartLockClass(*Thread));
     Thread->addSystemClass(initMutexClass(*Thread));

@@ -127,7 +127,7 @@ foreach hash<auto> h in (new ObjectPairReverseIterator(obj))
 
     @since %Qore 0.8.6.2
  */
-hash<auto> ObjectPairReverseIterator::getValue() [flags=RET_VALUE_ONLY] {
+hash<KeyValueInfo<auto>> ObjectPairReverseIterator::getValue() [flags=RET_VALUE_ONLY] {
     if (i->check(xsink))
         return QoreValue();
     return i->getReferencedValuePair(xsink);

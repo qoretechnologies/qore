@@ -37,6 +37,7 @@
 DLLEXPORT extern qore_classid_t CID_CHANNEL;
 DLLLOCAL extern QoreClass* QC_CHANNEL;
 
+DLLLOCAL TypedHashDecl* init_hashdecl_ChannelTryResult(QoreNamespace& ns);
 DLLLOCAL void preinitChannelClass();
 DLLLOCAL QoreClass* initChannelClass(QoreNamespace& ns);
 

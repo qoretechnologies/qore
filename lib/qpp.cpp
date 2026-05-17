@@ -153,9 +153,18 @@ static strmap_t dnmap;
 // enum name to base type map
 static strmap_t enum_base_type_map;
 
-// Current qclass generic context while emitting code for methods, members, and parents.
+// Current generic context while emitting code for methods, members, parents, and hashdecls.
 static const strlist_t* current_type_params = nullptr;
 static std::string current_class_uc;
+static std::string current_hashdecl_owner_expr;
+
+enum class TypeParamOwnerKind {
+    None,
+    Class,
+    HashDecl,
+};
+
+static TypeParamOwnerKind current_type_param_owner_kind = TypeParamOwnerKind::None;
 
 // set of possible code flags
 static strset_t fset;
@@ -1510,19 +1519,37 @@ static bool qpp_type_contains_current_type_param(const std::string& type) {
 class TypeParamContext {
 public:
     TypeParamContext(const strlist_t& params, const std::string& class_uc) : old_params(current_type_params),
-            old_class_uc(current_class_uc) {
+            old_class_uc(current_class_uc), old_hashdecl_owner_expr(current_hashdecl_owner_expr),
+            old_owner_kind(current_type_param_owner_kind) {
         current_type_params = params.empty() ? nullptr : &params;
         current_class_uc = class_uc;
+        current_hashdecl_owner_expr.clear();
+        current_type_param_owner_kind = current_type_params ? TypeParamOwnerKind::Class : TypeParamOwnerKind::None;
+    }
+
+    TypeParamContext(const strlist_t& params, const std::string& hashdecl_owner_expr, bool hashdecl)
+            : old_params(current_type_params), old_class_uc(current_class_uc),
+            old_hashdecl_owner_expr(current_hashdecl_owner_expr), old_owner_kind(current_type_param_owner_kind) {
+        assert(hashdecl);
+        (void)hashdecl;
+        current_type_params = params.empty() ? nullptr : &params;
+        current_class_uc.clear();
+        current_hashdecl_owner_expr = hashdecl_owner_expr;
+        current_type_param_owner_kind = current_type_params ? TypeParamOwnerKind::HashDecl : TypeParamOwnerKind::None;
     }
 
     ~TypeParamContext() {
         current_type_params = old_params;
         current_class_uc = old_class_uc;
+        current_hashdecl_owner_expr = old_hashdecl_owner_expr;
+        current_type_param_owner_kind = old_owner_kind;
     }
 
 private:
     const strlist_t* old_params;
     std::string old_class_uc;
+    std::string old_hashdecl_owner_expr;
+    TypeParamOwnerKind old_owner_kind;
 };
 
 static int parse_parameterized_type(const std::string& src, std::string& base, strlist_t& args) {
@@ -1704,6 +1731,27 @@ static void parseSubtypes(const std::string& str, std::vector<std::string>& subt
     }
 }
 
+static bool has_top_level_comma(const std::string& str) {
+    int bracket_depth = 0;
+    int paren_depth = 0;
+
+    for (char c : str) {
+        if (c == '<') {
+            ++bracket_depth;
+        } else if (c == '>') {
+            --bracket_depth;
+        } else if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')') {
+            --paren_depth;
+        } else if (c == ',' && bracket_depth == 0 && paren_depth == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static int get_qore_type(const std::string& qt, std::string& cppt) {
     if (qt.empty()) {
         cppt = "nothingTypeInfo";
@@ -1721,17 +1769,26 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
 
         // see if it's a complex type
         if (qpp_current_type_param_index(qt, type_param_index)) {
-            assert(!current_class_uc.empty());
-            qc = "qore_get_type_parameter_type(QC_" + current_class_uc + ", "
-                + std::to_string(type_param_index) + ", \"" + value_type + "\", "
-                + (on ? "true" : "false") + ")";
+            if (current_type_param_owner_kind == TypeParamOwnerKind::Class) {
+                assert(!current_class_uc.empty());
+                qc = "qore_get_type_parameter_type(QC_" + current_class_uc + ", "
+                    + std::to_string(type_param_index) + ", \"" + value_type + "\", "
+                    + (on ? "true" : "false") + ")";
+            } else if (current_type_param_owner_kind == TypeParamOwnerKind::HashDecl) {
+                assert(!current_hashdecl_owner_expr.empty());
+                qc = current_hashdecl_owner_expr + "->getTypeParameterType("
+                    + std::to_string(type_param_index) + ", \"" + value_type + "\", "
+                    + (on ? "true" : "false") + ")";
+            } else {
+                assert(false);
+            }
             log(LL_DEBUG, "registering type parameter return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else if (!qt.compare(on ? 1 : 0, 5, "hash<")) {
             // extract subtype name
             std::string subtype = qt.substr((on ? 6 : 5), qt.size() - (on ? 7 : 6));
 
             // cannot support complex hash types other than hashdecls yet
-            if (subtype.find(',') != std::string::npos) {
+            if (has_top_level_comma(subtype)) {
                 if (!subtype.compare(0, 7, "string,")) {
                     subtype.erase(0, 7);
                     trim(subtype);
@@ -1758,11 +1815,26 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
                 if (subtype == "auto")
                     qc = on ? "autoHashOrNothingTypeInfo" : "autoHashTypeInfo";
                 else {
-                    size_t i = subtype.rfind(':');
-                    if (i != std::string::npos)
-                        subtype.erase(0, i + 1);
-                    // generate type name
-                    qc = "hashdecl" + subtype + "->getTypeInfo(" + (on ? "true" : "false") + ")";
+                    std::string hbase;
+                    strlist_t hargs;
+                    int prc = parse_parameterized_type(subtype, hbase, hargs);
+                    if (prc < 0) {
+                        return -1;
+                    }
+
+                    std::string hname;
+                    if (prc > 0) {
+                        get_type_name(hname, hbase);
+                        std::string type_vec;
+                        if (make_type_vec_expr(hargs, type_vec)) {
+                            return -1;
+                        }
+                        qc = "hashdecl" + hname + "->getTypeInfo(" + type_vec + ", "
+                            + (on ? "true" : "false") + ")";
+                    } else {
+                        get_type_name(hname, subtype);
+                        qc = "hashdecl" + hname + "->getTypeInfo(" + (on ? "true" : "false") + ")";
+                    }
                     log(LL_DEBUG, "registering hashdecl return type '%s': '%s'\n", qt.c_str(), qc.c_str());
                 }
             }
@@ -4508,6 +4580,25 @@ public:
         while (*p1 && idnschar(*p1))
             ++p1;
 
+        if (*p1 == '<') {
+            unsigned ac = 0;
+            do {
+                if (*p1 == '<') {
+                    ++ac;
+                } else if (*p1 == '>') {
+                    assert(ac);
+                    --ac;
+                }
+                ++p1;
+            } while (*p1 && ac);
+
+            if (ac) {
+                error("%s:%d: unbalanced angle brackets in hashdecl declaration\n", fileName, lineNumber);
+                valid = false;
+                return;
+            }
+        }
+
         if (!*p1) {
             error("%s:%d: premature EOF reading hashdecl\n", fileName, lineNumber);
             valid = false;
@@ -4515,6 +4606,46 @@ public:
         }
 
         name.assign(p, p1 - p);
+
+        {
+            std::string base;
+            strlist_t params;
+            int prc = parse_parameterized_type(name, base, params);
+            if (prc < 0) {
+                valid = false;
+                return;
+            }
+            if (prc > 0) {
+                name = base;
+                type_params = params;
+
+                strset_t seen;
+                for (const std::string& tp : type_params) {
+                    if (!seen.insert(tp).second) {
+                        error("%s:%d: hashdecl '%s' has duplicate type parameter '%s'\n", fileName, lineNumber,
+                            name.c_str(), tp.c_str());
+                        valid = false;
+                    }
+                    if (tp.empty() || (!isalpha(tp[0]) && tp[0] != '_')) {
+                        error("%s:%d: hashdecl '%s' has invalid type parameter name '%s'\n", fileName, lineNumber,
+                            name.c_str(), tp.c_str());
+                        valid = false;
+                        continue;
+                    }
+                    for (char c : tp) {
+                        if (!idchar(c)) {
+                            error("%s:%d: hashdecl '%s' has invalid type parameter name '%s'\n", fileName,
+                                lineNumber, name.c_str(), tp.c_str());
+                            valid = false;
+                            break;
+                        }
+                    }
+                }
+                if (!valid) {
+                    return;
+                }
+            }
+        }
 
         {
             size_t i = name.rfind(':');
@@ -4666,6 +4797,9 @@ public:
         fprintf(fp, "    hd_path += \"%s\";\n", name.c_str());
         fprintf(fp, "    if (hd_path.rfind(\"::\", 0) != 0) {\n        hd_path.insert(0, \"::\");\n    }\n");
         fprintf(fp, "    TypedHashDecl* hd = new TypedHashDecl(\"%s\", hd_path.c_str());\n", name.c_str());
+        for (const std::string& p : type_params) {
+            fprintf(fp, "    hd->addTypeParameter(\"%s\");\n", p.c_str());
+        }
 
         // Set parent hashdecl if there is inheritance
         if (!parent_name.empty()) {
@@ -4679,6 +4813,7 @@ public:
 
         // get type name to substitute references to self if necessary
         std::string tname = "hashdecl" + name;
+        TypeParamContext type_param_context(type_params, "hd", true);
         for (auto& i : hdmap) {
             if (i.second.serializeCpp(fp, i.first.c_str(), tname))
                 return -1;
@@ -4698,10 +4833,11 @@ public:
         // serialize hashdecl doc
         process_comment(comment);
         fprintf(fp, "%s", comment.c_str());
+        std::string qore_name = getQoreName();
         if (!parent_name.empty()) {
-            fprintf(fp, "struct %s : %s {\n", name.c_str(), parent_name.c_str());
+            fprintf(fp, "struct %s : %s {\n", qore_name.c_str(), parent_name.c_str());
         } else {
-            fprintf(fp, "struct %s {\n", name.c_str());
+            fprintf(fp, "struct %s {\n", qore_name.c_str());
         }
         for (auto& i : hdmap)
             if (i.second.serializeDox(fp, i.first.c_str()))
@@ -4726,7 +4862,8 @@ public:
         int ns_depth = outputQoreNamespaceStart(fp);
 
         fputs("public hashdecl ", fp);
-        fputs(name.c_str(), fp);
+        std::string qore_name = getQoreName();
+        fputs(qore_name.c_str(), fp);
         if (!parent_name.empty()) {
             fputs(" inherits ", fp);
             fputs(parent_name.c_str(), fp);
@@ -4776,6 +4913,16 @@ public:
         if (!ns.empty()) {
             fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
         }
+        if (!type_params.empty()) {
+            fputs(",\"type_params\":[", fp);
+            for (unsigned i = 0; i < type_params.size(); ++i) {
+                if (i) {
+                    fputc(',', fp);
+                }
+                fprintf(fp, "\"%s\"", json_escape_string(type_params[i]).c_str());
+            }
+            fputc(']', fp);
+        }
         fprintf(fp, ",\"description\":\"%s\"", json_escape_string(comment).c_str());
         if (!parent_name.empty()) {
             fprintf(fp, ",\"parent_name\":\"%s\"", json_escape_string(parent_name).c_str());
@@ -4803,9 +4950,25 @@ protected:
     std::string comment;
     std::string name;
     std::string parent_name;  // parent hashdecl name for inheritance
+    strlist_t type_params;
     typedef std::map<std::string, HashDeclInfo> hdmap_t;
     hdmap_t hdmap;
     bool valid = true;
+
+    std::string getQoreName() const {
+        std::string rv = name;
+        if (!type_params.empty()) {
+            rv += "<";
+            for (unsigned i = 0; i < type_params.size(); ++i) {
+                if (i) {
+                    rv += ", ";
+                }
+                rv += type_params[i];
+            }
+            rv += ">";
+        }
+        return rv;
+    }
 
     int getType(std::string& line, std::string& type, const char* fileName, unsigned& lineNumber) {
         int bc = 0;

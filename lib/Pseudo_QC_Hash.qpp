@@ -337,9 +337,7 @@ map printf("%s: %y\n", $1.key, $1.value), h.pairIterator());
     @since %Qore 0.8.6.2
  */
 HashPairIterator <hash>::pairIterator() [flags=CONSTANT] {
-   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(h), xsink);
-   p->setView(QoreHashIterator::VIEW_PAIR);
-   return new QoreObject(QC_HASHPAIRITERATOR, 0, p.release());
+   return qore_new_hash_pair_iterator_object(0, h);
 }
 
 //! Returns a @ref Qore::HashListIterator "HashListIterator" object for the hash

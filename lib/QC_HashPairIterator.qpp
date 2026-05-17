@@ -62,7 +62,7 @@ extern QoreClass* QC_HASHITERATOR;
 
     @see HashPairReverseIterator
  */
-qclass HashPairIterator [arg=QoreHashIterator* i; ns=Qore; vparent=HashIterator<auto>];
+qclass HashPairIterator<V> [arg=QoreHashIterator* i; ns=Qore; vparent=HashIterator<V>; legacy_raw];
 
 //! Creates the hash iterator object
 /** @param hash_value the hash to iterate
@@ -72,8 +72,9 @@ qclass HashPairIterator [arg=QoreHashIterator* i; ns=Qore; vparent=HashIterator<
 HashPairIterator hi(h);
     @endcode
  */
-HashPairIterator::constructor(hash<auto> hash_value) [flags=NAMED_ARGS] {
-   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(hash_value), xsink);
+HashPairIterator::constructor(hash<string, V> hash_value) [flags=NAMED_ARGS] {
+   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(hash_value,
+      qore_get_hash_iterator_value_type(self->getInstantiatedTypeInfo())), xsink);
    p->setView(QoreHashIterator::VIEW_PAIR);
    self->setPrivate(CID_HASHPAIRITERATOR, p.release());
 }
@@ -86,7 +87,8 @@ HashPairIterator hi(h);
     @endcode
  */
 HashPairIterator::constructor() {
-   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator, xsink);
+   ReferenceHolder<QoreHashIterator> p(new QoreHashIterator(
+      qore_get_hash_iterator_value_type(self->getInstantiatedTypeInfo())), xsink);
    p->setView(QoreHashIterator::VIEW_PAIR);
    self->setPrivate(CID_HASHPAIRITERATOR, p.release());
 }
@@ -116,7 +118,7 @@ map printf("%s: %y\n", $1.key, $1.value), hash.pairIterator();
 
     @since %Qore 0.8.6.2
  */
-hash<auto> HashPairIterator::getValue() [flags=RET_VALUE_ONLY] {
+hash<KeyValueInfo<V>> HashPairIterator::getValue() [flags=RET_VALUE_ONLY] {
     if (i->check(xsink))
         return QoreValue();
     return i->getReferencedValuePair(xsink);
