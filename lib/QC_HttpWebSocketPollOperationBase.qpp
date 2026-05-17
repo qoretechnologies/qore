@@ -847,13 +847,13 @@ qclass HttpWebSocketPollOperationBase [
 ];
 
 //! Creates the WebSocket poll operation base
-/** @param sock the WebSocket Socket (after upgrade handshake complete)
+/** @param socket the WebSocket Socket (after upgrade handshake complete)
 
     Creates internal recv and send Queues for communication between the I/O
     thread and handler threads.
 */
-HttpWebSocketPollOperationBase::constructor(Socket[QoreSocketObject] sock) {
-    QoreSocketObject* sock_ptr = *sock;
+HttpWebSocketPollOperationBase::constructor(Socket[QoreSocketObject] socket) [flags=NAMED_ARGS] {
+    QoreSocketObject* sock_ptr = *socket;
 
     // Store socket as Qore member for DGC visibility
     QoreValue sock_arg = args->retrieveEntry(0);
@@ -952,7 +952,7 @@ auto HttpWebSocketPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
 
     @param text the UTF-8 text to send
 */
-nothing HttpWebSocketPollOperationBase::sendText(string text) {
+nothing HttpWebSocketPollOperationBase::sendText(string text) [flags=NAMED_ARGS] {
     priv->queueSendText(text, xsink);
 }
 
@@ -962,7 +962,7 @@ nothing HttpWebSocketPollOperationBase::sendText(string text) {
 
     @param data the binary data to send
 */
-nothing HttpWebSocketPollOperationBase::sendBinary(binary data) {
+nothing HttpWebSocketPollOperationBase::sendBinary(binary data) [flags=NAMED_ARGS] {
     priv->queueSendBinary(data, xsink);
 }
 
@@ -970,10 +970,10 @@ nothing HttpWebSocketPollOperationBase::sendBinary(binary data) {
 /** The ping is encoded as a WebSocket PING frame and queued for sending.
     Thread-safe: can be called from any thread.
 
-    @param data optional ping payload
+    @param payload optional ping payload
 */
-nothing HttpWebSocketPollOperationBase::sendPing(*binary data) {
-    priv->queueSendPing(data, xsink);
+nothing HttpWebSocketPollOperationBase::sendPing(*binary payload) [flags=NAMED_ARGS] {
+    priv->queueSendPing(payload, xsink);
 }
 
 //! Initiates the close handshake
@@ -984,17 +984,17 @@ nothing HttpWebSocketPollOperationBase::sendPing(*binary data) {
     @param code the close code (default 1000 = normal closure)
     @param reason the close reason string (default empty)
 */
-nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason = "") {
+nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason = "") [flags=NAMED_ARGS] {
     priv->queueSendClose(static_cast<uint16_t>(code), reason->c_str(), xsink);
 }
 
 //! Sets the maximum frame/message size in bytes
 /** Frames larger than this are rejected with close code 1009 (Message Too Big).
-    @param size the maximum size in bytes (0 = unlimited, default = 16MB)
+    @param max_frame_size the maximum size in bytes (0 = unlimited, default = 16MB)
     @since %Qore 2.3
 */
-nothing HttpWebSocketPollOperationBase::setMaxFrameSize(int size) {
-    priv->setMaxFrameSize(size > 0 ? static_cast<size_t>(size) : WS_DEFAULT_MAX_FRAME_SIZE);
+nothing HttpWebSocketPollOperationBase::setMaxFrameSize(int max_frame_size) [flags=NAMED_ARGS] {
+    priv->setMaxFrameSize(max_frame_size > 0 ? static_cast<size_t>(max_frame_size) : WS_DEFAULT_MAX_FRAME_SIZE);
 }
 
 //! Gets the next received frame (non-blocking)
@@ -1070,10 +1070,10 @@ Socket HttpWebSocketPollOperationBase::getSocket() {
 //! Queues a pre-encoded raw WebSocket frame for sending
 /** Thread-safe: can be called from any thread.
 
-    @param data the pre-encoded frame bytes (as produced by ws_encode_message())
+    @param frame_data the pre-encoded frame bytes (as produced by ws_encode_message())
 */
-nothing HttpWebSocketPollOperationBase::sendRawFrame(binary data) {
-    priv->queueSendRawFrame(data, xsink);
+nothing HttpWebSocketPollOperationBase::sendRawFrame(binary frame_data) [flags=NAMED_ARGS] {
+    priv->queueSendRawFrame(frame_data, xsink);
 }
 
 //! Sets the frame callback, called on the I/O thread when a frame is received
@@ -1082,24 +1082,24 @@ nothing HttpWebSocketPollOperationBase::sendRawFrame(binary data) {
 
     Pass @ref nothing to clear the callback.
 
-    @param cb the callback, or @ref nothing to clear
+    @param callback the callback, or @ref nothing to clear
 */
-nothing HttpWebSocketPollOperationBase::setFrameCallback(*code cb) {
-    ResolvedCallReferenceNode* callback = nullptr;
-    if (cb) {
-        callback = cb->refRefSelf();
+nothing HttpWebSocketPollOperationBase::setFrameCallback(*code callback) [flags=NAMED_ARGS] {
+    ResolvedCallReferenceNode* callback_ptr = nullptr;
+    if (callback) {
+        callback_ptr = callback->refRefSelf();
     }
-    priv->setFrameCallback(callback, xsink);
+    priv->setFrameCallback(callback_ptr, xsink);
 }
 
 //! Sets the send timeout in milliseconds
 /** When a send operation exceeds this timeout, a SOCKET-TIMEOUT exception is raised
     and the connection transitions to ERROR state.
 
-    @param ms the timeout in milliseconds (0 = no timeout)
+    @param timeout_ms the timeout in milliseconds (0 = no timeout)
 */
-nothing HttpWebSocketPollOperationBase::setSendTimeout(int ms) {
-    priv->setSendTimeout(static_cast<int64>(ms));
+nothing HttpWebSocketPollOperationBase::setSendTimeout(int timeout_ms) [flags=NAMED_ARGS] {
+    priv->setSendTimeout(static_cast<int64>(timeout_ms));
 }
 
 //! Returns the send timeout in milliseconds
@@ -1114,12 +1114,12 @@ int HttpWebSocketPollOperationBase::getSendTimeout() [flags=RET_VALUE_ONLY] {
     has been received within this interval. The I/O controller uses
     poll_timeout_ms to wake up in time for the heartbeat.
 
-    @param ms the heartbeat interval in milliseconds (0 = disabled)
+    @param heartbeat_interval_ms the heartbeat interval in milliseconds (0 = disabled)
 
     @since %Qore 2.3
 */
-nothing HttpWebSocketPollOperationBase::setHeartbeat(int ms) {
-    priv->setHeartbeat(static_cast<int64>(ms));
+nothing HttpWebSocketPollOperationBase::setHeartbeat(int heartbeat_interval_ms) [flags=NAMED_ARGS] {
+    priv->setHeartbeat(static_cast<int64>(heartbeat_interval_ms));
 }
 
 //! Enables the built-in C++ echo mode for zero-context-switch echo
@@ -1135,7 +1135,7 @@ nothing HttpWebSocketPollOperationBase::setHeartbeat(int ms) {
 
     @since %Qore 2.3
 */
-nothing HttpWebSocketPollOperationBase::setEchoMode(bool enabled) {
+nothing HttpWebSocketPollOperationBase::setEchoMode(bool enabled) [flags=NAMED_ARGS] {
     if (enabled) {
         priv->setIoFrameHandler(new WsEchoFrameHandler());
     } else {

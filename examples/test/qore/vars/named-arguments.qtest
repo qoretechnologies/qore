@@ -1061,6 +1061,32 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "h3s.registerStreamListener(session_id: 1, stream_id: 2, listener: listener); "
             "h3s.onStreamData(stream_key: \"1:2\"); }",
             "http3-server-poll-operation-named");
+        Program p7(PO_NEW_STYLE);
+        p7.parse("sub websocket_poll_operation_bases_named(Socket socket) { "
+            "code callback = sub () {}; "
+            "WebSocketClientPollOperationBase client(socket: socket); "
+            "client.sendText(text: \"hello\"); "
+            "client.sendBinary(data: binary(\"hello\")); "
+            "client.sendPing(payload: binary(\"ping\")); "
+            "client.sendPong(payload: binary(\"pong\")); "
+            "client.sendRawFrame(frame_data: binary(\"frame\")); "
+            "client.sendClose(code: 1000, reason: \"normal\"); "
+            "client.getReceivedFrameBlocking(timeout_ms: 10); "
+            "client.setHasExtensions(enabled: True); "
+            "client.setHeartbeat(heartbeat_interval_ms: 1000); "
+            "client.setIdleTimeout(idle_timeout_ms: 30000); "
+            "HttpWebSocketPollOperationBase server(socket: socket); "
+            "server.sendText(text: \"hello\"); "
+            "server.sendBinary(data: binary(\"hello\")); "
+            "server.sendPing(payload: binary(\"ping\")); "
+            "server.sendClose(code: 1000, reason: \"normal\"); "
+            "server.setMaxFrameSize(max_frame_size: 1048576); "
+            "server.sendRawFrame(frame_data: binary(\"frame\")); "
+            "server.setFrameCallback(callback: callback); "
+            "server.setSendTimeout(timeout_ms: 30000); "
+            "server.setHeartbeat(heartbeat_interval_ms: 1000); "
+            "server.setEchoMode(enabled: True); }",
+            "websocket-poll-operation-bases-named");
     }
 
     reviewedSqlClassBuiltinOptIn() {

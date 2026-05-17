@@ -417,6 +417,10 @@ These examples are from the core migration and should be reused as precedent:
   `connection_unique_hash`, `stream_key`, `error_code`, `description`, and
   `initial_body`. HTTP/3 server operation constructors should use
   `drain_timeout`, `headers_only`, and `max_request_body_size`.
+- WebSocket poll-operation APIs should use transport-neutral message names:
+  `payload` for ping/pong data, `frame_data` for pre-encoded frames,
+  `heartbeat_interval_ms`, `idle_timeout_ms`, `timeout_ms`, `max_frame_size`,
+  and `callback` instead of shorthand such as `msg`, `ms`, `size`, or `cb`.
 - Async I/O controller APIs should not expose implementation shorthand:
   use `auto_stop`, `operation_info`, `replace_existing`, `io_object`,
   `timeout_ms`, `user_data`, `cancel_callback`, and `max_threads` instead of
