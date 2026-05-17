@@ -1611,6 +1611,32 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         return "*list<auto!>";
     }
 
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
+        bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+        std::string rv = or_nothing ? "*hash<" : "hash<";
+        if (hp->isParameterizedHashDecl()) {
+            const TypedHashDecl* base = hp->getParameterizedBase();
+            rv += base ? base->getNamespacePath() : hd->getNamespacePath();
+            rv += "<";
+            const std::vector<const QoreTypeInfo*>& args = hp->getTypeArgs();
+            for (size_t i = 0; i < args.size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT hashdecl type path serialization")) {
+                    return {};
+                }
+                if (i) {
+                    rv += ", ";
+                }
+                rv += getAOTSerializableTypePath(args[i]);
+            }
+            rv += ">";
+        } else {
+            rv += hd->getNamespacePath();
+        }
+        rv += ">";
+        return rv;
+    }
+
     const char* raw_path = QoreTypeInfo::getPath(ti);
     bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
 
@@ -1648,6 +1674,45 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
 
 std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow) {
     return getAOTSerializableTypePath(ti, no_narrow);
+}
+
+const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char* path) {
+    if (!pgm || !path || !*path) {
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    if (const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS, path, found_ns)) {
+        return hd;
+    }
+
+    if (!strchr(path, '<')) {
+        return nullptr;
+    }
+
+    std::string type_path;
+    if (!strncmp(path, "hash<", 5) || !strncmp(path, "*hash<", 6)) {
+        type_path = path;
+    } else {
+        type_path = "hash<";
+        type_path += path;
+        type_path += ">";
+    }
+
+    ExceptionSink xsink;
+    ProgramRuntimeParseAccessHelper pah(&xsink, pgm);
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+
+    const QoreTypeInfo* ti = qore_get_type_from_string_intern(type_path.c_str());
+    if (xsink) {
+        xsink.clear();
+        return nullptr;
+    }
+    return QoreTypeInfo::getTypedHash(ti);
 }
 
 static void qoreAOTWriteContainerValueType(QoreAOTBinaryWriter& writer,
@@ -2914,32 +2979,65 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveClassType(const char* path) {
     return nullptr;
 }
 
+static bool extract_aot_type_args(const char* path, const char* type_name, bool& or_nothing,
+        std::vector<std::string>& args);
+
+static bool split_aot_parameterized_type_use(const std::string& path, std::string& base_path,
+        std::vector<std::string>& arg_paths);
+
 const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
     if (!pgm) {
         return nullptr;
     }
-    // path format: "hash<DeclName>" or "*hash<DeclName>" — extract the hashdecl name and resolve it
-    // directly to the registered TypedHashDecl.  Do not route this through the generic string parser:
-    // anchored and unanchored paths such as hash<::SqlUtil::QueryInfo> and hash<SqlUtil::QueryInfo>
-    // can otherwise produce distinct QoreTypeInfo objects for the same hashdecl.
+    // path format: "hash<DeclName>" / "hash<DeclName<T>>" and or-nothing forms.
+    // Resolve directly to the registered TypedHashDecl so anchored and unanchored
+    // paths such as hash<::SqlUtil::QueryInfo> and hash<SqlUtil::QueryInfo> keep
+    // one canonical QoreTypeInfo object.
     bool or_nothing = false;
-    const char* hash_path = path;
-    if (!strncmp(path, "*hash<", 6)) {
-        or_nothing = true;
-        hash_path = path + 1;
-    }
-    if (strncmp(hash_path, "hash<", 5)) {
+    std::vector<std::string> hash_args;
+    if (!extract_aot_type_args(path, "hash", or_nothing, hash_args) || hash_args.size() != 1) {
         return nullptr;
     }
-    const char* start = hash_path + 5;
-    const char* end = strchr(start, '>');
-    if (!end) {
+
+    std::string decl_name = hash_args[0];
+    if (decl_name == "auto" || decl_name == "auto!") {
         return nullptr;
     }
-    std::string decl_name(start, end - start);
-    if (decl_name.find(',') != std::string::npos) {
-        return nullptr;
+
+    std::string base_path;
+    std::vector<std::string> type_arg_paths;
+    if (split_aot_parameterized_type_use(decl_name, base_path, type_arg_paths)) {
+        while (base_path.rfind("::", 0) == 0) {
+            base_path.erase(0, 2);
+        }
+
+        const QoreNamespace* pns = nullptr;
+        const TypedHashDecl* base_hd = pgm->findHashDecl(base_path.c_str(), pns);
+        if (!base_hd) {
+            return nullptr;
+        }
+
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*base_hd);
+        if (!hp->hasTypeParams() || hp->getTypeParamCount() != type_arg_paths.size()) {
+            return nullptr;
+        }
+
+        type_vec_t type_args;
+        type_args.reserve(type_arg_paths.size());
+        for (size_t i = 0; i < type_arg_paths.size(); ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT hashdecl type argument resolution")) {
+                return nullptr;
+            }
+            std::string arg_error;
+            const QoreTypeInfo* arg = resolve(type_arg_paths[i].c_str(), arg_error);
+            if (!arg || !arg_error.empty()) {
+                return nullptr;
+            }
+            type_args.push_back(arg);
+        }
+        return hp->getParameterizedTypeInfo(type_args, or_nothing);
     }
+
     while (decl_name.rfind("::", 0) == 0) {
         decl_name.erase(0, 2);
     }
@@ -2947,6 +3045,9 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
     const QoreNamespace* pns = nullptr;
     const TypedHashDecl* thd = pgm->findHashDecl(decl_name.c_str(), pns);
     if (thd) {
+        if (typed_hash_decl_private::get(*thd)->hasTypeParams()) {
+            return nullptr;
+        }
         return thd->getTypeInfo(or_nothing);
     }
     return nullptr;
@@ -4965,6 +5066,25 @@ static bool writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
             writer.writeStringRef(parent_path.c_str());
         } else {
             writer.writeStringRef("");
+        }
+
+        if ((writer.feature_flags & QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS) != 0) {
+            const typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
+            size_t type_param_count = hdp->getTypeParamCount();
+            if (type_param_count > UINT16_MAX) {
+                error = "hashdecl '";
+                error += hd->getNamespacePath();
+                error += "' has too many type parameters for AOT serialization";
+                return false;
+            }
+            writer.writeU16(static_cast<uint16_t>(type_param_count));
+            for (size_t i = 0; i < type_param_count; ++i) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT hashdecl type parameter serialization")) {
+                    error = "operation cancelled during AOT hashdecl type parameter serialization";
+                    return false;
+                }
+                writer.writeStringRef(hdp->getTypeParamName(i));
+            }
         }
 
         // members - count by iterating first
@@ -10143,6 +10263,19 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         const char* parent_path = reader.readStringRef(ptr);
+        std::vector<std::string> type_params;
+        if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS) != 0) {
+            uint16_t type_param_count = QoreAOTBinaryReader::readU16(ptr);
+            type_params.reserve(type_param_count);
+            for (uint16_t ti = 0; ti < type_param_count; ++ti) {
+                if (ti && !(ti % 100) && qore_check_cancel(nullptr, "AOT hashdecl type parameter deserialization")) {
+                    error = "operation cancelled during AOT hashdecl type parameter deserialization";
+                    return false;
+                }
+                const char* type_param = reader.readStringRef(ptr);
+                type_params.push_back(type_param ? type_param : "");
+            }
+        }
 
         // Read members first to collect info.  The default-value path uses
         // readDeferredMemberDefault so that VT_ENUM references — which the
@@ -10224,6 +10357,18 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
 
         // Set namespace
         hdp->setNamespace(ns_list[ns_idx]);
+
+        for (size_t ti = 0; ti < type_params.size(); ++ti) {
+            if (ti && !(ti % 100) && qore_check_cancel(nullptr, "AOT hashdecl type parameter registration")) {
+                error = "operation cancelled during AOT hashdecl type parameter registration";
+                hdp->deref();
+                for (auto& mi : members) {
+                    mi.default_val.discard(nullptr);
+                }
+                return false;
+            }
+            hdp->addTypeParameter(type_params[ti].c_str());
+        }
 
         // Add to namespace's hashDeclList FIRST (before storing in pending list)
         if (ns_list[ns_idx]->hashDeclList.add(hd) != 0) {
@@ -10862,11 +11007,7 @@ static bool readAndSetupVariantSignature(
                     return false;
                 }
             }
-            qore_program_private* pp = qore_program_private::get(*pgm);
-            const qore_ns_private* found_ns = nullptr;
-            const TypedHashDecl* hd = hd_path
-                ? qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS, hd_path, found_ns)
-                : nullptr;
+            const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path);
             if (!hd) {
                 printd(0, "AOT deser: cannot resolve hashdecl '%s' for default value\n",
                     hd_path ? hd_path : "(null)");

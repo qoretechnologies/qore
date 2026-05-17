@@ -1731,10 +1731,7 @@ static QoreValue read_expr_hashdecl_new(AOTExprReadCtx& ctx) {
             }
         }
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
-        *pp->RootNS, hashdecl_path, found_ns);
+    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(ctx.pgm, hashdecl_path);
     if (!hd) {
         if (call_args) {
             call_args->deref(nullptr);
@@ -2277,10 +2274,7 @@ static QoreValue read_expr_cast_hashdecl(AOTExprReadCtx& ctx) {
     if (!strcmp(hashdecl_path, "hash")) {
         return QoreValue(new QoreHashDeclCastOperatorNode(&loc_builtin, nullptr, inner, or_nothing != 0));
     }
-    qore_program_private* pp = qore_program_private::get(*ctx.pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
-        *pp->RootNS, hashdecl_path, found_ns);
+    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(ctx.pgm, hashdecl_path);
     if (!hd) {
         inner.discard(nullptr);
         return QoreValue();

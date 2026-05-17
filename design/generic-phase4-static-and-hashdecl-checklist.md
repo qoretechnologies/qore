@@ -39,7 +39,7 @@ Implementation checklist:
   static calls until the IR has an explicit receiver-type operand.
 - [x] Cover normal, IR, and JIT execution with tests that verify accepted and
   rejected argument and return types.
-- [ ] Add a focused source-stripped AOT test for parameterized static method
+- [x] Add a focused source-stripped AOT test for parameterized static method
   calls after the AOT test harness can exercise this path directly.
 
 ## Generic Hashdecls And Result Records
@@ -68,16 +68,16 @@ Implementation checklist:
 - [x] Preserve parameterized hashdecl type identity on `QoreHashNode` values, not
   only the raw base hashdecl pointer.
 - [x] Preserve parameterized hashdecl use sites through AOT type metadata.
-- [ ] Preserve source-defined generic hashdecl definitions in source-stripped
+- [x] Preserve source-defined generic hashdecl definitions in source-stripped
   AOT metadata.
-- [ ] Implement or explicitly reject parameterized parent hashdecl references;
+- [x] Implement or explicitly reject parameterized parent hashdecl references;
   the initial implementation keeps existing non-generic hashdecl inheritance
   behavior.
 - [x] Update reflection and API metadata so tools can distinguish raw
   `hash<Result>` from `hash<Result<int>>`.
 - [x] Add tests for concrete member assignment, nested generic members, wrong
   member types, and normal/IR/JIT execution.
-- [ ] Add source-stripped AOT loading tests for generic hashdecl declarations
+- [x] Add source-stripped AOT loading tests for generic hashdecl declarations
   and uses.
 
 ## Binary Module Rollout

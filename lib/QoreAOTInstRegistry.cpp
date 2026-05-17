@@ -2269,10 +2269,7 @@ static std::unique_ptr<QoreIRInstruction> readNewHashDeclFromHash(
         ctx.error = std::string("cannot resolve hashdecl '") + hd_path + "': no program context";
         return nullptr;
     }
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
-        *pp->RootNS, hd_path, found_ns);
+    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, hd_path);
 
     auto* ni = new QoreIRNewHashDeclFromHashInstruction(hd_path, hd, runtime_check != 0);
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);

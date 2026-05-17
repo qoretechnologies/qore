@@ -504,8 +504,10 @@ static const AbstractQoreFunctionVariant* resolveAOTConstructorVariant(const Qor
 */
 static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* ref2,
         QoreProgram* pgm) {
+    if (!pgm) {
+        return 0;
+    }
     qore_program_private* pp = qore_program_private::get(*pgm);
-    qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
     switch (kind) {
         case AOTExprKind::FUNC_CALL: {
@@ -815,10 +817,7 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !*ref1) {
                 return 0;
             }
-            // Look up hashdecl by namespace-qualified path
-            const qore_ns_private* found_ns = nullptr;
-            const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
-                *pp->RootNS, ref1, found_ns);
+            const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
             if (!hd) {
                 printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);
                 return 0;
@@ -876,9 +875,7 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
                 auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, nullptr, QoreValue(), or_nothing);
                 return toBitsNB(QoreValue(node));
             }
-            const qore_ns_private* found_ns = nullptr;
-            const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
-                *pp->RootNS, ref1, found_ns);
+            const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
             if (!hd) {
                 printd(0, "AOT v2: cannot resolve hashdecl '%s' for cast\n", ref1);
                 return 0;
@@ -2388,9 +2385,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 // Resolve hashdecl and create node with args
                 if (ref1 && *ref1) {
-                    const qore_ns_private* found_ns = nullptr;
-                    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
-                        *pp->RootNS, ref1, found_ns);
+                    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, ref1);
                     if (hd) {
                         // Convert call_args to QoreParseListNode for NewHashDeclNode
                         QoreParseListNode* pln = nullptr;
@@ -2701,6 +2696,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                                     continue;
                                 }
                             }
+                            ctx->call_targets[i].receiver_type_info = receiver_type_info;
                             if (sig_text && !receiver_type_info) {
                                 MethodFunctionBase* mfb = qore_method_private::get(
                                     *const_cast<QoreMethod*>(m))->getFunction();
@@ -4036,6 +4032,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         if (smc && smc->getMethod()) {
             ctx->call_targets[i].method = smc->getMethod();
             ctx->call_targets[i].is_static_method = true;
+            ctx->call_targets[i].receiver_type_info = smc->getReceiverTypeInfo();
             const AbstractQoreFunctionVariant* v = smc->getVariant();
             if (v) {
                 ctx->call_targets[i].variant = v;

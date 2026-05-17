@@ -3279,6 +3279,14 @@ hashdecl_inherits:
     TOK_INHERITS IDENTIFIER {
         $$ = new NamedScope($2);
     }
+    | TOK_INHERITS ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@2.first_line,
+            @2.last_line);
+        parse_error(*loc, "parameterized parent hashdecl references such as '%s' are not supported; declare a "
+            "non-parameterized parent hashdecl in the inherits clause", $2);
+        free($2);
+        $$ = nullptr;
+    }
     | TOK_INHERITS SCOPED_REF {
         $$ = new NamedScope($2);
     }

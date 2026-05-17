@@ -1485,6 +1485,11 @@ hashdecl_inherits:
             $$->loc = @2;
             free($2);
         }
+        | TOK_INHERITS ANGLE_IDENTIFIER {
+            $$ = new ASTName($2, ASTNameKind::ANK_AngleIdentifier);
+            $$->loc = @2;
+            free($2);
+        }
         | TOK_INHERITS SCOPED_REF {
             $$ = new ASTName($2, ASTNameKind::ANK_ScopedRef);
             $$->loc = @2;

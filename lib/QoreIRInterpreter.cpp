@@ -68,6 +68,7 @@
 #include <qore/intern/QoreLogicalLessThanOperatorNode.h>
 #include <qore/intern/QoreLogicalLessThanOrEqualsOperatorNode.h>
 #include <qore/intern/QoreIR.h>
+#include <qore/intern/QoreAOTBinary.h>
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
@@ -122,10 +123,7 @@ static const TypedHashDecl* resolveNewHashDeclFromHashTarget(
         }
         return nullptr;
     }
-    qore_program_private* pp = qore_program_private::get(*pgm);
-    const qore_ns_private* found_ns = nullptr;
-    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
-        *pp->RootNS, inst.hd_path.c_str(), found_ns);
+    const TypedHashDecl* hd = qore_aot_resolve_hashdecl_path(pgm, inst.hd_path.c_str());
     if (!hd && xsink) {
         xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'",
             inst.hd_path.c_str());

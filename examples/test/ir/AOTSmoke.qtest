@@ -259,6 +259,7 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT strip source no source in binary", \testStripSourceNoSourceInBinary());
         # Strip source type export tests (Phase 9)
         addTestCase("AOT strip source hashdecl", \testStripSourceHashDecl());
+        addTestCase("AOT strip source generic hashdecl", \testStripSourceGenericHashDecl());
         addTestCase("AOT strip source hashdecl inheritance", \testStripSourceHashDeclInheritance());
         addTestCase("AOT strip source enum", \testStripSourceEnum());
         addTestCase("AOT strip source hashdecl enum member type",
@@ -7615,6 +7616,92 @@ exit(0);
             libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
 
         assertEq("name: test, value: 42\n", out, "hashdecl from strip-source module works correctly");
+    }
+
+    testStripSourceGenericHashDecl() {
+        string mod_code = "%modern
+
+module StripGenericHashDeclMod {
+    version = \"1.0\";
+    desc = \"Test generic hashdecl export\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace StripGenericHashDeclMod {
+    public hashdecl Result<T> {
+        string status;
+        T value;
+        list<T> values;
+    }
+
+    public hashdecl Envelope<T> {
+        hash<Result<T>> result;
+    }
+
+    public class Factory<T> {
+        private {
+            T value;
+        }
+
+        constructor(T value) {
+            self.value = value;
+        }
+
+        static Factory<T> make(T value) {
+            return new Factory<T>(value);
+        }
+
+        T get() {
+            return self.value;
+        }
+    }
+
+    public hash<Result<int>> sub getResult(int value) {
+        hash<Result<int>> rv((\"status\": \"ok\", \"value\": value, \"values\": (value + 1,)));
+        return rv;
+    }
+
+    public hash<Envelope<int>> sub getEnvelope(int value) {
+        hash<Envelope<int>> rv((\"result\": getResult(value)));
+        return rv;
+    }
+
+    public int sub getStaticValue(int value) {
+        Factory<int> f = Factory<int>::make(value);
+        return f.get();
+    }
+}
+";
+        hash<auto> mod_info = compileStripSourceModule(mod_code, "StripGenericHashDeclMod");
+        on_exit {
+            backquote(sprintf("rm -rf %s", mod_info.tmp_dir));
+        }
+
+        assertTrue(mod_info.compiled,
+            "strip-source module with generic hashdecl compiled: " + mod_info.compile_out);
+
+        string test_code = "%modern
+
+%requires StripGenericHashDeclMod
+
+hash<StripGenericHashDeclMod::Result<int>> result = StripGenericHashDeclMod::getResult(41);
+hash<StripGenericHashDeclMod::Envelope<int>> envelope = StripGenericHashDeclMod::getEnvelope(42);
+int static_value = StripGenericHashDeclMod::getStaticValue(43);
+printf(\"status: %s, value: %d, next: %d, nested: %d, static: %d\\n\",
+    result.status, result.value, result.values[0], envelope.result.value, static_value);
+exit(0);
+";
+        hash<auto> paths = writeTempScript(test_code);
+        on_exit {
+            unlink(paths.src);
+        }
+
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, mod_info.tmp_dir, qore_bin, paths.src));
+
+        assertEq("status: ok, value: 41, next: 42, nested: 42, static: 43\n", out,
+            "generic hashdecl and static generic method from strip-source module work correctly");
     }
 
     testStripSourceHashDeclInheritance() {

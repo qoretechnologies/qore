@@ -715,6 +715,10 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // parameterized receiver type so generic static methods evaluate with the
     // same T/K/V substitutions as source execution.
     flags |= QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE;
+    // Source-defined generic hashdecls need their formal type parameter names
+    // preserved so source-stripped metadata can rebuild symbolic T/K/V member
+    // types before resolving hashdecl members.
+    flags |= QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS;
     return flags;
 }
 

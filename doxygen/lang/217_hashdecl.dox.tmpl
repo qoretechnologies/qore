@@ -125,6 +125,10 @@ int payload = response.result.value;
     Omitting type arguments for a source-defined generic hashdecl, such as
     <tt>hash&lt;Result&gt;</tt>, is a parse-time type error.
 
+    The \c inherits clause continues to name a non-parameterized parent
+    hashdecl. Parameterized parent hashdecl references are rejected with a
+    parse-time error.
+
     @section hashdecl_type_compatibility Type-Safe Hash Type Compatibility
 
     Type-safe hashes can be assigned to any variable that accepts an untyped @ref hash_type "hash",

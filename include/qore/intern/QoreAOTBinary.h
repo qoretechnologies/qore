@@ -77,6 +77,9 @@ QoreValue qore_aot_resolve_constant_path_value(QoreProgram* pgm, const char* pat
 //! Returns the canonical AOT-serializable type path for \a ti.
 std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow = false);
 
+//! Resolves a serialized hashdecl path, including parameterized hashdecl paths.
+const TypedHashDecl* qore_aot_resolve_hashdecl_path(QoreProgram* pgm, const char* path);
+
 //! Magic number: "QORD" in little-endian (0x44524F51)
 constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 
@@ -144,8 +147,9 @@ constexpr uint64_t QORE_AOT_FEAT_CLASS_TYPE_PARAMS = 1ULL << 44; //!< class reco
 constexpr uint64_t QORE_AOT_FEAT_CLASS_PARAM_BASES = 1ULL << 45; //!< class base records preserve parameterized generic parent type paths
 constexpr uint64_t QORE_AOT_FEAT_CLASS_RAW_GENERIC = 1ULL << 46; //!< class records preserve source raw generic compatibility flags
 constexpr uint64_t QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE = 1ULL << 47; //!< static method calls preserve parameterized receiver typeInfo
+constexpr uint64_t QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS = 1ULL << 48; //!< hashdecl records preserve source generic type parameter names
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

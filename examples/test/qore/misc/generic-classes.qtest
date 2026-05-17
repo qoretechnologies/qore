@@ -465,6 +465,13 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
         {
             Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (
+                "hashdecl Parent<T> { T value; } hashdecl Child<T> inherits Parent<T> { string name; }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
             p.parse("class RawBox<T> {} sub t() { RawBox b(); }", "generic-classes");
             assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
         }
