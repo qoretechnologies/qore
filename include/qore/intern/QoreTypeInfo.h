@@ -998,6 +998,47 @@ protected:
     }
 };
 
+class QoreTypeParameterTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreTypeParameterTypeInfo(const QoreClass* owner, size_t index, const char* name, bool or_nothing,
+            const QoreTypeParameterTypeInfo* value_type = nullptr);
+
+    DLLLOCAL const QoreClass* getOwnerClass() const {
+        return owner_class;
+    }
+
+    DLLLOCAL size_t getIndex() const {
+        return index;
+    }
+
+    DLLLOCAL const std::string& getParameterName() const {
+        return param_name;
+    }
+
+    DLLLOCAL bool isOrNothing() const {
+        return or_nothing;
+    }
+
+protected:
+    const QoreClass* owner_class;
+    size_t index;
+    std::string param_name;
+    bool or_nothing;
+    std::string pname;
+
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
+        qore_string_private::get(str)->concat(&tname);
+    }
+
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+
+    DLLLOCAL const char* getPathImpl() const {
+        return pname.c_str();
+    }
+};
+
 class QoreHashDeclTypeInfo : public QoreTypeInfo {
 public:
     DLLLOCAL QoreHashDeclTypeInfo(const TypedHashDecl* hd, const char* name, const char* path)
@@ -3395,6 +3436,13 @@ DLLLOCAL const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types,
 
 //! Creates or retrieves a cached or-nothing union type for the given member types
 DLLLOCAL const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_types);
+
+//! Returns type-parameter metadata when the type info is a symbolic class type parameter
+DLLLOCAL const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(const QoreTypeInfo* ti);
+
+//! Substitutes symbolic class type parameters in \a ti using the concrete receiver type
+DLLLOCAL const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti,
+    const QoreTypeInfo* receiver_type_info);
 
 //! Type info for typed callable types: code<ReturnType(ParamTypes...)>
 /** This class represents a callable type with specified return type and parameter types.

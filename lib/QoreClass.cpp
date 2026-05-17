@@ -762,6 +762,7 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         raw_accepts_parameterized(old.raw_accepts_parameterized),
         raw_construction_defaults_to_auto(old.raw_construction_defaults_to_auto),
         type_params(old.type_params),
+        parameterized_vparents(old.parameterized_vparents),
         domain(old.domain),
         num_methods(old.num_methods),
         num_user_methods(old.num_user_methods),
@@ -2992,6 +2993,41 @@ void QoreClass::addDefaultBuiltinBaseClass(QoreClass* qc) {
 
 void QoreClass::addBuiltinVirtualBaseClass(QoreClass* qc) {
     priv->addBaseClass(qc, true);
+}
+
+const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
+        const QoreParameterizedClassTypeInfo* source, const QoreClass* target_base) const {
+    assert(source);
+    assert(target_base);
+
+    if (source->getBaseClass() == target_base) {
+        return source;
+    }
+
+    for (const QoreTypeInfo* parent_type : parameterized_vparents) {
+        const QoreTypeInfo* subst = qore_substitute_type_params(parent_type, source);
+        const QoreParameterizedClassTypeInfo* parent_pti = QoreTypeInfo::getParameterizedClassType(subst);
+        if (!parent_pti) {
+            continue;
+        }
+        if (parent_pti->getBaseClass() == target_base) {
+            return subst;
+        }
+        const QoreTypeInfo* indirect = qore_class_private::get(*parent_pti->getBaseClass())
+            ->getParameterizedBaseTypeInfo(parent_pti, target_base);
+        if (indirect) {
+            return indirect;
+        }
+    }
+
+    return nullptr;
+}
+
+void QoreClass::addParameterizedBuiltinVirtualBaseClass(const QoreTypeInfo* typeInfo) {
+    const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
+    assert(pti);
+    priv->addBaseClass(const_cast<QoreClass*>(pti->getBaseClass()), true);
+    priv->addParameterizedVirtualBase(typeInfo);
 }
 
 void QoreClass::addBaseClass(QoreClass* qc, bool virt) {
@@ -5322,6 +5358,15 @@ const QoreTypeInfo* QoreClass::getTypeInfo() const {
 const QoreTypeInfo* QoreClass::getTypeInfo(const std::vector<const QoreTypeInfo*>& args,
         bool or_nothing) const {
     return priv->getTypeInfo(args, or_nothing);
+}
+
+void QoreClass::addTypeParameter(const char* name) {
+    priv->addTypeParam(name);
+}
+
+void QoreClass::setLegacyRawGenericCompatibility(bool raw_accepts_parameterized,
+        bool raw_construction_defaults_to_auto) {
+    priv->setLegacyRawGenericCompatibility(raw_accepts_parameterized, raw_construction_defaults_to_auto);
 }
 
 bool QoreClass::hasTypeParameters() const {

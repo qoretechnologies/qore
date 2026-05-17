@@ -223,6 +223,9 @@ DLLEXPORT const QoreTypeInfo* qore_get_complex_code_type(const QoreTypeInfo* ret
 DLLEXPORT const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* return_type,
     const type_vec_t& param_types, bool varargs = false);
 
+DLLEXPORT const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owner, size_t index, const char* name,
+    bool or_nothing = false);
+
 // @since %Qore 0.9.4
 DLLEXPORT const QoreTypeInfo* qore_get_type_from_string(const char* str, ExceptionSink& xsink);
 

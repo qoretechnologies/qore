@@ -262,8 +262,9 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         // find variant
         QoreNamedArgBinding named_binding;
         variant = named_args
-            ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding)
-            : func->parseFindVariant(loc, argTypeInfo, class_ctx, err);
+            ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding,
+                receiver_type_info)
+            : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info);
 
         if (named_args) {
             if (!variant) {
@@ -300,7 +301,8 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                     //printd(5, "FunctionCallBase::parseArgsVariant() found abstract %s::%s\n", qc->getName(),
                     //    func->getName());
                     // issue #3387: set return type before clearing variant
-                    parse_context.typeInfo = mv->parseGetReturnTypeInfo();
+                    parse_context.typeInfo = qore_substitute_type_params(mv->parseGetReturnTypeInfo(),
+                        receiver_type_info);
                     variant = nullptr;
                     func = nullptr;
                     return err;
@@ -342,7 +344,9 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             check_flags(loc, func, func->parseGetUniqueFlags(), parse_context.pflag);
         }
 
-        parse_context.typeInfo = variant ? variant->parseGetReturnTypeInfo() : func->parseGetUniqueReturnTypeInfo();
+        parse_context.typeInfo = qore_substitute_type_params(
+            variant ? variant->parseGetReturnTypeInfo() : func->parseGetUniqueReturnTypeInfo(),
+            receiver_type_info);
 
         //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p pflag: %d pe: %d\n", this,
         //    func ? func->getName() : "n/a", variant, pflag, func ? func->empty() : -1);
@@ -825,7 +829,8 @@ NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args,
         return;
     }
     ExceptionSink xsink;
-    variant = qore_method_private::get(*constructor)->getFunction()->runtimeFindVariant(&xsink, args, false, nullptr);
+    variant = qore_method_private::get(*constructor)->getFunction()->runtimeFindVariant(&xsink, args, false, nullptr,
+        object_type_info);
 
     ExceptionSink* pxs = pgm->getParseExceptionSink();
     if (pxs) {
@@ -867,6 +872,7 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 #endif
 
     const QoreMethod* constructor = oc ? qore_class_private::get(*oc)->parseGetConstructor() : nullptr;
+    setReceiverTypeInfo(object_type_info);
     if (parseArgs(parse_context,
         constructor
             ? qore_method_private::get(*constructor)->getFunction()

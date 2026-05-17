@@ -66,6 +66,11 @@ static qore_type_result_e match_QTS_CLASS(const QoreTypeSpec& self, QoreTypeSpec
             ctx.max_result = QTI_IDENT;
             return rv;
         }
+        case QTS_TYPEPARAM: {
+            ctx.may_not_match = true;
+            ctx.max_result = QTI_IDENT;
+            return QTI_AMBIGUOUS;
+        }
         default: {
             qore_type_t tt = ctx.t.getType();
             if (tt == NT_ALL || tt == NT_OBJECT) {
@@ -302,12 +307,20 @@ static qore_type_result_e match_QTS_PARAMCLASS(const QoreTypeSpec& self, QoreTyp
     assert(self_pti);
 
     switch (ctx.t.getTypeSpec()) {
-        case QTS_PARAMCLASS:
+        case QTS_PARAMCLASS: {
             if (self_pti == ctx.t.getParameterizedClassTypeInfo()) {
                 ctx.max_result = QTI_IDENT;
                 return QTI_IDENT;
             }
+            const QoreParameterizedClassTypeInfo* src_pti = ctx.t.getParameterizedClassTypeInfo();
+            const QoreTypeInfo* mapped_type = qore_class_private::get(*src_pti->getBaseClass())
+                ->getParameterizedBaseTypeInfo(src_pti, self_pti->getBaseClass());
+            if (QoreTypeInfo::equal(mapped_type, self_pti)) {
+                ctx.max_result = QTI_IDENT;
+                return QTI_IDENT;
+            }
             return QTI_NOT_EQUAL;
+        }
 
         case QTS_CLASS: {
             qore_type_result_e rv = qore_class_private::get(*ctx.t.getClass())->parseCheckCompatibleClass(
@@ -336,6 +349,19 @@ static qore_type_result_e match_QTS_PARAMCLASS(const QoreTypeSpec& self, QoreTyp
     qore_type_result_e rv = self.tryMatchReferenceType(ctx.t, ctx.may_not_match);
     ctx.max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
     return rv;
+}
+
+// Handler for QTS_TYPEPARAM: unresolved class type-parameter placeholder
+static qore_type_result_e match_QTS_TYPEPARAM(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
+    if (ctx.t.getTypeSpec() == QTS_TYPEPARAM
+            && self.getTypeParameterTypeInfo() == ctx.t.getTypeParameterTypeInfo()) {
+        ctx.max_result = QTI_IDENT;
+        return QTI_IDENT;
+    }
+
+    ctx.may_not_match = true;
+    ctx.max_result = QTI_IDENT;
+    return QTI_AMBIGUOUS;
 }
 
 // Handler for QTS_ENUM: same-enum-declaration identity check

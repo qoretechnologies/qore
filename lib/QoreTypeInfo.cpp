@@ -332,6 +332,21 @@ struct ParameterizedClassCacheKey {
 typedef std::map<ParameterizedClassCacheKey, QoreParameterizedClassTypeInfo*> parameterized_class_map_t;
 static parameterized_class_map_t parameterized_class_map;
 
+struct TypeParameterCacheKey {
+    const QoreClass* ownerClass;
+    size_t index;
+    bool orNothing;
+
+    bool operator<(const TypeParameterCacheKey& other) const {
+        if (ownerClass != other.ownerClass) return ownerClass < other.ownerClass;
+        if (index != other.index) return index < other.index;
+        return orNothing < other.orNothing;
+    }
+};
+
+typedef std::map<TypeParameterCacheKey, QoreTypeParameterTypeInfo*> type_parameter_map_t;
+static type_parameter_map_t type_parameter_map;
+
 // Cache for parameterized HashPairInfo types based on value type
 typedef std::map<const QoreTypeInfo*, TypedHashDecl*> hp_decl_map_t;
 static hp_decl_map_t hp_decl_map;
@@ -456,6 +471,9 @@ void delete_qore_types() {
         delete i.second;
     // Clean up parameterized class type cache
     for (auto& i : parameterized_class_map)
+        delete i.second;
+    // Clean up symbolic class type parameter cache
+    for (auto& i : type_parameter_map)
         delete i.second;
     // Clean up hash pair info decl cache
     for (auto& i : hp_decl_map)
@@ -815,6 +833,53 @@ QoreParameterizedClassTypeSpec::QoreParameterizedClassTypeSpec(const QoreParamet
         : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_PARAMCLASS) {
 }
 
+static QoreString build_type_parameter_name(const char* name, bool or_nothing) {
+    QoreString rv;
+    if (or_nothing) {
+        rv.concat('*');
+    }
+    rv.concat(name);
+    return rv;
+}
+
+static q_accept_vec_t make_type_parameter_accept_vec(const QoreTypeParameterTypeInfo* ti, bool or_nothing) {
+    q_accept_vec_t rv {{QoreTypeParameterTypeSpec(ti), nullptr, !or_nothing}};
+    if (or_nothing) {
+        rv.emplace_back(QoreTypeSpec(NT_NOTHING), nullptr);
+        rv.emplace_back(QoreTypeSpec(NT_NULL),
+            [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); });
+    }
+    return rv;
+}
+
+static q_return_vec_t make_type_parameter_return_vec(const QoreTypeParameterTypeInfo* ti, bool or_nothing) {
+    q_return_vec_t rv {{QoreTypeParameterTypeSpec(ti), !or_nothing}};
+    if (or_nothing) {
+        rv.emplace_back(QoreTypeSpec(NT_NOTHING));
+    }
+    return rv;
+}
+
+QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const QoreClass* owner, size_t n_index, const char* name,
+        bool n_or_nothing, const QoreTypeParameterTypeInfo* value_type)
+        : QoreTypeInfo(
+            make_type_parameter_accept_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            make_type_parameter_return_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            build_type_parameter_name(name, n_or_nothing)),
+        owner_class(owner),
+        index(n_index),
+        param_name(name),
+        or_nothing(n_or_nothing) {
+    assert(owner_class);
+    assert(name && *name);
+    assert(!or_nothing || value_type);
+    pname = tname.c_str();
+}
+
+QoreTypeParameterTypeSpec::QoreTypeParameterTypeSpec(const QoreTypeParameterTypeInfo* ti)
+        : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_TYPEPARAM) {
+}
+
 const QoreTypeInfo* qore_get_parameterized_class_type(const QoreClass* qc,
         const std::vector<const QoreTypeInfo*>& args, bool or_nothing) {
     assert(qc);
@@ -839,6 +904,34 @@ const QoreTypeInfo* qore_get_parameterized_class_type(const QoreClass* qc,
         value_type);
     parameterized_class_map.insert(i, parameterized_class_map_t::value_type(key, ti));
     return ti;
+}
+
+const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owner, size_t index, const char* name,
+        bool or_nothing) {
+    assert(owner);
+    assert(name && *name);
+
+    const QoreTypeParameterTypeInfo* value_type = nullptr;
+    if (or_nothing) {
+        value_type = static_cast<const QoreTypeParameterTypeInfo*>(
+            qore_get_type_parameter_type(owner, index, name, false));
+    }
+
+    AutoLocker al(ctl);
+
+    TypeParameterCacheKey key {owner, index, or_nothing};
+    type_parameter_map_t::iterator i = type_parameter_map.lower_bound(key);
+    if (i != type_parameter_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
+    type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(const QoreTypeInfo* ti) {
+    return dynamic_cast<const QoreTypeParameterTypeInfo*>(ti);
 }
 
 // Helper function to create a normalized key for union type caching
@@ -1254,6 +1347,117 @@ const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* re
     return qore_get_complex_code_type(return_type, param_types, varargs, true);
 }
 
+static const QoreTypeInfo* get_substituted_type_param_arg(const QoreTypeParameterTypeInfo* tpi,
+        const QoreTypeInfo* receiver_type_info) {
+    const QoreParameterizedClassTypeInfo* receiver_pti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);
+    if (!receiver_pti) {
+        return nullptr;
+    }
+
+    const QoreTypeInfo* owner_type = qore_class_private::get(*receiver_pti->getBaseClass())
+        ->getParameterizedBaseTypeInfo(receiver_pti, tpi->getOwnerClass());
+    const QoreParameterizedClassTypeInfo* owner_pti = QoreTypeInfo::getParameterizedClassType(owner_type);
+    if (!owner_pti || tpi->getIndex() >= owner_pti->getArgCount()) {
+        return nullptr;
+    }
+
+    const QoreTypeInfo* arg = owner_pti->getTypeArgs()[tpi->getIndex()];
+    return tpi->isOrNothing() ? get_or_nothing_type_check(arg) : arg;
+}
+
+const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const QoreTypeInfo* receiver_type_info) {
+    if (!ti || !receiver_type_info) {
+        return ti;
+    }
+
+    if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
+        const QoreTypeInfo* subst = get_substituted_type_param_arg(tpi, receiver_type_info);
+        return subst ? subst : ti;
+    }
+
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        type_vec_t args;
+        args.reserve(pti->getArgCount());
+        bool changed = false;
+        for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+            const QoreTypeInfo* subst = qore_substitute_type_params(arg, receiver_type_info);
+            args.push_back(subst);
+            if (subst != arg) {
+                changed = true;
+            }
+        }
+        return changed ? qore_get_parameterized_class_type(pti->getBaseClass(), args, pti->isOrNothing()) : ti;
+    }
+
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+        const QoreTypeInfo* ret = qore_substitute_type_params(cti->getReturnType(), receiver_type_info);
+        type_vec_t params;
+        params.reserve(cti->getParamTypes().size());
+        bool changed = ret != cti->getReturnType();
+        for (const QoreTypeInfo* param : cti->getParamTypes()) {
+            const QoreTypeInfo* subst = qore_substitute_type_params(param, receiver_type_info);
+            params.push_back(subst);
+            if (subst != param) {
+                changed = true;
+            }
+        }
+        return changed ? qore_get_complex_code_type(ret, params, cti->hasVarArgs(), cti->isOrNothing()) : ti;
+    }
+
+    if (const QoreUnionTypeInfo* uti = QoreTypeInfo::getUnionType(ti)) {
+        type_vec_t members;
+        bool changed = false;
+        for (const QoreReturnSpec& rt : ti->return_vec) {
+            const QoreTypeInfo* member = rt.spec.getTypeInfo();
+            if (member == nothingTypeInfo) {
+                continue;
+            }
+            const QoreTypeInfo* subst = qore_substitute_type_params(member, receiver_type_info);
+            members.push_back(subst);
+            if (subst != member) {
+                changed = true;
+            }
+        }
+        return changed ? qore_get_union_type(members, uti->isOrNothing()) : ti;
+    }
+
+    const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    if (subtype) {
+        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info);
+        if (subst != subtype) {
+            return QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)
+                ? qore_get_complex_hash_or_nothing_type(subst)
+                : qore_get_complex_hash_type(subst);
+        }
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    if (subtype) {
+        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info);
+        if (subst != subtype) {
+            bool is_soft = !strncmp(QoreTypeInfo::getName(ti), "softlist<", 9)
+                || !strncmp(QoreTypeInfo::getName(ti), "*softlist<", 10);
+            if (QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)) {
+                return is_soft ? qore_get_complex_softlist_or_nothing_type(subst)
+                    : qore_get_complex_list_or_nothing_type(subst);
+            }
+            return is_soft ? qore_get_complex_softlist_type(subst) : qore_get_complex_list_type(subst);
+        }
+    }
+
+    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
+    if (subtype) {
+        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info);
+        if (subst != subtype) {
+            return QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)
+                ? qore_get_complex_reference_or_nothing_type(subst)
+                : qore_get_complex_reference_type(subst);
+        }
+    }
+
+    return ti;
+}
+
 const QoreTypeInfo* qore_get_complex_code_type_from_signature(const AbstractFunctionSignature* sig,
         bool or_nothing) {
     if (!sig) {
@@ -1371,10 +1575,14 @@ const QoreTypeInfo* getTypeInfoForType(qore_type_t t) {
 const QoreTypeInfo* getTypeInfoForValue(const AbstractQoreNode* n) {
     qore_type_t t = get_node_type(n);
     switch (t) {
-        case NT_OBJECT:
-            return static_cast<const QoreObject*>(n)->getClass()->getTypeInfo();
-        case NT_WEAKREF:
-            return static_cast<const WeakReferenceNode*>(n)->get()->getClass()->getTypeInfo();
+        case NT_OBJECT: {
+            const QoreObject* obj = static_cast<const QoreObject*>(n);
+            return obj->getInstantiatedTypeInfo() ? obj->getInstantiatedTypeInfo() : obj->getClass()->getTypeInfo();
+        }
+        case NT_WEAKREF: {
+            const QoreObject* obj = static_cast<const WeakReferenceNode*>(n)->get();
+            return obj->getInstantiatedTypeInfo() ? obj->getInstantiatedTypeInfo() : obj->getClass()->getTypeInfo();
+        }
         case NT_HASH:
             return static_cast<const QoreHashNode*>(n)->getTypeInfo();
         case NT_WEAKREF_HASH:
@@ -1607,7 +1815,9 @@ qore_type_result_e QoreTypeSpec::tryMatchReferenceType(const QoreTypeSpec& t, bo
 }
 
 qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
-    if (typespec == QTS_CLASS || typespec == QTS_PARAMCLASS) {
+    if (typespec == QTS_TYPEPARAM) {
+        return QTI_AMBIGUOUS;
+    } else if (typespec == QTS_CLASS || typespec == QTS_PARAMCLASS) {
         return t == NT_OBJECT ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_HASHDECL || typespec == QTS_COMPLEXHASH) {
         return t == NT_HASH ? QTI_IDENT : QTI_NOT_EQUAL;
@@ -1933,6 +2143,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             }
             break;
         }
+
     }
 
     if (ok) {
@@ -1973,6 +2184,7 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_COMPLEXREF:
             return QoreTypeInfo::equal(u.ti, other.u.ti);
         case QTS_PARAMCLASS:
+        case QTS_TYPEPARAM:
             return u.ti == other.u.ti;
         case QTS_HARDREF:
              return true;
@@ -2028,6 +2240,18 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             }
             if (obj->getInstantiatedTypeInfo() == u.ti) {
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+            }
+            if (obj->getInstantiatedTypeInfo()) {
+                const QoreParameterizedClassTypeInfo* obj_pti =
+                    QoreTypeInfo::getParameterizedClassType(obj->getInstantiatedTypeInfo());
+                const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
+                if (obj_pti && target_pti) {
+                    const QoreTypeInfo* mapped_type = qore_class_private::get(*obj_pti->getBaseClass())
+                        ->getParameterizedBaseTypeInfo(obj_pti, target_pti->getBaseClass());
+                    if (QoreTypeInfo::equal(mapped_type, u.ti)) {
+                        return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                    }
+                }
             }
             return QTI_NOT_EQUAL;
         }
@@ -2189,6 +2413,9 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
             }
             return QTI_NOT_EQUAL;
         }
+
+        case QTS_TYPEPARAM:
+            return QTI_NOT_EQUAL;
 
         default:
             assert(false);

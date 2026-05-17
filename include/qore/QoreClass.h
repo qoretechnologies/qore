@@ -891,6 +891,13 @@ public:
     */
     DLLEXPORT void addBuiltinVirtualBaseClass(QoreClass* qc);
 
+    //! sets a parameterized virtual base class mapping for a generic builtin class
+    /** @param typeInfo a parameterized class type info whose base class is the virtual base class to add
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addParameterizedBuiltinVirtualBaseClass(const QoreTypeInfo* typeInfo);
+
     //! Adds a base class to the current class
     /** @param qc the class to add
         @param virt if the base class is "virtual", meaning that the current class's binary object is also compatible
@@ -973,14 +980,30 @@ public:
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
 
     //! returns the parameterized type information structure for this class and the given type arguments
-    DLLLOCAL const QoreTypeInfo* getTypeInfo(const std::vector<const QoreTypeInfo*>& args,
+    DLLEXPORT const QoreTypeInfo* getTypeInfo(const std::vector<const QoreTypeInfo*>& args,
             bool or_nothing = false) const;
 
+    //! adds a formal type parameter to this class
+    /** @param name the formal type parameter name
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addTypeParameter(const char* name);
+
+    //! enables legacy raw generic compatibility behavior for migrated builtin classes
+    /** @param raw_accepts_parameterized when true, raw annotations accept parameterized instances
+        @param raw_construction_defaults_to_auto when true, raw construction creates the explicit auto instantiation
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void setLegacyRawGenericCompatibility(bool raw_accepts_parameterized = true,
+            bool raw_construction_defaults_to_auto = true);
+
     //! returns true if this class declares formal type parameters
-    DLLLOCAL bool hasTypeParameters() const;
+    DLLEXPORT bool hasTypeParameters() const;
 
     //! returns the number of formal type parameters declared by this class
-    DLLLOCAL size_t getTypeParameterCount() const;
+    DLLEXPORT size_t getTypeParameterCount() const;
 
     //! returns the "or nothing" type information structure for this class
     DLLEXPORT const QoreTypeInfo* getOrNothingTypeInfo() const;

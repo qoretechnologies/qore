@@ -122,6 +122,12 @@ const QoreTypeSpecMatchHandlerInfo QORE_TYPE_SPEC_MATCH_REGISTRY[] = {
         match_QTS_PARAMCLASS,
         "Parameterized class type - invariant type-argument matching with object/reference fallback"
     },
+    {
+        "QTS_TYPEPARAM",
+        QTS_TYPEPARAM,
+        match_QTS_TYPEPARAM,
+        "Symbolic generic class type-parameter placeholder"
+    },
     { nullptr, (q_typespec_t)0, nullptr, nullptr } // sentinel
 };
 

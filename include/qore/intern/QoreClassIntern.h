@@ -2030,6 +2030,7 @@ public:
         ;
 
     std::vector<std::string> type_params;
+    std::vector<const QoreTypeInfo*> parameterized_vparents;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
     mutable QoreReferenceCounter refs;  // existence references
@@ -2289,6 +2290,22 @@ public:
     DLLLOCAL bool rawConstructionDefaultsToAuto() const {
         return raw_construction_defaults_to_auto;
     }
+
+    DLLLOCAL void addTypeParam(const char* name) {
+        type_params.push_back(name);
+    }
+
+    DLLLOCAL void setLegacyRawGenericCompatibility(bool accepts_parameterized, bool construction_defaults_to_auto) {
+        raw_accepts_parameterized = accepts_parameterized;
+        raw_construction_defaults_to_auto = construction_defaults_to_auto;
+    }
+
+    DLLLOCAL void addParameterizedVirtualBase(const QoreTypeInfo* type_info) {
+        parameterized_vparents.push_back(type_info);
+    }
+
+    DLLLOCAL const QoreTypeInfo* getParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
+            const QoreClass* target_base) const;
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;
 

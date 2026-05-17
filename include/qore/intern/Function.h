@@ -498,6 +498,7 @@ protected:
     const QoreProgramLocation* loc;
     QoreListNodeEvalOptionalRefHolder tmp;
     const QoreTypeInfo* returnTypeInfo; // saved return type info
+    const QoreTypeInfo* receiver_type_info = nullptr;
     QoreProgram* pgm = nullptr; // program used when evaluated (to find stacks for references)
     const AbstractStatement* stmt = nullptr; // the current statement for the call stack entry
     std::string callName;
@@ -1336,11 +1337,13 @@ public:
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's
     // reachable
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
-            const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err) const;
+            const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
+            const QoreTypeInfo* receiver_type_info = nullptr) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNamed(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const name_vec_t& argNames,
-            const qore_class_private* class_ctx, int& err, QoreNamedArgBinding& binding) const;
+            const qore_class_private* class_ctx, int& err, QoreNamedArgBinding& binding,
+            const QoreTypeInfo* receiver_type_info = nullptr) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {
@@ -1356,10 +1359,13 @@ public:
 
     // find variant at runtime
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's reachable from the object being executed
-    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args, bool only_user, const qore_class_private* class_ctx) const;
+    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
+            bool only_user, const qore_class_private* class_ctx,
+            const QoreTypeInfo* receiver_type_info = nullptr) const;
 
     // finds the best match with the given arg types
-    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
+    DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
+            const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr) const;
     // finds only an exact match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
 

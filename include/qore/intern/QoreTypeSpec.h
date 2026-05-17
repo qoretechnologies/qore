@@ -42,6 +42,7 @@
 // Forward declarations
 class QoreTypeInfo;
 class QoreParameterizedClassTypeInfo;
+class QoreTypeParameterTypeInfo;
 class LValueHelper;
 class QoreHashNode;
 class QoreListNode;
@@ -70,9 +71,10 @@ enum q_typespec_t : unsigned char {
     QTS_EMPTYHASH = 10,
     QTS_ENUM = 11,
     QTS_PARAMCLASS = 12,
+    QTS_TYPEPARAM = 13,
 };
 
-static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_PARAMCLASS) + 1;
+static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_TYPEPARAM) + 1;
 
 typedef std::function<void (QoreValue&, ExceptionSink*)> q_type_map_t;
 
@@ -118,6 +120,10 @@ public:
     DLLLOCAL const QoreClass* getClass() const;
 
     DLLLOCAL const QoreParameterizedClassTypeInfo* getParameterizedClassTypeInfo() const;
+
+    DLLLOCAL const QoreTypeParameterTypeInfo* getTypeParameterTypeInfo() const {
+        return typespec == QTS_TYPEPARAM ? reinterpret_cast<const QoreTypeParameterTypeInfo*>(u.ti) : nullptr;
+    }
 
     DLLLOCAL const TypedHashDecl* getHashDecl() const {
         return typespec == QTS_HASHDECL ? u.hd : nullptr;
@@ -165,6 +171,7 @@ public:
                 || typespec == QTS_COMPLEXREF
                 || typespec == QTS_ENUM
                 || typespec == QTS_PARAMCLASS
+                || typespec == QTS_TYPEPARAM
             ;
     }
 
@@ -193,6 +200,7 @@ public:
                 return u.qc->getTypeInfo();
 
             case QTS_PARAMCLASS:
+            case QTS_TYPEPARAM:
                 return u.ti;
 
             case QTS_TYPE:
@@ -234,6 +242,8 @@ public:
                 return emptyHashTypeInfo;
             case QTS_ENUM:
                 return u.ed->getBaseTypeInfo();
+            case QTS_TYPEPARAM:
+                return u.ti;
         }
         assert(false);
         return nullptr;
@@ -355,6 +365,11 @@ public:
 class QoreParameterizedClassTypeSpec : public QoreTypeSpec {
 public:
     DLLLOCAL QoreParameterizedClassTypeSpec(const QoreParameterizedClassTypeInfo* ti);
+};
+
+class QoreTypeParameterTypeSpec : public QoreTypeSpec {
+public:
+    DLLLOCAL QoreTypeParameterTypeSpec(const QoreTypeParameterTypeInfo* ti);
 };
 
 class QoreEmptyListTypeSpec : public QoreTypeSpec {

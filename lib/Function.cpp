@@ -306,6 +306,8 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
+    receiver_type_info = self ? self->getInstantiatedTypeInfo() : nullptr;
+
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
         return;
@@ -377,7 +379,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     }
 
     setCallType(variant->getCallType());
-    setReturnTypeInfo(variant->getReturnTypeInfo());
+    setReturnTypeInfo(qore_substitute_type_params(variant->getReturnTypeInfo(), receiver_type_info));
     old_rtflags = rc.getRuntimeFlags();
     rc.setRuntimeFlags(static_cast<q_rt_flags_t>(variant->getFlags()));
     restore_rtflags = true;
@@ -398,7 +400,7 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         class_ctx = nullptr;
     }
 
-    variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx);
+    variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx, receiver_type_info);
     if (!variant) {
         assert(*xsink);
         return -1;
@@ -430,7 +432,9 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
     OptionalObjectOnlySubstitutionHelper self_helper;
     bool self_set = false;
     for (unsigned i = 0; i < max; ++i) {
-        const QoreTypeInfo* paramTypeInfo = i < typeList.size() ? sig->getParamTypeInfo(i) : nullptr;
+        const QoreTypeInfo* paramTypeInfo = i < typeList.size()
+            ? qore_substitute_type_params(sig->getParamTypeInfo(i), receiver_type_info)
+            : nullptr;
         bool use_default_arg = false;
         if (i < defaultArgList.size() && defaultArgList[i]) {
             if (!tmp) {
@@ -476,7 +480,8 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     continue;
                 }
 
-                const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
+                const QoreTypeInfo* paramTypeInfo = qore_substitute_type_params(sig->getParamTypeInfo(i),
+                    receiver_type_info);
                 if (!paramTypeInfo) {
                     continue;
                 }
@@ -1413,7 +1418,7 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
-        bool only_user, const qore_class_private* class_ctx) const {
+        bool only_user, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info) const {
     unsigned nargs = args ? args->size() : 0;
     QoreParseOptions ppo = runtime_get_parse_options();
 
@@ -1509,7 +1514,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             int pscore = 0;
             bool ok = true;
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                const QoreTypeInfo* t = sig->getParamTypeInfo(pi);
+                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info);
                 QoreValue n{};  // value-initialized to NOTHING (bits=0)
                 if (args) {
                     n = args->retrieveEntry(pi);
@@ -1661,7 +1666,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
-        const qore_class_private* class_ctx) const {
+        const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info) const {
     int match = -1;
 
     const AbstractQoreFunctionVariant* variant = nullptr;
@@ -1731,7 +1736,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             int count = 0;
             bool ok = true;
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                const QoreTypeInfo* t = sig->getParamTypeInfo(pi);
+                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info);
                 const QoreTypeInfo* a = args[pi];
 
                 int rc = QoreTypeInfo::runtimeTypeMatch(t, a);
@@ -1931,7 +1936,7 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
 
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const name_vec_t& argNames, const qore_class_private* class_ctx,
-        int& err, QoreNamedArgBinding& binding) const {
+        int& err, QoreNamedArgBinding& binding, const QoreTypeInfo* receiver_type_info) const {
     int score_len = -1;
     int score = -1;
     int max_score = -1;
@@ -2014,7 +2019,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
             bool ok = true;
 
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                const QoreTypeInfo* t = sig->getParamTypeInfo(pi);
+                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi),
+                    receiver_type_info);
                 bool pos_supplied = pi < cb.supplied.size() && cb.supplied[pi];
                 const QoreTypeInfo* a = pos_supplied && pi < cb.arg_types.size() ? cb.arg_types[pi] : nullptr;
                 bool pos_has_arg = pos_supplied && QoreTypeInfo::hasType(a);
@@ -2299,7 +2305,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
 // finds a variant at parse time
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProgramLocation* loc,
-        const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err) const {
+        const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
+        const QoreTypeInfo* receiver_type_info) const {
     // the lowest match length with the highest score wins
     int score_len = -1;
     // the score for the match of the variant
@@ -2394,7 +2401,8 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                 bool ok = true;
 
                 for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                    const QoreTypeInfo* t = sig->getParamTypeInfo(pi);
+                    const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi),
+                        receiver_type_info);
                     bool pos_has_arg = num_args && num_args > pi;
                     const QoreTypeInfo* a = pos_has_arg ? argTypeInfo[pi] : nullptr;
                     if (pos_has_arg) {

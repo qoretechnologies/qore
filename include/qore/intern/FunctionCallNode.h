@@ -42,6 +42,7 @@ protected:
     QoreParseListNode* parse_args = nullptr;
     QoreListNode* args = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
+    const QoreTypeInfo* receiver_type_info = nullptr;
 
 public:
     DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args),
@@ -51,11 +52,12 @@ public:
     DLLLOCAL FunctionCallBase(const FunctionCallBase& old) :
         parse_args(old.parse_args ? old.parse_args->listRefSelf() : nullptr),
         args(old.args ? old.args->listRefSelf() : nullptr),
-        variant(old.variant) {
+        variant(old.variant),
+        receiver_type_info(old.receiver_type_info) {
     }
 
     DLLLOCAL FunctionCallBase(const FunctionCallBase& old, QoreListNode* n_args) : args(n_args),
-            variant(old.variant) {
+            variant(old.variant), receiver_type_info(old.receiver_type_info) {
     }
 
     DLLLOCAL ~FunctionCallBase() {
@@ -79,6 +81,10 @@ public:
 
     DLLLOCAL void setVariant(const AbstractQoreFunctionVariant* v) {
         variant = v;
+    }
+
+    DLLLOCAL void setReceiverTypeInfo(const QoreTypeInfo* typeInfo) {
+        receiver_type_info = typeInfo;
     }
 
     //! Resolves parse_args into evaluated args for AOT-deserialized nodes
@@ -478,6 +484,7 @@ public:
     */
     DLLLOCAL void setSourceType(const QoreTypeInfo* ti) {
         sourceTypeInfo = ti;
+        setReceiverTypeInfo(ti);
     }
 
     //! Returns the source type info (type of object the method is called on)
