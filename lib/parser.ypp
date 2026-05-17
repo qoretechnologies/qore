@@ -239,15 +239,15 @@ public:
     std::string name;
     std::vector<std::string> type_params;
 
-    DLLLOCAL ClassDeclParseInfo(const QoreProgramLocation* loc, char* raw_decl) {
+    DLLLOCAL ClassDeclParseInfo(const QoreProgramLocation* loc, char* raw_decl, const char* decl_kind = "class") {
         std::unique_ptr<char, decl_free> raw(raw_decl);
         std::string decl(raw.get());
 
         size_t lt = decl.find('<');
         size_t gt = decl.rfind('>');
         if (lt == std::string::npos || gt == std::string::npos || gt < lt) {
-            parse_error(*loc, "invalid generic class declaration '%s'; expected syntax like 'class Box<T>'",
-                decl.c_str());
+            parse_error(*loc, "invalid generic %s declaration '%s'; expected syntax like '%s Box<T>'",
+                decl_kind, decl.c_str(), decl_kind);
             name = decl;
             trim(name);
             return;
@@ -255,8 +255,8 @@ public:
 
         for (size_t i = gt + 1; i < decl.size(); ++i) {
             if (decl[i] != ' ' && decl[i] != '\t' && decl[i] != '\r') {
-                parse_error(*loc, "invalid generic class declaration '%s'; unexpected text after type parameter list",
-                    decl.c_str());
+                parse_error(*loc, "invalid generic %s declaration '%s'; unexpected text after type parameter list",
+                    decl_kind, decl.c_str());
                 break;
             }
         }
@@ -264,7 +264,8 @@ public:
         name = decl.substr(0, lt);
         trim(name);
         if (name.empty()) {
-            parse_error(*loc, "invalid generic class declaration '%s'; missing class name", decl.c_str());
+            parse_error(*loc, "invalid generic %s declaration '%s'; missing %s name", decl_kind, decl.c_str(),
+                decl_kind);
         }
 
         std::string params = decl.substr(lt + 1, gt - lt - 1);
@@ -275,15 +276,16 @@ public:
                 comma == std::string::npos ? std::string::npos : comma - start);
             trim(param);
             if (param.empty()) {
-                parse_error(*loc, "invalid generic class declaration '%s'; empty type parameter name", decl.c_str());
+                parse_error(*loc, "invalid generic %s declaration '%s'; empty type parameter name", decl_kind,
+                    decl.c_str());
                 break;
             }
             if (!isIdentifier(param)) {
-                parse_error(*loc, "invalid type parameter name '%s' in generic class declaration '%s'; type "
-                    "parameter names must be identifiers", param.c_str(), decl.c_str());
+                parse_error(*loc, "invalid type parameter name '%s' in generic %s declaration '%s'; type "
+                    "parameter names must be identifiers", param.c_str(), decl_kind, decl.c_str());
             } else if (hasParam(param)) {
-                parse_error(*loc, "duplicate type parameter name '%s' in generic class declaration '%s'",
-                    param.c_str(), decl.c_str());
+                parse_error(*loc, "duplicate type parameter name '%s' in generic %s declaration '%s'",
+                    param.c_str(), decl_kind, decl.c_str());
             } else {
                 type_params.push_back(param);
             }
@@ -306,6 +308,12 @@ public:
     DLLLOCAL void applyTypeParams(QoreClass* qc) const {
         for (const std::string& param : type_params) {
             qc->addTypeParameter(param.c_str());
+        }
+    }
+
+    DLLLOCAL void applyTypeParams(typed_hash_decl_private* hp) const {
+        for (const std::string& param : type_params) {
+            hp->addTypeParameter(param.c_str());
         }
     }
 
@@ -3244,6 +3252,17 @@ hashdecl_def:
             $6->setParseParent($4);
         }
         $$ = new HashDeclDef(loc, $3, $6);
+    }
+    | nsc_modifiers TOK_HASHDECL ANGLE_IDENTIFIER hashdecl_inherits '{' hashdecl_attrs '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        ClassDeclParseInfo cdi(loc, $3, "hashdecl");
+        cdi.applyTypeParams($6);
+        check_hashdeclmod(loc, $1, *($6));
+        if ($4) {
+            $6->setParseParent($4);
+        }
+        $$ = new HashDeclDef(loc, cdi.takeName(), $6);
     }
     | nsc_modifiers TOK_HASHDECL SCOPED_REF hashdecl_inherits '{' hashdecl_attrs '}' {
         fix_start_location($1, @$, @2);

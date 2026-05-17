@@ -2248,6 +2248,18 @@ public:
 
     DLLLOCAL TypedHashDecl* parseFindHashDecl(const QoreProgramLocation* loc, const NamedScope& name);
 
+    //! Tries to find a hashdecl without raising a parse error
+    /** @param name the name/scope of the hashdecl
+        @return the hash declaration if found, nullptr otherwise
+    */
+    DLLLOCAL TypedHashDecl* parseTryFindHashDecl(const NamedScope& name) {
+        if (name.size() == 1) {
+            return parseFindHashDeclIntern(name.ostr);
+        }
+        unsigned m = 0;
+        return parseFindScopedHashDeclIntern(name, m);
+    }
+
     DLLLOCAL const QoreEnumDecl* parseFindScopedEnumIntern(const NamedScope& name, unsigned& matched);
     DLLLOCAL const QoreEnumDecl* parseFindEnum(const QoreProgramLocation* loc, const NamedScope& name);
 

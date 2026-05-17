@@ -50,6 +50,10 @@
       (<tt>[legacy_raw_accepts]</tt>, <tt>[legacy_raw_construct]</tt>, and
       <tt>[legacy_raw]</tt>), and AOT metadata preservation for generic base
       and raw-compatibility information
+    - source-defined generic class static methods can now be called with
+      parameterized receivers such as <tt>Factory&lt;int&gt;::make(...)</tt>, and
+      source-defined hashdecls can now declare type parameters for typed result
+      records such as <tt>hash&lt;Result&lt;int&gt;&gt;</tt>
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
     - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH string-literal escapes
     - new \c %%Y printf format specifier for multi-line pseudo-YAML output

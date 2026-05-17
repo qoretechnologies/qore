@@ -398,6 +398,9 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
             ctx.writer.writeStringRef("");
         }
         ctx.writer.writeStringRef(call->getName());
+        if ((ctx.writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
+            ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
+        }
         // Serialize method args
         const QoreListNode* args = call->getArgs();
         size_t nargs = args ? args->size() : 0;
@@ -423,6 +426,10 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    const char* receiver_type_path = nullptr;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
+        receiver_type_path = ctx.reader.readStringRef(ctx.ptr);
+    }
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
     QoreListNode* args_list = nullptr;
     if (num_args > 0) {
@@ -463,10 +470,30 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
         }
         return QoreValue();
     }
+    const QoreTypeInfo* receiver_type_info = nullptr;
+    if (receiver_type_path && *receiver_type_path) {
+        QoreAOTTypeResolver type_resolver(ctx.pgm);
+        std::string type_error;
+        receiver_type_info = type_resolver.resolve(receiver_type_path, type_error);
+        if (!receiver_type_info || !type_error.empty()) {
+            ctx.error = "cannot resolve static method receiver type '";
+            ctx.error += receiver_type_path;
+            ctx.error += "'";
+            if (!type_error.empty()) {
+                ctx.error += ": ";
+                ctx.error += type_error;
+            }
+            if (args_list) {
+                args_list->deref(nullptr);
+            }
+            return QoreValue();
+        }
+    }
     // Create with evaluated args list directly via the copy constructor pattern
     // StaticMethodCallNode needs QoreParseListNode for its primary constructor,
     // so we create a minimal node and set the args list for evaluation
     StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
+    smcn->setReceiverTypeInfo(receiver_type_info);
     if (args_list) {
         // Set the args as a member; since StaticMethodCallNode inherits FunctionCallBase,
         // we use resolveParseArgs after setting parse_args, or set args directly.
@@ -488,6 +515,7 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
         }
         args_list->deref(nullptr);
         smcn = new StaticMethodCallNode(&loc_builtin, m, pln);
+        smcn->setReceiverTypeInfo(receiver_type_info);
         smcn->resolveParseArgs();
     }
     return QoreValue(smcn);

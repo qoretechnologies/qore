@@ -1178,9 +1178,7 @@ static void qore_rt_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreV
 
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
-    if (QoreObject* self = runtime_get_stack_object()) {
-        ti = qore_substitute_type_params(ti, qore_get_object_receiver_type_info(self));
-    }
+    ti = qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
     QoreValue val = fromBits(value);
     ValueHolder weak_eval_holder(xsink);
     qore_rt_normalize_weak_reference_for_assignment(val, weak_eval_holder, xsink);
@@ -3679,9 +3677,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, con
 
 static QoreHashNode* qore_rt_make_implicit_hash_for_lvalue(LocalVar* var, ExceptionSink* xsink) {
     const QoreTypeInfo* typeInfo = var ? var->getTypeInfoForLValue() : nullptr;
-    if (QoreObject* self = runtime_get_stack_object()) {
-        typeInfo = qore_substitute_type_params(typeInfo, qore_get_object_receiver_type_info(self));
-    }
+    typeInfo = qore_substitute_type_params(typeInfo, qore_get_current_receiver_type_info());
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_HASH)) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot convert lvalue declared as %s to a hash",
             QoreTypeInfo::getName(typeInfo));
@@ -6305,8 +6301,7 @@ static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature
 }
 
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig) {
-    QoreObject* self = runtime_get_stack_object();
-    return qore_rt_get_effective_return_type(sig, qore_get_object_receiver_type_info(self));
+    return qore_rt_get_effective_return_type(sig, qore_get_current_receiver_type_info());
 }
 
 // --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
@@ -10978,6 +10973,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
         return toBits(QoreValue());
     }
     RuntimeConfig& rc = rc_get_current_ref();
+    object_type_info = qore_substitute_type_params(object_type_info, qore_get_current_receiver_type_info());
     // Pass nullptr (not *arg_list) when nargs=0: buildArgListFromNanBoxed
     // returns null for empty lists and *arg_list on a null holder is UB.
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
@@ -11001,6 +10997,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
         return toBits(QoreValue());
     }
     RuntimeConfig& rc = rc_get_current_ref();
+    object_type_info = qore_substitute_type_params(object_type_info, qore_get_current_receiver_type_info());
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
         nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
 }

@@ -1134,9 +1134,7 @@ static void applyNoNarrowContainerType(const QoreTypeInfo* ti, QoreValue& val, E
 static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
-    if (QoreObject* self = runtime_get_stack_object()) {
-        ti = qore_substitute_type_params(ti, qore_get_object_receiver_type_info(self));
-    }
+    ti = qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", stored, xsink);
     if (xsink && *xsink) {
         stored.discard(xsink);
@@ -1933,8 +1931,10 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     inv->expr.getInternalNode());
                 if (scoped && scoped->oc) {
                     RuntimeConfig& rc = rc_get_current_ref();
+                    const QoreTypeInfo* object_type_info = qore_substitute_type_params(
+                        scoped->getObjectTypeInfo(), qore_get_current_receiver_type_info());
                     return qore_class_private::execConstructor(*scoped->oc, rc,
-                        scoped->getVariant(), scoped->getArgs(), xsink, scoped->getObjectTypeInfo());
+                        scoped->getVariant(), scoped->getArgs(), xsink, object_type_info);
                 }
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
@@ -1991,6 +1991,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                     "NewObject invoke: class not resolved");
                 return QoreValue();
             }
+            object_type_info = qore_substitute_type_params(object_type_info, qore_get_current_receiver_type_info());
             // Build NaN-boxed arg array from pre-computed IR operands
             int nargs = static_cast<int>(inv->operands.size());
             constexpr int SMALL_BUF = 8;
@@ -5129,9 +5130,7 @@ load_local_done:
                     // Auto-vivify according to the declared lvalue type, matching
                     // LValueHelper::doHashLValue() including hashdecl error behavior.
                     const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
-                    if (QoreObject* self = runtime_get_stack_object()) {
-                        ti = qore_substitute_type_params(ti, qore_get_object_receiver_type_info(self));
-                    }
+                    ti = qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
                     QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
                     if (!new_h || (xsink && *xsink)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -5252,9 +5251,7 @@ load_local_done:
                     // Auto-vivify according to the declared lvalue type, matching
                     // LValueHelper::doHashLValue() including hashdecl error behavior.
                     const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
-                    if (QoreObject* self = runtime_get_stack_object()) {
-                        ti = qore_substitute_type_params(ti, qore_get_object_receiver_type_info(self));
-                    }
+                    ti = qore_substitute_type_params(ti, qore_get_current_receiver_type_info());
                     QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
                     if (!new_h || (xsink && *xsink)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -9854,10 +9851,8 @@ lvalue_path_unary_done:
                                 // Apply return type coercion
                                 if (!(xsink && *xsink) && direct_inst->cached_return_type) {
                                     const QoreTypeInfo* return_type = direct_inst->cached_return_type;
-                                    if (QoreObject* self = runtime_get_stack_object()) {
-                                        return_type = qore_substitute_type_params(return_type,
-                                            qore_get_object_receiver_type_info(self));
-                                    }
+                                    return_type = qore_substitute_type_params(return_type,
+                                        qore_get_current_receiver_type_info());
                                     QoreTypeInfo::acceptAssignment(return_type, "<return statement>",
                                         ir_return_value, xsink);
                                 }
@@ -10110,8 +10105,10 @@ lvalue_path_unary_done:
                             call_expr.getInternalNode());
                         if (scoped && scoped->oc) {
                             RuntimeConfig& rc = rc_get_current_ref();
+                            const QoreTypeInfo* object_type_info = qore_substitute_type_params(
+                                scoped->getObjectTypeInfo(), qore_get_current_receiver_type_info());
                             res = qore_class_private::execConstructor(*scoped->oc, rc,
-                                scoped->getVariant(), scoped->getArgs(), xsink);
+                                scoped->getVariant(), scoped->getArgs(), xsink, object_type_info);
                             used_operands = true;
                         }
                     }

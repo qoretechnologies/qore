@@ -143,8 +143,9 @@ constexpr uint64_t QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO = 1ULL << 43; //!< NewObjec
 constexpr uint64_t QORE_AOT_FEAT_CLASS_TYPE_PARAMS = 1ULL << 44; //!< class records preserve source generic type parameter names
 constexpr uint64_t QORE_AOT_FEAT_CLASS_PARAM_BASES = 1ULL << 45; //!< class base records preserve parameterized generic parent type paths
 constexpr uint64_t QORE_AOT_FEAT_CLASS_RAW_GENERIC = 1ULL << 46; //!< class records preserve source raw generic compatibility flags
+constexpr uint64_t QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE = 1ULL << 47; //!< static method calls preserve parameterized receiver typeInfo
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

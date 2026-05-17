@@ -34,8 +34,57 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreParseTypeInfo.h"
 
 #include <vector>
+
+static bool static_scope_has_parameterized_receiver(const NamedScope& scope) {
+    if (scope.size() < 2) {
+        return false;
+    }
+    for (unsigned i = 0, e = scope.size() - 1; i < e; ++i) {
+        if (strchr(scope[i], '<')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static std::string get_static_scope_receiver_type_path(const NamedScope& scope) {
+    std::string rv;
+    for (unsigned i = 0, e = scope.size() - 1; i < e; ++i) {
+        if (i) {
+            rv += "::";
+        }
+        rv += scope[i];
+    }
+    return rv;
+}
+
+static const QoreTypeInfo* resolve_static_scope_receiver_type(const QoreProgramLocation* loc, const NamedScope& scope,
+        int& err) {
+    std::string type_path = get_static_scope_receiver_type_path(scope);
+    QoreParseTypeInfo* pti = qore_parse_type_string_to_pti(type_path.c_str());
+    if (!pti) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve static method receiver type '%s'",
+            type_path.c_str());
+        err = -1;
+        return autoTypeInfo;
+    }
+    const QoreTypeInfo* rv = QoreParseTypeInfo::resolveAny(pti, loc, err);
+    delete pti;
+    if (err) {
+        return autoTypeInfo;
+    }
+    if (!QoreTypeInfo::getParameterizedClassType(rv)) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "static generic method call target '%s' must resolve to a "
+            "parameterized class type; use 'Class<...>::method()' for generic static methods or "
+            "'Class::method()' for non-generic static methods", type_path.c_str());
+        err = -1;
+        return autoTypeInfo;
+    }
+    return rv;
+}
 
 // eval method against an object where the assumed qoreclass and method were saved at parse time
 QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const qore_class_private* ctx,
@@ -846,7 +895,8 @@ QoreValue NewObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
 }
 
 QoreValue NewObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
-    return qore_class_private::execConstructor(*qc, rc, variant, args, xsink, object_type_info);
+    const QoreTypeInfo* oti = qore_substitute_type_params(object_type_info, qore_get_current_receiver_type_info());
+    return qore_class_private::execConstructor(*qc, rc, variant, args, xsink, oti);
 }
 
 int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -933,7 +983,8 @@ QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     assert(!parse_args || args || tmp_args
         || !"ScopedObjectCallNode::evalImpl(): parse_args set but args is null; "
            "call resolveParseArgs() after AOT deserialization");
-    return qore_class_private::execConstructor(*oc, rc, variant, args, xsink, object_type_info);
+    const QoreTypeInfo* oti = qore_substitute_type_params(object_type_info, qore_get_current_receiver_type_info());
+    return qore_class_private::execConstructor(*oc, rc, variant, args, xsink, oti);
 }
 
 QoreValue MethodCallNode::exec(QoreObject* o, ExceptionSink* xsink) const {
@@ -972,7 +1023,19 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         assert(!parse_context.typeInfo);
         bool abr = parse_check_parse_option(PO_ALLOW_BARE_REFS);
 
-        QoreClass* qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+        bool parameterized_receiver = static_scope_has_parameterized_receiver(*scope);
+        QoreClass* qc = nullptr;
+        if (parameterized_receiver) {
+            receiver_type_info = resolve_static_scope_receiver_type(loc, *scope, err);
+            if (err) {
+                return -1;
+            }
+            const QoreParameterizedClassTypeInfo* pcti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);
+            assert(pcti);
+            qc = const_cast<QoreClass*>(pcti->getBaseClass());
+        } else {
+            qc = qore_root_ns_private::parseFindScopedClassWithMethod(loc, *scope, false);
+        }
 
         const QoreClass* pc = parse_context.oflag
             && abr ? QoreTypeInfo::getUniqueReturnClass(parse_context.oflag->getTypeInfo()) : nullptr;
@@ -991,7 +1054,20 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         if (qc) {
             if (class_ctx && !qore_class_private::parseCheckPrivateClassAccess(*qc, class_ctx))
                 class_ctx = nullptr;
-            if (pc && class_ctx) {
+            if (parameterized_receiver) {
+                method = qore_class_private::get(*qc)->parseFindStaticMethod(scope->getIdentifier(), class_ctx);
+                if (!method) {
+                    const QoreMethod* any = qore_class_private::get(*qc)->parseFindAnyMethodStaticFirst(
+                        scope->getIdentifier(), class_ctx);
+                    if (any && !any->isStatic()) {
+                        parseException(*loc, "INVALID-METHOD", "cannot call instance method %s::%s() through "
+                            "parameterized static target '%s'; call the method on an object instance instead",
+                            qc->getName(), scope->getIdentifier(),
+                            get_static_scope_receiver_type_path(*scope).c_str());
+                        return -1;
+                    }
+                }
+            } else if (pc && class_ctx) {
                 // checks access already
                 method = qore_class_private::get(*qc)->parseFindAnyMethodStaticFirst(scope->getIdentifier(),
                     class_ctx);
@@ -1011,6 +1087,11 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
         // see if a constant can be resolved
         if (!method) {
+            if (parameterized_receiver) {
+                parse_error(*loc, "cannot resolve static method call '%s()'; class '%s' has no reachable static "
+                    "method named '%s'", scope->ostr, qc ? qc->getName() : "(unknown)", scope->getIdentifier());
+                return -1;
+            }
             {
                 // see if this is a function call to a function defined in a namespace
                 const FunctionEntry* f = qore_root_ns_private::parseResolveFunctionEntry(*scope);
@@ -1061,6 +1142,7 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
         }
 
         if (!method->isStatic()) {
+            assert(!parameterized_receiver);
             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(loc, scope->takeName(), takeParseArgs(), method, qc,
                 class_ctx);
             val = sfcn;
@@ -1106,14 +1188,15 @@ QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     const qore_class_private* cctx = method ? qore_class_private::get(*qore_method_private::get(*method)->parent_class) : nullptr;
 
     return tmp_args
-        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx)
-        : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx);
+        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx, variant, receiver_type_info)
+        : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx, nullptr, receiver_type_info);
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {
-    return variant
+    const QoreTypeInfo* rv = variant
         ? variant->parseGetReturnTypeInfo()
         : (method
             ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
             : 0);
+    return qore_substitute_type_params(rv, receiver_type_info);
 }

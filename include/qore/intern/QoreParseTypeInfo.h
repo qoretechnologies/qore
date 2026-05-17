@@ -37,6 +37,9 @@
 class QoreParseTypeInfo;
 typedef std::vector<QoreParseTypeInfo*> parse_type_vec_t;
 
+//! Parses a type string into parse-stage type metadata
+DLLLOCAL QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str);
+
 // this is basically just a wrapper around NamedScope
 //
 // Three-stage type resolution pipeline:

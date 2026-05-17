@@ -244,6 +244,29 @@ hash<MyHash> sub foo(int x) {
 }
     @endcode
 
+    Generic hashdecls can be used by supplying type arguments to the hashdecl
+    name inside the \c hash type. The resulting type is a concrete typed hash,
+    and its members are checked after substituting the type arguments into the
+    hashdecl declaration:
+
+    @code{.py}
+hashdecl Result<T> {
+    string status;
+    T value;
+}
+
+hash<Result<int>> int_result(("status": "ok", "value": 1));
+int value = int_result.value;
+
+hash<Result<string>> string_result(("status": "ok", "value": "done"));
+string text = string_result.value;
+    @endcode
+
+    Source-defined generic hashdecls require explicit type arguments in type
+    positions. For example, <tt>hash&lt;Result&lt;int&gt;&gt;</tt> is valid, while
+    <tt>hash&lt;Result&gt;</tt> is rejected because the member type \c T cannot be
+    resolved without a concrete argument.
+
     This type is supported at parse-time and at runtime; to convert such values to an untyped hash, assign it
     to a @ref hash_type "hash" lvalue, use @ref cast "cast<hash>(...)" on the value, call the @ref Qore::hash() "hash()"
     function on the value, or assign it to an untyped lvalue.  Each of these options can be used to convert a type-safe
@@ -539,6 +562,36 @@ int value = child.echo(42);
     Source-defined generic classes do not provide raw compatibility by default;
     use explicit type arguments such as <tt>Box&lt;int&gt;</tt> or
     <tt>Box&lt;auto&gt;</tt>.
+
+    Static methods on source-defined generic classes can use class type
+    parameters when the call target supplies concrete type arguments:
+
+    @code{.py}
+class Factory<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    static Factory<T> make(T value) {
+        return new Factory<T>(value);
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Factory<int> f = Factory<int>::make(10);
+int made = f.get();
+    @endcode
+
+    A static generic call must use the parameterized receiver spelling, such as
+    <tt>Factory&lt;int&gt;::make(...)</tt>, so the type parameter can be
+    substituted in arguments, local declarations, and return checks.
 
     @par Source Raw-Compatibility Attributes
     Source-defined generic classes that migrate an existing raw class API can

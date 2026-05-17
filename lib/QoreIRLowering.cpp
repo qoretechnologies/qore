@@ -10039,7 +10039,7 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
     // selection was inconclusive (due to missing type information), and runtime dispatch is required.
     const AbstractQoreFunctionVariant* variant = call->getVariant();
     const QoreMethod* method = call->getMethod();
-    if (method && variant
+    if (method && variant && !call->getReceiverTypeInfo()
             && !overloadedDirectCallNeedsRuntimeDispatch(qore_method_private::get(*method)->getFunction(), variant,
                 call->getParseArgs(), call->getArgs())) {
         QoreIRValue result;

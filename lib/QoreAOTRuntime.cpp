@@ -1452,10 +1452,14 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
-    // STATIC_METHOD_CALL: ref1(stringref) + ref2(stringref) + num_args(u8) + N×skipOneExpr
+    // STATIC_METHOD_CALL: ref1(stringref) + ref2(stringref) + optional receiver type + num_args(u8)
+    // + N×skipOneExpr
     if (ek == AOTExprKind::STATIC_METHOD_CALL) {
         rdr.readStringRef(p);  // class path
         rdr.readStringRef(p);  // method name
+        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
+            rdr.readStringRef(p);  // receiver type path
+        }
         uint8_t na = QoreAOTBinaryReader::readU8(p);
         for (uint8_t i = 0; i < na; ++i) {
             skipOneExpr(rdr, p, e);  // each arg
@@ -2631,6 +2635,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // ref1 = class path, ref2 = method name, followed by serialized args
                 ref1 = reader.readStringRef(ptr);
                 ref2 = reader.readStringRef(ptr);
+                const char* ref3 = nullptr;
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
+                    ref3 = reader.readStringRef(ptr);
+                }
                 std::string method_name_storage;
                 const char* method_name = ref2;
                 const char* sig_text = nullptr;
@@ -2675,7 +2683,25 @@ static QoreAOTContext* buildContextFromSlotMap(
                         if (m) {
                             ctx->call_targets[i].method = m;
                             ctx->call_targets[i].is_static_method = true;
-                            if (sig_text) {
+                            const QoreTypeInfo* receiver_type_info = nullptr;
+                            if (ref3 && *ref3) {
+                                QoreAOTTypeResolver type_resolver(pgm);
+                                std::string type_error;
+                                receiver_type_info = type_resolver.resolve(ref3, type_error);
+                                if (!receiver_type_info || !type_error.empty()) {
+                                    if (trace_slot_reg) {
+                                        fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] STATIC_METHOD_CALL cannot "
+                                            "resolve receiver type '%s': %s\n", name, i, ref3,
+                                            type_error.c_str());
+                                    }
+                                    if (call_args) {
+                                        call_args->deref(nullptr);
+                                    }
+                                    has_unsupported = true;
+                                    continue;
+                                }
+                            }
+                            if (sig_text && !receiver_type_info) {
                                 MethodFunctionBase* mfb = qore_method_private::get(
                                     *const_cast<QoreMethod*>(m))->getFunction();
                                 ctx->call_targets[i].variant = findAOTVariantBySignatureText(mfb, sig_text);
@@ -2696,6 +2722,15 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 call_args = nullptr;
                             }
                             StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, pln);
+                            smcn->setReceiverTypeInfo(receiver_type_info);
+                            if (sig_text) {
+                                MethodFunctionBase* mfb = qore_method_private::get(
+                                    *const_cast<QoreMethod*>(m))->getFunction();
+                                if (const AbstractQoreFunctionVariant* v = findAOTVariantBySignatureText(mfb,
+                                        sig_text)) {
+                                    smcn->setVariant(v);
+                                }
+                            }
                             if (pln) {
                                 smcn->resolveParseArgs();
                             }

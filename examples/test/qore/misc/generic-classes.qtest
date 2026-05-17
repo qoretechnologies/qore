@@ -103,6 +103,45 @@ class SourceGenericBodyBase<T> {
 class SourceFixedBodyChild2 inherits SourceGenericBodyBase<int> {
 }
 
+class SourceGenericStaticFactory<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    static SourceGenericStaticFactory<T> make(T value) {
+        return new SourceGenericStaticFactory<T>(value);
+    }
+
+    static list<T> collect(T value) {
+        list<T> rv();
+        rv += value;
+        return rv;
+    }
+
+    static T echoThroughLocal(auto value) {
+        T local = value;
+        return local;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+hashdecl SourceGenericResult<T> {
+    T value;
+    list<T> values;
+}
+
+hashdecl SourceGenericEnvelope<T> {
+    string status;
+    hash<SourceGenericResult<T>> result;
+}
+
 class SourceTypedIterator<T> inherits AbstractIterator<T> {
     private {
         T value;
@@ -168,6 +207,37 @@ namespace SourceGenericNs {
             return value;
         }
     }
+
+    class StaticFactory<T> {
+        private {
+            T value;
+        }
+
+        constructor(T value) {
+            self.value = value;
+        }
+
+        static StaticFactory<T> make(T value) {
+            return new StaticFactory<T>(value);
+        }
+
+        static T echoThroughLocal(auto value) {
+            T local = value;
+            return local;
+        }
+
+        T get() {
+            return self.value;
+        }
+    }
+
+    hashdecl Result<T> {
+        T value;
+    }
+
+    hashdecl Envelope<T> {
+        hash<Result<T>> result;
+    }
 }
 
 public class GenericClassTypesTest inherits QUnit::Test {
@@ -178,6 +248,8 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("generic overloads", \genericOverloads());
         addTestCase("runtime substitution errors", \runtimeSubstitutionErrors());
         addTestCase("generic inheritance", \genericInheritance());
+        addTestCase("static generic methods", \staticGenericMethods());
+        addTestCase("generic hashdecls", \genericHashDecls());
         addTestCase("source generic iterators", \sourceGenericIterators());
         addTestCase("source raw generic compatibility", \sourceRawGenericCompatibility());
         addTestCase("parse checks", \parseChecks());
@@ -255,6 +327,45 @@ public class GenericClassTypesTest inherits QUnit::Test {
         assertEq((7,), collected);
     }
 
+    staticGenericMethods() {
+        SourceGenericStaticFactory<int> f = SourceGenericStaticFactory<int>::make(8);
+        assertEq(8, f.get());
+
+        list<int> values = SourceGenericStaticFactory<int>::collect(9);
+        assertEq((9,), values);
+
+        assertEq(10, SourceGenericStaticFactory<int>::echoThroughLocal(10));
+        assertThrows("RUNTIME-TYPE-ERROR",
+            sub () { SourceGenericStaticFactory<int>::echoThroughLocal("x"); });
+
+        SourceGenericStaticFactory<string> sf = SourceGenericStaticFactory<string>::make("v");
+        assertEq("v", sf.get());
+
+        SourceGenericNs::StaticFactory<int> nsf = SourceGenericNs::StaticFactory<int>::make(13);
+        assertEq(13, nsf.get());
+        assertEq(14, SourceGenericNs::StaticFactory<int>::echoThroughLocal(14));
+        assertThrows("RUNTIME-TYPE-ERROR",
+            sub () { SourceGenericNs::StaticFactory<int>::echoThroughLocal("x"); });
+    }
+
+    genericHashDecls() {
+        hash<SourceGenericResult<int>> result(("value": 11, "values": (12,)));
+        assertEq(11, result.value);
+        assertEq((12,), result.values);
+
+        hash<SourceGenericEnvelope<int>> envelope(("status": "ok", "result": result));
+        assertEq("ok", envelope.status);
+        assertEq(11, envelope.result.value);
+
+        hash<SourceGenericNs::Result<int>> ns_result(("value": 13));
+        assertEq(13, ns_result.value);
+        hash<SourceGenericNs::Envelope<int>> ns_envelope(("result": ns_result));
+        assertEq(13, ns_envelope.result.value);
+
+        any bad_value = {"value": "x", "values": (1,)};
+        assertThrows("RUNTIME-TYPE-ERROR", sub () { hash<SourceGenericResult<int>> bad = bad_value; });
+    }
+
     sourceGenericIterators() {
         SourceTypedIterator<int> it(5);
         assertTrue(it instanceof AbstractIterator<int>);
@@ -317,6 +428,39 @@ public class GenericClassTypesTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE);
             assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
                 "class Box<T> { constructor(T value) {} } sub t() { Box<int> b(\"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { static Box<T> make(T value) { return new Box<T>(value); } } "
+                "sub t() { Box<int> b = Box<int>::make(\"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("INVALID-METHOD", \p.parse(), (
+                "class Box<T> { T get(T value) { return value; } } sub t() { Box<int>::get(1); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (
+                "hashdecl Result<T> { T value; } sub t() { hash<Result<int>> r((\"value\": \"x\")); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T> { T value; } hash<Result> r;", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T> { T value; } hash<Result<int, string>> r;", "generic-classes"));
         }
 
         {

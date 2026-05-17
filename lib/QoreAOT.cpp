@@ -560,7 +560,7 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
 
 //! Scan all IR instructions in a function and collect required features
 static uint64_t scanIRFeatureFlags(const QoreIRFunction& f) {
-    uint64_t flags = 0;
+    uint64_t flags = QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE;
     for (const auto& block : f.blocks) {
         for (const auto& inst : block->instructions) {
             flags |= opcodeToFeatureFlag(inst->opcode);
@@ -711,6 +711,10 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // raw construction compatibility, and source-stripped AOT must preserve
     // those migration flags.
     flags |= QORE_AOT_FEAT_CLASS_RAW_GENERIC;
+    // Static method call expressions and call-target slots carry the
+    // parameterized receiver type so generic static methods evaluate with the
+    // same T/K/V substitutions as source execution.
+    flags |= QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE;
     return flags;
 }
 
@@ -12130,6 +12134,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             }
         }
         id.ref2 = call->getName();
+        id.ref3 = qore_get_aot_serializable_type_path(call->getReceiverTypeInfo());
         if (const AbstractQoreFunctionVariant* v = call->getVariant()) {
             if (AbstractFunctionSignature* sig = const_cast<AbstractQoreFunctionVariant*>(v)->getSignature()) {
                 id.ref2 += "\n";

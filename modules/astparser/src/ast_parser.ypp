@@ -1495,10 +1495,20 @@ hashdecl_inherits:
         }
         ;
 
-hashdecl_def:
+        hashdecl_def:
         nsc_modifiers TOK_HASHDECL IDENTIFIER hashdecl_inherits '{' hashdecl_attributes '}' {
             ASTModifiers mods($1);
             ASTName name($3, ASTNameKind::ANK_Identifier);
+            name.loc = @3;
+            free($3);
+
+            $$ = new ASTHashDeclaration(mods, std::move(name), $4, $6);
+            $$->loc.set(@1, @7);
+            delete $6;
+        }
+        | nsc_modifiers TOK_HASHDECL ANGLE_IDENTIFIER hashdecl_inherits '{' hashdecl_attributes '}' {
+            ASTModifiers mods($1);
+            ASTName name($3, ASTNameKind::ANK_AngleIdentifier);
             name.loc = @3;
             free($3);
 

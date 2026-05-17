@@ -35,10 +35,15 @@
 
 #include "qore/intern/QoreClassIntern.h"
 
+#include <map>
+#include <mutex>
 #include <string>
+#include <vector>
 
 class typed_hash_decl_private;
 class NamedScope;
+
+DLLLOCAL const typed_hash_decl_private* parse_get_hashdecl_type_param_context();
 
 class HashDeclMemberInfo : public QoreMemberInfoBase {
 public:
@@ -53,6 +58,8 @@ public:
     DLLLOCAL bool equal(const HashDeclMemberInfo& other) const;
 
     DLLLOCAL int parseInit(const char* name, bool priv);
+
+    DLLLOCAL HashDeclMemberInfo* instantiate(const QoreTypeInfo* receiver_type_info) const;
 };
 
 typedef QoreMemberMapBase<HashDeclMemberInfo> HashDeclMemberMap;
@@ -77,6 +84,9 @@ public:
 
     DLLLOCAL ~typed_hash_decl_private() {
         assert(!refs.reference_count());
+        for (auto& i : parameterized_hashdecl_cache) {
+            typed_hash_decl_private::get(*i.second)->deref();
+        }
         delete typeInfo;
         delete orNothingTypeInfo;
         delete parse_parent;
@@ -233,6 +243,44 @@ public:
         members.addNoCheck(pair);
     }
 
+    DLLLOCAL void addTypeParameter(const char* param) {
+        type_params.push_back(param);
+    }
+
+    DLLLOCAL bool hasTypeParams() const {
+        return !type_params.empty();
+    }
+
+    DLLLOCAL size_t getTypeParamCount() const {
+        return type_params.size();
+    }
+
+    DLLLOCAL const char* getTypeParamName(size_t i) const {
+        assert(i < type_params.size());
+        return type_params[i].c_str();
+    }
+
+    DLLLOCAL bool isParameterizedHashDecl() const {
+        return parameterized_base;
+    }
+
+    DLLLOCAL const TypedHashDecl* getParameterizedBase() const {
+        return parameterized_base;
+    }
+
+    DLLLOCAL const std::vector<const QoreTypeInfo*>& getTypeArgs() const {
+        return type_args;
+    }
+
+    DLLLOCAL const TypedHashDecl* getParameterizedHashDecl(
+            const std::vector<const QoreTypeInfo*>& args) const;
+
+    DLLLOCAL const QoreTypeInfo* getParameterizedTypeInfo(const std::vector<const QoreTypeInfo*>& args,
+            bool or_nothing = false) const {
+        const TypedHashDecl* hd = getParameterizedHashDecl(args);
+        return hd ? hd->getTypeInfo(or_nothing) : nullptr;
+    }
+
     DLLLOCAL bool hasMember(const char* name) const {
         if (members.inList(name)) {
             return true;
@@ -256,6 +304,10 @@ public:
 
     DLLLOCAL const char* getPath() const {
         return path.c_str();
+    }
+
+    DLLLOCAL const TypedHashDecl* getHashDecl() const {
+        return thd;
     }
 
     DLLLOCAL const std::string& getNameStr() const {
@@ -359,6 +411,13 @@ protected:
 
     // member information
     HashDeclMemberMap members;
+
+    // Source generic type parameters and cached concrete instantiations.
+    std::vector<std::string> type_params;
+    mutable std::mutex parameterized_hashdecl_cache_lock;
+    mutable std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*> parameterized_hashdecl_cache;
+    const TypedHashDecl* parameterized_base = nullptr;
+    std::vector<const QoreTypeInfo*> type_args;
 
     // parent hashdecl (resolved after parseInit)
     const TypedHashDecl* parentHashDecl = nullptr;

@@ -1525,9 +1525,15 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
     }
 
     if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
-        const QoreClass* owner = tpi->getOwnerClass();
-        std::string rv = tpi->isOrNothing() ? "*typeparam<" : "typeparam<";
-        rv += owner ? owner->getPath() : "";
+        const QoreClass* owner_class = tpi->getOwnerClass();
+        const TypedHashDecl* owner_hashdecl = tpi->getOwnerHashDecl();
+        std::string rv = tpi->isOrNothing() ? "*" : "";
+        rv += owner_hashdecl ? "hashdecl_typeparam<" : "typeparam<";
+        if (owner_hashdecl) {
+            rv += owner_hashdecl->getNamespacePath();
+        } else if (owner_class) {
+            rv += owner_class->getPath();
+        }
         rv += ", ";
         rv += std::to_string(tpi->getIndex());
         rv += ", ";
@@ -3323,6 +3329,43 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveTypeParameterType(const char* pa
 
     bool or_nothing = false;
     std::vector<std::string> args;
+    if (extract_aot_type_args(path, "hashdecl_typeparam", or_nothing, args)) {
+        if (args.size() != 3) {
+            return nullptr;
+        }
+
+        std::string hashdecl_path = args[0];
+        while (hashdecl_path.rfind("::", 0) == 0) {
+            hashdecl_path.erase(0, 2);
+        }
+
+        const QoreNamespace* pns = nullptr;
+        const TypedHashDecl* hd = pgm->findHashDecl(hashdecl_path.c_str(), pns);
+        if (!hd) {
+            return nullptr;
+        }
+
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+        if (!hp->hasTypeParams()) {
+            return nullptr;
+        }
+
+        errno = 0;
+        char* end = nullptr;
+        unsigned long long raw_index = strtoull(args[1].c_str(), &end, 10);
+        if (errno || !end || *end || raw_index >= hp->getTypeParamCount()) {
+            return nullptr;
+        }
+
+        size_t index = static_cast<size_t>(raw_index);
+        const char* param_name = hp->getTypeParamName(index);
+        if (!param_name || args[2] != param_name) {
+            return nullptr;
+        }
+
+        return qore_get_hashdecl_type_parameter_type(hd, index, param_name, or_nothing);
+    }
+
     if (!extract_aot_type_args(path, "typeparam", or_nothing, args) || args.size() != 3) {
         return nullptr;
     }
@@ -5936,6 +5979,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeStringRef("");
         }
         writer.writeStringRef(call->getName());
+        if ((writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
+            writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
+        }
         // Serialize method args (must match read_expr_static_method_call format)
         const QoreListNode* args = call->getArgs();
         if (!write_qore_arg_list(args)) {

@@ -377,7 +377,8 @@ public:
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
-            bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr);
+            bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* explicit_receiver_type_info = nullptr);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -396,7 +397,8 @@ public:
     DLLLOCAL CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
-            bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr);
+            bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
+            const QoreTypeInfo* explicit_receiver_type_info = nullptr);
 
     DLLLOCAL ~CodeEvaluationHelper();
 
@@ -508,9 +510,12 @@ protected:
     const QoreProgramLocation* old_runtime_ctx_loc = nullptr;
     QoreParseOptions old_runtime_po;
     QoreParseOptions old_rc_po;
+    const QoreTypeInfo* explicit_receiver_type_info = nullptr;
+    const QoreTypeInfo* old_receiver_type_info = nullptr;
     q_rt_flags_t old_rtflags = 0;
     bool restore_stack = false;
     bool restore_runtime_ctx = false;
+    bool restore_receiver_type_info = false;
     bool restore_rtflags = false;
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,

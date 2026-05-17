@@ -2662,6 +2662,26 @@ hash\<{WORD}\>\{                        {
 #endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
+({WORD}::)*{WORD}<[a-zA-Z\*<>:_0-9 \t,!().]+>::{WORD} {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return SCOPED_REF;
+                                           }
+                                           parse_error(*get_loc(yylloc), "unterminated type specification in "
+                                               "static method call '%s'", yytext);
+                                           yylval->string = strdup(yytext);
+                                           return SCOPED_REF;
+                                        }
+(::{WORD})+<[a-zA-Z\*<>:_0-9 \t,!().]+>::{WORD} {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return SCOPED_REF;
+                                           }
+                                           parse_error(*get_loc(yylloc), "unterminated type specification in "
+                                               "static method call '%s'", yytext);
+                                           yylval->string = strdup(yytext);
+                                           return SCOPED_REF;
+                                        }
 ({WORD}::)+{WORD}<[a-zA-Z\*<:_0-9 \t,!().]+> {
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);

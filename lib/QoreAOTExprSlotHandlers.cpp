@@ -944,6 +944,9 @@ static bool write_slot_SELF_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
 static bool write_slot_STATIC_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
+        ctx.writer.writeStringRef(ctx.expr.ref3.c_str());
+    }
     // Serialize method args (may contain sub-expressions like string constants)
     return write_slot_args_prefer_call(ctx);
 }

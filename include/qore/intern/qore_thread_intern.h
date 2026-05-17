@@ -69,6 +69,7 @@ class ConstantEntry;
 class qore_ns_private;
 class qore_root_ns_private;
 class qore_class_private;
+class QoreTypeInfo;
 class AbstractQoreFunctionVariant;
 class AbstractQoreZoneInfo;
 class ThreadProgramData;
@@ -709,6 +710,9 @@ DLLLOCAL QoreObject* runtime_get_stack_object();
 // to get the current runtime class
 DLLLOCAL const qore_class_private* runtime_get_class();
 DLLLOCAL void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& qc);
+// to get or set the current generic receiver type for static generic method bodies
+DLLLOCAL const QoreTypeInfo* runtime_get_receiver_type_info();
+DLLLOCAL const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti);
 // for methods that behave differently when called within the method itself (methodGate(), memberGate(), etc)
 DLLLOCAL bool runtime_in_object_method(const char* name, const QoreObject* o);
 

@@ -289,6 +289,9 @@ static bool instRegistryWriteCallTargetExpr(AOTInstWriteCtx& ctx, const QoreValu
         const QoreClass* qc = method ? method->getClass() : nullptr;
         ctx.writer.writeStringRef(qc ? qc->getNamespacePath().c_str() : "");
         ctx.writer.writeStringRef(call->getName() ? call->getName() : "");
+        if ((ctx.writer.feature_flags & QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE) != 0) {
+            ctx.writer.writeStringRef(qore_get_aot_serializable_type_path(call->getReceiverTypeInfo()).c_str());
+        }
         ctx.writer.writeU8(0);
         return true;
     }

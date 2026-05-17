@@ -46,6 +46,7 @@
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/QoreTypeSpecMatchRegistry.h"
+#include "qore/intern/qore_thread_intern.h"
 #include "qore/QoreIteratorBase.h"
 
 #include <algorithm>
@@ -334,12 +335,14 @@ typedef std::map<ParameterizedClassCacheKey, QoreParameterizedClassTypeInfo*> pa
 static parameterized_class_map_t parameterized_class_map;
 
 struct TypeParameterCacheKey {
-    const QoreClass* ownerClass;
+    const void* owner;
+    bool hashdeclOwner;
     size_t index;
     bool orNothing;
 
     bool operator<(const TypeParameterCacheKey& other) const {
-        if (ownerClass != other.ownerClass) return ownerClass < other.ownerClass;
+        if (hashdeclOwner != other.hashdeclOwner) return hashdeclOwner < other.hashdeclOwner;
+        if (owner != other.owner) return owner < other.owner;
         if (index != other.index) return index < other.index;
         return orNothing < other.orNothing;
     }
@@ -877,6 +880,22 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const QoreClass* owner, siz
     pname = tname.c_str();
 }
 
+QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const TypedHashDecl* owner, size_t n_index,
+        const char* name, bool n_or_nothing, const QoreTypeParameterTypeInfo* value_type)
+        : QoreTypeInfo(
+            make_type_parameter_accept_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            make_type_parameter_return_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            build_type_parameter_name(name, n_or_nothing)),
+        owner_hashdecl(owner),
+        index(n_index),
+        param_name(name),
+        or_nothing(n_or_nothing) {
+    assert(owner_hashdecl);
+    assert(name && *name);
+    assert(!or_nothing || value_type);
+    pname = tname.c_str();
+}
+
 QoreTypeParameterTypeSpec::QoreTypeParameterTypeSpec(const QoreTypeParameterTypeInfo* ti)
         : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_TYPEPARAM) {
 }
@@ -920,7 +939,31 @@ const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owner, size_t 
 
     AutoLocker al(ctl);
 
-    TypeParameterCacheKey key {owner, index, or_nothing};
+    TypeParameterCacheKey key {owner, false, index, or_nothing};
+    type_parameter_map_t::iterator i = type_parameter_map.lower_bound(key);
+    if (i != type_parameter_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
+    type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_hashdecl_type_parameter_type(const TypedHashDecl* owner, size_t index,
+        const char* name, bool or_nothing) {
+    assert(owner);
+    assert(name && *name);
+
+    const QoreTypeParameterTypeInfo* value_type = nullptr;
+    if (or_nothing) {
+        value_type = static_cast<const QoreTypeParameterTypeInfo*>(
+            qore_get_hashdecl_type_parameter_type(owner, index, name, false));
+    }
+
+    AutoLocker al(ctl);
+
+    TypeParameterCacheKey key {owner, true, index, or_nothing};
     type_parameter_map_t::iterator i = type_parameter_map.lower_bound(key);
     if (i != type_parameter_map.end() && !(key < i->first)) {
         return i->second;
@@ -1038,11 +1081,8 @@ const QoreTypeInfo* qore_get_union_or_nothing_type(const type_vec_t& member_type
     return qore_get_union_type(member_types, true);
 }
 
-// Forward declaration
-static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str);
-
 // Helper function to parse a type string into a QoreParseTypeInfo with proper subtypes
-static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str) {
+QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str) {
     // Trim whitespace
     while (*type_str && isspace(*type_str)) ++type_str;
     if (!*type_str) return nullptr;
@@ -1101,7 +1141,7 @@ static QoreParseTypeInfo* parse_type_string_to_pti(const char* type_str) {
             while (!current.empty() && isspace(current.front())) current.erase(0, 1);
             if (!current.empty()) {
                 // Recursively parse this subtype
-                QoreParseTypeInfo* sub_pti = parse_type_string_to_pti(current.c_str());
+                QoreParseTypeInfo* sub_pti = qore_parse_type_string_to_pti(current.c_str());
                 if (sub_pti) {
                     subtypes.push_back(sub_pti);
                 }
@@ -1154,7 +1194,7 @@ static const QoreTypeInfo* parse_and_resolve_type_string(const char* type_str, c
     }
 
     // Parse the type string into a QoreParseTypeInfo with proper structure
-    QoreParseTypeInfo* pti = parse_type_string_to_pti(type_str);
+    QoreParseTypeInfo* pti = qore_parse_type_string_to_pti(type_str);
     if (!pti) return nullptr;
 
     return QoreParseTypeInfo::resolveAndDelete(pti, loc, err);
@@ -1350,6 +1390,27 @@ const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* re
 
 static const QoreTypeInfo* get_substituted_type_param_arg(const QoreTypeParameterTypeInfo* tpi,
         const QoreTypeInfo* receiver_type_info) {
+    if (const TypedHashDecl* owner_hashdecl = tpi->getOwnerHashDecl()) {
+        const TypedHashDecl* receiver_hashdecl = QoreTypeInfo::getTypedHash(receiver_type_info);
+        if (!receiver_hashdecl) {
+            return nullptr;
+        }
+
+        const typed_hash_decl_private* receiver_hp = typed_hash_decl_private::get(*receiver_hashdecl);
+        const TypedHashDecl* base_hashdecl = receiver_hp->getParameterizedBase();
+        if (!base_hashdecl || !base_hashdecl->equal(owner_hashdecl)) {
+            return nullptr;
+        }
+
+        const std::vector<const QoreTypeInfo*>& args = receiver_hp->getTypeArgs();
+        if (tpi->getIndex() >= args.size()) {
+            return nullptr;
+        }
+
+        const QoreTypeInfo* arg = args[tpi->getIndex()];
+        return tpi->isOrNothing() ? get_or_nothing_type_check(arg) : arg;
+    }
+
     const QoreParameterizedClassTypeInfo* receiver_pti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);
     if (!receiver_pti) {
         const QoreClass* receiver_class = QoreTypeInfo::getUniqueReturnClass(receiver_type_info);
@@ -1390,6 +1451,11 @@ const QoreTypeInfo* qore_get_object_receiver_type_info(const QoreObject* self) {
     return ti ? ti : self->getClass()->getTypeInfo();
 }
 
+const QoreTypeInfo* qore_get_current_receiver_type_info() {
+    const QoreTypeInfo* ti = runtime_get_receiver_type_info();
+    return ti ? ti : qore_get_object_receiver_type_info(runtime_get_stack_object());
+}
+
 const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const QoreTypeInfo* receiver_type_info) {
     if (!ti || !receiver_type_info) {
         return ti;
@@ -1412,6 +1478,26 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
             }
         }
         return changed ? qore_get_parameterized_class_type(pti->getBaseClass(), args, pti->isOrNothing()) : ti;
+    }
+
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+        if (hp->isParameterizedHashDecl()) {
+            type_vec_t args;
+            args.reserve(hp->getTypeArgs().size());
+            bool changed = false;
+            for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                const QoreTypeInfo* subst = qore_substitute_type_params(arg, receiver_type_info);
+                args.push_back(subst);
+                if (subst != arg) {
+                    changed = true;
+                }
+            }
+            if (changed) {
+                const typed_hash_decl_private* base = typed_hash_decl_private::get(*hp->getParameterizedBase());
+                return base->getParameterizedTypeInfo(args, QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING));
+            }
+        }
     }
 
     if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
@@ -2612,20 +2698,84 @@ static const QoreTypeInfo* qore_resolve_parse_type_parameter(const NamedScope& c
         return nullptr;
     }
 
+    const char* name = cscope.getIdentifier();
     qore_class_private* qc = parse_get_class_priv();
-    if (!qc || !qc->hasTypeParams()) {
-        return nullptr;
+    if (qc && qc->hasTypeParams()) {
+        for (size_t i = 0, e = qc->getTypeParamCount(); i < e; ++i) {
+            const char* param = qc->getTypeParamName(i);
+            if (!strcmp(name, param)) {
+                return qore_get_type_parameter_type(qc->cls, i, param, or_nothing);
+            }
+        }
     }
 
-    const char* name = cscope.getIdentifier();
-    for (size_t i = 0, e = qc->getTypeParamCount(); i < e; ++i) {
-        const char* param = qc->getTypeParamName(i);
-        if (!strcmp(name, param)) {
-            return qore_get_type_parameter_type(qc->cls, i, param, or_nothing);
+    const typed_hash_decl_private* hd = parse_get_hashdecl_type_param_context();
+    if (hd && hd->hasTypeParams()) {
+        for (size_t i = 0, e = hd->getTypeParamCount(); i < e; ++i) {
+            const char* param = hd->getTypeParamName(i);
+            if (!strcmp(name, param)) {
+                return qore_get_hashdecl_type_parameter_type(hd->getHashDecl(), i, param, or_nothing);
+            }
         }
     }
 
     return nullptr;
+}
+
+static TypedHashDecl* qore_parse_try_find_hashdecl(const NamedScope& nscope) {
+    return qore_root_ns_private::get(*getRootNS())->parseTryFindHashDecl(nscope);
+}
+
+static const TypedHashDecl* qore_resolve_parse_hashdecl_type(const QoreParseTypeInfo& pti,
+        const QoreProgramLocation* loc, int& err) {
+    const TypedHashDecl* hd = qore_parse_try_find_hashdecl(*pti.cscope);
+    if (!hd) {
+        return nullptr;
+    }
+
+    const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+    if (pti.subtypes.empty()) {
+        if (hp->hasTypeParams()) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic hashdecl '%s' declares %d "
+                "type parameter%s and must be used with explicit type arguments", QoreParseTypeInfo::getName(&pti),
+                pti.cscope->ostr, (int)hp->getTypeParamCount(), qore_type_arg_plural(hp->getTypeParamCount()));
+            err = -1;
+            return hd;
+        }
+        return hd;
+    }
+
+    if (!hp->hasTypeParams()) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; hashdecl '%s' does not declare type "
+            "parameters, so it cannot be used with %d type argument%s", QoreParseTypeInfo::getName(&pti),
+            pti.cscope->ostr, (int)pti.subtypes.size(), qore_type_arg_plural(pti.subtypes.size()));
+        err = -1;
+        return hd;
+    }
+
+    size_t expected = hp->getTypeParamCount();
+    size_t actual = pti.subtypes.size();
+    if (actual != expected) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic hashdecl '%s' declares %d type "
+            "parameter%s, but %d type argument%s %s provided", QoreParseTypeInfo::getName(&pti),
+            pti.cscope->ostr, (int)expected, qore_type_arg_plural(expected), (int)actual, qore_type_arg_plural(actual),
+            actual == 1 ? "was" : "were");
+        err = -1;
+        return hd;
+    }
+
+    type_vec_t args;
+    args.reserve(actual);
+    for (const auto& st : pti.subtypes) {
+        const QoreTypeInfo* arg = QoreParseTypeInfo::resolveAny(st, loc, err);
+        if (err) {
+            return hd;
+        }
+        args.push_back(arg);
+    }
+
+    const TypedHashDecl* parameterized_hd = hp->getParameterizedHashDecl(args);
+    return parameterized_hd ? parameterized_hd : hd;
 }
 
 static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const QoreParseTypeInfo& pti,
@@ -2687,6 +2837,35 @@ static const QoreTypeInfo* qore_resolve_runtime_parameterized_class_type(const Q
     return qc->getTypeInfo(args, or_nothing);
 }
 
+static const TypedHashDecl* qore_resolve_runtime_hashdecl_type(const QoreParseTypeInfo& pti) {
+    const qore_ns_private* ns;
+    const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->runtimeFindHashDeclIntern(*pti.cscope, ns);
+    if (!hd) {
+        return nullptr;
+    }
+
+    const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+    if (pti.subtypes.empty()) {
+        return hp->hasTypeParams() ? nullptr : hd;
+    }
+
+    if (!hp->hasTypeParams() || pti.subtypes.size() != hp->getTypeParamCount()) {
+        return nullptr;
+    }
+
+    type_vec_t args;
+    args.reserve(pti.subtypes.size());
+    for (const auto& st : pti.subtypes) {
+        const QoreTypeInfo* arg = QoreParseTypeInfo::resolveRuntime(st);
+        if (!arg) {
+            return nullptr;
+        }
+        args.push_back(arg);
+    }
+
+    return hp->getParameterizedHashDecl(args);
+}
+
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntime() const {
     if (!subtypes.empty())
         return resolveRuntimeSubtype();
@@ -2703,8 +2882,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
                 return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
             // resolve hashdecl
-            const qore_ns_private* ns;
-            const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->runtimeFindHashDeclIntern(*subtypes[0]->cscope, ns);
+            const TypedHashDecl* hd = qore_resolve_runtime_hashdecl_type(*subtypes[0]);
             if (!hd)
                 return nullptr;
             return hd->getTypeInfo(or_nothing);
@@ -2990,6 +3168,10 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
     if (rv) {
         return rv;
     }
+    const TypedHashDecl* hd = qore_resolve_runtime_hashdecl_type(*this);
+    if (hd) {
+        return hd->getTypeInfo(or_nothing);
+    }
     return nullptr;
 }
 
@@ -3002,8 +3184,12 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeClass(const NamedScope& csc
     // check for hashdecl (must be checked after class lookup)
     const qore_ns_private* ns;
     const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->runtimeFindHashDeclIntern(cscope, ns);
-    if (hd)
+    if (hd) {
+        if (typed_hash_decl_private::get(*hd)->hasTypeParams()) {
+            return nullptr;
+        }
         return hd->getTypeInfo(or_nothing);
+    }
 
     return nullptr;
 }
@@ -3016,8 +3202,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             if (!strcmp(subtypes[0]->cscope->ostr, "auto!"))
                 return or_nothing ? autoNoNarrowHashOrNothingTypeInfo : autoNoNarrowHashTypeInfo;
             // resolve hashdecl
-            const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc,
-                *subtypes[0]->cscope);
+            const TypedHashDecl* hd = qore_resolve_parse_hashdecl_type(*subtypes[0], loc, err);
             if (hd) {
                 return hd->getTypeInfo(or_nothing);
             }
@@ -3373,6 +3558,11 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         return rv ? rv : autoTypeInfo;
     }
 
+    const TypedHashDecl* hd = qore_resolve_parse_hashdecl_type(*this, loc, err);
+    if (hd || err) {
+        return hd ? hd->getTypeInfo(or_nothing) : autoTypeInfo;
+    }
+
     parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; type '%s' does not take subtype declarations",
         getName(), cscope->getIdentifier());
     err = -1;
@@ -3475,6 +3665,12 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveClass(const QoreProgramLocation* l
     // check for hashdecl (must be checked after class/enum lookup)
     const TypedHashDecl* hd = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc, cscope);
     if (hd) {
+        if (typed_hash_decl_private::get(*hd)->hasTypeParams()) {
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve generic hashdecl '%s' without explicit type "
+                "arguments", cscope.ostr);
+            err = -1;
+            return autoTypeInfo;
+        }
         return hd->getTypeInfo(or_nothing);
     }
 

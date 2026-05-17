@@ -113,6 +113,36 @@ Child<int> child();
 int echoed = child.echo(value);
     @endcode
 
+    Static methods on source-defined generic classes can use class type
+    parameters when the call target is parameterized:
+
+    @code{.py}
+class Factory<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    static Factory<T> make(T value) {
+        return new Factory<T>(value);
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Factory<int> f = Factory<int>::make(10);
+int made = f.get();
+    @endcode
+
+    The receiver type in <tt>Factory&lt;int&gt;::make(...)</tt> supplies the
+    concrete type argument used for argument checking, local declarations, and
+    return checking inside the static method body.
+
     Source-defined generic class types are runtime checked and are invariant.
     Unlike migrated builtin classes, source-defined generic classes do not
     provide raw compatibility by default; use explicit type arguments such as

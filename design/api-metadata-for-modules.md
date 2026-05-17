@@ -139,6 +139,64 @@ When `raw_construction_defaults_to_auto` is true, raw examples may still be
 valid for compatibility, but new generated snippets should prefer explicit
 type arguments when the value type is known and use `<auto>` only when it is not.
 
+Static methods on source-defined generic classes can also use the formal class
+type parameters. Metadata consumers should generate examples with a
+parameterized receiver so the call site contains enough information for type
+substitution:
+
+```qore
+Factory<int> f = Factory<int>::make(value: 42);
+```
+
+## Generic Hashdecl Metadata
+
+Hashdecl metadata should expose formal type parameters the same way class
+metadata does. This is required for result records and provider payload records
+where a single logical field type should be visible to QLS, generated examples,
+and API documentation.
+
+For every hashdecl object, metadata may include:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `type_parameters` | `list<string>` | Formal hashdecl type parameter names in declaration order |
+| `members` | `list<object>` | Member metadata with type strings that may reference formal parameters |
+
+Example:
+
+```json
+{
+  "name": "Result",
+  "namespace_path": "Example",
+  "type_parameters": ["T"],
+  "members": [
+    {"name": "status", "type_name": "string"},
+    {"name": "value", "type_name": "T"},
+    {"name": "values", "type_name": "list<T>"}
+  ]
+}
+```
+
+Concrete API signatures and examples should preserve parameterized hashdecl
+spelling in type paths:
+
+```json
+{
+  "name": "fetch",
+  "signature": "hash<Result<int>> fetch(int id)",
+  "return_type": "hash<Result<int>>"
+}
+```
+
+```qore
+hash<Result<int>> result = fetch(id: 42);
+int value = result.value;
+```
+
+Consumers must distinguish a raw generic hashdecl declaration (`Result<T>`) from
+a concrete typed hash use (`hash<Result<int>>`). New examples should use
+concrete type arguments whenever the payload type is known.
+
 ## Problem
 
 Previously, only the core `qore` repo generated `.meta.json` files from its 132+ qpp

@@ -379,6 +379,9 @@ public:
     // current class context
     const qore_class_private* current_class = nullptr;
 
+    // current generic receiver type for static generic method bodies
+    const QoreTypeInfo* current_receiver_type_info = nullptr;
+
     // current program context
     QoreProgram* current_pgm = nullptr;
 
@@ -2341,6 +2344,17 @@ void runtime_get_object_and_class(QoreObject*& obj, const qore_class_private*& q
     ThreadData* td = thread_data.get();
     obj = td->current_obj;
     qc = td->current_class;
+}
+
+const QoreTypeInfo* runtime_get_receiver_type_info() {
+    return thread_data.get()->current_receiver_type_info;
+}
+
+const QoreTypeInfo* runtime_set_receiver_type_info(const QoreTypeInfo* ti) {
+    ThreadData* td = thread_data.get();
+    const QoreTypeInfo* old = td->current_receiver_type_info;
+    td->current_receiver_type_info = ti;
+    return old;
 }
 
 ProgramThreadCountContextHelper::ProgramThreadCountContextHelper(ExceptionSink* xsink, QoreProgram* pgm,

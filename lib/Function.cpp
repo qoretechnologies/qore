@@ -470,10 +470,11 @@ static void add_args(QoreStringNode &desc, const QoreListNode* args) {
 CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
-        QoreProgram* pgm_ctx)
+        QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
-        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1) {
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        explicit_receiver_type_info(n_explicit_receiver_type_info) {
     if (self && !self->isValid()) {
         assert(n_qc);
         xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has already been " \
@@ -493,10 +494,11 @@ CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig
 CodeEvaluationHelper::CodeEvaluationHelper(ExceptionSink* n_xsink, RuntimeConfig& n_rc, const QoreFunction* func,
         const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args, QoreObject* self,
         const qore_class_private* n_qc, qore_call_t n_ct, bool is_copy, const qore_class_private* cctx,
-        QoreProgram* pgm_ctx)
+        QoreProgram* pgm_ctx, const QoreTypeInfo* n_explicit_receiver_type_info)
     : ct(n_ct), name(n_name), xsink(n_xsink), rc(n_rc), qc(n_qc),
         loc(get_runtime_location()),
-        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1) {
+        tmp(n_xsink), returnTypeInfo((const QoreTypeInfo*)-1),
+        explicit_receiver_type_info(n_explicit_receiver_type_info) {
     if (self && !self->isValid()) {
         assert(n_qc);
         xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has already been " \
@@ -528,6 +530,9 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     if (restore_rtflags) {
         rc.setRuntimeFlags(old_rtflags);
     }
+    if (restore_receiver_type_info) {
+        runtime_set_receiver_type_info(old_receiver_type_info);
+    }
     if (returnTypeInfo != (const QoreTypeInfo*)-1) {
         saveReturnTypeInfo(returnTypeInfo);
     }
@@ -546,7 +551,13 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
-    receiver_type_info = qore_get_object_receiver_type_info(self);
+    receiver_type_info = explicit_receiver_type_info
+        ? explicit_receiver_type_info
+        : qore_get_object_receiver_type_info(self);
+    if (receiver_type_info) {
+        old_receiver_type_info = runtime_set_receiver_type_info(receiver_type_info);
+        restore_receiver_type_info = true;
+    }
 
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
@@ -4243,7 +4254,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
         if (!*xsink) {
             const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-                qore_get_object_receiver_type_info(self));
+                qore_get_current_receiver_type_info());
             if (rt && QoreTypeInfo::hasType(rt)) {
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -4387,7 +4398,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
         if (!*xsink) {
             const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-                qore_get_object_receiver_type_info(self));
+                qore_get_current_receiver_type_info());
             if (rt && QoreTypeInfo::hasType(rt)) {
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -4452,7 +4463,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     if (!*xsink && val.isNothing()) {
         const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-            qore_get_object_receiver_type_info(self));
+            qore_get_current_receiver_type_info());
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
         if (*xsink) {
             xsink->overrideLocation(*signature.getParseLocation());
@@ -4541,7 +4552,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     // only check if there isn't an active exception
     if (!*xsink && val.isNothing()) {
         const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-            qore_get_object_receiver_type_info(self));
+            qore_get_current_receiver_type_info());
 
         // check return type
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);

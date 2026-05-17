@@ -79,6 +79,10 @@ public:
         return variant;
     }
 
+    DLLLOCAL const QoreTypeInfo* getReceiverTypeInfo() const {
+        return receiver_type_info;
+    }
+
     DLLLOCAL void setVariant(const AbstractQoreFunctionVariant* v) {
         variant = v;
     }
@@ -629,7 +633,8 @@ public:
 
     // used when copying (for background expressions with processed arguments)
     DLLLOCAL StaticMethodCallNode(const StaticMethodCallNode& old, QoreListNode* args)
-            : AbstractFunctionCallNode(old, args), method(old.method) {
+            : AbstractFunctionCallNode(old, args), scope(old.scope ? old.scope->copy() : nullptr),
+            method(old.method) {
     }
 
     DLLLOCAL StaticMethodCallNode(const QoreProgramLocation* loc, const QoreMethod* m, QoreParseListNode* args)

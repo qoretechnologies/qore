@@ -37,6 +37,27 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 
+static thread_local const typed_hash_decl_private* parse_hashdecl_type_param_context = nullptr;
+
+class HashDeclTypeParamContextHelper {
+public:
+    DLLLOCAL HashDeclTypeParamContextHelper(const typed_hash_decl_private* n_context)
+            : old_context(parse_hashdecl_type_param_context) {
+        parse_hashdecl_type_param_context = n_context;
+    }
+
+    DLLLOCAL ~HashDeclTypeParamContextHelper() {
+        parse_hashdecl_type_param_context = old_context;
+    }
+
+private:
+    const typed_hash_decl_private* old_context;
+};
+
+const typed_hash_decl_private* parse_get_hashdecl_type_param_context() {
+    return parse_hashdecl_type_param_context;
+}
+
 bool HashDeclMemberInfo::equal(const HashDeclMemberInfo& other) const {
     return QoreTypeInfo::equal(typeInfo, other.typeInfo);
 }
@@ -87,6 +108,12 @@ int HashDeclMemberInfo::parseInit(const char* name, bool priv) {
     return err;
 }
 
+HashDeclMemberInfo* HashDeclMemberInfo::instantiate(const QoreTypeInfo* receiver_type_info) const {
+    HashDeclMemberInfo* rv = new HashDeclMemberInfo(*this);
+    rv->typeInfo = qore_substitute_type_params(typeInfo, receiver_type_info);
+    return rv;
+}
+
 int typed_hash_decl_private::parseInit() {
     if (parse_init_done || sys) {
         return 0;
@@ -135,15 +162,90 @@ int typed_hash_decl_private::parseInit() {
         }
     }
 
-    // Initialize own members
-    for (auto& i : members.member_list) {
-        if (i.second) {
-            if (i.second->parseInit(i.first, true) && !err) {
-                err = -1;
+    {
+        HashDeclTypeParamContextHelper hashdecl_type_param_context(this);
+
+        // Initialize own members
+        for (auto& i : members.member_list) {
+            if (i.second) {
+                if (i.second->parseInit(i.first, true) && !err) {
+                    err = -1;
+                }
             }
         }
     }
     return err;
+}
+
+static std::string make_parameterized_hashdecl_name(const std::string& base,
+        const std::vector<const QoreTypeInfo*>& args, bool path) {
+    std::string rv(base);
+    rv += "<";
+    for (size_t i = 0, e = args.size(); i < e; ++i) {
+        if (i) {
+            rv += ", ";
+        }
+        rv += path ? QoreTypeInfo::getPath(args[i]) : QoreTypeInfo::getName(args[i]);
+    }
+    rv += ">";
+    return rv;
+}
+
+const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
+        const std::vector<const QoreTypeInfo*>& args) const {
+    const typed_hash_decl_private* base = parameterized_base ? get(*parameterized_base) : this;
+    if (base != this) {
+        return base->getParameterizedHashDecl(args);
+    }
+
+    if (args.size() != type_params.size()) {
+        return nullptr;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        auto i = parameterized_hashdecl_cache.lower_bound(args);
+        if (i != parameterized_hashdecl_cache.end()
+                && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
+            return i->second;
+        }
+    }
+
+    const_cast<typed_hash_decl_private*>(this)->parseInit();
+
+    typed_hash_decl_private* priv = new typed_hash_decl_private(loc);
+    priv->name = make_parameterized_hashdecl_name(name, args, false);
+    priv->path = make_parameterized_hashdecl_name(path, args, true);
+    priv->from_module = from_module;
+    priv->orig = priv;
+    priv->parentHashDecl = parentHashDecl;
+    priv->parentHashDeclName = parentHashDeclName;
+    priv->pub = pub;
+    priv->sys = sys;
+    priv->reexport = reexport;
+    priv->parse_init_done = true;
+    priv->parameterized_base = thd;
+    priv->type_args = args;
+    priv->ns = ns;
+
+    priv->thd = new TypedHashDecl(priv);
+    const QoreTypeInfo* receiver_type_info = priv->thd->getTypeInfo();
+    for (auto& mi : members.member_list) {
+        priv->members.addNoCheck(strdup(mi.first), mi.second ? mi.second->instantiate(receiver_type_info) : nullptr);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(parameterized_hashdecl_cache_lock);
+        auto i = parameterized_hashdecl_cache.lower_bound(args);
+        if (i != parameterized_hashdecl_cache.end()
+                && !(parameterized_hashdecl_cache.key_comp()(args, i->first))) {
+            typed_hash_decl_private::get(*priv->thd)->deref();
+            return i->second;
+        }
+        parameterized_hashdecl_cache.insert(i,
+            std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*>::value_type(args, priv->thd));
+    }
+    return priv->thd;
 }
 
 // NOTE: the new namespace will be set manually after this call
@@ -170,6 +272,9 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         // chains: A → B (via reexport) → C will reach C.
         reexport(old.reexport),
         parse_init_done(old.parse_init_done) {
+    type_params = old.type_params;
+    parameterized_base = old.parameterized_base;
+    type_args = old.type_args;
     // copy member list
     for (auto& i : old.members.member_list) {
         HashDeclMemberInfo* new_member = i.second ? new HashDeclMemberInfo(*i.second) : nullptr;
