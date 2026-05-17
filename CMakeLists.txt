@@ -36,6 +36,18 @@ if (APPLE)
     )
     if (_brew_result EQUAL 0 AND _brew_prefix)
         list(APPEND CMAKE_PREFIX_PATH "${_brew_prefix}")
+        # ICU is keg-only in Homebrew, so add its prefix explicitly for
+        # find_package(ICU) and pkg-config based discovery.
+        execute_process(
+            COMMAND brew --prefix icu4c
+            OUTPUT_VARIABLE _brew_icu_prefix
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+            RESULT_VARIABLE _brew_icu_result
+        )
+        if (_brew_icu_result EQUAL 0 AND _brew_icu_prefix)
+            list(APPEND CMAKE_PREFIX_PATH "${_brew_icu_prefix}")
+        endif()
     endif()
 endif()
 
