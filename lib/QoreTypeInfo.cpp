@@ -314,6 +314,24 @@ struct ComplexCodeCacheKey {
 typedef std::map<ComplexCodeCacheKey, QoreComplexCodeTypeInfo*> complex_code_map_t;
 static complex_code_map_t complex_code_map;
 
+struct ParameterizedClassCacheKey {
+    const QoreClass* baseClass;
+    type_vec_t typeArgs;
+    bool orNothing;
+
+    bool operator<(const ParameterizedClassCacheKey& other) const {
+        if (baseClass != other.baseClass) return baseClass < other.baseClass;
+        if (typeArgs.size() != other.typeArgs.size()) return typeArgs.size() < other.typeArgs.size();
+        for (size_t i = 0; i < typeArgs.size(); ++i) {
+            if (typeArgs[i] != other.typeArgs[i]) return typeArgs[i] < other.typeArgs[i];
+        }
+        return orNothing < other.orNothing;
+    }
+};
+
+typedef std::map<ParameterizedClassCacheKey, QoreParameterizedClassTypeInfo*> parameterized_class_map_t;
+static parameterized_class_map_t parameterized_class_map;
+
 // Cache for parameterized HashPairInfo types based on value type
 typedef std::map<const QoreTypeInfo*, TypedHashDecl*> hp_decl_map_t;
 static hp_decl_map_t hp_decl_map;
@@ -436,6 +454,9 @@ void delete_qore_types() {
     // Clean up typed callable type cache
     for (auto& i : complex_code_map)
         delete i.second;
+    // Clean up parameterized class type cache
+    for (auto& i : parameterized_class_map)
+        delete i.second;
     // Clean up hash pair info decl cache
     for (auto& i : hp_decl_map)
         typed_hash_decl_private::get(*i.second)->deref();
@@ -467,6 +488,13 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
         const QoreClass* qc = QoreTypeInfo::getReturnClass(typeInfo);
         if (qc) {
             return qc->getTypeInfo();
+        }
+    }
+
+    {
+        const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
+        if (pti) {
+            return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), false);
         }
     }
 
@@ -531,6 +559,13 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(typeInfo);
         if (qc) {
             return qc->getOrNothingTypeInfo();
+        }
+    }
+
+    {
+        const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(typeInfo);
+        if (pti) {
+            return qore_get_parameterized_class_type(pti->getBaseClass(), pti->getTypeArgs(), true);
         }
     }
 
@@ -709,6 +744,100 @@ const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInf
 
     QoreComplexReferenceOrNothingTypeInfo* ti = new QoreComplexReferenceOrNothingTypeInfo(vti);
     cron_map.insert(i, tmap_t::value_type(vti, ti));
+    return ti;
+}
+
+static type_vec_t normalize_parameterized_class_args(const std::vector<const QoreTypeInfo*>& args) {
+    type_vec_t rv;
+    rv.reserve(args.size());
+    for (const QoreTypeInfo* arg : args) {
+        rv.push_back(arg == autoNoNarrowTypeInfo ? autoTypeInfo : arg);
+    }
+    return rv;
+}
+
+static QoreString build_parameterized_class_name(const QoreClass* qc, const type_vec_t& args, bool or_nothing,
+        bool path) {
+    QoreString rv;
+    if (or_nothing) {
+        rv.concat('*');
+    }
+    rv.concat("object<");
+    rv.concat(path ? qc->getPath() : qc->getName());
+    rv.concat('<');
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (i) {
+            rv.concat(", ");
+        }
+        rv.concat(path ? QoreTypeInfo::getPath(args[i]) : QoreTypeInfo::getName(args[i]));
+    }
+    rv.concat(">>");
+    return rv;
+}
+
+static q_accept_vec_t make_parameterized_class_accept_vec(const QoreParameterizedClassTypeInfo* ti,
+        bool or_nothing) {
+    q_accept_vec_t rv {{QoreParameterizedClassTypeSpec(ti), nullptr, !or_nothing}};
+    if (or_nothing) {
+        rv.emplace_back(QoreTypeSpec(NT_NOTHING), nullptr);
+        rv.emplace_back(QoreTypeSpec(NT_NULL),
+            [] (QoreValue& n, ExceptionSink* xsink) { n.assignNothing(); });
+    }
+    return rv;
+}
+
+static q_return_vec_t make_parameterized_class_return_vec(const QoreParameterizedClassTypeInfo* ti,
+        bool or_nothing) {
+    q_return_vec_t rv {{QoreParameterizedClassTypeSpec(ti), !or_nothing}};
+    if (or_nothing) {
+        rv.emplace_back(QoreTypeSpec(NT_NOTHING));
+    }
+    return rv;
+}
+
+QoreParameterizedClassTypeInfo::QoreParameterizedClassTypeInfo(const QoreClass* qc,
+        const std::vector<const QoreTypeInfo*>& type_args, bool n_or_nothing,
+        const QoreParameterizedClassTypeInfo* value_type)
+        : QoreTypeInfo(
+            make_parameterized_class_accept_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            make_parameterized_class_return_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            build_parameterized_class_name(qc, normalize_parameterized_class_args(type_args), n_or_nothing, false)),
+        base_class(qc),
+        type_args(normalize_parameterized_class_args(type_args)),
+        or_nothing(n_or_nothing) {
+    assert(base_class);
+    assert(!this->type_args.empty());
+    assert(!or_nothing || value_type);
+    pname = build_parameterized_class_name(base_class, this->type_args, or_nothing, true).c_str();
+}
+
+QoreParameterizedClassTypeSpec::QoreParameterizedClassTypeSpec(const QoreParameterizedClassTypeInfo* ti)
+        : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_PARAMCLASS) {
+}
+
+const QoreTypeInfo* qore_get_parameterized_class_type(const QoreClass* qc,
+        const std::vector<const QoreTypeInfo*>& args, bool or_nothing) {
+    assert(qc);
+    assert(!args.empty());
+
+    type_vec_t normalized_args = normalize_parameterized_class_args(args);
+    const QoreParameterizedClassTypeInfo* value_type = nullptr;
+    if (or_nothing) {
+        value_type = static_cast<const QoreParameterizedClassTypeInfo*>(
+            qore_get_parameterized_class_type(qc, normalized_args, false));
+    }
+
+    AutoLocker al(ctl);
+
+    ParameterizedClassCacheKey key {qc, normalized_args, or_nothing};
+    parameterized_class_map_t::iterator i = parameterized_class_map.lower_bound(key);
+    if (i != parameterized_class_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreParameterizedClassTypeInfo* ti = new QoreParameterizedClassTypeInfo(qc, normalized_args, or_nothing,
+        value_type);
+    parameterized_class_map.insert(i, parameterized_class_map_t::value_type(key, ti));
     return ti;
 }
 
@@ -1345,6 +1474,20 @@ const char* QoreTypeSpec::getName() const {
     return QoreTypeInfo::getName(getTypeInfo());
 }
 
+const QoreClass* QoreTypeSpec::getClass() const {
+    if (typespec == QTS_CLASS) {
+        return u.qc;
+    }
+    if (typespec == QTS_PARAMCLASS) {
+        return getParameterizedClassTypeInfo()->getBaseClass();
+    }
+    return nullptr;
+}
+
+const QoreParameterizedClassTypeInfo* QoreTypeSpec::getParameterizedClassTypeInfo() const {
+    return typespec == QTS_PARAMCLASS ? static_cast<const QoreParameterizedClassTypeInfo*>(u.ti) : nullptr;
+}
+
 const char* QoreTypeSpec::getTypeName() const {
     switch (typespec) {
         case QTS_CLASS:
@@ -1464,7 +1607,7 @@ qore_type_result_e QoreTypeSpec::tryMatchReferenceType(const QoreTypeSpec& t, bo
 }
 
 qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
-    if (typespec == QTS_CLASS) {
+    if (typespec == QTS_CLASS || typespec == QTS_PARAMCLASS) {
         return t == NT_OBJECT ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_HASHDECL || typespec == QTS_COMPLEXHASH) {
         return t == NT_HASH ? QTI_IDENT : QTI_NOT_EQUAL;
@@ -1620,9 +1763,31 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
     switch (typespec) {
         case QTS_CLASS: {
             if (t == NT_OBJECT) {
-                ok = type_spec_accept_object(*u.qc, *n.get<const QoreObject>()->getClass(), priv_error);
+                const QoreObject* obj = n.get<const QoreObject>();
+                const qore_class_private* target = qore_class_private::get(*u.qc);
+                if (!obj->getInstantiatedTypeInfo() || !target->hasTypeParams()
+                        || target->rawAcceptsParameterized()) {
+                    ok = type_spec_accept_object(*u.qc, *obj->getClass(), priv_error);
+                }
             } else if (t == NT_WEAKREF) {
-                ok = type_spec_accept_object(*u.qc, *n.get<const WeakReferenceNode>()->get()->getClass(), priv_error);
+                const QoreObject* obj = n.get<const WeakReferenceNode>()->get();
+                const qore_class_private* target = qore_class_private::get(*u.qc);
+                if (!obj->getInstantiatedTypeInfo() || !target->hasTypeParams()
+                        || target->rawAcceptsParameterized()) {
+                    ok = type_spec_accept_object(*u.qc, *obj->getClass(), priv_error);
+                }
+            }
+            break;
+        }
+        case QTS_PARAMCLASS: {
+            const QoreObject* obj = nullptr;
+            if (t == NT_OBJECT) {
+                obj = n.get<const QoreObject>();
+            } else if (t == NT_WEAKREF) {
+                obj = n.get<const WeakReferenceNode>()->get();
+            }
+            if (obj && obj->getInstantiatedTypeInfo() == u.ti) {
+                ok = true;
             }
             break;
         }
@@ -1807,6 +1972,8 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
         case QTS_COMPLEXHARDREF:
         case QTS_COMPLEXREF:
             return QoreTypeInfo::equal(u.ti, other.u.ti);
+        case QTS_PARAMCLASS:
+            return u.ti == other.u.ti;
         case QTS_HARDREF:
              return true;
         case QTS_ENUM:
@@ -1831,6 +1998,11 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 obj = n.get<const WeakReferenceNode>()->get();
             }
             if (obj) {
+                const qore_class_private* target = qore_class_private::get(*u.qc);
+                if (obj->getInstantiatedTypeInfo() && target->hasTypeParams()
+                        && !target->rawAcceptsParameterized()) {
+                    return QTI_NOT_EQUAL;
+                }
                 qore_type_result_e rv = qore_class_private::runtimeCheckCompatibleClass(*u.qc, *obj->getClass());
                 if (rv == QTI_NOT_EQUAL) {
                     return rv;
@@ -1840,6 +2012,22 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                     return QTI_NOT_EQUAL;
                 }
                 return (rv == QTI_IDENT && exact) ? QTI_IDENT : QTI_AMBIGUOUS;
+            }
+            return QTI_NOT_EQUAL;
+        }
+
+        case QTS_PARAMCLASS: {
+            const QoreObject* obj = nullptr;
+            if (ot == NT_OBJECT) {
+                obj = n.get<const QoreObject>();
+            } else if (ot == NT_WEAKREF) {
+                obj = n.get<const WeakReferenceNode>()->get();
+            }
+            if (!obj || !obj->isValid()) {
+                return QTI_NOT_EQUAL;
+            }
+            if (obj->getInstantiatedTypeInfo() == u.ti) {
+                return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
             return QTI_NOT_EQUAL;
         }

@@ -36,6 +36,7 @@
 #include <cstdarg>
 #include <memory>
 #include <string>
+#include <vector>
 
 // all qore class IDs
 DLLEXPORT extern qore_classid_t CID_AUTOGATE;
@@ -970,6 +971,16 @@ public:
 
     //! returns the type information structure for this class
     DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
+
+    //! returns the parameterized type information structure for this class and the given type arguments
+    DLLLOCAL const QoreTypeInfo* getTypeInfo(const std::vector<const QoreTypeInfo*>& args,
+            bool or_nothing = false) const;
+
+    //! returns true if this class declares formal type parameters
+    DLLLOCAL bool hasTypeParameters() const;
+
+    //! returns the number of formal type parameters declared by this class
+    DLLLOCAL size_t getTypeParameterCount() const;
 
     //! returns the "or nothing" type information structure for this class
     DLLEXPORT const QoreTypeInfo* getOrNothingTypeInfo() const;

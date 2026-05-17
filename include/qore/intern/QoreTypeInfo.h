@@ -244,6 +244,14 @@ public:
     }
 
     // static version of method, checking for null pointer
+    DLLLOCAL static const QoreParameterizedClassTypeInfo* getParameterizedClassType(const QoreTypeInfo* ti) {
+        if (!ti || ti->return_vec.empty() || !hasType(ti)) {
+            return nullptr;
+        }
+        return ti->return_vec[0].spec.getParameterizedClassTypeInfo();
+    }
+
+    // static version of method, checking for null pointer
     DLLLOCAL static const TypedHashDecl* getUniqueReturnHashDecl(const QoreTypeInfo* ti) {
         if (!ti || ti->return_vec.size() > 1 || !hasType(ti))
             return nullptr;
@@ -946,6 +954,47 @@ protected:
     // returns true if there is no type or if the type can be converted to a scalar value, false if otherwise
     DLLLOCAL virtual bool canConvertToScalarImpl() const {
         return false;
+    }
+};
+
+class QoreParameterizedClassTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreParameterizedClassTypeInfo(const QoreClass* qc,
+            const std::vector<const QoreTypeInfo*>& type_args, bool or_nothing,
+            const QoreParameterizedClassTypeInfo* value_type = nullptr);
+
+    DLLLOCAL const QoreClass* getBaseClass() const {
+        return base_class;
+    }
+
+    DLLLOCAL const std::vector<const QoreTypeInfo*>& getTypeArgs() const {
+        return type_args;
+    }
+
+    DLLLOCAL size_t getArgCount() const {
+        return type_args.size();
+    }
+
+    DLLLOCAL bool isOrNothing() const {
+        return or_nothing;
+    }
+
+protected:
+    const QoreClass* base_class;
+    std::vector<const QoreTypeInfo*> type_args;
+    bool or_nothing;
+    std::string pname;
+
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
+        qore_string_private::get(str)->concat(&tname);
+    }
+
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+
+    DLLLOCAL const char* getPathImpl() const {
+        return pname.c_str();
     }
 };
 

@@ -569,6 +569,8 @@ qore_class_private::qore_class_private(QoreClass* n_cls, std::string&& nme, std:
         // after construction.  Without this initializer the bit-field has
         // indeterminate value and parse-time inheritance picks up garbage.
         reexport(false),
+        raw_accepts_parameterized(false),
+        raw_construction_defaults_to_auto(false),
         domain(dom),
         num_methods(0),
         num_user_methods(0),
@@ -757,6 +759,9 @@ qore_class_private::qore_class_private(const qore_class_private& old, qore_ns_pr
         // child-Program propagation continues through transitive %requires
         // chains: A → B (via reexport) → C will reach C.
         reexport(old.reexport),
+        raw_accepts_parameterized(old.raw_accepts_parameterized),
+        raw_construction_defaults_to_auto(old.raw_construction_defaults_to_auto),
+        type_params(old.type_params),
         domain(old.domain),
         num_methods(old.num_methods),
         num_user_methods(old.num_user_methods),
@@ -5274,6 +5279,19 @@ const QoreMethod* QoreClass::getMemberNotificationMethod() const {
 
 const QoreTypeInfo* QoreClass::getTypeInfo() const {
     return priv->getTypeInfo();
+}
+
+const QoreTypeInfo* QoreClass::getTypeInfo(const std::vector<const QoreTypeInfo*>& args,
+        bool or_nothing) const {
+    return priv->getTypeInfo(args, or_nothing);
+}
+
+bool QoreClass::hasTypeParameters() const {
+    return priv->hasTypeParams();
+}
+
+size_t QoreClass::getTypeParameterCount() const {
+    return priv->getTypeParamCount();
 }
 
 const QoreTypeInfo* QoreClass::getOrNothingTypeInfo() const {

@@ -116,6 +116,12 @@ const QoreTypeSpecMatchHandlerInfo QORE_TYPE_SPEC_MATCH_REGISTRY[] = {
         match_QTS_ENUM,
         "Enum type - same-enum-declaration identity check"
     },
+    {
+        "QTS_PARAMCLASS",
+        QTS_PARAMCLASS,
+        match_QTS_PARAMCLASS,
+        "Parameterized class type - invariant type-argument matching with object/reference fallback"
+    },
     { nullptr, (q_typespec_t)0, nullptr, nullptr } // sentinel
 };
 

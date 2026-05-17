@@ -41,6 +41,7 @@
 
 // Forward declarations
 class QoreTypeInfo;
+class QoreParameterizedClassTypeInfo;
 class LValueHelper;
 class QoreHashNode;
 class QoreListNode;
@@ -52,6 +53,8 @@ DLLLOCAL void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo);
 
 // internal use only
 DLLLOCAL const QoreTypeInfo* qore_get_complex_hard_reference_type(const QoreTypeInfo* valueTypeInfo);
+DLLLOCAL const QoreTypeInfo* qore_get_parameterized_class_type(const QoreClass* qc,
+        const std::vector<const QoreTypeInfo*>& args, bool or_nothing = false);
 
 enum q_typespec_t : unsigned char {
     QTS_TYPE = 0,
@@ -66,9 +69,10 @@ enum q_typespec_t : unsigned char {
     QTS_EMPTYLIST = 9,
     QTS_EMPTYHASH = 10,
     QTS_ENUM = 11,
+    QTS_PARAMCLASS = 12,
 };
 
-static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_ENUM) + 1;
+static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_PARAMCLASS) + 1;
 
 typedef std::function<void (QoreValue&, ExceptionSink*)> q_type_map_t;
 
@@ -111,9 +115,9 @@ public:
     // returns the base qore_type_t for the type specification
     DLLLOCAL qore_type_t getType() const;
 
-    DLLLOCAL const QoreClass* getClass() const {
-        return typespec == QTS_CLASS ? u.qc : nullptr;
-    }
+    DLLLOCAL const QoreClass* getClass() const;
+
+    DLLLOCAL const QoreParameterizedClassTypeInfo* getParameterizedClassTypeInfo() const;
 
     DLLLOCAL const TypedHashDecl* getHashDecl() const {
         return typespec == QTS_HASHDECL ? u.hd : nullptr;
@@ -160,6 +164,7 @@ public:
                 || typespec == QTS_COMPLEXHARDREF
                 || typespec == QTS_COMPLEXREF
                 || typespec == QTS_ENUM
+                || typespec == QTS_PARAMCLASS
             ;
     }
 
@@ -187,6 +192,9 @@ public:
             case QTS_CLASS:
                 return u.qc->getTypeInfo();
 
+            case QTS_PARAMCLASS:
+                return u.ti;
+
             case QTS_TYPE:
                 return getTypeInfoForType(u.t);
 
@@ -212,6 +220,7 @@ public:
             case QTS_COMPLEXSOFTLIST:
                 return listTypeInfo;
             case QTS_CLASS:
+            case QTS_PARAMCLASS:
                 return objectTypeInfo;
             case QTS_HARDREF:
             case QTS_COMPLEXHARDREF:
@@ -341,6 +350,11 @@ class QoreComplexReferenceTypeSpec : public QoreTypeSpec {
 public:
     DLLLOCAL QoreComplexReferenceTypeSpec(const QoreTypeInfo* ti) : QoreTypeSpec(ti, QTS_COMPLEXREF) {
     }
+};
+
+class QoreParameterizedClassTypeSpec : public QoreTypeSpec {
+public:
+    DLLLOCAL QoreParameterizedClassTypeSpec(const QoreParameterizedClassTypeInfo* ti);
 };
 
 class QoreEmptyListTypeSpec : public QoreTypeSpec {

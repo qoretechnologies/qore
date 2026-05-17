@@ -44,6 +44,7 @@ qore_type_t QoreTypeSpec::getType() const {
         case QTS_EMPTYHASH:
             return u.t;
         case QTS_CLASS:
+        case QTS_PARAMCLASS:
             return NT_OBJECT;
         case QTS_COMPLEXHASH:
         case QTS_HASHDECL:

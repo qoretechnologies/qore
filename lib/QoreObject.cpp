@@ -123,9 +123,10 @@ static void qore_trace_object_ref(const char* op, const qore_object_private* pri
     }
 }
 
-qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p, QoreHashNode* n_data) :
+qore_object_private::qore_object_private(QoreObject* n_obj, const QoreClass* oc, QoreProgram* p,
+        QoreHashNode* n_data, const QoreTypeInfo* n_instantiated_type) :
         RObject(n_obj->references, true),
-        theclass(oc), data(n_data), pgm(p), system_object(!p),
+        theclass(oc), instantiated_type(n_instantiated_type), data(n_data), pgm(p), system_object(!p),
         in_destructor(false),
         recursive_ref_found(false),
         obj(n_obj) {
@@ -232,6 +233,7 @@ void qore_object_private::decScanPrivateData() {
 int qore_object_private::copyData(ExceptionSink* xsink, const qore_object_private& old) {
     // copy public data from source object
     assert(!data);
+    instantiated_type = old.instantiated_type;
     data = old.copyData(xsink);
     if (*xsink) {
         return -1;
@@ -1363,6 +1365,14 @@ QoreObject::~QoreObject() {
 
 const QoreClass* QoreObject::getClass() const {
     return priv->theclass;
+}
+
+const QoreTypeInfo* QoreObject::getInstantiatedTypeInfo() const {
+    return priv->instantiated_type;
+}
+
+void QoreObject::setInstantiatedTypeInfo(const QoreTypeInfo* typeInfo) {
+    priv->instantiated_type = typeInfo;
 }
 
 const char *QoreObject::getClassName() const {

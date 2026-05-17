@@ -42,6 +42,7 @@ class BuiltinNormalMethodVariantBase;
 class BuiltinCopyVariantBase;
 class QoreExternalMethodVariant;
 class QoreProgram;
+class QoreTypeInfo;
 class ReferenceNode;
 
 //! the implementation of Qore's object data type, reference counted, dynamically-allocated only
@@ -405,6 +406,12 @@ public:
         @return a pointer to the QoreClass of this object
     */
     DLLEXPORT const QoreClass* getClass() const;
+
+    //! returns the concrete parameterized object type, if any
+    DLLLOCAL const QoreTypeInfo* getInstantiatedTypeInfo() const;
+
+    //! sets the concrete parameterized object type during construction or copying
+    DLLLOCAL void setInstantiatedTypeInfo(const QoreTypeInfo* typeInfo);
 
     //! returns the name of the class
     /**

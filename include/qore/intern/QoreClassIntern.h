@@ -2024,8 +2024,12 @@ public:
         // semantic and avoids diamond conflicts with namespace-merged
         // public classes (e.g. those brought in via %requires) that the
         // host never opted to expose to %requires children.
-        reexport : 1
+        reexport : 1,
+        raw_accepts_parameterized : 1,
+        raw_construction_defaults_to_auto : 1
         ;
+
+    std::vector<std::string> type_params;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
     mutable QoreReferenceCounter refs;  // existence references
@@ -2261,8 +2265,29 @@ public:
         return typeInfo;
     }
 
+    DLLLOCAL const QoreTypeInfo* getTypeInfo(const std::vector<const QoreTypeInfo*>& args,
+            bool or_nothing = false) const {
+        return qore_get_parameterized_class_type(cls, args, or_nothing);
+    }
+
     DLLLOCAL const QoreTypeInfo* getOrNothingTypeInfo() const {
         return orNothingTypeInfo;
+    }
+
+    DLLLOCAL bool hasTypeParams() const {
+        return !type_params.empty();
+    }
+
+    DLLLOCAL size_t getTypeParamCount() const {
+        return type_params.size();
+    }
+
+    DLLLOCAL bool rawAcceptsParameterized() const {
+        return raw_accepts_parameterized;
+    }
+
+    DLLLOCAL bool rawConstructionDefaultsToAuto() const {
+        return raw_construction_defaults_to_auto;
     }
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;

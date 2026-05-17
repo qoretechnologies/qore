@@ -50,6 +50,22 @@ static qore_type_result_e match_QTS_CLASS(const QoreTypeSpec& self, QoreTypeSpec
             ctx.max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
             return rv;
         }
+        case QTS_PARAMCLASS: {
+            const QoreParameterizedClassTypeInfo* pti = ctx.t.getParameterizedClassTypeInfo();
+            const qore_class_private* target = qore_class_private::get(*self.getClass());
+            qore_type_result_e rv = qore_class_private::get(*pti->getBaseClass())->parseCheckCompatibleClass(
+                *target, ctx.may_not_match);
+            if (rv == QTI_NOT_EQUAL) {
+                ctx.max_result = rv;
+                return rv;
+            }
+            if (target->hasTypeParams() && !target->rawAcceptsParameterized()) {
+                ctx.max_result = QTI_NOT_EQUAL;
+                return QTI_NOT_EQUAL;
+            }
+            ctx.max_result = QTI_IDENT;
+            return rv;
+        }
         default: {
             qore_type_t tt = ctx.t.getType();
             if (tt == NT_ALL || tt == NT_OBJECT) {
@@ -278,6 +294,48 @@ static qore_type_result_e match_QTS_COMPLEXREF(const QoreTypeSpec& self, QoreTyp
             return QTI_NOT_EQUAL;
     }
     return QTI_NOT_EQUAL;
+}
+
+// Handler for QTS_PARAMCLASS: invariant parameterized class type matching
+static qore_type_result_e match_QTS_PARAMCLASS(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
+    const QoreParameterizedClassTypeInfo* self_pti = self.getParameterizedClassTypeInfo();
+    assert(self_pti);
+
+    switch (ctx.t.getTypeSpec()) {
+        case QTS_PARAMCLASS:
+            if (self_pti == ctx.t.getParameterizedClassTypeInfo()) {
+                ctx.max_result = QTI_IDENT;
+                return QTI_IDENT;
+            }
+            return QTI_NOT_EQUAL;
+
+        case QTS_CLASS: {
+            qore_type_result_e rv = qore_class_private::get(*ctx.t.getClass())->parseCheckCompatibleClass(
+                *qore_class_private::get(*self_pti->getBaseClass()), ctx.may_not_match);
+            if (rv == QTI_NOT_EQUAL) {
+                ctx.max_result = rv;
+                return rv;
+            }
+            ctx.may_not_match = true;
+            ctx.max_result = QTI_IDENT;
+            return QTI_AMBIGUOUS;
+        }
+
+        case QTS_TYPE:
+            if (ctx.t.getType() == NT_ALL || ctx.t.getType() == NT_OBJECT) {
+                ctx.may_not_match = true;
+                ctx.max_result = QTI_IDENT;
+                return QTI_AMBIGUOUS;
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    qore_type_result_e rv = self.tryMatchReferenceType(ctx.t, ctx.may_not_match);
+    ctx.max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
+    return rv;
 }
 
 // Handler for QTS_ENUM: same-enum-declaration identity check
