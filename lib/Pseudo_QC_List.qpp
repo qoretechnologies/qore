@@ -32,6 +32,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/QoreListIterator.h"
 #include "qore/intern/RangeIterator.h"
+#include "qore/intern/SingleValueIterator.h"
 #include "qore/intern/qore_list_private.h"
 
 extern QoreClass* QC_LISTITERATOR;
@@ -224,7 +225,7 @@ map printf("+ %y\n", $1), l.iterator();
     @since %Qore 0.8.6
  */
 AbstractIterator <list>::iterator() [flags=CONSTANT] {
-   return new QoreObject(QC_LISTITERATOR, 0, new QoreListIterator(l));
+   return qore_new_list_iterator_object(0, l);
 }
 
 //! Returns a @ref Qore::RangeIterator "RangeIterator" object for the list elements
@@ -243,7 +244,7 @@ map printf("+ %y\n", $1), l.ranegIterator();
  */
 AbstractIterator <list>::rangeIterator(auto value) [flags=CONSTANT,NAMED_ARGS] {
    if (l->empty())
-      return new QoreObject(QC_SINGLEVALUEITERATOR, 0, new SingleValueIterator);
+      return qore_new_single_value_iterator_object(0, QoreValue(), autoTypeInfo);
 
    ReferenceHolder<RangeIterator> r(new RangeIterator(0, l->size(), 1, value, xsink), xsink);
    if (*xsink)

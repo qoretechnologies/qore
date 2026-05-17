@@ -2182,6 +2182,27 @@ class ReflectionTest inherits QUnit::Test {
             channel_iterator_class.getMethod("getValue").getVariants()[0];
         assertEq("T", channel_iterator_get_variant.getReturnType().getName());
 
+        Class list_iterator_class = Class::forName("ListIterator");
+        assertEq(("T",), list_iterator_class.getTypeParameters());
+        NormalMethodVariant list_iterator_get_variant =
+            list_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("T", list_iterator_get_variant.getReturnType().getName());
+
+        Class hash_iterator_class = Class::forName("HashIterator");
+        assertEq(("V",), hash_iterator_class.getTypeParameters());
+        NormalMethodVariant hash_iterator_get_variant =
+            hash_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("V", hash_iterator_get_variant.getReturnType().getName());
+        NormalMethodVariant hash_iterator_key_value_variant =
+            hash_iterator_class.getMethod("getKeyValue").getVariants()[0];
+        assertEq("V", hash_iterator_key_value_variant.getReturnType().getName());
+
+        Class single_value_iterator_class = Class::forName("SingleValueIterator");
+        assertEq(("T",), single_value_iterator_class.getTypeParameters());
+        NormalMethodVariant single_value_iterator_get_variant =
+            single_value_iterator_class.getMethod("getValue").getVariants()[0];
+        assertEq("T", single_value_iterator_get_variant.getReturnType().getName());
+
         Type queue_int("Queue<int>");
         assertTrue(queue_int.isParameterized());
         assertEq("object<Queue<int>>", queue_int.getName());
@@ -2207,6 +2228,21 @@ class ReflectionTest inherits QUnit::Test {
         assertTrue(channel_iterator_string.isParameterized());
         assertEq("object<ChannelIterator<string>>", channel_iterator_string.getName());
         assertTrue(StringType.isEqual(channel_iterator_string.getTypeArguments()[0]));
+
+        Type list_iterator_int("ListIterator<int>");
+        assertTrue(list_iterator_int.isParameterized());
+        assertEq("object<ListIterator<int>>", list_iterator_int.getName());
+        assertTrue(IntType.isEqual(list_iterator_int.getTypeArguments()[0]));
+
+        Type hash_iterator_string("HashIterator<string>");
+        assertTrue(hash_iterator_string.isParameterized());
+        assertEq("object<HashIterator<string>>", hash_iterator_string.getName());
+        assertTrue(StringType.isEqual(hash_iterator_string.getTypeArguments()[0]));
+
+        Type single_value_iterator_int("SingleValueIterator<int>");
+        assertTrue(single_value_iterator_int.isParameterized());
+        assertEq("object<SingleValueIterator<int>>", single_value_iterator_int.getName());
+        assertTrue(IntType.isEqual(single_value_iterator_int.getTypeArguments()[0]));
 
         assertFalse(IntType.isParameterized());
         assertNothing(IntType.getTypeArguments());

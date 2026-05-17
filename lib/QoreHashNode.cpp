@@ -1024,7 +1024,7 @@ ConstHashIterator::ConstHashIterator(const QoreHashNode* qh) : h(qh), priv(new q
 ConstHashIterator::ConstHashIterator(const QoreHashNode& qh) : h(&qh), priv(new qhi_priv()) {
 }
 
-ConstHashIterator::ConstHashIterator(const ConstHashIterator& old) : h(old.h->hashRefSelf()),
+ConstHashIterator::ConstHashIterator(const ConstHashIterator& old) : h(old.h ? old.h->hashRefSelf() : nullptr),
         priv(new qhi_priv(*old.priv)) {
 }
 

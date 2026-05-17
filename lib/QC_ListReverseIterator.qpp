@@ -30,14 +30,22 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreListIterator.h"
+#include "qore/intern/QoreTypeInfo.h"
 
 extern QoreClass* QC_LISTITERATOR;
+
+static const QoreTypeInfo* get_list_reverse_iterator_element_type(const QoreTypeInfo* iterator_type_info) {
+    const QoreParameterizedClassTypeInfo* iterator_type
+        = QoreTypeInfo::getParameterizedClassType(iterator_type_info);
+    return iterator_type && iterator_type->getArgCount() ? iterator_type->getTypeArgs()[0] : autoTypeInfo;
+}
 
 // internal reverse iterator class implementation only for the getName() function - the iterators remain
 // forwards and are used in the reverse sense by the Qore language class implementation below
 class QoreListReverseIterator : public QoreListIterator {
 public:
-   DLLLOCAL QoreListReverseIterator(const QoreListNode* l) : QoreListIterator(l) {
+   DLLLOCAL QoreListReverseIterator(const QoreListNode* l, const QoreTypeInfo* element_type = nullptr)
+         : QoreListIterator(l, element_type) {
    }
 
    DLLLOCAL QoreListReverseIterator(const QoreListReverseIterator& old) : QoreListIterator(old) {
@@ -82,7 +90,7 @@ public:
 
     @see ListIterator
  */
-qclass ListReverseIterator [arg=QoreListReverseIterator* i; ns=Qore; vparent=ListIterator];
+qclass ListReverseIterator<T> [arg=QoreListReverseIterator* i; ns=Qore; vparent=ListIterator<T>; legacy_raw];
 
 //! Creates the list iterator object
 /** @param list_value the list to iterate
@@ -94,8 +102,9 @@ ListReverseIterator li(l);
 
     @note the constructor's argument is @ref softlist_type "softlist" so that it can also accept @ref nothing
  */
-ListReverseIterator::constructor(softlist<auto> list_value) [flags=NAMED_ARGS] {
-   self->setPrivate(CID_LISTREVERSEITERATOR, new QoreListReverseIterator(list_value));
+ListReverseIterator::constructor(softlist<T> list_value) [flags=NAMED_ARGS] {
+   self->setPrivate(CID_LISTREVERSEITERATOR,
+      new QoreListReverseIterator(list_value, get_list_reverse_iterator_element_type(self->getInstantiatedTypeInfo())));
 }
 
 //! Creates a copy of the ListReverseIterator object, iterating the same object as the original and in the same position

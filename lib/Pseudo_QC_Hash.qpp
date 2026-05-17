@@ -301,7 +301,7 @@ map printf("value: %y\n", $1), h.iterator();
     @since %Qore 0.8.6
  */
 AbstractIterator <hash>::iterator() [flags=CONSTANT] {
-   return new QoreObject(QC_HASHITERATOR, 0, new QoreHashIterator(h));
+   return qore_new_hash_iterator_object(0, h);
 }
 
 //! Returns a @ref Qore::HashKeyIterator "HashKeyIterator" object for the hash

@@ -67,7 +67,7 @@ extern QoreClass* QC_HASHITERATOR;
 
     @see ObjectReverseIterator
  */
-qclass ObjectIterator [arg=QoreObjectIterator* i; ns=Qore; vparent=HashIterator];
+qclass ObjectIterator [arg=QoreObjectIterator* i; ns=Qore; vparent=HashIterator<auto>];
 
 //! Creates the object iterator object
 /** @param object_value the object to iterate

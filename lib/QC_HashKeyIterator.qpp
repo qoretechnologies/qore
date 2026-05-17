@@ -62,7 +62,7 @@ extern QoreClass* QC_HASHITERATOR;
 
     @see HashKeyReverseIterator
  */
-qclass HashKeyIterator [arg=QoreHashIterator* i; ns=Qore; vparent=HashIterator];
+qclass HashKeyIterator [arg=QoreHashIterator* i; ns=Qore; vparent=HashIterator<auto>];
 
 //! Creates the hash iterator object
 /** @param hash_value the hash to iterate

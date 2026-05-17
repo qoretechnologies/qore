@@ -38,6 +38,8 @@ extern QoreClass* QC_HASHKEYITERATOR;
 extern QoreClass* QC_HASHPAIRITERATOR;
 extern QoreClass* QC_HASHREVERSEITERATOR;
 
+DLLLOCAL QoreObject* qore_new_hash_iterator_object(QoreProgram* pgm, const QoreHashNode* h);
+
 // the c++ object
 class QoreHashIterator : public QoreIteratorBase, public ConstHashIterator {
 public:
@@ -59,6 +61,8 @@ protected:
     // reusable hash for pair iterator performance enhancement; provides an approx 70% speed improvement
     mutable QoreHashNode* pairHash;
 
+    const QoreTypeInfo* value_type;
+
     // What nativeGetValue() yields; set by the QPP ctors for Key/Pair variants.
     HashView view = VIEW_VALUE;
 
@@ -75,17 +79,27 @@ protected:
         return 0;
     }
 
-    DLLLOCAL QoreHashIterator(QoreHashNode* h) : ConstHashIterator(h), pairHash(0) {
+    DLLLOCAL static const QoreTypeInfo* resolveValueType(const QoreHashNode* h,
+            const QoreTypeInfo* value_type = nullptr) {
+        const QoreTypeInfo* rv = value_type ? value_type : (h ? h->getValueTypeInfo() : autoTypeInfo);
+        return QoreTypeInfo::hasType(rv) ? rv : autoTypeInfo;
+    }
+
+    DLLLOCAL QoreHashIterator(QoreHashNode* h, const QoreTypeInfo* value_type = nullptr)
+            : ConstHashIterator(h), pairHash(0), value_type(resolveValueType(h, value_type)) {
     }
 
 public:
-    DLLLOCAL QoreHashIterator(const QoreHashNode* h) : ConstHashIterator(h->hashRefSelf()), pairHash(0) {
+    DLLLOCAL QoreHashIterator(const QoreHashNode* h, const QoreTypeInfo* value_type = nullptr)
+            : ConstHashIterator(h->hashRefSelf()), pairHash(0), value_type(resolveValueType(h, value_type)) {
     }
 
-    DLLLOCAL QoreHashIterator() : ConstHashIterator(0), pairHash(0) {
+    DLLLOCAL QoreHashIterator(const QoreTypeInfo* value_type = autoTypeInfo)
+            : ConstHashIterator(0), pairHash(0), value_type(resolveValueType(nullptr, value_type)) {
     }
 
-    DLLLOCAL QoreHashIterator(const QoreHashIterator& old) : ConstHashIterator(*this), pairHash(0) {
+    DLLLOCAL QoreHashIterator(const QoreHashIterator& old)
+            : ConstHashIterator(old), pairHash(0), value_type(old.value_type) {
     }
 
     using AbstractPrivateData::deref;
@@ -159,7 +173,15 @@ public:
     DLLLOCAL virtual const char* getName() const { return "HashIterator"; }
 
     DLLLOCAL virtual const QoreTypeInfo* getElementType() const {
-        return h->getValueTypeInfo();
+        switch (view) {
+            case VIEW_KEY:
+                return stringTypeInfo;
+            case VIEW_PAIR:
+                return autoHashTypeInfo;
+            case VIEW_VALUE:
+            default:
+                return value_type;
+        }
     }
 
     //! Sets the value shape yielded by nativeGetValue(); see @ref HashView.
@@ -196,10 +218,11 @@ public:
 // forwards and are used in the reverse sense by the Qore language class implementation below
 class QoreHashReverseIterator : public QoreHashIterator {
 public:
-    DLLLOCAL QoreHashReverseIterator(const QoreHashNode* h) : QoreHashIterator(h) {
+    DLLLOCAL QoreHashReverseIterator(const QoreHashNode* h, const QoreTypeInfo* value_type = nullptr)
+            : QoreHashIterator(h, value_type) {
     }
 
-    DLLLOCAL QoreHashReverseIterator() {
+    DLLLOCAL QoreHashReverseIterator(const QoreTypeInfo* value_type = autoTypeInfo) : QoreHashIterator(value_type) {
     }
 
     DLLLOCAL QoreHashReverseIterator(const QoreHashReverseIterator& old) : QoreHashIterator(old) {
