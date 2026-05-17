@@ -36,6 +36,9 @@ class QoreI18nCmd {
     public {
         const Version = "0.1";
 
+        #! Color output helper
+        static Util::TerminalColor color;
+
         const ExtractOpts = {
             "output":       "o,output=s",
             "locale":       "l,locale=s",
@@ -72,6 +75,8 @@ class QoreI18nCmd {
     }
 
     constructor() {
+        color = new Util::TerminalColor(!removeNoColorOption());
+
         if (!ARGV) {
             usage();
             exit(1);
@@ -101,29 +106,67 @@ class QoreI18nCmd {
                     usage();
                     break;
                 default:
-                    stderr.printf("Error: unknown command '%s'\n\n", command);
+                    stderr.printf("%s unknown command '%s'\n\n", color.error("ERROR:"), command);
                     usage();
                     exit(1);
             }
         } catch (hash<ExceptionInfo> ex) {
-            stderr.printf("Error: %s: %s\n", ex.err, ex.desc);
+            stderr.printf("%s %s: %s\n", color.error("ERROR:"), ex.err, ex.desc);
             exit(1);
         }
     }
 
+    private bool removeNoColorOption() {
+        bool no_color = False;
+        list<string> args = ();
+        foreach string arg in (ARGV) {
+            if (arg == "-C" || arg == "--no-color") {
+                no_color = True;
+            } else {
+                args += arg;
+            }
+        }
+        ARGV = args;
+        return no_color;
+    }
+
     private usage() {
-        printf("qore-i18n v%s - Manage Qore native i18n catalogs\n\n", Version);
-        printf("Usage: qore-i18n <command> [options] <files...>\n\n");
-        printf("Commands:\n");
-        printf("  extract      Extract t()/tn()/tc() calls from Qore source into a native JSON catalog\n");
-        printf("  stats        Report translated/fuzzy/needs-review/stale coverage for native catalogs\n");
-        printf("  pseudo       Generate an ASCII pseudolocale catalog preserving placeholders\n");
-        printf("  export-po    Export one native-catalog locale to simple gettext PO interchange\n");
-        printf("  import-po    Import a simple gettext PO file into a native JSON catalog\n\n");
-        printf("Examples:\n");
-        printf("  qore-i18n extract -o catalogs/root.json src/app.q\n");
-        printf("  qore-i18n stats --fail-under=95 catalogs/cs.json\n");
-        printf("  qore-i18n pseudo -o catalogs/qps-ploc.json catalogs/root.json\n");
+        int key_width = 18;
+
+        printf("%s v%s - Manage Qore native i18n catalogs\n\n", color.bold("qore-i18n"), Version);
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s %s %s\n\n", color.bold("qore-i18n"), color.key("<command>"),
+            color.dim("[options] <files...>"));
+
+        printf("%s\n", color.bold("COMMANDS"));
+        printHelpLine(color.key("extract"), "Extract t()/tn()/tc() calls from Qore source into a native JSON catalog",
+            key_width);
+        printHelpLine(color.key("stats"), "Report translated/fuzzy/needs-review/stale coverage for native catalogs",
+            key_width);
+        printHelpLine(color.key("pseudo"), "Generate an ASCII pseudolocale catalog preserving placeholders",
+            key_width);
+        printHelpLine(color.key("export-po"), "Export one native-catalog locale to simple gettext PO interchange",
+            key_width);
+        printHelpLine(color.key("import-po"), "Import a simple gettext PO file into a native JSON catalog",
+            key_width);
+
+        printf("\n%s\n", color.bold("GLOBAL OPTIONS"));
+        printHelpLine(color.key("-C, --no-color"), "Disable colored output", key_width);
+        printHelpLine(color.key("-h, --help"), "Show this help", key_width);
+
+        printf("\n%s\n", color.bold("EXAMPLES"));
+        printf("  %s\n", color.key("qore-i18n extract -o catalogs/root.json src/app.q"));
+        printf("  %s\n", color.key("qore-i18n stats --fail-under=95 catalogs/cs.json"));
+        printf("  %s\n", color.key("qore-i18n pseudo -o catalogs/qps-ploc.json catalogs/root.json"));
+    }
+
+    private static printHelpLine(string colored, string desc, int width) {
+        printf("  %s %s\n", Util::TerminalColor::padRight(colored, width), desc);
+    }
+
+    private static printCommonOptionHelp(int key_width) {
+        printHelpLine(color.key("-C, --no-color"), "Disable colored output", key_width);
+        printHelpLine(color.key("-h, --help"), "Show this help", key_width);
     }
 
     private runExtract() {
@@ -150,7 +193,8 @@ class QoreI18nCmd {
         }
 
         foreach hash<auto> warning in (extract_warnings) {
-            stderr.printf("%s:%d: warning: %s\n", warning.path, warning.line, warning.message);
+            stderr.printf("%s:%d: %s: %s\n", color.key(warning.path), warning.line,
+                color.warning("warning"), warning.message);
         }
         if (opt{"fail-dynamic"} && extract_warnings) {
             throw "I18N-DYNAMIC-KEY-ERROR", "dynamic i18n call arguments were found";
@@ -168,14 +212,17 @@ class QoreI18nCmd {
     }
 
     private extractUsage() {
-        printf("Usage: qore-i18n extract [options] <source-files...>\n\n");
-        printf("Options:\n");
-        printf("  -o, --output=FILE       Output native catalog JSON (default: stdout)\n");
-        printf("  -l, --locale=LOCALE     Output locale key (default: root)\n");
-        printf("  -m, --marker=NAME       Marker to extract; repeatable (default: t, tn, tc)\n");
-        printf("      --fail-dynamic      Fail if a marker call uses dynamic source/id arguments\n");
-        printf("  -v, --verbose           Increase progress output\n");
-        printf("  -h, --help              Show this help\n");
+        int key_width = 26;
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s %s %s %s\n\n", color.bold("qore-i18n"), color.type("extract"),
+            color.dim("[options]"), color.key("<source-files...>"));
+        printf("%s\n", color.bold("OPTIONS"));
+        printHelpLine(color.key("-o, --output=FILE"), "Output native catalog JSON (default: stdout)", key_width);
+        printHelpLine(color.key("-l, --locale=LOCALE"), "Output locale key (default: root)", key_width);
+        printHelpLine(color.key("-m, --marker=NAME"), "Marker to extract; repeatable (default: t, tn, tc)", key_width);
+        printHelpLine(color.key("--fail-dynamic"), "Fail if a marker call uses dynamic source/id arguments", key_width);
+        printHelpLine(color.key("-v, --verbose"), "Increase progress output", key_width);
+        printCommonOptionHelp(key_width);
     }
 
     private runStats() {
@@ -216,12 +263,15 @@ class QoreI18nCmd {
     }
 
     private statsUsage() {
-        printf("Usage: qore-i18n stats [options] <catalog-files...>\n\n");
-        printf("Options:\n");
-        printf("  -l, --locale=LOCALE     Locale to report; repeatable (default: all)\n");
-        printf("  -f, --format=FORMAT     text|json (default: text)\n");
-        printf("      --fail-under=N      Exit 2 if translated coverage is below N percent\n");
-        printf("  -h, --help              Show this help\n");
+        int key_width = 26;
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s %s %s %s\n\n", color.bold("qore-i18n"), color.type("stats"),
+            color.dim("[options]"), color.key("<catalog-files...>"));
+        printf("%s\n", color.bold("OPTIONS"));
+        printHelpLine(color.key("-l, --locale=LOCALE"), "Locale to report; repeatable (default: all)", key_width);
+        printHelpLine(color.key("-f, --format=FORMAT"), "text|json (default: text)", key_width);
+        printHelpLine(color.key("--fail-under=N"), "Exit 2 if translated coverage is below N percent", key_width);
+        printCommonOptionHelp(key_width);
     }
 
     private runPseudo() {
@@ -258,12 +308,15 @@ class QoreI18nCmd {
     }
 
     private pseudoUsage() {
-        printf("Usage: qore-i18n pseudo [options] <catalog-file>\n\n");
-        printf("Options:\n");
-        printf("      --from=LOCALE       Source locale to pseudo-localize (default: root)\n");
-        printf("  -l, --locale=LOCALE     Pseudolocale name (default: qps-ploc)\n");
-        printf("  -o, --output=FILE       Output native catalog JSON (default: stdout)\n");
-        printf("  -h, --help              Show this help\n");
+        int key_width = 26;
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s %s %s %s\n\n", color.bold("qore-i18n"), color.type("pseudo"),
+            color.dim("[options]"), color.key("<catalog-file>"));
+        printf("%s\n", color.bold("OPTIONS"));
+        printHelpLine(color.key("--from=LOCALE"), "Source locale to pseudo-localize (default: root)", key_width);
+        printHelpLine(color.key("-l, --locale=LOCALE"), "Pseudolocale name (default: qps-ploc)", key_width);
+        printHelpLine(color.key("-o, --output=FILE"), "Output native catalog JSON (default: stdout)", key_width);
+        printCommonOptionHelp(key_width);
     }
 
     private runExportPo() {
@@ -283,11 +336,14 @@ class QoreI18nCmd {
     }
 
     private exportPoUsage() {
-        printf("Usage: qore-i18n export-po [options] <catalog-file>\n\n");
-        printf("Options:\n");
-        printf("  -l, --locale=LOCALE     Locale to export (default: root)\n");
-        printf("  -o, --output=FILE       Output PO file (default: stdout)\n");
-        printf("  -h, --help              Show this help\n");
+        int key_width = 26;
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s %s %s %s\n\n", color.bold("qore-i18n"), color.type("export-po"),
+            color.dim("[options]"), color.key("<catalog-file>"));
+        printf("%s\n", color.bold("OPTIONS"));
+        printHelpLine(color.key("-l, --locale=LOCALE"), "Locale to export (default: root)", key_width);
+        printHelpLine(color.key("-o, --output=FILE"), "Output PO file (default: stdout)", key_width);
+        printCommonOptionHelp(key_width);
     }
 
     private runImportPo() {
@@ -314,11 +370,14 @@ class QoreI18nCmd {
     }
 
     private importPoUsage() {
-        printf("Usage: qore-i18n import-po [options] <po-file>\n\n");
-        printf("Options:\n");
-        printf("  -l, --locale=LOCALE     Locale for the imported catalog (default: root)\n");
-        printf("  -o, --output=FILE       Output native catalog JSON (default: stdout)\n");
-        printf("  -h, --help              Show this help\n");
+        int key_width = 26;
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s %s %s %s\n\n", color.bold("qore-i18n"), color.type("import-po"),
+            color.dim("[options]"), color.key("<po-file>"));
+        printf("%s\n", color.bold("OPTIONS"));
+        printHelpLine(color.key("-l, --locale=LOCALE"), "Locale for the imported catalog (default: root)", key_width);
+        printHelpLine(color.key("-o, --output=FILE"), "Output native catalog JSON (default: stdout)", key_width);
+        printCommonOptionHelp(key_width);
     }
 
     private hash<auto> getMarkers(*list<string> configured) {
@@ -335,7 +394,7 @@ class QoreI18nCmd {
 
     private extractFile(string path, hash<auto> markers, *int verbose) {
         if (verbose) {
-            stderr.printf("extracting: %s\n", path);
+            stderr.printf("%s %s\n", color.info("extracting:"), path);
         }
 
         string source = ReadOnlyFile::readTextFile(path);
@@ -708,13 +767,37 @@ class QoreI18nCmd {
     }
 
     private printStats(list<hash<auto>> rows) {
-        printf("%-28s %-14s %7s %7s %7s %12s %7s %8s\n",
-            "file", "locale", "total", "ok", "fuzzy", "needs-review", "stale", "coverage");
+        printf("%s %s %s %s %s %s %s %s\n",
+            Util::TerminalColor::padRight(color.bold("file"), 28),
+            Util::TerminalColor::padRight(color.bold("locale"), 14),
+            Util::TerminalColor::padLeft(color.bold("total"), 7),
+            Util::TerminalColor::padLeft(color.bold("ok"), 7),
+            Util::TerminalColor::padLeft(color.bold("fuzzy"), 7),
+            Util::TerminalColor::padLeft(color.bold("needs-review"), 12),
+            Util::TerminalColor::padLeft(color.bold("stale"), 7),
+            Util::TerminalColor::padLeft(color.bold("coverage"), 8));
         foreach hash<auto> row in (rows) {
-            printf("%-28s %-14s %7d %7d %7d %12d %7d %7d%%\n",
-                basename(row.file), row.locale, row.total, row.translated, row.fuzzy,
-                row.needs_review, row.stale, row.coverage);
+            printf("%s %s %s %s %s %s %s %s\n",
+                Util::TerminalColor::padRight(color.key(basename(row.file)), 28),
+                Util::TerminalColor::padRight(color.type(row.locale), 14),
+                Util::TerminalColor::padLeft(color.number(string(row.total)), 7),
+                Util::TerminalColor::padLeft(color.success(string(row.translated)), 7),
+                Util::TerminalColor::padLeft(color.warning(string(row.fuzzy)), 7),
+                Util::TerminalColor::padLeft(color.warning(string(row.needs_review)), 12),
+                Util::TerminalColor::padLeft(color.error(string(row.stale)), 7),
+                Util::TerminalColor::padLeft(formatCoverage(row.coverage), 8));
         }
+    }
+
+    private string formatCoverage(int coverage) {
+        string value = sprintf("%d%%", coverage);
+        if (coverage >= 95) {
+            return color.success(value);
+        }
+        if (coverage >= 80) {
+            return color.warning(value);
+        }
+        return color.error(value);
     }
 
     private auto makePseudoEntry(string id, auto value) {

@@ -26,20 +26,38 @@ class QoreI18nCliTest inherits QUnit::Test {
     }
 
     constructor() : Test("qore-i18n CLI", "1.0") {
+        addTestCase("help output and color controls", \cliHelpTest());
         addTestCase("extract, stats, pseudo, and PO round trip", \cliWorkflowTest());
         set_return_value(main());
+    }
+
+    cliHelpTest() {
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        *string qore_bin = getQoreBin();
+        if (!exists qore_bin) {
+            testSkip("built qore executable not available");
+            return;
+        }
+
+        string help = runTool(qore_bin, "--no-color --help");
+        assertTrue(help.find("GLOBAL OPTIONS") >= 0);
+        assertTrue(help.find("-C, --no-color") >= 0);
+        assertEq(help, Util::TerminalColor::stripAnsi(help));
+
+        string extract_help = runTool(qore_bin, "extract --no-color --help");
+        assertTrue(extract_help.find("qore-i18n extract [options] <source-files...>") >= 0);
+        assertTrue(extract_help.find("--fail-dynamic") >= 0);
+        assertEq(extract_help, Util::TerminalColor::stripAnsi(extract_help));
     }
 
     cliWorkflowTest() {
 %ifdef NoJson
         testSkip("json module not available");
 %endif
-        string root = normalize_dir(dirname(get_script_path()) + DirSep + "../../..");
-        string qore_bin = root + DirSep + "build/qore";
-        if (!is_executable(qore_bin)) {
-            qore_bin = root + DirSep + "build-ci/qore";
-        }
-        if (!is_executable(qore_bin)) {
+        *string qore_bin = getQoreBin();
+        if (!exists qore_bin) {
             testSkip("built qore executable not available");
             return;
         }
@@ -91,6 +109,16 @@ class QoreI18nCliTest inherits QUnit::Test {
         hash<auto> imported_catalog = parse_json(ReadOnlyFile::readTextFile(imported));
         assertEq("Hello, {name}", imported_catalog.locales.cs.messages."Hello, {name}".message);
         assertEq("{count} files", imported_catalog.locales.cs.messages."1 file".forms.other);
+    }
+
+    private *string getQoreBin() {
+        string root = normalize_dir(dirname(get_script_path()) + DirSep + "../../..");
+        string qore_bin = root + DirSep + "build/qore";
+        if (is_executable(qore_bin)) {
+            return qore_bin;
+        }
+        qore_bin = root + DirSep + "build-ci/qore";
+        return is_executable(qore_bin) ? qore_bin : NOTHING;
     }
 
     private string runTool(string qore_bin, string args) {

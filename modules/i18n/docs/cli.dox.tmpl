@@ -14,5 +14,6 @@ qore-i18n import-po -l cs -o catalogs/cs.json catalogs/cs.po
     Dynamic source strings or ids are reported as warnings and can be made fatal with \c --fail-dynamic.
     The \c stats command reports translated, fuzzy, needs-review, stale, and coverage counts and can fail CI with
     \c --fail-under. PO import/export is intentionally simple interchange for plain messages and two-form source
-    plurals; richer per-locale forms remain represented in the native catalog.
+    plurals; richer per-locale forms remain represented in the native catalog. Human-readable help, warning, error,
+    and text statistics output is colorized when stdout is a terminal; pass \c -C or \c --no-color to disable colors.
 */
