@@ -787,6 +787,23 @@ class ReflectionTest inherits QUnit::Test {
             ("program", "statement_id", "exception", "dismiss", "run_state", "run_to_statement_id"));
         assertNamedClassMethodVariantCount("DebugProgram", "onExit",
             ("program", "statement_id", "return_value", "run_state", "run_to_statement_id"));
+        assertNamedClassMethodVariantCount("SandboxManager", "setMemoryLimit", ("max_bytes",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setCPUTimeLimit", ("max_cpu_time_ms",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setWallTimeLimit", ("max_wall_time_ms",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setMaxThreads", ("max_threads",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setMaxRecursionDepth", ("max_depth",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addFilesystemAllowedPath",
+            ("path", "access_modes"));
+        assertNamedClassMethodVariantCount("SandboxManager", "addFilesystemDeniedPath", ("path",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setFilesystemSandboxRoot", ("path",));
+        assertNamedClassMethodVariantCount("SandboxManager", "setFilesystemDefaultPolicy", ("allow",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkAllowedHost", ("host_pattern",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkAllowedIPRange", ("cidr",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkDeniedIPRange", ("cidr",));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkAllowedPort", ("port", "protocol"));
+        assertNamedClassMethodVariantCount("SandboxManager", "addNetworkAllowedPortRange",
+            ("start_port", "end_port", "protocol"));
+        assertNamedClassMethodVariantCount("SandboxManager", "setNetworkDefaultPolicy", ("allow",));
         assertNamedClassStaticMethodVariantCount("ProgramControl", "resolveProgramId", ("program_id",));
         assertNamedClassMethodVariantCount("ProgramControl", "isDefined", ("parse_define",));
         assertNamedClassMethodVariantCount("ProgramControl", "getDefine", ("parse_define",));

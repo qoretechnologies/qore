@@ -454,6 +454,10 @@ These examples are from the core migration and should be reused as precedent:
   `as_string`, `max_bytes`, and `max_file_len`. Use `argument` for the
   `setEventQueue()` input even though the resulting event hash key remains
   `arg`.
+- `SandboxManager` should expose explicit limit and policy names:
+  `max_bytes`, `max_cpu_time_ms`, `max_wall_time_ms`, `max_threads`,
+  `max_depth`, `path`, `access_modes`, `allow`, `host_pattern`, `cidr`,
+  `port`, `protocol`, `start_port`, and `end_port`.
 - For `File`, use `value` for width-specific integer writes,
   `lock_type` / `length` for file locking, `target_file` for `redirect()`,
   and `format` / `values` for explicit formatting-list methods. Keep true

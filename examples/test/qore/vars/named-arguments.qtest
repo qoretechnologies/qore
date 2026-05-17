@@ -150,6 +150,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed parse-options class builtin opt-in", \reviewedParseOptionsClassBuiltinOptIn(),
             NOTHING);
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed SandboxManager class builtin opt-in", \reviewedSandboxManagerBuiltinOptIn(),
+            NOTHING);
         addTestCase("reviewed ProgramControl class builtin opt-in", \reviewedProgramControlBuiltinOptIn(),
             NOTHING);
         addTestCase("reviewed DebugProgram callback builtin opt-in", \reviewedDebugProgramBuiltinOptIn(),
@@ -752,6 +754,35 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "pc.findFunctionVariants(function_name: \"main\"); "
             "ProgramControl::resolveProgramId(program_id: pc.getProgramId()); }",
             "program-control-named");
+    }
+
+    reviewedSandboxManagerBuiltinOptIn() {
+        SandboxManager sm();
+        sm.setMemoryLimit(max_bytes: 1024 * 1024);
+        assertEq(1024 * 1024, sm.getMemoryLimit(), "SandboxManager memory limit exposes max_bytes");
+        sm.setCPUTimeLimit(max_cpu_time_ms: 1000);
+        assertEq(1000, sm.getCPUTimeLimit(), "SandboxManager CPU limit exposes max_cpu_time_ms");
+        sm.setWallTimeLimit(max_wall_time_ms: 2000);
+        assertEq(2000, sm.getWallTimeLimit(), "SandboxManager wall limit exposes max_wall_time_ms");
+        sm.setMaxThreads(max_threads: 2);
+        assertEq(2, sm.getMaxThreads(), "SandboxManager thread limit exposes max_threads");
+        sm.setMaxRecursionDepth(max_depth: 20);
+        assertEq(20, sm.getMaxRecursionDepth(), "SandboxManager recursion limit exposes max_depth");
+
+        string cwd = getcwd();
+        sm.addFilesystemAllowedPath(path: cwd, access_modes: QSEC_READ);
+        sm.addFilesystemDeniedPath(path: cwd);
+        sm.setFilesystemSandboxRoot(path: cwd);
+        sm.setFilesystemDefaultPolicy(allow: True);
+        assertTrue(sm.getFilesystemDefaultPolicy(), "SandboxManager filesystem default policy exposes allow");
+
+        sm.addNetworkAllowedHost(host_pattern: "example.com");
+        sm.addNetworkAllowedIPRange(cidr: "203.0.113.0/24");
+        sm.addNetworkDeniedIPRange(cidr: "198.51.100.0/24");
+        sm.addNetworkAllowedPort(port: 443, protocol: QSEC_NET_TCP);
+        sm.addNetworkAllowedPortRange(start_port: 8000, end_port: 9000, protocol: QSEC_NET_TCP);
+        sm.setNetworkDefaultPolicy(allow: True);
+        assertTrue(sm.getNetworkDefaultPolicy(), "SandboxManager network default policy exposes allow");
     }
 
     reviewedDebugProgramBuiltinOptIn() {
