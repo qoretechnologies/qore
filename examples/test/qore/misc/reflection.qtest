@@ -1070,6 +1070,23 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("StringInputStream", "read", ("limit",));
         assertNamedConstructorVariantCount("StringOutputStream", ("encoding",));
         assertNamedClassMethodVariantCount("StringOutputStream", "write", ("data",));
+        assertNamedConstructorVariantCount("ReadOnlyFile", ("path", "encoding"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "open", ("path", "encoding"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "read", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "readBinary", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "readShortBinary", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "readLine", ("include_eol", "eol"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "setEncoding", ("encoding",));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "setPos", ("position",));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "isDataAvailable", ("timeout_ms",));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "setEventQueue", ("queue", "argument", "with_data"));
+        assertNamedClassMethodVariantCount("ReadOnlyFile", "startPollRead", ("path", "as_string", "max_bytes"));
+        assertNamedClassStaticMethodVariantCount("ReadOnlyFile", "readTextFile",
+            ("path", "encoding", "max_file_len"));
+        assertNamedClassStaticMethodVariantCount("ReadOnlyFile", "readBinaryFile", ("path", "max_file_len"));
+        foreach string name in (("stat", "lstat", "hstat", "hlstat", "statvfs")) {
+            assertNamedClassStaticMethodVariantCount("ReadOnlyFile", name, ("path",));
+        }
         assertNamedConstructorVariantCount("FileInputStream", ("path", "timeout_ms", "nonblocking_open"));
         assertNamedClassMethodVariantCount("FileInputStream", "read", ("limit",));
         assertNamedClassMethodVariantCount("FileInputStream", "readNonBlock", ("limit",));

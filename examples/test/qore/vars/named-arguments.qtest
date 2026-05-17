@@ -144,6 +144,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed misc builtin opt-in", \reviewedMiscBuiltinOptIn(), NOTHING);
         addTestCase("reviewed crypto builtin opt-in", \reviewedCryptoBuiltinOptIn(), NOTHING);
         addTestCase("reviewed file builtin opt-in", \reviewedFileBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed ReadOnlyFile class builtin opt-in", \reviewedReadOnlyFileBuiltinOptIn(),
+            NOTHING);
         addTestCase("reviewed library builtin opt-in", \reviewedLibraryBuiltinOptIn(), NOTHING);
         addTestCase("reviewed parse-options class builtin opt-in", \reviewedParseOptionsClassBuiltinOptIn(),
             NOTHING);
@@ -573,6 +575,55 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "is_dev(path: \"/tmp/qore-na\"); is_link(path: \"/tmp/qore-na\"); "
             "is_executable(path: \"/bin/sh\"); absolute_path_windows(path: \"C:\\\\temp\");",
             "file-named");
+    }
+
+    reviewedReadOnlyFileBuiltinOptIn() {
+        string file = sprintf("%s%sqore-na-readonly-file-%d-%s.txt", tmp_location(), DirSep, getpid(),
+            get_random_bytes(size: 4).toHex());
+        on_exit unlink(path: file);
+
+        {
+            File f();
+            f.open2(file, O_CREAT | O_WRONLY | O_TRUNC, 0600, "UTF-8");
+            f.write("first\nsecond");
+        }
+
+        assertEq("first\nsecond", ReadOnlyFile::readTextFile(path: file, encoding: "UTF-8",
+            max_file_len: -1), "ReadOnlyFile readTextFile exposes path, encoding, and max_file_len");
+        assertEq(binary("first\nsecond"), ReadOnlyFile::readBinaryFile(path: file, max_file_len: -1),
+            "ReadOnlyFile readBinaryFile exposes path and max_file_len");
+        assertTrue(ReadOnlyFile::stat(path: file) != NOTHING, "ReadOnlyFile stat exposes path");
+        assertTrue(ReadOnlyFile::lstat(path: file) != NOTHING, "ReadOnlyFile lstat exposes path");
+        assertTrue(ReadOnlyFile::hstat(path: file) != NOTHING, "ReadOnlyFile hstat exposes path");
+        assertTrue(ReadOnlyFile::hlstat(path: file) != NOTHING, "ReadOnlyFile hlstat exposes path");
+        assertTrue(ReadOnlyFile::statvfs(path: file) != NOTHING, "ReadOnlyFile statvfs exposes path");
+
+        ReadOnlyFile rof(path: file, encoding: "UTF-8");
+        assertTrue(rof.isDataAvailable(timeout_ms: 0), "ReadOnlyFile isDataAvailable exposes timeout_ms");
+        assertEq("first", rof.read(size: 5, timeout_ms: -1),
+            "ReadOnlyFile constructor and read expose names");
+        rof.setPos(position: 0);
+        assertEq("first", rof.readLine(include_eol: False, eol: "\n"),
+            "ReadOnlyFile readLine exposes include_eol and eol");
+        rof.setPos(position: 0);
+        assertEq(binary("fi"), rof.readBinary(size: 2, timeout_ms: -1),
+            "ReadOnlyFile readBinary exposes size and timeout_ms");
+        assertEq(binary("rs"), rof.readShortBinary(size: 2, timeout_ms: -1),
+            "ReadOnlyFile readShortBinary exposes size and timeout_ms");
+        rof.setEncoding(encoding: "UTF-8");
+        assertEq("UTF-8", rof.getEncoding(), "ReadOnlyFile setEncoding exposes encoding");
+
+        Queue queue();
+        rof.setEventQueue(queue: queue, argument: "read-only", with_data: False);
+        rof.setEventQueue();
+        rof.close();
+        rof.open(path: file, encoding: "UTF-8");
+        assertEq("first", rof.read(size: 5, timeout_ms: -1), "ReadOnlyFile open exposes path and encoding");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("ReadOnlyFile f(\"/tmp/qore-na-readonly\"); "
+            "f.startPollRead(path: \"/tmp/qore-na-readonly\", as_string: True, max_bytes: 1);",
+            "readonly-file-named");
     }
 
     reviewedLibraryBuiltinOptIn() {

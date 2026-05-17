@@ -444,6 +444,11 @@ These examples are from the core migration and should be reused as precedent:
 - Filesystem class methods should expose path role names. For `Dir`, use
   `owner` / `group` for ownership changes and `filename` for file-name-only
   operations such as `removeFile()`.
+- `ReadOnlyFile` should use `path`, `encoding`, `size`, `timeout_ms`,
+  `include_eol`, `eol`, `position`, `queue`, `argument`, `with_data`,
+  `as_string`, `max_bytes`, and `max_file_len`. Use `argument` for the
+  `setEventQueue()` input even though the resulting event hash key remains
+  `arg`.
 - For `File`, use `value` for width-specific integer writes,
   `lock_type` / `length` for file locking, `target_file` for `redirect()`,
   and `format` / `values` for explicit formatting-list methods. Keep true
