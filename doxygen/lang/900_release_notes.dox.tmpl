@@ -275,21 +275,26 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
     @endparblock
 
     @subsection qore_2_3_0_new_features New Features in Qore
-    @par New Required Libraries and Bundled HTTP/2 + HTTP/3 Stack
+    @par New Required Libraries and Async Networking Stack
     @parblock
-    The HTTP/2 and HTTP/3 stack &mdash; \c nghttp2, \c ngtcp2, \c ngtcp2_crypto_ossl, and
-    \c nghttp3 &mdash; is <b>downloaded and built from source automatically</b> as part of the
-    %Qore build and <b>statically linked</b> into \c libqore. These libraries do <b>not</b> need
-    to be installed as system packages; \c nghttp2 is always built from the bundled pinned
-    release, and \c ngtcp2 / \c nghttp3 are built from source automatically when a sufficiently
-    recent system installation is not found. Building these from a pinned release guarantees a
-    known-good, version-matched HTTP/2-3 stack on every platform and avoids header/library
-    version skew. The \c ngtcp2_crypto_ossl backend requires OpenSSL 3.5+ (QUIC TLS API); see
-    the \c BUILDING file for details.
+    The async networking stack &mdash; \c nghttp2 (HTTP/2), \c ngtcp2 +
+    \c ngtcp2_crypto_ossl + \c nghttp3 (QUIC/HTTP/3), and
+    <a href="https://c-ares.org/">\c c-ares</a> (asynchronous DNS resolution for socket I/O,
+    so hostname lookups do not block async I/O controller threads) &mdash; is now required.
+    %Qore prefers an adequate <b>system installation</b> of each; when a system package is
+    <b>missing or older than the minimum supported version</b>, %Qore automatically downloads
+    and builds the <b>latest stable release</b> from source and statically links it into
+    \c libqore, so the build always succeeds without manual intervention. Minimum versions:
+    \c nghttp2 >= 1.68.1 (CVE-2026-27135 fix), \c c-ares >= 1.19.1 (older versions reject the
+    numeric service "0"/ephemeral port with \c ARES_ESERVICE, breaking listeners that bind to
+    an ephemeral port), \c nghttp3 >= 1.14.0. The \c ngtcp2_crypto_ossl backend requires
+    OpenSSL 3.5+ (QUIC TLS API); on platforms with older OpenSSL (e.g. Ubuntu 24.04, macOS
+    Homebrew), \c ngtcp2 / \c nghttp3 are built from source. Installing the development
+    packages listed below is <b>recommended</b> (faster builds and distro security updates)
+    but not strictly required, as %Qore falls back to a source build automatically. See the
+    \c BUILDING file for details.
 
-    The following libraries are now required system build dependencies for %Qore and cannot be disabled at build time:
-    - <b><a href="https://c-ares.org/">c-ares</a></b>: asynchronous DNS resolution is available
-      for socket I/O so hostname lookups do not block async I/O controller threads
+    The following libraries are also required system build dependencies for %Qore and cannot be disabled at build time:
     - <b>Brotli, Zstd, LZ4:</b> Compression formats are always available
     - <b><a href="https://eigen.tuxfamily.org/">Eigen3</a></b> (>= 3.4, including Eigen 5.x):
       used by the new @ref mlintro "ml" binary module for linear algebra operations.
@@ -304,16 +309,27 @@ code<int(string)> func = int sub(int x) { return x; };  # PARSE-TYPE-ERROR: para
       for Kerberos credential, keytab, GSSAPI, SPNEGO, and HTTP Negotiate primitives
 
     Systems that previously built %Qore without these libraries will need to install the
-    development packages (the HTTP/2-3 stack listed above is built from source automatically
-    and is intentionally absent from these lists):
+    development packages:
     - <b>Debian/Ubuntu:</b> \c libbrotli-dev, \c libzstd-dev, \c liblz4-dev, \c libeigen3-dev,
-      \c libicu-dev, \c libprotobuf-dev, \c libkrb5-dev, \c libcares-dev
+      \c libicu-dev, \c libprotobuf-dev, \c libkrb5-dev
     - <b>RHEL/Fedora:</b> \c brotli-devel, \c libzstd-devel, \c lz4-devel, \c eigen3-devel,
-      \c libicu-devel, \c protobuf-devel, \c krb5-devel, \c c-ares-devel
+      \c libicu-devel, \c protobuf-devel, \c krb5-devel
     - <b>Alpine:</b> \c brotli-dev, \c zstd-dev, \c lz4-dev, \c eigen-dev, \c protobuf-dev,
-      \c icu-dev, \c icu-data-full, \c krb5-dev, \c c-ares-dev
-    - <b>macOS (Homebrew):</b> \c eigen, \c icu4c, \c protobuf, \c krb5, \c c-ares
-    - <b>macOS (MacPorts):</b> \c eigen3, \c icu, \c protobuf3-cpp, \c kerberos5, \c c-ares
+      \c icu-dev, \c icu-data-full, \c krb5-dev
+    - <b>macOS (Homebrew):</b> \c eigen, \c icu4c, \c protobuf, \c krb5
+    - <b>macOS (MacPorts):</b> \c eigen3, \c icu, \c protobuf3-cpp, \c kerberos5
+
+    The async networking stack development packages are <b>recommended</b> where the packaged
+    version meets the minimums above (otherwise %Qore source-builds the latest stable release
+    automatically &mdash; e.g. Debian/Ubuntu ship \c c-ares 1.18.x, below the 1.19.1 minimum,
+    so it is source-built regardless):
+    - <b>Debian/Ubuntu:</b> \c libnghttp2-dev, \c libngtcp2-dev, \c libngtcp2-crypto-ossl-dev,
+      \c libnghttp3-dev, \c libcares-dev
+    - <b>RHEL/Fedora:</b> \c libnghttp2-devel, \c libngtcp2-devel, \c libngtcp2_crypto_ossl-devel,
+      \c libnghttp3-devel, \c c-ares-devel
+    - <b>Alpine:</b> \c nghttp2-dev, \c ngtcp2-dev, \c nghttp3-dev, \c c-ares-dev
+    - <b>macOS (Homebrew):</b> \c nghttp2, \c ngtcp2, \c nghttp3, \c c-ares
+    - <b>macOS (MacPorts):</b> \c nghttp2, \c c-ares
 
     The following @ref Qore::Option "Option" namespace constants are now always \c True:
     - @ref Qore::Option::HAVE_BROTLI "Option::HAVE_BROTLI"
@@ -450,8 +466,9 @@ cargo install tree-sitter-cli@0.26.5
       @ref Qore::get_global_http2_mode() "get_global_http2_mode()" functions allow per-instance and
       process-wide policy.  @ref Qore::Option::HAVE_HTTP2 "HAVE_HTTP2" and
       @ref Qore::Option::HAVE_HTTP3 "HAVE_HTTP3" are both unconditionally @ref True since the underlying
-      libraries (\c nghttp2, \c ngtcp2, \c nghttp3) are bundled (built from source and statically
-      linked into \c libqore), so no system packages are required for HTTP/2 or HTTP/3 support.
+      libraries (\c nghttp2, \c ngtcp2, \c nghttp3) are always available &mdash; %Qore uses an
+      adequate system installation when present and otherwise source-builds and statically links
+      the latest stable release into \c libqore, so HTTP/2 and HTTP/3 support is never optional.
 
       The new async I/O controller exposes a uniform poll-operation API covering TCP connect, TLS handshake,
       QUIC handshake, request/response framing, streaming bodies, WebSocket upgrade
