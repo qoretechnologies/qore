@@ -20,6 +20,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("switch statement", \testSwitchStatement());
         addTestCase("try-catch", \testTryCatch());
         addTestCase("expressions", \testExpressions());
+        addTestCase("named arguments", \testNamedArguments());
         addTestCase("comments", \testComments());
         addTestCase("literals", \testLiterals());
         addTestCase("closures", \testClosures());
@@ -352,6 +353,44 @@ sub test() {
         result = fmt.format(src);
         assertRegex("parenthesized scalar is not converted to list",
             "return \\(\"x\"\\);", result);
+    }
+
+    testNamedArguments() {
+        QoreCodeFormat::CodeFormatter fmt();
+
+        list<string> sources = (
+            "%modern
+sub test() {
+    target(host:42, port:80);
+    \"abcdef\".substr(start:1, len:2);
+}
+",
+            "%modern
+sub test() {
+    target(host: 42, port: 80);
+    \"abcdef\".substr(start: 1, len: 2);
+}
+",
+            "%modern
+sub test() {
+    target(host : 42, port : 80);
+    \"abcdef\".substr(start : 1, len : 2);
+}
+",
+        );
+
+        string expected = "%modern
+sub test() {
+    target(host: 42, port: 80);
+    \"abcdef\".substr(start: 1, len: 2);
+}
+";
+
+        foreach string src in (sources) {
+            string result = fmt.format(src);
+            assertEq(expected, result, "named arguments use canonical colon spacing");
+            assertEq(result, fmt.format(result), "named argument formatting is idempotent");
+        }
     }
 
     testComments() {

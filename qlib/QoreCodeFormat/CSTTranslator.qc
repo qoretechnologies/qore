@@ -505,6 +505,8 @@ public class CSTTranslator {
                 return translateParameter(node);
             case "argument_list":
                 return translateArgumentList(node);
+            case "named_argument":
+                return translateNamedArgument(node);
             case "for_variable_declaration":
                 return translateForVarDecl(node);
             case "conditional_declaration":
@@ -2575,6 +2577,24 @@ public class CSTTranslator {
             "elements": args,
             "loc": node.loc,
         };
+    }
+
+    private hash<auto> translateNamedArgument(hash<auto> node) {
+        *hash<auto> nameNode = findField(node, "name");
+        *hash<auto> valueNode = findField(node, "value");
+
+        hash<auto> result = {
+            "nodetype": ANT_Expression,
+            "kind": AEK_NamedArgument,
+            "loc": node.loc,
+        };
+        if (exists nameNode) {
+            result.name = makeName(nameNode);
+        }
+        if (exists valueNode) {
+            result.value = translateExpression(valueNode);
+        }
+        return result;
     }
 
     private hash<auto> translateVarDeclarator(hash<auto> node) {
