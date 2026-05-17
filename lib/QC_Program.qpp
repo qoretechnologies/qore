@@ -1155,7 +1155,7 @@ qclass Program [arg=QoreProgram* p];
     Use the @ref Qore::ProgramControl::getProgram() "ProgramControl::getProgram()" method to attach to the currently
     running program
 
-    @param po A binary OR'ed product of @ref parse_options "parse options"
+    @param parse_options A binary OR'ed product of @ref parse_options "parse options"
     @param independent create an independent Program object with no connection or imports from the calling context
 
     @par Example:
@@ -1165,14 +1165,15 @@ Program pgm();
 
     @throw PROGRAM-OPTION-ERROR invalid parse options used
  */
-Program::constructor(softint po = PO_DEFAULT, *bool independent) [dom=EMBEDDED_LOGIC] {
-    if (po & PO_SYSTEM_OPS) {
+Program::constructor(softint parse_options = PO_DEFAULT, *bool independent)
+        [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    if (parse_options & PO_SYSTEM_OPS) {
         xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that "
-            "can only be set by the system", po);
+            "can only be set by the system", parse_options);
         return;
     }
 
-    QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), po);
+    QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), parse_options);
     //pgm->registerQoreObject(self, xsink);
     assert(!xsink->isEvent());
 
@@ -1181,7 +1182,7 @@ Program::constructor(softint po = PO_DEFAULT, *bool independent) [dom=EMBEDDED_L
 }
 
 //! Creates a new Program object with parse options from a ParseOptions object
-/** @param opts A @ref ParseOptions object specifying parse options (supports extended options beyond 64 bits)
+/** @param parse_options A @ref ParseOptions object specifying parse options (supports extended options beyond 64 bits)
     @param independent create an independent Program object with no connection or imports from the calling context
 
     @par Example:
@@ -1196,8 +1197,9 @@ Program pgm(opts);
 
     @since %Qore 2.1
  */
-Program::constructor(ParseOptions[QoreParseOptionsData] opts, *bool independent) [dom=EMBEDDED_LOGIC] {
-    QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), opts->get());
+Program::constructor(ParseOptions[QoreParseOptionsData] parse_options, *bool independent)
+        [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
+    QoreProgram* pgm = new QoreProgram(independent ? nullptr : getProgram(), parse_options->get());
     assert(!xsink->isEvent());
 
     self->setPrivate(CID_PROGRAM, pgm);
@@ -1274,7 +1276,8 @@ while (wh) {
     - %Qore 0.9 parsing can only be executed once per %Program object
     - %Qore 0.9 the \a format_label is obsolete / ignored
  */
-*hash<ExceptionInfo> Program::parse(string code, string label, *softint warning_mask, *string source, *softint offset, softbool[doc] format_label = True) [dom=EMBEDDED_LOGIC] {
+*hash<ExceptionInfo> Program::parse(string code, string label, *softint warning_mask, *string source,
+        *softint offset, softbool[doc] format_label = True) [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
     if (warning_mask) {
         ExceptionSink wsink;
         p->parse(code, label, xsink, &wsink, warning_mask, source, offset);
@@ -1333,7 +1336,8 @@ pgm.parseCommit();
     - %Qore 0.9 parsing can only be executed once per %Program object
     - %Qore 0.9 the \a format_label is obsolete / ignored
  */
-*hash<ExceptionInfo> Program::parsePending(string code, string label, *softint warning_mask, *string source, *softint offset, softbool[doc] format_label = True) [dom=EMBEDDED_LOGIC] {
+*hash<ExceptionInfo> Program::parsePending(string code, string label, *softint warning_mask, *string source,
+        *softint offset, softbool[doc] format_label = True) [dom=EMBEDDED_LOGIC; flags=NAMED_ARGS] {
     if (warning_mask) {
         ExceptionSink wsink;
         p->parsePending(code, label, xsink, &wsink, warning_mask, source, offset);
@@ -1405,7 +1409,7 @@ while (exists wh) {
 
     @since %Qore 0.9 parsing can only be executed once per %Program object
  */
-*hash<ExceptionInfo> Program::parseCommit(int warning_mask) {
+*hash<ExceptionInfo> Program::parseCommit(int warning_mask) [flags=NAMED_ARGS] {
     ExceptionSink wsink;
     p->parseCommit(xsink, &wsink, warning_mask);
     if (!wsink.isException())
@@ -1491,8 +1495,8 @@ auto Program::callFunction(string name, ...) {
 //! Calls a function in the program object giving the arguments to the function as a list and returns the return value
 /** The function runs with the permissions of the Program object containing the function.
 
-    @param name The name of the function to call
-    @param vargs The arguments to the function to be called
+    @param function_name The name of the function to call
+    @param arguments The arguments to the function to be called
 
     @return Depends on the function being called
 
@@ -1507,11 +1511,11 @@ auto result = pgm.callFunctionArgs("func_name", (arg1, arg2));
 
     @note The function called could also cause other exceptions to be thrown
  */
-auto Program::callFunctionArgs(string name, *softlist<auto> vargs) {
-    TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
+auto Program::callFunctionArgs(string function_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    TempEncodingHelper tmp(function_name, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
-    return p->callFunction(tmp->c_str(), vargs, xsink);
+    return p->callFunction(tmp->c_str(), arguments, xsink);
 }
 
 //! Calls a static method of an object, passing the arguments to the function as arguments to the method
@@ -1556,8 +1560,8 @@ auto result = p.callStaticMethodArgs("Namespace::Class::method", (arg1, arg2));
     @endcode
 
     @param class_name the with an optional namespace prefix
-    @param method the static method to call
-    @param call_args any additional arguments to the method
+    @param method_name the static method to call
+    @param arguments any additional arguments to the method
 
     @return the value returned by the method call
 
@@ -1574,12 +1578,13 @@ auto result = p.callStaticMethodArgs("Namespace::Class::method", (arg1, arg2));
 
     @since %Qore 0.9.5
 */
-auto Program::callStaticMethodArgs(string class_name, string method, *softlist<auto> call_args) {
-    return q_call_static_method_args(p, class_name, method, call_args, xsink);
+auto Program::callStaticMethodArgs(
+        string class_name, string method_name, *softlist<auto> arguments) [flags=NAMED_ARGS] {
+    return q_call_static_method_args(p, class_name, method_name, arguments, xsink);
 }
 
 //! Checks if a user function exists in the program object
-/** @param name The name of the function to check
+/** @param function_name The name of the function to check
 
     @return @ref True if the function exists, @ref False if not
 
@@ -1591,8 +1596,8 @@ if (pgm.existsFunction("my_func"))
 
     @throw ENCODING-CONVERSION-ERROR the function name could not be converted to the @ref default_encoding "default character encoding"
  */
-bool Program::existsFunction(string name) [flags=RET_VALUE_ONLY] {
-    TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
+bool Program::existsFunction(string function_name) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+    TempEncodingHelper tmp(function_name, QCS_DEFAULT, xsink);
     if (!tmp)
         return false;
     return p->existsFunction(tmp->c_str());
@@ -1613,7 +1618,7 @@ auto Program::run() {
 //! Imports a function into the program object's space; any calls to the imported function will run with the parent Program object's permissions
 /** This allows a user-defined API with greater capabilities than the embedded Program object to be imported into the embedded code.
 
-    @param func the name of the function to import into the Program object
+    @param function_name the name of the function to import into the Program object
 
     @par Example:
     @code{.py}
@@ -1626,8 +1631,8 @@ pgm.importFunction("log");
 
     @since %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")
  */
-nothing Program::importFunction(string func) {
-    TempEncodingHelper tmp(func, QCS_DEFAULT, xsink);
+nothing Program::importFunction(string function_name) [flags=NAMED_ARGS] {
+    TempEncodingHelper tmp(function_name, QCS_DEFAULT, xsink);
     if (!tmp)
         return QoreValue();
     qore_program_private::exportFunction(getProgram(), xsink, p, tmp->c_str());
@@ -1637,8 +1642,8 @@ nothing Program::importFunction(string func) {
 /** This allows a user-defined API with greater capabilities than the embedded Program object to be imported into the
     embedded code.
 
-    @param func the name of the function to import into the Program object
-    @param new_name the name of the function as it will be known in the Program object once imported; can be a fully-
+    @param function_name the name of the function to import into the Program object
+    @param import_as the name of the function as it will be known in the Program object once imported; can be a fully-
     qualified namespace path, in which case the namespace path will be created in the target Program object if
     necessary as well (ex: \c "Ns1::Ns2::my_func")
     @param inject if @ref True "True" then the imported function will be marked as a dependency injection and
@@ -1661,23 +1666,24 @@ pgm.importFunction("service_log", "log");
     - %Qore 0.8.4 the function name can include a namespace path (ex \c "Namespace::func")
     - %Qore 0.8.12 added the \a inject parameter
  */
-nothing Program::importFunction(string func, string new_name, *softbool inject) {
-    TempEncodingHelper tfunc(func, QCS_DEFAULT, xsink);
+nothing Program::importFunction(string function_name, string import_as, *softbool inject) [flags=NAMED_ARGS] {
+    TempEncodingHelper tfunc(function_name, QCS_DEFAULT, xsink);
     if (!tfunc)
         return QoreValue();
-    TempEncodingHelper tnew_name(new_name, QCS_DEFAULT, xsink);
-    if (!tnew_name)
+    TempEncodingHelper timport_as(import_as, QCS_DEFAULT, xsink);
+    if (!timport_as)
         return QoreValue();
-    if (tnew_name->empty())
-        xsink->raiseException("FUNCTION-IMPORT-ERROR", "the new function name while importing function '%s' may not be empty", func);
+    if (timport_as->empty())
+        xsink->raiseException("FUNCTION-IMPORT-ERROR",
+            "the new function name while importing function '%s' may not be empty", function_name);
 
-    qore_program_private::exportFunction(getProgram(), xsink, p, tfunc->c_str(), tnew_name->c_str(), inject);
+    qore_program_private::exportFunction(getProgram(), xsink, p, tfunc->c_str(), timport_as->c_str(), inject);
 }
 
 //! Imports a global variable into the program object's space
 /** If the variable is an object, then any methods called from the subprogram will run in the parent's space
 
-    @param varname The name of the global variable without the \c "$"
+    @param variable_name The name of the global variable without the \c "$"
     @param readonly If this argument is @ref True, then the variable will be imported read-only, and cannot be changed
     by the subprogram
 
@@ -1691,8 +1697,8 @@ pgm.importGlobalVariable("var");
     @throw ENCODING-CONVERSION-ERROR the global variablt name could not be converted to the
     @ref default_encoding "default character encoding"
  */
-nothing Program::importGlobalVariable(string varname, bool readonly = False) {
-    TempEncodingHelper tmp(varname, QCS_DEFAULT, xsink);
+nothing Program::importGlobalVariable(string variable_name, bool readonly = False) [flags=NAMED_ARGS] {
+    TempEncodingHelper tmp(variable_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         return QoreValue();
     }
@@ -1703,7 +1709,7 @@ nothing Program::importGlobalVariable(string varname, bool readonly = False) {
 //! Imports a global variable into the program object's space
 /** If the variable is an object, then any methods called from the subprogram will run in the parent's space
 
-    @param varname The name of the global variable in the source container without any \c "$"
+    @param variable_name The name of the global variable in the source container without any \c "$"
     @param import_as The name of the variable as it will be imported
     @param readonly If this argument is @ref True, then the variable will be imported read-only, and cannot be changed
     by the subprogram
@@ -1718,8 +1724,9 @@ pgm.importGlobalVariable("var", "another_var");
     @throw ENCODING-CONVERSION-ERROR the global variablt name could not be converted to the
     @ref default_encoding "default character encoding"
  */
-nothing Program::importGlobalVariable(string varname, string import_as, bool readonly = False) {
-    TempEncodingHelper tmp(varname, QCS_DEFAULT, xsink);
+nothing Program::importGlobalVariable(
+        string variable_name, string import_as, bool readonly = False) [flags=NAMED_ARGS] {
+    TempEncodingHelper tmp(variable_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         return QoreValue();
     }
@@ -1735,8 +1742,8 @@ nothing Program::importGlobalVariable(string varname, string import_as, bool rea
 /** This allows a user-defined API with greater capabilities than the embedded Program object to be imported into the
     embedded code.
 
-    @param cls the name of the class to import into the Program object
-    @param new_name the name of the class in the imported Program object; can be a fully-qualified namespace path, in
+    @param class_name the name of the class to import into the Program object
+    @param import_as the name of the class in the imported Program object; can be a fully-qualified namespace path, in
     which case the namespace path will be created in the target Program object if necessary as well (ex:
     \c "Ns1::Ns2::MyClass")
     @param inject if @ref True "True" then the imported class will be marked as a dependency injection and
@@ -1758,20 +1765,21 @@ pgm.importClass("MyNamespace::MyClass");
 
     @since
     - This method was first implemented in %Qore 0.8.7
-    - %Qore 0.8.12 added the \a new_name and \a inject parameters
+    - %Qore 0.8.12 added the \a import_as and \a inject parameters
     - %Qore 0.9.3 added the \a module_visibility parameter
     - %Qore 2.4 added the \a reexport parameter
  */
-nothing Program::importClass(string cls, *string new_name, *softbool inject, int module_visibility = CSP_UNCHANGED, bool reexport = False) {
-    TempEncodingHelper tmp(cls, QCS_DEFAULT, xsink);
+nothing Program::importClass(string class_name, *string import_as, *softbool inject,
+        int module_visibility = CSP_UNCHANGED, bool reexport = False) [flags=NAMED_ARGS] {
+    TempEncodingHelper tmp(class_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         assert(*xsink);
         return QoreValue();
     }
 
     TempEncodingHelper nn;
-    if (new_name) {
-        nn.set(new_name, QCS_DEFAULT, xsink);
+    if (import_as) {
+        nn.set(import_as, QCS_DEFAULT, xsink);
         if (!nn) {
             assert(*xsink);
             return QoreValue();
@@ -1780,14 +1788,15 @@ nothing Program::importClass(string cls, *string new_name, *softbool inject, int
         if (nn->empty())
             return xsink->raiseException("CLASS-IMPORT-ERROR", "the new class name while importing class '%s' may not be empty", tmp->c_str());
     }
-    qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(), new_name ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility), reexport);
+    qore_program_private::get(*p)->importClass(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(),
+        import_as ? nn->c_str() : nullptr, inject, static_cast<q_setpub_t>(module_visibility), reexport);
 }
 
 //! Imports a @ref hashdecl "typed hash declaration" into the program object's space
 /** This allows a user-defined API with greater capabilities than the embedded Program object to be imported into the embedded code.
 
-    @param name the name of the @ref hashdecl "typed hash declaration" to import into the Program object
-    @param new_name the name of the @ref hashdecl "typed hash declaration" in the imported Program object; can be a fully-qualified namespace path, in which case the namespace path will be created in the target Program object if necessary as well (ex: \c "Ns1::Ns2::MyClass")
+    @param hashdecl_name the name of the @ref hashdecl "typed hash declaration" to import into the Program object
+    @param import_as the name of the @ref hashdecl "typed hash declaration" in the imported Program object; can be a fully-qualified namespace path, in which case the namespace path will be created in the target Program object if necessary as well (ex: \c "Ns1::Ns2::MyClass")
 
     @par Example:
     @code{.py}
@@ -1803,16 +1812,16 @@ pgm.importHashDecl("MyNamespace::MyHash");
     - %Qore 0.8.13
     - %Qore 2.4 added the \a reexport parameter
  */
-nothing Program::importHashDecl(string name, *string new_name, bool reexport = False) {
-    TempEncodingHelper tmp(name, QCS_DEFAULT, xsink);
+nothing Program::importHashDecl(string hashdecl_name, *string import_as, bool reexport = False) [flags=NAMED_ARGS] {
+    TempEncodingHelper tmp(hashdecl_name, QCS_DEFAULT, xsink);
     if (!tmp) {
         assert(*xsink);
         return QoreValue();
     }
 
     TempEncodingHelper nn;
-    if (new_name) {
-        nn.set(new_name, QCS_DEFAULT, xsink);
+    if (import_as) {
+        nn.set(import_as, QCS_DEFAULT, xsink);
         if (!nn) {
             assert(*xsink);
             return QoreValue();
@@ -1821,7 +1830,8 @@ nothing Program::importHashDecl(string name, *string new_name, bool reexport = F
         if (nn->empty())
             return xsink->raiseException("HASHDECL-IMPORT-ERROR", "the new hashdecl name while importing hashdecl '%s' may not be empty", tmp->c_str());
     }
-    qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()), tmp->c_str(), new_name ? nn->c_str() : nullptr, CSP_UNCHANGED, reexport);
+    qore_program_private::get(*p)->importHashDecl(xsink, *qore_program_private::get(*getProgram()),
+        tmp->c_str(), import_as ? nn->c_str() : nullptr, CSP_UNCHANGED, reexport);
 }
 
 //! Returns a list of strings of all user functions defined in the program object
@@ -1886,7 +1896,7 @@ list<string> Program::getParseOptionStringList() [flags=CONSTANT] {
 //! Sets parse options in the parse option mask for the Program object
 /** An \c OPTIONS-LOCKED exception is thrown if parse options have been locked (for example with Program::lockOptions())
 
-    @param opt A single @ref parse_options "parse option" or binary-or'ed combination of @ref parse_options "parse options" to set in the parse option mask for the object; the given argument will be combined with binary or with the existing parse option mask
+    @param parse_options A single @ref parse_options "parse option" or binary-or'ed combination of @ref parse_options "parse options" to set in the parse option mask for the object; the given argument will be combined with binary or with the existing parse option mask
 
     @par Example:
     @code{.py}
@@ -1899,15 +1909,17 @@ pgm.setParseOptions(PO_NO_THREADS | PO_NO_GUI);
 
     @see Program::disableParseOptions() for a reciprocal method that disables parse options; also see Program::replaceParseOptions()
  */
-nothing Program::setParseOptions(softint opt = PO_DEFAULT) {
-   if (opt & PO_SYSTEM_OPS)
-      return xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that can only be set by the system", opt);
+nothing Program::setParseOptions(softint parse_options = PO_DEFAULT) [flags=NAMED_ARGS] {
+   if (parse_options & PO_SYSTEM_OPS)
+      return xsink->raiseException("PROGRAM-OPTION-ERROR",
+          "parse options (0x" QLLX ") contain restricted options that can only be set by the system",
+          parse_options);
 
-   p->setParseOptions(opt, xsink);
+   p->setParseOptions(parse_options, xsink);
 }
 
 //! Sets parse options from a ParseOptions object
-/** @param opts A @ref ParseOptions object with the parse options to set
+/** @param parse_options A @ref ParseOptions object with the parse options to set
 
     @par Example:
     @code{.py}
@@ -1919,14 +1931,14 @@ pgm.setParseOptions(opts);
 
     @since %Qore 2.1
 */
-nothing Program::setParseOptions(ParseOptions[QoreParseOptionsData] opts) {
-    p->setParseOptions(opts->get(), xsink);
+nothing Program::setParseOptions(ParseOptions[QoreParseOptionsData] parse_options) [flags=NAMED_ARGS] {
+    p->setParseOptions(parse_options->get(), xsink);
 }
 
 //! Removes the given parse options to the current parse option mask
 /** An \c OPTIONS-LOCKED exception is thrown if parse options have been locked (for example with Program::lockOptions())
 
-    @param opt A single @ref parse_options "parse option" or binary-or'ed combination of @ref parse_options "parse options" to unset in the parse option mask for the object; any bit set in this argument will be unset (ie zeroed out or combined with inverse binary and) in the Program's parse option mask
+    @param parse_options A single @ref parse_options "parse option" or binary-or'ed combination of @ref parse_options "parse options" to unset in the parse option mask for the object; any bit set in this argument will be unset (ie zeroed out or combined with inverse binary and) in the Program's parse option mask
 
     @par Example:
     @code{.py}
@@ -1939,15 +1951,17 @@ pgm.disableParseOptions(PO_NO_THREADS | PO_NO_GUI);
 
     @see Program::setParseOptions() for a reciprocal method that enables parse options; also see Program::replaceParseOptions()
  */
-nothing Program::disableParseOptions(softint opt) {
-   if (opt & PO_SYSTEM_OPS)
-      return xsink->raiseException("PROGRAM-OPTION-ERROR", "parse options (0x" QLLX ") contain restricted options that can only be set by the system", opt);
+nothing Program::disableParseOptions(softint parse_options) [flags=NAMED_ARGS] {
+   if (parse_options & PO_SYSTEM_OPS)
+      return xsink->raiseException("PROGRAM-OPTION-ERROR",
+          "parse options (0x" QLLX ") contain restricted options that can only be set by the system",
+          parse_options);
 
-   p->disableParseOptions(opt, xsink);
+   p->disableParseOptions(parse_options, xsink);
 }
 
 //! Disables parse options from a ParseOptions object
-/** @param opts A @ref ParseOptions object with the parse options to disable
+/** @param parse_options A @ref ParseOptions object with the parse options to disable
 
     @par Example:
     @code{.py}
@@ -1959,14 +1973,14 @@ pgm.disableParseOptions(opts);
 
     @since %Qore 2.1
 */
-nothing Program::disableParseOptions(ParseOptions[QoreParseOptionsData] opts) {
-    p->disableParseOptions(opts->get(), xsink);
+nothing Program::disableParseOptions(ParseOptions[QoreParseOptionsData] parse_options) [flags=NAMED_ARGS] {
+    p->disableParseOptions(parse_options->get(), xsink);
 }
 
 //! Replaces the parse options for the Program object
 /** An \c OPTION-ERROR exception is thrown if the calling Program object does not have @ref PO_NO_CHILD_PO_RESTRICTIONS set.
 
-    @param opt A single @ref parse_options "parse option" or binary-or'ed combination of @ref parse_options "parse options" to unset in the parse option mask for the object
+    @param parse_options A single @ref parse_options "parse option" or binary-or'ed combination of @ref parse_options "parse options" to unset in the parse option mask for the object
 
     @par Example:
     @code{.py}
@@ -1978,8 +1992,8 @@ pgm.replaceParseOptions(PO_NO_THREADS | PO_NO_GUI);
 
     @see Program::setParseOptions() and Program::disableParseOptions().
  */
-nothing Program::replaceParseOptions(softint opt) {
-   p->replaceParseOptions(opt, xsink);
+nothing Program::replaceParseOptions(softint parse_options) [flags=NAMED_ARGS] {
+   p->replaceParseOptions(parse_options, xsink);
 }
 
 //! Sets (or clears) the script path (directory and filename) for the object
@@ -1990,7 +2004,7 @@ nothing Program::replaceParseOptions(softint opt) {
 pgm.setScriptPath("/users/test/test.q");
     @endcode
  */
-nothing Program::setScriptPath(*string path) {
+nothing Program::setScriptPath(*string path) [flags=NAMED_ARGS] {
    p->setScriptPath(path ? path->c_str() : nullptr);
 }
 
@@ -2049,8 +2063,8 @@ nothing Program::lockOptions() {
 
 //! Returns a the value of the global variable identified by the first string argument
 /**
-    @param varname The string name of the global variable to find, not including the leading \c "$" character
-    @param rexists An lvalue reference to a @ref bool_type to determine if the global variable exists (because this method could return @ref nothing when the variable exists as well as when it does not)
+    @param variable_name The string name of the global variable to find, not including the leading \c "$" character
+    @param found An lvalue reference to a @ref bool_type to determine if the global variable exists (because this method could return @ref nothing when the variable exists as well as when it does not)
 
     @return the value of the global variable identified by the first string argument giving the name of the variable (without any leading \c "$" symbol)
 
@@ -2060,20 +2074,20 @@ bool existsv;
 auto val = pgm.getGlobalVariable("error_count", \existsv);
     @endcode
  */
-auto Program::getGlobalVariable(string varname, *reference<bool> rexists) {
-    TempEncodingHelper t(varname, QCS_DEFAULT, xsink);
+auto Program::getGlobalVariable(string variable_name, *reference<bool> found) [flags=NAMED_ARGS] {
+    TempEncodingHelper t(variable_name, QCS_DEFAULT, xsink);
     if (!t)
         return QoreValue();
 
-    bool found;
-    ValueHolder rv(p->getGlobalVariableValue(t->c_str(), found), xsink);
+    bool exists;
+    ValueHolder rv(p->getGlobalVariableValue(t->c_str(), exists), xsink);
 
-    if (rexists) {
-        QoreTypeSafeReferenceHelper r(rexists, xsink);
+    if (found) {
+        QoreTypeSafeReferenceHelper r(found, xsink);
         if (!r)
             return QoreValue();
 
-        if (r.assign(found))
+        if (r.assign(exists))
             return QoreValue();
     }
 
@@ -2092,7 +2106,7 @@ pgm.setTimeZoneRegion("Europe/Prague");
 
     @throw TZINFO-ERROR Unable to read zoneinfo file; invalid file magic; error parsing zoneinfo file, etc
  */
-nothing Program::setTimeZoneRegion(string region) {
+nothing Program::setTimeZoneRegion(string region) [flags=NAMED_ARGS] {
     const AbstractQoreZoneInfo *zone = QTZM.findLoadRegion(region->c_str(), xsink);
     if (!*xsink) {
         p->setTZ(zone);
@@ -2118,7 +2132,7 @@ pgm.setTimeZoneUTCOffset(PT2H);
 
     @see TimeZone::setUTCOffset()
  */
-nothing Program::setTimeZoneUTCOffset(softint seconds_east) {
+nothing Program::setTimeZoneUTCOffset(softint seconds_east) [flags=NAMED_ARGS] {
    const AbstractQoreZoneInfo *zone = QTZM.findCreateOffsetZone(seconds_east);
    p->setTZ(zone);
 }
@@ -2133,7 +2147,7 @@ pgm.setTimeZone(tz);
 
     @see TimeZone::set()
  */
-nothing Program::setTimeZone(TimeZone[TimeZoneData] zone) {
+nothing Program::setTimeZone(TimeZone[TimeZoneData] zone) [flags=NAMED_ARGS] {
    p->setTZ(zone->get());
 }
 
@@ -2150,7 +2164,7 @@ TimeZone Program::getTimeZone() [flags=CONSTANT] {
 }
 
 //! Sets the sandbox manager for the program to enforce security restrictions
-/** @param sm The sandbox manager to set; the program takes ownership of the reference
+/** @param sandbox_manager The sandbox manager to set; the program takes ownership of the reference
 
     @par Example:
     @code{.py}
@@ -2163,9 +2177,9 @@ pgm.setSandboxManager(sm);
 
     @since Qore 2.1
  */
-nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sm) {
+nothing Program::setSandboxManager(SandboxManager[QoreSandboxManager] sandbox_manager) [flags=NAMED_ARGS] {
    // setSandboxManager() takes its own strong reference; ReferenceHolder from QPP macro handles the arg ref
-   p->setSandboxManager(*sm);
+   p->setSandboxManager(*sandbox_manager);
 }
 
 //! Returns the sandbox manager for this program if set
@@ -2215,7 +2229,7 @@ pgm.setExecMode(EM_JIT);
 
     @since %Qore 2.3
  */
-nothing Program::setExecMode(enum<ExecMode> mode) {
+nothing Program::setExecMode(enum<ExecMode> mode) [flags=NAMED_ARGS] {
    p->setExecMode(static_cast<qore_exec_mode_t>(mode));
 }
 
@@ -2239,36 +2253,36 @@ enum<ExecMode> Program::getExecMode() [flags=CONSTANT] {
 }
 
 //! Sets a @ref conditional_parsing "parse define" for the current Program
-/** @param def The parse define to assign
-    @param val The value to assign to the define
+/** @param parse_define The parse define to assign
+    @param value The value to assign to the define
 
     @par Example:
     @code{.py}
 pgm.define("PRODUCTION", True);
     @endcode
  */
-nothing Program::define(string def, auto val) {
-   TempEncodingHelper t(def, QCS_DEFAULT, xsink);
+nothing Program::define(string parse_define, auto value) [flags=NAMED_ARGS] {
+   TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    if (t)
-      qore_program_private::runTimeDefine(p, t->c_str(), val.refSelf(), xsink);
+      qore_program_private::runTimeDefine(p, t->c_str(), value.refSelf(), xsink);
 }
 
 //! Unsets a @ref conditional_parsing "parse define" for the current Program
-/** @param def The name of the define to undefine; if the given define is not defined anyway, the operation is ignored
+/** @param parse_define The name of the define to undefine; if the given define is not defined anyway, the operation is ignored
 
     @par Example:
     @code{.py}
 pgm.undefine("PRODUCTION");
     @endcode
  */
-nothing Program::undefine(string def) {
-   TempEncodingHelper t(def, QCS_DEFAULT, xsink);
+nothing Program::undefine(string parse_define) [flags=NAMED_ARGS] {
+   TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    if (t)
       qore_program_private::runTimeUnDefine(p, t->c_str(), xsink);
 }
 
 //! Returns @ref True if the given @ref conditional_parsing "parse define" is defined in the current Program (does not have to have a value defined to return @ref True), @ref False if not
-/** @param def The name of the define to check
+/** @param parse_define The name of the define to check
 
     @return @ref True if the given @ref conditional_parsing "parse define" is defined in the current Program (does not have to have a value defined to return @ref True), @ref False if not
 
@@ -2279,8 +2293,8 @@ bool b = pgm.isDefined("PRODUCTION");
 
     @throw ENCODING-CONVERSION-ERROR this error is thrown if the string cannot be converted to the @ref default_encoding "default character encoding"
  */
-bool Program::isDefined(string def) [flags=RET_VALUE_ONLY] {
-   TempEncodingHelper t(def, QCS_DEFAULT, xsink);
+bool Program::isDefined(string parse_define) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    return t ? qore_program_private::runTimeIsDefined(p, t->c_str()) : false;
 }
 
@@ -2296,8 +2310,8 @@ auto val = pgm.getDefine("PRODUCTION");
 
     @note A parse define may be defined with no value; use Program::isDefined() to check if a parse define is actually defined or not
  */
-auto Program::getDefine(string def) [flags=RET_VALUE_ONLY] {
-   TempEncodingHelper t(def, QCS_DEFAULT, xsink);
+auto Program::getDefine(string parse_define) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+   TempEncodingHelper t(parse_define, QCS_DEFAULT, xsink);
    return t ? qore_program_private::runTimeGetDefine(p, t->c_str()) : QoreValue();
 }
 
@@ -2333,7 +2347,7 @@ int Program::getProgramId() [flags=CONSTANT] {
 
     Note that modules providing objects resolved at parse time (classes, constants, functions, etc) must be loaded prior to parsing.
 
-    @param name either a feature name (a module will be searched with this feature name) or a path to a module to load
+    @param module_name either a feature name (a module will be searched with this feature name) or a path to a module to load
     @param warning_mask the warning mask to use when loading the module; note that warnings are treated as errors
 
     @par Example:
@@ -2358,8 +2372,8 @@ pgm.loadModule("mysql");
     - %Qore 0.8.7 introduced this method
     - %Qore 0.9 added the \c warning_mask parameter
 */
-Program::loadModule(string name, int warning_mask = WARN_MODULES) [dom=MODULES] {
-    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), p, nullptr, QMLO_NONE, warning_mask);
+Program::loadModule(string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
+    QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), p, nullptr, QMLO_NONE, warning_mask);
 }
 
 //! Loads a %Qore module into the Program object at run-time
@@ -2367,7 +2381,7 @@ Program::loadModule(string name, int warning_mask = WARN_MODULES) [dom=MODULES] 
 
     Note that modules providing objects resolved at parse time (classes, constants, functions, etc) must be loaded prior to parsing.
 
-    @param name either a feature name (a module will be searched with this feature name) or a path to a module to load
+    @param module_name either a feature name (a module will be searched with this feature name) or a path to a module to load
     @param warning_mask the warning mask to use when loading the module; any warnings will be returned in the return value
 
     @return any warnings found while parsing the module (if the module is a user module)
@@ -2392,9 +2406,10 @@ pgm.loadModule("mysql");
 
     @since %Qore 0.9 introduced this method
 */
-*hash<ExceptionInfo> Program::loadModuleWarn(string name, int warning_mask = WARN_MODULES) [dom=MODULES] {
+*hash<ExceptionInfo> Program::loadModuleWarn(
+        string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
     ExceptionSink wsink;
-    QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), p, nullptr, QMLO_NONE, warning_mask);
+    QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, nullptr, QMLO_NONE, warning_mask);
     if (!*xsink && wsink) {
         return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
     }
@@ -2412,8 +2427,8 @@ pgm.loadModule("mysql");
 pgm.loadUserModuleWithProgram("MyModule", p);
     @endcode
 
-    @param name the name or path of the user module to load
-    @param pgm the @ref Qore::Program "Program" object to use as a container for the new user module, presumably this has a custom API that the user module can use; note that after this call the @ref Qore::Program "Program" object will be owned by the user module, therefore the object itself will no longer be valid and any accesses to the object after this call will result in an exception
+    @param module_name the name or path of the user module to load
+    @param program the @ref Qore::Program "Program" object to use as a container for the new user module, presumably this has a custom API that the user module can use; note that after this call the @ref Qore::Program "Program" object will be owned by the user module, therefore the object itself will no longer be valid and any accesses to the object after this call will result in an exception
     @param warning_mask the warning mask to use when loading the module; note that warnings are treated as errors
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, module defines symbols already defined in the target object, etc
@@ -2433,8 +2448,9 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     - %Qore 0.8.12 introduced this method
     - %Qore 0.9 added the \c warning_mask parameter
 */
-Program::loadUserModuleWithProgram(string name, !Qore::Program[QoreProgram] pgm, int warning_mask = WARN_MODULES) [dom=MODULES,INJECTION] {
-    QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), p, pgm, QMLO_INJECT, warning_mask);
+Program::loadUserModuleWithProgram(string module_name, !Qore::Program[QoreProgram] program,
+        int warning_mask = WARN_MODULES) [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
+    QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), p, program, QMLO_INJECT, warning_mask);
 }
 
 //! Loads a %Qore user module into the Program object at run-time using the given @ref Qore::Program "Program" object as the container for the user module code
@@ -2448,8 +2464,8 @@ Program::loadUserModuleWithProgram(string name, !Qore::Program[QoreProgram] pgm,
 pgm.loadUserModuleWithProgram("MyModule", p);
     @endcode
 
-    @param name the name or path of the user module to load
-    @param pgm the @ref Qore::Program "Program" object to use as a container for the new user module, presumably this has a custom API that the user module can use; note that after this call the @ref Qore::Program "Program" object will be owned by the user module, therefore the object itself will no longer be valid and any accesses to the object after this call will result in an exception
+    @param module_name the name or path of the user module to load
+    @param program the @ref Qore::Program "Program" object to use as a container for the new user module, presumably this has a custom API that the user module can use; note that after this call the @ref Qore::Program "Program" object will be owned by the user module, therefore the object itself will no longer be valid and any accesses to the object after this call will result in an exception
     @param warning_mask the warning mask to use when loading the module; any warnings will be returned in the return value
 
     @return any warnings found while parsing the module (if the module is a user module)
@@ -2469,9 +2485,11 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 
     @since %Qore 0.9 introduced this method
 */
-*hash<ExceptionInfo> Program::loadUserModuleWithProgramWarn(string name, !Qore::Program[QoreProgram] pgm, int warning_mask = WARN_MODULES) [dom=MODULES,INJECTION] {
+*hash<ExceptionInfo> Program::loadUserModuleWithProgramWarn(string module_name,
+        !Qore::Program[QoreProgram] program, int warning_mask = WARN_MODULES)
+        [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
     ExceptionSink wsink;
-    QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), p, pgm, QMLO_INJECT, warning_mask);
+    QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), p, program, QMLO_INJECT, warning_mask);
     if (!*xsink && wsink) {
         return wsink.catchException()->makeExceptionObjectAndDelete(xsink);
     }
@@ -2481,7 +2499,7 @@ pgm.loadUserModuleWithProgram("MyModule", p);
 //! Loads a %Qore user module into the given Program container at run-time; after this call the Program object is owned by the user module and is no longer accessible in the object used for the call
 /** This method allows a user module to be loaded with a custom API already present in the user module's @ref Qore::Program "Program" container.
 
-    @param name the name or path of the user module to load
+    @param module_name the name or path of the user module to load
     @param reinject if @ref True "True" then the module will be reloaded even if already loaded previously; if the module was not already loaded then it is loaded with this call
     @param warning_mask the warning mask to use when loading the module; note that warnings are treated as errors
     @param reexport reexport symbols from the imported module (only valid when used in a user module)
@@ -2507,7 +2525,8 @@ pgm.loadUserModuleWithProgram("MyModule", p);
     - %Qore 0.9 added the \c warning_mask parameter
     - %Qore 0.9.4 added the \c reexport parameter
  */
-Program::loadApplyToUserModule(string name, *softbool reinject, int warning_mask = WARN_MODULES, bool reexport = False) [dom=MODULES,INJECTION] {
+Program::loadApplyToUserModule(string module_name, *softbool reinject,
+        int warning_mask = WARN_MODULES, bool reexport = False) [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: %d, self: %p\n", p, p->getProgramId(), self);
 #ifdef DEBUG
@@ -2518,8 +2537,8 @@ Program::loadApplyToUserModule(string name, *softbool reinject, int warning_mask
     assert(pgm == p);
 #endif
     if (!*xsink) {
-        QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), 0, p, QMLO_INJECT | (reinject ? QMLO_REINJECT : 0),
-            warning_mask, reexport);
+        QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, p,
+            QMLO_INJECT | (reinject ? QMLO_REINJECT : 0), warning_mask, reexport);
         // getAndRemovePrivateData removed private data, so destructor is not executed. We must remove reference to this object
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
@@ -2529,7 +2548,7 @@ Program::loadApplyToUserModule(string name, *softbool reinject, int warning_mask
 //! Loads a %Qore user module into the given Program container at run-time; after this call the Program object is owned by the user module and is no longer accessible in the object used for the call
 /** This method allows a user module to be loaded with a custom API already present in the user module's @ref Qore::Program "Program" container.
 
-    @param name the name or path of the user module to load
+    @param module_name the name or path of the user module to load
     @param reinject if @ref True "True" then the module will be reloaded even if already loaded previously; if the module was not already loaded then it is loaded with this call
     @param warning_mask the warning mask to use when loading the module; any warnings will be returned in the return value
     @param reexport reexport symbols from the imported module (only valid when used in a user module)
@@ -2557,7 +2576,8 @@ Program::loadApplyToUserModule(string name, *softbool reinject, int warning_mask
     - %Qore 0.9 added the \c warning_mask parameter
     - %Qore 0.9.4 added the \c reexport parameter
  */
-*hash<ExceptionInfo> Program::loadApplyToUserModuleWarn(string name, *softbool reinject, int warning_mask = WARN_MODULES, bool reexport = False) [dom=MODULES,INJECTION] {
+*hash<ExceptionInfo> Program::loadApplyToUserModuleWarn(string module_name, *softbool reinject,
+        int warning_mask = WARN_MODULES, bool reexport = False) [dom=MODULES,INJECTION; flags=NAMED_ARGS] {
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToUserModule pgm: %p, pgmid: %d, self: %p\n", p, p->getProgramId(), self);
 #ifdef DEBUG
@@ -2569,8 +2589,8 @@ Program::loadApplyToUserModule(string name, *softbool reinject, int warning_mask
 #endif
     if (!*xsink) {
         ExceptionSink wsink;
-        QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), 0, p, QMLO_INJECT | (reinject ? QMLO_REINJECT : 0),
-            warning_mask, reexport);
+        QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), 0, p,
+            QMLO_INJECT | (reinject ? QMLO_REINJECT : 0), warning_mask, reexport);
         // getAndRemovePrivateData removed private data, so destructor is not executed. We must remove reference to this object
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
@@ -2584,7 +2604,7 @@ Program::loadApplyToUserModule(string name, *softbool reinject, int warning_mask
 //! Loads a %Qore user module privately into the given Program container at run-time; after this call the Program object is owned by the user module and is no longer accessible in the object used for the call
 /** This method allows a user module to be privately loaded with a custom API already present in the user module's @ref Qore::Program "Program" container.
 
-    @param name the name or path of the user module to load
+    @param module_name the name or path of the user module to load
     @param warning_mask the warning mask to use when loading the module; note that warnings are treated as errors
 
     @throw LOAD-MODULE-ERROR module cannot be loaded: binary modules cannot be loaded in @ref Qore::Program "Program" containers, etc
@@ -2606,7 +2626,8 @@ Program::loadApplyToUserModule(string name, *softbool reinject, int warning_mask
 
     @since %Qore 0.9 added the \c warning_mask parameter
  */
-Program::loadApplyToPrivateUserModule(string name, int warning_mask = WARN_MODULES) [dom=MODULES] {
+Program::loadApplyToPrivateUserModule(
+        string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: %d, self: %p\n", p, p->getProgramId(), self);
 #ifdef DEBUG
@@ -2617,7 +2638,8 @@ Program::loadApplyToPrivateUserModule(string name, int warning_mask = WARN_MODUL
     assert(pgm == p);
 #endif
     if (!*xsink) {
-        QMM.runTimeLoadModule(*xsink, *xsink, name->c_str(), 0, p, QMLO_INJECT | QMLO_PRIVATE, warning_mask);
+        QMM.runTimeLoadModule(*xsink, *xsink, module_name->c_str(), 0, p, QMLO_INJECT | QMLO_PRIVATE,
+            warning_mask);
         // getAndRemovePrivateData removed private data, so destructor is not executed. We must remove reference to this object
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
@@ -2627,7 +2649,7 @@ Program::loadApplyToPrivateUserModule(string name, int warning_mask = WARN_MODUL
 //! Loads a %Qore user module privately into the given Program container at run-time; after this call the Program object is owned by the user module and is no longer accessible in the object used for the call
 /** This method allows a user module to be privately loaded with a custom API already present in the user module's @ref Qore::Program "Program" container.
 
-    @param name the name or path of the user module to load
+    @param module_name the name or path of the user module to load
     @param warning_mask the warning mask to use when loading the module; any warnings will be returned in the return value
 
     @return any warnings found while parsing the module (if the module is a user module)
@@ -2651,7 +2673,8 @@ Program::loadApplyToPrivateUserModule(string name, int warning_mask = WARN_MODUL
 
     @since %Qore 0.9 added the \c warning_mask parameter
  */
-*hash<ExceptionInfo> Program::loadApplyToPrivateUserModuleWarn(string name, int warning_mask = WARN_MODULES) [dom=MODULES] {
+*hash<ExceptionInfo> Program::loadApplyToPrivateUserModuleWarn(
+        string module_name, int warning_mask = WARN_MODULES) [dom=MODULES; flags=NAMED_ARGS] {
     // remove the QoreProgram private data from the object
     printd(5, "Program::loadApplyToPrivateUserModule pgm: %p, pgmid: %d, self: %p\n", p, p->getProgramId(), self);
 #ifdef DEBUG
@@ -2663,7 +2686,8 @@ Program::loadApplyToPrivateUserModule(string name, int warning_mask = WARN_MODUL
 #endif
     if (!*xsink) {
         ExceptionSink wsink;
-        QMM.runTimeLoadModule(*xsink, wsink, name->c_str(), 0, p, QMLO_INJECT | QMLO_PRIVATE, warning_mask);
+        QMM.runTimeLoadModule(*xsink, wsink, module_name->c_str(), 0, p, QMLO_INJECT | QMLO_PRIVATE,
+            warning_mask);
         // getAndRemovePrivateData removed private data, so destructor is not executed. We must remove reference to this object
         //p->unregisterQoreObject(self, xsink);
         self->doDelete(xsink);
@@ -2771,7 +2795,7 @@ Program::importSystemApi() {
 //! Sets a @ref call_reference "call reference" or @ref closure "closure" to run every time a new thread is started
 /** This code can be used to initialize @ref threading_and_variables "global thread-local variables", for example.
 
-    @param init a @ref call_reference "call reference" or @ref closure "closure" to run every time a new thread is started or @ref nothing to clear any thread initialization code
+    @param callback a @ref call_reference "call reference" or @ref closure "closure" to run every time a new thread is started or @ref nothing to clear any thread initialization code
 
     @return @ref True if there was already user initialization code set, @ref False if not
 
@@ -2786,8 +2810,8 @@ pgm.setThreadInit(sub () { var = 123; });
 
     @since %Qore 0.8.13
 */
-bool Program::setThreadInit(*code init) [dom=THREAD_CONTROL] {
-    return qore_program_private::setThreadInit(*p, init, xsink);
+bool Program::setThreadInit(*code callback) [dom=THREAD_CONTROL; flags=NAMED_ARGS] {
+    return qore_program_private::setThreadInit(*p, callback, xsink);
 }
 
 //! returns a hash of global variables
@@ -2812,7 +2836,7 @@ hash<auto> Program::getGlobalVars() [flags=CONSTANT] {
 pgm.setGlobalVarValue("a", 1);
     @endcode
 
-    @param name the name of the variable
+    @param variable_name the name of the variable
     @param value the value to assign
 
     @throw UNKNOWN-VARIABLE the variable is not a global variable
@@ -2823,12 +2847,12 @@ pgm.setGlobalVarValue("a", 1);
 
     @since %Qore 0.8.13
  */
-nothing Program::setGlobalVarValue(string name, auto value) {
-   p->setGlobalVarValue(name->c_str(), value.refSelf(), xsink);
+nothing Program::setGlobalVarValue(string variable_name, auto value) [flags=NAMED_ARGS] {
+   p->setGlobalVarValue(variable_name->c_str(), value.refSelf(), xsink);
 }
 
 //! finds all variants of a function or class method and returns a list of the results
-/** @param function the function or class method name; may also be namespace-justified
+/** @param function_name the function or class method name; may also be namespace-justified
 
     @return a list of hashes for each resolved name; when matched, each hash element has the following keys:
     - \c desc: a string description of the call which includes the name and the full text call signature
@@ -2840,10 +2864,10 @@ nothing Program::setGlobalVarValue(string name, auto value) {
 
     @note the <a href="../../modules/reflection/html/index.html">reflection</a> module supercedes this functionality
 */
-list<hash<auto>> Program::findFunctionVariants(string function) {
-    ReferenceHolder<QoreListNode> vl(p->runtimeFindCallVariants(function->c_str(), xsink), xsink);
+list<hash<auto>> Program::findFunctionVariants(string function_name) [flags=NAMED_ARGS] {
+    ReferenceHolder<QoreListNode> vl(p->runtimeFindCallVariants(function_name->c_str(), xsink), xsink);
     if (!vl)
-        return xsink->raiseException("PROGRAM-ERROR", "cannot find any function \"%s\"", function->c_str());
+        return xsink->raiseException("PROGRAM-ERROR", "cannot find any function \"%s\"", function_name->c_str());
     return vl.release();
 }
 
@@ -2890,8 +2914,8 @@ ProgramControl Program::getProgram() [flags=RET_VALUE_ONLY; dom=DEBUGGER] {
 pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_code.toBase64());
     @endcode
 
-    @param module the module name
-    @param cmd the command string to execute to be parsed by the module
+    @param module_name the module name
+    @param command the command string to execute to be parsed by the module
 
     @throw PARSE-COMMAND-ERROR the module does not support commands
 
@@ -2900,13 +2924,13 @@ pgm.issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_co
 
     @since %Qore 0.9
 */
-nothing Program::issueModuleCmd(string module, string cmd) {
-    TempEncodingHelper tmp_module(module, QCS_DEFAULT, xsink);
+nothing Program::issueModuleCmd(string module_name, string command) [flags=NAMED_ARGS] {
+    TempEncodingHelper tmp_module(module_name, QCS_DEFAULT, xsink);
     if (!tmp_module) {
         return QoreValue();
     }
 
-    TempEncodingHelper tmp_cmd(cmd, QCS_DEFAULT, xsink);
+    TempEncodingHelper tmp_cmd(command, QCS_DEFAULT, xsink);
     if (!tmp_cmd) {
         return QoreValue();
     }
@@ -2938,7 +2962,7 @@ nothing Program::issueModuleCmd(string module, string cmd) {
 
     @since %Qore 0.9.4
  */
-code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY] {
+code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     QoreProgramContextHelper pch(p);
     return get_call_reference_intern(runtime_get_stack_object(), identifier, xsink);
 }
@@ -2949,7 +2973,7 @@ code Program::getCallReference(string identifier) [flags=RET_VALUE_ONLY] {
 
     @since %Qore 0.9.5
 */
-Expression Program::getExpression(string source, string label) {
+Expression Program::getExpression(string source, string label) [flags=NAMED_ARGS] {
     ReferenceHolder<QoreExpression> exp(new QoreExpression(*p, *source, *label, xsink), xsink);
     if (!*xsink) {
         return new QoreObject(QC_EXPRESSION, p, exp.release());
@@ -2976,21 +3000,21 @@ int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
 }
 
 //! Returns the capability mask of the program n calls above this call
-/** @param n the number of stack frames above this call; must be a non-negative number
+/** @param frame_offset the number of stack frames above this call; must be a non-negative number
 
-    @return the capability mask of the program n calls above this call
+    @return the capability mask of the program \a frame_offset calls above this call
 
     @since %Qore 2.0
 */
-static int Program::getCallerCapabilityMask(int n = 1) [flags=RET_VALUE_ONLY;dom=PROCESS] {
-    if (n < 0) {
+static int Program::getCallerCapabilityMask(int frame_offset = 1) [flags=RET_VALUE_ONLY,NAMED_ARGS;dom=PROCESS] {
+    if (frame_offset < 0) {
         xsink->raiseException("INVALID-STACK-FRAME", "The stack frame argument must be a non-negative number; got "
-            QLLD, n);
+            QLLD, frame_offset);
         return -1;
     }
-    return !n
+    return !frame_offset
         ? runtime_get_parse_options().getLo()
-        : runtime_get_parse_options_stack(xsink, (size_t)n).getLo();
+        : runtime_get_parse_options_stack(xsink, (size_t)frame_offset).getLo();
 }
 
 //! Issues a module command for the given module in the current Program object
@@ -3001,8 +3025,8 @@ static int Program::getCallerCapabilityMask(int n = 1) [flags=RET_VALUE_ONLY;dom
 Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + byte_code.toBase64());
     @endcode
 
-    @param module the module name
-    @param cmd the command string to execute to be parsed by the module
+    @param module_name the module name
+    @param command the command string to execute to be parsed by the module
 
     @throw PARSE-COMMAND-ERROR the module does not support commands
 
@@ -3011,13 +3035,13 @@ Program::issueModuleCmd("jni", "define-class " + java_class_path_name + " " + by
 
     @since %Qore 2.0
 */
-static nothing Program::issueModuleCmd(string module, string cmd) [dom=MODULES] {
-    TempEncodingHelper tmp_module(module, QCS_DEFAULT, xsink);
+static nothing Program::issueModuleCmd(string module_name, string command) [dom=MODULES; flags=NAMED_ARGS] {
+    TempEncodingHelper tmp_module(module_name, QCS_DEFAULT, xsink);
     if (!tmp_module) {
         return QoreValue();
     }
 
-    TempEncodingHelper tmp_cmd(cmd, QCS_DEFAULT, xsink);
+    TempEncodingHelper tmp_cmd(command, QCS_DEFAULT, xsink);
     if (!tmp_cmd) {
         return QoreValue();
     }
@@ -3052,7 +3076,7 @@ if (Program::hasParseOption("broken-soft-types")) {
 
     @since %Qore 2.3
  */
-static bool Program::hasParseOption(string name) [flags=CONSTANT] {
+static bool Program::hasParseOption(string name) [flags=CONSTANT,NAMED_ARGS] {
     QoreParseOptions opts = runtime_get_parse_options();
     QoreParseOptions opt = ParseOptionMap::find_code(name->c_str());
     if (opt == QoreParseOptions(-1)) {

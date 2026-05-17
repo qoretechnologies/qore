@@ -817,6 +817,75 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("ProgramControl", "findFunctionStatementId",
             ("function_name", "params"));
         assertNamedClassMethodVariantCount("ProgramControl", "findFunctionVariants", ("function_name",));
+        assertNamedConstructorVariantCount("Program", ("parse_options", "independent"), 2);
+        assertNamedClassMethodVariantCount("Program", "parse",
+            ("code", "label", "warning_mask", "source", "offset", "format_label"));
+        assertNamedClassMethodVariantCount("Program", "parsePending",
+            ("code", "label", "warning_mask", "source", "offset", "format_label"));
+        assertNamedClassMethodVariantCount("Program", "parseCommit", ("warning_mask",));
+        assertNamedClassMethodVariantCount("Program", "callFunctionArgs", ("function_name", "arguments"));
+        assertNamedClassMethodVariantCount("Program", "callStaticMethodArgs",
+            ("class_name", "method_name", "arguments"));
+        assertNamedClassMethodVariantCount("Program", "existsFunction", ("function_name",));
+        assertNamedClassMethodVariantCount("Program", "importFunction", ("function_name",));
+        assertNamedClassMethodVariantCount("Program", "importFunction",
+            ("function_name", "import_as", "inject"));
+        assertNamedClassMethodVariantCount("Program", "importGlobalVariable", ("variable_name", "readonly"));
+        assertNamedClassMethodVariantCount("Program", "importGlobalVariable",
+            ("variable_name", "import_as", "readonly"));
+        assertNamedClassMethodVariantCount("Program", "importClass",
+            ("class_name", "import_as", "inject", "module_visibility", "reexport"));
+        assertNamedClassMethodVariantCount("Program", "importHashDecl",
+            ("hashdecl_name", "import_as", "reexport"));
+        assertNamedClassMethodVariantCount("Program", "setParseOptions", ("parse_options",), 2);
+        assertNamedClassMethodVariantCount("Program", "disableParseOptions", ("parse_options",), 2);
+        assertNamedClassMethodVariantCount("Program", "replaceParseOptions", ("parse_options",));
+        assertNamedClassMethodVariantCount("Program", "setScriptPath", ("path",));
+        assertNamedClassMethodVariantCount("Program", "getGlobalVariable", ("variable_name", "found"));
+        assertNamedClassMethodVariantCount("Program", "setTimeZoneRegion", ("region",));
+        assertNamedClassMethodVariantCount("Program", "setTimeZoneUTCOffset", ("seconds_east",));
+        assertNamedClassMethodVariantCount("Program", "setTimeZone", ("zone",));
+        assertNamedClassMethodVariantCount("Program", "setSandboxManager", ("sandbox_manager",));
+        assertNamedClassMethodVariantCount("Program", "setExecMode", ("mode",));
+        assertNamedClassMethodVariantCount("Program", "define", ("parse_define", "value"));
+        assertNamedClassMethodVariantCount("Program", "undefine", ("parse_define",));
+        assertNamedClassMethodVariantCount("Program", "isDefined", ("parse_define",));
+        assertNamedClassMethodVariantCount("Program", "getDefine", ("parse_define",));
+        assertNamedClassMethodVariantCount("Program", "loadModule", ("module_name", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadModuleWarn", ("module_name", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadUserModuleWithProgram",
+            ("module_name", "program", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadUserModuleWithProgramWarn",
+            ("module_name", "program", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadApplyToUserModule",
+            ("module_name", "reinject", "warning_mask", "reexport"));
+        assertNamedClassMethodVariantCount("Program", "loadApplyToUserModuleWarn",
+            ("module_name", "reinject", "warning_mask", "reexport"));
+        assertNamedClassMethodVariantCount("Program", "loadApplyToPrivateUserModule",
+            ("module_name", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "loadApplyToPrivateUserModuleWarn",
+            ("module_name", "warning_mask"));
+        assertNamedClassMethodVariantCount("Program", "setThreadInit", ("callback",));
+        assertNamedClassMethodVariantCount("Program", "setGlobalVarValue", ("variable_name", "value"));
+        assertNamedClassMethodVariantCount("Program", "findFunctionVariants", ("function_name",));
+        assertNamedClassMethodVariantCount("Program", "issueModuleCmd", ("module_name", "command"));
+        assertNamedClassMethodVariantCount("Program", "getCallReference", ("identifier",));
+        assertNamedClassMethodVariantCount("Program", "getExpression", ("source", "label"));
+        assertNamedClassStaticMethodVariantCount("Program", "getCallerCapabilityMask", ("frame_offset",));
+        assertNamedClassStaticMethodVariantCount("Program", "issueModuleCmd", ("module_name", "command"));
+        assertNamedClassStaticMethodVariantCount("Program", "hasParseOption", ("name",));
+        foreach AbstractMethodVariant v in (Class::forName("Program").getMethod("callFunction").getVariants()) {
+            if (v.getParamNames() == ("name", "...")) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
+        foreach AbstractMethodVariant v in (Class::forName("Program").getMethod("callStaticMethod").getVariants()) {
+            if (v.getParamNames() == ("class_name", "method", "...")) {
+                assertFalse(v.isNamedCallable());
+                assertEq((), v.getNamedParameterNames());
+            }
+        }
         assertNamedConstructorVariantCount("Expression", ("program", "source", "label"));
 
         assertNamedConstructorVariantCount("AutoGate", ("gate",));

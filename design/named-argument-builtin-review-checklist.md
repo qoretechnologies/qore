@@ -465,6 +465,18 @@ These examples are from the core migration and should be reused as precedent:
 - Program-control debugger APIs should use `program_id`, `parse_define`,
   `function_name`, `variable_name`, `found`, `breakpoint`, `statement_id`,
   `list_breakpoints`, `file`, `line`, and `params`.
+- Program APIs should expose stable owner and action names: `parse_options`,
+  `independent`, `code`, `label`, `warning_mask`, `source`, `offset`,
+  `format_label`, `function_name`, `class_name`, `method_name`, `arguments`,
+  `variable_name`, `found`, `import_as`, `readonly`, `inject`,
+  `module_visibility`, `reexport`, `hashdecl_name`, `path`, `region`,
+  `seconds_east`, `zone`, `sandbox_manager`, `mode`, `parse_define`,
+  `module_name`, `program`, `reinject`, `callback`, `value`, `command`,
+  `identifier`, `frame_offset`, and `name` for parse-option string names.
+  Leave true varargs forwarding helpers such as `Program::callFunction(name,
+  ...)` and `Program::callStaticMethod(class_name, method, ...)` positional
+  until fixed-parameter-plus-varargs named-call semantics are designed and
+  tested.
 - Debugger callback hooks (`onAttach()`, `onStep()`, etc.) are override
   surfaces; review them separately from direct control methods. When enabled,
   the base `DebugProgram` names should be complete and stable: `program`,

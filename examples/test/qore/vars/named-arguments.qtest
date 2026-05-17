@@ -152,6 +152,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed thread builtin opt-in", \reviewedThreadBuiltinOptIn(), NOTHING);
         addTestCase("reviewed SandboxManager class builtin opt-in", \reviewedSandboxManagerBuiltinOptIn(),
             NOTHING);
+        addTestCase("reviewed Program class builtin opt-in", \reviewedProgramClassBuiltinOptIn(), NOTHING);
         addTestCase("reviewed ProgramControl class builtin opt-in", \reviewedProgramControlBuiltinOptIn(),
             NOTHING);
         addTestCase("reviewed DebugProgram callback builtin opt-in", \reviewedDebugProgramBuiltinOptIn(),
@@ -783,6 +784,95 @@ public class NamedArgumentsTest inherits QUnit::Test {
         sm.addNetworkAllowedPortRange(start_port: 8000, end_port: 9000, protocol: QSEC_NET_TCP);
         sm.setNetworkDefaultPolicy(allow: True);
         assertTrue(sm.getNetworkDefaultPolicy(), "SandboxManager network default policy exposes allow");
+    }
+
+    reviewedProgramClassBuiltinOptIn() {
+        ParseOptions opts = new ParseOptions(parse_options: PO_NEW_STYLE);
+        Program p = new Program(parse_options: opts, independent: True);
+        p.parse(code: "sub na_program_function(int value) { return value + 1; } "
+            "class NAProgramStatic { static string echo(string value) { return value; } }",
+            label: "program-named-runtime", warning_mask: WARN_NONE, source: NOTHING, offset: NOTHING);
+
+        assertTrue(p.existsFunction(function_name: "na_program_function"), "Program existsFunction exposes function_name");
+        assertEq(42, p.callFunctionArgs(function_name: "na_program_function", arguments: (41,)),
+            "Program callFunctionArgs exposes function_name and arguments");
+        assertEq("ok", p.callStaticMethodArgs(class_name: "NAProgramStatic", method_name: "echo",
+            arguments: ("ok",)), "Program callStaticMethodArgs exposes class_name, method_name, and arguments");
+
+        p.define(parse_define: "NA_PROGRAM_DEFINE", value: "defined");
+        assertTrue(p.isDefined(parse_define: "NA_PROGRAM_DEFINE"), "Program isDefined exposes parse_define");
+        assertEq("defined", p.getDefine(parse_define: "NA_PROGRAM_DEFINE"),
+            "Program getDefine exposes parse_define");
+        p.undefine(parse_define: "NA_PROGRAM_DEFINE");
+        assertFalse(p.isDefined(parse_define: "NA_PROGRAM_DEFINE"), "Program undefine exposes parse_define");
+
+        bool found = True;
+        assertNothing(p.getGlobalVariable(variable_name: "no_such_global", found: \found),
+            "Program getGlobalVariable exposes found");
+        assertFalse(found, "Program getGlobalVariable updates found");
+
+        p.setParseOptions(parse_options: PO_REQUIRE_TYPES);
+        p.disableParseOptions(parse_options: PO_REQUIRE_TYPES);
+        p.setScriptPath(path: "/tmp/qore-program-named.q");
+        p.setTimeZoneRegion(region: "UTC");
+        p.setTimeZoneUTCOffset(seconds_east: 0);
+        p.setTimeZone(zone: new TimeZone(region: "UTC"));
+        p.setExecMode(mode: EM_AST);
+        assertTrue(p.findFunctionVariants(function_name: "na_program_function").size() > 0,
+            "Program findFunctionVariants exposes function_name");
+        assertTrue(p.getCallReference(identifier: "na_program_function") != NOTHING,
+            "Program getCallReference exposes identifier");
+        assertTrue(p.getExpression(source: "1 + 1", label: "program-expression-named") != NOTHING,
+            "Program getExpression exposes source and label");
+
+        Program pending = new Program(parse_options: PO_NEW_STYLE, independent: True);
+        pending.parsePending(code: "sub na_program_pending() { return 7; }",
+            label: "program-named-pending", warning_mask: WARN_NONE, source: NOTHING, offset: NOTHING);
+        pending.parseCommit(warning_mask: WARN_NONE);
+        assertEq(7, pending.callFunctionArgs(function_name: "na_program_pending", arguments: ()),
+            "Program parsePending and parseCommit expose parser names");
+
+        Program sandboxed = new Program(parse_options: PO_NEW_STYLE, independent: True);
+        sandboxed.setSandboxManager(sandbox_manager: new SandboxManager());
+
+        assertTrue(Program::hasParseOption(name: "new-style"), "Program static hasParseOption exposes name");
+        assertTrue(Program::getCallerCapabilityMask(frame_offset: 0) != NOTHING,
+            "Program static getCallerCapabilityMask exposes frame_offset");
+
+        Program parse_only = new Program(parse_options: PO_NEW_STYLE | PO_ALLOW_INJECTION
+            | PO_NO_CHILD_PO_RESTRICTIONS, independent: True);
+        parse_only.parse(code: "sub program_named_api(Program p, Program target) { "
+            "p.importFunction(function_name: \"html_encode\"); "
+            "p.importFunction(function_name: \"html_encode\", import_as: \"html_encode_named\", inject: False); "
+            "p.importGlobalVariable(variable_name: \"ARGV\", readonly: True); "
+            "p.importGlobalVariable(variable_name: \"ARGV\", import_as: \"PROGRAM_ARGV\", readonly: True); "
+            "p.importClass(class_name: \"Qore::TimeZone\", import_as: NOTHING, inject: False, "
+            "module_visibility: CSP_UNCHANGED, reexport: False); "
+            "p.importHashDecl(hashdecl_name: \"ExceptionInfo\", import_as: NOTHING, reexport: False); "
+            "p.loadModule(module_name: \"reflection\", warning_mask: WARN_NONE); "
+            "p.loadModuleWarn(module_name: \"reflection\", warning_mask: WARN_NONE); "
+            "p.loadUserModuleWithProgram(module_name: \"NamedArgsTest\", program: target, warning_mask: WARN_NONE); "
+            "p.loadUserModuleWithProgramWarn(module_name: \"NamedArgsTest\", program: target, "
+            "warning_mask: WARN_NONE); "
+            "p.loadApplyToUserModule(module_name: \"NamedArgsTest\", reinject: False, "
+            "warning_mask: WARN_NONE, reexport: False); "
+            "p.loadApplyToUserModuleWarn(module_name: \"NamedArgsTest\", reinject: False, "
+            "warning_mask: WARN_NONE, reexport: False); "
+            "p.loadApplyToPrivateUserModule(module_name: \"NamedArgsTest\", warning_mask: WARN_NONE); "
+            "p.loadApplyToPrivateUserModuleWarn(module_name: \"NamedArgsTest\", warning_mask: WARN_NONE); "
+            "p.setThreadInit(callback: NOTHING); "
+            "p.setGlobalVarValue(variable_name: \"program_named_api_value\", value: 1); "
+            "p.issueModuleCmd(module_name: \"jni\", command: \"noop\"); "
+            "Program::issueModuleCmd(module_name: \"jni\", command: \"noop\"); "
+            "} ",
+            label: "program-named-api-parse", warning_mask: WARN_NONE, source: NOTHING, offset: NOTHING);
+
+        assertThrows("NAMED-CALL-NOT-SUPPORTED", sub () {
+            Program unsupported = new Program(parse_options: PO_NEW_STYLE, independent: True);
+            unsupported.parse(code: "Program p(PO_NEW_STYLE); p.callFunction(name: \"missing\");",
+                label: "program-varargs-named-unsupported", warning_mask: WARN_NONE, source: NOTHING,
+                offset: NOTHING);
+        });
     }
 
     reviewedDebugProgramBuiltinOptIn() {
