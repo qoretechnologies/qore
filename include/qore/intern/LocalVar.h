@@ -130,6 +130,9 @@ public:
     }
 
     DLLLOCAL void del(ExceptionSink* xsink) {
+        // Discarding the value can re-enter deref() and delete this CVV for
+        // self-capturing closures, so do not touch members after discard().
+        block_cleared = true;
         if (val.static_assignment) {
             // static_assignment variables (e.g. "self") have borrowed references
             // that must not be decremented; use unassignIgnore() to clear safely
@@ -137,7 +140,6 @@ public:
         } else {
             val.removeValue(true).discard(xsink);
         }
-        block_cleared = true;
     }
 
     DLLLOCAL bool isRef() const {
