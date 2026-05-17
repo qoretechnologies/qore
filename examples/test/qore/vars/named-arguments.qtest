@@ -163,6 +163,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
         addTestCase("reviewed Socket low-level builtin opt-in", \reviewedSocketLowLevelBuiltinOptIn(),
             NOTHING);
         addTestCase("reviewed Socket HTTP builtin opt-in", \reviewedSocketHttpBuiltinOptIn(), NOTHING);
+        addTestCase("reviewed Socket HTTP/2 builtin opt-in", \reviewedSocketHttp2BuiltinOptIn(), NOTHING);
         addTestCase("reviewed HTTP readiness builtin opt-in", \reviewedHttpReadinessBuiltinOptIn(),
             NOTHING);
         addTestCase("reviewed HTTPClient class builtin opt-in", \reviewedHttpClientClassBuiltinOptIn(),
@@ -1152,6 +1153,31 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "s.readHTTPChunkedBodyBinaryWithCallback(receive_callback: receive_callback, timeout_ms: 0); "
             "s.readServerSentEvent(content_encoding: \"identity\", timeout_ms: 0); }",
             "socket-http-named");
+    }
+
+    reviewedSocketHttp2BuiltinOptIn() {
+        Program p(PO_NEW_STYLE);
+        p.parse("sub socket_http2_named(Socket s) { binary data = <00>; StringInputStream input_stream(source: "
+            "\"body\"); hash<auto> headers = {}; "
+            "s.startPollReadHttp2Request(options: {\"headers_only\": True}); "
+            "s.startPollSendHttp2Response(stream_id: 1, status_code: 200, headers: headers, body: data); "
+            "s.startPollSendHttp2StreamingResponse(stream_id: 1, status_code: 200, headers: headers, "
+            "body: input_stream, chunk_size: 1024); "
+            "s.submitHttp2PushPromise(stream_id: 1, path: \"/style.css\", headers: headers); "
+            "s.submitHttp2Response(stream_id: 1, status_code: 200, headers: headers, body: data); "
+            "s.setHttp2ConnectProtocolEnabled(enabled: True); "
+            "s.submitHttp2ConnectResponse(stream_id: 1, status_code: 200, headers: headers); "
+            "s.startPollSendHttp2ConnectResponse(stream_id: 1, status_code: 200, headers: headers); "
+            "s.waitForHttp2StreamDrain(stream_id: 1, timeout_ms: 0); "
+            "s.submitHttp2StreamingResponseHeaders(stream_id: 1, status_code: 200, headers: headers); "
+            "s.sendHttp2StreamData(stream_id: 1, data: data, end_stream: False); "
+            "s.sendHttp2Trailers(stream_id: 1, trailers: {\"grpc-status\": \"0\"}); "
+            "s.cleanupHttp2Stream(stream_id: 1); s.resetHttp2Stream(stream_id: 1); "
+            "s.submitHttp2StreamingResponseWithStream(stream_id: 1, status_code: 200, headers: headers, "
+            "body: input_stream); "
+            "s.submitHttp2Request(headers: headers, body: data, streaming: False); "
+            "s.cancelHttp2Stream(stream_id: 1); }",
+            "socket-http2-named");
     }
 
     reviewedHttpReadinessBuiltinOptIn() {

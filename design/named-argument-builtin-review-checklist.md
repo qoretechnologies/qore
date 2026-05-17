@@ -514,6 +514,9 @@ These examples are from the core migration and should be reused as precedent:
   behavior without ambiguity. Keep the timeout-only
   `readServerSentEvent(timeout_ms)` compatibility overload positional when the
   fuller overload can provide named calls.
+  HTTP/2 methods should keep protocol terms explicit: `options`, `stream_id`,
+  `status_code`, `headers`, `body`, `chunk_size`, `path`, `enabled`,
+  `timeout_ms`, `end_stream`, `trailers`, and `streaming`.
 - `SandboxManager` should expose explicit limit and policy names:
   `max_bytes`, `max_cpu_time_ms`, `max_wall_time_ms`, `max_threads`,
   `max_depth`, `path`, `access_modes`, `allow`, `host_pattern`, `cidr`,

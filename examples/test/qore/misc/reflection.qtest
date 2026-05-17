@@ -1073,6 +1073,31 @@ class ReflectionTest inherits QUnit::Test {
                 assertFalse(v.isNamedCallable());
             }
         }
+        assertNamedClassMethodVariantCount("Socket", "startPollReadHttp2Request", ("options",));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttp2Response",
+            ("stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttp2StreamingResponse",
+            ("stream_id", "status_code", "headers", "body", "chunk_size"));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2PushPromise",
+            ("stream_id", "path", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2Response",
+            ("stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "setHttp2ConnectProtocolEnabled", ("enabled",));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2ConnectResponse",
+            ("stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "startPollSendHttp2ConnectResponse",
+            ("stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "waitForHttp2StreamDrain", ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2StreamingResponseHeaders",
+            ("stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "sendHttp2StreamData", ("stream_id", "data", "end_stream"));
+        assertNamedClassMethodVariantCount("Socket", "sendHttp2Trailers", ("stream_id", "trailers"));
+        assertNamedClassMethodVariantCount("Socket", "cleanupHttp2Stream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Socket", "resetHttp2Stream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2StreamingResponseWithStream",
+            ("stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "submitHttp2Request", ("headers", "body", "streaming"));
+        assertNamedClassMethodVariantCount("Socket", "cancelHttp2Stream", ("stream_id",));
         assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "waitForReady", ("timeout_ms",));
         assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "registerReadyNotifier", ("notifier",));
         assertNamedClassMethodVariantCount("HttpClientConnectionBase", "waitForReadyOrError", ("timeout_ms",));

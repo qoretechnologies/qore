@@ -6767,7 +6767,7 @@ static list<hash<SocketPollInfo>> Socket::poll(
 
     @note The socket must be a TLS connection that has negotiated HTTP/2 via ALPN
 
-    @param opts optional hash with options:
+    @param options optional hash with options:
     - \c headers_only (bool): if @ref True "True", the poll completes when HEADERS are received
       (before END_STREAM); the stream stays in the session for incremental reading via the
       @ref HttpServerAsyncIo "HttpServerAsyncIo" @c register_body_queue closure (the I/O
@@ -6777,7 +6777,7 @@ static list<hash<SocketPollInfo>> Socket::poll(
 
     @since %Qore 2.1 (headers_only option added in %Qore 2.3)
 */
-AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> opts) {
+AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> options) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketHttp2ServerPollOperation(xsink, s), xsink);
     if (*xsink) {
@@ -6786,7 +6786,7 @@ AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> opts) {
 
     // Always propagate headers_only mode to the session (resets any sticky state
     // from a previous poll operation on the same connection)
-    bool headers_only = opts ? opts->getKeyValue("headers_only").getAsBool() : false;
+    bool headers_only = options ? options->getKeyValue("headers_only").getAsBool() : false;
     (reinterpret_cast<SocketHttp2ServerPollOperation*>(*poller))->setHeadersOnly(headers_only);
 
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -6834,7 +6834,7 @@ AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> opts) {
     @since %Qore 2.1
 */
 AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
-        *data body) {
+        *data body) [flags=NAMED_ARGS] {
     s->ref();
 
     // Get body data
@@ -6883,7 +6883,7 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
     @since %Qore 2.2
 */
 AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
-        *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+        *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) [flags=NAMED_ARGS] {
     // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
     InputStream* body_ptr = body.release();
     // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
@@ -6950,7 +6950,7 @@ AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id,
 
     @since %Qore 2.2
 */
-int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) {
+int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> headers) [flags=NAMED_ARGS] {
     return s->submitHttp2PushPromise(stream_id, path->c_str(), headers, xsink);
 }
 
@@ -6969,7 +6969,8 @@ int Socket::submitHttp2PushPromise(int stream_id, string path, *hash<auto> heade
 
     @since %Qore 2.2
 */
-nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers, *data body) {
+nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> headers,
+        *data body) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     char body_short_buf[7];
@@ -6983,16 +6984,16 @@ nothing Socket::submitHttp2Response(int stream_id, int status_code, *hash<auto> 
 
 //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
 /** Must be called before the HTTP/2 session is created (before the socket starts
-    processing HTTP/2 traffic). When \c enable is @ref False, the server will not
+    processing HTTP/2 traffic). When \c enabled is @ref False, the server will not
     advertise RFC 8441 extended CONNECT protocol support, so clients will not attempt
     WebSocket over HTTP/2 CONNECT.
 
-    @param enable @ref True to advertise ENABLE_CONNECT_PROTOCOL (default), @ref False to disable
+    @param enabled @ref True to advertise ENABLE_CONNECT_PROTOCOL (default), @ref False to disable
 
     @since %Qore 2.3
 */
-nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
-    s->setHttp2ConnectProtocolEnabled(enable);
+nothing Socket::setHttp2ConnectProtocolEnabled(bool enabled = True) [flags=NAMED_ARGS] {
+    s->setHttp2ConnectProtocolEnabled(enabled);
 }
 
 //! Submits an HTTP/2 CONNECT response through the async I/O controller (RFC 8441)
@@ -7012,7 +7013,8 @@ nothing Socket::setHttp2ConnectProtocolEnabled(bool enable = True) {
 
     @since %Qore 2.3
 */
-nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code, *hash<auto> headers) {
+nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     s->submitHttp2ConnectResponse(stream_id, status_code, headers, xsink);
 }
 
@@ -7054,7 +7056,7 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code, *hash
     @since %Qore 2.3
 */
 AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, int status_code,
-        *hash<auto> headers) {
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     s->ref();
 
     ReferenceHolder<SocketPollOperationBase> poller(
@@ -7108,7 +7110,7 @@ AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, i
 
     @since %Qore 2.3
 */
-int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
+int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "waitForHttp2StreamDrain", xsink);
     if (*xsink) {
         return -1;
@@ -7135,7 +7137,7 @@ int Socket::waitForHttp2StreamDrain(int stream_id, timeout timeout_ms = 5s) {
     @since %Qore 2.3
 */
 nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_code,
-        *hash<auto> headers) {
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     s->submitHttp2StreamingResponseHeadersAsync((int32_t)stream_id, status_code, headers, xsink);
     return QoreValue();
 }
@@ -7155,7 +7157,7 @@ nothing Socket::submitHttp2StreamingResponseHeaders(int stream_id, int status_co
 
     @since %Qore 2.3
 */
-nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
+nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) [flags=NAMED_ARGS] {
     s->sendHttp2StreamDataAsync((int32_t)stream_id, data, (bool)end_stream, xsink);
     return QoreValue();
 }
@@ -7178,7 +7180,7 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
 
     @since %Qore 2.3
 */
-nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) {
+nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) [flags=NAMED_ARGS] {
     s->sendHttp2TrailersAsync((int32_t)stream_id, trailers, xsink);
     return QoreValue();
 }
@@ -7190,7 +7192,7 @@ nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) 
 
     @since %Qore 2.3
 */
-nothing Socket::cleanupHttp2Stream(int stream_id) {
+nothing Socket::cleanupHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     s->cleanupHttp2StreamAsync((int32_t)stream_id);
     return QoreValue();
 }
@@ -7205,7 +7207,7 @@ nothing Socket::cleanupHttp2Stream(int stream_id) {
 
     @since %Qore 2.3
 */
-nothing Socket::resetHttp2Stream(int stream_id) {
+nothing Socket::resetHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     s->resetHttp2StreamAsync((int32_t)stream_id, xsink);
     return QoreValue();
 }
@@ -7232,7 +7234,7 @@ nothing Socket::resetHttp2Stream(int stream_id) {
     @since %Qore 2.3
 */
 int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_code,
-        *hash<auto> headers, InputStream[InputStream] body) {
+        *hash<auto> headers, InputStream[InputStream] body) [flags=NAMED_ARGS] {
     // Pass raw pointer; only release from SimpleRefHolder if C++ takes ownership (rv == 0).
     // If rv == 1 (not I/O-thread-safe), the SimpleRefHolder destructor will deref the body.
     int rv = s->submitHttp2StreamingResponseWithStream((int32_t)stream_id, status_code, headers,
@@ -7360,7 +7362,7 @@ AbstractPollOperation Socket::startPollHttp2ClientMultiplex() {
 
     @since %Qore 2.3
 */
-int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) {
+int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = False) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     char body_short_buf[7];
@@ -7385,7 +7387,7 @@ int Socket::submitHttp2Request(hash<auto> headers, *data body, bool streaming = 
 
     @since %Qore 2.3
 */
-nothing Socket::cancelHttp2Stream(int stream_id) {
+nothing Socket::cancelHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     s->cancelHttp2Stream(stream_id, xsink);
 }
 
