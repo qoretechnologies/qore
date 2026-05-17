@@ -73,7 +73,7 @@ static int queue_check_timeout(bool to, int timeout_ms, ExceptionSink* xsink) {
 
     @note This class is not available with the @ref PO_NO_THREAD_CLASSES parse option
  */
-qclass Queue [dom=THREAD_CLASS; arg=Queue *q; ns=Qore::Thread];
+qclass Queue<T> [dom=THREAD_CLASS; arg=Queue *q; ns=Qore::Thread; legacy_raw];
 
 //! Creates the Queue object
 /** @par Example:
@@ -134,7 +134,7 @@ Queue::copy() {
 
     @since %Qore 0.8.4 this method takes a timeout parameter
  */
-nothing Queue::push(auto value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+nothing Queue::push(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
         return QoreValue();
     }
@@ -156,7 +156,7 @@ nothing Queue::push(auto value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 
     @since %Qore 0.8.4 this method takes a timeout parameter
  */
-nothing Queue::insert(auto value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+nothing Queue::insert(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
         return QoreValue();
     }
@@ -187,7 +187,7 @@ nothing Queue::insert(auto value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-auto Queue::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+T Queue::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
         return QoreValue();
     }
@@ -266,7 +266,7 @@ auto Queue::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 
     @since %Qore 2.3 added support for interruption via @ref Qore::SandboxManager "SandboxManager"
  */
-auto Queue::pop(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+T Queue::pop(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     if (pre_check_timeout(timeout_ms, xsink)) {
         return QoreValue();
     }

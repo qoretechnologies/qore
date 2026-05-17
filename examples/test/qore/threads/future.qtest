@@ -41,6 +41,10 @@ class FutureTest inherits QUnit::Test {
         addTestCase("FutureImpl cancel rejected is no-op", \testCancelRejected());
         addTestCase("FutureImpl cancel wakes blocked getter", \testCancelWakesGetter());
         addTestCase("Custom Future subclass must implement cancel", \testCustomFutureCancel());
+        addTestCase("generic Queue<T>", \testGenericQueue());
+        addTestCase("generic Channel<T>", \testGenericChannel());
+        addTestCase("generic Promise<T>/Future<T>", \testGenericPromiseFuture());
+        addTestCase("generic thread class type errors", \testGenericThreadClassTypeErrors());
         set_return_value(main());
     }
 
@@ -396,6 +400,46 @@ class FutureTest inherits QUnit::Test {
         assertTrue(w.isError());
         assertTrue(w.cancel_called);
         assertThrows("FUTURE-CANCELLED", sub() { w.get(); });
+    }
+
+    testGenericQueue() {
+        Queue<int> q();
+        q.push(value: 1);
+        q.insert(value: 2);
+        assertEq(2, q.get(timeout_ms: 0));
+        assertEq(1, q.pop(timeout_ms: 0));
+    }
+
+    testGenericChannel() {
+        Channel<string> ch(1);
+        ch.send(value: "hello");
+        *string s = ch.recv(timeout_ms: 0);
+        assertEq("hello", s);
+
+        Channel<int> ch2(1);
+        assertTrue(ch2.trySend(value: 7));
+        int i = ch2.recv(timeout_ms: 0);
+        assertEq(7, i);
+    }
+
+    testGenericPromiseFuture() {
+        Promise<int> p();
+        Future<int> f = p.getFuture();
+        p.set(value: 42);
+        int i = f.get(timeout_ms: 0);
+        assertEq(42, i);
+        assertTrue(f.isDone());
+        assertFalse(f.isError());
+    }
+
+    testGenericThreadClassTypeErrors() {
+        Program p();
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(),
+            ("%new-style\nQueue<int> q(); q.push(value: \"wrong\");", "generic-queue-type-error"));
+
+        Program p2();
+        assertThrows("PARSE-TYPE-ERROR", \p2.parse(),
+            ("%new-style\nPromise<int> p(); p.set(value: \"wrong\");", "generic-promise-type-error"));
     }
 }
 

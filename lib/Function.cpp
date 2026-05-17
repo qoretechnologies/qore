@@ -143,10 +143,14 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
     if (sig.returnTypeInfo != nothingTypeInfo) {
         bool may_not_match = false;
         qore_type_result_e res = QoreTypeInfo::parseAccepts(sig.returnTypeInfo, returnTypeInfo, may_not_match);
+        const QoreTypeParameterTypeInfo* rtpi = qore_get_type_parameter_type_info(sig.returnTypeInfo);
+        bool raw_generic_type_param = rtpi
+            && qore_class_private::get(*rtpi->getOwnerClass())->rawConstructionDefaultsToAuto();
         if (!res || (may_not_match && !relaxed_match
                 // auto/any return types always accept any concrete return type
                 && sig.returnTypeInfo != autoTypeInfo
-                && sig.returnTypeInfo != anyTypeInfo)) {
+                && sig.returnTypeInfo != anyTypeInfo
+                && !raw_generic_type_param)) {
             //printd(5, "AbstractFunctionSignature::compare() rt: %s is not compatible with %s (%p %p)\n",
             //    QoreTypeInfo::getName(returnTypeInfo), QoreTypeInfo::getName(sig.returnTypeInfo), returnTypeInfo,
             //    sig.returnTypeInfo);

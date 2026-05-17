@@ -30,6 +30,8 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreTypeInfo.h"
+#include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_FutureImpl.h"
 
@@ -107,7 +109,7 @@ for (int i = 0; i < 10; ++i) {
 
     @since %Qore 2.3
  */
-qclass Promise [dom=THREAD_CLASS; arg=QorePromise* p; ns=Qore::Thread];
+qclass Promise<T> [dom=THREAD_CLASS; arg=QorePromise* p; ns=Qore::Thread; legacy_raw];
 
 //! Creates the Promise object
 /** @par Example:
@@ -145,7 +147,7 @@ p.set(value: 42);
 
     @throw PROMISE-ERROR Promise has already been resolved or rejected
  */
-nothing Promise::set(auto value) [flags=NAMED_ARGS] {
+nothing Promise::set(T value) [flags=NAMED_ARGS] {
     p->set(value.refSelf(), xsink);
 }
 
@@ -177,10 +179,16 @@ Future f = p.getFuture();
 
     @throw PROMISE-ERROR Future has already been retrieved from this Promise
  */
-Future Promise::getFuture() {
+Future<T> Promise::getFuture() {
     QoreFuture* future = p->getFuture(xsink);
     if (!future) {
         return QoreValue();
     }
-    return new QoreObject(QC_FUTUREIMPL, getProgram(), future);
+    QoreObject* rv = new QoreObject(QC_FUTUREIMPL, getProgram(), future);
+    const QoreParameterizedClassTypeInfo* promise_type
+        = QoreTypeInfo::getParameterizedClassType(self->getInstantiatedTypeInfo());
+    if (promise_type && promise_type->getArgCount()) {
+        rv->setInstantiatedTypeInfo(QC_FUTUREIMPL->getTypeInfo(promise_type->getTypeArgs()));
+    }
+    return rv;
 }

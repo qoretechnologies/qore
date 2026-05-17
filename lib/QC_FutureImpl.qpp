@@ -75,7 +75,7 @@ QoreValue q_future_get_blocking(QoreObject* future_obj, int64 timeout_ms,
 
     @since %Qore 2.3
  */
-qclass FutureImpl [dom=THREAD_CLASS; arg=QoreFuture* f; ns=Qore::Thread; vparent=Future];
+qclass FutureImpl<T> [dom=THREAD_CLASS; arg=QoreFuture* f; ns=Qore::Thread; vparent=Future<T>; legacy_raw];
 
 //! Throws an exception; FutureImpl objects can only be created internally
 /** @throw FUTURE-ERROR FutureImpl objects cannot be created directly
@@ -104,7 +104,7 @@ FutureImpl::copy() {
 /** @param timeout_ms timeout; 0 means wait indefinitely
     @return the value set by the associated Promise
  */
-auto FutureImpl::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+T FutureImpl::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     return f->get(timeout_ms, xsink);
 }
 

@@ -186,7 +186,7 @@ foreach auto result in (result_ch.iterator()) {
 
     @since %Qore 2.3
  */
-qclass Channel [dom=THREAD_CLASS; arg=QoreChannel* ch; ns=Qore::Thread];
+qclass Channel<T> [dom=THREAD_CLASS; arg=QoreChannel* ch; ns=Qore::Thread; legacy_raw];
 
 //! Creates the Channel with the given capacity
 /** @param capacity the buffer capacity; -1 = unlimited (unbounded buffer), 0 = unbuffered
@@ -244,7 +244,7 @@ ch.send(42);
     @throw CHANNEL-TIMEOUT timed out waiting to send
     @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
  */
-nothing Channel::send(auto value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+nothing Channel::send(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     ch->send(value.refSelf(), timeout_ms, xsink);
 }
 
@@ -262,7 +262,7 @@ auto val = ch.recv();
     @throw CHANNEL-TIMEOUT timed out waiting to receive
     @throw PROGRAM-INTERRUPTED interrupted by SandboxManager
  */
-auto Channel::recv(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
+*T Channel::recv(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
     bool timed_out = false;
     bool has_value = false;
     QoreValue rv = ch->recv(timeout_ms, xsink, timed_out, has_value);
@@ -285,7 +285,7 @@ if (ch.trySend(42)) {
 }
     @endcode
  */
-bool Channel::trySend(auto value) [flags=NAMED_ARGS] {
+bool Channel::trySend(T value) [flags=NAMED_ARGS] {
     QoreValue v = value.refSelf();
     if (ch->trySend(v)) {
         return true;

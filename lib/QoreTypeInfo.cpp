@@ -1351,6 +1351,13 @@ static const QoreTypeInfo* get_substituted_type_param_arg(const QoreTypeParamete
         const QoreTypeInfo* receiver_type_info) {
     const QoreParameterizedClassTypeInfo* receiver_pti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);
     if (!receiver_pti) {
+        const QoreClass* receiver_class = QoreTypeInfo::getUniqueReturnClass(receiver_type_info);
+        const qore_class_private* owner = qore_class_private::get(*tpi->getOwnerClass());
+        if (receiver_class && owner->rawConstructionDefaultsToAuto()
+                && qore_class_private::runtimeCheckCompatibleClass(*tpi->getOwnerClass(), *receiver_class)
+                    != QTI_NOT_EQUAL) {
+            return tpi->isOrNothing() ? get_or_nothing_type_check(autoTypeInfo) : autoTypeInfo;
+        }
         return nullptr;
     }
 
@@ -1998,6 +2005,17 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             }
             if (obj && obj->getInstantiatedTypeInfo() == u.ti) {
                 ok = true;
+            } else if (obj && obj->getInstantiatedTypeInfo()) {
+                const QoreParameterizedClassTypeInfo* obj_pti =
+                    QoreTypeInfo::getParameterizedClassType(obj->getInstantiatedTypeInfo());
+                const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
+                if (obj_pti && target_pti) {
+                    const QoreTypeInfo* mapped_type = qore_class_private::get(*obj_pti->getBaseClass())
+                        ->getParameterizedBaseTypeInfo(obj_pti, target_pti->getBaseClass());
+                    if (QoreTypeInfo::equal(mapped_type, u.ti)) {
+                        ok = true;
+                    }
+                }
             }
             break;
         }

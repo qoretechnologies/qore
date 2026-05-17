@@ -153,6 +153,10 @@ static strmap_t dnmap;
 // enum name to base type map
 static strmap_t enum_base_type_map;
 
+// Current qclass generic context while emitting code for methods, members, and parents.
+static const strlist_t* current_type_params = nullptr;
+static std::string current_class_uc;
+
 // set of possible code flags
 static strset_t fset;
 
@@ -465,7 +469,7 @@ static void trim_end(std::string& str) {
 }
 
 static void trim(std::string& str) {
-    while (whitespace(str[0]))
+    while (!str.empty() && whitespace(str[0]))
         str.erase(0, 1);
     trim_end(str);
 }
@@ -1166,6 +1170,17 @@ static int add_element(const char* fileName, unsigned lineNumber, const std::str
         size_t start, size_t end) {
     size_t eq = propstr.find('=', start);
     if (eq == std::string::npos || eq >= end) {
+        std::string key(propstr, start, end - start);
+        trim(key);
+        if (key.empty()) {
+            return 0;
+        }
+        if (props.find(key) != props.end()) {
+            error("%s:%d property '%s' set twice in property string '%s'\n",
+                  fileName, lineNumber, key.c_str(), propstr.c_str());
+            return -1;
+        }
+        props[key] = std::string();
         return 0;
     }
     while (start < eq && (propstr[start] == ' ' || propstr[start] == '\n')) {
@@ -1178,24 +1193,40 @@ static int add_element(const char* fileName, unsigned lineNumber, const std::str
         error("%s:%d: missing property name in property string '%s'\n", fileName, lineNumber, propstr.c_str());
         return -1;
     }
-    size_t tend = end;
-    while (tend > eq && (propstr[tend] == ' ' || propstr[tend] == '\n')) {
-        if (propstr[tend] == '\n') {
+    size_t tend = eq;
+    while (tend > start && (propstr[tend - 1] == ' ' || propstr[tend - 1] == '\n')) {
+        if (propstr[tend - 1] == '\n') {
             ++lineNumber;
         }
         --tend;
     }
 
-    if (tend == eq)
+    if (tend == start)
         return missing_value_error(fileName, lineNumber, propstr);
 
-    std::string key(propstr, start, eq - start);
+    size_t vstart = eq + 1;
+    while (vstart < end && (propstr[vstart] == ' ' || propstr[vstart] == '\n')) {
+        if (propstr[vstart] == '\n') {
+            ++lineNumber;
+        }
+        ++vstart;
+    }
+
+    size_t vend = end;
+    while (vend > vstart && (propstr[vend - 1] == ' ' || propstr[vend - 1] == '\n')) {
+        if (propstr[vend - 1] == '\n') {
+            ++lineNumber;
+        }
+        --vend;
+    }
+
+    std::string key(propstr, start, tend - start);
     if (props.find(key) != props.end()) {
         error("%s:%d property '%s' set twice in property string '%s'\n",
               fileName, lineNumber, key.c_str(), propstr.c_str());
         return -1;
     }
-    std::string value(propstr, eq + 1, end - eq - 1);
+    std::string value(propstr, vstart, vend - vstart);
 
     //value.erase(std::remove(value.begin(), value.end(), '\n'), value.cend());
     std::string::size_type i = 0;
@@ -1422,8 +1453,149 @@ static void get_type_name(std::string& t, const std::string& type) {
         t = type;
     else
         t.assign(type, cp + 2, -1);
-    if (t[0] == '*' || t[0] == '!')
+    if (!t.empty() && (t[0] == '*' || t[0] == '!'))
         t.erase(0, 1);
+    size_t lt = t.find('<');
+    if (lt != std::string::npos) {
+        t.erase(lt);
+    }
+    trim(t);
+}
+
+static int get_qore_type(const std::string& qt, std::string& cppt);
+
+static bool qpp_current_type_param_index(const std::string& type, size_t& index) {
+    if (!current_type_params) {
+        return false;
+    }
+
+    std::string t = type;
+    trim(t);
+    if (!t.empty() && (t[0] == '*' || t[0] == '!')) {
+        t.erase(0, 1);
+    }
+    trim(t);
+
+    for (size_t i = 0; i < current_type_params->size(); ++i) {
+        if ((*current_type_params)[i] == t) {
+            index = i;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool qpp_type_contains_current_type_param(const std::string& type) {
+    if (!current_type_params) {
+        return false;
+    }
+
+    for (const std::string& p : *current_type_params) {
+        size_t pos = 0;
+        while ((pos = type.find(p, pos)) != std::string::npos) {
+            bool left = !pos || !idchar(type[pos - 1]);
+            size_t end = pos + p.size();
+            bool right = end == type.size() || !idchar(type[end]);
+            if (left && right) {
+                return true;
+            }
+            ++pos;
+        }
+    }
+
+    return false;
+}
+
+class TypeParamContext {
+public:
+    TypeParamContext(const strlist_t& params, const std::string& class_uc) : old_params(current_type_params),
+            old_class_uc(current_class_uc) {
+        current_type_params = params.empty() ? nullptr : &params;
+        current_class_uc = class_uc;
+    }
+
+    ~TypeParamContext() {
+        current_type_params = old_params;
+        current_class_uc = old_class_uc;
+    }
+
+private:
+    const strlist_t* old_params;
+    std::string old_class_uc;
+};
+
+static int parse_parameterized_type(const std::string& src, std::string& base, strlist_t& args) {
+    std::string type = src;
+    trim(type);
+    if (type.empty() || type[0] == '<') {
+        return 0;
+    }
+
+    size_t lt = std::string::npos;
+    unsigned depth = 0;
+    for (size_t i = 0; i < type.size(); ++i) {
+        if (type[i] == '<') {
+            if (!depth) {
+                lt = i;
+            }
+            ++depth;
+        } else if (type[i] == '>') {
+            if (!depth) {
+                error("unbalanced angle brackets in type '%s'\n", src.c_str());
+                return -1;
+            }
+            --depth;
+            if (!depth) {
+                std::string tail(type, i + 1);
+                trim(tail);
+                if (!tail.empty()) {
+                    error("invalid trailing characters after parameterized type '%s'\n", src.c_str());
+                    return -1;
+                }
+                base.assign(type, 0, lt);
+                trim(base);
+                std::string inner(type, lt + 1, i - lt - 1);
+                if (base.empty() || inner.empty()) {
+                    error("invalid parameterized type '%s'\n", src.c_str());
+                    return -1;
+                }
+                if (get_string_list(args, inner, ',', true)) {
+                    return -1;
+                }
+                for (std::string& arg : args) {
+                    trim(arg);
+                    if (arg.empty()) {
+                        error("empty type argument in parameterized type '%s'\n", src.c_str());
+                        return -1;
+                    }
+                }
+                return 1;
+            }
+        }
+    }
+
+    if (depth) {
+        error("unbalanced angle brackets in type '%s'\n", src.c_str());
+        return -1;
+    }
+
+    return 0;
+}
+
+static int make_type_vec_expr(const strlist_t& args, std::string& expr) {
+    expr = "[&]() { type_vec_t qpp_type_args; ";
+    for (const std::string& arg : args) {
+        std::string arg_expr;
+        if (get_qore_type(arg, arg_expr)) {
+            return -1;
+        }
+        expr += "qpp_type_args.push_back(";
+        expr += arg_expr;
+        expr += "); ";
+    }
+    expr += "return qpp_type_args; }()";
+    return 0;
 }
 
 static std::string get_java_type_name(const std::string& type, const std::string& ns) {
@@ -1538,13 +1710,23 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
         return 0;
     }
 
-    strmap_t::iterator i = tmap.find(qt);
+    bool context_dependent = qpp_type_contains_current_type_param(qt);
+    strmap_t::iterator i = context_dependent ? tmap.end() : tmap.find(qt);
     if (i == tmap.end()) {
         std::string qc;
         bool on = qt[0] == '*';
+        std::string value_type = on ? qt.substr(1) : qt;
+        trim(value_type);
+        size_t type_param_index;
 
         // see if it's a complex type
-        if (!qt.compare(on ? 1 : 0, 5, "hash<")) {
+        if (qpp_current_type_param_index(qt, type_param_index)) {
+            assert(!current_class_uc.empty());
+            qc = "qore_get_type_parameter_type(QC_" + current_class_uc + ", "
+                + std::to_string(type_param_index) + ", \"" + value_type + "\", "
+                + (on ? "true" : "false") + ")";
+            log(LL_DEBUG, "registering type parameter return type '%s': '%s'\n", qt.c_str(), qc.c_str());
+        } else if (!qt.compare(on ? 1 : 0, 5, "hash<")) {
             // extract subtype name
             std::string subtype = qt.substr((on ? 6 : 5), qt.size() - (on ? 7 : 6));
 
@@ -1755,16 +1937,40 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
             qc = "enum" + var_name + "->getTypeInfo(" + (on ? "true" : "false") + ")";
             log(LL_DEBUG, "registering enum return type '%s': '%s'\n", qt.c_str(), qc.c_str());
         } else {
-            // assume a Qore object of the given class
-            get_type_name(qc, qt);
-            toupper(qc);
-            qc = "QC_" + qc;
-            qc += on ? "->getOrNothingTypeInfo()" : "->getTypeInfo()";
+            std::string pbase;
+            strlist_t pargs;
+            int prc = parse_parameterized_type(value_type, pbase, pargs);
+            if (prc < 0) {
+                return -1;
+            }
+            if (prc > 0) {
+                std::string class_name;
+                get_type_name(class_name, pbase);
+                toupper(class_name);
+
+                std::string type_vec;
+                if (make_type_vec_expr(pargs, type_vec)) {
+                    return -1;
+                }
+
+                qc = "QC_" + class_name + "->getTypeInfo(" + type_vec + ", " + (on ? "true" : "false") + ")";
+                log(LL_DEBUG, "registering parameterized class return type '%s': '%s'\n", qt.c_str(), qc.c_str());
+            } else {
+                // assume a Qore object of the given class
+                get_type_name(qc, qt);
+                toupper(qc);
+                qc = "QC_" + qc;
+                qc += on ? "->getOrNothingTypeInfo()" : "->getTypeInfo()";
+            }
         }
         log(LL_DEBUG, "registering reference return type '%s': '%s'\n", qt.c_str(), qc.c_str());
-        oset.insert(qt);
-        tmap[qt] = qc;
-        cppt = tmap[qt];
+        if (context_dependent) {
+            cppt = qc;
+        } else {
+            oset.insert(qt);
+            tmap[qt] = qc;
+            cppt = tmap[qt];
+        }
     } else
         cppt = i->second;
     return 0;
@@ -2914,6 +3120,11 @@ protected:
             }
 
             if (ptype == "any" || ptype == "data" || ptype == "auto") {
+                fprintf(fp, "    QoreValue %s = get_param_value(args, %d);\n", p.name.c_str(), i);
+                continue;
+            }
+            size_t type_param_index;
+            if (qpp_current_type_param_index(ptype, type_param_index)) {
                 fprintf(fp, "    QoreValue %s = get_param_value(args, %d);\n", p.name.c_str(), i);
                 continue;
             }
@@ -5685,6 +5896,7 @@ protected:
         deserializer;              // class deserializer function
 
     strlist_t vparents;            // builtin virtual base/parent classes
+    strlist_t type_params;         // formal generic type parameters
 
     paramlist_t public_members;    // public members
     paramlist_t private_members;   // private members
@@ -5699,7 +5911,9 @@ protected:
         upm = false,               // unset public member flag
         is_pseudo = false,
         is_final = false,
-        module_public = true;
+        module_public = true,
+        raw_accepts_parameterized = false,
+        raw_construction_defaults_to_auto = false;
 
     void addElement(strlist_t& l, const std::string& str, size_t start, size_t end = std::string::npos) {
         std::string se(str, start, end);
@@ -5750,6 +5964,37 @@ protected:
 public:
     ClassElement(const char* fn, const std::string& n_name, const strmap_t& props, const std::string& n_doc) :
         fileName(fn), name(n_name), doc(n_doc) {
+        if (!name.empty() && name[0] != '<') {
+            std::string base;
+            strlist_t params;
+            int prc = parse_parameterized_type(name, base, params);
+            if (prc < 0) {
+                valid = false;
+            } else if (prc > 0) {
+                name = base;
+                type_params = params;
+
+                strset_t seen;
+                for (const std::string& p : type_params) {
+                    if (!seen.insert(p).second) {
+                        error("class '%s' has duplicate type parameter '%s'\n", name.c_str(), p.c_str());
+                        valid = false;
+                    }
+                    if (p.empty() || (!isalpha(p[0]) && p[0] != '_')) {
+                        error("class '%s' has invalid type parameter name '%s'\n", name.c_str(), p.c_str());
+                        valid = false;
+                        continue;
+                    }
+                    for (char c : p) {
+                        if (!idchar(c)) {
+                            error("class '%s' has invalid type parameter name '%s'\n", name.c_str(), p.c_str());
+                            valid = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
         log(LL_DETAIL, "parsing Qore class '%s'\n", name.c_str());
 
         if (name.size() && name[0] == '<' && name[name.size() - 1] == '>')
@@ -5819,8 +6064,12 @@ public:
             }
 
             if (i->first == "vparent") {
-                get_string_list(vparents, i->second);
+                if (get_string_list(vparents, i->second, ',', true)) {
+                    valid = false;
+                    continue;
+                }
                 for (unsigned i = 0; i < vparents.size(); ++i) {
+                    trim(vparents[i]);
                     log(LL_DEBUG, "+ virtual base class: %s\n", vparents[i].c_str());
                     if (is_pseudo) {
                         size_t ps = vparents[i].size();
@@ -5834,6 +6083,34 @@ public:
                         }
                     }
                 }
+                continue;
+            }
+
+            if (i->first == "legacy_raw") {
+                if (!i->second.empty() && i->second != "true") {
+                    error("prop: '%s': '%s' - must be empty or \"true\"\n", i->first.c_str(), i->second.c_str());
+                    valid = false;
+                }
+                raw_accepts_parameterized = true;
+                raw_construction_defaults_to_auto = true;
+                continue;
+            }
+
+            if (i->first == "legacy_raw_accepts") {
+                if (!i->second.empty() && i->second != "true") {
+                    error("prop: '%s': '%s' - must be empty or \"true\"\n", i->first.c_str(), i->second.c_str());
+                    valid = false;
+                }
+                raw_accepts_parameterized = true;
+                continue;
+            }
+
+            if (i->first == "legacy_raw_construct") {
+                if (!i->second.empty() && i->second != "true") {
+                    error("prop: '%s': '%s' - must be empty or \"true\"\n", i->first.c_str(), i->second.c_str());
+                    valid = false;
+                }
+                raw_construction_defaults_to_auto = true;
                 continue;
             }
 
@@ -5868,6 +6145,11 @@ public:
             valid = false;
         }
 
+        if (type_params.empty() && (raw_accepts_parameterized || raw_construction_defaults_to_auto)) {
+            valid = false;
+            error("class '%s' has legacy raw generic compatibility properties but no type parameters\n", name.c_str());
+        }
+
         if (arg.empty() && !is_pseudo) {
             valid = false;
             error("class '%s' has no 'arg' property\n", name.c_str());
@@ -5890,6 +6172,21 @@ public:
 
     const char* getName() const {
         return name.c_str();
+    }
+
+    std::string getQoreName() const {
+        std::string rv = name;
+        if (!type_params.empty()) {
+            rv += "<";
+            for (unsigned i = 0; i < type_params.size(); ++i) {
+                if (i) {
+                    rv += ", ";
+                }
+                rv += type_params[i];
+            }
+            rv += ">";
+        }
+        return rv;
     }
 
     int addMethod(const std::string& mname, attr_t attr, const std::string& return_type, const paramlist_t& params,
@@ -6027,6 +6324,8 @@ public:
         for (unsigned i = 0; i < name.size(); ++i)
             UC += toupper(name[i]);
 
+        TypeParamContext type_param_context(type_params, UC);
+
         std::string lname = name;
         if (is_pseudo) {
             size_t nl = name.size();
@@ -6058,7 +6357,16 @@ public:
         fprintf(fp, "DLLLOCAL void preinit%sClass() {\n    QC_%s = new QoreBuiltinClass(\"%s\", \"%s\", ", lname.c_str(),
             UC.c_str(), name.c_str(), ns_path.c_str());
         dom_output_cpp(fp, dom);
-        fprintf(fp, ");\n    CID_%s = QC_%s->getID();\n", UC.c_str(), UC.c_str());
+        fprintf(fp, ");\n");
+        for (const std::string& p : type_params) {
+            fprintf(fp, "    QC_%s->addTypeParameter(\"%s\");\n", UC.c_str(), p.c_str());
+        }
+        if (raw_accepts_parameterized || raw_construction_defaults_to_auto) {
+            fprintf(fp, "    QC_%s->setLegacyRawGenericCompatibility(%s, %s);\n", UC.c_str(),
+                raw_accepts_parameterized ? "true" : "false",
+                raw_construction_defaults_to_auto ? "true" : "false");
+        }
+        fprintf(fp, "    CID_%s = QC_%s->getID();\n", UC.c_str(), UC.c_str());
         fprintf(fp, "    QC_%s->setSystem();\n", UC.c_str());
         if (!module_public) {
             fprintf(fp, "    reinterpret_cast<QoreBuiltinClass*>(QC_%s)->setModulePublic(false);\n", UC.c_str());
@@ -6086,6 +6394,28 @@ public:
 
         for (unsigned i = 0; i < vparents.size(); ++i) {
             std::string vp;
+            std::string pbase;
+            strlist_t pargs;
+            int prc = is_pseudo ? 0 : parse_parameterized_type(vparents[i], pbase, pargs);
+            if (prc < 0) {
+                valid = false;
+                return -1;
+            }
+            if (prc > 0) {
+                get_type_name(vp, pbase);
+                toupper(vp);
+
+                std::string vp_type;
+                if (get_qore_type(vparents[i], vp_type)) {
+                    valid = false;
+                    return -1;
+                }
+                fprintf(fp, "\n    // set parameterized parent class\n    assert(QC_%s);\n    "
+                    "QC_%s->addParameterizedBuiltinVirtualBaseClass(%s);\n", vp.c_str(), UC.c_str(),
+                    vp_type.c_str());
+                continue;
+            }
+
             if (is_pseudo)
                 vp.assign(vparents[i], 1, vparents[i].size() - 2);
             else
@@ -6188,8 +6518,10 @@ public:
             nn += "zzz9";
             fprintf(fp, "class %s", nn.c_str());
         }
-        else
-            fprintf(fp, "class %s", name.c_str());
+        else {
+            std::string display_name = getQoreName();
+            fprintf(fp, "class %s", display_name.c_str());
+        }
 
         if (!vparents.empty()) {
             fprintf(fp, " : ");
@@ -6238,7 +6570,8 @@ public:
         int ns_depth = outputQoreNamespaceStart(fp);
 
         fputs("public class ", fp);
-        fputs(name.c_str(), fp);
+        std::string display_name = getQoreName();
+        fputs(display_name.c_str(), fp);
         if (!vparents.empty()) {
             fputs(" inherits ", fp);
             for (unsigned i = 0; i < vparents.size(); ++i) {
@@ -6302,6 +6635,19 @@ public:
             fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
         }
         fprintf(fp, ",\"description\":\"%s\"", json_escape_string(doc).c_str());
+        if (!type_params.empty()) {
+            fputs(",\"type_parameters\":[", fp);
+            for (unsigned i = 0; i < type_params.size(); ++i) {
+                if (i) {
+                    fputc(',', fp);
+                }
+                fprintf(fp, "\"%s\"", json_escape_string(type_params[i]).c_str());
+            }
+            fputc(']', fp);
+            fprintf(fp, ",\"raw_accepts_parameterized\":%s", raw_accepts_parameterized ? "true" : "false");
+            fprintf(fp, ",\"raw_construction_defaults_to_auto\":%s",
+                raw_construction_defaults_to_auto ? "true" : "false");
+        }
 
         // parents
         if (!vparents.empty()) {
@@ -6332,8 +6678,9 @@ public:
         // instance methods
         fputs(",\"instance_methods\":[", fp);
         bool first_method = true;
+        std::string display_name = getQoreName();
         for (auto& i : normal_mmap) {
-            i.second->serializeMetadataMethodJson(fp, name, first_method);
+            i.second->serializeMetadataMethodJson(fp, display_name, first_method);
         }
         fputs("]", fp);
 
@@ -6341,7 +6688,7 @@ public:
         fputs(",\"static_methods\":[", fp);
         first_method = true;
         for (auto& i : static_mmap) {
-            i.second->serializeMetadataMethodJson(fp, name, first_method);
+            i.second->serializeMetadataMethodJson(fp, display_name, first_method);
         }
         fputs("]", fp);
 
@@ -6594,7 +6941,7 @@ protected:
                     }
 
                     ClassElement* ce = new ClassElement(fileName, cn, props, str);
-                    cemap[cn] = ce;
+                    cemap[ce->getName()] = ce;
                     checkBuf(buf);
                     source.push_back(ce);
                     // mark code as invalid if class element is invalid
