@@ -36,6 +36,18 @@ if (APPLE)
     )
     if (_brew_result EQUAL 0 AND _brew_prefix)
         list(APPEND CMAKE_PREFIX_PATH "${_brew_prefix}")
+        # ICU is keg-only in Homebrew, so add its prefix explicitly for
+        # find_package(ICU) and pkg-config based discovery.
+        execute_process(
+            COMMAND brew --prefix icu4c
+            OUTPUT_VARIABLE _brew_icu_prefix
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+            RESULT_VARIABLE _brew_icu_result
+        )
+        if (_brew_icu_result EQUAL 0 AND _brew_icu_prefix)
+            list(APPEND CMAKE_PREFIX_PATH "${_brew_icu_prefix}")
+        endif()
     endif()
 endif()
 
@@ -370,6 +382,7 @@ set(QORE_BIN_FILES
     bin/qdbg-server
     bin/qdbg-remote
     bin/qdbg-vsc-adapter
+    bin/qore-i18n
     bin/qore-openapi3-gen
     bin/qore-asyncapi-gen
     bin/qdiff
@@ -447,6 +460,18 @@ find_package(MPFR REQUIRED)
 find_package(BZip2 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCRE2 REQUIRED libpcre2-8)
+
+# ICU is required so the bundled i18n module is always built and available.
+pkg_check_modules(ICU QUIET icu-uc icu-i18n)
+if(ICU_FOUND)
+    if(ICU_VERSION)
+        message(STATUS "Found ICU: ${ICU_VERSION}")
+    else()
+        message(STATUS "Found ICU")
+    endif()
+else()
+    find_package(ICU COMPONENTS uc i18n REQUIRED)
+endif()
 
 # c-ares is required for asynchronous DNS resolution in socket I/O.
 pkg_check_modules(CARES QUIET libcares)
@@ -2057,6 +2082,8 @@ add_subdirectory(modules/reflection)
 add_subdirectory(modules/logger_bin)
 # linenoise module
 add_subdirectory(modules/linenoise)
+# i18n module
+add_subdirectory(modules/i18n)
 # krb5 module
 add_subdirectory(modules/krb5)
 # mongodb module (optional, requires libmongoc)

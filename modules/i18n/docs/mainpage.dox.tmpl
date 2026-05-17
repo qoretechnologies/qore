@@ -1,0 +1,39 @@
+/** @mainpage Qore i18n Module
+
+    @tableofcontents
+
+    @section i18nintro i18n Module Introduction
+
+    The \c i18n module provides ICU-backed internationalization primitives for Qore. ICU development
+    and runtime libraries are required so this bundled binary module is always built and available.
+
+    Locale-sensitive behavior is intentionally exposed through explicit \c Qore::I18n APIs. Existing
+    core machine-format functions keep their default behavior; use this module when output or parsing
+    must follow CLDR locale data.
+
+    @section i18noverview Overview
+
+    - @subpage i18nplural
+    - @subpage i18ncatalogs
+    - @subpage i18nlocaleformatting
+    - @subpage i18ncli
+
+    @section i18nquickstart Quick Example
+
+    @code{.py}
+%requires i18n
+
+printf("%s\n", I18n::plural_category(2, "ru"));
+printf("%s\n", I18n::format_currency("12.5", "USD", "en-US"));
+
+hash<auto> catalog_data = I18n::load_native_catalog("catalog.json");
+I18n::MessageCatalog catalog(catalog_data);
+printf("%s\n", catalog.t("Hello, {name}", "cs-CZ", {"name": "Petr"}));
+    @endcode
+
+    @section i18nscope Current Scope
+
+    This module is the implementation target for issue #5334. Rich message formatting, request-locale
+    propagation helpers, and machine-translation workflow support are planned follow-up phases in the
+    same issue.
+*/

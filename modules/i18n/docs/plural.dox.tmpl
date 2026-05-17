@@ -1,0 +1,41 @@
+/** @page i18nplural Plural Selection
+
+    The \c Util::plural() helper remains an English two-form helper. Non-English pluralization
+    requires caller-supplied forms keyed by CLDR category.
+
+    @section i18npluralcategory Plural Categories
+
+    Use \c I18n::plural_category() to inspect the CLDR category for a numeric value:
+
+    @code{.py}
+%requires i18n
+
+printf("%s\n", I18n::plural_category(1, "en"));      # one
+printf("%s\n", I18n::plural_category(2, "ru"));      # few
+printf("%s\n", I18n::plural_category(5, "ru"));      # many
+printf("%s\n", I18n::plural_category(2, "en", {"type": "ordinal"})); # two
+    @endcode
+
+    @section i18npluralforms Plural Forms
+
+    Use \c I18n::plural_form() to select among strings supplied by the caller:
+
+    @code{.py}
+hash<auto> forms = {
+    "=0": "no files",
+    "one": "file",
+    "other": "files",
+};
+
+string form = I18n::plural_form(count, "en", forms);
+string msg = count == 0 ? form : sprintf("%d %s", count, form);
+printf("%s\n", msg);
+    @endcode
+
+    String operands preserve visible fraction digits, which matters for CLDR plural rules in some locales:
+
+    @code{.py}
+printf("%s\n", I18n::plural_category("1", "lv"));
+printf("%s\n", I18n::plural_category("1.0", "lv"));
+    @endcode
+*/
