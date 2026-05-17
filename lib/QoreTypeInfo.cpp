@@ -3843,6 +3843,18 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
 
     const char* className = iteratorClass->getName();
 
+    // Handle object iterators. Object members do not have a single static value
+    // type, but pair/key iterator element shapes are still known.
+    if (!strcmp(className, "ObjectPairIterator") || !strcmp(className, "ObjectPairReverseIterator")) {
+        return autoHashTypeInfo;
+    }
+    if (!strcmp(className, "ObjectKeyIterator") || !strcmp(className, "ObjectKeyReverseIterator")) {
+        return stringTypeInfo;
+    }
+    if (!strcmp(className, "ObjectIterator") || !strcmp(className, "ObjectReverseIterator")) {
+        return autoTypeInfo;
+    }
+
     // Handle hash iterators
     const QoreTypeInfo* hashValueType = getUniqueReturnComplexHash(sourceTypeInfo);
     if (!hashValueType) {
@@ -3862,6 +3874,10 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
         // HashIterator / HashReverseIterator: return value type
         if (!strcmp(className, "HashIterator") || !strcmp(className, "HashReverseIterator")) {
             return hashValueType;
+        }
+        // HashListIterator / HashListReverseIterator: return row hashes
+        if (!strcmp(className, "HashListIterator") || !strcmp(className, "HashListReverseIterator")) {
+            return autoHashTypeInfo;
         }
         // AbstractIterator from `<hash>::iterator()` — the pseudo-method
         // declares AbstractIterator as its static return type but at
@@ -3930,15 +3946,13 @@ const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue&
     // First try list element type (existing behavior for list<T> sources)
     const QoreTypeInfo* implicitArgType = getUniqueReturnComplexList(iteratorTypeInfo);
 
-    if (!implicitArgType) {
-        implicitArgType = getAbstractIteratorElementType(iteratorTypeInfo);
-    }
-
-    // If not a list, check if it's an iterator class and get element type from source type
+    // For iterator-valued pseudo-method calls, prefer source-aware typing before
+    // generic iterator base classes.  This preserves precise types for calls
+    // like h.pairIterator() and avoids leaking unresolved legacy raw base type
+    // parameters from iterators such as HashListIterator.
     if (!implicitArgType) {
         const QoreClass* qc = getUniqueReturnClass(iteratorTypeInfo);
         if (qc) {
-            // Try to get the source type from the iterator expression if it's a method call
             const QoreTypeInfo* sourceType = nullptr;
             if (iteratorExpr.getType() == NT_OPERATOR) {
                 const QoreDotEvalOperatorNode* dotOp =
@@ -3954,6 +3968,10 @@ const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue&
                 implicitArgType = getIteratorElementType(qc, sourceType);
             }
         }
+    }
+
+    if (!implicitArgType) {
+        implicitArgType = getAbstractIteratorElementType(iteratorTypeInfo);
     }
 
     // If not a list or iterator, check if it's a hashdecl type (for "map expr, <Decl>{}")

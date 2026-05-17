@@ -58,7 +58,8 @@
 
     @see ListHashReverseIterator
  */
-qclass ListHashIterator [arg=QoreListHashIterator* i; ns=Qore; vparent=AbstractQuantifiedBidirectionalIterator];
+qclass ListHashIterator [arg=QoreListHashIterator* i; ns=Qore;
+    vparent=AbstractQuantifiedBidirectionalIterator<hash<auto>>];
 
 //! Creates the hash list iterator object
 /** @param list_value the list of hashes to iterate

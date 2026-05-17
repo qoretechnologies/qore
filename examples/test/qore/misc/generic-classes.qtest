@@ -177,6 +177,18 @@ class SourceTypedIterator<T> inherits AbstractIterator<T> {
     }
 }
 
+class SourceObjectPairMembers {
+    public {
+        int count;
+        string label;
+    }
+
+    constructor() {
+        count = 3;
+        label = "three";
+    }
+}
+
 class SourceRawCompatBox<T> [legacy_raw] {
     private {
         T value;
@@ -251,6 +263,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("static generic methods", \staticGenericMethods());
         addTestCase("generic hashdecls", \genericHashDecls());
         addTestCase("source generic iterators", \sourceGenericIterators());
+        addTestCase("builtin iterator element types", \builtinIteratorElementTypes());
         addTestCase("source raw generic compatibility", \sourceRawGenericCompatibility());
         addTestCase("parse checks", \parseChecks());
 
@@ -381,6 +394,39 @@ public class GenericClassTypesTest inherits QUnit::Test {
         list<int> selected = select selected_it, $1 > 3;
         assertEq(1, selected.size());
         assertEq(7, selected[0]);
+    }
+
+    builtinIteratorElementTypes() {
+        hash<auto> recs = {
+            "name": ("alice", "bob"),
+            "age": (30, 31),
+        };
+
+        list<hash<auto>> rows = map $1, recs.contextIterator();
+        assertEq(2, rows.size());
+        assertEq("alice", rows[0].name);
+        assertEq(31, rows[1].age);
+
+        HashListIterator hli(recs);
+        list<hash<auto>> hli_rows = map $1, hli;
+        assertEq(2, hli_rows.size());
+        assertEq("bob", hli_rows[1].name);
+
+        list<hash<auto>> row_list = (("id": 1), ("id": 2));
+        ListHashIterator lhi(row_list);
+        list<hash<auto>> lhi_rows = map $1, lhi;
+        assertEq(2, lhi_rows.size());
+        assertEq(2, lhi_rows[1].id);
+
+        hash<string, int> values = {"a": 1, "b": 2};
+        hash<string, int> copied = map {$1.key: $1.value}, values.pairIterator();
+        assertEq(1, copied.a);
+        assertEq(2, copied.b);
+
+        SourceObjectPairMembers obj();
+        hash<auto> object_members = map {$1.key: $1.value}, obj.pairIterator();
+        assertEq(3, object_members.count);
+        assertEq("three", object_members.label);
     }
 
     sourceRawGenericCompatibility() {

@@ -66,7 +66,8 @@
 
     @see HashListReverseIterator
  */
-qclass HashListIterator [arg=QoreHashListIterator* i; ns=Qore; vparent=AbstractQuantifiedBidirectionalIterator];
+qclass HashListIterator [arg=QoreHashListIterator* i; ns=Qore;
+    vparent=AbstractQuantifiedBidirectionalIterator<hash<auto>>];
 
 //! Creates the hash list iterator object
 /** @param hash_value the hash of lists to iterate
