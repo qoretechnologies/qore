@@ -35,6 +35,8 @@
 #include <cstring>
 #include <fcntl.h>
 #include <limits>
+#include <locale>
+#include <sstream>
 #include <string>
 #include <unordered_set>
 
@@ -58,6 +60,13 @@ static int i18n_json_hex_value(char c) {
         return c - 'A' + 10;
     }
     return -1;
+}
+
+static bool i18n_json_parse_classic_double(const std::string& text, double& value) {
+    std::istringstream stream(text);
+    stream.imbue(std::locale::classic());
+    stream >> value;
+    return !stream.fail() && stream.peek() == std::char_traits<char>::eof() && std::isfinite(value);
 }
 
 static bool i18n_json_append_utf8(std::string& out, uint32_t codepoint, ExceptionSink* xsink, size_t pos) {
@@ -493,8 +502,8 @@ private:
             return static_cast<int64>(value);
         }
 
-        double value = std::strtod(text.c_str(), &end);
-        if (errno == ERANGE || !end || *end || !std::isfinite(value)) {
+        double value = 0.0;
+        if (!i18n_json_parse_classic_double(text, value)) {
             xsink->raiseException("I18N-CATALOG-JSON-ERROR",
                 "floating-point JSON number out of range at byte offset %zu", start);
             return QoreValue();

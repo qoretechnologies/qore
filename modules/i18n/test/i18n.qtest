@@ -107,6 +107,11 @@ class I18nTest inherits QUnit::Test {
         assertEq("en", ranges[2].locale);
         assertEq(0.8, ranges[1].q);
 
+        ranges = I18n::parse_accept_language("en;q=1.000, fr;q=0.125");
+        assertEq(2, ranges.size());
+        assertEq(1.0, ranges[0].q);
+        assertEq(0.125, ranges[1].q);
+
         assertEq("fr", I18n::negotiate_locale("fr-CA, fr;q=0.8, en;q=0.5", ("en", "fr", "root")));
         assertEq("en", I18n::negotiate_locale("de-AT, en;q=0.9", ("en", "fr", "root")));
         assertEq("root", I18n::negotiate_locale("de-AT", ("en", "fr", "root")));
@@ -117,6 +122,9 @@ class I18nTest inherits QUnit::Test {
 
         assertThrows("I18N-ACCEPT-LANGUAGE-ERROR", auto sub() {
             return I18n::parse_accept_language("en;q=1.5");
+        });
+        assertThrows("I18N-ACCEPT-LANGUAGE-ERROR", auto sub() {
+            return I18n::parse_accept_language("en;q=0.8x");
         });
     }
 
@@ -423,6 +431,9 @@ class I18nTest inherits QUnit::Test {
         assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
             return I18n::parse_native_catalog_json("[1, 2, 3]");
         });
+        hash<auto> parsed = I18n::parse_native_catalog_json("{\"schema_version\":1,\"score\":0.8,\"small\":1e-2}");
+        assertEq(0.8, parsed.score);
+        assertEq(0.01, parsed.small);
 
         TmpFile tmp("qore-i18n-", ".json");
         tmp.file.write(createCatalogJson("Ahoj"));
