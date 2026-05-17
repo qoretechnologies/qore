@@ -1,0 +1,588 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  i18n.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%requires ../../../qlib/FsUtil.qm
+%requires ../../../qlib/QUnit.qm
+
+%requires i18n
+
+%exec-class I18nTest
+
+class I18nTest inherits QUnit::Test {
+    constructor() : Test("I18nTest", "1.0") {
+        addTestCase("backend version introspection", \backendInfoTest());
+        addTestCase("cardinal plural categories", \cardinalPluralCategoryTest());
+        addTestCase("visible fraction digits", \visibleFractionDigitsTest());
+        addTestCase("ordinal plural categories", \ordinalPluralCategoryTest());
+        addTestCase("locale negotiation utilities", \localeNegotiationTest());
+        addTestCase("thread locale control", \threadLocaleControlTest());
+        addTestCase("locale formatting and collation", \localeFormattingAndCollationTest());
+        addTestCase("plural form selection", \pluralFormTest());
+        addTestCase("plural validation errors", \validationErrorTest());
+        addTestCase("message catalog lookup", \messageCatalogLookupTest());
+        addTestCase("message catalog plural lookup", \messageCatalogPluralLookupTest());
+        addTestCase("message catalog bidi isolation", \messageCatalogBidiIsolationTest());
+        addTestCase("message catalog state policy", \messageCatalogStatePolicyTest());
+        addTestCase("message catalog layer precedence", \messageCatalogLayerPrecedenceTest());
+        addTestCase("message catalog JSON file loading", \messageCatalogJsonFileLoadingTest());
+        addTestCase("message catalog JSON validation", \messageCatalogJsonValidationTest());
+        addTestCase("message catalog discovery", \messageCatalogDiscoveryTest());
+        addTestCase("message catalog discovery sandbox", \messageCatalogDiscoverySandboxTest());
+        addTestCase("message catalog validation", \messageCatalogValidationTest());
+
+        set_return_value(main());
+    }
+
+    backendInfoTest() {
+        hash<auto> info = I18n::get_backend_info();
+        assertEq("icu", info.backend);
+        assertRegex("^[0-9]+\\.[0-9]+", info.icu_version);
+        assertRegex("^[0-9]+\\.[0-9]+", I18n::get_icu_version());
+        assertRegex("^[0-9]+\\.[0-9]+", info.cldr_version);
+        assertEq(I18n::get_cldr_version(), info.cldr_version);
+        assertEq(1, info.catalog_schema_version);
+        assertEq(1, I18n::get_catalog_schema_version());
+    }
+
+    cardinalPluralCategoryTest() {
+        assertEq("one", I18n::plural_category(1, "en"));
+        assertEq("other", I18n::plural_category(2, "en"));
+
+        assertEq("other", I18n::plural_category(1, "ja"));
+        assertEq("other", I18n::plural_category(2, "zh"));
+
+        assertEq("one", I18n::plural_category(1, "ru"));
+        assertEq("few", I18n::plural_category(2, "ru"));
+        assertEq("many", I18n::plural_category(5, "ru"));
+
+        assertEq("zero", I18n::plural_category(0, "ar"));
+        assertEq("one", I18n::plural_category(1, "ar"));
+        assertEq("two", I18n::plural_category(2, "ar"));
+        assertEq("few", I18n::plural_category(3, "ar"));
+        assertEq("many", I18n::plural_category(11, "ar"));
+        assertEq("other", I18n::plural_category(100, "ar"));
+
+        assertEq("few", I18n::plural_category(2, "cs"));
+        assertEq("many", I18n::plural_category(5, "pl"));
+        assertEq("zero", I18n::plural_category(0, "cy"));
+        assertEq("two", I18n::plural_category(2, "cy"));
+    }
+
+    visibleFractionDigitsTest() {
+        assertEq("one", I18n::plural_category("1", "ru"));
+        assertEq("other", I18n::plural_category("1.0", "ru"));
+        assertEq("other", I18n::plural_category("1.00", "ru"));
+
+        assertEq("one", I18n::plural_category("1", "cs"));
+        assertEq("many", I18n::plural_category("1.0", "cs"));
+        assertEq("many", I18n::plural_category("1.20", "cs"));
+    }
+
+    ordinalPluralCategoryTest() {
+        hash<auto> opts = {"type": "ordinal"};
+        assertEq("one", I18n::plural_category(1, "en", opts));
+        assertEq("two", I18n::plural_category(2, "en", opts));
+        assertEq("few", I18n::plural_category(3, "en", opts));
+        assertEq("other", I18n::plural_category(4, "en", opts));
+        assertEq("other", I18n::plural_category(11, "en", opts));
+        assertEq("one", I18n::plural_category(21, "en", opts));
+    }
+
+    localeNegotiationTest() {
+        assertEq("en-US", I18n::canonicalize_locale("en_US"));
+        assertEq("he", I18n::canonicalize_locale("iw"));
+        assertEq("sr-Cyrl-RS", I18n::add_likely_subtags("sr"));
+        assertEq(("fr-CA", "fr", "root"), I18n::get_locale_fallback_chain("fr-CA-u-nu-latn"));
+
+        list<hash<auto>> ranges = I18n::parse_accept_language("da, en-gb;q=0.8, en;q=0.7");
+        assertEq(3, ranges.size());
+        assertEq("da", ranges[0].locale);
+        assertEq("en-GB", ranges[1].locale);
+        assertEq("en", ranges[2].locale);
+        assertEq(0.8, ranges[1].q);
+
+        ranges = I18n::parse_accept_language("en;q=1.000, fr;q=0.125");
+        assertEq(2, ranges.size());
+        assertEq(1.0, ranges[0].q);
+        assertEq(0.125, ranges[1].q);
+
+        assertEq("fr", I18n::negotiate_locale("fr-CA, fr;q=0.8, en;q=0.5", ("en", "fr", "root")));
+        assertEq("en", I18n::negotiate_locale("de-AT, en;q=0.9", ("en", "fr", "root")));
+        assertEq("root", I18n::negotiate_locale("de-AT", ("en", "fr", "root")));
+        assertEq("fr", I18n::negotiate_locale("de-AT", ("en", "fr"), "fr"));
+        assertEq("fr", I18n::negotiate_locale("*, en;q=0.5", ("en", "fr"), "fr"));
+        assertEq("sr-Cyrl", I18n::negotiate_locale("sr", ("sr-Cyrl", "en"), "en"));
+        assertEq("zh-Hant", I18n::negotiate_locale("zh-TW", ("zh-Hant", "en"), "en"));
+
+        assertThrows("I18N-ACCEPT-LANGUAGE-ERROR", auto sub() {
+            return I18n::parse_accept_language("en;q=1.5");
+        });
+        assertThrows("I18N-ACCEPT-LANGUAGE-ERROR", auto sub() {
+            return I18n::parse_accept_language("en;q=0.8x");
+        });
+    }
+
+    threadLocaleControlTest() {
+        I18n::clear_thread_locale();
+        assertEq("root", I18n::get_thread_locale());
+        I18n::set_thread_locale("cs_CZ-u-nu-latn");
+        assertEq("cs-CZ", I18n::get_thread_locale());
+        hash<auto> locale_context = I18n::capture_locale_context();
+        assertEq("cs-CZ", locale_context.locale);
+        I18n::clear_thread_locale();
+        assertEq("root", I18n::get_thread_locale());
+        I18n::apply_locale_context(locale_context);
+        assertEq("cs-CZ", I18n::get_thread_locale());
+        I18n::apply_locale_context(I18n::make_locale_context("root"));
+        assertEq("root", I18n::get_thread_locale());
+        assertThrows("I18N-LOCALE-CONTEXT-ERROR", sub() {
+            I18n::apply_locale_context({});
+        });
+    }
+
+    localeFormattingAndCollationTest() {
+        assertEq("1,234.50", I18n::format_number("1234.50", "en-US"));
+        assertEq("1234.50", I18n::format_number("1234.50", "en-US", {"grouping": False}));
+        assertEq("1.00", I18n::format_number(1, "en-US", {"min_fraction_digits": 2}));
+        assertEq(1234, I18n::parse_number("1,234", "en-US"));
+        assertEq(1234, I18n::parse_number("1.234", "de-DE"));
+        assertEq("1234.5", string(I18n::parse_number("1,234.50", "en-US")));
+        assertThrows("I18N-PARSE-ERROR", auto sub() {
+            return I18n::parse_number("1,234.50 trailing", "en-US");
+        });
+        assertRegex("^\\$12\\.50$", I18n::format_currency("12.5", "USD", "en-US"));
+        date instant = 2020-05-04T15:06:07Z;
+        assertEq("May 4, 2020",
+            I18n::format_datetime(instant, "en-US", {"date_style": "medium", "time_style": "none"}));
+        assertEq("May 4, 2020", I18n::format_datetime(instant, "en-US", {"skeleton": "yMMMd"}));
+        assertRegex("^3:06.*PM$",
+            I18n::format_datetime(instant, "en-US", {"date_style": "none", "time_style": "short"}));
+        assertThrows("I18N-FORMAT-ERROR", auto sub() {
+            return I18n::format_datetime(instant, "en-US", {"skeleton": "yMMMd", "date_style": "medium"});
+        });
+
+        assertLt(0, I18n::compare_strings("a", "b", "en-US"));
+        assertEq(0, I18n::compare_strings("a", "a", "en-US"));
+        assertRegex("^[0-9]+\\.[0-9]+", I18n::get_collation_version("en-US"));
+
+        binary a_key = I18n::get_sort_key("a", "en-US");
+        binary b_key = I18n::get_sort_key("b", "en-US");
+        assertTrue(a_key.size() > 0);
+        assertNeq(a_key, b_key);
+    }
+
+    pluralFormTest() {
+        hash<auto> ru_forms = {
+            "one": "file-one",
+            "few": "file-few",
+            "many": "file-many",
+            "other": "file-other",
+        };
+        assertEq("file-one", I18n::plural_form(1, "ru", ru_forms));
+        assertEq("file-few", I18n::plural_form(2, "ru", ru_forms));
+        assertEq("file-many", I18n::plural_form(5, "ru", ru_forms));
+        assertEq("file-other", I18n::plural_form("1.0", "ru", ru_forms));
+
+        hash<auto> exact_forms = {
+            "=0": "no files",
+            "=1": "one exact file",
+            "one": "one category file",
+            "other": "many files",
+        };
+        assertEq("no files", I18n::plural_form(0, "en", exact_forms));
+        assertEq("one exact file", I18n::plural_form("1.0", "en", exact_forms));
+        assertEq("many files", I18n::plural_form(2, "en", exact_forms));
+
+        hash<auto> suffixes = {"one": "st", "two": "nd", "few": "rd", "other": "th"};
+        assertEq("nd", I18n::plural_form(2, "en", suffixes, {"type": "ordinal"}));
+        assertEq("th", I18n::plural_form(4, "en", suffixes, {"type": "ordinal"}));
+    }
+
+    validationErrorTest() {
+        assertThrows("I18N-NUMBER-ERROR", auto sub() {
+            return I18n::plural_category("abc", "en");
+        });
+        assertThrows("I18N-PLURAL-TYPE-ERROR", auto sub() {
+            return I18n::plural_category(1, "en", {"type": "range"});
+        });
+        assertThrows("I18N-FORMS-ERROR", auto sub() {
+            return I18n::plural_form(2, "en", {"one": "one"});
+        });
+        assertThrows("I18N-FORMS-ERROR", auto sub() {
+            return I18n::plural_form(1, "en", {"bogus": "bad", "other": "other"});
+        });
+        assertThrows("I18N-NUMBER-ERROR", auto sub() {
+            return I18n::plural_form(1, "en", {"=abc": "bad", "other": "other"});
+        });
+    }
+
+    private hash<auto> createCatalog() {
+        return {
+            "schema_version": 1,
+            "locales": {
+                "root": {
+                    "messages": {
+                        "Hello, {name}": "Hello, {name}",
+                        "workflow.greeting": {
+                            "source": "Hello, {name}",
+                            "message": "Hello, {name}",
+                            "state": "translated",
+                        },
+                        "1 file": {
+                            "plural_source": "{count} files",
+                            "forms": {
+                                "one": "1 file",
+                                "other": "{count} files",
+                            },
+                            "state": "translated",
+                        },
+                        "{name} has 1 file": {
+                            "plural_source": "{name} has {count} files",
+                            "forms": {
+                                "one": "{name} has 1 file",
+                                "other": "{name} has {count} files",
+                            },
+                            "state": "translated",
+                        },
+                    },
+                },
+                "cs": {
+                    "messages": {
+                        "Hello, {name}": {
+                            "message": "Ahoj, {name}",
+                            "state": "translated",
+                        },
+                        "workflow.greeting": {
+                            "source": "Hello, {name}",
+                            "message": "Nazdar, {name}",
+                            "state": "translated",
+                        },
+                        "1 file": {
+                            "plural_source": "{count} files",
+                            "forms": {
+                                "one": "{count} soubor",
+                                "few": "{count} soubory",
+                                "many": "{count} souboru",
+                                "other": "{count} souboru",
+                            },
+                            "state": "translated",
+                        },
+                        "{name} has 1 file": {
+                            "plural_source": "{name} has {count} files",
+                            "forms": {
+                                "one": "{name} ma {count} soubor",
+                                "few": "{name} ma {count} soubory",
+                                "many": "{name} ma {count} souboru",
+                                "other": "{name} ma {count} souboru",
+                            },
+                            "state": "translated",
+                        },
+                    },
+                },
+                "fr": {
+                    "messages": {
+                        "Hello, {name}": {
+                            "message": "Bonjour, {name}",
+                            "state": "translated",
+                        },
+                    },
+                },
+            },
+        };
+    }
+
+    private string createCatalogJson(string cs_message) {
+        return "{\n"
+            "  \"schema_version\": 1,\n"
+            "  \"locales\": {\n"
+            "    \"root\": {\"messages\": {\"Hello, {name}\": \"Hello, {name}\"}},\n"
+            "    \"cs\": {\"messages\": {\n"
+            "      \"Hello, {name}\": {\"message\": \"" + cs_message + ", {name}\", \"state\": \"translated\"},\n"
+            "      \"1 file\": {\n"
+            "        \"plural_source\": \"{count} files\",\n"
+            "        \"forms\": {\"one\": \"{count} soubor\", \"few\": \"{count} soubory\", \"other\": \"{count} souboru\"},\n"
+            "        \"state\": \"translated\"\n"
+            "      }\n"
+            "    }}\n"
+            "  }\n"
+            "}\n";
+    }
+
+    private nothing writeTextFile(string path, string data) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(data);
+        f.close();
+    }
+
+    messageCatalogLookupTest() {
+        I18n::MessageCatalog catalog(createCatalog());
+
+        assertEq("Ahoj, Petr", catalog.t("Hello, {name}", "cs-CZ", {"name": "Petr"}));
+        assertEq("Nazdar, Eva", catalog.tc("workflow.greeting", "Hello, {name}", "cs", {"name": "Eva"}));
+        assertEq("Bonjour, Jean", catalog.t("Hello, {name}", "fr-CA", {"name": "Jean"}));
+        assertEq("Hello, Sam", catalog.t("Hello, {name}", "de", {"name": "Sam"}));
+
+        assertEq(("cs-CZ", "cs", "root"), catalog.getFallbackChain("cs-CZ-u-nu-latn"));
+        assertEq("cs", catalog.getEffectiveLocale("cs-CZ"));
+        assertEq(("cs", "fr", "root"), catalog.availableLocales());
+
+        hash<auto> stats = catalog.getStats("cs");
+        assertEq(4, stats.total);
+        assertEq(4, stats.translated);
+        assertEq(4, stats.usable);
+    }
+
+    messageCatalogPluralLookupTest() {
+        I18n::MessageCatalog catalog(createCatalog());
+
+        assertEq("1 soubor", catalog.tn(1, "1 file", "{count} files", "cs"));
+        assertEq("2 soubory", catalog.tn(2, "1 file", "{count} files", "cs"));
+        assertEq("5 souboru", catalog.tn(5, "1 file", "{count} files", "cs"));
+        assertEq("1.0 souboru", catalog.tn("1.0", "1 file", "{count} files", "cs"));
+
+        assertEq("Petr ma 2 soubory",
+            catalog.tn(2, "{name} has 1 file", "{name} has {count} files", "cs", {"name": "Petr"}));
+
+        assertEq("2 files", catalog.tn(2, "1 file", "{count} files", "de"));
+        assertEq("1 file", catalog.tn(1, "1 file", "{count} files", "de"));
+        assertEq("1.0 files", catalog.tn("1.0", "1 file", "{count} files", "de"));
+    }
+
+    messageCatalogBidiIsolationTest() {
+        I18n::MessageCatalog catalog(createCatalog());
+
+        assertEq("Hello, \u2068Sam\u2069", catalog.t("Hello, {name}", "ar", {"name": "Sam"}));
+        assertEq("\u20682\u2069 files", catalog.tn(2, "1 file", "{count} files", "ar"));
+    }
+
+    messageCatalogStatePolicyTest() {
+        hash<auto> data = {
+            "schema_version": 1,
+            "locales": {
+                "root": {"messages": {"Hello": "Hello"}},
+                "cs": {"messages": {"Hello": {"message": "Ahoj", "state": "fuzzy"}}},
+            },
+        };
+
+        I18n::MessageCatalog strict(data);
+        I18n::MessageCatalog preview(data, {"use_unreviewed": True});
+
+        assertEq("Hello", strict.t("Hello", "cs"));
+        assertEq("Ahoj", preview.t("Hello", "cs"));
+
+        hash<auto> strict_stats = strict.getStats("cs");
+        hash<auto> preview_stats = preview.getStats("cs");
+        assertEq(0, strict_stats.usable);
+        assertEq(1, preview_stats.usable);
+    }
+
+    messageCatalogLayerPrecedenceTest() {
+        hash<auto> base = {
+            "schema_version": 1,
+            "locales": {
+                "root": {"messages": {"Hello": "Hello"}},
+                "cs": {"messages": {"Hello": "Ahoj"}},
+            },
+        };
+        hash<auto> override = {
+            "schema_version": 1,
+            "locales": {
+                "cs": {"messages": {"Hello": "Cau"}},
+            },
+        };
+
+        I18n::MessageCatalog catalog((base, override));
+        assertEq("Cau", catalog.t("Hello", "cs"));
+        assertEq("Hello", catalog.t("Hello", "de"));
+    }
+
+    messageCatalogJsonFileLoadingTest() {
+        TmpFile base("qore-i18n-", ".json");
+        base.file.write(createCatalogJson("Ahoj"));
+        base.file.close();
+
+        hash<auto> loaded = I18n::load_native_catalog(base.path);
+        assertEq(1, loaded.schema_version);
+        assertEq("Ahoj, {name}", loaded.locales.cs.messages."Hello, {name}".message);
+
+        I18n::MessageCatalog catalog(base.path);
+        assertEq("Ahoj, Petr", catalog.t("Hello, {name}", "cs", {"name": "Petr"}));
+        assertEq("2 soubory", catalog.tn(2, "1 file", "{count} files", "cs"));
+
+        TmpFile override("qore-i18n-", ".json");
+        override.file.write(createCatalogJson("Cau"));
+        override.file.close();
+
+        I18n::MessageCatalog layered((base.path, override.path));
+        assertEq("Cau, Eva", layered.t("Hello, {name}", "cs", {"name": "Eva"}));
+    }
+
+    messageCatalogJsonValidationTest() {
+        assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
+            return I18n::parse_native_catalog_json("{\"a\": 1, \"a\": 2}");
+        });
+        assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
+            return I18n::parse_native_catalog_json("[1, 2, 3]");
+        });
+        hash<auto> parsed = I18n::parse_native_catalog_json("{\"schema_version\":1,\"score\":0.8,\"small\":1e-2}");
+        assertEq(0.8, parsed.score);
+        assertEq(0.01, parsed.small);
+
+        TmpFile tmp("qore-i18n-", ".json");
+        tmp.file.write(createCatalogJson("Ahoj"));
+        tmp.file.close();
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return I18n::load_native_catalog(tmp.path, 8);
+        });
+
+        TmpFile bad("qore-i18n-", ".json");
+        bad.file.write("{\"schema_version\": 1,");
+        bad.file.close();
+        assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
+            return new I18n::MessageCatalog(bad.path);
+        });
+    }
+
+    messageCatalogDiscoveryTest() {
+        string base_dir = make_tmp_dir("qore-i18n-base-");
+        string override_dir = make_tmp_dir("qore-i18n-override-");
+        on_exit remove_tree(base_dir);
+        on_exit remove_tree(override_dir);
+
+        mkdir(base_dir + "/billing");
+        mkdir(override_dir + "/billing");
+
+        string base_root = base_dir + "/billing/root.json";
+        string base_cs = base_dir + "/billing/cs.json";
+        string override_cs = override_dir + "/billing/cs.json";
+        writeTextFile(base_root, createCatalogJson("Root"));
+        writeTextFile(base_cs, createCatalogJson("Ahoj"));
+        writeTextFile(override_cs, createCatalogJson("Cau"));
+
+        list<string> search_path = I18n::get_catalog_search_path({
+            "search_path": (base_dir,),
+            "override_path": override_dir,
+        });
+        assertEq((base_dir, override_dir), search_path);
+
+        list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {
+            "search_path": (base_dir,),
+            "override_path": override_dir,
+        });
+        assertEq((base_root, base_cs, override_cs), files);
+
+        I18n::MessageCatalog catalog(files);
+        assertEq("Cau, Eva", catalog.t("Hello, {name}", "cs", {"name": "Eva"}));
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return I18n::discover_catalog_files("../billing", "cs", {"search_path": (base_dir,)});
+        });
+    }
+
+    messageCatalogDiscoverySandboxTest() {
+        string base_dir = make_tmp_dir("qore-i18n-sandbox-");
+        on_exit remove_tree(base_dir);
+
+        mkdir(base_dir + "/billing");
+        string base_root = base_dir + "/billing/root.json";
+        writeTextFile(base_root, createCatalogJson("Root"));
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("
+%modern
+%requires i18n
+
+list<string> sub discover_catalogs(string domain, string locale, string path) {
+    return I18n::discover_catalog_files(domain, locale, {\"search_path\": (path,)});
+}
+        ", "i18n_sandbox_discovery");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(base_dir);
+        p.setSandboxManager(sm);
+
+        assertEq((base_root,), p.callFunction("discover_catalogs", "billing", "root", base_dir));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", auto sub() {
+            return p.callFunction("discover_catalogs", "billing", "root", "/etc");
+        });
+    }
+
+    messageCatalogValidationTest() {
+        assertThrows("I18N-FORMAT-ERROR", auto sub() {
+            I18n::MessageCatalog catalog(createCatalog());
+            return catalog.t("Hello, {name}", "cs");
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({"schema_version": 2, "locales": {}});
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "Hello, {name}": {"message": "Ahoj", "state": "translated"},
+                    }},
+                },
+            });
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "Hello": {"message": "Ahoj, {name}", "state": "translated"},
+                    }},
+                },
+            });
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "Hello": {"message": "Ahoj", "state": "reviewed"},
+                    }},
+                },
+            });
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "1 file": {
+                            "plural_source": "{count} files",
+                            "forms": {"one": "{count} soubor"},
+                        },
+                    }},
+                },
+            });
+        });
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return new I18n::MessageCatalog({
+                "schema_version": 1,
+                "locales": {
+                    "cs": {"messages": {
+                        "{name} has 1 file": {
+                            "plural_source": "{name} has {count} files",
+                            "forms": {"other": "{count} souboru"},
+                        },
+                    }},
+                },
+            });
+        });
+    }
+}

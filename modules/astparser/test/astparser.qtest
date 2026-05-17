@@ -6,13 +6,9 @@
 %requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 
-%try-module astparser
-%define NoAstParser
-%endtry
+%requires astparser
 
-%ifndef NoAstParser
 %define HasAstTreeSearcher
-%endif
 
 %exec-class AstParserTest
 
@@ -373,9 +369,6 @@ sub test() {
     }
 
     constructor() : Test("AstParserTest", "1.0") {
-%ifdef NoAstParser
-        addTestCase("astparser module not available", \testNoModule());
-%else
         addTestCase("Basic parsing", \testBasicParsing());
         addTestCase("Named argument calls", \testNamedArgumentCalls());
         addTestCase("Parse file", \testParseFile());
@@ -491,15 +484,9 @@ sub test() {
         addTestCase("Resolve definition cross-doc", \testResolveDefinitionCrossDoc());
         addTestCase("Scope symbols with parse errors", \testScopeSymbolsWithErrors());
 %endif
-%endif
         set_return_value(main());
     }
 
-%ifdef NoAstParser
-    testNoModule() {
-        testSkip("astparser module not available");
-    }
-%else
     # Helper: find a child node by its field name in a CST node hash
     private static *hash<auto> findChildByField(hash<auto> node, string fieldName) {
         if (!node.children) {
@@ -3502,6 +3489,4 @@ sub broken(int x) {
         assertTrue(exists matching, "findMatchingSymbols returns results despite errors");
         assertGt(0, matching.size(), "MyClass found by findMatchingSymbols");
     }
-
-%endif
 }

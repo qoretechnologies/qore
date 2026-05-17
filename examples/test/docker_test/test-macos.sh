@@ -26,10 +26,25 @@ if [ "$PM" = "macports" ]; then
 elif [ "$PM" = "homebrew" ]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
     HB="$(brew --prefix)"
+
+    # Self-heal: install build-critical Homebrew packages that may be
+    # missing from a stale Tart VM image (image was built before the
+    # package was added to qore-test-base/prep-macos.sh).  CMakeLists
+    # requires Eigen3, c-ares, Kerberos, and ICU unconditionally. brew
+    # install is idempotent (no-op if already installed), so this is safe
+    # to run on a fresh image too.
+    REQUIRED_BREW_PKGS=(eigen krb5 c-ares icu4c)
+    for pkg in "${REQUIRED_BREW_PKGS[@]}"; do
+        if ! brew list "$pkg" >/dev/null 2>&1; then
+            echo "=== Installing missing Homebrew package: $pkg ==="
+            brew install "$pkg"
+        fi
+    done
+
     # Add keg-only package paths so CMake/find_program can locate them
     export PATH="${HB}/opt/bison/bin:${HB}/opt/flex/bin:${PATH}"
     # Ensure linker and pkg-config find Homebrew libraries (including keg-only)
-    KEG_PKGS=(openssl@3 libxml2 libxslt zlib bzip2 expat readline ncurses libffi sqlite openldap krb5 c-ares libarchive curl libtool ossp-uuid libyaml)
+    KEG_PKGS=(icu4c openssl@3 libxml2 libxslt zlib bzip2 expat readline ncurses libffi sqlite openldap krb5 c-ares libarchive curl libtool ossp-uuid libyaml)
     for pkg in "${KEG_PKGS[@]}"; do
         kp="$(brew --prefix "$pkg" 2>/dev/null)" || continue
         [ -d "$kp/lib/pkgconfig" ] && export PKG_CONFIG_PATH="$kp/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
@@ -39,21 +54,6 @@ elif [ "$PM" = "homebrew" ]; then
     export LDFLAGS="-L${HB}/lib ${LDFLAGS:-}"
     export CPPFLAGS="-I${HB}/include ${CPPFLAGS:-}"
     export PKG_CONFIG_PATH="${HB}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-
-    # Self-heal: install build-critical Homebrew packages that may be
-    # missing from a stale Tart VM image (image was built before the
-    # package was added to qore-test-base/prep-macos.sh).  CMakeLists
-    # requires Eigen3 unconditionally for the ml/kalman modules; the
-    # build aborts at find_package(Eigen3 REQUIRED) if it isn't
-    # present.  brew install is idempotent (no-op if already installed)
-    # so this is safe to run on a fresh image too.
-    REQUIRED_BREW_PKGS=(eigen krb5 c-ares)
-    for pkg in "${REQUIRED_BREW_PKGS[@]}"; do
-        if ! brew list "$pkg" >/dev/null 2>&1; then
-            echo "=== Installing missing Homebrew package: $pkg ==="
-            brew install "$pkg"
-        fi
-    done
 fi
 
 # Add cargo bin to PATH (tree-sitter CLI installed via cargo)
@@ -130,8 +130,9 @@ case "$PM" in
         ;;
     homebrew)
         # Homebrew on Apple Silicon; include keg-only package prefixes for CMake
-        CMAKE_PREFIX="/opt/homebrew;/opt/homebrew/opt/openssl@3;/opt/homebrew/opt/libxml2;/opt/homebrew/opt/ossp-uuid"
-        PM_PREFIX="${HB:-/opt/homebrew}"
+        HB_PREFIX="${HB:-/opt/homebrew}"
+        CMAKE_PREFIX="${HB_PREFIX};${HB_PREFIX}/opt/icu4c;${HB_PREFIX}/opt/openssl@3;${HB_PREFIX}/opt/libxml2;${HB_PREFIX}/opt/ossp-uuid"
+        PM_PREFIX="${HB_PREFIX}"
         ;;
     *)
         CMAKE_PREFIX=""

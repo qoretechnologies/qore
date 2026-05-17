@@ -1,0 +1,2264 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+  ql_i18n.qpp
+
+  Qore i18n module functions
+
+  Copyright (C) 2026 Qore Technologies, s.r.o.
+
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and/or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+  DEALINGS IN THE SOFTWARE.
+*/
+
+#include "i18n-module.h"
+
+#include "qore/QoreSandboxManager.h"
+#include "qore/SystemEnvironment.h"
+#include "qore/intern/QoreTimeZoneManager.h"
+
+#include <unicode/bytestream.h>
+#include <unicode/coll.h>
+#include <unicode/currunit.h>
+#include <unicode/datefmt.h>
+#include <unicode/locid.h>
+#include <unicode/numfmt.h>
+#include <unicode/numberformatter.h>
+#include <unicode/parsepos.h>
+#include <unicode/plurrule.h>
+#include <unicode/stringpiece.h>
+#include <unicode/timezone.h>
+#include <unicode/uchar.h>
+#include <unicode/ulocdata.h>
+#include <unicode/unistr.h>
+#include <unicode/uversion.h>
+
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
+#include <cstdlib>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#include <sys/stat.h>
+
+static constexpr int64 I18N_CATALOG_SCHEMA_VERSION = 1;
+
+static thread_local std::string i18n_thread_locale;
+
+static const char* i18n_icu_error_name(UErrorCode status) {
+    return u_errorName(status);
+}
+
+static std::string i18n_version_to_string(const UVersionInfo version) {
+    char buf[U_MAX_VERSION_STRING_LENGTH] = {0};
+    u_versionToString(version, buf);
+    return buf;
+}
+
+static std::string i18n_get_icu_version_string() {
+    UVersionInfo version;
+    u_getVersion(version);
+    return i18n_version_to_string(version);
+}
+
+static std::string i18n_get_cldr_version_string(ExceptionSink* xsink) {
+    UVersionInfo version;
+    UErrorCode status = U_ZERO_ERROR;
+    ulocdata_getCLDRVersion(version, &status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot read ICU CLDR version: %s", i18n_icu_error_name(status));
+        return std::string();
+    }
+    return i18n_version_to_string(version);
+}
+
+static bool i18n_is_ascii_space(char c) {
+    return std::isspace(static_cast<unsigned char>(c)) != 0;
+}
+
+static bool i18n_parse_accept_language_qvalue(const std::string& text, double& q) {
+    if (text.empty() || (text[0] != '0' && text[0] != '1')) {
+        return false;
+    }
+
+    size_t pos = 1;
+    if (pos < text.size()) {
+        if (text[pos] != '.') {
+            return false;
+        }
+        ++pos;
+        size_t digits = 0;
+        while (pos < text.size() && std::isdigit(static_cast<unsigned char>(text[pos]))) {
+            if (text[0] == '1' && text[pos] != '0') {
+                return false;
+            }
+            ++digits;
+            ++pos;
+        }
+        if (digits > 3 || pos != text.size()) {
+            return false;
+        }
+    }
+
+    q = q_strtod(text.c_str());
+    return q >= 0.0 && q <= 1.0;
+}
+
+static bool i18n_trim_ascii(const std::string& s, std::string& out, ExceptionSink* xsink) {
+    size_t start = 0;
+    while (start < s.size() && i18n_is_ascii_space(s[start])) {
+        if (start && !(start % 100) && qore_check_cancel(xsink, "trimming i18n numeric string")) {
+            return false;
+        }
+        ++start;
+    }
+
+    size_t end = s.size();
+    while (end > start && i18n_is_ascii_space(s[end - 1])) {
+        if ((s.size() - end) && !((s.size() - end) % 100)
+            && qore_check_cancel(xsink, "trimming i18n numeric string")) {
+            return false;
+        }
+        --end;
+    }
+
+    out = s.substr(start, end - start);
+    return true;
+}
+
+static bool i18n_check_locale_length(const std::string& locale, ExceptionSink* xsink, const char* arg_name) {
+    if (locale.size() > 255) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "%s is too long; maximum supported length is 255 bytes",
+            arg_name);
+        return false;
+    }
+    return true;
+}
+
+struct I18nDecimalInfo {
+    std::string formatted;
+    std::string canonical;
+    int32_t fraction_digits = 0;
+};
+
+static bool i18n_parse_decimal_string(const std::string& input, I18nDecimalInfo& info, ExceptionSink* xsink,
+        const char* arg_name) {
+    std::string s;
+    if (!i18n_trim_ascii(input, s, xsink)) {
+        return false;
+    }
+    if (s.empty()) {
+        xsink->raiseException("I18N-NUMBER-ERROR", "%s cannot be empty", arg_name);
+        return false;
+    }
+
+    size_t pos = 0;
+    bool negative = false;
+    if (s[pos] == '+' || s[pos] == '-') {
+        negative = s[pos] == '-';
+        ++pos;
+    }
+
+    std::string integer;
+    while (pos < s.size() && std::isdigit(static_cast<unsigned char>(s[pos]))) {
+        if (pos && !(pos % 100) && qore_check_cancel(xsink, "parsing i18n numeric string")) {
+            return false;
+        }
+        integer.push_back(s[pos++]);
+    }
+
+    std::string fraction;
+    if (pos < s.size() && s[pos] == '.') {
+        ++pos;
+        while (pos < s.size() && std::isdigit(static_cast<unsigned char>(s[pos]))) {
+            if (pos && !(pos % 100) && qore_check_cancel(xsink, "parsing i18n numeric string")) {
+                return false;
+            }
+            fraction.push_back(s[pos++]);
+        }
+    }
+
+    if (integer.empty() && fraction.empty()) {
+        xsink->raiseException("I18N-NUMBER-ERROR", "%s must contain at least one digit", arg_name);
+        return false;
+    }
+
+    if (pos != s.size()) {
+        xsink->raiseException("I18N-NUMBER-ERROR",
+            "%s must be a base-10 integer or decimal string; got '%s'", arg_name, input.c_str());
+        return false;
+    }
+
+    if (integer.empty()) {
+        integer = "0";
+    }
+
+    if (integer.size() > 1000) {
+        xsink->raiseException("I18N-NUMBER-ERROR",
+            "%s has too many integer digits; maximum supported is 1000", arg_name);
+        return false;
+    }
+
+    size_t first_non_zero = integer.find_first_not_of('0');
+    std::string canonical_integer = first_non_zero == std::string::npos ? "0" : integer.substr(first_non_zero);
+
+    std::string canonical_fraction = fraction;
+    size_t trim_pos = 0;
+    while (!canonical_fraction.empty() && canonical_fraction.back() == '0') {
+        if (trim_pos && !(trim_pos % 100) && qore_check_cancel(xsink, "normalizing i18n numeric string")) {
+            return false;
+        }
+        canonical_fraction.pop_back();
+        ++trim_pos;
+    }
+
+    if (fraction.size() > 100) {
+        xsink->raiseException("I18N-NUMBER-ERROR",
+            "%s has too many visible fraction digits; maximum supported is 100", arg_name);
+        return false;
+    }
+
+    bool is_zero = canonical_integer == "0" && canonical_fraction.empty();
+
+    info.formatted.clear();
+    if (negative && !is_zero) {
+        info.formatted.push_back('-');
+    }
+    info.formatted += canonical_integer;
+    if (!fraction.empty()) {
+        info.formatted.push_back('.');
+        info.formatted += fraction;
+    }
+
+    info.canonical.clear();
+    if (negative && !is_zero) {
+        info.canonical.push_back('-');
+    }
+    info.canonical += canonical_integer;
+    if (!canonical_fraction.empty()) {
+        info.canonical.push_back('.');
+        info.canonical += canonical_fraction;
+    }
+    info.fraction_digits = static_cast<int32_t>(fraction.size());
+
+    return true;
+}
+
+static bool i18n_value_to_decimal_info(QoreValue value, I18nDecimalInfo& info, ExceptionSink* xsink) {
+    switch (value.getType()) {
+        case NT_INT: {
+            int64 i = value.getAsBigInt();
+            info.formatted = std::to_string(i);
+            info.canonical = info.formatted;
+            info.fraction_digits = 0;
+            return true;
+        }
+        case NT_NUMBER:
+        case NT_FLOAT:
+        case NT_STRING: {
+            QoreStringValueHelper str(value, QCS_UTF8, xsink);
+            if (*xsink) {
+                return false;
+            }
+            return i18n_parse_decimal_string(str->c_str(), info, xsink, "value");
+        }
+    }
+
+    xsink->raiseException("I18N-TYPE-ERROR", "value must be an int, float, number, or string; got type '%s'",
+        value.getTypeName());
+    return false;
+}
+
+static std::string i18n_qore_string_to_utf8(const QoreStringNode* str, ExceptionSink* xsink, const char* arg_name) {
+    TempEncodingHelper tmp(str, QCS_UTF8, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+
+    if (!tmp || !tmp->c_str()[0]) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "%s cannot be empty", arg_name);
+        return std::string();
+    }
+
+    std::string rv = tmp->c_str();
+    if (!i18n_check_locale_length(rv, xsink, arg_name)) {
+        return std::string();
+    }
+
+    return rv;
+}
+
+static std::string i18n_accept_language_to_utf8(const QoreStringNode* str, ExceptionSink* xsink) {
+    TempEncodingHelper tmp(str, QCS_UTF8, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+    if (!tmp) {
+        xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+            "Accept-Language header could not be converted to UTF-8");
+        return std::string();
+    }
+    if (tmp->strlen() > 8192) {
+        xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+            "Accept-Language header is too long; maximum supported length is 8192 bytes");
+        return std::string();
+    }
+    return tmp->c_str();
+}
+
+static std::string i18n_strip_unicode_extensions(const std::string& locale) {
+    std::string lower = locale;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    size_t ext = lower.find("-u-");
+    return ext == std::string::npos ? locale : locale.substr(0, ext);
+}
+
+static std::string i18n_canonicalize_locale_tag(const std::string& raw, ExceptionSink* xsink,
+        bool strip_extensions = false) {
+    std::string tag = raw.empty() ? "root" : raw;
+    if (tag == "root") {
+        return tag;
+    }
+    if (!i18n_check_locale_length(tag, xsink, "locale")) {
+        return std::string();
+    }
+
+    std::replace(tag.begin(), tag.end(), '_', '-');
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::forLanguageTag(icu::StringPiece(tag), status);
+    if (U_FAILURE(status) || locale.isBogus()) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "invalid locale '%s': %s", raw.c_str(),
+            i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    std::string canonical = locale.toLanguageTag<std::string>(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "cannot canonicalize locale '%s': %s", raw.c_str(),
+            i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    return strip_extensions ? i18n_strip_unicode_extensions(canonical) : canonical;
+}
+
+static QoreHashNode* i18n_make_locale_context_hash(const std::string& locale, ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("locale", new QoreStringNode(locale, QCS_UTF8), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return h.release();
+}
+
+static std::string i18n_get_locale_from_context(const QoreHashNode* context, ExceptionSink* xsink) {
+    QoreValue locale_value = context->getKeyValue("locale");
+    if (locale_value.getType() != NT_STRING) {
+        xsink->raiseException("I18N-LOCALE-CONTEXT-ERROR",
+            "locale context must contain a string 'locale' key; got type '%s'", locale_value.getTypeName());
+        return std::string();
+    }
+
+    QoreStringValueHelper str(locale_value, QCS_UTF8, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+    if (!str->c_str()[0]) {
+        xsink->raiseException("I18N-LOCALE-CONTEXT-ERROR", "locale context locale cannot be empty");
+        return std::string();
+    }
+
+    std::string canonical = i18n_canonicalize_locale_tag(str->c_str(), xsink, true);
+    if (*xsink) {
+        return std::string();
+    }
+    return canonical;
+}
+
+static std::vector<std::string> i18n_locale_fallback_chain(const std::string& raw, ExceptionSink* xsink) {
+    std::vector<std::string> chain;
+    std::string locale = i18n_canonicalize_locale_tag(raw, xsink, true);
+    if (*xsink) {
+        return chain;
+    }
+
+    if (locale != "root") {
+        chain.push_back(locale);
+        size_t count = 0;
+        while (true) {
+            if (count && !(count % 100) && qore_check_cancel(xsink, "building locale fallback chain")) {
+                return chain;
+            }
+            ++count;
+            size_t pos = locale.rfind('-');
+            if (pos == std::string::npos) {
+                break;
+            }
+            locale.resize(pos);
+            chain.push_back(locale);
+        }
+    }
+    chain.push_back("root");
+    return chain;
+}
+
+static std::string i18n_add_likely_subtags_to_locale(const std::string& raw, ExceptionSink* xsink,
+        bool strip_extensions = false) {
+    std::string tag = i18n_canonicalize_locale_tag(raw, xsink, strip_extensions);
+    if (*xsink || tag == "root") {
+        return tag;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::forLanguageTag(icu::StringPiece(tag), status);
+    if (U_FAILURE(status) || locale.isBogus()) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "invalid locale '%s': %s", raw.c_str(),
+            i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    locale.addLikelySubtags(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "cannot add likely subtags to locale '%s': %s", raw.c_str(),
+            i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    std::string likely = locale.toLanguageTag<std::string>(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "cannot canonicalize likely-subtag locale '%s': %s",
+            raw.c_str(), i18n_icu_error_name(status));
+        return std::string();
+    }
+    return strip_extensions ? i18n_strip_unicode_extensions(likely) : likely;
+}
+
+static void i18n_push_locale_candidate(std::vector<std::string>& candidates, const std::string& candidate,
+        bool include_root) {
+    if (candidate.empty() || (candidate == "root" && !include_root)
+        || std::find(candidates.begin(), candidates.end(), candidate) != candidates.end()) {
+        return;
+    }
+    candidates.push_back(candidate);
+}
+
+static std::vector<std::string> i18n_locale_lookup_candidates(const std::string& raw, ExceptionSink* xsink,
+        bool include_root) {
+    std::vector<std::string> candidates;
+    for (const std::string& candidate : i18n_locale_fallback_chain(raw, xsink)) {
+        if (*xsink) {
+            return candidates;
+        }
+        i18n_push_locale_candidate(candidates, candidate, include_root);
+    }
+
+    std::string likely = i18n_add_likely_subtags_to_locale(raw, xsink, true);
+    if (*xsink || likely == "root") {
+        return candidates;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::forLanguageTag(icu::StringPiece(likely), status);
+    if (U_FAILURE(status) || locale.isBogus()) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "invalid likely-subtag locale '%s': %s", likely.c_str(),
+            i18n_icu_error_name(status));
+        return candidates;
+    }
+
+    const std::string language = locale.getLanguage();
+    const std::string script = locale.getScript();
+    const std::string region = locale.getCountry();
+
+    i18n_push_locale_candidate(candidates, likely, include_root);
+    if (!language.empty() && !region.empty()) {
+        i18n_push_locale_candidate(candidates, language + "-" + region, include_root);
+    }
+    if (!language.empty() && !script.empty()) {
+        i18n_push_locale_candidate(candidates, language + "-" + script, include_root);
+    }
+    if (!language.empty()) {
+        i18n_push_locale_candidate(candidates, language, include_root);
+    }
+
+    return candidates;
+}
+
+struct I18nLanguageRange {
+    std::string locale;
+    double q = 1.0;
+    int64 index = 0;
+    bool wildcard = false;
+};
+
+static std::vector<I18nLanguageRange> i18n_parse_accept_language_header(const std::string& header,
+        ExceptionSink* xsink) {
+    std::vector<I18nLanguageRange> ranges;
+    if (header.size() > 8192) {
+        xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+            "Accept-Language header is too long; maximum supported length is 8192 bytes");
+        return ranges;
+    }
+
+    size_t start = 0;
+    int64 index = 0;
+    while (start <= header.size()) {
+        if (start && !(start % 100) && qore_check_cancel(xsink, "parsing Accept-Language header")) {
+            return ranges;
+        }
+
+        size_t comma = header.find(',', start);
+        std::string raw_item = header.substr(start, comma == std::string::npos ? std::string::npos : comma - start);
+        std::string item;
+        if (!i18n_trim_ascii(raw_item, item, xsink)) {
+            return ranges;
+        }
+
+        if (!item.empty()) {
+            if (ranges.size() >= 100) {
+                xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+                    "Accept-Language header has too many language ranges; maximum supported count is 100");
+                return ranges;
+            }
+
+            size_t semi = item.find(';');
+            std::string range_text;
+            if (!i18n_trim_ascii(item.substr(0, semi), range_text, xsink)) {
+                return ranges;
+            }
+            if (range_text.empty()) {
+                xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR", "empty language range in Accept-Language header");
+                return ranges;
+            }
+
+            I18nLanguageRange range;
+            range.index = index++;
+            range.wildcard = range_text == "*";
+            if (range.wildcard) {
+                range.locale = "*";
+            } else {
+                range.locale = i18n_canonicalize_locale_tag(range_text, xsink, true);
+                if (*xsink) {
+                    return ranges;
+                }
+            }
+
+            if (semi != std::string::npos) {
+                std::string params = item.substr(semi + 1);
+                size_t pstart = 0;
+                while (pstart <= params.size()) {
+                    if (pstart && !(pstart % 100) && qore_check_cancel(xsink,
+                            "parsing Accept-Language parameters")) {
+                        return ranges;
+                    }
+                    size_t psemi = params.find(';', pstart);
+                    std::string raw_param = params.substr(pstart,
+                        psemi == std::string::npos ? std::string::npos : psemi - pstart);
+                    std::string param;
+                    if (!i18n_trim_ascii(raw_param, param, xsink)) {
+                        return ranges;
+                    }
+                    if (param.size() >= 2 && param[0] == 'q' && param[1] == '=') {
+                        std::string qtext = param.substr(2);
+                        if (!i18n_parse_accept_language_qvalue(qtext, range.q)) {
+                            xsink->raiseException("I18N-ACCEPT-LANGUAGE-ERROR",
+                                "invalid q value '%s' in Accept-Language header", qtext.c_str());
+                            return ranges;
+                        }
+                    }
+                    if (psemi == std::string::npos) {
+                        break;
+                    }
+                    pstart = psemi + 1;
+                }
+            }
+
+            if (range.q > 0.0) {
+                ranges.push_back(std::move(range));
+            }
+        }
+
+        if (comma == std::string::npos) {
+            break;
+        }
+        start = comma + 1;
+    }
+
+    std::stable_sort(ranges.begin(), ranges.end(), [](const I18nLanguageRange& a, const I18nLanguageRange& b) {
+        if (a.q == b.q) {
+            return a.index < b.index;
+        }
+        return a.q > b.q;
+    });
+
+    return ranges;
+}
+
+static QoreStringNode* i18n_negotiate_locale(const QoreStringNode* header, const QoreListNode* available,
+        const QoreStringNode* default_locale, ExceptionSink* xsink) {
+    std::string header_str = i18n_accept_language_to_utf8(header, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::string default_str = "root";
+    if (default_locale) {
+        default_str = i18n_qore_string_to_utf8(default_locale, xsink, "default_locale");
+        if (*xsink) {
+            return nullptr;
+        }
+        default_str = i18n_canonicalize_locale_tag(default_str, xsink, true);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+
+    std::unordered_map<std::string, std::string> available_map;
+    for (size_t i = 0; i < available->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking available locales")) {
+            return nullptr;
+        }
+        QoreStringValueHelper value(available->retrieveEntry(i), QCS_UTF8, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        std::string locale = i18n_canonicalize_locale_tag(value->c_str(), xsink, true);
+        if (*xsink) {
+            return nullptr;
+        }
+        available_map.emplace(locale, locale);
+    }
+
+    std::vector<I18nLanguageRange> ranges = i18n_parse_accept_language_header(header_str, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    for (size_t i = 0; i < ranges.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "negotiating locale")) {
+            return nullptr;
+        }
+
+        if (ranges[i].wildcard) {
+            auto def = available_map.find(default_str);
+            if (def != available_map.end()) {
+                return new QoreStringNode(def->second, QCS_UTF8);
+            }
+            return new QoreStringNode(default_str, QCS_UTF8);
+        }
+
+        std::vector<std::string> candidates = i18n_locale_lookup_candidates(ranges[i].locale, xsink,
+            ranges[i].locale == "root");
+        if (*xsink) {
+            return nullptr;
+        }
+        for (const std::string& candidate : candidates) {
+            if (*xsink) {
+                return nullptr;
+            }
+            auto match = available_map.find(candidate);
+            if (match != available_map.end()) {
+                return new QoreStringNode(match->second, QCS_UTF8);
+            }
+        }
+    }
+
+    return new QoreStringNode(default_str, QCS_UTF8);
+}
+
+static bool i18n_qore_value_to_utf8_string(QoreValue value, std::string& out, ExceptionSink* xsink,
+        const char* arg_name) {
+    if (value.getType() != NT_STRING) {
+        xsink->raiseException("I18N-TYPE-ERROR", "%s must be a string; got type '%s'", arg_name, value.getTypeName());
+        return false;
+    }
+
+    QoreStringValueHelper str(value, QCS_UTF8, xsink);
+    if (*xsink) {
+        return false;
+    }
+
+    out = str->c_str();
+    return true;
+}
+
+static bool i18n_validate_catalog_domain(const std::string& domain, ExceptionSink* xsink) {
+    if (domain.empty() || domain.size() > 128) {
+        xsink->raiseException("I18N-CATALOG-ERROR",
+            "catalog domain must be between 1 and 128 ASCII bytes");
+        return false;
+    }
+    if (domain == "." || domain == ".." || domain.find("..") != std::string::npos) {
+        xsink->raiseException("I18N-CATALOG-ERROR", "catalog domain cannot contain path traversal components");
+        return false;
+    }
+
+    for (size_t i = 0; i < domain.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "validating i18n catalog domain")) {
+            return false;
+        }
+        unsigned char c = static_cast<unsigned char>(domain[i]);
+        if (!(std::isalnum(c) || c == '_' || c == '-' || c == '.')) {
+            xsink->raiseException("I18N-CATALOG-ERROR",
+                "catalog domain may only contain ASCII letters, digits, '.', '_', and '-'");
+            return false;
+        }
+    }
+    return true;
+}
+
+static void i18n_push_catalog_search_path(std::vector<std::string>& paths, const std::string& path) {
+    if (!path.empty() && std::find(paths.begin(), paths.end(), path) == paths.end()) {
+        paths.push_back(path);
+    }
+}
+
+static bool i18n_split_catalog_path_list(std::vector<std::string>& paths, const std::string& path_list,
+        ExceptionSink* xsink) {
+#ifdef _WIN32
+    static constexpr char path_sep = ';';
+#else
+    static constexpr char path_sep = ':';
+#endif
+
+    size_t start = 0;
+    while (start <= path_list.size()) {
+        if (start && !(start % 100) && qore_check_cancel(xsink, "parsing i18n catalog search path")) {
+            return false;
+        }
+
+        size_t sep = path_list.find(path_sep, start);
+        std::string entry = path_list.substr(start, sep == std::string::npos ? std::string::npos : sep - start);
+        i18n_push_catalog_search_path(paths, entry);
+        if (sep == std::string::npos) {
+            break;
+        }
+        start = sep + 1;
+    }
+    return true;
+}
+
+static bool i18n_append_catalog_paths_option(std::vector<std::string>& paths, const QoreHashNode* opts,
+        const char* key, ExceptionSink* xsink) {
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+    if (value.getType() == NT_STRING) {
+        std::string path;
+        if (!i18n_qore_value_to_utf8_string(value, path, xsink, key)) {
+            return false;
+        }
+        i18n_push_catalog_search_path(paths, path);
+        return true;
+    }
+    if (value.getType() != NT_LIST) {
+        xsink->raiseException("I18N-CATALOG-ERROR", "opts.%s must be a string or list<string>; got type '%s'",
+            key, value.getTypeName());
+        return false;
+    }
+
+    const QoreListNode* list = value.get<const QoreListNode>();
+    for (size_t i = 0; i < list->size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking i18n catalog search path option")) {
+            return false;
+        }
+        QoreStringValueHelper str(list->retrieveEntry(i), QCS_UTF8, xsink);
+        if (*xsink) {
+            return false;
+        }
+        i18n_push_catalog_search_path(paths, str->c_str());
+    }
+    return true;
+}
+
+static bool i18n_append_env_catalog_search_path(std::vector<std::string>& paths, ExceptionSink* xsink) {
+    SimpleRefHolder<QoreStringNode> env_path(SystemEnvironment::getAsStringNode("QORE_CATALOG_DIR"));
+    if (!env_path) {
+        return true;
+    }
+
+    TempEncodingHelper tmp(*env_path, QCS_UTF8, xsink);
+    if (*xsink) {
+        return false;
+    }
+    return i18n_split_catalog_path_list(paths, tmp->c_str(), xsink);
+}
+
+static std::vector<std::string> i18n_get_catalog_search_paths(const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::vector<std::string> paths;
+
+    if (opts && !opts->getKeyValue("search_path").isNullOrNothing()) {
+        if (!i18n_append_catalog_paths_option(paths, opts, "search_path", xsink)) {
+            return paths;
+        }
+    } else if (!i18n_append_env_catalog_search_path(paths, xsink)) {
+        return paths;
+    }
+
+    i18n_append_catalog_paths_option(paths, opts, "override_path", xsink);
+    return paths;
+}
+
+static std::string i18n_join_catalog_path(const std::string& dir, const std::string& rel) {
+    if (dir.empty()) {
+        return rel;
+    }
+
+    char last = dir[dir.size() - 1];
+    if (last == '/' || last == '\\') {
+        return dir + rel;
+    }
+    return dir + "/" + rel;
+}
+
+static bool i18n_regular_file_exists(const std::string& path, ExceptionSink* xsink) {
+    QoreSandboxManagerHelper smh;
+    if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
+        return false;
+    }
+
+    struct stat sbuf;
+    return !stat(path.c_str(), &sbuf) && S_ISREG(sbuf.st_mode);
+}
+
+static std::vector<std::string> i18n_discover_catalog_files(const std::string& domain, const std::string& locale,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::vector<std::string> files;
+    if (!i18n_validate_catalog_domain(domain, xsink)) {
+        return files;
+    }
+
+    std::vector<std::string> paths = i18n_get_catalog_search_paths(opts, xsink);
+    if (*xsink) {
+        return files;
+    }
+
+    std::vector<std::string> locales = i18n_locale_fallback_chain(locale, xsink);
+    if (*xsink) {
+        return files;
+    }
+    std::reverse(locales.begin(), locales.end());
+
+    std::unordered_set<std::string> seen;
+    for (size_t p = 0; p < paths.size(); ++p) {
+        if (p && !(p % 100) && qore_check_cancel(xsink, "discovering i18n catalog files")) {
+            return files;
+        }
+
+        for (size_t l = 0; l < locales.size(); ++l) {
+            if (l && !(l % 100) && qore_check_cancel(xsink, "checking i18n catalog locale candidates")) {
+                return files;
+            }
+
+            const std::string rels[] = {
+                domain + "/" + locales[l] + ".json",
+                domain + "." + locales[l] + ".json",
+            };
+
+            for (const std::string& rel : rels) {
+                std::string path = i18n_join_catalog_path(paths[p], rel);
+                if (seen.find(path) != seen.end()) {
+                    continue;
+                }
+                seen.insert(path);
+                if (i18n_regular_file_exists(path, xsink)) {
+                    if (*xsink) {
+                        return files;
+                    }
+                    files.push_back(std::move(path));
+                }
+            }
+        }
+    }
+
+    return files;
+}
+
+static QoreListNode* i18n_string_vector_to_list(const std::vector<std::string>& values, ExceptionSink* xsink,
+        const char* activity) {
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, activity)) {
+            return nullptr;
+        }
+        rv->push(new QoreStringNode(values[i], QCS_UTF8), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+    }
+    return rv.release();
+}
+
+static std::string i18n_string_arg_to_utf8(const QoreStringNode* str, ExceptionSink* xsink, const char* arg_name,
+        size_t max_len = 1024 * 1024) {
+    TempEncodingHelper tmp(str, QCS_UTF8, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+    if (!tmp) {
+        xsink->raiseException("I18N-STRING-ERROR", "%s could not be converted to UTF-8", arg_name);
+        return std::string();
+    }
+    if (tmp->strlen() > max_len) {
+        xsink->raiseException("I18N-STRING-ERROR", "%s is too long; maximum supported length is %zu bytes",
+            arg_name, max_len);
+        return std::string();
+    }
+    return tmp->c_str();
+}
+
+static icu::Locale i18n_make_locale(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
+    std::string tag = i18n_qore_string_to_utf8(locale_arg, xsink, "locale");
+    if (*xsink) {
+        return icu::Locale::getRoot();
+    }
+
+    std::replace(tag.begin(), tag.end(), '_', '-');
+    UErrorCode status = U_ZERO_ERROR;
+    icu::Locale locale = icu::Locale::forLanguageTag(icu::StringPiece(tag), status);
+    if (U_FAILURE(status) || locale.isBogus()) {
+        xsink->raiseException("I18N-LOCALE-ERROR", "invalid locale '%s': %s", tag.c_str(),
+            i18n_icu_error_name(status));
+        return icu::Locale::getRoot();
+    }
+
+    return locale;
+}
+
+static UPluralType i18n_get_plural_type(const QoreHashNode* opts, ExceptionSink* xsink) {
+    if (!opts) {
+        return UPLURAL_TYPE_CARDINAL;
+    }
+
+    QoreValue value = opts->getKeyValue("type");
+    if (value.isNullOrNothing()) {
+        return UPLURAL_TYPE_CARDINAL;
+    }
+
+    std::string type;
+    if (!i18n_qore_value_to_utf8_string(value, type, xsink, "opts.type")) {
+        return UPLURAL_TYPE_CARDINAL;
+    }
+
+    if (type == "cardinal") {
+        return UPLURAL_TYPE_CARDINAL;
+    }
+    if (type == "ordinal") {
+        return UPLURAL_TYPE_ORDINAL;
+    }
+
+    xsink->raiseException("I18N-PLURAL-TYPE-ERROR",
+        "unsupported plural type '%s'; expected 'cardinal' or 'ordinal'", type.c_str());
+    return UPLURAL_TYPE_CARDINAL;
+}
+
+static bool i18n_get_optional_fraction_digits(const QoreHashNode* opts, const char* key, int32_t& out,
+        bool& present, ExceptionSink* xsink) {
+    present = false;
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+    if (value.getType() != NT_INT) {
+        xsink->raiseException("I18N-FORMAT-ERROR", "opts.%s must be an int; got type '%s'", key,
+            value.getTypeName());
+        return false;
+    }
+
+    int64 i = value.getAsBigInt();
+    if (i < 0 || i > 100) {
+        xsink->raiseException("I18N-FORMAT-ERROR", "opts.%s must be between 0 and 100", key);
+        return false;
+    }
+
+    out = static_cast<int32_t>(i);
+    present = true;
+    return true;
+}
+
+static bool i18n_get_optional_bool(const QoreHashNode* opts, const char* key, bool& out, bool& present) {
+    present = false;
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+
+    out = value.getAsBool();
+    present = true;
+    return true;
+}
+
+static bool i18n_apply_number_options(icu::number::UnlocalizedNumberFormatter& formatter,
+        const I18nDecimalInfo& decimal, const QoreHashNode* opts, bool currency, ExceptionSink* xsink) {
+    int32_t min_fraction = 0;
+    int32_t max_fraction = 0;
+    bool has_min_fraction = false;
+    bool has_max_fraction = false;
+    if (!i18n_get_optional_fraction_digits(opts, "min_fraction_digits", min_fraction, has_min_fraction, xsink)
+        || !i18n_get_optional_fraction_digits(opts, "max_fraction_digits", max_fraction, has_max_fraction, xsink)) {
+        return false;
+    }
+
+    if (has_min_fraction && has_max_fraction && min_fraction > max_fraction) {
+        xsink->raiseException("I18N-FORMAT-ERROR",
+            "opts.min_fraction_digits cannot be greater than opts.max_fraction_digits");
+        return false;
+    }
+
+    if (has_min_fraction && has_max_fraction) {
+        formatter = formatter.precision(icu::number::Precision::minMaxFraction(min_fraction, max_fraction));
+    } else if (has_min_fraction) {
+        formatter = formatter.precision(icu::number::Precision::minFraction(min_fraction));
+    } else if (has_max_fraction) {
+        formatter = formatter.precision(icu::number::Precision::maxFraction(max_fraction));
+    } else if (!currency) {
+        formatter = formatter.precision(icu::number::Precision::fixedFraction(decimal.fraction_digits));
+    }
+
+    bool grouping = false;
+    bool has_grouping = false;
+    i18n_get_optional_bool(opts, "grouping", grouping, has_grouping);
+    if (has_grouping && !grouping) {
+        formatter = formatter.grouping(UNUM_GROUPING_OFF);
+    }
+    return true;
+}
+
+static QoreStringNode* i18n_format_number_value(QoreValue value, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    I18nDecimalInfo decimal;
+    if (!i18n_value_to_decimal_info(value, decimal, xsink)) {
+        return nullptr;
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    icu::number::UnlocalizedNumberFormatter formatter = icu::number::NumberFormatter::with();
+    if (!i18n_apply_number_options(formatter, decimal, opts, false, xsink)) {
+        return nullptr;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::number::FormattedNumber formatted = formatter.locale(locale).formatDecimal(
+        icu::StringPiece(decimal.formatted), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot format number '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    icu::UnicodeString formatted_text = formatted.toString(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot render formatted number '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    std::string rv;
+    formatted_text.toUTF8String(rv);
+    return new QoreStringNode(rv, QCS_UTF8);
+}
+
+static QoreStringNode* i18n_format_currency_value(QoreValue value, const QoreStringNode* currency_arg,
+        const QoreStringNode* locale_arg, const QoreHashNode* opts, ExceptionSink* xsink) {
+    I18nDecimalInfo decimal;
+    if (!i18n_value_to_decimal_info(value, decimal, xsink)) {
+        return nullptr;
+    }
+
+    std::string currency_code = i18n_string_arg_to_utf8(currency_arg, xsink, "currency", 16);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::CurrencyUnit currency(icu::StringPiece(currency_code), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-CURRENCY-ERROR", "invalid currency code '%s': %s",
+            currency_code.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    icu::number::UnlocalizedNumberFormatter formatter = icu::number::NumberFormatter::with().unit(currency);
+    if (!i18n_apply_number_options(formatter, decimal, opts, true, xsink)) {
+        return nullptr;
+    }
+
+    icu::number::FormattedNumber formatted = formatter.locale(locale).formatDecimal(
+        icu::StringPiece(decimal.formatted), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot format currency value '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    icu::UnicodeString formatted_text = formatted.toString(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot render formatted currency value '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    std::string rv;
+    formatted_text.toUTF8String(rv);
+    return new QoreStringNode(rv, QCS_UTF8);
+}
+
+static QoreValue i18n_parse_number_value(const QoreStringNode* text_arg, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::string text = i18n_string_arg_to_utf8(text_arg, xsink, "text", 4096);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    std::unique_ptr<icu::NumberFormat> formatter(icu::NumberFormat::createInstance(locale, status));
+    if (U_FAILURE(status) || !formatter) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create number parser for locale '%s': %s",
+            locale.getName(), i18n_icu_error_name(status));
+        return QoreValue();
+    }
+
+    bool integer_only = false;
+    bool has_integer_only = false;
+    i18n_get_optional_bool(opts, "integer_only", integer_only, has_integer_only);
+    if (has_integer_only) {
+        formatter->setParseIntegerOnly(integer_only);
+    }
+
+    icu::UnicodeString input = icu::UnicodeString::fromUTF8(icu::StringPiece(text));
+    icu::Formattable parsed;
+    icu::ParsePosition pos(0);
+    formatter->parse(input, parsed, pos);
+    if (pos.getIndex() == 0 || pos.getErrorIndex() >= 0) {
+        xsink->raiseException("I18N-PARSE-ERROR", "cannot parse number '%s' for locale '%s'",
+            text.c_str(), locale.getName());
+        return QoreValue();
+    }
+
+    int32_t i = pos.getIndex();
+    while (i < input.length()) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking parsed i18n number trailing text")) {
+            return QoreValue();
+        }
+        UChar32 ch = input.char32At(i);
+        if (!u_isUWhiteSpace(ch)) {
+            xsink->raiseException("I18N-PARSE-ERROR",
+                "unexpected trailing text while parsing number '%s' for locale '%s'", text.c_str(), locale.getName());
+            return QoreValue();
+        }
+        i += U16_LENGTH(ch);
+    }
+
+    status = U_ZERO_ERROR;
+    QoreValue rv;
+    switch (parsed.getType()) {
+        case icu::Formattable::kLong:
+            rv = static_cast<int64>(parsed.getLong(status));
+            break;
+        case icu::Formattable::kInt64:
+            rv = parsed.getInt64(status);
+            break;
+        case icu::Formattable::kDouble:
+            rv = new QoreNumberNode(parsed.getDouble(status));
+            break;
+        default:
+            xsink->raiseException("I18N-PARSE-ERROR",
+                "ICU returned an unsupported parsed number type for '%s'", text.c_str());
+            return QoreValue();
+    }
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot convert parsed number '%s': %s",
+            text.c_str(), i18n_icu_error_name(status));
+        return QoreValue();
+    }
+    return rv;
+}
+
+static bool i18n_get_datetime_style(const QoreHashNode* opts, const char* key, icu::DateFormat::EStyle def,
+        icu::DateFormat::EStyle& out, ExceptionSink* xsink) {
+    out = def;
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+
+    std::string style;
+    if (!i18n_qore_value_to_utf8_string(value, style, xsink, key)) {
+        return false;
+    }
+
+    if (style == "none") {
+        out = icu::DateFormat::kNone;
+    } else if (style == "short") {
+        out = icu::DateFormat::kShort;
+    } else if (style == "medium") {
+        out = icu::DateFormat::kMedium;
+    } else if (style == "long") {
+        out = icu::DateFormat::kLong;
+    } else if (style == "full") {
+        out = icu::DateFormat::kFull;
+    } else {
+        xsink->raiseException("I18N-FORMAT-ERROR",
+            "opts.%s must be 'none', 'short', 'medium', 'long', or 'full'; got '%s'", key, style.c_str());
+        return false;
+    }
+    return true;
+}
+
+static bool i18n_get_optional_datetime_skeleton(const QoreHashNode* opts, std::string& skeleton, bool& present,
+        ExceptionSink* xsink) {
+    present = false;
+    if (!opts) {
+        return true;
+    }
+
+    QoreValue value = opts->getKeyValue("skeleton");
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+    if (!i18n_qore_value_to_utf8_string(value, skeleton, xsink, "skeleton")) {
+        return false;
+    }
+    if (skeleton.empty() || skeleton.size() > 128) {
+        xsink->raiseException("I18N-FORMAT-ERROR",
+            "opts.skeleton must be between 1 and 128 bytes");
+        return false;
+    }
+    if (!opts->getKeyValue("date_style").isNullOrNothing() || !opts->getKeyValue("time_style").isNullOrNothing()) {
+        xsink->raiseException("I18N-FORMAT-ERROR",
+            "opts.skeleton cannot be combined with opts.date_style or opts.time_style");
+        return false;
+    }
+
+    present = true;
+    return true;
+}
+
+static std::string i18n_get_datetime_timezone_id(const DateTimeNode* dt) {
+    const AbstractQoreZoneInfo* zone = dt->getZone();
+    if (!zone) {
+        return "UTC";
+    }
+    const char* region = zone->getRegionName();
+    if (!region || !strcmp(region, "UTC")) {
+        return "UTC";
+    }
+    if (region[0] == '+' || region[0] == '-') {
+        return std::string("GMT") + region;
+    }
+    return region;
+}
+
+static QoreStringNode* i18n_format_datetime_value(const DateTimeNode* dt, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    if (dt->isRelative()) {
+        xsink->raiseException("I18N-DATETIME-ERROR", "relative date/time values cannot be formatted as instants");
+        return nullptr;
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::unique_ptr<icu::DateFormat> formatter;
+    std::string skeleton;
+    bool has_skeleton = false;
+    if (!i18n_get_optional_datetime_skeleton(opts, skeleton, has_skeleton, xsink)) {
+        return nullptr;
+    }
+
+    if (has_skeleton) {
+        UErrorCode status = U_ZERO_ERROR;
+        icu::UnicodeString skeleton_u = icu::UnicodeString::fromUTF8(icu::StringPiece(skeleton));
+        formatter.reset(icu::DateFormat::createInstanceForSkeleton(skeleton_u, locale, status));
+        if (U_FAILURE(status)) {
+            xsink->raiseException("I18N-ICU-ERROR", "cannot create date/time skeleton formatter '%s' for locale '%s': %s",
+                skeleton.c_str(), locale.getName(), i18n_icu_error_name(status));
+            return nullptr;
+        }
+    } else {
+        icu::DateFormat::EStyle date_style;
+        icu::DateFormat::EStyle time_style;
+        if (!i18n_get_datetime_style(opts, "date_style", icu::DateFormat::kMedium, date_style, xsink)
+            || !i18n_get_datetime_style(opts, "time_style", icu::DateFormat::kShort, time_style, xsink)) {
+            return nullptr;
+        }
+        if (date_style == icu::DateFormat::kNone && time_style == icu::DateFormat::kNone) {
+            xsink->raiseException("I18N-FORMAT-ERROR", "date_style and time_style cannot both be 'none'");
+            return nullptr;
+        }
+
+        formatter.reset(icu::DateFormat::createDateTimeInstance(date_style, time_style, locale));
+    }
+    if (!formatter) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create date/time formatter for locale '%s'",
+            locale.getName());
+        return nullptr;
+    }
+
+    std::string tzid = i18n_get_datetime_timezone_id(dt);
+    icu::UnicodeString tzid_u = icu::UnicodeString::fromUTF8(icu::StringPiece(tzid));
+    formatter->adoptTimeZone(icu::TimeZone::createTimeZone(tzid_u));
+
+    UDate udate = static_cast<UDate>(dt->getEpochSecondsUTC()) * 1000.0
+        + static_cast<UDate>(dt->getMicrosecond()) / 1000.0;
+    icu::UnicodeString formatted;
+    formatter->format(udate, formatted);
+
+    std::string rv;
+    formatted.toUTF8String(rv);
+    return new QoreStringNode(rv, QCS_UTF8);
+}
+
+static std::unique_ptr<icu::Collator> i18n_make_collator(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    std::unique_ptr<icu::Collator> collator(icu::Collator::createInstance(locale, status));
+    if (U_FAILURE(status) || !collator) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create collator for locale '%s': %s",
+            locale.getName(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+    return collator;
+}
+
+static icu::UnicodeString i18n_utf8_to_unicode_string(const std::string& value) {
+    return icu::UnicodeString::fromUTF8(icu::StringPiece(value));
+}
+
+static std::string i18n_select_plural_category(QoreValue value, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    I18nDecimalInfo decimal;
+    if (!i18n_value_to_decimal_info(value, decimal, xsink)) {
+        return std::string();
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+
+    UPluralType type = i18n_get_plural_type(opts, xsink);
+    if (*xsink) {
+        return std::string();
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    std::unique_ptr<icu::PluralRules> rules(icu::PluralRules::forLocale(locale, type, status));
+    if (U_FAILURE(status) || !rules) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot create plural rules for locale '%s': %s",
+            locale.getName(), i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    icu::number::LocalizedNumberFormatter formatter = icu::number::NumberFormatter::with()
+        .precision(icu::number::Precision::fixedFraction(decimal.fraction_digits))
+        .locale(locale);
+    icu::number::FormattedNumber formatted = formatter.formatDecimal(icu::StringPiece(decimal.formatted), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot format plural operand '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    icu::UnicodeString keyword = rules->select(formatted, status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot select plural category for '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return std::string();
+    }
+
+    std::string rv;
+    keyword.toUTF8String(rv);
+    return rv;
+}
+
+static bool i18n_get_form_value(const QoreHashNode* forms, const char* key, std::string& out, ExceptionSink* xsink) {
+    QoreValue value = forms->getKeyValue(key);
+    if (value.isNullOrNothing()) {
+        return false;
+    }
+
+    return i18n_qore_value_to_utf8_string(value, out, xsink, key);
+}
+
+static QoreStringNode* i18n_select_plural_form(QoreValue value, const QoreStringNode* locale_arg,
+        const QoreHashNode* forms, const QoreHashNode* opts, ExceptionSink* xsink) {
+    if (!forms) {
+        xsink->raiseException("I18N-FORMS-ERROR", "forms cannot be NOTHING");
+        return nullptr;
+    }
+
+    I18nDecimalInfo decimal;
+    if (!i18n_value_to_decimal_info(value, decimal, xsink)) {
+        return nullptr;
+    }
+
+    size_t i = 0;
+    ConstHashIterator hi(forms);
+    while (hi.next()) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "checking plural forms")) {
+            return nullptr;
+        }
+        ++i;
+
+        const char* key = hi.getKey();
+        if (!key || !key[0]) {
+            xsink->raiseException("I18N-FORMS-ERROR", "forms cannot contain an empty key");
+            return nullptr;
+        }
+
+        std::string form_value;
+        if (!i18n_qore_value_to_utf8_string(hi.get(), form_value, xsink, key)) {
+            return nullptr;
+        }
+
+        if (key[0] == '=') {
+            I18nDecimalInfo exact;
+            if (!i18n_parse_decimal_string(key + 1, exact, xsink, "forms exact-value key")) {
+                return nullptr;
+            }
+            if (exact.canonical == decimal.canonical) {
+                return new QoreStringNode(form_value, QCS_UTF8);
+            }
+            continue;
+        }
+
+        const char* valid_categories[] = {"zero", "one", "two", "few", "many", "other"};
+        bool valid = false;
+        for (const char* category : valid_categories) {
+            if (!strcmp(key, category)) {
+                valid = true;
+                break;
+            }
+        }
+        if (!valid) {
+            xsink->raiseException("I18N-FORMS-ERROR",
+                "invalid plural form key '%s'; expected a CLDR category or exact key such as '=0'", key);
+            return nullptr;
+        }
+    }
+
+    std::string category = i18n_select_plural_category(value, locale_arg, opts, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::string selected;
+    if (i18n_get_form_value(forms, category.c_str(), selected, xsink)) {
+        if (*xsink) {
+            return nullptr;
+        }
+        return new QoreStringNode(selected, QCS_UTF8);
+    }
+    if (*xsink) {
+        return nullptr;
+    }
+
+    if (!i18n_get_form_value(forms, "other", selected, xsink)) {
+        if (!*xsink) {
+            xsink->raiseException("I18N-FORMS-ERROR",
+                "forms must include an 'other' fallback when no exact-value key matches");
+        }
+        return nullptr;
+    }
+
+    return new QoreStringNode(selected, QCS_UTF8);
+}
+
+/** @defgroup i18n_functions I18n Functions
+ */
+///@{
+namespace Qore::I18n;
+
+//! Returns information about the locale-data backend used by the module.
+/** @return a hash with \c backend, \c icu_version, \c cldr_version, and \c catalog_schema_version keys
+
+    @par Example:
+    @code{.py}
+hash<auto> info = I18n::get_backend_info();
+printf("I18n backend: %s %s\n", info.backend, info.icu_version);
+    @endcode
+*/
+hash<auto> get_backend_info() [flags=CONSTANT] {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("backend", new QoreStringNode("icu", QCS_UTF8), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    h->setKeyValue("icu_version", new QoreStringNode(i18n_get_icu_version_string(), QCS_UTF8), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    UVersionInfo cldr_version;
+    UErrorCode status = U_ZERO_ERROR;
+    ulocdata_getCLDRVersion(cldr_version, &status);
+    h->setKeyValue("cldr_version",
+        new QoreStringNode(U_SUCCESS(status) ? i18n_version_to_string(cldr_version) : "unknown", QCS_UTF8), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    h->setKeyValue("catalog_schema_version", I18N_CATALOG_SCHEMA_VERSION, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return h.release();
+}
+
+//! Parses native catalog JSON data into a Qore catalog hash.
+/** The JSON data must be UTF-8 and must represent the schema-versioned native catalog shape consumed by
+    I18n::MessageCatalog. Catalog JSON is data only; it is parsed by this module and never evaluated as Qore code.
+
+    @param json UTF-8 JSON catalog data
+    @return native catalog hash suitable for I18n::MessageCatalog
+
+    @throw I18N-CATALOG-JSON-ERROR if \a json is malformed, not UTF-8, or does not contain a JSON object
+
+    @par Example:
+    @code{.py}
+hash<auto> catalog_data = I18n::parse_native_catalog_json(ReadOnlyFile::readTextFile("catalog.json"));
+I18n::MessageCatalog catalog(catalog_data);
+    @endcode
+*/
+hash<auto> parse_native_catalog_json(string json) [flags=RET_VALUE_ONLY] {
+    QoreHashNode* catalog = i18n_parse_native_catalog_json(json, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return catalog;
+}
+
+//! Loads and parses a native catalog JSON file.
+/** Files are parsed as UTF-8 JSON and never evaluated as Qore code. The resulting hash is still validated by
+    I18n::MessageCatalog construction.
+
+    @param path catalog JSON file path
+    @return native catalog hash suitable for I18n::MessageCatalog
+
+    @throw FILE-READ-ERROR if the file cannot be read
+    @throw I18N-CATALOG-ERROR if the file exceeds the default size limit
+    @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
+
+    @par Example:
+    @code{.py}
+I18n::MessageCatalog catalog(I18n::load_native_catalog("catalog.json"));
+    @endcode
+*/
+hash<auto> load_native_catalog(string path) [dom=FILESYSTEM] {
+    QoreHashNode* catalog = i18n_load_native_catalog_json(path, -1, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return catalog;
+}
+
+//! Loads and parses a native catalog JSON file with an explicit maximum file size.
+/** @param path catalog JSON file path
+    @param max_file_len maximum accepted file size in bytes
+    @return native catalog hash suitable for I18n::MessageCatalog
+
+    @throw FILE-READ-ERROR if the file cannot be read
+    @throw I18N-CATALOG-ERROR if \a max_file_len is invalid or the file exceeds it
+    @throw I18N-CATALOG-JSON-ERROR if the file is not valid native catalog JSON
+*/
+hash<auto> load_native_catalog(string path, int max_file_len) [dom=FILESYSTEM] {
+    QoreHashNode* catalog = i18n_load_native_catalog_json(path, max_file_len, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return catalog;
+}
+
+//! Returns the ICU library version used by the module.
+/** @return ICU version string, for example \c "78.2"
+
+    @par Example:
+    @code{.py}
+printf("ICU: %s\n", I18n::get_icu_version());
+    @endcode
+*/
+string get_icu_version() [flags=CONSTANT] {
+    return new QoreStringNode(i18n_get_icu_version_string(), QCS_UTF8);
+}
+
+//! Returns the CLDR data version used by ICU.
+/** @return CLDR version string
+
+    @throw I18N-ICU-ERROR if ICU does not expose the CLDR data version
+
+    @par Example:
+    @code{.py}
+printf("CLDR: %s\n", I18n::get_cldr_version());
+    @endcode
+*/
+string get_cldr_version() [flags=RET_VALUE_ONLY] {
+    std::string version = i18n_get_cldr_version_string(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(version, QCS_UTF8);
+}
+
+//! Returns the native message catalog schema version supported by this module.
+/** @return catalog schema version number
+
+    @par Example:
+    @code{.py}
+assertEq(1, I18n::get_catalog_schema_version());
+    @endcode
+*/
+int get_catalog_schema_version() [flags=CONSTANT] {
+    return I18N_CATALOG_SCHEMA_VERSION;
+}
+
+//! Returns the canonical BCP 47 form of a locale tag.
+/** @param locale locale tag such as \c "en_US" or \c "iw"
+    @return canonical BCP 47 locale tag
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+
+    @par Example:
+    @code{.py}
+assertEq("en-US", I18n::canonicalize_locale("en_US"));
+    @endcode
+*/
+string canonicalize_locale(string locale) [flags=RET_VALUE_ONLY] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string canonical = i18n_canonicalize_locale_tag(tag, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(canonical, QCS_UTF8);
+}
+
+//! Returns the likely-subtag form of a locale tag.
+/** @param locale locale tag
+    @return canonical locale tag with likely language, script, and region subtags added
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid or ICU cannot maximize the locale
+
+    @par Example:
+    @code{.py}
+assertEq("sr-Cyrl-RS", I18n::add_likely_subtags("sr"));
+    @endcode
+*/
+string add_likely_subtags(string locale) [flags=RET_VALUE_ONLY] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string likely = i18n_add_likely_subtags_to_locale(tag, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(likely, QCS_UTF8);
+}
+
+//! Sets the current thread's ambient i18n locale.
+/** Explicit-locale APIs should be preferred for stable behavior. The ambient locale is intended for request or task
+    context integration and is not propagated through raw queue handoff by this module.
+
+    @param locale BCP 47 locale tag
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+nothing set_thread_locale(string locale) [dom=LOCALE_CONTROL] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string canonical = i18n_canonicalize_locale_tag(tag, xsink, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    i18n_thread_locale = canonical;
+}
+
+//! Returns the current thread's ambient i18n locale.
+/** @return the current thread locale, or \c "root" if none has been set
+
+    @note Raw \c Queue handoff does not propagate this ambient locale; pass an explicit context object or locale string
+    across queue boundaries.
+*/
+string get_thread_locale() [flags=RET_VALUE_ONLY] {
+    return new QoreStringNode(i18n_thread_locale.empty() ? "root" : i18n_thread_locale, QCS_UTF8);
+}
+
+//! Creates a locale context hash for explicit propagation across task boundaries.
+/** The returned hash has a canonical \c "locale" key and is data-only. Pass it explicitly to background work,
+    thread-pool tasks, or request dispatch code, then call I18n::apply_locale_context() in the destination thread.
+
+    @param locale BCP 47 locale tag
+    @return hash containing the canonical catalog locale
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+hash<auto> make_locale_context(string locale) [flags=RET_VALUE_ONLY] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string canonical = i18n_canonicalize_locale_tag(tag, xsink, true);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return i18n_make_locale_context_hash(canonical, xsink);
+}
+
+//! Captures the current thread's ambient locale as a locale context hash.
+/** @return hash containing the current thread locale, or \c "root" if none has been set
+*/
+hash<auto> capture_locale_context() [flags=RET_VALUE_ONLY] {
+    return i18n_make_locale_context_hash(i18n_thread_locale.empty() ? "root" : i18n_thread_locale, xsink);
+}
+
+//! Applies a previously captured or constructed locale context to the current thread.
+/** @param context hash returned by I18n::make_locale_context() or I18n::capture_locale_context()
+
+    @throw I18N-LOCALE-CONTEXT-ERROR if \a context is malformed
+    @throw I18N-LOCALE-ERROR if the context locale is invalid
+*/
+nothing apply_locale_context(hash<auto> context) [dom=LOCALE_CONTROL] {
+    std::string canonical = i18n_get_locale_from_context(context, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (canonical == "root") {
+        i18n_thread_locale.clear();
+    } else {
+        i18n_thread_locale = canonical;
+    }
+}
+
+//! Clears the current thread's ambient i18n locale.
+/** After this call, I18n::get_thread_locale() returns \c "root".
+*/
+nothing clear_thread_locale() [dom=LOCALE_CONTROL] {
+    i18n_thread_locale.clear();
+}
+
+//! Returns the catalog fallback chain for a locale tag.
+/** Unicode formatting extensions are stripped from catalog identity.
+
+    @param locale locale tag
+    @return fallback chain such as \c ("fr-CA", "fr", "root")
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+list<string> get_locale_fallback_chain(string locale) [flags=RET_VALUE_ONLY] {
+    std::string tag = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    std::vector<std::string> chain = i18n_locale_fallback_chain(tag, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; i < chain.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "returning locale fallback chain")) {
+            return QoreValue();
+        }
+        rv->push(new QoreStringNode(chain[i], QCS_UTF8), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+    return rv.release();
+}
+
+//! Parses an HTTP Accept-Language header.
+/** @param header Accept-Language header value
+    @return list of hashes sorted by preference; each hash has \c locale, \c q, \c index, and \c wildcard keys
+
+    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed
+    @throw I18N-LOCALE-ERROR if a language range is invalid
+*/
+list<hash<auto>> parse_accept_language(string header) [flags=RET_VALUE_ONLY] {
+    std::string header_str = i18n_accept_language_to_utf8(header, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    std::vector<I18nLanguageRange> ranges = i18n_parse_accept_language_header(header_str, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (size_t i = 0; i < ranges.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "returning Accept-Language ranges")) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("locale", new QoreStringNode(ranges[i].locale, QCS_UTF8), xsink);
+        if (*xsink) return QoreValue();
+        h->setKeyValue("q", ranges[i].q, xsink);
+        if (*xsink) return QoreValue();
+        h->setKeyValue("index", ranges[i].index, xsink);
+        if (*xsink) return QoreValue();
+        h->setKeyValue("wildcard", ranges[i].wildcard, xsink);
+        if (*xsink) return QoreValue();
+        rv->push(h.release(), xsink);
+        if (*xsink) return QoreValue();
+    }
+    return rv.release();
+}
+
+//! Negotiates an effective locale from an HTTP Accept-Language header.
+/** @param header Accept-Language header value
+    @param available available catalog locales
+    @return best matching locale, or \c "root" if no match is found
+
+    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed
+    @throw I18N-LOCALE-ERROR if a language range or available locale is invalid
+*/
+string negotiate_locale(string header, list<string> available) [flags=RET_VALUE_ONLY] {
+    return i18n_negotiate_locale(header, available, nullptr, xsink);
+}
+
+//! Negotiates an effective locale from an HTTP Accept-Language header.
+/** @param header Accept-Language header value
+    @param available available catalog locales
+    @param default_locale default locale returned when no language range matches
+    @return best matching locale, or \a default_locale if no match is found
+
+    @throw I18N-ACCEPT-LANGUAGE-ERROR if \a header is malformed
+    @throw I18N-LOCALE-ERROR if a language range, available locale, or default locale is invalid
+*/
+string negotiate_locale(string header, list<string> available, string default_locale) [flags=RET_VALUE_ONLY] {
+    return i18n_negotiate_locale(header, available, default_locale, xsink);
+}
+
+//! Returns the configured native catalog search path.
+/** If \c opts.search_path is present, it is returned instead of \c QORE_CATALOG_DIR. \c opts.override_path entries are
+    appended after the base search path and therefore have higher precedence for catalog composition.
+
+    @param opts optional hash with \c search_path and \c override_path string or list<string> entries
+    @return search path entries in low-to-high precedence order
+
+    @throw I18N-CATALOG-ERROR if options have invalid types
+*/
+list<string> get_catalog_search_path(*hash<auto> opts) [flags=RET_VALUE_ONLY;dom=EXTERNAL_INFO] {
+    std::vector<std::string> paths = i18n_get_catalog_search_paths(opts, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return i18n_string_vector_to_list(paths, xsink, "returning i18n catalog search path");
+}
+
+//! Discovers native catalog JSON files for a domain and requested locale.
+/** Discovery checks \c QORE_CATALOG_DIR by default. Pass \c opts.search_path to use an explicit base path list, and
+    \c opts.override_path to append application/Qorus override paths. Returned files are ordered for direct
+    MessageCatalog construction: lower precedence first, with locale files ordered \c root before more-specific
+    locales.
+
+    For each search directory, both \c domain/locale.json and \c domain.locale.json are recognized. The domain is
+    restricted to ASCII letters, digits, \c '.', \c '_', and \c '-' to prevent path traversal.
+
+    @param domain catalog domain
+    @param locale requested locale
+    @param opts optional hash with \c search_path and \c override_path string or list<string> entries
+    @return existing native catalog JSON file paths in load order
+
+    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+*/
+list<string> discover_catalog_files(string domain, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY;dom=FILESYSTEM,EXTERNAL_INFO] {
+    std::string domain_str = i18n_string_arg_to_utf8(domain, xsink, "domain", 128);
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string locale_str = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    std::vector<std::string> files = i18n_discover_catalog_files(domain_str, locale_str, opts, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return i18n_string_vector_to_list(files, xsink, "returning discovered i18n catalog files");
+}
+
+//! Formats a decimal number with explicit locale data.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag, including supported Unicode numbering-system extensions
+    @return locale-formatted decimal number
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if formatting options are invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+
+    @par Example:
+    @code{.py}
+assertEq("1,234.50", I18n::format_number("1234.50", "en-US"));
+    @endcode
+*/
+string format_number(auto value, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_format_number_value(value, locale, nullptr, xsink);
+}
+
+//! Formats a decimal number with explicit locale data and options.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag
+    @param opts optional hash; supported keys are \c min_fraction_digits, \c max_fraction_digits, and \c grouping
+    @return locale-formatted decimal number
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if \a opts is invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+*/
+string format_number(auto value, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_format_number_value(value, locale, opts, xsink);
+}
+
+//! Parses a locale-formatted decimal number with explicit locale data.
+/** @param text locale-formatted decimal number text
+    @param locale BCP 47 locale tag, including supported Unicode numbering-system extensions
+    @return parsed Qore integer or number value
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-PARSE-ERROR if \a text cannot be parsed completely as a number
+    @throw I18N-ICU-ERROR if ICU cannot parse or convert the value
+
+    @par Example:
+    @code{.py}
+assertEq(1234, I18n::parse_number("1,234", "en-US"));
+    @endcode
+*/
+auto parse_number(string text, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_parse_number_value(text, locale, nullptr, xsink);
+}
+
+//! Parses a locale-formatted decimal number with explicit locale data and options.
+/** @param text locale-formatted decimal number text
+    @param locale BCP 47 locale tag
+    @param opts optional hash; supported key: \c integer_only
+    @return parsed Qore integer or number value
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-PARSE-ERROR if \a text cannot be parsed completely as a number
+    @throw I18N-ICU-ERROR if ICU cannot parse or convert the value
+*/
+auto parse_number(string text, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_parse_number_value(text, locale, opts, xsink);
+}
+
+//! Formats a currency value with explicit locale data.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param currency ISO 4217 currency code such as \c "USD" or \c "EUR"
+    @param locale BCP 47 locale tag
+    @return locale-formatted currency value
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-CURRENCY-ERROR if \a currency is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if formatting options are invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+*/
+string format_currency(auto value, string currency, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_format_currency_value(value, currency, locale, nullptr, xsink);
+}
+
+//! Formats a currency value with explicit locale data and options.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param currency ISO 4217 currency code such as \c "USD" or \c "EUR"
+    @param locale BCP 47 locale tag
+    @param opts optional hash; supported keys are \c min_fraction_digits, \c max_fraction_digits, and \c grouping
+    @return locale-formatted currency value
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-CURRENCY-ERROR if \a currency is invalid
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if \a opts is invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+*/
+string format_currency(auto value, string currency, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_format_currency_value(value, currency, locale, opts, xsink);
+}
+
+//! Formats an absolute date/time value with explicit locale data.
+/** @param dt absolute date/time value
+    @param locale BCP 47 locale tag, including supported calendar/hour-cycle extensions
+    @return locale-formatted date/time with medium date and short time styles
+
+    @throw I18N-DATETIME-ERROR if \a dt is relative
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if formatting options are invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a date/time formatter
+*/
+string format_datetime(date dt, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_format_datetime_value(dt, locale, nullptr, xsink);
+}
+
+//! Formats an absolute date/time value with explicit locale data and style options.
+/** @param dt absolute date/time value
+    @param locale BCP 47 locale tag, including supported calendar/hour-cycle extensions
+    @param opts optional hash; \c date_style and \c time_style may be \c "none", \c "short", \c "medium", \c "long",
+        or \c "full"; alternatively pass \c skeleton for CLDR skeleton formatting such as \c "yMMMd"
+    @return locale-formatted date/time
+
+    @throw I18N-DATETIME-ERROR if \a dt is relative
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if \a opts is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a date/time formatter
+*/
+string format_datetime(date dt, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_format_datetime_value(dt, locale, opts, xsink);
+}
+
+//! Compares two strings using explicit locale collation.
+/** @param left left string
+    @param right right string
+    @param locale BCP 47 locale tag, including supported Unicode collation extensions
+    @return \c -1 if \a left sorts before \a right, \c 1 if after, or \c 0 if equal under the collator
+
+    @throw I18N-STRING-ERROR if either string cannot be converted to UTF-8
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a collator
+*/
+int compare_strings(string left, string right, string locale) [flags=RET_VALUE_ONLY] {
+    std::string left_str = i18n_string_arg_to_utf8(left, xsink, "left");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::string right_str = i18n_string_arg_to_utf8(right, xsink, "right");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::unique_ptr<icu::Collator> collator = i18n_make_collator(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    icu::Collator::EComparisonResult result = collator->compare(i18n_utf8_to_unicode_string(left_str),
+        i18n_utf8_to_unicode_string(right_str));
+    return result == icu::Collator::LESS ? -1 : result == icu::Collator::GREATER ? 1 : 0;
+}
+
+//! Returns an ICU sort key for a string and explicit locale.
+/** Sort keys are binary data intended for cache-local ordering only.
+
+    @param value string to convert
+    @param locale BCP 47 locale tag, including supported Unicode collation extensions
+    @return binary ICU sort key
+
+    @throw I18N-STRING-ERROR if \a value cannot be converted to UTF-8 or the sort key is too large
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a collator
+
+    @note Sort keys are not stable across ICU/CLDR versions, locales, or collation options. Persistent keys must be
+    tagged with the locale, options, backend, ICU/CLDR versions, and collation version.
+*/
+binary get_sort_key(string value, string locale) [flags=RET_VALUE_ONLY] {
+    std::string value_str = i18n_string_arg_to_utf8(value, xsink, "value");
+    if (*xsink) {
+        return QoreValue();
+    }
+    std::unique_ptr<icu::Collator> collator = i18n_make_collator(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    icu::UnicodeString uvalue = i18n_utf8_to_unicode_string(value_str);
+    int32_t len = collator->getSortKey(uvalue, nullptr, 0);
+    if (len < 0 || len > 1024 * 1024) {
+        xsink->raiseException("I18N-STRING-ERROR", "generated sort key is too large");
+        return QoreValue();
+    }
+
+    std::vector<uint8_t> data(static_cast<size_t>(len));
+    int32_t actual = collator->getSortKey(uvalue, data.data(), len);
+    if (actual < 0 || actual > len) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot generate sort key");
+        return QoreValue();
+    }
+
+    BinaryNode* rv = new BinaryNode;
+    rv->append(data.data(), static_cast<size_t>(actual));
+    return rv;
+}
+
+//! Returns the ICU collation version for an explicit locale.
+/** @param locale BCP 47 locale tag
+    @return collation version string
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create a collator
+*/
+string get_collation_version(string locale) [flags=RET_VALUE_ONLY] {
+    std::unique_ptr<icu::Collator> collator = i18n_make_collator(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    UVersionInfo version;
+    collator->getVersion(version);
+    return new QoreStringNode(i18n_version_to_string(version), QCS_UTF8);
+}
+
+//! Returns the CLDR plural category for a value and locale using cardinal rules.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag, for example \c "en", \c "ru", or \c "ar"
+    @return one of \c "zero", \c "one", \c "two", \c "few", \c "many", or \c "other"
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
+
+    @note String values preserve visible fraction digits, so \c "1", \c "1.0", and \c "1.00" can select different
+    categories in locales whose CLDR rules distinguish them.
+
+    @par Example:
+    @code{.py}
+assertEq("one", I18n::plural_category(1, "en"));
+assertEq("few", I18n::plural_category(2, "ru"));
+    @endcode
+*/
+string plural_category(auto value, string locale) [flags=RET_VALUE_ONLY] {
+    std::string category = i18n_select_plural_category(value, locale, nullptr, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(category, QCS_UTF8);
+}
+
+//! Returns the CLDR plural category for a value and locale.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag, for example \c "en", \c "ru", or \c "ar"
+    @param opts optional hash; \c "type" may be \c "cardinal" or \c "ordinal"
+    @return one of \c "zero", \c "one", \c "two", \c "few", \c "many", or \c "other"
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
+
+    @par Example:
+    @code{.py}
+assertEq("one", I18n::plural_category(1, "en", {"type": "ordinal"}));
+assertEq("two", I18n::plural_category(2, "en", {"type": "ordinal"}));
+    @endcode
+*/
+string plural_category(auto value, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    std::string category = i18n_select_plural_category(value, locale, opts, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(category, QCS_UTF8);
+}
+
+//! Selects a caller-supplied plural form using cardinal CLDR rules.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag
+    @param forms hash keyed by CLDR plural category, with optional exact-value keys such as \c "=0" or \c "=1"
+    @return the selected form string; missing category keys fall back to \c "other"
+
+    @throw I18N-FORMS-ERROR if \a forms is invalid or does not include an \c "other" fallback
+    @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
+
+    @note This function only selects among forms supplied by the caller. A locale string alone cannot localize an
+    English two-form word pair into languages with more plural categories.
+
+    @par Example:
+    @code{.py}
+hash<auto> ru = {"one": "soubor", "few": "soubory", "many": "souboru", "other": "souboru"};
+printf("%d %s\n", n, I18n::plural_form(n, "cs", ru));
+    @endcode
+*/
+string plural_form(auto value, string locale, hash<auto> forms) [flags=RET_VALUE_ONLY] {
+    return i18n_select_plural_form(value, locale, forms, nullptr, xsink);
+}
+
+//! Selects a caller-supplied plural form using CLDR rules.
+/** @param value integer, floating-point, number, or base-10 decimal string
+    @param locale BCP 47 locale tag
+    @param forms hash keyed by CLDR plural category, with optional exact-value keys such as \c "=0" or \c "=1"
+    @param opts optional hash; \c "type" may be \c "cardinal" or \c "ordinal"
+    @return the selected form string; missing category keys fall back to \c "other"
+
+    @throw I18N-FORMS-ERROR if \a forms is invalid or does not include an \c "other" fallback
+    @throw I18N-NUMBER-ERROR if \a value or an exact-value key is malformed
+    @throw I18N-PLURAL-TYPE-ERROR if \c opts.type is unsupported
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-ICU-ERROR if ICU cannot create or apply plural rules
+
+    @note Exact-value keys take precedence over CLDR categories.
+
+    @par Example:
+    @code{.py}
+hash<auto> en_ordinal = {"one": "st", "two": "nd", "few": "rd", "other": "th"};
+printf("2%s\n", I18n::plural_form(2, "en", en_ordinal, {"type": "ordinal"}));
+    @endcode
+*/
+string plural_form(auto value, string locale, hash<auto> forms, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_select_plural_form(value, locale, forms, opts, xsink);
+}
+
+///@}

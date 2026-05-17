@@ -5889,6 +5889,29 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             remove_thread_data("svc_listener");
         }
 
+        # Some handlers report persistence that legitimately toggles
+        # per-request (e.g. a handler that pins a thread only for the
+        # duration of an open transaction) while the underlying client
+        # connection continues to carry further persistent requests
+        # multiplexed over the same HTTP/2 stream set or HTTP/3 QUIC
+        # session.  For such handlers, tearing the dedicated thread down
+        # (and deregistering the persistent queue) on every per-request
+        # persistence clear races the next in-flight request on the same
+        # multiplexed connection: it is dispatched to a fresh pool thread
+        # that has none of the dedicated thread's thread-local resources.
+        # When the handler asks to keep the connection dedicated for its
+        # full lifetime, the dedicated thread is released only on
+        # connection close, an explicit end-of-session request, or the
+        # idle TTL (the contract documented in the QUEUE-TIMEOUT branch
+        # below).  The persistent-queue filter (getPersistentQueueFilter())
+        # already restricts which requests are routed to the dedicated
+        # thread, so unrelated requests on the same connection are
+        # unaffected.  Default handler behaviour (one-shot persistence) is
+        # unchanged: the flag stays False and the dedicated thread is
+        # released as soon as persistence clears.
+        bool keep_connection_dedicated =
+            phi.handler && phi.handler.keepPersistentConnectionDedicated();
+
         try {
             while (!exit && s.isOpen()) {
                 # Before blocking on the queue, check whether the handler still
@@ -5902,7 +5925,17 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # (default 75 s) expires, making client-side close latency
                 # visibly bad for every handler that naturally terminates its
                 # persistence on request completion.
-                if (!phi.handler || !phi.handler.isPersistent()) {
+                #
+                # Handlers that opt into connection-lifetime dedication
+                # (keepPersistentConnectionDedicated()) are excepted: their
+                # persistence legitimately toggles per-request while the
+                # connection keeps carrying further persistent requests, so
+                # the loop must keep waiting for the next request here and
+                # release the dedicated thread only on connection close, an
+                # explicit end-of-session request, or the idle TTL (handled
+                # in the QUEUE-TIMEOUT branch below).
+                if ((!phi.handler || !phi.handler.isPersistent())
+                        && !keep_connection_dedicated) {
                     log("cid %d: handler no longer persistent, exiting "
                         "dedicated mode immediately", cx.id);
                     deregister_fn(sock_key);
@@ -5920,9 +5953,9 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                         if (!phi.handler || !phi.handler.isPersistent()) {
                             # Non-persistent handler timed out; exit the loop.
                             # For persistent handlers, the client must
-                            # explicitly end the session via the
-                            # End-Persistent header, or TCP connection close
-                            # triggers cleanup via
+                            # explicitly end the session (recognised by the
+                            # handler via isPersistentSessionEndRequest()),
+                            # or TCP connection close triggers cleanup via
                             # signalPersistentQueuesForConnection().
                             log("cid %d: queued persistent idle timeout, "
                                 "exiting dedicated mode", cx.id);
@@ -5948,12 +5981,16 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 bool is_multiplexed = (conn_info.header_info.http2 ?? False)
                     || (conn_info.header_info.http3 ?? False);
 
-                # Check for end-persistent signal — the client is explicitly
-                # ending the persistent session (e.g., before clearing its
-                # client-side persistent flag).  Send a 200 OK response and
-                # exit the loop; the on_exit block will call phi.clear() →
-                # persistentClosed() → rollback any open transaction.
-                if (req_hdr."qorus-connection" =~ /^end-persistent$/i) {
+                # Check for a handler-defined end-of-session signal — the
+                # client is explicitly ending the persistent session (e.g.,
+                # before clearing its client-side persistent flag).  The
+                # server does not interpret any application header itself;
+                # it asks the handler (isPersistentSessionEndRequest()).
+                # Send a 200 OK response and exit the loop; the on_exit
+                # block will call phi.clear() → persistentClosed() →
+                # release any handler-held context.
+                if (phi.handler
+                        && phi.handler.isPersistentSessionEndRequest(req_hdr)) {
                     log("cid %d: received end-persistent signal, terminating "
                         "persistent session", cx.id);
                     hash<auto> end_cx = cx_listener;
@@ -6104,8 +6141,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 # use uctx at all, so their handler flag remains authoritative.
                 *hash<auto> uctx = get_thread_data("uctx");
                 bool persistence_data_cleared = is_multiplexed && !uctx.persistent_data;
-                if (!phi.handler || !phi.handler.isPersistent()
-                        || persistence_data_cleared) {
+                # Handlers that opt into connection-lifetime dedication keep
+                # the dedicated thread bound across per-request persistence
+                # clears (e.g. between sequential transactions multiplexed on
+                # the same connection); the loop instead waits for the next
+                # request and releases only on connection close, an explicit
+                # end-of-session request, or the idle TTL.
+                if ((!phi.handler || !phi.handler.isPersistent()
+                            || persistence_data_cleared)
+                        && !keep_connection_dedicated) {
                     log("cid %d: persistence cleared after request, exiting "
                         "dedicated mode", cx.id);
                     # Deregister the persistent queue BEFORE returning to prevent
@@ -6136,8 +6180,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             # Drain any requests routed onto the persistent queue between
             # the last pq.get() and this error.  Without this drain, a
             # request queued while we were processing the failing request
-            # (e.g. an End-Persistent cleanup sent in parallel with an
-            # insert, or any second request on the same connection that
+            # (e.g. an end-of-session cleanup sent in parallel with another
+            # request, or any second request on the same connection that
             # matched the persistence filter) is stranded on the queue:
             # deregister stops future dispatches but does not drain what
             # was already enqueued.  The client then waits for its full

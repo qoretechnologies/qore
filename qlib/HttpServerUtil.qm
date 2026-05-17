@@ -2492,8 +2492,8 @@ public class AbstractHttpRequestHandler {
 
         The default implementation returns @ref nothing (no filter), meaning all
         requests are routed to the persistent queue.  Subclasses should override
-        this method if the persistent session is identified by specific request
-        headers (e.g. a \c "Qorus-Connection" header).
+        this method if the persistent session is identified by an
+        application-specific request header.
 
         @return a callback that takes a header hash and returns @ref True if the
         request should be routed to the persistent queue, or @ref nothing for no
@@ -2502,6 +2502,69 @@ public class AbstractHttpRequestHandler {
         @since HttpServerUtil 1.x
     */
     *code<bool(hash<auto>)> getPersistentQueueFilter() {
+    }
+
+    #! Returns @ref True "True" if the dedicated persistent connection thread must stay bound for the connection's lifetime
+    /** In multiplexed (HTTP/2, HTTP/3) persistent mode the server dedicates a
+        single handler thread to the connection so that subsequent requests on
+        that connection reuse the same thread-local resources.  By default the
+        dedicated thread is released as soon as the handler reports it is no
+        longer persistent (@ref isPersistent() returns @ref False) — the
+        correct behaviour for one-shot persistent handlers (e.g. a single
+        streamed response) so the thread is freed immediately instead of
+        idling for the full TTL.
+
+        Some handlers, however, report persistence that legitimately toggles
+        per-request (e.g. a handler that pins a thread only while a
+        transaction is open) while the client connection continues to carry
+        further persistent requests multiplexed over the same connection.
+        For such handlers, releasing the dedicated thread on every
+        per-request persistence clear races the next in-flight request on the
+        same multiplexed connection, which is then dispatched to a fresh pool
+        thread without the dedicated thread's thread-local resources.
+
+        Handlers in that category should override this method to return
+        @ref True "True"; the dedicated thread is then released only when the
+        connection closes, the client explicitly ends the persistent session,
+        or the idle TTL expires.  The @ref getPersistentQueueFilter() callback
+        still restricts which requests are routed to the dedicated thread, so
+        unrelated requests on the same connection are unaffected.
+
+        @return @ref True "True" if the dedicated thread must remain bound to
+        the connection until it closes / the session is explicitly ended /
+        the idle TTL expires; @ref False "False" (the default) to release the
+        dedicated thread as soon as persistence clears
+
+        @since HttpServerUtil 2.1
+    */
+    bool keepPersistentConnectionDedicated() {
+        return False;
+    }
+
+    #! Returns @ref True "True" if the given request explicitly ends the persistent session
+    /** The HTTP server does not interpret any application-specific request
+        header to decide when a persistent session ends; that protocol is
+        owned entirely by the handler.  When a dedicated persistent
+        connection is active, the server calls this method for each request
+        so the handler can recognise its own end-of-session signal (e.g. a
+        custom request header).  When this returns @ref True the server
+        sends a 200 OK response, exits the dedicated persistent loop, and
+        runs the normal persistent-session cleanup (@ref persistentClosed()).
+
+        The default implementation returns @ref False "False" (no
+        handler-defined end-of-session signal); the dedicated thread is then
+        released only when the connection closes or the idle TTL expires.
+        Handlers that define an explicit client-driven end-of-session
+        request should override this method.
+
+        @param hdr the request header hash
+
+        @return @ref True "True" if this request ends the persistent session
+
+        @since HttpServerUtil 2.1
+    */
+    bool isPersistentSessionEndRequest(hash<auto> hdr) {
+        return False;
     }
 
     #! Sets or clears persistent mode for the current connection
