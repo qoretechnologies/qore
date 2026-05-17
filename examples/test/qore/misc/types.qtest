@@ -73,6 +73,7 @@ class TypeTest inherits QUnit::Test {
         addTestCase("list type", \self.testListType());
         addTestCase("list complex type", \self.testListComplexType());
         addTestCase("object type", \self.testObjectType());
+        addTestCase("parameterized class type resolution", \self.testParameterizedClassTypeResolution());
         addTestCase("timeout type", \self.testTimeoutType());
         addTestCase("data type", \self.testDataType());
         addTestCase("null type", \self.testNullType());
@@ -2586,6 +2587,26 @@ class TypeTest inherits QUnit::Test {
             }
         }
 
+    }
+
+    testParameterizedClassTypeResolution() {
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "class 'C' does not declare type parameters", \p.parse(),
+                ("class C {} C<int> x;", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "class 'C' does not declare type parameters", \p.parse(),
+                ("class C {} object<C<int>> x;", ""));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", "object subtype 'hash<string, int>' must name a class", \p.parse(),
+                ("object<hash<string, int>> x;", ""));
+        }
     }
 
     testTimeoutType() {

@@ -2322,6 +2322,69 @@ bool return_vec_compare(const q_return_vec_t& a, const q_return_vec_t& b) {
     return typespec_vec_compare<q_return_vec_t>(a, b);
 }
 
+static const char* qore_type_arg_plural(size_t count) {
+    return count == 1 ? "" : "s";
+}
+
+static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const QoreParseTypeInfo& pti,
+        const QoreProgramLocation* loc, int& err, bool or_nothing) {
+    const QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *pti.cscope, false);
+    if (!qc) {
+        return nullptr;
+    }
+
+    if (!qc->hasTypeParameters()) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; class '%s' does not declare type "
+            "parameters, so it cannot be used with %d type argument%s", QoreParseTypeInfo::getName(&pti),
+            pti.cscope->ostr, (int)pti.subtypes.size(), qore_type_arg_plural(pti.subtypes.size()));
+        err = -1;
+        return autoTypeInfo;
+    }
+
+    size_t expected = qc->getTypeParameterCount();
+    size_t actual = pti.subtypes.size();
+    if (actual != expected) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic class '%s' declares %d type "
+            "parameter%s, but %d type argument%s %s provided", QoreParseTypeInfo::getName(&pti),
+            pti.cscope->ostr, (int)expected, qore_type_arg_plural(expected), (int)actual, qore_type_arg_plural(actual),
+            actual == 1 ? "was" : "were");
+        err = -1;
+        return autoTypeInfo;
+    }
+
+    type_vec_t args;
+    args.reserve(actual);
+    for (const auto& st : pti.subtypes) {
+        const QoreTypeInfo* arg = QoreParseTypeInfo::resolveAny(st, loc, err);
+        if (err) {
+            return autoTypeInfo;
+        }
+        args.push_back(arg);
+    }
+
+    return qc->getTypeInfo(args, or_nothing);
+}
+
+static const QoreTypeInfo* qore_resolve_runtime_parameterized_class_type(const QoreParseTypeInfo& pti,
+        bool or_nothing) {
+    const QoreClass* qc = qore_root_ns_private::get(*getRootNS())->runtimeFindScopedClass(*pti.cscope);
+    if (!qc || !qc->hasTypeParameters() || pti.subtypes.size() != qc->getTypeParameterCount()) {
+        return nullptr;
+    }
+
+    type_vec_t args;
+    args.reserve(pti.subtypes.size());
+    for (const auto& st : pti.subtypes) {
+        const QoreTypeInfo* arg = QoreParseTypeInfo::resolveRuntime(st);
+        if (!arg) {
+            return nullptr;
+        }
+        args.push_back(arg);
+    }
+
+    return qc->getTypeInfo(args, or_nothing);
+}
+
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntime() const {
     if (!subtypes.empty())
         return resolveRuntimeSubtype();
@@ -2451,6 +2514,10 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
 
         if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
             return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
+
+        if (!subtypes[0]->subtypes.empty()) {
+            return qore_resolve_runtime_parameterized_class_type(*subtypes[0], or_nothing);
+        }
 
         // resolve class
         return resolveRuntimeClass(*subtypes[0]->cscope, or_nothing);
@@ -2617,6 +2684,10 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
 
         return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
     }
+    const QoreTypeInfo* rv = qore_resolve_runtime_parameterized_class_type(*this, or_nothing);
+    if (rv) {
+        return rv;
+    }
     return nullptr;
 }
 
@@ -2774,6 +2845,18 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         }
 
         if (!strcmp(subtypes[0]->cscope->ostr, "auto")) {
+            return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
+        }
+
+        if (!subtypes[0]->subtypes.empty()) {
+            const QoreTypeInfo* rv = qore_resolve_parse_parameterized_class_type(*subtypes[0], loc, err,
+                or_nothing);
+            if (rv || err) {
+                return rv ? rv : autoTypeInfo;
+            }
+            parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; object subtype '%s' must name a class",
+                getName(), subtypes[0]->getName());
+            err = -1;
             return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
         }
 
@@ -2981,6 +3064,11 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
         }
 
         return qore_get_complex_code_type(returnType, param_types, has_varargs, or_nothing);
+    }
+
+    const QoreTypeInfo* rv = qore_resolve_parse_parameterized_class_type(*this, loc, err, or_nothing);
+    if (rv || err) {
+        return rv ? rv : autoTypeInfo;
     }
 
     parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; type '%s' does not take subtype declarations",
