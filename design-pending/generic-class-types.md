@@ -2101,44 +2101,40 @@ Scan conclusion:
 
 ### Phase 2: Builtin/QPP Pilots
 
-- Extend qpp to declare generic builtin classes and symbolic type parameters.
-- Implement `Queue<T>`.
-- Implement `Channel<T>` producer/consumer typing; keep `ChannelIterator`
-  raw until Phase 2b.
-- Implement `Promise<T>` and `Future<T>`.
-- Add narrow QPP parameterized vparent support for builtin metadata needed by
+- [x] Extend qpp to declare generic builtin classes and symbolic type
+  parameters.
+- [x] Implement `Queue<T>`.
+- [x] Implement `Channel<T>` producer/consumer typing; keep
+  `ChannelIterator` raw until Phase 2b.
+- [x] Implement `Promise<T>` and `Future<T>`.
+- [x] Add narrow QPP parameterized vparent support for builtin metadata needed by
   `FutureImpl<T> -> Future<T>`.
-- Preserve raw construction defaults and raw annotation compatibility for
+- [x] Preserve raw construction defaults and raw annotation compatibility for
   `Queue`, `Channel`, `Promise`, and `Future`.
-- Set both compatibility flags for migrated builtin pilots via the
+- [x] Set both compatibility flags for migrated builtin pilots via the
   `legacy_raw` qpp class-header attribute (see "Legacy-Compatibility Class
   Header Attributes" in QPP Support). This sets
   `raw_accepts_parameterized = true` and
   `raw_construction_defaults_to_auto = true` on each pilot. New
   source-defined generic classes and any future generic builtins
   introduced without `legacy_raw` keep both flags false.
-- Decide and test a serialization policy per pilot class before changing its
-  wire form:
-  - If `Queue<T>` or `Channel<T>` are serializable, their wire form must store
-    the concrete parameterized type before serialized contents, and
-    deserialization must validate contents against that type. Otherwise they
-    should remain explicitly unserializable with a stable error.
-  - `Promise<T>`, `Future<T>`, and `FutureImpl<T>` are live synchronization
-    objects; the generic patch should preserve their existing serialization
-    policy rather than inventing one. If they remain unserializable, add tests
-    for the explicit failure. If serialization is later added, the result type
-    must be part of the wire form.
-- Extend `Class::getTypeParameters()` / `Type::getTypeArguments()` /
+- [x] Decide and test a serialization policy per pilot class before changing
+  its wire form. Phase 2 keeps `Queue<T>`, `Channel<T>`, `Promise<T>`, and
+  `Future<T>` explicitly unserializable, with tests asserting the stable
+  `SERIALIZATION-ERROR` behavior.
+- [x] Extend `Class::getTypeParameters()` / `Type::getTypeArguments()` /
   `Type::isParameterized()` accessors in `modules/reflection/src/` for the
   builtin generic pilots.
-- Add a `Class::callConstructor(list<auto> args, *list<Type> type_args)`
+- [x] Add a `Class::callConstructor(list<auto> args, *list<Type> type_args)`
   overload so reflection callers can construct a specific parameterized
   instantiation. Without `type_args`, the existing single-argument
   overload constructs the all-`<auto>` form only for classes with
   `raw_construction_defaults_to_auto = true`; otherwise it raises a
   missing-type-arguments error.
-- Add parser, runtime, AOT, IR, and serialization-policy tests around these
-  classes.
+- [x] Add parser, runtime, reflection, and serialization-policy tests around
+  these classes.
+- [x] Extend explicit IR/JIT/AOT-mode coverage for the Phase 2 builtin pilots
+  beyond the source-defined generic class AOT/IR coverage.
 
 ### Phase 2b: Typed Iterator Family
 
@@ -2148,28 +2144,30 @@ introduced in Phase 2 and the typed-class machinery from Phase 1. Phase 3
 depends on Phase 1 + Phase 2 type-info machinery but no iterator work. Either
 can land first.
 
-- Genericize the builtin iterator base hierarchy without flattening it:
+- [x] Genericize the builtin iterator base hierarchy without flattening it:
   `AbstractIterator<T>`, `AbstractBidirectionalIterator<T>`,
   `AbstractQuantifiedIterator<T>`, and
   `AbstractQuantifiedBidirectionalIterator<T>`.
-- Land concrete-arg iterator vparents where the current contract is stable:
+- [x] Land concrete-arg iterator vparents where the current contract is stable:
   `StringCharIterator -> AbstractIterator<int>` and line/split iterators to
   `AbstractIterator<string>`. Keep `RangeIterator` raw or decide an explicit
   generic shape before typing it, because its optional `auto val` constructor
   argument changes the value returned by `getValue()`. Type key iterators only
   after preserving their existing `HashIterator` / `ObjectIterator` API
   compatibility.
-- Land shape-preserving builtin iterators:
+- [x] Land shape-preserving builtin iterators:
   `ListIterator<T>`, `SingleValueIterator<T>`, `ChannelIterator<T>`,
   `HashIterator<V>`, and reverse variants, preserving existing intermediate
   iterator bases.
-- Keep pair and row-shape iterators raw until generic hashdecls/result records
+- [x] Keep pair and row-shape iterators raw until generic hashdecls/result records
   can express their `{key, value}` or row payloads.
-- Narrow functional operator return types (`map` / `select`) by wrapping the
-  existing `FunctionalOperatorInterface::getValueTypeImpl()` result in
-  `AbstractIterator<T>`.
-- Add qpp, parser, runtime, IR/AOT, foreach, and functional-operator tests for
+- [x] Preserve typed functional-operator inference for `map` / `select`.
+  Map/select expressions remain eager `list<T>` values for compatibility, and
+  their lazy `FunctionalOperatorInterface` paths now derive element types from
+  `AbstractIterator<T>` metadata instead of degrading to `auto`.
+- [x] Add qpp, parser, runtime, foreach, and functional-operator tests for
   typed iterators.
+- [x] Extend explicit IR/JIT/AOT-mode coverage for Phase 2b typed iterators.
 
 ### Phase 3: Source-Defined Generic Classes
 

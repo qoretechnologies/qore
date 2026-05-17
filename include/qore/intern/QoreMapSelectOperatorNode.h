@@ -125,13 +125,13 @@ public:
     }
 
     DLLLOCAL virtual const QoreTypeInfo* getValueType() const {
-        return getList()->getValueTypeInfo();
+        return map->expTypeInfo;
     }
 
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
-        return l->getValueTypeInfo();
+        return map->expTypeInfo;
     }
 };
 
@@ -153,7 +153,7 @@ public:
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
-        return v.getTypeInfo();
+        return map->expTypeInfo;
     }
 };
 
@@ -177,7 +177,7 @@ public:
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
-        return autoTypeInfo;
+        return map->expTypeInfo;
     }
 };
 

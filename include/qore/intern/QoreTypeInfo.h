@@ -252,6 +252,9 @@ public:
     }
 
     // static version of method, checking for null pointer
+    DLLLOCAL static const QoreTypeInfo* getAbstractIteratorElementType(const QoreTypeInfo* iteratorTypeInfo);
+
+    // static version of method, checking for null pointer
     DLLLOCAL static const TypedHashDecl* getUniqueReturnHashDecl(const QoreTypeInfo* ti) {
         if (!ti || ti->return_vec.size() > 1 || !hasType(ti))
             return nullptr;

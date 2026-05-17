@@ -87,6 +87,8 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     // use lazy evaluation if the iterator expression supports it
     iterator_func = dynamic_cast<FunctionalOperator*>(left.getInternalNode());
 
+    const QoreTypeInfo* listType = elementTypeInfo ? qore_get_complex_list_type(elementTypeInfo) : autoListTypeInfo;
+
     // if iterator is a list or an iterator, then the return type is a list, otherwise it's the return type of the
     // iterated expression
     if (QoreTypeInfo::hasType(iteratorTypeInfo)) {
@@ -98,11 +100,11 @@ int QoreSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
                 "future");
             parse_context.typeInfo = nothingTypeInfo;
         } else if (QoreTypeInfo::isType(iteratorTypeInfo, NT_LIST)) {
-            parse_context.typeInfo = autoListTypeInfo;
+            parse_context.typeInfo = listType;
         } else {
             const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(iteratorTypeInfo);
             if (qc && qore_class_private::parseCheckCompatibleClass(qc, QC_ABSTRACTITERATOR)) {
-                parse_context.typeInfo = autoListTypeInfo;
+                parse_context.typeInfo = listType;
             } else if ((QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL)
                 && (QoreTypeInfo::parseReturns(iteratorTypeInfo, QC_ABSTRACTITERATOR) == QTI_NOT_EQUAL)) {
                 parse_context.typeInfo = iteratorTypeInfo;

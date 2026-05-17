@@ -46,6 +46,7 @@
 #include "qore/intern/QoreClosureNode.h"
 #include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/QoreTypeSpecMatchRegistry.h"
+#include "qore/QoreIteratorBase.h"
 
 #include <algorithm>
 #include <set>
@@ -3681,10 +3682,44 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
     return nullptr;
 }
 
+const QoreTypeInfo* QoreTypeInfo::getAbstractIteratorElementType(const QoreTypeInfo* iteratorTypeInfo) {
+    if (!QC_ABSTRACTITERATOR || !iteratorTypeInfo || !hasType(iteratorTypeInfo)) {
+        return nullptr;
+    }
+
+    const QoreTypeInfo* abstract_iterator_type = nullptr;
+
+    const QoreParameterizedClassTypeInfo* pti = getParameterizedClassType(iteratorTypeInfo);
+    if (pti) {
+        abstract_iterator_type = qore_class_private::get(*pti->getBaseClass())
+            ->getParameterizedBaseTypeInfo(pti, QC_ABSTRACTITERATOR);
+    }
+
+    if (!abstract_iterator_type) {
+        const QoreClass* qc = getUniqueReturnClass(iteratorTypeInfo);
+        if (qc) {
+            abstract_iterator_type = qore_class_private::get(*qc)
+                ->getConcreteParameterizedBaseTypeInfo(QC_ABSTRACTITERATOR);
+        }
+    }
+
+    const QoreParameterizedClassTypeInfo* abstract_pti = getParameterizedClassType(abstract_iterator_type);
+    if (!abstract_pti || abstract_pti->getBaseClass() != QC_ABSTRACTITERATOR
+            || abstract_pti->getTypeArgs().empty()) {
+        return nullptr;
+    }
+
+    return abstract_pti->getTypeArgs()[0];
+}
+
 const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue& iteratorExpr,
         const QoreTypeInfo* iteratorTypeInfo) {
     // First try list element type (existing behavior for list<T> sources)
     const QoreTypeInfo* implicitArgType = getUniqueReturnComplexList(iteratorTypeInfo);
+
+    if (!implicitArgType) {
+        implicitArgType = getAbstractIteratorElementType(iteratorTypeInfo);
+    }
 
     // If not a list, check if it's an iterator class and get element type from source type
     if (!implicitArgType) {

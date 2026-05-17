@@ -70,6 +70,19 @@ public class ListTest inherits QUnit::Test {
         assertTrue(pseudo_li instanceof AbstractIterator<int>);
         assertFalse(pseudo_li instanceof AbstractIterator<auto>);
 
+        AbstractIterator<int> abstract_li = l.iterator();
+        list<int> selected_li = select abstract_li, $1 > 2;
+        assertEq((3, 4, 5), selected_li);
+
+        AbstractIterator<int> abstract_li_ms = l.iterator();
+        list<int> mapped_selected_li = map $1 + 10, abstract_li_ms, $1 % 2;
+        assertEq((11, 13, 15), mapped_selected_li);
+
+        Program p();
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(),
+            ("%new-style\nsub t(){list<int> l=(1,2); AbstractIterator<int> it=l.iterator(); " +
+                "list<string> bad = select it, $1 > 1;}", "typed-abstract-iterator-select-error"));
+
         # ListReverseIterator via foreach
         ListReverseIterator<int> lri(l);
         assertTrue(lri instanceof ListReverseIterator<int>);
@@ -81,7 +94,8 @@ public class ListTest inherits QUnit::Test {
 
         # ListReverseIterator via map
         ListReverseIterator<int> lri2(l);
-        assertEq((50, 40, 30, 20, 10), (map $1 * 10, lri2));
+        list<int> doubled_reverse = map $1 * 10, lri2;
+        assertEq((50, 40, 30, 20, 10), doubled_reverse);
 
         # HashListReverseIterator via foreach
         hash<auto> data = {"col1": (1, 2, 3), "col2": ("a", "b", "c")};

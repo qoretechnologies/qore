@@ -493,7 +493,7 @@ int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitString("\n");
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::splitString(string separator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+AbstractIterator<string> <string>::splitString(string separator) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     // Convert separator encoding if needed; use c_str()/size() on the source
     // (the iterator holds its own ref and walks bytes — encoding matters only
     // for the separator search).
@@ -524,7 +524,7 @@ int digits = foldl $1 + ($2 =~ /[0-9]/ ? 1 : 0), 0, str.splitChars();
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::splitChars() [flags=CONSTANT] {
+AbstractIterator<string> <string>::splitChars() [flags=CONSTANT] {
     return new QoreObject(QC_STRINGSPLITITERATOR, 0,
         new StringSplitIterator(str, nullptr, StringSplitIterator::SPLIT_CHARS));
 }
@@ -555,7 +555,7 @@ foreach int cp in (text.codePointIterator()) {
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::codePointIterator() [flags=CONSTANT] {
+AbstractIterator<int> <string>::codePointIterator() [flags=CONSTANT] {
     return new QoreObject(QC_STRINGCHARITERATOR, 0, new StringCharIterator(str));
 }
 
@@ -575,7 +575,7 @@ int errors = foldl $1 + ($2 =~ /ERROR/ ? 1 : 0), 0, log.splitLines();
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::splitLines() [flags=CONSTANT] {
+AbstractIterator<string> <string>::splitLines() [flags=CONSTANT] {
     QoreString nl("\n");
     return new QoreObject(QC_STRINGSPLITITERATOR, 0,
         new StringSplitIterator(str, &nl, StringSplitIterator::STRIP_TRAILING_CR));
@@ -609,7 +609,7 @@ AbstractIterator <string>::splitLines() [flags=CONSTANT] {
 
     @since %Qore 2.3
  */
-AbstractIterator <string>::splitLinesRegex(string separator_pattern, int options = 0,
+AbstractIterator<string> <string>::splitLinesRegex(string separator_pattern, int options = 0,
         bool with_separator = False) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     SimpleRefHolder<QoreRegex> re(new QoreRegex(*separator_pattern, options, xsink));
     if (*xsink) {

@@ -145,7 +145,11 @@ public:
     DLLLOCAL virtual bool getNextImpl(ValueOptionalRefHolder& val, ExceptionSink* xsink);
 
     DLLLOCAL virtual const QoreTypeInfo* getValueTypeImpl() const {
-        return autoTypeInfo;
+        const QoreTypeInfo* valueType = QoreTypeInfo::getAbstractIteratorElementType(h.obj->getInstantiatedTypeInfo());
+        if (!valueType) {
+            valueType = QoreTypeInfo::getAbstractIteratorElementType(h.obj->getClass()->getTypeInfo());
+        }
+        return valueType ? valueType : autoTypeInfo;
     }
 
 protected:
