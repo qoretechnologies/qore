@@ -161,7 +161,7 @@ public:
 #endif
 
     DLLLOCAL QoreParseTypeInfo* copy() const {
-        return new QoreParseTypeInfo(cscope);
+        return new QoreParseTypeInfo(*this);
     }
 
     // static version of method, checking for null pointer
