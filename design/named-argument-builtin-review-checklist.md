@@ -411,7 +411,8 @@ These examples are from the core migration and should be reused as precedent:
   roles explicit: use `connect_target`, `target_host`, `target_port`,
   `ssl_required`, `proxy_tunnel`, `plain_proxy`, `connection`, `method`,
   `path`, `headers`, `body`, `promise`, `max_streams`, `channel`,
-  `streaming`, `body_streaming`, `trailers`, and `initial_body`.
+  `streaming`, `body_streaming`, `trailers`, `ping_interval_ms`,
+  `end_stream`, `message_queue`, and `initial_body`.
 - Async I/O controller APIs should not expose implementation shorthand:
   use `auto_stop`, `operation_info`, `replace_existing`, `io_object`,
   `timeout_ms`, `user_data`, `cancel_callback`, and `max_threads` instead of

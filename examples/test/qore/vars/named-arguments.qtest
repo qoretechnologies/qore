@@ -995,6 +995,30 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "h1.cancelStream(stream_id: 1); "
             "h1.installSseState(stream_id: 1, queue: queue, notifier: notifier, initial_body: NOTHING); }",
             "http1-client-poll-operation-base-named");
+        Program p4(PO_NEW_STYLE);
+        p4.parse("sub http2_client_poll_operation_base_named(Socket socket, "
+            "AbstractHttpPollConnection connection, Promise promise, EventNotifier notifier, "
+            "Queue queue, object channel) { "
+            "Http2ClientPollOperationBase h2c(socket: socket, connect_target: \"localhost:443\", "
+            "target_host: \"localhost\", target_port: 443, ssl_required: True, "
+            "proxy_tunnel: False, connection: connection); "
+            "h2c.setIdleTimeout(idle_timeout_ms: 1000); "
+            "h2c.setPingInterval(ping_interval_ms: 500); "
+            "h2c.submitRequest(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "promise: promise, max_streams: 10); "
+            "h2c.submitRequestWithNotifier(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "promise: promise, notifier: notifier, max_streams: 10); "
+            "h2c.submitRequestStreaming(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "channel: channel, max_streams: 10, streaming: True, notifier: NOTHING, "
+            "sse_install_eligible: False); "
+            "h2c.submitRequestSse(method: \"GET\", path: \"/events\", headers: NOTHING, body: NOTHING, "
+            "queue: queue, max_streams: 10, notifier: notifier); "
+            "h2c.cancelStream(stream_id: 1); "
+            "h2c.sendStreamData(stream_id: 1, data: \"chunk\", end_stream: False); "
+            "h2c.registerStreamQueue(stream_id: 1, queue: queue, notifier: notifier); "
+            "h2c.installFrameState(stream_id: 1, message_queue: queue); "
+            "h2c.installSseState(stream_id: 1, queue: queue, notifier: notifier, initial_body: NOTHING); }",
+            "http2-client-poll-operation-base-named");
     }
 
     reviewedSqlClassBuiltinOptIn() {

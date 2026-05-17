@@ -1492,7 +1492,7 @@ qclass Http2ClientPollOperationBase [
 ];
 
 //! Creates the HTTP/2 client poll operation base
-/** @param sock the TCP socket (must not be connected yet)
+/** @param socket the TCP socket (must not be connected yet)
     @param connect_target the TCP connect target ("host:port")
     @param target_host the target hostname for :authority and proxy CONNECT
     @param target_port the target port number
@@ -1500,10 +1500,10 @@ qclass Http2ClientPollOperationBase [
     @param proxy_tunnel True if a proxy CONNECT tunnel is needed
     @param connection the owning HttpClientConnection object
 */
-Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string connect_target,
+Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, string connect_target,
         string target_host, int target_port, bool ssl_required, bool proxy_tunnel,
-        AbstractHttpPollConnection[AbstractHttpPollConnectionPriv] connection) {
-    QoreSocketObject* sock_ptr = *sock;
+        AbstractHttpPollConnection[AbstractHttpPollConnectionPriv] connection) [flags=NAMED_ARGS] {
+    QoreSocketObject* sock_ptr = *socket;
 
     // Create initial TCP connect operation
     sock_ptr->ref();
@@ -1606,7 +1606,7 @@ nothing Http2ClientPollOperationBase::abort() {
 
     @since %Qore 2.3
 */
-nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) {
+nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) [flags=NAMED_ARGS] {
     priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
 }
 
@@ -1626,7 +1626,7 @@ nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) {
 
     @since %Qore 2.3
 */
-nothing Http2ClientPollOperationBase::setPingInterval(int ping_interval_ms) {
+nothing Http2ClientPollOperationBase::setPingInterval(int ping_interval_ms) [flags=NAMED_ARGS] {
     priv->setPingInterval(ping_interval_ms > 0 ? (int64_t)ping_interval_ms * 1000 : -1);
 }
 
@@ -1682,7 +1682,7 @@ int Http2ClientPollOperationBase::getActiveStreamCount() [flags=RET_VALUE_ONLY] 
     @return the stream ID assigned to this request
 */
 int Http2ClientPollOperationBase::submitRequest(string method, string path,
-        *hash<auto> headers, *data body, Promise[QorePromise] promise, int max_streams) {
+        *hash<auto> headers, *data body, Promise[QorePromise] promise, int max_streams) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     if (body) {
@@ -1736,7 +1736,7 @@ int Http2ClientPollOperationBase::submitRequest(string method, string path,
 */
 int Http2ClientPollOperationBase::submitRequestWithNotifier(string method, string path,
         *hash<auto> headers, *data body, Promise[QorePromise] promise,
-        EventNotifier[QoreEventNotifier] notifier, int max_streams) {
+        EventNotifier[QoreEventNotifier] notifier, int max_streams) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     if (body) {
@@ -1796,7 +1796,7 @@ int Http2ClientPollOperationBase::submitRequestWithNotifier(string method, strin
 int Http2ClientPollOperationBase::submitRequestStreaming(string method, string path,
         *hash<auto> headers, *data body, object channel, int max_streams,
         bool streaming = False, *EventNotifier[QoreEventNotifier] notifier,
-        bool sse_install_eligible = False) {
+        bool sse_install_eligible = False) [flags=NAMED_ARGS] {
     // Extract QoreChannel private data from the Channel object
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
@@ -1869,7 +1869,7 @@ int Http2ClientPollOperationBase::submitRequestStreaming(string method, string p
 */
 int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
         *hash<auto> headers, *data body, Queue[Queue] queue, int max_streams,
-        *EventNotifier[QoreEventNotifier] notifier) {
+        *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     if (body) {
@@ -1916,7 +1916,7 @@ int Http2ClientPollOperationBase::submitRequestSse(string method, string path,
 /** @param stream_id the stream to cancel
     @return True if the stream was found and cancelled
 */
-bool Http2ClientPollOperationBase::cancelStream(int stream_id) {
+bool Http2ClientPollOperationBase::cancelStream(int stream_id) [flags=NAMED_ARGS] {
     return priv->cancelStream(stream_id, xsink);
 }
 
@@ -1926,7 +1926,7 @@ bool Http2ClientPollOperationBase::cancelStream(int stream_id) {
     @param end_stream if True, signals end of stream
 */
 nothing Http2ClientPollOperationBase::sendStreamData(int stream_id, data data,
-        bool end_stream = False) {
+        bool end_stream = False) [flags=NAMED_ARGS] {
     if (data.getType() == NT_BINARY) {
         priv->sendStreamData(stream_id, data.get<const BinaryNode>(), end_stream, xsink);
     } else if (data.getType() == NT_STRING) {
@@ -1954,7 +1954,7 @@ nothing Http2ClientPollOperationBase::sendStreamData(int stream_id, data data,
     @since %Qore 2.3
 */
 nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
-        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) {
+        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) [flags=NAMED_ARGS] {
     Queue* queue_ptr = queue.release();
     const_cast<QoreObject*>(obj_queue)->ref();
 
@@ -1997,7 +1997,7 @@ nothing Http2ClientPollOperationBase::clearStreamQueues() {
     frame state.  No caller-side pre-swap residual is needed.
 
     @param stream_id the H2 stream ID returned by submitRequestStreaming()
-    @param msg_queue the Queue that will receive typed frame hashes
+    @param message_queue the Queue that will receive typed frame hashes
            ({type, data, rsv1?, rsv2?, rsv3?, code?, reason?})
 
     @throw HTTPCLIENT-STREAM-CLOSED if the stream is not found or already
@@ -2007,9 +2007,9 @@ nothing Http2ClientPollOperationBase::clearStreamQueues() {
     @since %Qore 2.3
 */
 nothing Http2ClientPollOperationBase::installFrameState(int stream_id,
-        Queue[Queue] msg_queue) {
+        Queue[Queue] message_queue) [flags=NAMED_ARGS] {
     // Transfer the Queue ref from the ReferenceHolder to the C++ priv
-    Queue* queue_ptr = msg_queue.release();
+    Queue* queue_ptr = message_queue.release();
     priv->installFrameState(static_cast<int32_t>(stream_id), queue_ptr, xsink);
 }
 
@@ -2024,7 +2024,7 @@ nothing Http2ClientPollOperationBase::installFrameState(int stream_id,
 */
 nothing Http2ClientPollOperationBase::installSseState(int stream_id,
         Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier,
-        *data initial_body) {
+        *data initial_body) [flags=NAMED_ARGS] {
     QoreEventNotifier* notifier_ptr = nullptr;
     QoreObject* notifier_obj_ptr = nullptr;
     if (notifier) {

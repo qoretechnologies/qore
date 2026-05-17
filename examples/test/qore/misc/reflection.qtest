@@ -906,6 +906,31 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "cancelStream", ("stream_id",));
         assertNamedClassMethodVariantCount("Http1ClientPollOperationBase", "installSseState",
             ("stream_id", "queue", "notifier", "initial_body"));
+        assertNamedConstructorVariantCount("Http2ClientPollOperationBase",
+            ("socket", "connect_target", "target_host", "target_port", "ssl_required", "proxy_tunnel",
+                "connection"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "setIdleTimeout",
+            ("idle_timeout_ms",));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "setPingInterval",
+            ("ping_interval_ms",));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "submitRequest",
+            ("method", "path", "headers", "body", "promise", "max_streams"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "submitRequestWithNotifier",
+            ("method", "path", "headers", "body", "promise", "notifier", "max_streams"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "submitRequestStreaming",
+            ("method", "path", "headers", "body", "channel", "max_streams", "streaming", "notifier",
+                "sse_install_eligible"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "submitRequestSse",
+            ("method", "path", "headers", "body", "queue", "max_streams", "notifier"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "cancelStream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "sendStreamData",
+            ("stream_id", "data", "end_stream"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "registerStreamQueue",
+            ("stream_id", "queue", "notifier"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "installFrameState",
+            ("stream_id", "message_queue"));
+        assertNamedClassMethodVariantCount("Http2ClientPollOperationBase", "installSseState",
+            ("stream_id", "queue", "notifier", "initial_body"));
         assertNamedConstructorVariantCount("AsyncIoController", ("auto_stop",));
         assertNamedClassMethodVariantCount("AsyncIoController", "submit",
             ("operation_info", "replace_existing"));
