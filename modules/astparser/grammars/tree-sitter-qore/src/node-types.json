@@ -3651,8 +3651,108 @@
         "required": true,
         "types": [
           {
+            "type": "any",
+            "named": false
+          },
+          {
+            "type": "auto",
+            "named": false
+          },
+          {
+            "type": "binary",
+            "named": false
+          },
+          {
+            "type": "bool",
+            "named": false
+          },
+          {
+            "type": "code",
+            "named": false
+          },
+          {
+            "type": "data",
+            "named": false
+          },
+          {
+            "type": "date",
+            "named": false
+          },
+          {
+            "type": "float",
+            "named": false
+          },
+          {
+            "type": "hash",
+            "named": false
+          },
+          {
             "type": "identifier",
             "named": true
+          },
+          {
+            "type": "int",
+            "named": false
+          },
+          {
+            "type": "list",
+            "named": false
+          },
+          {
+            "type": "nothing",
+            "named": false
+          },
+          {
+            "type": "number",
+            "named": false
+          },
+          {
+            "type": "object",
+            "named": false
+          },
+          {
+            "type": "reference",
+            "named": false
+          },
+          {
+            "type": "softbool",
+            "named": false
+          },
+          {
+            "type": "softdate",
+            "named": false
+          },
+          {
+            "type": "softfloat",
+            "named": false
+          },
+          {
+            "type": "softint",
+            "named": false
+          },
+          {
+            "type": "softlist",
+            "named": false
+          },
+          {
+            "type": "softnumber",
+            "named": false
+          },
+          {
+            "type": "softstring",
+            "named": false
+          },
+          {
+            "type": "string",
+            "named": false
+          },
+          {
+            "type": "timeout",
+            "named": false
+          },
+          {
+            "type": "union",
+            "named": false
           }
         ]
       },
