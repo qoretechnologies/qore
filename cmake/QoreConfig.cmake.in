@@ -11,6 +11,7 @@
 # QORE_QPP_EXECUTABLE - qore qpp executable
 # QORE_QCC_EXECUTABLE - qore AOT compiler (qcc) executable
 # QORE_QCC_FORMAT_STAMP - dependency file updated when qcc AOT output can change
+# QORE_AOT_MODULES_DIR - install location for AOT-compiled user module .qmod artifacts
 
 
 if (CMAKE_VERSION VERSION_LESS 2.8.3)
@@ -55,12 +56,18 @@ if(DEFINED QORE_USER_MODULE_VER_DIR)
 else()
     set(QORE_USER_MODULES_VER_DIR @USER_MODULE_VER_DIR@)
 endif()
+# allow the AOT user-module directory to be overridden
+if(DEFINED QORE_AOT_MODULE_DIR)
+    set(QORE_AOT_MODULES_DIR ${QORE_AOT_MODULE_DIR})
+elseif(NOT DEFINED QORE_AOT_MODULES_DIR)
+    set(QORE_AOT_MODULES_DIR ${QORE_MODULES_DIR})
+endif()
 
 set(QORE_API_VERSION @MODULE_API_MAJOR@.@MODULE_API_MINOR@)
 set(QORE_USERMODULE_DOXYGEN_TEMPLATE @CMAKE_INSTALL_FULL_DATADIR@/qore/Doxyfile.in)
 
 option(QORE_BUILD_AOT_MODULES
-       "Build AOT-compiled .qmod artifacts alongside each user module via qcc"
+       "Build AOT-compiled .qmod artifacts for user modules via qcc"
        ON)
 option(QORE_AOT_LINK_SOURCE_MODULES
        "Link generated .qmod artifacts into source qlib directories for qmod-first in-tree tests"

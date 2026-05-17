@@ -8,10 +8,10 @@
 
     To load a module at parse time (normally required for most modules), use the @ref requires "%requires" or @ref try-module "%try-module" parse directive. If the named feature is not already present in %Qore, %Qore will try to load the module from its list of module directories (module path). This list contains the following directories:\n
     -# directories listed in the environment variable \c QORE_MODULE_DIR (see @ref environment_variables)
-    -# \c USER_MODULE_VER_DIR - build variable set to directory where Qore user modules of the specific Qore version should be installed (ex: \c /usr/share/qore-modules/0.8.12)
-    -# \c MODULE_VER_DIR - build variable set to directory where Qore binary modules of the specific Qore version should be installed (ex: \c /usr/lib/x86_64-linux-gnu/qore-modules/0.8.12)
-    -# \c USER_MODULE_DIR - build variable set to directory where user modules of external binary modules should be installed (ex: \c /usr/share/qore-modules)
+    -# \c MODULE_VER_DIR - build variable set to directory where Qore binary modules and AOT-compiled user module artifacts of the specific Qore version should be installed (ex: \c /usr/lib/x86_64-linux-gnu/qore-modules/0.8.12)
+    -# \c USER_MODULE_VER_DIR - build variable set to directory where Qore user module source files of the specific Qore version should be installed (ex: \c /usr/share/qore-modules/0.8.12)
     -# \c MODULE_DIR - build variable set to directory where external binary modules should be installed (ex: \c /usr/lib/x86_64-linux-gnu/qore-modules)
+    -# \c USER_MODULE_DIR - build variable set to directory where user modules of external binary modules should be installed (ex: \c /usr/share/qore-modules)
     -# directories added using @ref append-module-path "%append-module-path"
 
     Modules can also be loaded directly by using a path relative to the Qore script or module requiring them when using @ref requires "%requires" or @ref try-module "%try-module" parse directives:
@@ -1022,11 +1022,13 @@ ModuleName/
 
     Starting with %Qore 2.3, the standard build also compiles user modules to AOT
     binary module artifacts (\c "*.qmod") when \c QORE_BUILD_AOT_MODULES is enabled.
-    This CMake option defaults to \c ON.  The compiled module is installed beside
-    the source module, and module lookup prefers the \c .qmod file over the \c .qm
-    file in the same module location.  This makes installed user modules use the
-    faster AOT path by default while preserving source modules for documentation,
-    inspection, and development workflows.
+    This CMake option defaults to \c ON.  The compiled module is installed in the
+    architecture-specific module directory, while the source module remains
+    installed in the user-module source directory.  Module lookup checks the
+    compiled module directories before the corresponding source module
+    directories, so installed user modules use the faster AOT path by default
+    while preserving source modules for documentation, inspection, and
+    development workflows.
 
     To disable AOT user-module artifacts in a source build:
 

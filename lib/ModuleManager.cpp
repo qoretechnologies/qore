@@ -681,19 +681,19 @@ std::string module_dir_prefix(const char * path) {
 void QoreModuleManager::addStandardModulePaths() {
    moduleDirList.addDirList(getenv("QORE_MODULE_DIR"));
 
-   // append version-specifc user module directory
-   moduleDirList.push_back(module_dir_prefix(USER_MODULE_VER_DIR));
-
-   // append version-specifc module directory
+   // append version-specific binary/AOT module directory
    if (strcmp(MODULE_VER_DIR, USER_MODULE_VER_DIR))
       moduleDirList.push_back(module_dir_prefix(MODULE_VER_DIR));
 
-   // append user-module directory
-   moduleDirList.push_back(module_dir_prefix(USER_MODULE_DIR));
+   // append version-specific user module source directory
+   moduleDirList.push_back(module_dir_prefix(USER_MODULE_VER_DIR));
 
    // append qore module directory
    if (strcmp(MODULE_DIR, USER_MODULE_DIR))
       moduleDirList.push_back(module_dir_prefix(MODULE_DIR));
+
+   // append user-module source directory
+   moduleDirList.push_back(module_dir_prefix(USER_MODULE_DIR));
 }
 
 void ModuleManager::addStandardModulePaths() {

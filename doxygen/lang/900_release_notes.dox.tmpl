@@ -627,13 +627,16 @@ int echoed = child.echo(value);
     @par AOT-compiled User Modules by Default
     @parblock
     The standard CMake build now compiles user modules to \c .qmod artifacts
-    with \c qcc and installs those compiled artifacts beside their source
-    \c .qm modules.  \c QORE_BUILD_AOT_MODULES defaults to \c ON.
+    with \c qcc and installs those compiled artifacts in the
+    architecture-specific module directory.  Source \c .qm modules remain
+    installed in the user-module source directory.  \c QORE_BUILD_AOT_MODULES
+    defaults to \c ON.
 
-    Module lookup prefers a \c .qmod over a \c .qm in the same module
-    location, so installed user modules use the AOT-compiled version for
-    better startup and runtime performance by default.  Source modules remain
-    installed for documentation, inspection, and development workflows.
+    Module lookup checks compiled module directories before the corresponding
+    source module directories, so installed user modules use the AOT-compiled
+    version for better startup and runtime performance by default.  Source
+    modules remain installed for documentation, inspection, and development
+    workflows.
 
     Disable this behavior with \c -DQORE_BUILD_AOT_MODULES=OFF.  See
     @ref qore_modules "Qore Modules" and @ref exec_mode_aot "AOT

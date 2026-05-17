@@ -439,6 +439,31 @@ MACRO (QORE_BINARY_MODULE_INTERN2 _module_name _version _install_suffix _mod_suf
     endif (DOXYGEN_FOUND)
 ENDMACRO (QORE_BINARY_MODULE_INTERN2)
 
+MACRO (QORE_AOT_APPEND_INSTALL_REMOVE_PATH _out_var _base_dir _relative_path)
+    if (IS_ABSOLUTE "${_base_dir}")
+        set(_qore_aot_remove_path "\$ENV{DESTDIR}${_base_dir}/${_relative_path}")
+    else()
+        set(_qore_aot_remove_path
+            "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_base_dir}/${_relative_path}")
+    endif()
+    string(APPEND ${_out_var} "  \"${_qore_aot_remove_path}\"\n")
+ENDMACRO (QORE_AOT_APPEND_INSTALL_REMOVE_PATH)
+
+MACRO (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES _name _is_dir _base_dir)
+    set(_qore_aot_stale_source_qmods "")
+    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+        _qore_aot_stale_source_qmods "${_base_dir}" "${_name}.qmod")
+    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+        _qore_aot_stale_source_qmods "${_base_dir}" "${_name}.qmod.d")
+    if (${_is_dir})
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qore_aot_stale_source_qmods "${_base_dir}" "${_name}/${_name}.qmod")
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qore_aot_stale_source_qmods "${_base_dir}" "${_name}/${_name}.qmod.d")
+    endif()
+    install(CODE "file(REMOVE\n${_qore_aot_stale_source_qmods})")
+ENDMACRO (QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES)
+
 # Emit AOT-build rules for a user module producing a .qmod via qcc.
 #
 # Gated on QORE_BUILD_AOT_MODULES; uses the in-tree qcc target when building
@@ -452,9 +477,9 @@ ENDMACRO (QORE_BINARY_MODULE_INTERN2)
 #                for _is_dir=0: absolute path to the primary .qm file
 # Variadic:     absolute paths of all .qm + .qc source files in the module
 #
-# The .qmod lands in ${QORE_USER_MODULES_DIR} at install time; per the
-# .qmod-vs-.qm precedence rule in ModuleManager, it wins over the sibling
-# .qm source.
+# The .qmod lands in ${QORE_AOT_MODULES_DIR} at install time.  Core qlib uses
+# the versioned arch-specific module directory, while external module builds
+# default to their arch-specific module directory from QoreConfig.cmake.
 MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     if (TARGET qcc)
         set(_qore_qcc_command $<TARGET_FILE:qcc>)
@@ -479,6 +504,13 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
     endif()
     if (NOT DEFINED QORE_AOT_LINK_SOURCE_MODULES)
         set(QORE_AOT_LINK_SOURCE_MODULES ON)
+    endif()
+    if (DEFINED QORE_AOT_MODULES_DIR)
+        set(_qmod_install_dir ${QORE_AOT_MODULES_DIR})
+    elseif (DEFINED QORE_MODULES_DIR)
+        set(_qmod_install_dir ${QORE_MODULES_DIR})
+    else()
+        set(_qmod_install_dir ${QORE_USER_MODULES_DIR})
     endif()
 
     # Split-dir modules emit `build/qlib-qmod/<name>/<name>.qmod` and copy
@@ -666,25 +698,37 @@ MACRO (QORE_USER_MODULE_AOT_RULES _name _is_dir _source_root)
         endforeach()
     endif()
 
-    # For split-dir modules install into ${QORE_USER_MODULES_DIR}/<name>/
-    # so the layout matches the in-tree build: qmod sits alongside the
-    # .qm source and resource siblings.  The .qm+resources were already
-    # staged there by QORE_USER_MODULE's install(FILES) call.
+    # Install qmods into an arch-specific module directory.  Split-dir module
+    # qmods keep their resources beside the qmod so get_script_dir() resolves
+    # the same way it does in the build tree.
+    set(_qmod_stale_install_paths "")
+    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+        _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod")
+    QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+        _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}.qmod.d")
     if (${_is_dir})
-        # Remove stale flat artifacts from older installs.  The loader checks
-        # <dir>/<name>.qmod before <dir>/<name>/<name>.qmod, so leaving the old
-        # flat file installed shadows the current split-dir artifact.
-        if (IS_ABSOLUTE "${QORE_USER_MODULES_DIR}")
-            set(_qmod_install_flat_path "\$ENV{DESTDIR}${QORE_USER_MODULES_DIR}/${_name}.qmod")
-        else()
-            set(_qmod_install_flat_path
-                "\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${QORE_USER_MODULES_DIR}/${_name}.qmod")
+        # Remove stale artifacts from older layouts.  Flat qmods shadow split
+        # qmods within one module path entry, and old share-installed qmods can
+        # be loaded when AOT is later disabled or an installed qmod is missing.
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod")
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${QORE_USER_MODULES_DIR}" "${_name}/${_name}.qmod.d")
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod")
+        QORE_AOT_APPEND_INSTALL_REMOVE_PATH(
+            _qmod_stale_install_paths "${_qmod_install_dir}" "${_name}.qmod.d")
+        install(CODE "file(REMOVE\n${_qmod_stale_install_paths})")
+        install(FILES ${_qmod_out} DESTINATION ${_qmod_install_dir}/${_name})
+        if (_qmod_resource_srcs)
+            install(FILES ${_qmod_resource_srcs} DESTINATION ${_qmod_install_dir}/${_name})
         endif()
-        install(CODE
-            "file(REMOVE\n  \"${_qmod_install_flat_path}\"\n  \"${_qmod_install_flat_path}.d\")")
-        install(FILES ${_qmod_out} DESTINATION ${QORE_USER_MODULES_DIR}/${_name})
+        if (_qmod_jar_srcs)
+            install(FILES ${_qmod_jar_srcs} DESTINATION ${_qmod_install_dir}/${_name}/jar)
+        endif()
     else()
-        install(FILES ${_qmod_out} DESTINATION ${QORE_USER_MODULES_DIR})
+        install(CODE "file(REMOVE\n${_qmod_stale_install_paths})")
+        install(FILES ${_qmod_out} DESTINATION ${_qmod_install_dir})
     endif()
 ENDMACRO (QORE_USER_MODULE_AOT_RULES)
 
@@ -842,6 +886,11 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
 
     # install qm file
     install(FILES ${_mod_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir})
+    if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 1 "${QORE_USER_MODULES_DIR}")
+    else()
+        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 0 "${QORE_USER_MODULES_DIR}")
+    endif()
 
     # extract and install QM metadata (automatic for user modules)
     if(DEFINED QORE_QM_METADATA_EXECUTABLE AND DEFINED QORE_METADATA_DIR
@@ -1051,6 +1100,11 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
 
     # install user module files
     install(FILES ${_mod_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir})
+    if (IS_DIRECTORY ${CMAKE_SOURCE_DIR}/qlib/${f})
+        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 1 "${QORE_USER_MODULES_DIR}")
+    else()
+        QORE_AOT_REMOVE_STALE_SOURCE_QMOD_INSTALL_RULES(${f} 0 "${QORE_USER_MODULES_DIR}")
+    endif()
     if (_mod_jar_targets)
         install(FILES ${_mod_jar_targets} DESTINATION ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar)
         message(STATUS "called install for ${_mod_jar_targets} -> ${QORE_USER_MODULES_DIR}/${qm_install_subdir}/jar")

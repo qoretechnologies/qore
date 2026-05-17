@@ -140,10 +140,12 @@ qcc -o app build/aot/*.qo
     Standard user modules are compiled to \c .qmod during the CMake build when
     \c QORE_BUILD_AOT_MODULES is enabled. This option defaults to \c ON.
 
-    Installed \c .qmod files are placed beside the source \c .qm modules. Module
-    lookup prefers a compiled \c .qmod over a source \c .qm in the same module
-    location, so installed user modules run through AOT by default while source
-    modules remain available for documentation and development.
+    Installed \c .qmod files are placed in the architecture-specific module
+    directory.  Source \c .qm modules remain installed in the user-module source
+    directory.  Module lookup checks compiled module directories before the
+    corresponding source module directories, so installed user modules run
+    through AOT by default while source modules remain available for
+    documentation and development.
 
     Disable this behavior at configure time if needed:
 

@@ -2552,6 +2552,7 @@ add_subdirectory(modules/protobuf)
 #       for qore core qlib modules.
 # NOTE: anything below will be installed into versioned dirs!
 set(QORE_USER_MODULES_DIR ${USER_MODULE_VER_DIR})
+set(QORE_AOT_MODULES_DIR ${MODULE_VER_DIR})
 # modules must go after docs target - it's depending on it
 
 # qlib modules + their documentation
