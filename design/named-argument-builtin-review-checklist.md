@@ -548,3 +548,37 @@ These examples are from the core migration and should be reused as precedent:
   than introducing a qmod build failure.
 - Fixed-arity functions in reviewed batches should leave no unmarked entries in
   that batch's generated metadata except intentional excluded variants.
+
+### Current core positional-only inventory
+
+After the core Socket HTTP/2 and QUIC sweep, generated core metadata still has
+intentional positional-only entries in these categories:
+
+- True varargs and fixed-prefix varargs remain positional until the named-call
+  convention for mixed fixed/varargs builtins is designed and tested. This
+  includes formatting APIs (`printf`, `sprintf`, `f_printf`, `f_sprintf`),
+  forwarding helpers (`call_function`, `call_builtin_function`,
+  `call_object_method`, `call_static_method`, `Program::callFunction`,
+  `Program::callStaticMethod`, `<callref>::exec`, `call_async`), generic
+  varargs constructors/functions such as `list(...)`, `print(...)`, and
+  `exists(...)`, and SQL varargs such as `exec(sql, ...)`,
+  `select(sql, ...)`, `prepare(sql, ...)`, `bind(...)`, and `exec(...)`.
+- Compatibility overloads stay positional when another overload provides the
+  useful named-call surface without ambiguity. Current examples include
+  `Socket::sendHTTPResponse(..., timeout_ms)` no-`info` overloads,
+  `Socket::sendHTTPResponseWithCallback(..., timeout_ms)` no-`info`,
+  timeout-only `Socket::readServerSentEvent(timeout_ms)`,
+  timeout-only `HTTPClient::readServerSentEvent(timeout_ms)`,
+  `<string>::splitRegex(separator_pattern, with_separator, limit)`, and the
+  four-argument `RangeIterator` / `xrange` value-override overloads.
+- Legacy aliases with generic historical parameter names remain positional when
+  the canonical reviewed API exposes named calls. Examples include old DBI,
+  time, list-sort, string/encoding, and object helper aliases with names such as
+  `ds`, `dt`, `arg`, `l`, `f`, `str`, `bin`, `obj`, and `varg`.
+- `Datasource` / `DatasourcePool` constructor overloads remain positional for
+  now because their overload sets currently produce a clearer
+  `NAMED-CALL-NOT-SUPPORTED` diagnostic than a misleading partial named-call
+  match. Revisit them only with dedicated overload-selection tests.
+- `GetOpt::parse*` by-value `arguments` overloads remain positional; only the
+  reference-taking overloads should expose named calls so `arguments: \ARGV`
+  remains useful without making overload resolution ambiguous.
