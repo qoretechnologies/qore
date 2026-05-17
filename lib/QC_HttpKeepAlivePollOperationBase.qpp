@@ -261,11 +261,11 @@ qclass HttpKeepAlivePollOperationBase [
 ];
 
 //! Creates the keep-alive poll operation
-/** @param sock the Socket to monitor
-    @param ttl_us keep-alive timeout in microseconds
+/** @param socket the Socket to monitor
+    @param timeout_ms keep-alive timeout in milliseconds
 */
-HttpKeepAlivePollOperationBase::constructor(Socket[QoreSocketObject] sock, int ttl_us) {
-    QoreSocketObject* sock_ptr = *sock;
+HttpKeepAlivePollOperationBase::constructor(Socket[QoreSocketObject] socket, int timeout_ms) [flags=NAMED_ARGS] {
+    QoreSocketObject* sock_ptr = *socket;
 
     // Store socket as Qore member for DGC visibility
     QoreValue sock_arg = args->retrieveEntry(0);
@@ -279,7 +279,7 @@ HttpKeepAlivePollOperationBase::constructor(Socket[QoreSocketObject] sock, int t
 
     sock_ptr->ref();
     self->setPrivate(CID_HTTPKEEPALIVEPOLLOPERATIONBASE,
-        new HttpKeepAlivePollOperationPriv(self, sock_ptr, ttl_us));
+        new HttpKeepAlivePollOperationPriv(self, sock_ptr, timeout_ms));
 }
 
 //! Destroys the object

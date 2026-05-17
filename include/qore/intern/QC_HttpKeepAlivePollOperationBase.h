@@ -75,9 +75,9 @@ public:
     //! Creates the keep-alive poll operation
     /** @param self the QoreObject wrapping this private data
         @param sock the socket to monitor (will be ref'd)
-        @param ttl_us keep-alive timeout in microseconds
+        @param ttl_ms keep-alive timeout in milliseconds
     */
-    DLLLOCAL HttpKeepAlivePollOperationPriv(QoreObject* self, QoreSocketObject* sock, int64_t ttl_us);
+    DLLLOCAL HttpKeepAlivePollOperationPriv(QoreObject* self, QoreSocketObject* sock, int64_t ttl_ms);
 
     DLLLOCAL ~HttpKeepAlivePollOperationPriv();
 

@@ -342,25 +342,25 @@ qclass HttpClientPingPollOperationBase [
 ];
 
 //! Creates the HTTP client ping/verify poll operation base
-/** @param inner_poll_op the inner poll operation from HTTPClient.startPollSendRecv()
-    @param status_lo lowest acceptable HTTP status code (inclusive)
-    @param status_hi highest acceptable HTTP status code (inclusive)
-    @param err_code Qore exception error code for validation failures
+/** @param operation the inner poll operation from HTTPClient.startPollSendRecv()
+    @param min_status lowest acceptable HTTP status code (inclusive)
+    @param max_status highest acceptable HTTP status code (inclusive)
+    @param error_code Qore exception error code for validation failures
     @param header_name optional response header name to validate (lowercase)
     @param header_prefix optional required prefix for the validated header value
-    @param ws_key optional WebSocket key for Sec-WebSocket-Accept validation
+    @param websocket_key optional WebSocket key for Sec-WebSocket-Accept validation
 
-    @throw HTTPCLIENTPINGPOLLOPERATIONBASE-ERROR if inner_poll_op is not a valid poll operation
+    @throw HTTPCLIENTPINGPOLLOPERATIONBASE-ERROR if operation is not a valid poll operation
 */
-HttpClientPingPollOperationBase::constructor(object inner_poll_op, int status_lo, int status_hi,
-        string err_code, *string header_name, *string header_prefix, *string ws_key) {
+HttpClientPingPollOperationBase::constructor(object operation, int min_status, int max_status,
+        string error_code, *string header_name, *string header_prefix, *string websocket_key) [flags=NAMED_ARGS] {
     // Extract the C++ SocketPollOperationBase from the inner poll op
     SocketPollOperationBase* inner_priv = dynamic_cast<SocketPollOperationBase*>(
-        inner_poll_op->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+        operation->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
     if (!inner_priv) {
         if (!*xsink) {
             xsink->raiseException("HTTPCLIENTPINGPOLLOPERATIONBASE-ERROR",
-                "inner_poll_op is not a SocketPollOperationBase subclass");
+                "operation is not a SocketPollOperationBase subclass");
         }
         return;
     }
@@ -378,11 +378,11 @@ HttpClientPingPollOperationBase::constructor(object inner_poll_op, int status_lo
     // Create the private data
     self->setPrivate(CID_HTTPCLIENTPINGPOLLOPERATIONBASE,
         new HttpClientPingPollOperationPriv(self, inner_priv, inner_obj,
-            (int)status_lo, (int)status_hi,
-            err_code->c_str(),
+            (int)min_status, (int)max_status,
+            error_code->c_str(),
             header_name ? header_name->c_str() : nullptr,
             header_prefix ? header_prefix->c_str() : nullptr,
-            ws_key ? ws_key->c_str() : nullptr));
+            websocket_key ? websocket_key->c_str() : nullptr));
 }
 
 //! Destroys the object

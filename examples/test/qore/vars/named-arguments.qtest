@@ -947,6 +947,20 @@ public class NamedArgumentsTest inherits QUnit::Test {
         HttpClientConnectionBase base();
         assertFalse(base.waitForReadyOrError(timeout_ms: 1),
             "HttpClientConnectionBase waitForReadyOrError exposes timeout_ms");
+
+        Program p(PO_NEW_STYLE);
+        p.parse("sub http_poll_constructors_named(Socket socket, object operation, *object certificate, "
+            "*object private_key) { "
+            "HttpKeepAlivePollOperationBase keep_alive(socket: socket, timeout_ms: 1000); "
+            "HttpIdlePollOperationBase idle(socket: socket, timeout_ms: 1s); "
+            "HttpClientPingPollOperationBase ping(operation: operation, min_status: 200, max_status: 299, "
+            "error_code: \"HTTP-PING-ERROR\", header_name: NOTHING, header_prefix: NOTHING, "
+            "websocket_key: NOTHING); "
+            "HttpAcceptPollOperationBase accept(listener: socket, accept_operation: operation, "
+            "ssl_required: False, certificate: certificate, private_key: private_key, "
+            "ssl_verify_flags: 0, accept_all_certificates: False, http_version: \"1.1\", "
+            "perform_ssl_handshake: True); }",
+            "http-poll-constructors-named");
     }
 
     reviewedSqlClassBuiltinOptIn() {

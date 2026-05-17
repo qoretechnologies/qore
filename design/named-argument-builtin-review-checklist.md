@@ -399,6 +399,11 @@ These examples are from the core migration and should be reused as precedent:
   `notifier` for `registerReadyNotifier()`. HTTP connection constructors should
   keep the endpoint and TLS decision explicit (`target_host`, `target_port`,
   `ssl_required`) when they are exposed to named calls.
+- HTTP poll-operation constructors should avoid internal shorthand: use
+  `socket`, `timeout_ms`, `operation`, `min_status`,
+  `max_status`, `error_code`, `header_name`, `header_prefix`,
+  `websocket_key`, `accept_operation`, `certificate`, `private_key`,
+  `accept_all_certificates`, `http_version`, and `perform_ssl_handshake`.
 - Async I/O controller APIs should not expose implementation shorthand:
   use `auto_stop`, `operation_info`, `replace_existing`, `io_object`,
   `timeout_ms`, `user_data`, `cancel_callback`, and `max_threads` instead of
