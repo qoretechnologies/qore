@@ -861,6 +861,18 @@
           "members": [
             {
               "type": "SYMBOL",
+              "name": "class_compatibility_attributes"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
               "name": "superclass_list"
             },
             {
@@ -896,6 +908,34 @@
               "value": ";"
             }
           ]
+        }
+      ]
+    },
+    "class_compatibility_attributes": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "SYMBOL",
+        "name": "class_compatibility_attribute"
+      }
+    },
+    "class_compatibility_attribute": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "["
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": "]"
         }
       ]
     },

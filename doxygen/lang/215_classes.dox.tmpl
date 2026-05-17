@@ -118,6 +118,56 @@ int echoed = child.echo(value);
     provide raw compatibility by default; use explicit type arguments such as
     <tt>Box&lt;int&gt;</tt> or <tt>Box&lt;auto&gt;</tt>.
 
+    Existing source classes that are migrated to generic form can opt into
+    legacy raw compatibility by placing a compatibility attribute after the
+    class name or type-parameter list and before any \c inherits clause:
+
+    @code{.py}
+class LegacyBox<T> [legacy_raw] {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+LegacyBox raw("text");              # raw construction creates LegacyBox<auto>
+LegacyBox<string> typed("text");
+LegacyBox accepted = typed;         # raw annotation accepts LegacyBox<string>
+
+class AcceptsOnly<T> [legacy_raw_accepts] {
+    constructor(T value) {
+    }
+}
+
+AcceptsOnly<int> typed_accepts(1);
+AcceptsOnly raw_accepts = typed_accepts;  # allowed
+# AcceptsOnly invalid(1);                 # MISSING-TYPE-ARGUMENTS
+
+class ConstructsOnly<T> [legacy_raw_construct] {
+    constructor(T value) {
+    }
+}
+
+ConstructsOnly raw_constructs(1);         # creates ConstructsOnly<auto>
+ConstructsOnly<int> typed_constructs(1);
+# ConstructsOnly raw_target = typed_constructs;  # PARSE-TYPE-ERROR
+    @endcode
+
+    The supported compatibility attributes are
+    <tt>[legacy_raw_accepts]</tt>, <tt>[legacy_raw_construct]</tt>, and
+    <tt>[legacy_raw]</tt>. The combined <tt>[legacy_raw]</tt> form enables
+    both raw annotation acceptance and raw construction defaulting to
+    <tt>&lt;auto&gt;</tt>. These attributes should be used only for migration
+    compatibility; new generic classes should normally require explicit type
+    arguments.
+
     @note No semicolon (\c ";") is required to terminate a class declaration (in fact using a semicolon would raise a parse exception).
 
     @par Out-Of-Line Class Declaration Syntax

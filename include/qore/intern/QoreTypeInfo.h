@@ -3447,6 +3447,9 @@ DLLLOCAL const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(cons
 DLLLOCAL const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti,
     const QoreTypeInfo* receiver_type_info);
 
+//! Returns the effective receiver type for class type-parameter substitution
+DLLLOCAL const QoreTypeInfo* qore_get_object_receiver_type_info(const QoreObject* self);
+
 //! Type info for typed callable types: code<ReturnType(ParamTypes...)>
 /** This class represents a callable type with specified return type and parameter types.
     It supports:

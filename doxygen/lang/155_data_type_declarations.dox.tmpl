@@ -540,6 +540,48 @@ int value = child.echo(42);
     use explicit type arguments such as <tt>Box&lt;int&gt;</tt> or
     <tt>Box&lt;auto&gt;</tt>.
 
+    @par Source Raw-Compatibility Attributes
+    Source-defined generic classes that migrate an existing raw class API can
+    opt into raw compatibility with class attributes written after the class
+    name or type-parameter list:
+
+    @code{.py}
+class LegacyBox<T> [legacy_raw] {
+    constructor(T value) {
+    }
+}
+
+LegacyBox raw("value");              # same runtime type as LegacyBox<auto>
+LegacyBox<string> typed("value");
+LegacyBox accepted = typed;          # raw annotation accepts typed object
+    @endcode
+
+    The separate forms make migration intent explicit:
+
+    @code{.py}
+class RawAccepts<T> [legacy_raw_accepts] {
+    constructor(T value) {
+    }
+}
+
+RawAccepts<int> typed_accepts(1);
+RawAccepts raw_accepts = typed_accepts;  # allowed
+# RawAccepts invalid(1);                 # raw construction still rejected
+
+class RawConstructs<T> [legacy_raw_construct] {
+    constructor(T value) {
+    }
+}
+
+RawConstructs raw_constructs(1);         # creates RawConstructs<auto>
+RawConstructs<int> typed_constructs(1);
+# RawConstructs raw_target = typed_constructs;  # raw annotation still rejected
+    @endcode
+
+    <tt>[legacy_raw]</tt> enables both behaviors. These attributes are intended
+    for compatibility migrations only; they should not be used to make raw
+    annotations a general wildcard type for new APIs.
+
     <hr>
     @section null_type null
 

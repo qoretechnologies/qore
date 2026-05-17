@@ -2140,7 +2140,7 @@ Mapper mapv(DataMap);
                     input_provider_search, input_search_options);
                 list<hash<auto>> rv;
                 while (*hash<auto> records = i.getValue()) {
-                    map rv += $1, mapBulk(records).contextIterator();
+                    map rv += asOutputRecord($1), mapBulk(records).contextIterator();
                 }
                 return rv;
             } else {
@@ -2170,6 +2170,10 @@ Mapper mapv(DataMap);
             return input_provider.requestSearchRecords(input_request, input_provider_search, input_search_options);
         }
         return input_provider.searchRecords(input_provider_search, input_search_options);
+    }
+
+    private:internal hash<auto> asOutputRecord(auto rec) {
+        return cast<hash<auto>>(rec);
     }
 
     #! maps all input records and returns the mapped data as a list of output records
@@ -2243,6 +2247,10 @@ Mapper mapv(DataMap);
     */
     hash<auto> mapData(hash<auto> rec) {
         return mapDataIntern(rec, True);
+    }
+
+    hash<auto> mapData(auto rec) {
+        return mapData(cast<hash<auto>>(rec));
     }
 
     #! maps all input record(s) automatically and returns the mapped data
@@ -2496,6 +2504,10 @@ Mapper mapv(DataMap);
             }
             rethrow;
         }
+    }
+
+    private *hash<auto> doCreateRecordIntern(auto rec) {
+        return doCreateRecordIntern(cast<hash<auto>>(rec));
     }
 
     #! Swap the mapper thread context
@@ -3056,8 +3068,8 @@ Mapper mapv(DataMap);
     }
 }
 
-#! abstract base class for hash iterator mappping classes based on a mapper object and an iterator input source
-public class AbstractMapperIterator inherits Qore::AbstractIterator {
+#! abstract base class for iterator mappping classes based on a mapper object and an iterator input source
+public class AbstractMapperIterator<RecT> [legacy_raw] inherits Qore::AbstractIterator<RecT> {
     public {
     }
 
@@ -3093,8 +3105,8 @@ public class AbstractMapperIterator inherits Qore::AbstractIterator {
 
         @return a list of mapped hashes with a maximum number of rows corresponding to the \a size argument; in case there is less input data than requested, the list returned could have fewer rows than requested; in case there is no more data, the return value is an empty list
         */
-    list<hash> mapBulk(int size) {
-        list<hash> rv();
+    list<RecT> mapBulk(int size) {
+        list<RecT> rv();
         while (next()) {
             rv += getValue();
             if (rv.size() == size)
@@ -3105,7 +3117,7 @@ public class AbstractMapperIterator inherits Qore::AbstractIterator {
 }
 
 #! provides a hash iterator based on a mapper object and an iterator input source
-public class MapperIterator inherits Mapper::AbstractMapperIterator {
+public class MapperIterator inherits Mapper::AbstractMapperIterator<hash<auto>> {
     public {
     }
 

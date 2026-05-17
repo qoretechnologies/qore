@@ -601,6 +601,8 @@ extern std::string* takeSubDocComment();
 %type <astdecl>        namespace_decl
 %type <decllist>       namespace_decls
 %type <ui4>            nsc_modifiers
+%type <ui4>            class_compat_attrs
+%type <ui4>            class_compat_attr
 %type <nameexpr>       optname
 %type <funcdecl>       outofline_methoddef
 %type <parseopt>       parse_option
@@ -1682,73 +1684,88 @@ typedef_def:
         ;
 
 class_def:
-        nsc_modifiers CLASS_STRING inheritance_list '{' class_attributes '}' {
+        nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list '{' class_attributes '}' {
             ASTModifiers mods($1);
             ASTName name($2, ASTNameKind::ANK_ClassString);
             name.loc = @2;
             free($2);
 
-            $$ = new ASTClassDeclaration(mods, std::move(name), $3, $5);
-            $$->loc.set(@1, @6);
+            $$ = new ASTClassDeclaration(mods, std::move(name), $4, $6);
+            $$->loc.set(@1, @7);
             ATTACH_CLASS_DOC_COMMENT($$);
-            delete $3;
-            delete $5;
+            delete $4;
+            delete $6;
         }
-        | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' class_attributes '}' {
+        | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list '{' class_attributes '}' {
             ASTModifiers mods($1);
             ASTName name($2, ASTNameKind::ANK_ClassScopedRef);
             name.loc = @2;
             free($2);
 
-            $$ = new ASTClassDeclaration(mods, std::move(name), $3, $5);
-            $$->loc.set(@1, @6);
+            $$ = new ASTClassDeclaration(mods, std::move(name), $4, $6);
+            $$->loc.set(@1, @7);
             ATTACH_CLASS_DOC_COMMENT($$);
-            delete $3;
-            delete $5;
+            delete $4;
+            delete $6;
         }
-        | nsc_modifiers CLASS_STRING inheritance_list ';' {
+        | nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list ';' {
             ASTModifiers mods($1);
             ASTName name($2, ASTNameKind::ANK_ClassString);
             name.loc = @2;
             free($2);
 
-            $$ = new ASTClassDeclaration(mods, std::move(name), $3);
-            $$->loc.set(@1, @4);
-            ATTACH_CLASS_DOC_COMMENT($$);
-            delete $3;
-        }
-        | nsc_modifiers CLASS_SCOPED_REF inheritance_list ';' {
-            ASTModifiers mods($1);
-            ASTName name($2, ASTNameKind::ANK_ClassScopedRef);
-            name.loc = @2;
-            free($2);
-
-            $$ = new ASTClassDeclaration(mods, std::move(name), $3);
-            $$->loc.set(@1, @4);
-            ATTACH_CLASS_DOC_COMMENT($$);
-            delete $3;
-        }
-        | nsc_modifiers CLASS_STRING inheritance_list '{' '}' {
-            ASTModifiers mods($1);
-            ASTName name($2, ASTNameKind::ANK_ClassString);
-            name.loc = @2;
-            free($2);
-
-            $$ = new ASTClassDeclaration(mods, std::move(name), $3);
+            $$ = new ASTClassDeclaration(mods, std::move(name), $4);
             $$->loc.set(@1, @5);
             ATTACH_CLASS_DOC_COMMENT($$);
-            delete $3;
+            delete $4;
         }
-        | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' '}' {
+        | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list ';' {
             ASTModifiers mods($1);
             ASTName name($2, ASTNameKind::ANK_ClassScopedRef);
             name.loc = @2;
             free($2);
 
-            $$ = new ASTClassDeclaration(mods, std::move(name), $3);
+            $$ = new ASTClassDeclaration(mods, std::move(name), $4);
             $$->loc.set(@1, @5);
             ATTACH_CLASS_DOC_COMMENT($$);
-            delete $3;
+            delete $4;
+        }
+        | nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list '{' '}' {
+            ASTModifiers mods($1);
+            ASTName name($2, ASTNameKind::ANK_ClassString);
+            name.loc = @2;
+            free($2);
+
+            $$ = new ASTClassDeclaration(mods, std::move(name), $4);
+            $$->loc.set(@1, @6);
+            ATTACH_CLASS_DOC_COMMENT($$);
+            delete $4;
+        }
+        | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list '{' '}' {
+            ASTModifiers mods($1);
+            ASTName name($2, ASTNameKind::ANK_ClassScopedRef);
+            name.loc = @2;
+            free($2);
+
+            $$ = new ASTClassDeclaration(mods, std::move(name), $4);
+            $$->loc.set(@1, @6);
+            ATTACH_CLASS_DOC_COMMENT($$);
+            delete $4;
+        }
+        ;
+
+class_compat_attrs:
+        // nothing
+        { $$ = 0; }
+        | class_compat_attrs class_compat_attr {
+            $$ = $1 | $2;
+        }
+        ;
+
+class_compat_attr:
+        '[' IDENTIFIER ']' {
+            free($2);
+            $$ = 1;
         }
         ;
 

@@ -388,7 +388,8 @@ public:
             }
 
             member_class_ctx = mi->getClassContext(class_ctx);
-            typeInfo = qore_substitute_type_params(mi->getTypeInfo(), instantiated_type);
+            typeInfo = qore_substitute_type_params(mi->getTypeInfo(),
+                instantiated_type ? instantiated_type : theclass->getTypeInfo());
             return 0;
         }
 

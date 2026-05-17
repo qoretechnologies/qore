@@ -4703,7 +4703,8 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         writer.writeU32(ci.ns_idx);
 
         // flags: bit 0 = pub, bit 1 = final, bit 2 = injected import,
-        // bit 3 = reexported import
+        // bit 3 = reexported import, bit 4 = raw generic accepts,
+        // bit 5 = raw generic construction
         uint16_t flags = 0;
         if (priv->pub) {
             flags |= 0x0001;
@@ -4716,6 +4717,14 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
         }
         if (priv->reexport) {
             flags |= 0x0008;
+        }
+        if ((writer.feature_flags & QORE_AOT_FEAT_CLASS_RAW_GENERIC) != 0) {
+            if (priv->rawAcceptsParameterized()) {
+                flags |= 0x0010;
+            }
+            if (priv->rawConstructionDefaultsToAuto()) {
+                flags |= 0x0020;
+            }
         }
         writer.writeU16(flags);
 
@@ -8723,6 +8732,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0;
     const bool has_class_param_bases
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_PARAM_BASES) != 0;
+    const bool has_class_raw_generic
+        = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_RAW_GENERIC) != 0;
 
     // Populate the root namespace's clmap incrementally as each class is
     // created, so standard lookup paths (runtimeFindClass, findClass,
@@ -8816,6 +8827,9 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             for (const std::string& type_param : type_params) {
                 qc->addTypeParameter(type_param.c_str());
             }
+        }
+        if (has_class_raw_generic) {
+            priv->setLegacyRawGenericCompatibility((flags & 0x0010) != 0, (flags & 0x0020) != 0);
         }
         bool class_already_existed = false;
         int add_rv = ns_list[ns_idx]->classList.add(qc);

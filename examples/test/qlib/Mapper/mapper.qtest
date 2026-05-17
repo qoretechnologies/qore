@@ -9,7 +9,7 @@
 %requires MapperUtil
 %requires Logger
 %requires DataProvider
-%requires Mapper
+%requires ../../../../qlib/Mapper.qm
 
 %exec-class MapperTest
 
@@ -1128,6 +1128,11 @@ public class MapperTest inherits QUnit::Test {
 
     testMapperBulk() {
         MapperIterator i(MapInput.iterator(), DataMap, m_opts);
+        assertTrue(i instanceof Mapper::AbstractMapperIterator<hash<auto>>);
+        assertTrue(i instanceof Qore::AbstractIterator<hash<auto>>);
+        Mapper::AbstractMapperIterator raw_i = i;
+        Mapper::AbstractMapperIterator<hash<auto>> typed_i = i;
+        assertEq(raw_i, typed_i);
         list l = i.mapBulk(MapInput.lsize());
         testAssertion("Verify mapped list", \equalsIterated(), (l.iterator(), MapOutput.iterator()));
         assertEq(2, i.getCount());

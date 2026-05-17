@@ -2211,7 +2211,7 @@ can land first.
 - Method-level generic functions.
 - Generic hashdecls/result records.
 - Variance annotations for immutable/read-only abstractions.
-- Opt-in raw-compatibility modifiers for source-defined generic classes,
+- [x] Opt-in raw-compatibility modifiers for source-defined generic classes,
   needed when migrating an existing user-defined non-generic class to a
   generic form without breaking either raw-`Box`-typed callers or
   `Box b()` construction sites. Three modifiers cover the two flags
@@ -2228,7 +2228,17 @@ can land first.
     for migrated user-defined non-generic classes.
   v1 keeps both flags false for all source-defined generic classes by
   default to avoid silently widening acceptance or default construction
-  in new code.
+  in new code. Implemented in source syntax as class compatibility
+  attributes after the class name / type-parameter list and before
+  `inherits`; AOT metadata preserves the two flags with the
+  `class-raw-generic` feature.
+
+Phase 4 completion note: inherited generic method bodies now substitute
+symbolic type parameters through the concrete receiver class's parameterized
+base type when the receiver itself is non-generic, for example
+`MapperIterator inherits Mapper::AbstractMapperIterator<hash<auto>>`.
+This keeps local variables, return checks, IR execution, and JIT helpers
+consistent with parse-time method signature substitution.
 
 ## Estimated Effort
 

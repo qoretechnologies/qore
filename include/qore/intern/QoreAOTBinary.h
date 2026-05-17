@@ -142,8 +142,9 @@ constexpr uint64_t QORE_AOT_FEAT_BCA_NAMED_ARG_MAP = 1ULL << 42; //!< BCA record
 constexpr uint64_t QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO = 1ULL << 43; //!< NewObject records and slots preserve instantiated object type paths
 constexpr uint64_t QORE_AOT_FEAT_CLASS_TYPE_PARAMS = 1ULL << 44; //!< class records preserve source generic type parameter names
 constexpr uint64_t QORE_AOT_FEAT_CLASS_PARAM_BASES = 1ULL << 45; //!< class base records preserve parameterized generic parent type paths
+constexpr uint64_t QORE_AOT_FEAT_CLASS_RAW_GENERIC = 1ULL << 46; //!< class records preserve source raw generic compatibility flags
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

@@ -1179,7 +1179,7 @@ static void qore_rt_apply_no_narrow_container_type(const QoreTypeInfo* ti, QoreV
 extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint64_t value,
         uint64_t* cleanup_ptr, ExceptionSink* xsink) {
     if (QoreObject* self = runtime_get_stack_object()) {
-        ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+        ti = qore_substitute_type_params(ti, qore_get_object_receiver_type_info(self));
     }
     QoreValue val = fromBits(value);
     ValueHolder weak_eval_holder(xsink);
@@ -3680,7 +3680,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_access_int(uint64_t hash_val, con
 static QoreHashNode* qore_rt_make_implicit_hash_for_lvalue(LocalVar* var, ExceptionSink* xsink) {
     const QoreTypeInfo* typeInfo = var ? var->getTypeInfoForLValue() : nullptr;
     if (QoreObject* self = runtime_get_stack_object()) {
-        typeInfo = qore_substitute_type_params(typeInfo, self->getInstantiatedTypeInfo());
+        typeInfo = qore_substitute_type_params(typeInfo, qore_get_object_receiver_type_info(self));
     }
     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_HASH)) {
         xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot convert lvalue declared as %s to a hash",
@@ -6306,7 +6306,7 @@ static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature
 
 static const QoreTypeInfo* qore_rt_get_effective_return_type(const UserSignature* sig) {
     QoreObject* self = runtime_get_stack_object();
-    return qore_rt_get_effective_return_type(sig, self ? self->getInstantiatedTypeInfo() : nullptr);
+    return qore_rt_get_effective_return_type(sig, qore_get_object_receiver_type_info(self));
 }
 
 // --- Fast function call (bypasses QoreListNode + CodeEvaluationHelper dispatch chain) ---
@@ -7092,7 +7092,7 @@ static uint64_t qore_rt_call_method_fast_impl(const QoreMethod* method,
         xsink->raiseException("JIT-ERROR", "no self object in fast method call");
         return toBits(QoreValue());
     }
-    const QoreTypeInfo* receiver_type_info = self->getInstantiatedTypeInfo();
+    const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(self);
 
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();
@@ -11081,7 +11081,7 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
         result = toBits(QoreValue());
         return true;
     }
-    const QoreTypeInfo* receiver_type_info = o->getInstantiatedTypeInfo();
+    const QoreTypeInfo* receiver_type_info = qore_get_object_receiver_type_info(o);
 
     const UserSignature* sig = uvb->getUserSignature();
     unsigned num_params = sig->numParams();

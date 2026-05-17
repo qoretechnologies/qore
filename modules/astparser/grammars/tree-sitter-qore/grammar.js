@@ -272,11 +272,20 @@ module.exports = grammar({
       'class',
       field('name', choice($.identifier, $.scoped_identifier)),
       optional(field('type_parameters', $.type_parameter_list)),
+      optional($.class_compatibility_attributes),
       optional($.superclass_list),
       choice(
         seq('{', repeat($._class_item), '}'),
         ';',  // forward declaration
       ),
+    ),
+
+    class_compatibility_attributes: $ => repeat1($.class_compatibility_attribute),
+
+    class_compatibility_attribute: $ => seq(
+      '[',
+      field('name', $.identifier),
+      ']',
     ),
 
     type_parameter_list: $ => seq(

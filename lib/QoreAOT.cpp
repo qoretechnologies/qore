@@ -707,6 +707,10 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // not only the raw base class path, so AOT cold-load can rebuild inherited
     // type substitution metadata.
     flags |= QORE_AOT_FEAT_CLASS_PARAM_BASES;
+    // Source-defined generic classes may opt into legacy raw annotation and
+    // raw construction compatibility, and source-stripped AOT must preserve
+    // those migration flags.
+    flags |= QORE_AOT_FEAT_CLASS_RAW_GENERIC;
     return flags;
 }
 

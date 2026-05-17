@@ -1679,6 +1679,38 @@ static void check_funcmod(const QoreProgramLocation* loc, int mod) {
         parse_error(*loc, "illegal 'abstract' modifier in function declaration");
 }
 
+static constexpr int CCA_LEGACY_RAW_ACCEPTS = 1 << 0;
+static constexpr int CCA_LEGACY_RAW_CONSTRUCT = 1 << 1;
+
+static int parse_class_compat_attr(const QoreProgramLocation* loc, char* attr) {
+    int rv = 0;
+    if (!strcmp(attr, "legacy_raw_accepts")) {
+        rv = CCA_LEGACY_RAW_ACCEPTS;
+    } else if (!strcmp(attr, "legacy_raw_construct")) {
+        rv = CCA_LEGACY_RAW_CONSTRUCT;
+    } else if (!strcmp(attr, "legacy_raw")) {
+        rv = CCA_LEGACY_RAW_ACCEPTS | CCA_LEGACY_RAW_CONSTRUCT;
+    } else {
+        parseException(*loc, "PARSE-TYPE-ERROR",
+            "unknown class compatibility attribute '%s'; expected 'legacy_raw_accepts', "
+            "'legacy_raw_construct', or 'legacy_raw'", attr);
+    }
+    free(attr);
+    return rv;
+}
+
+static void apply_class_compat_attrs(const QoreProgramLocation* loc, int attrs, QoreClass& qc) {
+    if (!attrs) {
+        return;
+    }
+    if (!qc.hasTypeParameters()) {
+        parseException(*loc, "PARSE-TYPE-ERROR",
+            "legacy raw generic compatibility attributes require a generic class declaration");
+        return;
+    }
+    qc.setLegacyRawGenericCompatibility(attrs & CCA_LEGACY_RAW_ACCEPTS, attrs & CCA_LEGACY_RAW_CONSTRUCT);
+}
+
 static void check_classmod(const QoreProgramLocation* loc, int mod, QoreClass& qc) {
    if (mod & (OFM_PRIVATE|OFM_INTERNAL))
       parse_error(*loc, "illegal 'private' modifier in class declaration");
@@ -2358,6 +2390,8 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <i4>             method_modifiers
 %type <i4>             method_modifier
 %type <i4>             nsc_modifiers
+%type <i4>             class_compat_attrs
+%type <i4>             class_compat_attr
 %type <returnTypeInfo> return_value
 %type <string>         optname
 %type <statement>      switch_statement
@@ -3297,80 +3331,50 @@ enum_member:
     ;
 
 class_def:
-    nsc_modifiers CLASS_STRING inheritance_list '{' class_attributes '}' {
+    nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list '{' class_attributes '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
-        check_classmod(loc, $1, *($5));
-        qore_class_private::parseSetBaseClassList(*($5), $3);
-        $$ = new ObjClassDef(loc, $2, $5);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
+        check_classmod(loc, $1, *($6));
+        apply_class_compat_attrs(loc, $3, *($6));
+        qore_class_private::parseSetBaseClassList(*($6), $4);
+        $$ = new ObjClassDef(loc, $2, $6);
     }
-    | nsc_modifiers CLASS_GENERIC_STRING inheritance_list '{' class_attributes '}' {
+    | nsc_modifiers CLASS_GENERIC_STRING class_compat_attrs inheritance_list '{' class_attributes '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
         ClassDeclParseInfo cdi(loc, $2);
         if (cdi.isScoped()) {
             check_strong_encapsulation(loc, "class", cdi.name.c_str());
         }
-        cdi.applyTypeParams($5);
-        check_classmod(loc, $1, *($5));
-        qore_class_private::parseSetBaseClassList(*($5), $3);
-        $$ = new ObjClassDef(loc, cdi.takeName(), $5);
+        cdi.applyTypeParams($6);
+        check_classmod(loc, $1, *($6));
+        apply_class_compat_attrs(loc, $3, *($6));
+        qore_class_private::parseSetBaseClassList(*($6), $4);
+        $$ = new ObjClassDef(loc, cdi.takeName(), $6);
     }
-    | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' class_attributes '}' {
+    | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list '{' class_attributes '}' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @7.last_line);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "class", $2->ostr);
-        check_classmod(loc, $1, *($5));
-        $$ = new ObjClassDef(loc, $2, $5);
-        qore_class_private::parseSetBaseClassList(*($5), $3);
+        check_classmod(loc, $1, *($6));
+        apply_class_compat_attrs(loc, $3, *($6));
+        $$ = new ObjClassDef(loc, $2, $6);
+        qore_class_private::parseSetBaseClassList(*($6), $4);
     }
-    | nsc_modifiers CLASS_STRING inheritance_list ';' {
+    | nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
         // class name is set automatically from name saved in scanner
         QoreClass* qc = new QoreParseClass(loc);
         check_classmod(loc, $1, *qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
+        apply_class_compat_attrs(loc, $3, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
         $$ = new ObjClassDef(loc, $2, qc);
     }
-    | nsc_modifiers CLASS_GENERIC_STRING inheritance_list ';' {
+    | nsc_modifiers CLASS_GENERIC_STRING class_compat_attrs inheritance_list ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
-        ClassDeclParseInfo cdi(loc, $2);
-        if (cdi.isScoped()) {
-            check_strong_encapsulation(loc, "class", cdi.name.c_str());
-        }
-        // class name is set automatically from name saved in scanner
-        QoreClass* qc = new QoreParseClass(loc);
-        cdi.applyTypeParams(qc);
-        check_classmod(loc, $1, *qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
-        $$ = new ObjClassDef(loc, cdi.takeName(), qc);
-    }
-    | nsc_modifiers CLASS_SCOPED_REF inheritance_list ';' {
-        fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @3.last_line);
-        // see if strong encapsulation is enabled
-        check_strong_encapsulation(loc, "class", $2->ostr);
-        // class name is set automatically from name saved in scanner
-        QoreClass* qc = new QoreParseClass(loc);
-        check_classmod(loc, $1, *qc);
-        $$ = new ObjClassDef(loc, $2, qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
-    }
-    | nsc_modifiers CLASS_STRING inheritance_list '{' '}' {
-        fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
-        // class name is set automatically from name saved in scanner
-        QoreClass* qc = new QoreParseClass(loc);
-        check_classmod(loc, $1, *qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
-        $$ = new ObjClassDef(loc, $2, qc);
-    }
-    | nsc_modifiers CLASS_GENERIC_STRING inheritance_list '{' '}' {
-        fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
         ClassDeclParseInfo cdi(loc, $2);
         if (cdi.isScoped()) {
             check_strong_encapsulation(loc, "class", cdi.name.c_str());
@@ -3379,19 +3383,77 @@ class_def:
         QoreClass* qc = new QoreParseClass(loc);
         cdi.applyTypeParams(qc);
         check_classmod(loc, $1, *qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
+        apply_class_compat_attrs(loc, $3, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
         $$ = new ObjClassDef(loc, cdi.takeName(), qc);
     }
-    | nsc_modifiers CLASS_SCOPED_REF inheritance_list '{' '}' {
+    | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list ';' {
         fix_start_location($1, @$, @2);
-        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @5.last_line);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @4.last_line);
         // see if strong encapsulation is enabled
         check_strong_encapsulation(loc, "class", $2->ostr);
         // class name is set automatically from name saved in scanner
         QoreClass* qc = new QoreParseClass(loc);
         check_classmod(loc, $1, *qc);
+        apply_class_compat_attrs(loc, $3, *qc);
         $$ = new ObjClassDef(loc, $2, qc);
-        qore_class_private::parseSetBaseClassList(*qc, $3);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
+    }
+    | nsc_modifiers CLASS_STRING class_compat_attrs inheritance_list '{' '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        check_classmod(loc, $1, *qc);
+        apply_class_compat_attrs(loc, $3, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
+        $$ = new ObjClassDef(loc, $2, qc);
+    }
+    | nsc_modifiers CLASS_GENERIC_STRING class_compat_attrs inheritance_list '{' '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        ClassDeclParseInfo cdi(loc, $2);
+        if (cdi.isScoped()) {
+            check_strong_encapsulation(loc, "class", cdi.name.c_str());
+        }
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        cdi.applyTypeParams(qc);
+        check_classmod(loc, $1, *qc);
+        apply_class_compat_attrs(loc, $3, *qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
+        $$ = new ObjClassDef(loc, cdi.takeName(), qc);
+    }
+    | nsc_modifiers CLASS_SCOPED_REF class_compat_attrs inheritance_list '{' '}' {
+        fix_start_location($1, @$, @2);
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation($1 ? @1.first_line : @2.first_line, @6.last_line);
+        // see if strong encapsulation is enabled
+        check_strong_encapsulation(loc, "class", $2->ostr);
+        // class name is set automatically from name saved in scanner
+        QoreClass* qc = new QoreParseClass(loc);
+        check_classmod(loc, $1, *qc);
+        apply_class_compat_attrs(loc, $3, *qc);
+        $$ = new ObjClassDef(loc, $2, qc);
+        qore_class_private::parseSetBaseClassList(*qc, $4);
+    }
+    ;
+
+class_compat_attrs:
+    // nothing
+    { $$ = 0; }
+    | class_compat_attrs class_compat_attr {
+        if (($1 | $2) == $1) {
+            const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+            parse_error(*loc, "class compatibility attribute given twice");
+        }
+        $$ = $1 | $2;
+    }
+    ;
+
+class_compat_attr:
+    '[' IDENTIFIER ']' {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line);
+        $$ = parse_class_compat_attr(loc, $2);
     }
     ;
 

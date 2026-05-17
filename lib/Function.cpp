@@ -546,7 +546,7 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     //printd(5, "CodeEvaluationHelper::init() this: %p '%s()' file: %s line: %d variant: %p cctx: %p (%s)\n", this,
     //    func->getName(), loc->getFile(), loc->start_line, variant, cctx, cctx ? cctx->name.c_str() : "n/a");
 
-    receiver_type_info = self ? self->getInstantiatedTypeInfo() : nullptr;
+    receiver_type_info = qore_get_object_receiver_type_info(self);
 
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
@@ -4243,7 +4243,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
         if (!*xsink) {
             const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-                self ? self->getInstantiatedTypeInfo() : nullptr);
+                qore_get_object_receiver_type_info(self));
             if (rt && QoreTypeInfo::hasType(rt)) {
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -4387,7 +4387,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
         if (!*xsink) {
             const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-                self ? self->getInstantiatedTypeInfo() : nullptr);
+                qore_get_object_receiver_type_info(self));
             if (rt && QoreTypeInfo::hasType(rt)) {
                 if (val.isNothing()) {
                     QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
@@ -4452,7 +4452,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
     if (!*xsink && val.isNothing()) {
         const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-            self ? self->getInstantiatedTypeInfo() : nullptr);
+            qore_get_object_receiver_type_info(self));
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
         if (*xsink) {
             xsink->overrideLocation(*signature.getParseLocation());
@@ -4541,7 +4541,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
     // only check if there isn't an active exception
     if (!*xsink && val.isNothing()) {
         const QoreTypeInfo* rt = qore_substitute_type_params(signature.getReturnTypeInfo(),
-            self ? self->getInstantiatedTypeInfo() : nullptr);
+            qore_get_object_receiver_type_info(self));
 
         // check return type
         QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);

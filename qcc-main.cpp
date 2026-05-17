@@ -1314,6 +1314,8 @@ static void print_aot_feature_flags(uint64_t flags) {
         {QORE_AOT_FEAT_BCA_NAMED_ARG_MAP, "bca-named-arg-map"},
         {QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO, "new-object-typeinfo"},
         {QORE_AOT_FEAT_CLASS_TYPE_PARAMS, "class-type-params"},
+        {QORE_AOT_FEAT_CLASS_PARAM_BASES, "class-param-bases"},
+        {QORE_AOT_FEAT_CLASS_RAW_GENERIC, "class-raw-generic"},
     };
 
     printf("    features: 0x%016llx", static_cast<unsigned long long>(flags));

@@ -15,8 +15,8 @@
 %requires MysqlSqlUtil
 %requires FreetdsSqlUtil
 %requires Schema
-%requires Mapper
-%requires TableMapper
+%requires ../../../../qlib/Mapper.qm
+%requires ../../../../qlib/TableMapper.qm
 
 public class TableMapperTestSchema inherits AbstractSchema {
     public {
@@ -564,6 +564,8 @@ public class TableMapperTest inherits QUnit::Test {
 
             InboundTableMapper mapper(table, Map1);
             InboundTableMapperIterator i = mapper.iterator(Input1.iterator());
+            assertTrue(i instanceof Mapper::AbstractMapperIterator<hash<auto>>);
+            assertTrue(i instanceof Qore::AbstractIterator<hash<auto>>);
             map $1, i;
             checkMap(table.selectRows(("orderby": "id")), output1);
             assertEq(3, i.getCount());
@@ -1125,7 +1127,7 @@ public class TableMapperTest inherits QUnit::Test {
     }
 
     checkUpsert(hash h, string label) {
-        map checkUpsertRow($1, label), h.contextIterator();
+        map checkUpsertRow(asHash($1), label), h.contextIterator();
     }
 
     checkUpsert(list l, string label) {
@@ -1137,12 +1139,18 @@ public class TableMapperTest inherits QUnit::Test {
         assertEq(row.string, h.label, "upsert " + label);
     }
 
+    hash asHash(auto h) {
+        return cast<hash>(h);
+    }
+
     outputTableMapperTest() {
         if (!table)
             testSkip("no DB connection");
 
         SqlStatementOutboundMapper m(table, SelectHash, OutMap1, ("input": ("id": ("desc": "test"))));
         SqlStatementMapperIterator i = m.iterator();
+        assertTrue(i instanceof Mapper::AbstractMapperIterator<hash<auto>>);
+        assertTrue(i instanceof Qore::AbstractIterator<hash<auto>>);
         list l;
         while (list tl = i.mapBulk(2))
             l += tl;

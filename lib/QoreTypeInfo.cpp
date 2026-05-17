@@ -1353,6 +1353,15 @@ static const QoreTypeInfo* get_substituted_type_param_arg(const QoreTypeParamete
     const QoreParameterizedClassTypeInfo* receiver_pti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);
     if (!receiver_pti) {
         const QoreClass* receiver_class = QoreTypeInfo::getUniqueReturnClass(receiver_type_info);
+        if (receiver_class) {
+            const QoreTypeInfo* owner_type = qore_class_private::get(*receiver_class)
+                ->getConcreteParameterizedBaseTypeInfo(tpi->getOwnerClass());
+            const QoreParameterizedClassTypeInfo* owner_pti = QoreTypeInfo::getParameterizedClassType(owner_type);
+            if (owner_pti && tpi->getIndex() < owner_pti->getArgCount()) {
+                const QoreTypeInfo* arg = owner_pti->getTypeArgs()[tpi->getIndex()];
+                return tpi->isOrNothing() ? get_or_nothing_type_check(arg) : arg;
+            }
+        }
         const qore_class_private* owner = qore_class_private::get(*tpi->getOwnerClass());
         if (receiver_class && owner->rawConstructionDefaultsToAuto()
                 && qore_class_private::runtimeCheckCompatibleClass(*tpi->getOwnerClass(), *receiver_class)
@@ -1371,6 +1380,14 @@ static const QoreTypeInfo* get_substituted_type_param_arg(const QoreTypeParamete
 
     const QoreTypeInfo* arg = owner_pti->getTypeArgs()[tpi->getIndex()];
     return tpi->isOrNothing() ? get_or_nothing_type_check(arg) : arg;
+}
+
+const QoreTypeInfo* qore_get_object_receiver_type_info(const QoreObject* self) {
+    if (!self) {
+        return nullptr;
+    }
+    const QoreTypeInfo* ti = self->getInstantiatedTypeInfo();
+    return ti ? ti : self->getClass()->getTypeInfo();
 }
 
 const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const QoreTypeInfo* receiver_type_info) {

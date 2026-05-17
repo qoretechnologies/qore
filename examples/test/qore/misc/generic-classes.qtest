@@ -89,6 +89,20 @@ class SourceGenericChild<T> inherits SourceGenericBase<T> {
 class SourceFixedBaseChild<T> inherits SourceGenericBase<string> {
 }
 
+class SourceFixedBodyChild inherits SourceGenericBase<int> {
+}
+
+class SourceGenericBodyBase<T> {
+    list<T> collectBase(T value) {
+        list<T> rv();
+        rv += value;
+        return rv;
+    }
+}
+
+class SourceFixedBodyChild2 inherits SourceGenericBodyBase<int> {
+}
+
 class SourceTypedIterator<T> inherits AbstractIterator<T> {
     private {
         T value;
@@ -124,6 +138,30 @@ class SourceTypedIterator<T> inherits AbstractIterator<T> {
     }
 }
 
+class SourceRawCompatBox<T> [legacy_raw] {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+class SourceRawAcceptsBox<T> [legacy_raw_accepts] {
+    constructor(T value) {
+    }
+}
+
+class SourceRawConstructBox<T> [legacy_raw_construct] {
+    constructor(T value) {
+    }
+}
+
 namespace SourceGenericNs {
     class Box<T> {
         T echo(T value) {
@@ -141,6 +179,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("runtime substitution errors", \runtimeSubstitutionErrors());
         addTestCase("generic inheritance", \genericInheritance());
         addTestCase("source generic iterators", \sourceGenericIterators());
+        addTestCase("source raw generic compatibility", \sourceRawGenericCompatibility());
         addTestCase("parse checks", \parseChecks());
 
         # Return for compatibility with test harness that checks return value.
@@ -206,6 +245,14 @@ public class GenericClassTypesTest inherits QUnit::Test {
         assertEq("z", fixed.echo("z"));
         assertTrue(fixed instanceof SourceGenericBase<string>);
         assertFalse(fixed instanceof SourceGenericBase<int>);
+
+        SourceFixedBodyChild fixed_body();
+        list<int> fixed_values = fixed_body.asList(6);
+        assertEq((6,), fixed_values);
+
+        SourceFixedBodyChild2 fixed_body2();
+        list<int> collected = fixed_body2.collectBase(7);
+        assertEq((7,), collected);
     }
 
     sourceGenericIterators() {
@@ -223,6 +270,22 @@ public class GenericClassTypesTest inherits QUnit::Test {
         list<int> selected = select selected_it, $1 > 3;
         assertEq(1, selected.size());
         assertEq(7, selected[0]);
+    }
+
+    sourceRawGenericCompatibility() {
+        SourceRawCompatBox raw(1);
+        assertTrue(raw instanceof SourceRawCompatBox<auto>);
+        assertFalse(raw instanceof SourceRawCompatBox<int>);
+
+        SourceRawCompatBox<int> typed(2);
+        SourceRawCompatBox raw_annotation = typed;
+        assertTrue(raw_annotation instanceof SourceRawCompatBox<int>);
+
+        SourceRawAcceptsBox raw_accepts = new SourceRawAcceptsBox<int>(3);
+        assertTrue(raw_accepts instanceof SourceRawAcceptsBox<int>);
+
+        auto raw_construct = new SourceRawConstructBox(4);
+        assertTrue(raw_construct instanceof SourceRawConstructBox<auto>);
     }
 
     parseChecks() {
@@ -280,6 +343,20 @@ public class GenericClassTypesTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE);
             assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
                 "class Base {} class Child<T> inherits Base<T> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Plain [legacy_raw] {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse(
+                "class Box<T> [legacy_raw_accepts] { constructor(T value) {} } "
+                "sub t() { auto b = new Box(1); }", "generic-classes");
+            assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
         }
     }
 }

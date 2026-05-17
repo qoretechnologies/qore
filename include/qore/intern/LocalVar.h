@@ -673,7 +673,7 @@ public:
             // Use getTypeInfoForLValue() to include NoNarrow marker for hash<auto!>/list<auto!> variables
             const QoreTypeInfo* ti = getTypeInfoForLValue();
             if (QoreObject* self = runtime_get_stack_object()) {
-                ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+                ti = qore_substitute_type_params(ti, qore_get_object_receiver_type_info(self));
             }
             return val->getLValue(lvh, for_remove, ti, refTypeInfo);
         }

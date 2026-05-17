@@ -683,6 +683,37 @@
     }
   },
   {
+    "type": "class_compatibility_attribute",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "class_compatibility_attributes",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "class_compatibility_attribute",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "class_declaration",
     "named": true,
     "fields": {
@@ -715,6 +746,10 @@
       "multiple": true,
       "required": false,
       "types": [
+        {
+          "type": "class_compatibility_attributes",
+          "named": true
+        },
         {
           "type": "constant_declaration",
           "named": true

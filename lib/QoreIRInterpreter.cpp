@@ -1135,7 +1135,7 @@ static QoreValue coerceIRLocalValue(LocalVar* var, const QoreValue& value, Excep
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
     const QoreTypeInfo* ti = var ? var->getTypeInfoForLValue() : nullptr;
     if (QoreObject* self = runtime_get_stack_object()) {
-        ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+        ti = qore_substitute_type_params(ti, qore_get_object_receiver_type_info(self));
     }
     QoreTypeInfo::acceptAssignment(ti, "<lvalue>", stored, xsink);
     if (xsink && *xsink) {
@@ -5130,7 +5130,7 @@ load_local_done:
                     // LValueHelper::doHashLValue() including hashdecl error behavior.
                     const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
                     if (QoreObject* self = runtime_get_stack_object()) {
-                        ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+                        ti = qore_substitute_type_params(ti, qore_get_object_receiver_type_info(self));
                     }
                     QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
                     if (!new_h || (xsink && *xsink)) {
@@ -5253,7 +5253,7 @@ load_local_done:
                     // LValueHelper::doHashLValue() including hashdecl error behavior.
                     const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
                     if (QoreObject* self = runtime_get_stack_object()) {
-                        ti = qore_substitute_type_params(ti, self->getInstantiatedTypeInfo());
+                        ti = qore_substitute_type_params(ti, qore_get_object_receiver_type_info(self));
                     }
                     QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
                     if (!new_h || (xsink && *xsink)) {
@@ -9856,7 +9856,7 @@ lvalue_path_unary_done:
                                     const QoreTypeInfo* return_type = direct_inst->cached_return_type;
                                     if (QoreObject* self = runtime_get_stack_object()) {
                                         return_type = qore_substitute_type_params(return_type,
-                                            self->getInstantiatedTypeInfo());
+                                            qore_get_object_receiver_type_info(self));
                                     }
                                     QoreTypeInfo::acceptAssignment(return_type, "<return statement>",
                                         ir_return_value, xsink);
