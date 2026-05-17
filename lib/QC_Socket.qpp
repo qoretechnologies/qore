@@ -7424,7 +7424,7 @@ nothing Socket::cancelHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int family = AF_INET) {
+AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int family = AF_INET) [flags=NAMED_ARGS] {
     if (port < 1 || port > 65535) {
         xsink->raiseException("QUIC-ERROR", "port %d is out of range (1-65535)", (int)port);
         return QoreValue();
@@ -7480,7 +7480,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
     @throw QUIC-ERROR if QUIC/HTTP/3 support is not available
     @throw SOCKET-NOT-OPEN if the socket is not open
 
-    @param opts optional options hash:
+    @param options optional options hash:
     - \c "headers_only": if @ref True, dispatches requests as soon as headers are received
       (before the full body arrives); the handler reads body data incrementally via
       @ref readQuicStreamDataBlock().  When enabled:
@@ -7496,7 +7496,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
     @code{.py}
     Socket sock();
     sock.bindINET("0.0.0.0", 8443, True, AF_INET);
-    AbstractPollOperation op = sock.startPollQuicAccept({"headers_only": True});
+    AbstractPollOperation op = sock.startPollQuicAccept(options: {"headers_only": True});
     while (*hash<SocketPollInfo> info = op.continuePoll()) {
         Socket::poll((info,), 10s);
     }
@@ -7520,7 +7520,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> opts) {
+AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> options) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketQuicServerPollOperation(xsink, s), xsink);
     if (*xsink) {
@@ -7528,12 +7528,12 @@ AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> opts) {
     }
 
     // Apply options
-    if (opts) {
+    if (options) {
         SocketQuicServerPollOperation* sqspo = reinterpret_cast<SocketQuicServerPollOperation*>(*poller);
-        if (opts->getKeyValue("headers_only").getAsBool()) {
+        if (options->getKeyValue("headers_only").getAsBool()) {
             sqspo->setHeadersOnly(true);
         }
-        int64 max_body = opts->getKeyValue("max_request_body_size").getAsBigInt();
+        int64 max_body = options->getKeyValue("max_request_body_size").getAsBigInt();
         if (max_body > 0) {
             sqspo->setMaxRequestBodySize(max_body);
         }
@@ -7571,7 +7571,7 @@ AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> opts) {
     @since %Qore 2.3
 */
 AbstractPollOperation Socket::startPollQuicSendResponse(int session_id, int stream_id, int status_code,
-        *hash<auto> headers, *data body) {
+        *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7646,7 +7646,7 @@ bool Socket::isQuic() [flags=CONSTANT] {
 
     @since %Qore 2.3
 */
-int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body) {
+int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
     const void* body_ptr = nullptr;
     size_t body_len = 0;
     char body_short_buf[7];
@@ -7681,7 +7681,7 @@ int Socket::submitQuicRequest(string method, string path, *hash<auto> headers, *
 
     @since %Qore 2.3
 */
-int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers) {
+int Socket::submitQuicRequestStreaming(string method, string path, *hash<auto> headers) [flags=NAMED_ARGS] {
     int64_t stream_id = s->submitQuicRequestStreaming(method->c_str(), path->c_str(), headers, xsink);
     return stream_id;
 }
@@ -7726,7 +7726,7 @@ bool Socket::isQuicSessionClosed() [flags=CONSTANT] {
 
     @since %Qore 2.3
 */
-int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_stream = False) {
+int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_stream = False) [flags=NAMED_ARGS] {
     if (stream_id < 0) {
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0",
             (long long)stream_id);
@@ -7763,7 +7763,7 @@ int Socket::sendQuicClientStreamData(int stream_id, *data body, softbool end_str
 
     @since %Qore 2.3
 */
-int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) {
+int Socket::waitForQuicClientStreamDrain(int stream_id, timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicClientStreamDrain", xsink);
     if (*xsink) {
         return -1;
@@ -7806,7 +7806,7 @@ int Socket::getQuicSessionId() {
 
     @since %Qore 2.3
 */
-nothing Socket::cancelQuicStream(int session_id, int stream_id) {
+nothing Socket::cancelQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7837,7 +7837,8 @@ nothing Socket::cancelQuicStream(int session_id, int stream_id) {
 
     @since %Qore 2.3
 */
-nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers, *data body) {
+nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_code, *hash<auto> headers,
+        *data body) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7877,7 +7878,7 @@ nothing Socket::submitQuicResponse(int session_id, int stream_id, int status_cod
 
     @since %Qore 2.3
 */
-nothing Socket::submitQuicShutdownNotice(int session_id) {
+nothing Socket::submitQuicShutdownNotice(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7902,7 +7903,7 @@ nothing Socket::submitQuicShutdownNotice(int session_id) {
 
     @since %Qore 2.3
 */
-nothing Socket::submitQuicShutdown(int session_id) {
+nothing Socket::submitQuicShutdown(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7928,7 +7929,7 @@ nothing Socket::submitQuicShutdown(int session_id) {
 
     @since %Qore 2.3
 */
-hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) {
+hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -7954,7 +7955,7 @@ hash<QuicGoawayStateInfo> Socket::getQuicSessionGoawayState(int session_id) {
 
     @since %Qore 2.3
 */
-bool Socket::isQuicGoawayReceived(int session_id) {
+bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         return false;
     }
@@ -7984,7 +7985,7 @@ bool Socket::isQuicGoawayReceived(int session_id) {
 
     @since %Qore 2.3
 */
-*SSLCertificate Socket::getQuicPeerCertificate(int session_id) {
+*SSLCertificate Socket::getQuicPeerCertificate(int session_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8020,7 +8021,8 @@ bool Socket::isQuicGoawayReceived(int session_id) {
     @since %Qore 2.3
 */
 AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id, int stream_id,
-        int status_code, *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+        int status_code, *hash<auto> headers, InputStream[InputStream] body,
+        *int chunk_size) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8092,7 +8094,7 @@ AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id,
     @since %Qore 2.3
 */
 nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int status_code,
-        *hash<auto> headers) {
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8135,7 +8137,7 @@ nothing Socket::submitQuicResponseStreaming(int session_id, int stream_id, int s
     @since %Qore 2.3
 */
 int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
-        softbool end_stream = False) {
+        softbool end_stream = False) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return -1;
@@ -8179,7 +8181,7 @@ int Socket::submitQuicStreamData(int session_id, int stream_id, *data body,
     @since %Qore 2.3
 */
 int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
-        int status_code, *hash<auto> headers, InputStream[InputStream] body) {
+        int status_code, *hash<auto> headers, InputStream[InputStream] body) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
             (long long)session_id);
@@ -8237,7 +8239,7 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
     @since %Qore 2.3
 */
 int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
-        timeout timeout_ms = 5s) {
+        timeout timeout_ms = 5s) [flags=NAMED_ARGS] {
     SocketSyncPoll::assertNotOnIoThread("Socket", "waitForQuicStreamDrain", xsink);
     if (*xsink) {
         return -1;
@@ -8270,7 +8272,7 @@ int Socket::waitForQuicStreamDrain(int session_id, int stream_id,
     @since %Qore 2.3
 */
 nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int status_code,
-        *hash<auto> headers) {
+        *hash<auto> headers) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8299,7 +8301,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @since %Qore 2.3
 */
-*binary Socket::readQuicConnectStreamData(int session_id, int stream_id) {
+*binary Socket::readQuicConnectStreamData(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8408,7 +8410,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @param session_id the QUIC session ID (from \c cx."header-info".session_id)
     @param stream_id the HTTP/3 stream ID (from \c cx."header-info".stream_id)
-    @param timeout the maximum time to wait for data; default 30s
+    @param timeout_ms the maximum time to wait for data; default 30s
 
     @return binary data if available, or @ref nothing if the stream is complete
     (END_STREAM received and no more buffered data)
@@ -8424,7 +8426,8 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @since %Qore 2.3
 */
-*binary Socket::readQuicStreamDataBlock(int session_id, int stream_id, timeout timeout = 30s) {
+*binary Socket::readQuicStreamDataBlock(int session_id, int stream_id,
+        timeout timeout_ms = 30s) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8433,7 +8436,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    return s->readQuicStreamDataBlock(session_id, stream_id, (int)timeout, xsink);
+    return s->readQuicStreamDataBlock(session_id, stream_id, (int)timeout_ms, xsink);
 }
 
 //! Check if an HTTP/3 stream has received END_STREAM
@@ -8464,7 +8467,7 @@ nothing Socket::submitQuicConnectResponse(int session_id, int stream_id, int sta
 
     @since %Qore 2.3
 */
-bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT] {
+bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT,NAMED_ARGS] {
     if (session_id <= 0 || stream_id < 0) {
         return true;
     }
@@ -8508,7 +8511,7 @@ bool Socket::isQuicStreamComplete(int session_id, int stream_id) [flags=CONSTANT
 
     @since %Qore 2.3
 */
-nothing Socket::cleanupQuicStream(int session_id, int stream_id) {
+nothing Socket::cleanupQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8537,7 +8540,8 @@ nothing Socket::cleanupQuicStream(int session_id, int stream_id) {
 
     @since %Qore 2.3
 */
-nothing Socket::registerQuicConnectStreamQueue(int session_id, int stream_id, Queue[Queue] queue) {
+nothing Socket::registerQuicConnectStreamQueue(int session_id, int stream_id,
+        Queue[Queue] queue) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8563,7 +8567,7 @@ nothing Socket::registerQuicConnectStreamQueue(int session_id, int stream_id, Qu
 
     @since %Qore 2.3
 */
-nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) {
+nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         return QoreValue();
     }
@@ -8590,7 +8594,8 @@ nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) 
 
     @since %Qore 2.3
 */
-nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_id, Queue[Queue] queue) {
+nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_id,
+        Queue[Queue] queue) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0",
             (long long)session_id);
@@ -8611,7 +8616,7 @@ nothing Socket::registerQuicConnectStreamFrameState(int session_id, int stream_i
 
 //! Deregister the WebSocket frame state machine for an HTTP/3 CONNECT tunnel
 /** @since %Qore 2.4 */
-nothing Socket::deregisterQuicConnectStreamFrameState(int session_id, int stream_id) {
+nothing Socket::deregisterQuicConnectStreamFrameState(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         return QoreValue();
     }
@@ -8635,7 +8640,7 @@ nothing Socket::deregisterQuicConnectStreamFrameState(int session_id, int stream
 
     @since %Qore 2.3
 */
-nothing Socket::resetQuicStream(int session_id, int stream_id) {
+nothing Socket::resetQuicStream(int session_id, int stream_id) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8669,7 +8674,7 @@ nothing Socket::resetQuicStream(int session_id, int stream_id) {
     @see @ref getQuicMaxDatagramSize()
     @see @ref isQuicDatagramSupported()
 */
-nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [dom=NETWORK] {
+nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8686,7 +8691,7 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
 
     @param session_id the QUIC session ID
     @param stream_id the HTTP/3 stream ID (anchor stream)
-    @param timeout maximum wait time (default 30 seconds)
+    @param timeout_ms maximum wait time (default 30 seconds)
 
     @return the datagram payload as binary data, or @ref nothing on timeout
 
@@ -8696,7 +8701,8 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
 
     @see @ref submitQuicDatagram()
 */
-*binary Socket::readQuicDatagram(int session_id, int stream_id, timeout timeout = 30s) [dom=NETWORK] {
+*binary Socket::readQuicDatagram(int session_id, int stream_id,
+        timeout timeout_ms = 30s) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8705,7 +8711,7 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
         xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
         return QoreValue();
     }
-    return s->readQuicDatagram(session_id, stream_id, (int)timeout, xsink);
+    return s->readQuicDatagram(session_id, stream_id, (int)timeout_ms, xsink);
 }
 
 //! Registers a @ref Queue to receive incoming QUIC datagrams for a stream (RFC 9221/9297)
@@ -8730,7 +8736,8 @@ nothing Socket::submitQuicDatagram(int session_id, int stream_id, binary data) [
     @see @ref unregisterQuicDatagramQueue()
     @see @ref readQuicDatagram()
 */
-nothing Socket::registerQuicDatagramQueue(int session_id, int stream_id, Queue[Queue] queue) [dom=NETWORK] {
+nothing Socket::registerQuicDatagramQueue(int session_id, int stream_id,
+        Queue[Queue] queue) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8764,7 +8771,7 @@ nothing Socket::registerQuicDatagramQueue(int session_id, int stream_id, Queue[Q
 
     @see @ref registerQuicDatagramQueue()
 */
-nothing Socket::unregisterQuicDatagramQueue(int session_id, int stream_id) [dom=NETWORK] {
+nothing Socket::unregisterQuicDatagramQueue(int session_id, int stream_id) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return QoreValue();
@@ -8793,7 +8800,7 @@ nothing Socket::unregisterQuicDatagramQueue(int session_id, int stream_id) [dom=
     @see @ref submitQuicDatagram()
     @see @ref isQuicDatagramSupported()
 */
-int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [dom=NETWORK] {
+int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return 0;
@@ -8820,7 +8827,7 @@ int Socket::getQuicMaxDatagramSize(int session_id, int stream_id) [dom=NETWORK] 
     @see @ref submitQuicDatagram()
     @see @ref getQuicMaxDatagramSize()
 */
-bool Socket::isQuicDatagramSupported(int session_id) [dom=NETWORK] {
+bool Socket::isQuicDatagramSupported(int session_id) [flags=NAMED_ARGS;dom=NETWORK] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
         return false;

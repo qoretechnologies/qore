@@ -164,6 +164,7 @@ public class NamedArgumentsTest inherits QUnit::Test {
             NOTHING);
         addTestCase("reviewed Socket HTTP builtin opt-in", \reviewedSocketHttpBuiltinOptIn(), NOTHING);
         addTestCase("reviewed Socket HTTP/2 builtin opt-in", \reviewedSocketHttp2BuiltinOptIn(), NOTHING);
+        addTestCase("reviewed Socket QUIC builtin opt-in", \reviewedSocketQuicBuiltinOptIn(), NOTHING);
         addTestCase("reviewed HTTP readiness builtin opt-in", \reviewedHttpReadinessBuiltinOptIn(),
             NOTHING);
         addTestCase("reviewed HTTPClient class builtin opt-in", \reviewedHttpClientClassBuiltinOptIn(),
@@ -1178,6 +1179,49 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "s.submitHttp2Request(headers: headers, body: data, streaming: False); "
             "s.cancelHttp2Stream(stream_id: 1); }",
             "socket-http2-named");
+    }
+
+    reviewedSocketQuicBuiltinOptIn() {
+        Program p(PO_NEW_STYLE);
+        p.parse("sub socket_quic_named(Socket s) { binary data = <00>; StringInputStream input_stream(source: "
+            "\"body\"); Queue q(); hash<auto> headers = {}; "
+            "s.startPollQuicConnect(host: \"example.com\", port: 443, family: AF_INET); "
+            "s.startPollQuicAccept(options: {\"headers_only\": True}); "
+            "s.startPollQuicSendResponse(session_id: 1, stream_id: 0, status_code: 200, headers: headers, "
+            "body: data); "
+            "s.submitQuicRequest(method: \"GET\", path: \"/\", headers: headers, body: data); "
+            "s.submitQuicRequestStreaming(method: \"POST\", path: \"/stream\", headers: headers); "
+            "s.sendQuicClientStreamData(stream_id: 0, body: data, end_stream: False); "
+            "s.waitForQuicClientStreamDrain(stream_id: 0, timeout_ms: 0); "
+            "s.cancelQuicStream(session_id: 1, stream_id: 0); "
+            "s.submitQuicResponse(session_id: 1, stream_id: 0, status_code: 200, headers: headers, body: data); "
+            "s.submitQuicShutdownNotice(session_id: 1); s.submitQuicShutdown(session_id: 1); "
+            "s.getQuicSessionGoawayState(session_id: 1); s.isQuicGoawayReceived(session_id: 1); "
+            "s.getQuicPeerCertificate(session_id: 1); "
+            "s.startPollQuicSendStreamingResponse(session_id: 1, stream_id: 0, status_code: 200, "
+            "headers: headers, body: input_stream, chunk_size: 1024); "
+            "s.submitQuicResponseStreaming(session_id: 1, stream_id: 0, status_code: 200, headers: headers); "
+            "s.submitQuicStreamData(session_id: 1, stream_id: 0, body: data, end_stream: False); "
+            "s.submitQuicStreamingResponseWithStream(session_id: 1, stream_id: 0, status_code: 200, "
+            "headers: headers, body: input_stream); "
+            "s.waitForQuicStreamDrain(session_id: 1, stream_id: 0, timeout_ms: 0); "
+            "s.submitQuicConnectResponse(session_id: 1, stream_id: 0, status_code: 200, headers: headers); "
+            "s.readQuicConnectStreamData(session_id: 1, stream_id: 0); "
+            "s.readQuicStreamDataBlock(session_id: 1, stream_id: 0, timeout_ms: 0); "
+            "s.isQuicStreamComplete(session_id: 1, stream_id: 0); "
+            "s.cleanupQuicStream(session_id: 1, stream_id: 0); "
+            "s.registerQuicConnectStreamQueue(session_id: 1, stream_id: 0, queue: q); "
+            "s.deregisterQuicConnectStreamQueue(session_id: 1, stream_id: 0); "
+            "s.registerQuicConnectStreamFrameState(session_id: 1, stream_id: 0, queue: q); "
+            "s.deregisterQuicConnectStreamFrameState(session_id: 1, stream_id: 0); "
+            "s.resetQuicStream(session_id: 1, stream_id: 0); "
+            "s.submitQuicDatagram(session_id: 1, stream_id: 0, data: data); "
+            "s.readQuicDatagram(session_id: 1, stream_id: 0, timeout_ms: 0); "
+            "s.registerQuicDatagramQueue(session_id: 1, stream_id: 0, queue: q); "
+            "s.unregisterQuicDatagramQueue(session_id: 1, stream_id: 0); "
+            "s.getQuicMaxDatagramSize(session_id: 1, stream_id: 0); "
+            "s.isQuicDatagramSupported(session_id: 1); }",
+            "socket-quic-named");
     }
 
     reviewedHttpReadinessBuiltinOptIn() {

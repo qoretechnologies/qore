@@ -1098,6 +1098,64 @@ class ReflectionTest inherits QUnit::Test {
             ("stream_id", "status_code", "headers", "body"));
         assertNamedClassMethodVariantCount("Socket", "submitHttp2Request", ("headers", "body", "streaming"));
         assertNamedClassMethodVariantCount("Socket", "cancelHttp2Stream", ("stream_id",));
+        assertNamedClassMethodVariantCount("Socket", "startPollQuicConnect", ("host", "port", "family"));
+        assertNamedClassMethodVariantCount("Socket", "startPollQuicAccept", ("options",));
+        assertNamedClassMethodVariantCount("Socket", "startPollQuicSendResponse",
+            ("session_id", "stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicRequest",
+            ("method", "path", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicRequestStreaming",
+            ("method", "path", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "sendQuicClientStreamData",
+            ("stream_id", "body", "end_stream"));
+        assertNamedClassMethodVariantCount("Socket", "waitForQuicClientStreamDrain",
+            ("stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "cancelQuicStream", ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicResponse",
+            ("session_id", "stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicShutdownNotice", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicShutdown", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "getQuicSessionGoawayState", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "isQuicGoawayReceived", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "getQuicPeerCertificate", ("session_id",));
+        assertNamedClassMethodVariantCount("Socket", "startPollQuicSendStreamingResponse",
+            ("session_id", "stream_id", "status_code", "headers", "body", "chunk_size"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicResponseStreaming",
+            ("session_id", "stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicStreamData",
+            ("session_id", "stream_id", "body", "end_stream"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicStreamingResponseWithStream",
+            ("session_id", "stream_id", "status_code", "headers", "body"));
+        assertNamedClassMethodVariantCount("Socket", "waitForQuicStreamDrain",
+            ("session_id", "stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicConnectResponse",
+            ("session_id", "stream_id", "status_code", "headers"));
+        assertNamedClassMethodVariantCount("Socket", "readQuicConnectStreamData",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "readQuicStreamDataBlock",
+            ("session_id", "stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "isQuicStreamComplete", ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "cleanupQuicStream", ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "registerQuicConnectStreamQueue",
+            ("session_id", "stream_id", "queue"));
+        assertNamedClassMethodVariantCount("Socket", "deregisterQuicConnectStreamQueue",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "registerQuicConnectStreamFrameState",
+            ("session_id", "stream_id", "queue"));
+        assertNamedClassMethodVariantCount("Socket", "deregisterQuicConnectStreamFrameState",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "resetQuicStream", ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "submitQuicDatagram",
+            ("session_id", "stream_id", "data"));
+        assertNamedClassMethodVariantCount("Socket", "readQuicDatagram",
+            ("session_id", "stream_id", "timeout_ms"));
+        assertNamedClassMethodVariantCount("Socket", "registerQuicDatagramQueue",
+            ("session_id", "stream_id", "queue"));
+        assertNamedClassMethodVariantCount("Socket", "unregisterQuicDatagramQueue",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "getQuicMaxDatagramSize",
+            ("session_id", "stream_id"));
+        assertNamedClassMethodVariantCount("Socket", "isQuicDatagramSupported", ("session_id",));
         assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "waitForReady", ("timeout_ms",));
         assertNamedClassMethodVariantCount("AbstractHttpPollConnection", "registerReadyNotifier", ("notifier",));
         assertNamedClassMethodVariantCount("HttpClientConnectionBase", "waitForReadyOrError", ("timeout_ms",));

@@ -517,6 +517,10 @@ These examples are from the core migration and should be reused as precedent:
   HTTP/2 methods should keep protocol terms explicit: `options`, `stream_id`,
   `status_code`, `headers`, `body`, `chunk_size`, `path`, `enabled`,
   `timeout_ms`, `end_stream`, `trailers`, and `streaming`.
+  QUIC / HTTP/3 methods should mirror those terms and use `session_id`,
+  `stream_id`, `status_code`, `headers`, `body`, `data`, `queue`, `options`,
+  `timeout_ms`, `method`, `path`, `host`, `port`, `family`, `chunk_size`, and
+  `end_stream`; avoid exposing shorthand such as `opts` or generic `timeout`.
 - `SandboxManager` should expose explicit limit and policy names:
   `max_bytes`, `max_cpu_time_ms`, `max_wall_time_ms`, `max_threads`,
   `max_depth`, `path`, `access_modes`, `allow`, `host_pattern`, `cidr`,
