@@ -10,9 +10,7 @@
 %requires ../../../qlib/FsUtil.qm
 %requires ../../../qlib/QUnit.qm
 
-%try-module i18n
-%define NoI18n
-%endtry
+%requires i18n
 
 %exec-class I18nTest
 
@@ -42,9 +40,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     backendInfoTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         hash<auto> info = I18n::get_backend_info();
         assertEq("icu", info.backend);
         assertRegex("^[0-9]+\\.[0-9]+", info.icu_version);
@@ -56,9 +51,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     cardinalPluralCategoryTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         assertEq("one", I18n::plural_category(1, "en"));
         assertEq("other", I18n::plural_category(2, "en"));
 
@@ -83,9 +75,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     visibleFractionDigitsTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         assertEq("one", I18n::plural_category("1", "ru"));
         assertEq("other", I18n::plural_category("1.0", "ru"));
         assertEq("other", I18n::plural_category("1.00", "ru"));
@@ -96,9 +85,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     ordinalPluralCategoryTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         hash<auto> opts = {"type": "ordinal"};
         assertEq("one", I18n::plural_category(1, "en", opts));
         assertEq("two", I18n::plural_category(2, "en", opts));
@@ -109,9 +95,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     localeNegotiationTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         assertEq("en-US", I18n::canonicalize_locale("en_US"));
         assertEq("he", I18n::canonicalize_locale("iw"));
         assertEq("sr-Cyrl-RS", I18n::add_likely_subtags("sr"));
@@ -138,9 +121,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     threadLocaleControlTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         I18n::clear_thread_locale();
         assertEq("root", I18n::get_thread_locale());
         I18n::set_thread_locale("cs_CZ-u-nu-latn");
@@ -159,9 +139,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     localeFormattingAndCollationTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         assertEq("1,234.50", I18n::format_number("1234.50", "en-US"));
         assertEq("1234.50", I18n::format_number("1234.50", "en-US", {"grouping": False}));
         assertEq("1.00", I18n::format_number(1, "en-US", {"min_fraction_digits": 2}));
@@ -193,9 +170,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     pluralFormTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         hash<auto> ru_forms = {
             "one": "file-one",
             "few": "file-few",
@@ -223,9 +197,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     validationErrorTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         assertThrows("I18N-NUMBER-ERROR", auto sub() {
             return I18n::plural_category("abc", "en");
         });
@@ -343,9 +314,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     messageCatalogLookupTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         I18n::MessageCatalog catalog(createCatalog());
 
         assertEq("Ahoj, Petr", catalog.t("Hello, {name}", "cs-CZ", {"name": "Petr"}));
@@ -364,9 +332,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     messageCatalogPluralLookupTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         I18n::MessageCatalog catalog(createCatalog());
 
         assertEq("1 soubor", catalog.tn(1, "1 file", "{count} files", "cs"));
@@ -383,9 +348,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     messageCatalogBidiIsolationTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         I18n::MessageCatalog catalog(createCatalog());
 
         assertEq("Hello, \u2068Sam\u2069", catalog.t("Hello, {name}", "ar", {"name": "Sam"}));
@@ -393,9 +355,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     messageCatalogStatePolicyTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         hash<auto> data = {
             "schema_version": 1,
             "locales": {
@@ -417,9 +376,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     messageCatalogLayerPrecedenceTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         hash<auto> base = {
             "schema_version": 1,
             "locales": {
@@ -440,9 +396,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     messageCatalogJsonFileLoadingTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         TmpFile base("qore-i18n-", ".json");
         base.file.write(createCatalogJson("Ahoj"));
         base.file.close();
@@ -464,9 +417,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     messageCatalogJsonValidationTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
             return I18n::parse_native_catalog_json("{\"a\": 1, \"a\": 2}");
         });
@@ -490,9 +440,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     messageCatalogDiscoveryTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         string base_dir = make_tmp_dir("qore-i18n-base-");
         string override_dir = make_tmp_dir("qore-i18n-override-");
         on_exit remove_tree(base_dir);
@@ -529,9 +476,6 @@ class I18nTest inherits QUnit::Test {
     }
 
     messageCatalogDiscoverySandboxTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         string base_dir = make_tmp_dir("qore-i18n-sandbox-");
         on_exit remove_tree(base_dir);
 
@@ -560,9 +504,6 @@ list<string> sub discover_catalogs(string domain, string locale, string path) {
     }
 
     messageCatalogValidationTest() {
-%ifdef NoI18n
-        testSkip("i18n module not available");
-%endif
         assertThrows("I18N-FORMAT-ERROR", auto sub() {
             I18n::MessageCatalog catalog(createCatalog());
             return catalog.t("Hello, {name}", "cs");
