@@ -1826,12 +1826,12 @@ qclass PollPipeline [
 ];
 
 //! Creates a new poll pipeline for the given socket
-/** @param sock the Socket object to use for I/O operations
+/** @param socket the Socket object to use for I/O operations
 
     @throw POLL-PIPELINE-ERROR if the socket is invalid
 */
-PollPipeline::constructor(Socket[QoreSocketObject] sock) {
-    QoreSocketObject* sock_ptr = *sock;
+PollPipeline::constructor(Socket[QoreSocketObject] socket) [flags=NAMED_ARGS] {
+    QoreSocketObject* sock_ptr = *socket;
 
     // Store socket as Qore member for DGC visibility
     QoreValue sock_arg = args->retrieveEntry(0);
@@ -1856,7 +1856,7 @@ PollPipeline::constructor(Socket[QoreSocketObject] sock) {
 
     @since %Qore 2.3
 */
-PollPipeline::constructor(*string goal) {
+PollPipeline::constructor(*string goal) [flags=NAMED_ARGS] {
     self->setMemberValue("goal", QC_POLLPIPELINE,
         goal ? new QoreStringNode(goal->c_str()) : new QoreStringNode("poll_pipeline"), xsink);
 
@@ -1886,7 +1886,7 @@ PollPipeline::copy() {
 
     @since %Qore 2.3
 */
-int PollPipeline::addConnect(string target) [dom=NETWORK] {
+int PollPipeline::addConnect(string target) [dom=NETWORK; flags=NAMED_ARGS] {
     return priv->addConnect(target->c_str());
 }
 
@@ -1896,7 +1896,7 @@ int PollPipeline::addConnect(string target) [dom=NETWORK] {
 
     @since %Qore 2.3
 */
-int PollPipeline::addConnectSsl(string target) [dom=NETWORK] {
+int PollPipeline::addConnectSsl(string target) [dom=NETWORK; flags=NAMED_ARGS] {
     return priv->addConnectSsl(target->c_str());
 }
 
@@ -1910,25 +1910,25 @@ int PollPipeline::addSslUpgrade() [dom=NETWORK] {
 }
 
 //! Adds a send step
-/** @param d the data to send (string or binary)
+/** @param payload the data to send (string or binary)
     @return the step index
 
     @throw POLL-PIPELINE-ERROR if the data type is invalid
 
     @since %Qore 2.3
 */
-int PollPipeline::addSend(data d) [dom=NETWORK] {
+int PollPipeline::addSend(data payload) [dom=NETWORK; flags=NAMED_ARGS] {
     BinaryNode* bin;
-    if (d.getType() == NT_BINARY) {
-        bin = d.get<BinaryNode>()->binRefSelf();
-    } else if (d.getType() == NT_STRING) {
-        QoreStringValueHelper str(d);
+    if (payload.getType() == NT_BINARY) {
+        bin = payload.get<BinaryNode>()->binRefSelf();
+    } else if (payload.getType() == NT_STRING) {
+        QoreStringValueHelper str(payload);
         bin = new BinaryNode();
         bin->append(str->c_str(), str->size());
     } else {
         xsink->raiseException("POLL-PIPELINE-ERROR",
             "send data must be string or binary, got type '%s'",
-            d.getFullTypeName());
+            payload.getFullTypeName());
         return -1;
     }
     return priv->addSend(bin);
@@ -1953,7 +1953,7 @@ int PollPipeline::addReadHttpHeader() [dom=NETWORK] {
 
     @since %Qore 2.3
 */
-int PollPipeline::addReadHttpBody(*string method) [dom=NETWORK] {
+int PollPipeline::addReadHttpBody(*string method) [dom=NETWORK; flags=NAMED_ARGS] {
     return priv->addReadHttpBody(method ? method->c_str() : "");
 }
 
@@ -1964,15 +1964,15 @@ int PollPipeline::addReadHttpBody(*string method) [dom=NETWORK] {
     This enables composing high-level operations (like HTTPClient.startPollSendRecv)
     as pipeline steps while keeping the I/O thread pure C++.
 
-    @param op the poll operation object (must have C++ SocketPollOperationBase private data)
+    @param operation the poll operation object (must have C++ SocketPollOperationBase private data)
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addDelegate(object op) [dom=NETWORK] {
+int PollPipeline::addDelegate(object operation) [dom=NETWORK; flags=NAMED_ARGS] {
     // Extract the C++ SocketPollOperationBase from the Qore object
     SocketPollOperationBase* spop = static_cast<SocketPollOperationBase*>(
-        const_cast<QoreObject*>(op)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+        const_cast<QoreObject*>(operation)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
     if (!spop) {
         if (!*xsink) {
             xsink->raiseException("POLL-PIPELINE-ERROR",
@@ -1987,20 +1987,20 @@ int PollPipeline::addDelegate(object op) [dom=NETWORK] {
         return -1;
     }
     // addDelegate takes its own refs; release the getReferencedPrivateData ref
-    int rv = priv->addDelegate(spop, const_cast<QoreObject*>(op));
+    int rv = priv->addDelegate(spop, const_cast<QoreObject*>(operation));
     spop->deref(xsink);
     return rv;
 }
 
 //! Adds a fixed-size receive step
-/** @param size the number of bytes to receive
+/** @param byte_count the number of bytes to receive
     @param as_string if True, return the data as a string
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addRecvExact(int size, bool as_string = False) [dom=NETWORK] {
-    return priv->addRecvExact((size_t)size, as_string);
+int PollPipeline::addRecvExact(int byte_count, bool as_string = False) [dom=NETWORK; flags=NAMED_ARGS] {
+    return priv->addRecvExact((size_t)byte_count, as_string);
 }
 
 //! Adds a receive-until-pattern step
@@ -2010,7 +2010,7 @@ int PollPipeline::addRecvExact(int size, bool as_string = False) [dom=NETWORK] {
 
     @since %Qore 2.3
 */
-int PollPipeline::addRecvUntilBytes(string pattern, bool as_string = True) [dom=NETWORK] {
+int PollPipeline::addRecvUntilBytes(string pattern, bool as_string = True) [dom=NETWORK; flags=NAMED_ARGS] {
     return priv->addRecvUntil(pattern->c_str(), as_string);
 }
 
@@ -2020,7 +2020,7 @@ int PollPipeline::addRecvUntilBytes(string pattern, bool as_string = True) [dom=
 
     @since %Qore 2.3
 */
-int PollPipeline::addRecvData(bool as_string = False) [dom=NETWORK] {
+int PollPipeline::addRecvData(bool as_string = False) [dom=NETWORK; flags=NAMED_ARGS] {
     return priv->addRecvData(as_string);
 }
 
@@ -2042,13 +2042,14 @@ int PollPipeline::addDeliverResult() {
 
     @param header_name the header name (case-sensitive key in context headers)
     @param expected_prefix the expected value prefix (case-insensitive comparison)
-    @param err the Qore exception error code to throw on mismatch
+    @param error_code the Qore exception error code to throw on mismatch
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addValidateHeaderPrefix(string header_name, string expected_prefix, string err) {
-    return priv->addValidateHeaderPrefix(header_name->c_str(), expected_prefix->c_str(), err->c_str());
+int PollPipeline::addValidateHeaderPrefix(
+        string header_name, string expected_prefix, string error_code) [flags=NAMED_ARGS] {
+    return priv->addValidateHeaderPrefix(header_name->c_str(), expected_prefix->c_str(), error_code->c_str());
 }
 
 //! Adds an output field extraction step
@@ -2060,7 +2061,7 @@ int PollPipeline::addValidateHeaderPrefix(string header_name, string expected_pr
 
     @since %Qore 2.3
 */
-int PollPipeline::addExtractOutputField(string field_name) {
+int PollPipeline::addExtractOutputField(string field_name) [flags=NAMED_ARGS] {
     return priv->addExtractOutputField(field_name->c_str());
 }
 
@@ -2068,14 +2069,14 @@ int PollPipeline::addExtractOutputField(string field_name) {
 /** Computes the expected accept key per RFC 6455 and validates the
     response header matches. Throws if validation fails.
 
-    @param ws_key the Sec-WebSocket-Key sent in the request
-    @param err the exception error code on failure
+    @param websocket_key the Sec-WebSocket-Key sent in the request
+    @param error_code the exception error code on failure
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addValidateWebSocketAccept(string ws_key, string err) {
-    return priv->addValidateWebSocketAccept(ws_key->c_str(), err->c_str());
+int PollPipeline::addValidateWebSocketAccept(string websocket_key, string error_code) [flags=NAMED_ARGS] {
+    return priv->addValidateWebSocketAccept(websocket_key->c_str(), error_code->c_str());
 }
 
 //! Adds a status-code validation step that throws if the code is out of range
@@ -2083,28 +2084,30 @@ int PollPipeline::addValidateWebSocketAccept(string ws_key, string err) {
     RECV_HEADER steps). If the status code is not in the given range,
     throws an exception with the given error code.
 
-    @param lo the lower bound (inclusive)
-    @param hi the upper bound (inclusive)
-    @param err_code the Qore exception error code
+    @param min_status the lower bound (inclusive)
+    @param max_status the upper bound (inclusive)
+    @param error_code the Qore exception error code
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addValidateStatus(int lo, int hi, string err) [dom=NETWORK] {
-    return priv->addValidateStatus((int)lo, (int)hi, err->c_str());
+int PollPipeline::addValidateStatus(
+        int min_status, int max_status, string error_code) [dom=NETWORK; flags=NAMED_ARGS] {
+    return priv->addValidateStatus((int)min_status, (int)max_status, error_code->c_str());
 }
 
 //! Adds a conditional branch step based on HTTP status code range
-/** @param lo the lower bound of the status code range (inclusive)
-    @param hi the upper bound of the status code range (inclusive)
+/** @param min_status the lower bound of the status code range (inclusive)
+    @param max_status the upper bound of the status code range (inclusive)
     @param true_step the step index to jump to if the status code is in range
     @param false_step the step index to jump to if the status code is out of range
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addBranchOnStatus(int lo, int hi, int true_step, int false_step) {
-    return priv->addBranchOnStatus((int)lo, (int)hi, (int)true_step, (int)false_step);
+int PollPipeline::addBranchOnStatus(
+        int min_status, int max_status, int true_step, int false_step) [flags=NAMED_ARGS] {
+    return priv->addBranchOnStatus((int)min_status, (int)max_status, (int)true_step, (int)false_step);
 }
 
 //! Adds a send step that sends data from a named context extra slot
@@ -2119,7 +2122,7 @@ int PollPipeline::addBranchOnStatus(int lo, int hi, int true_step, int false_ste
 
     @since %Qore 2.3
 */
-int PollPipeline::addSendFromContext(string context_key) [dom=NETWORK] {
+int PollPipeline::addSendFromContext(string context_key) [dom=NETWORK; flags=NAMED_ARGS] {
     return priv->addSendFromContext(context_key->c_str());
 }
 
@@ -2137,36 +2140,37 @@ int PollPipeline::addSendFromContext(string context_key) [dom=NETWORK] {
 
     @param code_key the context extra key for the numeric reply code
     @param text_key the context extra key for the accumulated response text
-    @param err_code the exception error code for error responses
+    @param error_code the exception error code for error responses
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addRecvLineResponse(string code_key, string text_key, string err_code) [dom=NETWORK] {
-    return priv->addRecvLineResponse(code_key->c_str(), text_key->c_str(), err_code->c_str());
+int PollPipeline::addRecvLineResponse(
+        string code_key, string text_key, string error_code) [dom=NETWORK; flags=NAMED_ARGS] {
+    return priv->addRecvLineResponse(code_key->c_str(), text_key->c_str(), error_code->c_str());
 }
 
 //! Adds a branch step based on whether a context extra key is truthy
-/** Evaluates the value in ctx.extra[key] as a boolean. Jumps to true_step
+/** Evaluates the value in ctx.extra[context_key] as a boolean. Jumps to true_step
     if truthy, false_step otherwise.
 
-    @param key the context extra key to check
+    @param context_key the context extra key to check
     @param true_step the step index if the value is truthy
     @param false_step the step index if the value is falsy
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addBranchOnContextKey(string key, int true_step, int false_step) {
-    return priv->addBranchOnContextKey(key->c_str(), (int)true_step, (int)false_step);
+int PollPipeline::addBranchOnContextKey(string context_key, int true_step, int false_step) [flags=NAMED_ARGS] {
+    return priv->addBranchOnContextKey(context_key->c_str(), (int)true_step, (int)false_step);
 }
 
 //! Adds a branch step based on whether a context extra string equals a value
-/** Compares ctx.extra[key] (must be a string) against the expected value
+/** Compares ctx.extra[context_key] (must be a string) against the expected value
     using exact string comparison. Jumps to true_step on match, false_step
     otherwise.
 
-    @param key the context extra key to check
+    @param context_key the context extra key to check
     @param value the expected string value
     @param true_step the step index on match
     @param false_step the step index on mismatch
@@ -2174,27 +2178,28 @@ int PollPipeline::addBranchOnContextKey(string key, int true_step, int false_ste
 
     @since %Qore 2.3
 */
-int PollPipeline::addBranchOnContextValue(string key, string value, int true_step, int false_step) {
-    return priv->addBranchOnContextValue(key->c_str(), value->c_str(),
+int PollPipeline::addBranchOnContextValue(
+        string context_key, string value, int true_step, int false_step) [flags=NAMED_ARGS] {
+    return priv->addBranchOnContextValue(context_key->c_str(), value->c_str(),
         (int)true_step, (int)false_step);
 }
 
 //! Adds a transform step that sets a string value in the context extra hash
-/** @param key the context extra key to set
+/** @param context_key the context extra key to set
     @param value the string value to store
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addSetContextValue(string key, string value) {
-    return priv->addSetContextValue(key->c_str(), value->c_str());
+int PollPipeline::addSetContextValue(string context_key, string value) [flags=NAMED_ARGS] {
+    return priv->addSetContextValue(context_key->c_str(), value->c_str());
 }
 
 //! Adds a transform step that sets binary data in the context extra hash
 /** The data can be string or binary. Strings are stored as binary.
     Use with addSendFromContext() to prepare dynamic send data.
 
-    @param key the context extra key to set
+    @param context_key the context extra key to set
     @param value the data to store (string or binary)
     @return the step index
 
@@ -2202,7 +2207,7 @@ int PollPipeline::addSetContextValue(string key, string value) {
 
     @since %Qore 2.3
 */
-int PollPipeline::addSetContextBinary(string key, data value) {
+int PollPipeline::addSetContextBinary(string context_key, data value) [flags=NAMED_ARGS] {
     BinaryNode* bin;
     if (value.getType() == NT_BINARY) {
         bin = value.get<BinaryNode>()->binRefSelf();
@@ -2216,7 +2221,7 @@ int PollPipeline::addSetContextBinary(string key, data value) {
             value.getFullTypeName());
         return -1;
     }
-    return priv->addSetContextBinary(key->c_str(), bin);
+    return priv->addSetContextBinary(context_key->c_str(), bin);
 }
 
 //! Adds a transform step that checks if a context string contains a substring
@@ -2231,7 +2236,8 @@ int PollPipeline::addSetContextBinary(string key, data value) {
 
     @since %Qore 2.3
 */
-int PollPipeline::addCheckContains(string source_key, string substring, string result_key) {
+int PollPipeline::addCheckContains(
+        string source_key, string substring, string result_key) [flags=NAMED_ARGS] {
     return priv->addCheckContains(source_key->c_str(), substring->c_str(),
         result_key->c_str());
 }
@@ -2244,14 +2250,14 @@ int PollPipeline::addCheckContains(string source_key, string substring, string r
     Used for POP3 and similar line-oriented protocols that use +OK/-ERR
     prefixes instead of numeric status codes.
 
-    @param prefix the expected prefix (e.g., "+OK")
-    @param err_code the Qore exception error code to throw on mismatch
+    @param expected_prefix the expected prefix (e.g., "+OK")
+    @param error_code the Qore exception error code to throw on mismatch
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addValidateResponsePrefix(string prefix, string err_code) {
-    return priv->addValidateResponsePrefix(prefix->c_str(), err_code->c_str());
+int PollPipeline::addValidateResponsePrefix(string expected_prefix, string error_code) [flags=NAMED_ARGS] {
+    return priv->addValidateResponsePrefix(expected_prefix->c_str(), error_code->c_str());
 }
 
 //! Adds a POP3 APOP command generation step
@@ -2261,25 +2267,27 @@ int PollPipeline::addValidateResponsePrefix(string prefix, string err_code) {
 
     @param command_key the context extra key for the generated APOP command
     @param present_key the context extra key set to True if a challenge was present
-    @param user the POP3 user name
+    @param username the POP3 user name
     @param password the POP3 password
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addMakePop3ApopCommand(string command_key, string present_key, string user, string password) {
-    return priv->addMakePop3ApopCommand(command_key->c_str(), present_key->c_str(), user->c_str(), password->c_str());
+int PollPipeline::addMakePop3ApopCommand(
+        string command_key, string present_key, string username, string password) [flags=NAMED_ARGS] {
+    return priv->addMakePop3ApopCommand(
+        command_key->c_str(), present_key->c_str(), username->c_str(), password->c_str());
 }
 
 //! Adds a transform step that sets a boolean value in the context extra hash
-/** @param key the context extra key to set
+/** @param context_key the context extra key to set
     @param value the boolean value to store
     @return the step index
 
     @since %Qore 2.3
 */
-int PollPipeline::addSetContextBool(string key, bool value) {
-    return priv->addSetContextBool(key->c_str(), value);
+int PollPipeline::addSetContextBool(string context_key, bool value) [flags=NAMED_ARGS] {
+    return priv->addSetContextBool(context_key->c_str(), value);
 }
 
 //! Adds a transform step that selects between two context values based on a condition
@@ -2296,7 +2304,7 @@ int PollPipeline::addSetContextBool(string key, bool value) {
     @since %Qore 2.3
 */
 int PollPipeline::addSelectContextValue(string result_key, string condition_key,
-        string true_source_key, string false_source_key) {
+        string true_source_key, string false_source_key) [flags=NAMED_ARGS] {
     return priv->addSelectContextValue(result_key->c_str(), condition_key->c_str(),
         true_source_key->c_str(), false_source_key->c_str());
 }
@@ -2311,7 +2319,7 @@ int PollPipeline::addSelectContextValue(string result_key, string condition_key,
 
     @since %Qore 2.3
 */
-int PollPipeline::addContextOr(string result_key, string key_a, string key_b) {
+int PollPipeline::addContextOr(string result_key, string key_a, string key_b) [flags=NAMED_ARGS] {
     return priv->addContextOr(result_key->c_str(), key_a->c_str(), key_b->c_str());
 }
 
@@ -2321,7 +2329,7 @@ int PollPipeline::addContextOr(string result_key, string key_a, string key_b) {
 
     @since %Qore 2.3
 */
-int PollPipeline::addGoto(int target_step) {
+int PollPipeline::addGoto(int target_step) [flags=NAMED_ARGS] {
     return priv->addGoto((int)target_step);
 }
 
@@ -2343,7 +2351,7 @@ int PollPipeline::addQueue() {
 
     @since %Qore 2.3
 */
-int PollPipeline::addPushQueue(int queue_id) {
+int PollPipeline::addPushQueue(int queue_id) [flags=NAMED_ARGS] {
     return priv->addPushQueue((int)queue_id);
 }
 
@@ -2356,7 +2364,7 @@ int PollPipeline::addPushQueue(int queue_id) {
 
     @since %Qore 2.3
 */
-int PollPipeline::addDrainQueueSend(int queue_id) [dom=NETWORK] {
+int PollPipeline::addDrainQueueSend(int queue_id) [dom=NETWORK; flags=NAMED_ARGS] {
     return priv->addDrainQueueSend((int)queue_id);
 }
 
@@ -2369,21 +2377,21 @@ int PollPipeline::addDrainQueueSend(int queue_id) [dom=NETWORK] {
 
     @since %Qore 2.3
 */
-int PollPipeline::addYield(int resume_step) {
+int PollPipeline::addYield(int resume_step) [flags=NAMED_ARGS] {
     return priv->addYield((int)resume_step);
 }
 
 //! Sets the branch targets for a BRANCH step after construction
 /** Useful when branch targets reference steps that were added later.
 
-    @param step_idx the BRANCH step index to update
+    @param step_index the BRANCH step index to update
     @param true_step the step index for the true condition
     @param false_step the step index for the false condition
 
     @since %Qore 2.3
 */
-nothing PollPipeline::setStepTarget(int step_idx, int true_step, int false_step) {
-    priv->setStepTarget((int)step_idx, (int)true_step, (int)false_step);
+nothing PollPipeline::setStepTarget(int step_index, int true_step, int false_step) [flags=NAMED_ARGS] {
+    priv->setStepTarget((int)step_index, (int)true_step, (int)false_step);
 }
 
 //! Adds a non-blocking WebSocket framed receive step
@@ -2435,7 +2443,8 @@ int PollPipeline::addWsDecodeFrame() {
 
     @since %Qore 2.3
 */
-int PollPipeline::addWsControlFrameHandler(int send_queue_id, bool client_mask = True) {
+int PollPipeline::addWsControlFrameHandler(
+        int send_queue_id, bool client_mask = True) [flags=NAMED_ARGS] {
     Queue* q = priv->getQueuePtr((int)send_queue_id);
     return priv->addTransform(makeWsControlFrameHandler(q, client_mask));
 }
@@ -2450,7 +2459,7 @@ int PollPipeline::addWsControlFrameHandler(int send_queue_id, bool client_mask =
 
     @since %Qore 2.3
 */
-int PollPipeline::addBranchOnWsControlFrame(int true_step, int false_step) {
+int PollPipeline::addBranchOnWsControlFrame(int true_step, int false_step) [flags=NAMED_ARGS] {
     return priv->addBranch(wsIsControlFrame, (int)true_step, (int)false_step);
 }
 
@@ -2462,7 +2471,7 @@ int PollPipeline::addBranchOnWsControlFrame(int true_step, int false_step) {
 
     @since %Qore 2.3
 */
-int PollPipeline::addBranchOnWsClosed(int true_step, int false_step) {
+int PollPipeline::addBranchOnWsClosed(int true_step, int false_step) [flags=NAMED_ARGS] {
     return priv->addBranch(wsIsClosed, (int)true_step, (int)false_step);
 }
 
@@ -2474,7 +2483,7 @@ int PollPipeline::addBranchOnWsClosed(int true_step, int false_step) {
 
     @since %Qore 2.3
 */
-int PollPipeline::addBranchOnWsClosingDone(int true_step, int false_step) {
+int PollPipeline::addBranchOnWsClosingDone(int true_step, int false_step) [flags=NAMED_ARGS] {
     return priv->addBranch(wsIsClosingDone, (int)true_step, (int)false_step);
 }
 
@@ -2486,7 +2495,7 @@ int PollPipeline::addBranchOnWsClosingDone(int true_step, int false_step) {
 
     @since %Qore 2.3
 */
-int PollPipeline::addBranchOnEof(int true_step, int false_step) {
+int PollPipeline::addBranchOnEof(int true_step, int false_step) [flags=NAMED_ARGS] {
     return priv->addBranch([](const PollPipelinePriv::Context& ctx) {
         return ctx.eof;
     }, (int)true_step, (int)false_step);
@@ -2500,7 +2509,7 @@ int PollPipeline::addBranchOnEof(int true_step, int false_step) {
 
     @since %Qore 2.3
 */
-int PollPipeline::addBranchOnHasFrame(int true_step, int false_step) {
+int PollPipeline::addBranchOnHasFrame(int true_step, int false_step) [flags=NAMED_ARGS] {
     return priv->addBranch([](const PollPipelinePriv::Context& ctx) {
         return ctx.has_frame;
     }, (int)true_step, (int)false_step);
@@ -2512,7 +2521,7 @@ int PollPipeline::addBranchOnHasFrame(int true_step, int false_step) {
 
     @since %Qore 2.3
 */
-auto PollPipeline::getQueueItem(int queue_id) {
+auto PollPipeline::getQueueItem(int queue_id) [flags=NAMED_ARGS] {
     return priv->getQueueItem((int)queue_id, xsink);
 }
 
@@ -2523,7 +2532,7 @@ auto PollPipeline::getQueueItem(int queue_id) {
 
     @since %Qore 2.3
 */
-auto PollPipeline::getQueueItemBlocking(int queue_id, timeout timeout_ms) {
+auto PollPipeline::getQueueItemBlocking(int queue_id, timeout timeout_ms) [flags=NAMED_ARGS] {
     return priv->getQueueItemBlocking((int)queue_id, (int)timeout_ms, xsink);
 }
 
@@ -2533,7 +2542,7 @@ auto PollPipeline::getQueueItemBlocking(int queue_id, timeout timeout_ms) {
 
     @since %Qore 2.3
 */
-nothing PollPipeline::pushQueueItem(int queue_id, auto item) {
+nothing PollPipeline::pushQueueItem(int queue_id, auto item) [flags=NAMED_ARGS] {
     priv->pushQueueItem((int)queue_id, item.refSelf(), xsink);
 }
 
@@ -2543,7 +2552,7 @@ nothing PollPipeline::pushQueueItem(int queue_id, auto item) {
 
     @since %Qore 2.3
 */
-bool PollPipeline::queueHasItems(int queue_id) [flags=RET_VALUE_ONLY] {
+bool PollPipeline::queueHasItems(int queue_id) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return priv->queueHasItems((int)queue_id);
 }
 
@@ -2553,7 +2562,7 @@ bool PollPipeline::queueHasItems(int queue_id) [flags=RET_VALUE_ONLY] {
 
     @since %Qore 2.3
 */
-int PollPipeline::getQueueSize(int queue_id) [flags=RET_VALUE_ONLY] {
+int PollPipeline::getQueueSize(int queue_id) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return priv->getQueueSize((int)queue_id);
 }
 
@@ -2565,7 +2574,7 @@ int PollPipeline::getQueueSize(int queue_id) [flags=RET_VALUE_ONLY] {
 
     @since %Qore 2.3
 */
-nothing PollPipeline::setResultPromise(Promise[QorePromise] promise) {
+nothing PollPipeline::setResultPromise(Promise[QorePromise] promise) [flags=NAMED_ARGS] {
     QoreObject* promise_obj = const_cast<QoreObject*>(
         get_param_value(args, 0).get<const QoreObject>());
     priv->setResultAction(new PromiseAction(*promise, promise_obj));
@@ -2578,7 +2587,7 @@ nothing PollPipeline::setResultPromise(Promise[QorePromise] promise) {
 
     @since %Qore 2.3
 */
-nothing PollPipeline::setResultChannel(object channel) {
+nothing PollPipeline::setResultChannel(object channel) [flags=NAMED_ARGS] {
     QoreChannel* ch = static_cast<QoreChannel*>(
         const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
     if (!ch) {

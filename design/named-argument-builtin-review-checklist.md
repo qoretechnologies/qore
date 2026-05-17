@@ -421,6 +421,11 @@ These examples are from the core migration and should be reused as precedent:
   `payload` for ping/pong data, `frame_data` for pre-encoded frames,
   `heartbeat_interval_ms`, `idle_timeout_ms`, `timeout_ms`, `max_frame_size`,
   and `callback` instead of shorthand such as `msg`, `ms`, `size`, or `cb`.
+- PollPipeline APIs should expose pipeline roles rather than implementation
+  shorthand: use `socket`, `payload`, `operation`, `byte_count`,
+  `error_code`, `min_status`, `max_status`, `context_key`,
+  `expected_prefix`, `username`, and `step_index` instead of `sock`, `d`,
+  `op`, `size`, `err`, `lo`, `hi`, `key`, `prefix`, `user`, or `step_idx`.
 - Async I/O controller APIs should not expose implementation shorthand:
   use `auto_stop`, `operation_info`, `replace_existing`, `io_object`,
   `timeout_ms`, `user_data`, `cancel_callback`, and `max_threads` instead of
