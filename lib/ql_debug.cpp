@@ -582,7 +582,7 @@ static void ut_future_get_blocking_resolved(UnitTestCounters& c) {
     UT_ASSERT(c, future.operator->() != nullptr, "Future is non-null");
 
     // Wrap the Future in a QoreObject (like FutureImpl would)
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     // Resolve the promise from a background thread after ~50ms
     std::thread resolver([&promise]() {
@@ -619,7 +619,7 @@ static void ut_future_get_blocking_timeout(UnitTestCounters& c) {
     ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
     UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
 
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     // Don't resolve the promise — wait should time out at 100ms
     int unused_us;
@@ -653,7 +653,7 @@ static void ut_future_get_blocking_error(UnitTestCounters& c) {
     ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
     UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
 
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     // Reject the promise with an error
     promise->setError("TEST-ERROR", "test error description", QoreValue(), &xsink);
@@ -692,7 +692,7 @@ static void ut_promise_action_execute_then_get(UnitTestCounters& c) {
 
     // Wrap the Future in a QoreObject so q_future_get_blocking can use
     // the FutureImpl fast path.
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     // Hand ownership of the Promise to the PromiseAction.  The C++
     // poll op would do the same — submitRequest() stores the action
@@ -764,7 +764,7 @@ static void ut_promise_action_execute_error(UnitTestCounters& c) {
     ReferenceHolder<QoreFuture> future(promise_holder->getFuture(&xsink), &xsink);
     UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
 
-    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+    QoreObject* future_obj = qore_new_future_impl_object(getProgram(), future.release());
 
     QorePromise* promise_raw = promise_holder.release();
     AbstractAsyncAction* action = new PromiseAction(promise_raw);

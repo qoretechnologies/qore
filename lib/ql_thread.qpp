@@ -1242,7 +1242,7 @@ Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL] {
     // We no longer need the promise reference from here - the thread owns it via priv
     promise->deref(xsink);
 
-    return new QoreObject(QC_FUTUREIMPL, getProgram(), future);
+    return qore_new_future_impl_object(getProgram(), future);
 }
 
 // ===== parallel_map / parallel_foreach internal implementation =====

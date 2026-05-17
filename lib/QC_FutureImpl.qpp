@@ -33,6 +33,7 @@
 #include <qore/QoreSandboxManager.h>
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
+#include "qore/intern/QoreTypeInfo.h"
 
 QoreValue q_future_get_blocking(QoreObject* future_obj, int64 timeout_ms,
         ExceptionSink* xsink) {
@@ -66,6 +67,18 @@ QoreValue q_future_get_blocking(QoreObject* future_obj, int64 timeout_ms,
         return QoreValue();
     }
     return future_obj->evalMethod("get", *args, xsink);
+}
+
+QoreObject* qore_new_future_impl_object(QoreProgram* pgm, QoreFuture* future, const QoreTypeInfo* type_arg) {
+    type_vec_t type_args;
+    type_args.push_back(type_arg ? type_arg : autoTypeInfo);
+    return qore_new_future_impl_object(pgm, future, type_args);
+}
+
+QoreObject* qore_new_future_impl_object(QoreProgram* pgm, QoreFuture* future, const type_vec_t& type_args) {
+    QoreObject* rv = new QoreObject(QC_FUTUREIMPL, pgm, future);
+    rv->setInstantiatedTypeInfo(QC_FUTUREIMPL->getTypeInfo(type_args));
+    return rv;
 }
 
 //! Concrete Future implementation backed by a QoreFuture (Promise/Future pair)

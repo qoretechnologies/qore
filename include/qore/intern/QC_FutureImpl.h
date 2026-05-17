@@ -39,4 +39,8 @@ DLLEXPORT extern QoreClass* QC_FUTUREIMPL;
 
 DLLLOCAL QoreClass* initFutureImplClass(QoreNamespace& ns);
 
+DLLLOCAL QoreObject* qore_new_future_impl_object(QoreProgram* pgm, QoreFuture* future,
+        const QoreTypeInfo* type_arg = nullptr);
+DLLLOCAL QoreObject* qore_new_future_impl_object(QoreProgram* pgm, QoreFuture* future, const type_vec_t& type_args);
+
 #endif // _QORE_CLASS_FUTUREIMPL_H

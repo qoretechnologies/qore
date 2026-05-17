@@ -383,7 +383,7 @@ QoreHashNode* Http2ClientConnection::submitRequest(const char* method, const cha
     }
     QoreProgram* pgm = getProgram();
     ReferenceHolder<QoreObject> future_obj(
-        new QoreObject(QC_FUTUREIMPL, pgm, future_holder.release()), xsink);
+        qore_new_future_impl_object(pgm, future_holder.release()), xsink);
 
     PromiseAction* action = new PromiseAction(promise_raw, /* promise_obj */ nullptr);
 
@@ -540,7 +540,7 @@ QoreHashNode* Http2ClientConnection::submitRequestStreamingSend(const char* meth
             return nullptr;
         }
         QoreProgram* pgm = getProgram();
-        future_obj = new QoreObject(QC_FUTUREIMPL, pgm, future_holder.release());
+        future_obj = qore_new_future_impl_object(pgm, future_holder.release());
         action = new PromiseAction(promise_raw, nullptr);
         promise_holder.release()->deref(xsink);
     }

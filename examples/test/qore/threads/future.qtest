@@ -196,6 +196,10 @@ class FutureTest inherits QUnit::Test {
         Future f = call_async(int sub() { return 42; });
         auto result = f.get();
         assertEq(42, result);
+
+        Future<auto> typed_f = call_async(int sub() { return 7; });
+        int typed_result = typed_f.get(timeout_ms: 0);
+        assertEq(7, typed_result);
     }
 
     testCallAsyncException() {

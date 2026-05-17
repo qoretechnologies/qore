@@ -1550,7 +1550,7 @@ list<hash<auto>> l = f.get();
 Future getaddrinfo_async(*string node, *softstring service, softint family = AF_UNSPEC, softint flags = 0, softint socktype = SOCK_STREAM, softint protocol = 0, timeout timeout = -1) [flags=NAMED_ARGS;dom=EXTERNAL_INFO] {
    QoreFuture* future = qore_socket_resolve_addrinfo_asyncio_future(xsink, node ? node->c_str() : 0,
       service ? service->c_str() : 0, (int)family, (int)flags, (int)socktype, (int)protocol, timeout);
-   return future ? new QoreObject(QC_FUTUREIMPL, getProgram(), future) : nullptr;
+   return future ? qore_new_future_impl_object(getProgram(), future) : nullptr;
 }
 
 //! Starts an asynchronous reverse address lookup and returns a Future for peer-style address information
@@ -1585,7 +1585,7 @@ Future getnameinfo_async(string address, softint family = AF_INET, softint port 
    }
 
    QoreFuture* future = qore_socket_resolve_nameinfo_asyncio_future(xsink, sa, len, timeout);
-   return future ? new QoreObject(QC_FUTUREIMPL, getProgram(), future) : nullptr;
+   return future ? qore_new_future_impl_object(getProgram(), future) : nullptr;
 }
 
 //! closes all possible file descriptors; useful in "daemon" processes that may have inherited open file descriptors

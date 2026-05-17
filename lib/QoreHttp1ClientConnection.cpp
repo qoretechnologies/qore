@@ -499,7 +499,7 @@ QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const cha
     }
     QoreProgram* pgm = getProgram();
     ReferenceHolder<QoreObject> future_obj(
-        new QoreObject(QC_FUTUREIMPL, pgm, future_holder.release()), xsink);
+        qore_new_future_impl_object(pgm, future_holder.release()), xsink);
 
     // Build the PromiseAction.  The ctor refs the promise internally; the
     // caller (this fn) still holds a ref via promise_holder.  Ownership
@@ -660,7 +660,7 @@ QoreHashNode* Http1ClientConnection::submitRequestStreamingSend(const char* meth
             return nullptr;
         }
         QoreProgram* pgm = getProgram();
-        future_obj = new QoreObject(QC_FUTUREIMPL, pgm, future_holder.release());
+        future_obj = qore_new_future_impl_object(pgm, future_holder.release());
         action = new PromiseAction(promise_raw, nullptr);
         promise_holder.release()->deref(xsink);
     }

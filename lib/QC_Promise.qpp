@@ -184,11 +184,10 @@ Future<T> Promise::getFuture() {
     if (!future) {
         return QoreValue();
     }
-    QoreObject* rv = new QoreObject(QC_FUTUREIMPL, getProgram(), future);
     const QoreParameterizedClassTypeInfo* promise_type
         = QoreTypeInfo::getParameterizedClassType(self->getInstantiatedTypeInfo());
     if (promise_type && promise_type->getArgCount()) {
-        rv->setInstantiatedTypeInfo(QC_FUTUREIMPL->getTypeInfo(promise_type->getTypeArgs()));
+        return qore_new_future_impl_object(getProgram(), future, promise_type->getTypeArgs());
     }
-    return rv;
+    return qore_new_future_impl_object(getProgram(), future);
 }
