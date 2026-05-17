@@ -3419,6 +3419,10 @@ superclass:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
         $$ = new BCNode(loc, $1, Public);
     }
+    | ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $1, false), Public);
+    }
     | SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);
         $$ = new BCNode(loc, new NamedScope($1), Public);
@@ -3426,6 +3430,10 @@ superclass:
     | TOK_PUBLIC IDENTIFIER {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, $2, Public);
+    }
+    | TOK_PUBLIC ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Public);
     }
     | TOK_PUBLIC SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
@@ -3435,6 +3443,10 @@ superclass:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, $2, Private);
     }
+    | TOK_PRIVATE ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Private);
+    }
     | TOK_PRIVATE SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, new NamedScope($2), Private);
@@ -3443,6 +3455,10 @@ superclass:
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, $2, Private);
     }
+    | TOK_PRIVATEHIERARCHY ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Private);
+    }
     | TOK_PRIVATEHIERARCHY SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, new NamedScope($2), Private);
@@ -3450,6 +3466,10 @@ superclass:
     | TOK_PRIVATEINTERNAL IDENTIFIER {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
         $$ = new BCNode(loc, $2, Internal);
+    }
+    | TOK_PRIVATEINTERNAL ANGLE_IDENTIFIER {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);
+        $$ = new BCNode(loc, ParserTypeStruct::getParseType(loc, $2, false), Internal);
     }
     | TOK_PRIVATEINTERNAL SCOPED_REF {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line);

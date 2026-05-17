@@ -441,9 +441,10 @@ Mutex sub foo(Qore::Thread::Mutex m = new Mutex()) {
 
     @section generic_class_type Generic Class Types
 
-    Some builtin classes declare type parameters. These classes can be used with
-    type arguments in any type position, which makes the type argument part of the
-    object's runtime type and of parse-time method checking.
+    Builtin and source-defined classes can declare type parameters. These
+    classes can be used with type arguments in any type position, which makes
+    the type argument part of the object's runtime type and of parse-time
+    method checking.
 
     @par Generic Queue Example
     @code{.py}
@@ -497,9 +498,47 @@ values = ints;  # PARSE-TYPE-ERROR
     migrated parameterized queue objects. Use explicit type arguments in new code
     when the element or result type is known.
 
-    @note %Qore 2.3 supports generic type arguments for builtin classes that
-    declare type parameters. Source-defined generic class declarations such as
-    <tt>class Box&lt;T&gt;</tt> are reserved for a later release.
+    @par Source-Defined Generic Class Example
+    @code{.py}
+class Box<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Box<string> box("ready");
+string value = box.get();
+    @endcode
+
+    Source-defined generic classes can inherit generic base classes and pass
+    through their own type parameters:
+
+    @code{.py}
+class Base<T> {
+    T echo(T value) {
+        return value;
+    }
+}
+
+class Child<T> inherits Base<T> {
+}
+
+Child<int> child();
+int value = child.echo(42);
+    @endcode
+
+    Source-defined generic class types are runtime checked and invariant.
+    Source-defined generic classes do not provide raw compatibility by default;
+    use explicit type arguments such as <tt>Box&lt;int&gt;</tt> or
+    <tt>Box&lt;auto&gt;</tt>.
 
     <hr>
     @section null_type null

@@ -51,9 +51,9 @@ class MyClass inherits MyBaseClass {
 }
     @endcode
 
-    @subsection builtin_generic_classes Generic Builtin Classes
-    Builtin classes can declare formal type parameters in their public API. User
-    code supplies concrete type arguments in type positions, as documented in
+    @subsection generic_classes Generic Classes
+    Classes can declare formal type parameters in their public API. User code
+    supplies concrete type arguments in type positions, as documented in
     @ref generic_class_type "Generic Class Types". The first generic builtin
     classes are the threading value-container classes @ref Qore::Thread::Queue
     "Queue", @ref Qore::Thread::Channel "Channel", @ref Qore::Thread::Promise
@@ -77,8 +77,46 @@ string result = future.get(timeout_ms: 1s);
     declarations such as <tt>Queue q()</tt> for compatibility; raw construction
     creates the explicit <tt>Queue&lt;auto&gt;</tt> form.
 
-    @note Source-defined generic class declarations, for example
-    <tt>class Box&lt;T&gt;</tt>, are not enabled in %Qore 2.3.
+    Source-defined classes can also declare type parameters and use them in
+    members, method signatures, constructors, local variables, and inherited
+    generic base classes:
+
+    @par Source-Defined Generic Class Example
+    @code{.py}
+class Box<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Box<int> box(42);
+int value = box.get();
+
+class Base<T> {
+    T echo(T value) {
+        return value;
+    }
+}
+
+class Child<T> inherits Base<T> {
+}
+
+Child<int> child();
+int echoed = child.echo(value);
+    @endcode
+
+    Source-defined generic class types are runtime checked and are invariant.
+    Unlike migrated builtin classes, source-defined generic classes do not
+    provide raw compatibility by default; use explicit type arguments such as
+    <tt>Box&lt;int&gt;</tt> or <tt>Box&lt;auto&gt;</tt>.
 
     @note No semicolon (\c ";") is required to terminate a class declaration (in fact using a semicolon would raise a parse exception).
 

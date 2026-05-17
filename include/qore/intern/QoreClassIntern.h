@@ -40,6 +40,7 @@
 #include "qore/intern/VRMutex.h"
 #include "qore/QoreProgram.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/QoreParseTypeInfo.h"
 #include "qore/vector_map"
 #include "qore/vector_set"
 
@@ -1543,34 +1544,44 @@ public:
     const QoreProgramLocation* loc;
     NamedScope* cname = nullptr;
     char* cstr = nullptr;
+    QoreParseTypeInfo* parsed_type = nullptr;
+    const QoreTypeInfo* type_info = nullptr;
     QoreClass* sclass = nullptr;
     ClassAccess access;
     bool is_virtual : 1;
+    bool parameterized_parent_registered : 1;
 
     DLLLOCAL BCNode(const QoreProgramLocation* loc, NamedScope* c, ClassAccess a) : loc(loc), cname(c), access(a),
-            is_virtual(false) {
+            is_virtual(false), parameterized_parent_registered(false) {
     }
 
     // this method takes ownership of *str
     DLLLOCAL BCNode(const QoreProgramLocation* loc, char* str, ClassAccess a) : loc(loc), cstr(str), access(a),
-            is_virtual(false) {
+            is_virtual(false), parameterized_parent_registered(false) {
+    }
+
+    // this method takes ownership of *type
+    DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreParseTypeInfo* type, ClassAccess a) : loc(loc),
+            parsed_type(type), access(a), is_virtual(false), parameterized_parent_registered(false) {
     }
 
     // for builtin base classes
     DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, bool n_virtual = false) : loc(loc), sclass(qc),
-            access(Public), is_virtual(n_virtual) {
+            access(Public), is_virtual(n_virtual), parameterized_parent_registered(false) {
     }
 
     // for builtin base classes with explicit access level
     DLLLOCAL BCNode(const QoreProgramLocation* loc, QoreClass* qc, ClassAccess a, bool n_virtual = false)
-            : loc(loc), sclass(qc), access(a), is_virtual(n_virtual) {
+            : loc(loc), sclass(qc), access(a), is_virtual(n_virtual), parameterized_parent_registered(false) {
     }
 
     // called at runtime with committed classes
-    DLLLOCAL BCNode(const BCNode &old) : loc(old.loc), sclass(old.sclass), access(old.access),
-            is_virtual(old.is_virtual) {
+    DLLLOCAL BCNode(const BCNode &old) : loc(old.loc), type_info(old.type_info), sclass(old.sclass),
+            access(old.access), is_virtual(old.is_virtual),
+            parameterized_parent_registered(old.parameterized_parent_registered) {
         assert(!old.cname);
         assert(!old.cstr);
+        assert(!old.parsed_type);
         assert(old.sclass);
     }
 
@@ -1578,6 +1589,7 @@ public:
         delete cname;
         if (cstr)
             free(cstr);
+        delete parsed_type;
     }
 
     DLLLOCAL int tryResolveClass(QoreClass* cls, bool raise_error);

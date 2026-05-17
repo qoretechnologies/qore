@@ -141,8 +141,9 @@ constexpr uint64_t QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS = 1ULL << 41; //!< varian
 constexpr uint64_t QORE_AOT_FEAT_BCA_NAMED_ARG_MAP = 1ULL << 42; //!< BCA records preserve named-argument source-to-parameter evaluation maps
 constexpr uint64_t QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO = 1ULL << 43; //!< NewObject records and slots preserve instantiated object type paths
 constexpr uint64_t QORE_AOT_FEAT_CLASS_TYPE_PARAMS = 1ULL << 44; //!< class records preserve source generic type parameter names
+constexpr uint64_t QORE_AOT_FEAT_CLASS_PARAM_BASES = 1ULL << 45; //!< class base records preserve parameterized generic parent type paths
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -1434,6 +1435,7 @@ class QoreAOTBinaryDeserializer {
     // Pending base class info for two-pass class resolution
     struct PendingBaseClass {
         std::string base_path;
+        std::string type_path;
         uint8_t access;  //!< ClassAccess value for the base class inheritance
         bool is_virtual;
     };

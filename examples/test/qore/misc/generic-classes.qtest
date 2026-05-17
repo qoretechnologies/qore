@@ -73,6 +73,57 @@ class SourceGenericOverloads<T> {
     }
 }
 
+class SourceGenericBase<T> {
+    T echo(T value) {
+        return value;
+    }
+
+    list<T> asList(T value) {
+        return (value,);
+    }
+}
+
+class SourceGenericChild<T> inherits SourceGenericBase<T> {
+}
+
+class SourceFixedBaseChild<T> inherits SourceGenericBase<string> {
+}
+
+class SourceTypedIterator<T> inherits AbstractIterator<T> {
+    private {
+        T value;
+        bool available;
+        bool valid_flag;
+    }
+
+    constructor(T value) {
+        self.value = value;
+        self.available = True;
+    }
+
+    bool next() {
+        if (!self.available) {
+            self.valid_flag = False;
+            return False;
+        }
+
+        self.available = False;
+        self.valid_flag = True;
+        return True;
+    }
+
+    T getValue() {
+        if (!self.valid_flag) {
+            throw "INVALID-ITERATOR", "iterator is not valid";
+        }
+        return self.value;
+    }
+
+    bool valid() {
+        return self.valid_flag;
+    }
+}
+
 namespace SourceGenericNs {
     class Box<T> {
         T echo(T value) {
@@ -88,6 +139,8 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("namespaced generic class types", \namespacedGenericClassTypes());
         addTestCase("generic overloads", \genericOverloads());
         addTestCase("runtime substitution errors", \runtimeSubstitutionErrors());
+        addTestCase("generic inheritance", \genericInheritance());
+        addTestCase("source generic iterators", \sourceGenericIterators());
         addTestCase("parse checks", \parseChecks());
 
         # Return for compatibility with test harness that checks return value.
@@ -132,6 +185,46 @@ public class GenericClassTypesTest inherits QUnit::Test {
         assertThrows("RUNTIME-TYPE-ERROR", sub () { box.setAny("x"); });
     }
 
+    genericInheritance() {
+        SourceGenericChild<int> ichild();
+        assertEq(2, ichild.echo(2));
+        int i = ichild.echo(3);
+        assertEq(3, i);
+
+        list<int> values = ichild.asList(4);
+        assertEq(1, values.size());
+        assertEq(4, values[0]);
+
+        assertTrue(ichild instanceof SourceGenericBase<int>);
+        assertFalse(ichild instanceof SourceGenericBase<string>);
+
+        SourceGenericChild<string> schild();
+        string s = schild.echo("x");
+        assertEq("x", s);
+
+        SourceFixedBaseChild<int> fixed();
+        assertEq("z", fixed.echo("z"));
+        assertTrue(fixed instanceof SourceGenericBase<string>);
+        assertFalse(fixed instanceof SourceGenericBase<int>);
+    }
+
+    sourceGenericIterators() {
+        SourceTypedIterator<int> it(5);
+        assertTrue(it instanceof AbstractIterator<int>);
+        assertFalse(it instanceof AbstractIterator<string>);
+
+        AbstractIterator<int> typed = it;
+        assertTrue(typed.next());
+        int value = typed.getValue();
+        assertEq(5, value);
+        assertFalse(typed.next());
+
+        SourceTypedIterator<int> selected_it(7);
+        list<int> selected = select selected_it, $1 > 3;
+        assertEq(1, selected.size());
+        assertEq(7, selected[0]);
+    }
+
     parseChecks() {
         {
             Program p(PO_NEW_STYLE);
@@ -167,6 +260,26 @@ public class GenericClassTypesTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE);
             p.parse("class RawBox<T> {} sub t() { RawBox b(); }", "generic-classes");
             assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Base<T> { T get(T value) { return value; } } "
+                "class Child<T> inherits Base<T> {} "
+                "sub t() { Child<int> c(); string s = c.get(1); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Base<T> {} class Child<T> inherits Base<T, string> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Base {} class Child<T> inherits Base<T> {}", "generic-classes"));
         }
     }
 }

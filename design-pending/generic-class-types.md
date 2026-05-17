@@ -2191,8 +2191,14 @@ can land first.
 
 ### Phase 4: Optional Extensions
 
-- Generic inheritance.
-- Source-defined generic iterators: source-defined generic
+- [x] Generic inheritance: source classes can declare
+  `class Derived<T> inherits Base<T>`, including fixed-argument bases such as
+  `class Derived<T> inherits Base<string>`. The runtime records the
+  parameterized parent type so inherited method return/argument types,
+  `instanceof`, and subtype matching substitute through the derived class's
+  actual type arguments. AOT metadata also preserves the parameterized base
+  type path so source-stripped cold-load uses the same substitution metadata.
+- [x] Source-defined generic iterators: source-defined generic
   iterators that inherit from `AbstractIterator<T>` from Qore source code.
   Includes `Mapper::AbstractMapperIterator<RecT>` (qlib) and any user-defined
   generic iterator that wants to participate in the typed-iterator surface.

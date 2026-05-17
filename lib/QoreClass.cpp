@@ -995,7 +995,8 @@ int qore_class_private::initializeMembers() {
 // process signature entries for base classes
 static void do_sig(QoreString& csig, BCNode& n) {
     qore_class_private* qc = qore_class_private::get(*n.sclass);
-    csig.sprintf("inherits %s %s ", privpub(n.getAccess()), qc->name.c_str());
+    csig.sprintf("inherits %s %s ", privpub(n.getAccess()),
+        n.type_info ? QoreTypeInfo::getName(n.type_info) : qc->name.c_str());
     SignatureHash& h = qc->hash;
     if (h) {
         csig.concat('[');
@@ -1914,7 +1915,52 @@ int BCANode::parseInit(BCList* bcl, const char* classname) {
 
 int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
     if (!sclass) {
-        if (cname) {
+        if (parsed_type) {
+            QoreClass* qc = qore_root_ns_private::parseFindScopedClass(loc, *parsed_type->cscope, raise_error);
+            if (qc) {
+                assert(qc->priv);
+                if (!qc->hasTypeParameters()) {
+                    parseException(*loc, "PARSE-TYPE-ERROR",
+                        "cannot inherit '%s' as '%s': class '%s' does not declare type parameters",
+                        qc->getName(), QoreParseTypeInfo::getName(parsed_type), qc->getName());
+                    return -1;
+                }
+
+                size_t expected = qc->getTypeParameterCount();
+                size_t actual = parsed_type->subtypes.size();
+                if (actual != expected) {
+                    parseException(*loc, "PARSE-TYPE-ERROR",
+                        "cannot inherit '%s': class '%s' expects %d type argument%s, but %d %s provided",
+                        QoreParseTypeInfo::getName(parsed_type), qc->getName(), (int)expected,
+                        expected == 1 ? "" : "s", (int)actual, actual == 1 ? "was" : "were");
+                    return -1;
+                }
+
+                type_vec_t type_args;
+                type_args.reserve(actual);
+                int err = 0;
+                {
+                    QoreParseClassHelper qpch(cls);
+                    for (QoreParseTypeInfo* arg : parsed_type->subtypes) {
+                        const QoreTypeInfo* arg_type = QoreParseTypeInfo::resolveAny(arg, loc, err);
+                        if (err) {
+                            return -1;
+                        }
+                        type_args.push_back(arg_type);
+                    }
+                }
+
+                type_info = qc->getTypeInfo(type_args, parsed_type->or_nothing);
+                sclass = qc;
+                printd(5, "BCNode::tryResolveClass() %s inheriting %s (%p) as %s\n", cls->getName(),
+                    parsed_type->cscope->ostr, sclass, QoreTypeInfo::getName(type_info));
+                delete parsed_type;
+                parsed_type = nullptr;
+            } else {
+                printd(5, "BCNode::tryResolveClass() %s cannot resolve %s\n", cls->getName(),
+                    QoreParseTypeInfo::getName(parsed_type));
+            }
+        } else if (cname) {
             // if the class cannot be found, RootQoreNamespace::parseFindScopedClass() will throw the appropriate exception
             sclass = qore_root_ns_private::parseFindScopedClass(loc, *cname, raise_error);
             if (sclass) {
@@ -1945,6 +1991,10 @@ int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
             assert(cls->priv->scl);
             cls->priv->scl->valid = false;
             sclass = nullptr;
+        }
+        if (sclass && type_info && !parameterized_parent_registered) {
+            cls->priv->addParameterizedVirtualBase(type_info);
+            parameterized_parent_registered = true;
         }
         //printd(5, "BCNode::tryResolveClass() cls: %p '%s' inherits %p '%s' final: %d\n", cls, cls->getName(),
         //  sclass, sclass ? sclass->getName() : "n/a", sclass ? sclass->priv->final : 0);

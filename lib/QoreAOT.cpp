@@ -703,6 +703,10 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Source-defined generic classes need their formal type parameter names
     // preserved so source-stripped metadata can rebuild symbolic T, K, V types.
     flags |= QORE_AOT_FEAT_CLASS_TYPE_PARAMS;
+    // Generic source inheritance needs the full parameterized base type path,
+    // not only the raw base class path, so AOT cold-load can rebuild inherited
+    // type substitution metadata.
+    flags |= QORE_AOT_FEAT_CLASS_PARAM_BASES;
     return flags;
 }
 

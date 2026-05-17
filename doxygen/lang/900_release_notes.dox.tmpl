@@ -308,6 +308,48 @@ string result = f.get(timeout_ms: 1s);
     migrated classes.
     @endparblock
 
+    @par Source-Defined Generic Classes
+    @parblock
+    Source-defined classes can now declare formal type parameters and use them
+    in members, methods, constructors, locals, and generic base classes:
+
+    @code{.py}
+class Box<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+Box<int> box(42);
+int value = box.get();
+
+class Base<T> {
+    T echo(T value) {
+        return value;
+    }
+}
+
+class Child<T> inherits Base<T> {
+}
+
+Child<int> child();
+int echoed = child.echo(value);
+    @endcode
+
+    Source-defined generic class types are runtime checked and invariant. AOT
+    metadata preserves generic class parameters and parameterized base-class
+    inheritance so compiled code uses the same type substitutions as source
+    execution.
+    @endparblock
+
     @par Removal of %strict-types Support
     @parblock
     The @ref strict-types "%strict-types" parse directive and @ref Qore::PO_STRICT_TYPES "PO_STRICT_TYPES"

@@ -4762,6 +4762,9 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                 }
                 writer.writeU8(static_cast<uint8_t>(bcn->access));
                 writer.writeU8(bcn->is_virtual ? 1 : 0);
+                if ((writer.feature_flags & QORE_AOT_FEAT_CLASS_PARAM_BASES) != 0) {
+                    writeTypePathRef(writer, bcn->type_info);
+                }
             }
         } else {
             writer.writeU32(0);
@@ -8718,6 +8721,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0;
     const bool has_class_type_params
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0;
+    const bool has_class_param_bases
+        = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_PARAM_BASES) != 0;
 
     // Populate the root namespace's clmap incrementally as each class is
     // created, so standard lookup paths (runtimeFindClass, findClass,
@@ -8857,9 +8862,11 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             const char* base_path = reader.readStringRef(ptr);
             uint8_t access = QoreAOTBinaryReader::readU8(ptr);
             uint8_t is_virtual = QoreAOTBinaryReader::readU8(ptr);
+            const char* base_type_path = has_class_param_bases ? reader.readStringRef(ptr) : nullptr;
             if (base_path && *base_path) {
                 PendingBaseClass pbc;
                 pbc.base_path = base_path;
+                pbc.type_path = base_type_path ? base_type_path : "";
                 pbc.access = access;
                 pbc.is_virtual = (is_virtual != 0);
                 bases.push_back(std::move(pbc));
@@ -9115,6 +9122,21 @@ bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
                 // Add base class to this class with proper access level
                 qc->addBaseClass(const_cast<QoreClass*>(base),
                     static_cast<ClassAccess>(pbc.access), pbc.is_virtual);
+                if (!pbc.type_path.empty()) {
+                    std::string type_error;
+                    const QoreTypeInfo* base_type = type_resolver->resolve(pbc.type_path.c_str(), type_error);
+                    if (!base_type) {
+                        error = "cannot resolve parameterized base type '" + pbc.type_path + "' for class '" +
+                            std::string(qc->getName()) + "'";
+                        if (!type_error.empty()) {
+                            error += ": ";
+                            error += type_error;
+                        }
+                        pending_bases.clear();
+                        return false;
+                    }
+                    qore_class_private::get(*qc)->addParameterizedVirtualBase(base_type);
+                }
                 // Source parsing treats inherited classes as class-signature
                 // input. AOT attaches bases manually, so mark the signature
                 // dirty here; otherwise memberless derived classes commit with

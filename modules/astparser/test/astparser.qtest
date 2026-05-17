@@ -6,6 +6,7 @@
 %requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
 
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/astparser"
 %requires astparser
 
 %define HasAstTreeSearcher
@@ -425,6 +426,7 @@ sub test() {
 %endif
         addTestCase("getNodesInfo line indexing", \testGetNodesInfo());
         addTestCase("Generic class CST", \testGenericClassGetNodesInfo());
+        addTestCase("Generic inheritance CST", \testGenericInheritanceGetNodesInfo());
 %ifdef HasAstTreeSearcher
         addTestCase("Scope symbols", \testScopeSymbols());
         addTestCase("Doc comments", \testDocComments());
@@ -1349,6 +1351,45 @@ sub make() {
         list<auto> params = findAllChildrenByType(typeParams, "identifier");
         assertEq(1, params.size(), "one type parameter");
         assertEq("T", params[0].text, "type parameter text");
+    }
+
+    testGenericInheritanceGetNodesInfo() {
+        string testCode = "
+%new-style
+class Box<T> {
+}
+
+class Child<T> inherits Box<T> {
+}
+";
+        AstParser parser();
+        *AstTree tree = parser.parseString(testCode);
+        assertEq(0, parser.getErrorCount(), "no parse errors");
+
+        list nodes = tree.getNodesInfo();
+        *hash<auto> childClass;
+        foreach auto node in (nodes) {
+            if (node.type != "class_declaration") {
+                continue;
+            }
+            *hash<auto> nameChild = findChildByField(node, "name");
+            if (exists(nameChild) && nameChild.text == "Child") {
+                childClass = node;
+                break;
+            }
+        }
+        assertTrue(exists(childClass), "child class node found");
+
+        *hash<auto> superclassList = findChildByType(childClass, "superclass_list");
+        assertTrue(exists(superclassList), "child class has superclass list");
+        *hash<auto> superclass = findChildByType(superclassList, "superclass");
+        assertTrue(exists(superclass), "child class has superclass");
+        *hash<auto> genericType = findChildByType(superclass, "generic_type");
+        assertTrue(exists(genericType), "superclass is a generic type");
+        assertEq("Box", findChildByField(genericType, "base").text, "generic superclass base");
+        *hash<auto> typeArg = findChildByType(genericType, "type");
+        assertTrue(exists(typeArg), "generic superclass has type argument");
+        assertEq("T", getLeafText(typeArg), "generic superclass type argument");
     }
 
 %ifdef HasAstTreeSearcher

@@ -1779,6 +1779,12 @@ superclass:
             free($1);
             $$ = new ASTSuperclassDeclaration(std::move(name));
         }
+        | ANGLE_IDENTIFIER {
+            ASTName name($1, ASTNameKind::ANK_AngleIdentifier);
+            name.loc = @1;
+            free($1);
+            $$ = new ASTSuperclassDeclaration(std::move(name));
+        }
         | SCOPED_REF {
             ASTName name($1, ASTNameKind::ANK_ScopedRef);
             name.loc = @1;
@@ -1788,6 +1794,15 @@ superclass:
         | TOK_PUBLIC IDENTIFIER {
             ASTModifiers mods(ASTModifier::AM_Public);
             ASTName name($2, ASTNameKind::ANK_Identifier);
+            name.loc = @2;
+            free($2);
+
+            $$ = new ASTSuperclassDeclaration(mods, std::move(name));
+            $$->loc.setFirst(@1);
+        }
+        | TOK_PUBLIC ANGLE_IDENTIFIER {
+            ASTModifiers mods(ASTModifier::AM_Public);
+            ASTName name($2, ASTNameKind::ANK_AngleIdentifier);
             name.loc = @2;
             free($2);
 
@@ -1812,6 +1827,15 @@ superclass:
             $$ = new ASTSuperclassDeclaration(mods, std::move(name));
             $$->loc.setFirst(@1);
         }
+        | TOK_PRIVATE ANGLE_IDENTIFIER {
+            ASTModifiers mods(ASTModifier::AM_Private);
+            ASTName name($2, ASTNameKind::ANK_AngleIdentifier);
+            name.loc = @2;
+            free($2);
+
+            $$ = new ASTSuperclassDeclaration(mods, std::move(name));
+            $$->loc.setFirst(@1);
+        }
         | TOK_PRIVATE SCOPED_REF {
             ASTModifiers mods(ASTModifier::AM_Private);
             ASTName name($2, ASTNameKind::ANK_ScopedRef);
@@ -1830,6 +1854,15 @@ superclass:
             $$ = new ASTSuperclassDeclaration(mods, std::move(name));
             $$->loc.setFirst(@1);
         }
+        | TOK_PRIVATEHIERARCHY ANGLE_IDENTIFIER {
+            ASTModifiers mods(ASTModifier::AM_PrivateHierarchy);
+            ASTName name($2, ASTNameKind::ANK_AngleIdentifier);
+            name.loc = @2;
+            free($2);
+
+            $$ = new ASTSuperclassDeclaration(mods, std::move(name));
+            $$->loc.setFirst(@1);
+        }
         | TOK_PRIVATEHIERARCHY SCOPED_REF {
             ASTModifiers mods(ASTModifier::AM_PrivateHierarchy);
             ASTName name($2, ASTNameKind::ANK_ScopedRef);
@@ -1842,6 +1875,15 @@ superclass:
         | TOK_PRIVATEINTERNAL IDENTIFIER {
             ASTModifiers mods(ASTModifier::AM_PrivateInternal);
             ASTName name($2, ASTNameKind::ANK_Identifier);
+            name.loc = @2;
+            free($2);
+
+            $$ = new ASTSuperclassDeclaration(mods, std::move(name));
+            $$->loc.setFirst(@1);
+        }
+        | TOK_PRIVATEINTERNAL ANGLE_IDENTIFIER {
+            ASTModifiers mods(ASTModifier::AM_PrivateInternal);
+            ASTName name($2, ASTNameKind::ANK_AngleIdentifier);
             name.loc = @2;
             free($2);
 
