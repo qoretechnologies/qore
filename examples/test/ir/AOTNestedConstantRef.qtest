@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+%exec-class AOTNestedConstantRefTest
+
+class AOTNestedConstantRefTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+        string repo_dir;
+        string qjar_path;
+    }
+
+    constructor() : QUnit::Test("AOTNestedConstantRefTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        repo_dir = normalize_dir(get_script_dir() + "/../../..");
+        qjar_path = repo_dir + "/doxygen/qjar";
+
+        addTestCase("AOT module constants supplied to JNI resolve nested runtime constant references",
+            \testAotJniNestedConstantRefs());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        return "%modern
+
+module AOTNestedConstantRefMod {
+    version = \"1.0\";
+    desc = \"AOT nested runtime constant reference regression module\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTNestedConstantRefMod {
+    public class AOTNestedConstantRefClass {
+        public {
+            const HeaderName = \"Authorization\";
+            const AuthArgs = {\"header\": HeaderName};
+            const AuthOptions = {
+                \"args\": AuthArgs,
+                \"nested\": {\"args\": AuthArgs},
+                \"list\": (AuthArgs, {\"header\": HeaderName}),
+            };
+        }
+    }
+}
+";
+    }
+
+    private bool haveJniModule() {
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s:$LD_LIBRARY_PATH %s -b -l jni -ne 'printf(\"ok\");' 2>&1",
+            libqore_dir, qore_bin));
+        return out == "ok";
+    }
+
+    testAotJniNestedConstantRefs() {
+        if (!haveJniModule()) {
+            testSkip("jni module not available");
+        }
+
+        TmpDir tmp("qore-aot-nested-const-ref-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        string java_dir = tmp_dir + "/java";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTNestedConstantRefMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string qmod_path = qmod_dir + "/AOTNestedConstantRefMod.qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled nested constant reference module: " + compile_out);
+
+        string qjar_out = backquote(sprintf("LD_LIBRARY_PATH=%s:$LD_LIBRARY_PATH QORE_MODULE_DIR=%s:$QORE_MODULE_DIR %s -b %s -i=%s -m=AOTNestedConstantRefMod -v 2>&1",
+            libqore_dir, qmod_dir, qore_bin, qjar_path, java_dir));
+        assertFalse(qjar_out =~ /NT_RTCONSTREF|JNI-ERROR|don't know how to convert/,
+            "qjar must not expose nested runtime constant references to JNI: " + qjar_out);
+        assertTrue(is_file(java_dir + "/qoremod/AOTNestedConstantRefMod/AOTNestedConstantRefClass.class"),
+            "qjar generated Java class from AOT qmod: " + qjar_out);
+    }
+}

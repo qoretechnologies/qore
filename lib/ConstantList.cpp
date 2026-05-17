@@ -346,7 +346,96 @@ const QoreValue& ConstantEntry::resolveRtConstRef(const QoreValue& start) {
     return *v;
 }
 
+static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xsink, bool& changed) {
+    const QoreValue& resolved = ConstantEntry::resolveRtConstRef(start);
+    changed = &resolved != &start;
+
+    // AOT constant containers can hold nested RuntimeConstantRefNode values.
+    // Materialize only the containers that actually contain such references.
+    if (resolved.getType() == NT_HASH) {
+        const QoreHashNode* h = resolved.get<const QoreHashNode>();
+        if (!h) {
+            return resolved.refSelf();
+        }
+
+        ReferenceHolder<QoreHashNode> rv(xsink);
+        ConstHashIterator hi(*h);
+        while (hi.next()) {
+            bool child_changed;
+            QoreValue v = resolveRtConstRefDeep(hi.get(), xsink, child_changed);
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (child_changed) {
+                if (!rv) {
+                    rv = h->realCopy();
+                }
+                rv->setKeyValue(hi.getKey(), v, xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+            } else {
+                v.discard(nullptr);
+            }
+        }
+
+        if (rv) {
+            changed = true;
+            return rv.release();
+        }
+
+        return resolved.refSelf();
+    }
+
+    if (resolved.getType() == NT_LIST) {
+        const QoreListNode* l = resolved.get<const QoreListNode>();
+        if (!l) {
+            return resolved.refSelf();
+        }
+
+        ReferenceHolder<QoreListNode> rv(xsink);
+        for (size_t i = 0, e = l->size(); i < e; ++i) {
+            bool child_changed;
+            QoreValue v = resolveRtConstRefDeep(l->retrieveEntry(i), xsink, child_changed);
+            if (*xsink) {
+                return QoreValue();
+            }
+            if (child_changed) {
+                if (!rv) {
+                    rv = static_cast<QoreListNode*>(l->realCopy());
+                }
+                rv->setEntry(i, v, xsink);
+                if (*xsink) {
+                    return QoreValue();
+                }
+            } else {
+                v.discard(nullptr);
+            }
+        }
+
+        if (rv) {
+            changed = true;
+            return rv.release();
+        }
+
+        return resolved.refSelf();
+    }
+
+    return resolved.refSelf();
+}
+
 QoreValue ConstantEntry::getReferencedValue() const {
+    ExceptionSink xsink;
+    bool changed;
+    QoreValue rv = resolveRtConstRefDeep(val, &xsink, changed);
+    if (!xsink) {
+        return rv;
+    }
+    rv.discard(nullptr);
+
+    // This accessor cannot report exceptions. Preserve the historical raw
+    // return path for genuinely unresolved AOT/external constants.
+    xsink.clear();
     return resolveRtConstRef(val).refSelf();
 }
 
