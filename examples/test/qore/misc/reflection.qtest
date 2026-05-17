@@ -905,6 +905,27 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedClassMethodVariantCount("HTTPClient", "readHttp3StreamData", ("stream_id", "timeout_ms"));
         assertNamedClassMethodVariantCount("HTTPClient", "readServerSentEvent", ("content_encoding", "timeout_ms"));
         assertNamedClassMethodVariantCount("HTTPClient", "recvBinary", ("size", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "get", ("path", "headers", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "head", ("path", "headers", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "post", ("path", "body", "headers", "info"), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "send",
+            ("body", "method", "path", "headers", "read_response_body", "info"), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "send",
+            ("output_stream", "body", "method", "path", "headers", "timeout_ms", "read_response_body", "info",
+                "receive_callback"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendAndStream",
+            ("method", "path", "body", "headers", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendChunked",
+            ("output_stream", "input_stream", "method", "max_chunk_size", "path", "headers", "timeout_ms",
+                "read_response_body", "info", "receive_callback", "trailers_callback"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendWithCallbacks",
+            ("send_callback", "receive_callback", "method", "path", "headers", "timeout_ms",
+                "read_response_body", "info"));
+        assertNamedClassMethodVariantCount("HTTPClient", "sendWithRecvCallback",
+            ("receive_callback", "body", "method", "path", "headers", "timeout_ms", "read_response_body", "info"),
+            2);
+        assertNamedClassMethodVariantCount("HTTPClient", "sendWithSendCallback",
+            ("send_callback", "method", "path", "headers", "timeout_ms", "read_response_body", "info"));
         assertNamedClassMethodVariantCount("HTTPClient", "sendHttp2Connect",
             ("path", "headers", "protocol", "info"));
         assertNamedClassMethodVariantCount("HTTPClient", "sendHttp2StreamData",
@@ -913,6 +934,10 @@ class ReflectionTest inherits QUnit::Test {
             ("path", "headers", "protocol", "info"));
         assertNamedClassMethodVariantCount("HTTPClient", "sendHttp3StreamData",
             ("stream_id", "data", "end_stream", "timeout_ms"));
+        assertNamedClassMethodVariantCount("HTTPClient", "startPollSendAndStream",
+            ("method", "path", "body", "headers"), 2);
+        assertNamedClassMethodVariantCount("HTTPClient", "startPollSendRecv",
+            ("method", "path", "body", "headers"), 2);
         assertNamedClassMethodVariantCount("HTTPClient", "setAssumedEncoding", ("encoding",));
         assertNamedClassMethodVariantCount("HTTPClient", "setConnectTimeout", ("timeout_ms",));
         assertNamedClassMethodVariantCount("HTTPClient", "setConnectionPath", ("uri_path",));

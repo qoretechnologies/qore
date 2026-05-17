@@ -363,13 +363,19 @@ These examples are from the core migration and should be reused as precedent:
   `warning_bytes`, `max_redirects`, and `uri_path`. HTTP/2 and HTTP/3 stream
   helpers use `stream_id`, `data`, `end_stream`, `timeout_ms`, `protocol`,
   `info`, and `content_encoding`. Passive read/status methods can opt in with
-  these names, but keep the timeout-only `readServerSentEvent(timeout_ms)`
-  compatibility overload positional because it is ambiguous with
-  `readServerSentEvent(content_encoding, timeout_ms)` in named-call parsing.
-  Keep the main request-sending and callback overloads (`send`, `post`,
-  `startPollSendRecv`, `sendWithCallbacks`, `sendChunked`, etc.) as a separate
-  review batch until callback names, stream roles, and `getbody`/response-body
-  semantics are renamed consistently.
+  these names. Keep the timeout-only `readServerSentEvent(timeout_ms)`
+  compatibility overload itself positional; `readServerSentEvent(timeout_ms:)`
+  is still parse-safe through the named `readServerSentEvent(content_encoding,
+  timeout_ms)` variant with `content_encoding` omitted.
+  Main request-sending and callback APIs should use behavior-oriented names:
+  `method`, `path`, `body`, `headers`, `read_response_body`, `info`,
+  `send_callback`, `receive_callback`, `trailers_callback`, `output_stream`,
+  `input_stream`, and `max_chunk_size`. Avoid exposing terse internal names
+  such as `getbody`, `scb`, `rcb`, `tcb`, `os`, or `is`. The `send`,
+  `post`, `sendWithRecvCallback`, `startPollSendRecv`, and
+  `startPollSendAndStream` overload pairs share the same named parameter list
+  across string/binary body variants and are safe when parser tests cover both
+  statically typed body forms.
 - SQL/Datasource APIs should expose database connection roles and list-taking
   bind helpers clearly: use `username`, `password`, `database`, `description`,
   `options`, `queue`, `argument`, `option`, `value`, `auto_commit`,

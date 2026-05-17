@@ -885,6 +885,9 @@ public class NamedArgumentsTest inherits QUnit::Test {
 
         Program p(PO_NEW_STYLE);
         p.parse("sub httpclient_named_unexecuted() { HTTPClient hc(); hash<auto> info; binary data = <00>; "
+            "StringOutputStream output_stream(); StringInputStream input_stream(source: \"body\"); "
+            "code send_callback = sub () { return NOTHING; }; code receive_callback = sub (hash<auto> h) {}; "
+            "code trailers_callback = *hash<auto> sub () { return NOTHING; }; "
             "hc.setHttp2StreamPriority(stream_id: 1, weight: 16, dependency: 0, exclusive: False); "
             "hc.sendHttp2Connect(path: \"/chat\", headers: NOTHING, protocol: \"websocket\", info: \\info); "
             "hc.sendHttp3Connect(path: \"/chat\", headers: NOTHING, protocol: \"websocket\", info: \\info); "
@@ -898,7 +901,37 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "hc.readHTTPChunk(timeout_ms: 0); hc.readHTTPChunkedBody(timeout_ms: 0); "
             "hc.readHTTPChunkedBodyBinary(timeout_ms: 0); "
             "hc.readServerSentEvent(content_encoding: \"gzip\", timeout_ms: 0); "
-            "hc.recvBinary(size: 1, timeout_ms: 0); }",
+            "hc.readServerSentEvent(timeout_ms: 0); "
+            "hc.recvBinary(size: 1, timeout_ms: 0); "
+            "hc.startPollSendRecv(method: \"POST\", path: \"/path\", body: \"body\", headers: NOTHING); "
+            "hc.startPollSendRecv(method: \"POST\", path: \"/path\", body: data, headers: NOTHING); "
+            "hc.startPollSendAndStream(method: \"POST\", path: \"/events\", body: \"body\", headers: NOTHING); "
+            "hc.startPollSendAndStream(method: \"POST\", path: \"/events\", body: data, headers: NOTHING); "
+            "hc.send(body: \"body\", method: \"POST\", path: \"/path\", headers: NOTHING, "
+            "read_response_body: False, info: \\info); "
+            "hc.send(body: data, method: \"POST\", path: \"/path\", headers: NOTHING, "
+            "read_response_body: False, info: \\info); "
+            "hc.send(output_stream: output_stream, body: \"body\", method: \"POST\", path: \"/path\", "
+            "headers: NOTHING, timeout_ms: 0, read_response_body: False, info: \\info, "
+            "receive_callback: receive_callback); "
+            "hc.sendAndStream(method: \"POST\", path: \"/events\", body: data, headers: NOTHING, info: \\info); "
+            "hc.sendWithSendCallback(send_callback: send_callback, method: \"POST\", path: \"/path\", "
+            "headers: NOTHING, timeout_ms: 0, read_response_body: False, info: \\info); "
+            "hc.sendWithRecvCallback(receive_callback: receive_callback, body: \"body\", method: \"POST\", "
+            "path: \"/path\", headers: NOTHING, timeout_ms: 0, read_response_body: False, info: \\info); "
+            "hc.sendWithRecvCallback(receive_callback: receive_callback, body: data, method: \"POST\", "
+            "path: \"/path\", headers: NOTHING, timeout_ms: 0, read_response_body: False, info: \\info); "
+            "hc.sendChunked(output_stream: output_stream, input_stream: input_stream, method: \"POST\", "
+            "max_chunk_size: 1024, path: \"/path\", headers: NOTHING, timeout_ms: 0, "
+            "read_response_body: False, info: \\info, receive_callback: receive_callback, "
+            "trailers_callback: trailers_callback); "
+            "hc.sendWithCallbacks(send_callback: send_callback, receive_callback: receive_callback, "
+            "method: \"POST\", path: \"/path\", headers: NOTHING, timeout_ms: 0, "
+            "read_response_body: False, info: \\info); "
+            "hc.get(path: \"/path\", headers: NOTHING, info: \\info); "
+            "hc.head(path: \"/path\", headers: NOTHING, info: \\info); "
+            "hc.post(path: \"/path\", body: \"body\", headers: NOTHING, info: \\info); "
+            "hc.post(path: \"/path\", body: data, headers: NOTHING, info: \\info); }",
             "httpclient-class-named");
     }
 
