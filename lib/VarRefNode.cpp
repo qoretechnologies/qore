@@ -566,7 +566,7 @@ QoreValue VarRefNewObjectNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Ex
         case VRN_OBJECT: {
             assert(QoreTypeInfo::getUniqueReturnClass(typeInfo));
             value = qore_class_private::execConstructor(
-                *QoreTypeInfo::getUniqueReturnClass(typeInfo), rc, variant, args, xsink
+                *QoreTypeInfo::getUniqueReturnClass(typeInfo), rc, variant, args, xsink, typeInfo
             );
             break;
         }

@@ -4168,7 +4168,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             return inst->result;
         }
         return builder.createNewObject(new_obj->getClass(), new_obj->getVariant(),
-                operands, expr, nullptr)->result;
+                operands, expr, new_obj->getObjectTypeInfo(), nullptr)->result;
     }
     if (auto* scoped_obj = dynamic_cast<const ScopedObjectCallNode*>(node)) {
         // No-AST path: lower each constructor arg as a separate IR instruction.
@@ -4189,7 +4189,7 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
             return inst->result;
         }
         return builder.createNewObject(scoped_obj->oc, scoped_obj->getVariant(),
-                operands, expr, scoped_obj->loc)->result;
+                operands, expr, scoped_obj->getObjectTypeInfo(), scoped_obj->loc)->result;
     }
     // Parse-time constant values: use LoadConstant (returns expr.refSelf() at runtime)
     if (dynamic_cast<const QoreObject*>(node)
@@ -4524,7 +4524,7 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
                 obj_val = inst->result;
             } else {
                 obj_val = builder.createNewObject(qc, vrn->getVariant(),
-                    operands, expr, var->loc)->result;
+                    operands, expr, vrn->getTypeInfo(), var->loc)->result;
             }
             // Store the constructed object to the variable
             if (!storeVarRef(var, obj_val, error, "VarRefNewObjectNode", &expr, var->loc)) {

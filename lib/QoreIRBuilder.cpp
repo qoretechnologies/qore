@@ -479,8 +479,9 @@ QoreIRNewObjectInstruction* QoreIRBuilder::createNewObject(const QoreClass* qc,
         const AbstractQoreFunctionVariant* variant,
         const std::vector<QoreIRValue>& operands,
         const QoreValue& expr,
+        const QoreTypeInfo* object_type_info,
         const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewObjectInstruction>(qc, variant, expr);
+    auto inst = block->appendInstruction<QoreIRNewObjectInstruction>(qc, variant, expr, object_type_info);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands = operands;

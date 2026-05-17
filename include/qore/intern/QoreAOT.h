@@ -60,6 +60,7 @@ class QoreMethod;
 class QoreNamespace;
 class QoreProgram;
 class QoreStringNode;
+class QoreTypeInfo;
 class QoreValue;
 class StatementBlock;
 class UserVariantBase;
@@ -74,6 +75,7 @@ struct QoreAOTCallTarget {
     const UserVariantBase* uvb = nullptr;  //!< cached user variant base for inlined fast path
     const QoreMethod* method = nullptr;    //!< for static/self method calls (pre-resolved)
     const QoreClass* qc = nullptr;         //!< for dot-eval method calls (pre-resolved)
+    const QoreTypeInfo* object_type_info = nullptr; //!< instantiated object type for constructor calls
     const char* method_name = nullptr;     //!< for dot-eval fallback (name-based dispatch)
     const char* class_path = nullptr;      //!< for lazy class resolution when registration order delays availability
     const char* variant_sig = nullptr;     //!< constructor/method signature text retained for diagnostics/lazy resolution

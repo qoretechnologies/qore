@@ -697,6 +697,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Local slot records carry source body-local ordinals so duplicate local
     // names in sibling/nested scopes resolve to the exact LocalVar identity.
     flags |= QORE_AOT_FEAT_LOCAL_DECL_ORDINAL;
+    // Constructor call targets preserve instantiated object typeInfo so AOT
+    // execution stamps generic class instances the same way as source/JIT.
+    flags |= QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO;
     return flags;
 }
 
@@ -12172,6 +12175,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             }
             id.ref2.append(")");
         }
+        if (const QoreTypeInfo* object_type_info = no->getObjectTypeInfo()) {
+            id.ref3 = QoreTypeInfo::getPath(object_type_info);
+        }
         return id;
     }
 
@@ -12201,6 +12207,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                     id.ref2.append(QoreTypeInfo::getPath(types[i]));
                 }
                 id.ref2.append(")");
+            }
+            if (const QoreTypeInfo* object_type_info = vrn->getTypeInfo()) {
+                id.ref3 = QoreTypeInfo::getPath(object_type_info);
             }
             return id;
         }
@@ -12788,6 +12797,9 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.ref2.append(QoreTypeInfo::getPath(types[i]));
             }
             id.ref2.append(")");
+        }
+        if (const QoreTypeInfo* object_type_info = sc->getObjectTypeInfo()) {
+            id.ref3 = QoreTypeInfo::getPath(object_type_info);
         }
         return id;
     }

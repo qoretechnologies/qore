@@ -131,6 +131,7 @@ public:
         const AbstractQoreFunctionVariant* variant,
         const std::vector<QoreIRValue>& operands,
         const QoreValue& expr,
+        const QoreTypeInfo* object_type_info = nullptr,
         const QoreProgramLocation* loc = nullptr);
     // Constant loading
     QoreIRLoadConstantInstruction* createLoadConstant(const RuntimeConstantRefNode* node,

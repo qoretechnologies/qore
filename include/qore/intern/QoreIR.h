@@ -1377,9 +1377,9 @@ public:
 class QoreIRNewObjectInstruction : public QoreIRInstruction {
 public:
     QoreIRNewObjectInstruction(const QoreClass* n_qc, const AbstractQoreFunctionVariant* n_variant,
-            const QoreValue& n_expr = QoreValue())
+            const QoreValue& n_expr = QoreValue(), const QoreTypeInfo* n_object_type_info = nullptr)
             : QoreIRInstruction(QoreIROpcode::NewObject), qc(n_qc), variant(n_variant),
-              expr(n_expr) {
+              expr(n_expr), object_type_info(n_object_type_info) {
         expr.ref();
     }
 
@@ -1390,6 +1390,7 @@ public:
 
     const QoreClass* qc;
     const AbstractQoreFunctionVariant* variant;
+    const QoreTypeInfo* object_type_info;
     // Compile-time-only metadata: the original AST node (NewObjectCallNode,
     // ScopedObjectCallNode, or VarRefNewObjectNode).  Used ONLY by the AOT
     // compiler to serialize class_path/variant_sig as slot metadata so the

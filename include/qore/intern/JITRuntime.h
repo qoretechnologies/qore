@@ -905,14 +905,14 @@ uint64_t qore_rt_call_fast(const QoreFunction* func, const AbstractQoreFunctionV
 //! computed as a separate IR operand and passed as a NaN-boxed value.  execConstructor
 //! and CodeEvaluationHelper handle default args and type coercion.
 uint64_t qore_rt_new_object_nb(const QoreClass* qc,
-    const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
-    ExceptionSink* xsink);
+    const AbstractQoreFunctionVariant* variant, const QoreTypeInfo* object_type_info,
+    uint64_t* args, int nargs, ExceptionSink* xsink);
 
 //! Constructor call variant that consumes caller-owned temporary argument cleanup slots
 //! after the constructor argument list has taken any required references.
 uint64_t qore_rt_new_object_nb_consume_args(const QoreClass* qc,
-    const AbstractQoreFunctionVariant* variant, uint64_t* args,
-    uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+    const AbstractQoreFunctionVariant* variant, const QoreTypeInfo* object_type_info,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
 //! AOT variant of qore_rt_new_object_nb: loads qc/variant from the AOT context's
 //! call_targets slot (populated at module load time from serialized class_path

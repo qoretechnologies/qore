@@ -555,6 +555,10 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
             std::string class_ref = qore_aot_encode_class_ref(qc);
             ctx.writer.writeStringRef(class_ref.c_str());
+            if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+                ctx.writer.writeStringRef(vrn->getTypeInfo()
+                    ? QoreTypeInfo::getPath(vrn->getTypeInfo()) : "");
+            }
             const QoreListNode* args = vrn->getArgs();
             size_t nargs = args ? args->size() : 0;
             if (nargs > 255) {
@@ -579,6 +583,10 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
         const QoreClass* qc = no->getClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         ctx.writer.writeStringRef(class_ref.c_str());
+        if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+            ctx.writer.writeStringRef(no->getObjectTypeInfo()
+                ? QoreTypeInfo::getPath(no->getObjectTypeInfo()) : "");
+        }
         ctx.writer.writeU8(0);
         return true;
     }
@@ -587,6 +595,25 @@ static bool write_expr_new_object(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const QoreTypeInfo* object_type_info = nullptr;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+        const char* object_type_path = ctx.reader.readStringRef(ctx.ptr);
+        if (object_type_path && *object_type_path) {
+            QoreAOTTypeResolver type_resolver(ctx.pgm);
+            std::string type_error;
+            object_type_info = type_resolver.resolve(object_type_path, type_error);
+            if (!object_type_info || !type_error.empty()) {
+                ctx.error = "cannot resolve new-object type path '";
+                ctx.error += object_type_path;
+                ctx.error += "'";
+                if (!type_error.empty()) {
+                    ctx.error += ": ";
+                    ctx.error += type_error;
+                }
+                return QoreValue();
+            }
+        }
+    }
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
     QoreListNode* args_list = nullptr;
     if (num_args > 0) {
@@ -626,7 +653,7 @@ static QoreValue read_expr_new_object(AOTExprReadCtx& ctx) {
         ctx.error = variant_err;
         return QoreValue();
     }
-    NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list);
+    NewObjectCallNode* nocn = new NewObjectCallNode(qc, args_list, object_type_info);
     if (variant) {
         nocn->setVariant(variant);
     }
@@ -1521,6 +1548,10 @@ static bool write_expr_scoped_new_object(AOTExprWriteCtx& ctx) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
             std::string class_ref = qore_aot_encode_class_ref(socn->oc);
             ctx.writer.writeStringRef(class_ref.c_str());
+            if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+                ctx.writer.writeStringRef(socn->getObjectTypeInfo()
+                    ? QoreTypeInfo::getPath(socn->getObjectTypeInfo()) : "");
+            }
             const QoreListNode* args = socn->getArgs();
             if (args && args->size() > 255) {
                 return false;
@@ -1541,6 +1572,25 @@ static bool write_expr_scoped_new_object(AOTExprWriteCtx& ctx) {
 
 static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const QoreTypeInfo* object_type_info = nullptr;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+        const char* object_type_path = ctx.reader.readStringRef(ctx.ptr);
+        if (object_type_path && *object_type_path) {
+            QoreAOTTypeResolver type_resolver(ctx.pgm);
+            std::string type_error;
+            object_type_info = type_resolver.resolve(object_type_path, type_error);
+            if (!object_type_info || !type_error.empty()) {
+                ctx.error = "cannot resolve scoped-new-object type path '";
+                ctx.error += object_type_path;
+                ctx.error += "'";
+                if (!type_error.empty()) {
+                    ctx.error += ": ";
+                    ctx.error += type_error;
+                }
+                return QoreValue();
+            }
+        }
+    }
     uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
     QoreListNode* args_list = nullptr;
     if (num_args > 0) {
@@ -1592,7 +1642,7 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
         }
         args_list->deref(nullptr);
     }
-    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln);
+    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln, object_type_info);
     // Convert parse_args to args so evalImpl() doesn't hit the assertion
     if (pln) {
         socn->resolveParseArgs();

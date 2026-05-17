@@ -1931,7 +1931,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 if (scoped && scoped->oc) {
                     RuntimeConfig& rc = rc_get_current_ref();
                     return qore_class_private::execConstructor(*scoped->oc, rc,
-                        scoped->getVariant(), scoped->getArgs(), xsink);
+                        scoped->getVariant(), scoped->getArgs(), xsink, scoped->getObjectTypeInfo());
                 }
             }
             return raiseIRAstFallback(xsink, "invoke", func, block, ip, inv, op, inv->expr);
@@ -1964,19 +1964,23 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::NewObject: {
             const QoreClass* qc = nullptr;
             const AbstractQoreFunctionVariant* variant = nullptr;
+            const QoreTypeInfo* object_type_info = nullptr;
             if (inv->expr.hasNode()) {
                 if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
                         inv->expr.getInternalNode())) {
                     qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
                     variant = vrn->getVariant();
+                    object_type_info = vrn->getTypeInfo();
                 } else if (auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(
                         inv->expr.getInternalNode())) {
                     qc = scoped->oc;
                     variant = scoped->getVariant();
+                    object_type_info = scoped->getObjectTypeInfo();
                 } else if (auto* nocn = dynamic_cast<const NewObjectCallNode*>(
                         inv->expr.getInternalNode())) {
                     qc = nocn->getClass();
                     variant = nocn->getVariant();
+                    object_type_info = nocn->getObjectTypeInfo();
                 }
             }
             if (!qc) {
@@ -2008,7 +2012,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             if (nargs > SMALL_BUF) delete[] nb_args;
             RuntimeConfig& rc = rc_get_current_ref();
             return qore_class_private::execConstructor(*qc, rc, variant,
-                nargs > 0 ? *arg_list : nullptr, xsink);
+                nargs > 0 ? *arg_list : nullptr, xsink, object_type_info);
         }
 
         // VrnConstruct: construct hashdecl/complex types without local variable assignment
@@ -5894,12 +5898,15 @@ load_local_done:
                     if (auto* no = dynamic_cast<const NewObjectCallNode*>(node)) {
                         qc = no->getClass();
                         variant = no->getVariant();
+                        no_inst->object_type_info = no->getObjectTypeInfo();
                     } else if (auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(node)) {
                         qc = scoped->oc;
                         variant = scoped->getVariant();
+                        no_inst->object_type_info = scoped->getObjectTypeInfo();
                     } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
                         qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
                         variant = vrn->getVariant();
+                        no_inst->object_type_info = vrn->getTypeInfo();
                     }
                     if (qc) {
                         no_inst->qc = qc;
@@ -5922,7 +5929,7 @@ load_local_done:
                     nb_args[i] = toBits(getIRValue(values, no_inst->operands[i]));
                 }
                 // Dispatch via the shared no-AST runtime helper
-                uint64_t rv = qore_rt_new_object_nb(qc, variant, nb_args, nargs, xsink);
+                uint64_t rv = qore_rt_new_object_nb(qc, variant, no_inst->object_type_info, nb_args, nargs, xsink);
                 if (nargs > SMALL_BUF) delete[] nb_args;
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);

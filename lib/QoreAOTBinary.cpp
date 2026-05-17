@@ -289,6 +289,11 @@ static void qoreAOTAppendExprSlotContext(std::string& error, const AOTExprSlotId
         error += qoreAOTQuoteDetail(expr.ref2);
         error += "'";
     }
+    if (!expr.ref3.empty()) {
+        error += "; ref3='";
+        error += qoreAOTQuoteDetail(expr.ref3);
+        error += "'";
+    }
     if (expr.flags) {
         error += "; flags=0x";
         char buf[8];
@@ -3127,6 +3132,61 @@ static bool split_aot_union_shorthand(const char* path, bool& or_nothing, std::v
     return true;
 }
 
+static bool split_aot_parameterized_type_use(const std::string& path, std::string& base_path,
+        std::vector<std::string>& arg_paths) {
+    base_path.clear();
+    arg_paths.clear();
+
+    std::string trimmed = trim_aot_type_component(path);
+    if (trimmed.empty()) {
+        return false;
+    }
+
+    size_t open = std::string::npos;
+    int paren_depth = 0;
+    for (size_t i = 0; i < trimmed.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT parameterized type path parsing")) {
+            return false;
+        }
+        char c = trimmed[i];
+        if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')' && paren_depth > 0) {
+            --paren_depth;
+        } else if (c == '<' && paren_depth == 0) {
+            open = i;
+            break;
+        }
+    }
+    if (open == std::string::npos) {
+        return false;
+    }
+
+    int depth = 1;
+    size_t close = std::string::npos;
+    for (size_t i = open + 1; i < trimmed.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT parameterized type argument parsing")) {
+            return false;
+        }
+        char c = trimmed[i];
+        if (c == '<') {
+            ++depth;
+        } else if (c == '>' && --depth == 0) {
+            close = i;
+            break;
+        }
+    }
+    if (close == std::string::npos || close + 1 != trimmed.size()) {
+        return false;
+    }
+
+    base_path = trim_aot_type_component(trimmed.substr(0, open));
+    if (base_path.empty()) {
+        return false;
+    }
+    return split_aot_type_args(trimmed.substr(open + 1, close - open - 1), arg_paths);
+}
+
 const QoreTypeInfo* QoreAOTTypeResolver::resolveUnionShorthandType(const char* path) {
     bool or_nothing = false;
     std::vector<std::string> member_paths;
@@ -3161,6 +3221,30 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char
         }
         if (args[0] == "auto") {
             return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
+        }
+        std::string param_class_path;
+        std::vector<std::string> type_arg_paths;
+        if (split_aot_parameterized_type_use(args[0], param_class_path, type_arg_paths)) {
+            param_class_path = normalize_aot_type_path(param_class_path.c_str());
+            const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(pgm, param_class_path.c_str());
+            if (!qc || !qc->hasTypeParameters() || type_arg_paths.size() != qc->getTypeParameterCount()) {
+                return nullptr;
+            }
+            type_vec_t type_args;
+            type_args.reserve(type_arg_paths.size());
+            for (size_t i = 0; i < type_arg_paths.size(); ++i) {
+                if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT parameterized type argument resolution")) {
+                    return nullptr;
+                }
+                const std::string& type_arg_path = type_arg_paths[i];
+                std::string arg_error;
+                const QoreTypeInfo* type_arg = resolve(type_arg_path.c_str(), arg_error);
+                if (!type_arg || !arg_error.empty()) {
+                    return nullptr;
+                }
+                type_args.push_back(type_arg);
+            }
+            return qc->getTypeInfo(type_args, or_nothing);
         }
         std::string class_path = normalize_aot_type_path(args[0].c_str());
         const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(pgm, class_path.c_str());
@@ -5643,6 +5727,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
             std::string class_ref = qore_aot_encode_class_ref(qc);
             writer.writeStringRef(class_ref.c_str());
+            if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+                writeTypePathRef(writer, vrn->getTypeInfo());
+            }
             const QoreListNode* args = vrn->getArgs();
             if (!write_qore_arg_list(args)) {
                 return false;
@@ -5811,6 +5898,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
             std::string class_ref = qore_aot_encode_class_ref(socn->oc);
             writer.writeStringRef(class_ref.c_str());
+            if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+                writeTypePathRef(writer, socn->getObjectTypeInfo());
+            }
             // Try evaluated args first, fall back to parse args
             return write_args_prefer_qore(socn->getArgs(), socn->getParseArgs());
         }
@@ -5822,6 +5912,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         const QoreClass* qc = no->getClass();
         std::string class_ref = qore_aot_encode_class_ref(qc);
         writer.writeStringRef(class_ref.c_str());
+        if ((writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+            writeTypePathRef(writer, no->getObjectTypeInfo());
+        }
         // Serialize constructor args if available
         return write_args_prefer_qore(no->getArgs(), no->getParseArgs());
     }
@@ -6911,10 +7004,13 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
                 if (!match && expr.ref2.find(trace) != std::string::npos) {
                     match = true;
                 }
+                if (!match && expr.ref3.find(trace) != std::string::npos) {
+                    match = true;
+                }
                 if (match) {
-                    fprintf(stderr, "[aot-slot] func=%s kind=%u ref1=%s ref2=%s\n",
+                    fprintf(stderr, "[aot-slot] func=%s kind=%u ref1=%s ref2=%s ref3=%s\n",
                         func.name.c_str(), static_cast<unsigned>(expr.kind),
-                        expr.ref1.c_str(), expr.ref2.c_str());
+                        expr.ref1.c_str(), expr.ref2.c_str(), expr.ref3.c_str());
                 }
             }
             if (expr.kind == AOTExprKind::UNSUPPORTED || expr.kind == AOTExprKind::EXPR_TREE

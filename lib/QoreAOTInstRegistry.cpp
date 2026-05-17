@@ -1865,6 +1865,10 @@ static bool writeNewObject(AOTInstWriteCtx& ctx) {
         }
     }
     ctx.writer.writeStringRef(variant_sig.c_str());
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+        ctx.writer.writeStringRef(ni->object_type_info
+            ? QoreTypeInfo::getPath(ni->object_type_info) : "");
+    }
     return true;
 }
 
@@ -1874,6 +1878,26 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
         AOTInstReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* variant_sig = ctx.reader.readStringRef(ctx.ptr);
+    const char* object_type_path = nullptr;
+    const QoreTypeInfo* object_type_info = nullptr;
+    if ((ctx.reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+        object_type_path = ctx.reader.readStringRef(ctx.ptr);
+        if (object_type_path && *object_type_path) {
+            QoreAOTTypeResolver resolver(ctx.pgm);
+            std::string type_error;
+            object_type_info = resolver.resolve(object_type_path, type_error);
+            if (!object_type_info || !type_error.empty()) {
+                ctx.error = "cannot resolve NewObject object type path '";
+                ctx.error += object_type_path;
+                ctx.error += "'";
+                if (!type_error.empty()) {
+                    ctx.error += ": ";
+                    ctx.error += type_error;
+                }
+                return nullptr;
+            }
+        }
+    }
     const QoreClass* qc = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
     if (class_path && *class_path) {
@@ -1903,7 +1927,7 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
             }
         }
     }
-    auto* ni = new QoreIRNewObjectInstruction(qc, variant);
+    auto* ni = new QoreIRNewObjectInstruction(qc, variant, QoreValue(), object_type_info);
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
     ni->result = QoreIRValue(result_id);
     ni->operands = operands;

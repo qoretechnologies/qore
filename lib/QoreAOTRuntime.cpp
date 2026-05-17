@@ -990,7 +990,8 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
     stored inline in closure and handler IR bodies. The format is produced by
     classifyAndWriteExpr(): kind(u8) + kind-specific data (stringrefs, recursive exprs).
 
-    For NEW_OBJECT/SCOPED_NEW_OBJECT: class_path(stringref) + num_args(u8) + N×readOneExpr().
+    For NEW_OBJECT/SCOPED_NEW_OBJECT: class_path(stringref)
+    + [object_type_path(stringref)] + num_args(u8) + N×readOneExpr().
 
     @param rdr binary reader (for readStringRef)
     @param p current read pointer (advanced by reading)
@@ -1452,6 +1453,9 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
     }
     if (ek == AOTExprKind::NEW_OBJECT || ek == AOTExprKind::SCOPED_NEW_OBJECT) {
         rdr.readStringRef(p);  // class path
+        if ((rdr.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+            rdr.readStringRef(p);  // instantiated object type path
+        }
         uint8_t na = QoreAOTBinaryReader::readU8(p);
         for (uint8_t i = 0; i < na; ++i) {
             skipOneExpr(rdr, p, e);  // each arg
@@ -2130,6 +2134,7 @@ static QoreAOTContext* buildContextFromSlotMap(
             ? expr_kind_info->name : "UNKNOWN";
         const char* ref1 = nullptr;
         const char* ref2 = nullptr;
+        const char* ref3 = nullptr;
 
         // Validate expression kind through the registry instead of keeping a
         // second hard-coded max native opcode here.
@@ -2151,12 +2156,16 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::NEW_OBJECT:
             case AOTExprKind::SCOPED_NEW_OBJECT: {
                 // ref1 = class path, ref2 = variant signature (e.g. "(string)").
+                // ref3 = instantiated object type path when present.
                 // Constructor args are IR operands here, not inline AST values.
                 // If no exact variant signature was serialized, leave the
                 // variant unset so constructor overload resolution runs after
                 // the operand values have been evaluated.
                 ref1 = reader.readStringRef(ptr);
                 ref2 = reader.readStringRef(ptr);
+                if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+                    ref3 = reader.readStringRef(ptr);
+                }
                 if (ref1 && *ref1) {
                     ctx->owned_call_target_strings.emplace_back(ref1);
                     ctx->call_targets[i].class_path = ctx->owned_call_target_strings.back().c_str();
@@ -2164,6 +2173,30 @@ static QoreAOTContext* buildContextFromSlotMap(
                 if (ref2 && *ref2) {
                     ctx->owned_call_target_strings.emplace_back(ref2);
                     ctx->call_targets[i].variant_sig = ctx->owned_call_target_strings.back().c_str();
+                }
+                const QoreTypeInfo* object_type_info = nullptr;
+                if (ref3 && *ref3) {
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    std::string type_error;
+                    object_type_info = type_resolver.resolve(ref3, type_error);
+                    if (!object_type_info || !type_error.empty()) {
+                        std::string msg = "cannot resolve new-object type path '";
+                        msg += ref3;
+                        msg += "'";
+                        if (!type_error.empty()) {
+                            msg += ": ";
+                            msg += type_error;
+                        }
+                        if (trace_slot_reg) {
+                            fprintf(stderr, "[aot-slot-reg] '%s': expr[%d] %s cannot resolve "
+                                "object type '%s'%s%s\n", name, i, expr_kind_name, ref3,
+                                type_error.empty() ? "" : ": ", type_error.c_str());
+                        }
+                        setBuildError(msg);
+                        has_unsupported = true;
+                        ctx->exprs[i] = toBitsNB(QoreValue());
+                        continue;
+                    }
                 }
                 const QoreClass* qc = nullptr;
                 const AbstractQoreFunctionVariant* resolved_variant = nullptr;
@@ -2202,6 +2235,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                             name, i, expr_kind_name, ref2, class_desc.c_str());
                     }
                     ctx->call_targets[i].qc = qc;
+                    ctx->call_targets[i].object_type_info = object_type_info;
                     ctx->exprs[i] = toBitsNB(QoreValue());
                     continue;
                 }
@@ -2213,6 +2247,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Store in call_targets for LLVM to load qc/variant at runtime
                 ctx->call_targets[i].qc = qc;
                 ctx->call_targets[i].variant = resolved_variant;
+                ctx->call_targets[i].object_type_info = object_type_info;
                 // exprs[i] not used — LLVM uses call_targets directly
                 ctx->exprs[i] = toBitsNB(QoreValue());
                 continue;

@@ -136,8 +136,9 @@ constexpr uint64_t QORE_AOT_FEAT_LOCAL_DECL_ORDINAL = 1ULL << 39; //!< local slo
 constexpr uint64_t QORE_AOT_FEAT_CLASS_INJECTION = 1ULL << 40; //!< class records preserve import/injection compatibility metadata
 constexpr uint64_t QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS = 1ULL << 41; //!< variant signatures carry original body parse options for source-stripped domain checks
 constexpr uint64_t QORE_AOT_FEAT_BCA_NAMED_ARG_MAP = 1ULL << 42; //!< BCA records preserve named-argument source-to-parameter evaluation maps
+constexpr uint64_t QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO = 1ULL << 43; //!< NewObject records and slots preserve instantiated object type paths
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0xFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {
@@ -1190,6 +1191,7 @@ struct AOTExprSlotId {
     AOTExprKind kind = AOTExprKind::UNSUPPORTED; //!< expression kind; UNSUPPORTED is compile-time-only
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
+    std::string ref3;        //!< kind-specific: instantiated object type path for NEW_OBJECT
     uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: bit 0 = is_pseudo)
     QoreValue child_expr;   //!< kind-specific child expression (e.g., OBJ_METHOD_REF_EXPR target)
     const QoreListNode* call_args = nullptr; //!< call args for NEW_OBJECT/SCOPED_NEW_OBJECT/STATIC_METHOD_CALL

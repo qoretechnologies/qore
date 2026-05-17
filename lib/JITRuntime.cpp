@@ -10944,8 +10944,8 @@ static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, Excepti
 // default args and type coercion; pre-evaluated values pass through eval() as
 // a no-op since only AST nodes need re-evaluation.
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
-        const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
-        ExceptionSink* xsink) {
+        const AbstractQoreFunctionVariant* variant, const QoreTypeInfo* object_type_info,
+        uint64_t* args, int nargs, ExceptionSink* xsink) {
     if (!qc) {
         xsink->raiseException("AOT-ERROR", "null class pointer in new object call");
         return toBits(QoreValue());
@@ -10958,12 +10958,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
     // Pass nullptr (not *arg_list) when nargs=0: buildArgListFromNanBoxed
     // returns null for empty lists and *arg_list on a null holder is UB.
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
-        nargs > 0 ? *arg_list : nullptr, xsink));
+        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
-        uint64_t* args, uint64_t** arg_cleanups, int nargs,
+        const QoreTypeInfo* object_type_info, uint64_t* args, uint64_t** arg_cleanups, int nargs,
         ExceptionSink* xsink) {
     if (!qc) {
         xsink->raiseException("AOT-ERROR", "null class pointer in new object call");
@@ -10979,7 +10979,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_consume_args(
     }
     RuntimeConfig& rc = rc_get_current_ref();
     return toBits(qore_class_private::execConstructor(*qc, rc, variant,
-        nargs > 0 ? *arg_list : nullptr, xsink));
+        nargs > 0 ? *arg_list : nullptr, xsink, object_type_info));
 }
 
 // AOT variant: resolve qc/variant from the per-function call_targets slot
@@ -10998,7 +10998,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot(QoreAOTContext* ctx,
             target.class_path && *target.class_path ? target.class_path : "<missing>", slot);
         return toBits(QoreValue());
     }
-    return qore_rt_new_object_nb(qc, target.variant, args, nargs, xsink);
+    return qore_rt_new_object_nb(qc, target.variant, target.object_type_info, args, nargs, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
@@ -11017,7 +11017,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot_consume_args(
         clearConsumedArgCleanups(arg_cleanups, nargs, xsink);
         return toBits(QoreValue());
     }
-    return qore_rt_new_object_nb_consume_args(qc, target.variant, args,
+    return qore_rt_new_object_nb_consume_args(qc, target.variant, target.object_type_info, args,
         arg_cleanups, nargs, xsink);
 }
 

@@ -86,12 +86,16 @@ static bool write_slot_args_prefer_call(AOTExprSlotWriteCtx& ctx) {
 }
 
 //! NEW_OBJECT and SCOPED_NEW_OBJECT
-//! ref1 = class path, ref2 = variant signature (e.g. "(string,int)" or "()" ).
+//! ref1 = class path, ref2 = variant signature (e.g. "(string,int)" or "()" ),
+//! ref3 = instantiated object type path when QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO is set.
 //! No inline args — constructor args are computed by separate IR instructions
 //! that feed the NewObject's operand values at runtime.
 static bool write_slot_NEW_OBJECT(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
+    if ((ctx.writer.feature_flags & QORE_AOT_FEAT_NEW_OBJECT_TYPEINFO) != 0) {
+        ctx.writer.writeStringRef(ctx.expr.ref3.c_str());
+    }
     return true;
 }
 
