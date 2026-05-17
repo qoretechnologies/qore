@@ -972,6 +972,29 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "h2.registerStreamFrameState(stream_id: 1, queue: queue); "
             "h2.onStreamData(stream_id: 1); }",
             "http2-poll-operation-base-named");
+        Program p3(PO_NEW_STYLE);
+        p3.parse("sub http1_client_poll_operation_base_named(Socket socket, "
+            "AbstractHttpPollConnection connection, Promise promise, EventNotifier notifier, "
+            "Queue queue, object channel) { "
+            "Http1ClientPollOperationBase h1(socket: socket, connect_target: \"localhost:80\", "
+            "target_host: \"localhost\", target_port: 80, ssl_required: False, "
+            "proxy_tunnel: False, plain_proxy: False, connection: connection); "
+            "h1.setIdleTimeout(idle_timeout_ms: 1000); "
+            "h1.setProtocolSwitchedListener(listener: connection); "
+            "h1.submitRequest(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "promise: promise, max_streams: 1); "
+            "h1.submitRequestWithNotifier(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "promise: promise, notifier: notifier, max_streams: 1); "
+            "h1.submitRequestStreaming(method: \"GET\", path: \"/\", headers: NOTHING, body: NOTHING, "
+            "channel: channel, max_streams: 1, streaming: True, body_streaming: False, "
+            "notifier: NOTHING, sse_install_eligible: False); "
+            "h1.pushSendData(data: NOTHING); "
+            "h1.setTrailers(trailers: NOTHING); "
+            "h1.submitRequestSse(method: \"GET\", path: \"/events\", headers: NOTHING, body: NOTHING, "
+            "queue: queue, max_streams: 1, notifier: notifier); "
+            "h1.cancelStream(stream_id: 1); "
+            "h1.installSseState(stream_id: 1, queue: queue, notifier: notifier, initial_body: NOTHING); }",
+            "http1-client-poll-operation-base-named");
     }
 
     reviewedSqlClassBuiltinOptIn() {

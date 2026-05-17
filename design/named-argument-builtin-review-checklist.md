@@ -407,6 +407,11 @@ These examples are from the core migration and should be reused as precedent:
   `initial_read_operation`, `send_operation`, and `read_operation`.
   Stream registration helpers should use `stream_id`, `queue`, and
   `notifier`.
+- HTTP client poll-operation APIs should keep connection routing and request
+  roles explicit: use `connect_target`, `target_host`, `target_port`,
+  `ssl_required`, `proxy_tunnel`, `plain_proxy`, `connection`, `method`,
+  `path`, `headers`, `body`, `promise`, `max_streams`, `channel`,
+  `streaming`, `body_streaming`, `trailers`, and `initial_body`.
 - Async I/O controller APIs should not expose implementation shorthand:
   use `auto_stop`, `operation_info`, `replace_existing`, `io_object`,
   `timeout_ms`, `user_data`, `cancel_callback`, and `max_threads` instead of
