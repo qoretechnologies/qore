@@ -593,22 +593,129 @@ else()
     find_package(ICU COMPONENTS uc i18n REQUIRED)
 endif()
 
-# c-ares is required for asynchronous DNS resolution in socket I/O.
-pkg_check_modules(CARES QUIET libcares)
-if(CARES_FOUND)
-    message(STATUS "Found c-ares: ${CARES_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${CARES_LIBRARIES})
-    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${CARES_INCLUDE_DIRS})
+# c-ares is required for asynchronous DNS resolution in socket I/O (>= 1.19.1).
+# Prefer an adequate system install; fall back to building the latest stable
+# release from source via FetchContent (statically linked) when the system
+# package is missing or older than the minimum.
+#
+# Minimum 1.19.1: c-ares <= 1.19.0 (e.g. Debian 12 ships 1.18.1) has an
+# ares_getaddrinfo() bug that rejects the numeric service "0" (ephemeral
+# port, valid per getaddrinfo(3)) with ARES_ESERVICE, which 1.18.1's
+# ares_strerror() additionally renders as the opaque "unknown"; this breaks
+# every listener that binds to an ephemeral port. Fixed in 1.19.1 (verified
+# empirically: 1.18.1 and 1.19.0 fail, 1.19.1+ succeed).
+#
+# IMPORTANT: consume the pkg-config IMPORTED_TARGET (PkgConfig::CARES_PKG),
+# NOT the bare ${CARES_PKG_LIBRARIES} name, so the linker resolves the exact
+# library pkg-config reports (full path + include dirs) rather than a
+# different libcares earlier in its default search path.
+set(CARES_VERSION "1.34.6")  # latest stable; FetchContent fallback pin
+set(CARES_FOUND_SYSTEM FALSE)
+pkg_check_modules(CARES_PKG QUIET IMPORTED_TARGET libcares>=1.19.1)
+if (CARES_PKG_FOUND)
+    message(STATUS "Found system c-ares: ${CARES_PKG_VERSION}")
+    list(APPEND LIBQORE_OPTIONAL_LIBS PkgConfig::CARES_PKG)
+    set(CARES_FOUND_SYSTEM TRUE)
 else()
+    # Try to find c-ares without pkg-config, applying the same version gate.
+    # find_library returns a full path (not a bare name).
     find_path(CARES_INCLUDE_DIR ares.h)
     find_library(CARES_LIBRARY NAMES cares)
-    if(CARES_INCLUDE_DIR AND CARES_LIBRARY)
-        message(STATUS "Found c-ares: ${CARES_LIBRARY}")
-        list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${CARES_INCLUDE_DIR})
-        list(APPEND LIBQORE_OPTIONAL_LIBS ${CARES_LIBRARY})
-    else()
-        message(FATAL_ERROR "c-ares is required for asynchronous DNS resolution. Please install libc-ares-dev (Debian/Ubuntu), c-ares-devel (Fedora/RHEL/openSUSE), or c-ares-dev (Alpine)")
+    if (CARES_INCLUDE_DIR AND CARES_LIBRARY
+            AND EXISTS "${CARES_INCLUDE_DIR}/ares_version.h")
+        file(STRINGS "${CARES_INCLUDE_DIR}/ares_version.h" _cares_ver_str
+             REGEX "^#define ARES_VERSION_STR ")
+        if (_cares_ver_str MATCHES "\"([0-9]+\\.[0-9]+\\.[0-9]+)\"")
+            set(_cares_ver "${CMAKE_MATCH_1}")
+            if (_cares_ver VERSION_LESS "1.19.1")
+                message(STATUS "system c-ares ${_cares_ver} too old (need >= 1.19.1 for ares_getaddrinfo service \"0\" fix); will build from source")
+            else()
+                message(STATUS "Found system c-ares: ${CARES_LIBRARY} (${_cares_ver})")
+                list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${CARES_INCLUDE_DIR})
+                list(APPEND LIBQORE_OPTIONAL_LIBS ${CARES_LIBRARY})
+                set(CARES_FOUND_SYSTEM TRUE)
+            endif()
+        endif()
     endif()
+endif()
+
+if (NOT CARES_FOUND_SYSTEM)
+    # Build the latest stable c-ares from source via FetchContent.
+    message(STATUS "system c-ares not found or too old; building from source (c-ares ${CARES_VERSION})")
+    include(FetchContent)
+
+    # Save cache variables we override for the subproject build
+    set(_SAVE_CARES_BUILD_TESTING ${BUILD_TESTING})
+    set(_SAVE_CARES_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
+    set(_SAVE_CARES_STATIC ${CARES_STATIC})
+    set(_SAVE_CARES_SHARED ${CARES_SHARED})
+    set(_SAVE_CARES_INSTALL ${CARES_INSTALL})
+    set(_SAVE_CARES_STATIC_PIC ${CARES_STATIC_PIC})
+    set(_SAVE_CARES_BUILD_TOOLS ${CARES_BUILD_TOOLS})
+    set(_SAVE_CARES_PIC ${CMAKE_POSITION_INDEPENDENT_CODE})
+
+    set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(CARES_STATIC ON CACHE BOOL "" FORCE)
+    set(CARES_SHARED OFF CACHE BOOL "" FORCE)
+    set(CARES_INSTALL OFF CACHE BOOL "" FORCE)
+    set(CARES_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+    # Static lib linked into libqore.so needs -fPIC
+    set(CARES_STATIC_PIC ON CACHE BOOL "" FORCE)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
+
+    FetchContent_Declare(cares
+        URL "https://github.com/c-ares/c-ares/releases/download/v${CARES_VERSION}/c-ares-${CARES_VERSION}.tar.gz"
+        URL_HASH SHA256=912dd7cc3b3e8a79c52fd7fb9c0f4ecf0aaa73e45efda880266a2d6e26b84ef5
+        EXCLUDE_FROM_ALL
+    )
+    FetchContent_MakeAvailable(cares)
+
+    # Restore cache variables
+    if (DEFINED _SAVE_CARES_BUILD_TESTING)
+        set(BUILD_TESTING ${_SAVE_CARES_BUILD_TESTING} CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_TESTING CACHE)
+    endif()
+    if (DEFINED _SAVE_CARES_BUILD_SHARED_LIBS)
+        set(BUILD_SHARED_LIBS ${_SAVE_CARES_BUILD_SHARED_LIBS} CACHE BOOL "" FORCE)
+    else()
+        unset(BUILD_SHARED_LIBS CACHE)
+    endif()
+    if (DEFINED _SAVE_CARES_STATIC)
+        set(CARES_STATIC ${_SAVE_CARES_STATIC} CACHE BOOL "" FORCE)
+    else()
+        unset(CARES_STATIC CACHE)
+    endif()
+    if (DEFINED _SAVE_CARES_SHARED)
+        set(CARES_SHARED ${_SAVE_CARES_SHARED} CACHE BOOL "" FORCE)
+    else()
+        unset(CARES_SHARED CACHE)
+    endif()
+    if (DEFINED _SAVE_CARES_INSTALL)
+        set(CARES_INSTALL ${_SAVE_CARES_INSTALL} CACHE BOOL "" FORCE)
+    else()
+        unset(CARES_INSTALL CACHE)
+    endif()
+    if (DEFINED _SAVE_CARES_STATIC_PIC)
+        set(CARES_STATIC_PIC ${_SAVE_CARES_STATIC_PIC} CACHE BOOL "" FORCE)
+    else()
+        unset(CARES_STATIC_PIC CACHE)
+    endif()
+    if (DEFINED _SAVE_CARES_BUILD_TOOLS)
+        set(CARES_BUILD_TOOLS ${_SAVE_CARES_BUILD_TOOLS} CACHE BOOL "" FORCE)
+    else()
+        unset(CARES_BUILD_TOOLS CACHE)
+    endif()
+    if (DEFINED _SAVE_CARES_PIC)
+        set(CMAKE_POSITION_INDEPENDENT_CODE ${_SAVE_CARES_PIC} CACHE BOOL "" FORCE)
+    else()
+        unset(CMAKE_POSITION_INDEPENDENT_CODE CACHE)
+    endif()
+
+    # The c-ares::cares alias resolves to the static target (CARES_SHARED=OFF)
+    # and carries its own INTERFACE include directories.
+    list(APPEND LIBQORE_OPTIONAL_LIBS c-ares::cares)
 endif()
 set(HAVE_CARES TRUE)
 
@@ -816,23 +923,34 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
-# HTTP/2 support via nghttp2 (required, >= 1.68.1)
-# Minimum 1.68.1: v1.68.1 fixes CVE-2026-27135 (GHSA-6933-cjhr-5qg6), a DoS via
-# assertion failure in nghttp2_session_terminate_session[2] when extension
+# HTTP/2 support via nghttp2 (required, >= 1.68.1).
+# Prefer an adequate system install; fall back to building the latest stable
+# release from source via FetchContent (statically linked) when the system
+# package is missing or older than the minimum.
+#
+# Minimum 1.68.1: v1.68.1 fixes CVE-2026-27135 (GHSA-6933-cjhr-5qg6), a DoS
+# via assertion failure in nghttp2_session_terminate_session[2] when extension
 # frames (ALTSVC, PRIORITY_UPDATE) trigger a follow-on FRAME_SIZE_ERROR.
 # Encoded as NGHTTP2_VERSION_NUM 0x014401 (1.68.1).
-# Falls back to building from source via FetchContent when no system install
-# satisfies the minimum.
-set(NGHTTP2_VERSION "1.69.0")
+#
+# IMPORTANT: consume the pkg-config IMPORTED_TARGET (PkgConfig::NGHTTP2_PKG),
+# NOT the bare ${NGHTTP2_PKG_LIBRARIES} name. The imported target carries the
+# full resolved library path plus include dirs, so the linker cannot silently
+# pick a different/older libnghttp2 earlier in its default search path - which
+# previously produced "undefined reference to nghttp2_session_mem_send2"
+# (Http2Session.cpp selects the API by the compile-time NGHTTP2_VERSION_NUM,
+# so a header/library skew only surfaced at link time).
+set(NGHTTP2_VERSION "1.69.0")  # latest stable; FetchContent fallback pin
 set(NGHTTP2_FOUND_SYSTEM FALSE)
-pkg_check_modules(NGHTTP2_PKG QUIET libnghttp2>=1.68.1)
+pkg_check_modules(NGHTTP2_PKG QUIET IMPORTED_TARGET libnghttp2>=1.68.1)
 if (NGHTTP2_PKG_FOUND)
-    message(STATUS "Found nghttp2: ${NGHTTP2_PKG_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_PKG_INCLUDE_DIRS})
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_PKG_LIBRARIES})
+    message(STATUS "Found system nghttp2: ${NGHTTP2_PKG_VERSION}")
+    list(APPEND LIBQORE_OPTIONAL_LIBS PkgConfig::NGHTTP2_PKG)
     set(NGHTTP2_FOUND_SYSTEM TRUE)
 else()
-    # Try to find nghttp2 without pkg-config
+    # Try to find nghttp2 without pkg-config, applying the same version gate.
+    # find_library returns a full path (not a bare name), so this path is not
+    # affected by the linker-search-order issue described above.
     find_path(NGHTTP2_INCLUDE_DIR nghttp2/nghttp2.h)
     find_library(NGHTTP2_LIBRARY NAMES nghttp2)
     if (NGHTTP2_INCLUDE_DIR AND NGHTTP2_LIBRARY
@@ -843,9 +961,9 @@ else()
             math(EXPR _nghttp2_ver_num "0x${CMAKE_MATCH_1}" OUTPUT_FORMAT DECIMAL)
             # 0x014401 = 82945 decimal (v1.68.1)
             if (_nghttp2_ver_num LESS 82945)
-                message(STATUS "nghttp2 version too old (need >= 1.68.1 for CVE-2026-27135); will build from source")
+                message(STATUS "system nghttp2 too old (need >= 1.68.1 for CVE-2026-27135); will build from source")
             else()
-                message(STATUS "Found nghttp2: ${NGHTTP2_LIBRARY}")
+                message(STATUS "Found system nghttp2: ${NGHTTP2_LIBRARY}")
                 list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGHTTP2_INCLUDE_DIR})
                 list(APPEND LIBQORE_OPTIONAL_LIBS ${NGHTTP2_LIBRARY})
                 set(NGHTTP2_FOUND_SYSTEM TRUE)
@@ -855,10 +973,10 @@ else()
 endif()
 
 if (NOT NGHTTP2_FOUND_SYSTEM)
-    # Build nghttp2 from source via FetchContent.
+    # Build the latest stable nghttp2 from source via FetchContent.
     # nghttp2 unconditionally creates an add_custom_target(check) like ngtcp2/
     # nghttp3, so we patch it out the same way before add_subdirectory.
-    message(STATUS "nghttp2 not found on system; building from source (nghttp2 ${NGHTTP2_VERSION})")
+    message(STATUS "system nghttp2 not found or too old; building from source (nghttp2 ${NGHTTP2_VERSION})")
     include(FetchContent)
 
     # Save cache variables we override for the subproject build
@@ -956,15 +1074,18 @@ set(NGTCP2_VERSION "1.22.1")
 set(NGHTTP3_VERSION "1.15.0")
 
 set(QUIC_FOUND_SYSTEM FALSE)
-pkg_check_modules(NGTCP2_PKG QUIET libngtcp2)
-pkg_check_modules(NGTCP2_CRYPTO_OSSL_PKG QUIET libngtcp2_crypto_ossl)
-pkg_check_modules(NGHTTP3_PKG QUIET libnghttp3>=1.14.0)
+# Consume the pkg-config IMPORTED_TARGETs (PkgConfig::*), NOT the bare
+# ${*_PKG_LIBRARIES} names: the imported targets carry full resolved library
+# paths plus include dirs, so the linker cannot silently pick a different/
+# older libngtcp2/libnghttp3 earlier in its default search path.
+pkg_check_modules(NGTCP2_PKG QUIET IMPORTED_TARGET libngtcp2)
+pkg_check_modules(NGTCP2_CRYPTO_OSSL_PKG QUIET IMPORTED_TARGET libngtcp2_crypto_ossl)
+pkg_check_modules(NGHTTP3_PKG QUIET IMPORTED_TARGET libnghttp3>=1.14.0)
 if (NGTCP2_PKG_FOUND AND NGTCP2_CRYPTO_OSSL_PKG_FOUND AND NGHTTP3_PKG_FOUND)
-    message(STATUS "Found ngtcp2: ${NGTCP2_PKG_VERSION}")
-    message(STATUS "Found ngtcp2_crypto_ossl: ${NGTCP2_CRYPTO_OSSL_PKG_VERSION}")
-    message(STATUS "Found nghttp3: ${NGHTTP3_PKG_VERSION}")
-    list(APPEND LIBQORE_OPTIONAL_INCLUDE_DIRS ${NGTCP2_PKG_INCLUDE_DIRS} ${NGTCP2_CRYPTO_OSSL_PKG_INCLUDE_DIRS} ${NGHTTP3_PKG_INCLUDE_DIRS})
-    list(APPEND LIBQORE_OPTIONAL_LIBS ${NGTCP2_PKG_LIBRARIES} ${NGTCP2_CRYPTO_OSSL_PKG_LIBRARIES} ${NGHTTP3_PKG_LIBRARIES})
+    message(STATUS "Found system ngtcp2: ${NGTCP2_PKG_VERSION}")
+    message(STATUS "Found system ngtcp2_crypto_ossl: ${NGTCP2_CRYPTO_OSSL_PKG_VERSION}")
+    message(STATUS "Found system nghttp3: ${NGHTTP3_PKG_VERSION}")
+    list(APPEND LIBQORE_OPTIONAL_LIBS PkgConfig::NGTCP2_PKG PkgConfig::NGTCP2_CRYPTO_OSSL_PKG PkgConfig::NGHTTP3_PKG)
     set(QUIC_FOUND_SYSTEM TRUE)
 else()
     # Try to find ngtcp2/nghttp3 without pkg-config
