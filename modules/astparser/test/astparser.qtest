@@ -583,6 +583,7 @@ sub test() {
             "    target(1, beta: 2, gamma: 3);\n"
             "    target(alpha: 1,);\n"
             "    \"abcdef\".substr(start: 1, len: 2);\n"
+            "    File f(); string yaml = \"x\"; f.write(data: yaml);\n"
             "    new Child();\n"
             "}\n";
 

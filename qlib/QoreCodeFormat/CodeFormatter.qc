@@ -106,6 +106,7 @@ public const AEK_Ternary = 28;
 public const AEK_Unary = 29;
 public const AEK_HashdeclHash = 30;
 public const AEK_StringConcat = 31;
+public const AEK_NamedArgument = 32;
 
 #! Operator string mapping
 public const OperatorStrings = {
@@ -1873,6 +1874,8 @@ public class CodeFormatter {
                 return emitConstrInitExpr(node);
             case AEK_StringConcat:
                 return emitStringConcatExpr(node);
+            case AEK_NamedArgument:
+                return emitNamedArgumentExpr(node);
             default:
                 return stripTrailingSemicolon(extractSourceText(node.loc));
         }
@@ -2165,6 +2168,13 @@ public class CodeFormatter {
         string key = emitExpressionStr(node.key);
         string val = emitExpressionStr(node.value);
         return key + ": " + val;
+    }
+
+    #! Emit named argument expression
+    private string emitNamedArgumentExpr(hash<auto> node) {
+        string name = node.name.name ?? stripTrailingSemicolon(extractSourceText(node.loc));
+        string val = emitExpressionStr(node.value);
+        return name + ": " + val;
     }
 
     #! Emit hashdecl hash expression

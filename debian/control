@@ -2,7 +2,7 @@ Source: qore
 Section: devel
 Priority: optional
 Maintainer: David Nichols <david@qore.org>
-Build-Depends: debhelper (>= 13),
+Build-Depends: debhelper-compat (= 13),
                cmake (>= 3.14),
                g++,
                flex (>= 2.5.31),
@@ -110,3 +110,4 @@ Description: Miscellaneous user tools written in Qore
   - API Schema Generation (qore-openapi3-gen, qore-asyncapi-gen)
   - Language Server (qls)
   - File Downloads (qget)
+  - Translation Catalogs (qore-i18n)
