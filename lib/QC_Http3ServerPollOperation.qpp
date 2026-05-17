@@ -727,22 +727,22 @@ void Http3ServerPollOperationPriv::checkStreamQueues() {
 qclass Http3ServerPollOperation [arg=Http3ServerPollOperationPriv* priv; ns=Qore; vparent=SocketPollOperationBase; private_members=object sock,string goal,auto data_save];
 
 //! Creates the HTTP/3 server poll operation
-/** @param sock the UDP socket bound and ready for QUIC connections
+/** @param socket the UDP socket bound and ready for QUIC connections
     @param drain_timeout duration to wait for in-flight requests to complete
     during GOAWAY graceful shutdown; defaults to 5s
     @param headers_only if @ref True, dispatches requests as soon as headers are
     received (before the full body arrives)
     @param max_request_body_size maximum request body size in bytes; 0 = unlimited
 */
-Http3ServerPollOperation::constructor(Socket[QoreSocketObject] sock,
+Http3ServerPollOperation::constructor(Socket[QoreSocketObject] socket,
         timeout drain_timeout = 5s, bool headers_only = False,
-        int max_request_body_size = 0) {
-    if (!*sock) {
+        int max_request_body_size = 0) [flags=NAMED_ARGS] {
+    if (!*socket) {
         xsink->raiseException("HTTP3-ERROR", "socket cannot be null");
         return;
     }
 
-    QoreSocketObject* sock_ptr = *sock;
+    QoreSocketObject* sock_ptr = *socket;
 
     // Set up the Qore object members
     QoreValue sock_arg = args->retrieveEntry(0);
@@ -864,7 +864,7 @@ bool Http3ServerPollOperation::hasError() [flags=RET_VALUE_ONLY] {
     @param body response body (optional)
 */
 nothing Http3ServerPollOperation::startSendResponse(int status_code, *hash<auto> headers,
-        *data body) {
+        *data body) [flags=NAMED_ARGS] {
     ValueHolder materialized_body(xsink);
     const AbstractQoreNode* body_node = nullptr;
     if (materializeHttp3ServerDataBodyNode(get_param_value(args, 2), materialized_body,
@@ -881,7 +881,7 @@ nothing Http3ServerPollOperation::startSendResponse(int status_code, *hash<auto>
     @param chunk_size optional chunk size for reading from the InputStream
 */
 nothing Http3ServerPollOperation::startSendStreamingResponse(int status_code,
-        *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+        *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) [flags=NAMED_ARGS] {
     // body ref is owned by QPP ReferenceHolder; transfer ownership to the operation
     InputStream* body_ptr = body.release();
     QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
@@ -907,7 +907,7 @@ nothing Http3ServerPollOperation::continueReading() {
 //! Gracefully shuts down the QUIC connection
 /** @param session_id optional session ID to shut down
 */
-nothing Http3ServerPollOperation::shutdown(*int session_id) {
+nothing Http3ServerPollOperation::shutdown(*int session_id) [flags=NAMED_ARGS] {
     priv->shutdown(session_id ? session_id : 0, xsink);
 }
 
@@ -928,16 +928,16 @@ nothing Http3ServerPollOperation::abort() {
     cert/key snapshotted at handshake time; new handshakes after the swap pick
     up the new material via a freshly built shared SSL_CTX.
 
-    @param cert the new X.509 certificate
-    @param key the new private key
+    @param certificate the new X.509 certificate
+    @param private_key the new private key
 
     @since %Qore 2.3
 */
-nothing Http3ServerPollOperation::reloadCertificate(SSLCertificate[QoreSSLCertificate] cert,
-        SSLPrivateKey[QoreSSLPrivateKey] key) {
+nothing Http3ServerPollOperation::reloadCertificate(SSLCertificate[QoreSSLCertificate] certificate,
+        SSLPrivateKey[QoreSSLPrivateKey] private_key) [flags=NAMED_ARGS] {
     // ReferenceHolder-style release: ownership of the underlying ref'd
     // private data transfers to the priv class.
-    priv->setPendingCertificate(cert.release(), key.release());
+    priv->setPendingCertificate(certificate.release(), private_key.release());
 }
 
 //! Sets the completion context for accept operations
@@ -947,7 +947,7 @@ nothing Http3ServerPollOperation::reloadCertificate(SSLCertificate[QoreSSLCertif
     @param owner the owner identifier
 */
 nothing Http3ServerPollOperation::setCompletionContext(object controller, object listener,
-        object target, string owner) {
+        object target, string owner) [flags=NAMED_ARGS] {
     // Store in internal members — accessed by onComplete()
     QoreValue ctrl_arg = args->retrieveEntry(0);
     QoreValue lsnr_arg = args->retrieveEntry(1);
@@ -970,18 +970,18 @@ nothing Http3ServerPollOperation::setCompletionContext(object controller, object
 
 //! Sets the connection-level completion context for resubmitted ops
 /** @param controller the controller
-    @param uh the connection unique hash
+    @param connection_unique_hash the connection unique hash
     @param state the connection state
 */
 nothing Http3ServerPollOperation::setConnectionCompletionContext(object controller,
-        string uh, string state) {
+        string connection_unique_hash, string state) [flags=NAMED_ARGS] {
     QoreValue ctrl_arg = args->retrieveEntry(0);
     if (ctrl_arg.getType() == NT_OBJECT) {
         self->setMemberValue("completion_controller", QC_HTTP3SERVERPOLLOPERATION,
             const_cast<QoreObject*>(ctrl_arg.get<const QoreObject>())->refSelf(), xsink);
     }
     self->setMemberValue("conn_completion_uh", QC_HTTP3SERVERPOLLOPERATION,
-        uh->refSelf(), xsink);
+        connection_unique_hash->refSelf(), xsink);
     self->setMemberValue("conn_completion_state", QC_HTTP3SERVERPOLLOPERATION,
         state->refSelf(), xsink);
 }
@@ -990,7 +990,7 @@ nothing Http3ServerPollOperation::setConnectionCompletionContext(object controll
 /** Routes to handleConnectionResult() when a connection-level context is set
     (resubmitted ops), or to handleQuicAcceptResult() for the initial accept.
 */
-nothing Http3ServerPollOperation::onComplete(hash<SocketPollResultInfo> result) {
+nothing Http3ServerPollOperation::onComplete(hash<SocketPollResultInfo> result) [flags=NAMED_ARGS] {
     ValueHolder ctrl(self->getReferencedMemberNoMethod("completion_controller", xsink), xsink);
     if (*xsink || ctrl->isNullOrNothing()) {
         return QoreValue();
@@ -1037,7 +1037,7 @@ nothing Http3ServerPollOperation::onComplete(hash<SocketPollResultInfo> result) 
     @param queue the Queue that h3RecvDataCallback pushes data to
 */
 nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream_id,
-        Queue[Queue] queue) {
+        Queue[Queue] queue) [flags=NAMED_ARGS] {
     std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
 
     // Store the QoreObject ref in internal_members to prevent GC
@@ -1074,7 +1074,7 @@ nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream
     @param listener object with notifyIo() method
 */
 nothing Http3ServerPollOperation::registerStreamListener(int session_id, int stream_id,
-        object listener) {
+        object listener) [flags=NAMED_ARGS] {
     std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
     QoreObject* listener_obj = nullptr;
 
@@ -1112,7 +1112,7 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
 //! Called by the I/O controller on a worker thread when stream data is available
 /** @param stream_key composite key "session_id:stream_id"
 */
-nothing Http3ServerPollOperation::onStreamData(string stream_key) {
+nothing Http3ServerPollOperation::onStreamData(string stream_key) [flags=NAMED_ARGS] {
     ValueHolder listener(xsink);
     bool had_listeners = false;
     size_t listener_count = 0;

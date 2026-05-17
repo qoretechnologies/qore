@@ -413,8 +413,10 @@ These examples are from the core migration and should be reused as precedent:
   `path`, `headers`, `body`, `promise`, `max_streams`, `channel`,
   `streaming`, `body_streaming`, `trailers`, `ping_interval_ms`,
   `end_stream`, `message_queue`, `host`, `port`, `family`,
-  `connect_timeout`, `stream_limit`, `error_code`, `description`, and
-  `initial_body`.
+  `connect_timeout`, `stream_limit`, `status_code`, `chunk_size`,
+  `connection_unique_hash`, `stream_key`, `error_code`, `description`, and
+  `initial_body`. HTTP/3 server operation constructors should use
+  `drain_timeout`, `headers_only`, and `max_request_body_size`.
 - Async I/O controller APIs should not expose implementation shorthand:
   use `auto_stop`, `operation_info`, `replace_existing`, `io_object`,
   `timeout_ms`, `user_data`, `cancel_callback`, and `max_threads` instead of
@@ -426,7 +428,10 @@ These examples are from the core migration and should be reused as precedent:
   compilation.
 - Qlib wrapper/object call sites must also stay positional when the receiver is
   not parse-time-resolved tightly enough for qmod named-call compilation, even
-  if the underlying native method now supports named arguments.
+  if the underlying native method now supports named arguments. For example,
+  `HttpServerAsyncIo` calls to `Http3ServerPollOperation` constructor and
+  stream-registration methods currently stay positional because named calls
+  raise `NAMED-CALL-NOT-SUPPORTED` while loading the qlib module.
 - Time and terminal APIs should expand terse units and value roles before
   opt-in: use `seconds`, `microseconds`, `milliseconds`, `date_value`,
   `date_string`, and `offset` instead of `secs`, `us`, `ms`, `d`, `dtstr`,

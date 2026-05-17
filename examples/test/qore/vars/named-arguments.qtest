@@ -1041,6 +1041,26 @@ public class NamedArgumentsTest inherits QUnit::Test {
             "h3.installFrameState(stream_id: 1, message_queue: queue); "
             "h3.installSseState(stream_id: 1, queue: queue, notifier: notifier, initial_body: NOTHING); }",
             "http3-client-poll-operation-base-named");
+        Program p6(PO_NEW_STYLE);
+        p6.parse("sub http3_server_poll_operation_named(Socket socket, object controller, "
+            "object listener, object target, Queue queue, hash<SocketPollResultInfo> result, "
+            "SSLCertificate certificate, SSLPrivateKey private_key, InputStream stream) { "
+            "Http3ServerPollOperation h3s(socket: socket, drain_timeout: 5s, headers_only: True, "
+            "max_request_body_size: 1048576); "
+            "h3s.startSendResponse(status_code: 200, headers: {}, body: binary(\"ok\")); "
+            "h3s.startSendStreamingResponse(status_code: 200, headers: {}, body: stream, "
+            "chunk_size: 8192); "
+            "h3s.shutdown(session_id: 1); "
+            "h3s.reloadCertificate(certificate: certificate, private_key: private_key); "
+            "h3s.setCompletionContext(controller: controller, listener: listener, target: target, "
+            "owner: \"listener\"); "
+            "h3s.setConnectionCompletionContext(controller: controller, connection_unique_hash: \"uh\", "
+            "state: \"Http3\"); "
+            "h3s.onComplete(result: result); "
+            "h3s.registerStreamQueue(session_id: 1, stream_id: 2, queue: queue); "
+            "h3s.registerStreamListener(session_id: 1, stream_id: 2, listener: listener); "
+            "h3s.onStreamData(stream_key: \"1:2\"); }",
+            "http3-server-poll-operation-named");
     }
 
     reviewedSqlClassBuiltinOptIn() {
