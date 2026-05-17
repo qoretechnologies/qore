@@ -103,6 +103,40 @@ x=null@endverbatim
     |@ref Qore::Thread::Sequence "Sequence"|A simple, thread-atomic sequence object (increment-only)
     |@ref Qore::Thread::ThreadPool "ThreadPool"|A flexible, dynamically scalable thread pool
 
+    @par Generic Threading Classes
+    The value-carrying threading classes can be declared with type arguments so
+    producer and consumer methods are checked against the same value type:
+
+    @code{.py}
+Queue<int> queue();
+queue.push(value: 42);
+int queued = queue.get(timeout_ms: 0);
+
+Channel<string> channel(1);
+channel.send(value: "ready");
+*string received = channel.recv(timeout_ms: 1s);
+
+Promise<hash<auto>> promise();
+Future<hash<auto>> future = promise.getFuture();
+promise.set(value: {"code": 200, "message": "ok"});
+hash<auto> response = future.get(timeout_ms: 5s);
+    @endcode
+
+    Type arguments are enforced where values enter the container. Passing a
+    value that does not match the declared type raises a parse-time or runtime
+    type error depending on when the value type is known:
+
+    @code{.py}
+Queue<int> queue();
+queue.push(value: "wrong");  # PARSE-TYPE-ERROR
+    @endcode
+
+    Existing raw declarations remain valid for compatibility. For example,
+    <tt>Queue q()</tt> creates a <tt>Queue&lt;auto&gt;</tt> object, and
+    \c Future values returned from APIs such as @ref Qore::call_async()
+    "call_async()" can also be stored as <tt>Future&lt;auto&gt;</tt> when the
+    concrete result type is not declared.
+
     @par Functions Useful With Threading
     The following functions assist writing safe and efficient multi-threaded %Qore programs:\n
     |!Function|!Description

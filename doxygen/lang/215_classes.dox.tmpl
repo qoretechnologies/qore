@@ -51,6 +51,35 @@ class MyClass inherits MyBaseClass {
 }
     @endcode
 
+    @subsection builtin_generic_classes Generic Builtin Classes
+    Builtin classes can declare formal type parameters in their public API. User
+    code supplies concrete type arguments in type positions, as documented in
+    @ref generic_class_type "Generic Class Types". The first generic builtin
+    classes are the threading value-container classes @ref Qore::Thread::Queue
+    "Queue", @ref Qore::Thread::Channel "Channel", @ref Qore::Thread::Promise
+    "Promise", and @ref Qore::Thread::Future "Future".
+
+    @par Example
+    @code{.py}
+Queue<int> queue();
+queue.push(value: 42);
+int value = queue.pop(timeout_ms: 0);
+
+Promise<string> promise();
+Future<string> future = promise.getFuture();
+promise.set(value: "done");
+string result = future.get(timeout_ms: 1s);
+    @endcode
+
+    Generic builtin class types are runtime checked and are invariant. For
+    example, <tt>Queue&lt;int&gt;</tt> and <tt>Queue&lt;auto&gt;</tt> are
+    different concrete types. Migrated legacy builtin classes still support raw
+    declarations such as <tt>Queue q()</tt> for compatibility; raw construction
+    creates the explicit <tt>Queue&lt;auto&gt;</tt> form.
+
+    @note Source-defined generic class declarations, for example
+    <tt>class Box&lt;T&gt;</tt>, are not enabled in %Qore 2.3.
+
     @note No semicolon (\c ";") is required to terminate a class declaration (in fact using a semicolon would raise a parse exception).
 
     @par Out-Of-Line Class Declaration Syntax

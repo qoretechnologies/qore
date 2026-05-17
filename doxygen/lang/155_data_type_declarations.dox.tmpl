@@ -27,6 +27,7 @@
     |@ref object_type "object"|@ref object|@ref object|Restricts values to @ref object values
     |@ref classname_type "object<...>"|@ref object|@ref object|Restricts values to objects of the specific class
     |@ref classname_type "<classname>"|@ref object|@ref object|Restricts values to objects of the specific class given; either the class name can be given (ex: @ref Qore::Thread::Mutex "Mutex" or a qualified path to the class: @ref Qore::Thread::Mutex)
+    |@ref generic_class_type "Class<T>"|@ref object|@ref object|Restricts values to objects of a builtin class with the declared type arguments
     |@ref null_type "null"|@ref null|@ref null|Restricts values to %Qore's @ref null type; this type has few (if any) practical applications and has been included for completeness' sake
     |@ref nothing_type "nothing"|@ref nothing|@ref nothing|Restricts values to %Qore's @ref nothing type; this type is mostly useful for declaring that a function or method returns no value
     |@ref timeout_type "timeout"|@ref integer, @ref date|@ref integer|Accepts @ref integer, @ref date and converts dates to an integer value representing milliseconds and returns the integer; incoming integers are assumed to represent milliseconds
@@ -437,6 +438,68 @@ Mutex sub foo(Qore::Thread::Mutex m = new Mutex()) {
     return m;
 }
     @endcode
+
+    @section generic_class_type Generic Class Types
+
+    Some builtin classes declare type parameters. These classes can be used with
+    type arguments in any type position, which makes the type argument part of the
+    object's runtime type and of parse-time method checking.
+
+    @par Generic Queue Example
+    @code{.py}
+Queue<int> q();
+q.push(value: 10);
+q.push(value: 20);
+
+int first = q.get(timeout_ms: 0);
+int second = q.pop(timeout_ms: 0);
+    @endcode
+
+    The declared type is enforced at producer methods. For example, the following
+    call is rejected before the program runs:
+
+    @code{.py}
+Queue<int> q();
+q.push(value: "not an int");  # PARSE-TYPE-ERROR
+    @endcode
+
+    @par Generic Channel Example
+    @code{.py}
+Channel<string> ch(2);
+ch.send(value: "ready");
+
+*string message = ch.recv(timeout_ms: 100ms);
+    @endcode
+
+    @par Generic Future Example
+    @code{.py}
+Promise<hash<auto>> p();
+Future<hash<auto>> f = p.getFuture();
+
+p.set(value: {"status": 200, "body": "ok"});
+hash<auto> response = f.get(timeout_ms: 5s);
+    @endcode
+
+    Parameterized class types are invariant. For example,
+    <tt>Queue&lt;auto&gt;</tt> is a concrete value-erased queue type; it is
+    not a wildcard that accepts every queue instantiation:
+
+    @code{.py}
+Queue<int> ints();
+Queue<auto> values();
+
+values = ints;  # PARSE-TYPE-ERROR
+    @endcode
+
+    The first generic builtin classes keep source compatibility with existing raw
+    code. A raw declaration such as <tt>Queue q()</tt> constructs a
+    <tt>Queue&lt;auto&gt;</tt> object, and a raw \c Queue annotation accepts
+    migrated parameterized queue objects. Use explicit type arguments in new code
+    when the element or result type is known.
+
+    @note %Qore 2.3 supports generic type arguments for builtin classes that
+    declare type parameters. Source-defined generic class declarations such as
+    <tt>class Box&lt;T&gt;</tt> are reserved for a later release.
 
     <hr>
     @section null_type null

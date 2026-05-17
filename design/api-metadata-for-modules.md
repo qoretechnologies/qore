@@ -78,6 +78,67 @@ Consumers should use `named_callable` before offering named-call snippets or dia
 They should use `named_parameters`, not just `params`, for builtin APIs because a builtin
 variant can have parameter names in documentation while remaining positional-only.
 
+## Generic Class Metadata
+
+QPP metadata also exposes builtin class type parameters when a class is declared
+with generic arguments, such as `qclass Queue<T>` or `qclass FutureImpl<T>
+[vparent=Future<T>]`. This is required so QLS and generated documentation can
+display the generic class spelling, preserve type-parameter names in signatures,
+and avoid presenting raw legacy classes as the only available API.
+
+For every class object, metadata may include:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `type_parameters` | `list<string>` | Formal class type parameter names in declaration order |
+| `raw_accepts_parameterized` | `bool` | Raw annotations of this class accept parameterized instances for legacy compatibility |
+| `raw_construction_defaults_to_auto` | `bool` | Raw construction creates the explicit all-`auto` instantiation |
+
+Example:
+
+```json
+{
+  "name": "Queue",
+  "namespace_path": "Qore::Thread",
+  "type_parameters": ["T"],
+  "raw_accepts_parameterized": true,
+  "raw_construction_defaults_to_auto": true,
+  "instance_methods": [
+    {
+      "name": "push",
+      "signature": "nothing Queue<T>::push(T value, timeout timeout_ms = 0)",
+      "named_callable": true,
+      "named_parameters": ["value", "timeout_ms"]
+    },
+    {
+      "name": "pop",
+      "signature": "T Queue<T>::pop(timeout timeout_ms = 0)",
+      "named_callable": true,
+      "named_parameters": ["timeout_ms"]
+    }
+  ]
+}
+```
+
+Consumers should render the generic spelling (`Queue<T>`, `Future<T>`) and keep
+formal type parameters intact in examples. When generating example calls for a
+concrete use case, substitute the formal type parameter with a concrete type:
+
+```qore
+Queue<int> q();
+q.push(value: 42);
+int value = q.pop(timeout_ms: 0);
+
+Promise<string> p();
+Future<string> f = p.getFuture();
+p.set(value: "done");
+string result = f.get(timeout_ms: 1s);
+```
+
+When `raw_construction_defaults_to_auto` is true, raw examples may still be
+valid for compatibility, but new generated snippets should prefer explicit
+type arguments when the value type is known and use `<auto>` only when it is not.
+
 ## Problem
 
 Previously, only the core `qore` repo generated `.meta.json` files from its 132+ qpp
