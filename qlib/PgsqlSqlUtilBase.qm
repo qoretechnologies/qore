@@ -1589,7 +1589,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     #! returns an iterator listing the string materialized view names in the database
-    ListIterator materializedViewIterator() {
+    ListIterator<string> materializedViewIterator() {
         return listMaterializedViews().iterator();
     }
 
@@ -1599,7 +1599,7 @@ public class PgsqlDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     #! returns an iterator listing the string type names in the database
-    ListIterator typeIterator() {
+    ListIterator<string> typeIterator() {
         return listTypes().iterator();
     }
 

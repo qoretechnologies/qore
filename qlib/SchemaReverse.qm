@@ -438,7 +438,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         }
 
         hash toQore() {
-            ListIterator it = database().sequenceIterator();
+            ListIterator<string> it = database().sequenceIterator();
             hash ret = hash();
             while (it.next()) {
                 string s = it.getValue();
@@ -483,7 +483,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                 return {};
             }
 
-            ListIterator it = database().typeIterator();
+            ListIterator<string> it = database().typeIterator();
             hash ret = {};
             while (it.next()) {
                 string s = it.getValue();
@@ -645,7 +645,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
         }
 
         hash toQore() {
-            ListIterator it = database().tableIterator();
+            ListIterator<string> it = database().tableIterator();
             hash ret = {};
             while (it.next()) {
                 string s = it.getValue();
@@ -744,7 +744,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                 return hash();
             }
 
-            ListIterator it = call_object_method(database(), m_function_name);
+            ListIterator<string> it = call_object_method(database(), m_function_name);
             hash ret = hash();
             while (it.next()) {
                 string s = it.getValue();
@@ -911,7 +911,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
             ret = replace(ret, "<X_SCHEMA_NAME>", m_class_name);
 
             softlist toReplace = regex_extract(TEMPLATE, "(<SCHEMA_.*>)", Qore::RE_MultiLine|Qore::RE_Global);
-            ListIterator it(toReplace);
+            ListIterator<string> it(toReplace);
             while (it.next()) {
                 string key = regex_extract(it.getValue(), "<SCHEMA_(.*)>")[0];
                 AbstractReverseObject o = get_object(key.lwr(), m_ds);

@@ -7886,8 +7886,8 @@ AbstractColumn c = cols.id;
         }
 
         #! returns an iterator for column SQL names
-        AbstractIterator getSqlColumnNameIterator() {
-            return new ListIterator((map $1.value.ddl_name ?? $1.key, h.pairIterator()));
+        AbstractIterator<string> getSqlColumnNameIterator() {
+            return new ListIterator<string>((map $1.value.ddl_name ?? $1.key, h.pairIterator()));
         }
     }
 
@@ -8534,7 +8534,7 @@ AbstractConstraint ix = constraints.uk_jobs;
             - \c fk: the AbstractForeignConstraint object
             - \c table: the table name
         */
-        Qore::AbstractIterator getSourceConstraintIterator() {
+        Qore::AbstractIterator<hash<auto>> getSourceConstraintIterator() {
             list<hash<auto>> l = ();
             if (sourceConstraints) {
                 HashIterator i(sourceConstraints);

@@ -522,7 +522,7 @@ map printf("unique constraint %s\n", $1.getName()), table.getUniqueConstraintIte
 
         @return an iterator for all unique constraints on the table (including the primary key if any)
     */
-    Qore::AbstractIterator getUniqueConstraintIterator() {
+    Qore::AbstractIterator<AbstractConstraint> getUniqueConstraintIterator() {
         bool lck = !l.lockOwner();
         if (lck)
             l.lock();
@@ -534,7 +534,7 @@ map printf("unique constraint %s\n", $1.getName()), table.getUniqueConstraintIte
             getConstraintsUnlocked();
         }
 
-        list lst = ();
+        list<AbstractConstraint> lst = ();
         if (!primaryKey.empty())
             lst += primaryKey;
 

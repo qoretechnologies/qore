@@ -1056,7 +1056,7 @@ public class WebSocketConnection {
         }
 
         # Apply transforms in reverse order
-        ListIterator i(active_extensions);
+        ListIterator<AbstractWebSocketExtension> i(active_extensions);
         i.last();
         while (i.prev()) {
             AbstractWebSocketExtension ext = i.getValue();

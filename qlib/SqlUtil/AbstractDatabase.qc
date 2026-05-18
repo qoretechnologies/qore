@@ -1194,7 +1194,7 @@ string sql = t.getSqlFromList(list);
     }
 
     #! returns an iterator listing the string table names in the database
-    Qore::ListIterator tableIterator() {
+    Qore::ListIterator<string> tableIterator() {
         return sort(listTablesImpl()).iterator();
     }
 
@@ -1204,7 +1204,7 @@ string sql = t.getSqlFromList(list);
     }
 
     #! returns an iterator listing the string function names in the database
-    Qore::ListIterator functionIterator() {
+    Qore::ListIterator<string> functionIterator() {
         return sort(listFunctionsImpl()).iterator();
     }
 
@@ -1214,7 +1214,7 @@ string sql = t.getSqlFromList(list);
     }
 
     #! returns an iterator listing the string procedure names in the database
-    Qore::ListIterator procedureIterator() {
+    Qore::ListIterator<string> procedureIterator() {
         return sort(listProceduresImpl()).iterator();
     }
 
@@ -1224,7 +1224,7 @@ string sql = t.getSqlFromList(list);
     }
 
     #! returns an iterator listing the string sequence names in the database
-    Qore::ListIterator sequenceIterator() {
+    Qore::ListIterator<string> sequenceIterator() {
         return sort(listSequencesImpl()).iterator();
     }
 
@@ -1234,7 +1234,7 @@ string sql = t.getSqlFromList(list);
     }
 
     #! returns an iterator listing the string view names in the database
-    Qore::ListIterator viewIterator() {
+    Qore::ListIterator<string> viewIterator() {
         return sort(listViewsImpl()).iterator();
     }
 

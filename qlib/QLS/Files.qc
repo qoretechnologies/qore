@@ -88,7 +88,7 @@ public list<string> sub find_qore_files(string path) {
 
     list<string> ret = ();
 
-    ListIterator it = d.listFiles().iterator();
+    ListIterator<string> it = d.listFiles().iterator();
     while (it.next()) {
         string fpath = sprintf("%s%s%s", path, DirSep, it.getValue());
         if (is_valid_qore_file(fpath)) {

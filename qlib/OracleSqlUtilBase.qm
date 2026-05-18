@@ -1615,7 +1615,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     #! returns an iterator listing the string synonym names in the database
-    ListIterator synonymIterator() {
+    ListIterator<string> synonymIterator() {
         return listSynonyms().iterator();
     }
 
@@ -1625,7 +1625,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     #! returns an iterator listing the string type names in the database
-    ListIterator typeIterator() {
+    ListIterator<string> typeIterator() {
         return listTypes().iterator();
     }
 
@@ -1635,7 +1635,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     #! returns an iterator listing the string package names in the database
-    ListIterator packageIterator() {
+    ListIterator<string> packageIterator() {
         return listPackages().iterator();
     }
 
@@ -1645,7 +1645,7 @@ public class OracleDatabase inherits SqlUtil::AbstractDatabase {
     }
 
     #! returns an iterator listing the string materialized view names in the database
-    ListIterator materializedViewIterator() {
+    ListIterator<string> materializedViewIterator() {
         return listMaterializedViews().iterator();
     }
 
