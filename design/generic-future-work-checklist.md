@@ -265,20 +265,38 @@ Core candidate checklist:
 
 Qlib candidate checklist:
 
-- [ ] Convert remaining qlib record iterators that already return one stable
+- [x] Convert remaining qlib record iterators that already return one stable
   record shape to `AbstractDataProviderRecordIterator<RecT>` or
   `DefaultRecordIterator<RecT>`.
 - [x] Review provider-specific iterators in MongoDB and DataFrame for this
   branch. `MongoDbRecordIterator` and `DataFrameRecordIterator` now inherit
   `AbstractDataProviderRecordIterator<hash<auto>>`; the related
   `searchRecordsImpl()` methods return the same typed parent.
-- [ ] Review provider-specific iterators in ServiceNow, Salesforce,
+- [x] Review provider-specific iterators in ServiceNow, Salesforce,
   ElasticSearch, SmartSheet, Wave, Jotform, CdsRest/OData, Generator, Qdrant,
   DbDataProvider, FixedLength, Edifact, CsvUtil, TableMapper, and the broader
-  qlib DataProvider set. This is intentionally left as a follow-up rollout
-  because many providers expose remote-schema or option-dependent records.
+  qlib DataProvider set. Stable record iterators now use
+  `AbstractDataProviderRecordIterator<hash<auto>>` and
+  `DefaultRecordIterator<hash<auto>>`. The abstract `AbstractDataProvider`
+  implementation hooks intentionally remain raw because they are type-erased
+  override points, and the local `QoreModelRegistry::DefaultRecordIterator`
+  class is already a typed, module-local iterator despite its legacy class name.
 - [x] Keep provider iterators raw or `hash<auto>` when the record shape depends
   on runtime metadata, selected columns, or remote schema discovery.
+- [x] Normalize Swagger, OpenAPI 3, and RestSchema record-search response
+  bodies before wrapping them in typed iterators: `NOTHING` becomes an empty
+  iterator, a hash becomes one record, and list responses must contain only hash
+  records or a provider-specific search error is raised.
+- [x] Review non-DataProvider qlib iterator APIs where the element type is
+  stable. SQL schema-name iterators now return `ListIterator<string>`,
+  selected SQL utility iterators expose typed `AbstractIterator` results, and
+  local `ListIterator` uses in `SchemaReverse`, `WebSocketHandler`, and `QLS`
+  carry explicit element types.
+- [x] Defer qlib queues and dynamic walkers that intentionally carry mixed
+  payloads, sentinels, runtime schemas, or arbitrary user data. Examples include
+  HTTP/WebSocket/SSE queues, generic `HashIterator`/`ListIterator` walkers in
+  serialization/debug/formatting helpers, and mapper input iterators whose
+  contract is "hash-like input" rather than one concrete public value type.
 - [x] Update examples to show concrete generic classes where the value type is
   known and keep raw examples only for intentional type erasure.
 
