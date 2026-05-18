@@ -63,6 +63,52 @@ class SourceGenericPair<K, V> {
     }
 }
 
+class SourceDefaultBox<T = int> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+class SourceDefaultPair<K, V = string> {
+    private {
+        K key;
+        V value;
+    }
+
+    constructor(K key, V value) {
+        self.key = key;
+        self.value = value;
+    }
+
+    K getKey() {
+        return self.key;
+    }
+
+    V getValue() {
+        return self.value;
+    }
+}
+
+class SourceDefaultStatic<T = int> {
+    static T echo(T value) {
+        return value;
+    }
+}
+
+class SourceNestedDefaultStatic<T = list<hash<auto>>> {
+    static T echo(T value) {
+        return value;
+    }
+}
+
 class SourceGenericOverloads<T> {
     string take(T value) {
         return "scalar";
@@ -140,6 +186,15 @@ hashdecl SourceGenericResult<T> {
 hashdecl SourceGenericEnvelope<T> {
     string status;
     hash<SourceGenericResult<T>> result;
+}
+
+hashdecl SourceDefaultResult<T = string> {
+    T value;
+}
+
+hashdecl SourceDefaultPairResult<K, V = string> {
+    K key;
+    V value;
 }
 
 class SourceTypedIterator<T> inherits AbstractIterator<T> {
@@ -285,6 +340,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
     constructor() : Test("Generic class types", "1.0") {
         addTestCase("basic source generics", \basicSourceGenerics());
         addTestCase("multiple type parameters", \multipleTypeParameters());
+        addTestCase("default type arguments", \defaultTypeArguments());
         addTestCase("namespaced generic class types", \namespacedGenericClassTypes());
         addTestCase("generic overloads", \genericOverloads());
         addTestCase("runtime substitution errors", \runtimeSubstitutionErrors());
@@ -320,6 +376,36 @@ public class GenericClassTypesTest inherits QUnit::Test {
         SourceGenericPair<string, int> pair("id", 7);
         assertEq("id", pair.getKey());
         assertEq(7, pair.getValue());
+    }
+
+    defaultTypeArguments() {
+        SourceDefaultBox<> default_box(1);
+        int value = default_box.get();
+        assertEq(1, value);
+
+        SourceDefaultPair<int> default_pair(2, "two");
+        assertEq(2, default_pair.getKey());
+        string default_pair_value = default_pair.getValue();
+        assertEq("two", default_pair_value);
+
+        SourceDefaultPair<string, int> explicit_pair("three", 3);
+        assertEq("three", explicit_pair.getKey());
+        assertEq(3, explicit_pair.getValue());
+
+        assertEq(4, SourceDefaultStatic<>::echo(4));
+
+        list<hash<auto>> nested_default = SourceNestedDefaultStatic<>::echo((("value": 6),));
+        assertEq(6, nested_default[0].value);
+
+        hash<SourceDefaultResult<>> default_result(("value": "ok"));
+        string result_value = default_result.value;
+        assertEq("ok", result_value);
+        assertEq("hash<SourceDefaultResult<string>>", default_result.fullType());
+
+        hash<SourceDefaultPairResult<int>> pair_result(("key": 5, "value": "five"));
+        assertEq(5, pair_result.key);
+        assertEq("five", pair_result.value);
+        assertEq("hash<SourceDefaultPairResult<int, string>>", pair_result.fullType());
     }
 
     namespacedGenericClassTypes() {
@@ -565,6 +651,28 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
         {
             Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T = int, U> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T, U = T> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Pair<K, V = string> {} sub t() { Pair<> p(); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T = int> { constructor(T value) {} } sub t() { Box b(1); }", "generic-classes");
+            assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
             assertThrows("DUPLICATE-SIGNATURE", \p.parse(), (
                 "class C<T> { nothing set(T v) {} nothing set(int v) {} }", "generic-classes"));
         }
@@ -613,6 +721,12 @@ public class GenericClassTypesTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE);
             assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
                 "hashdecl Result<T> { T value; } hash<Result> r;", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T = string> { T value; } hash<Result> r;", "generic-classes"));
         }
 
         {

@@ -1610,6 +1610,95 @@ static int parse_parameterized_type(const std::string& src, std::string& base, s
     return 0;
 }
 
+static size_t find_top_level_char(const std::string& str, char target) {
+    int angle_depth = 0;
+    int paren_depth = 0;
+    for (size_t i = 0; i < str.size(); ++i) {
+        char c = str[i];
+        if (c == '<' && paren_depth == 0) {
+            ++angle_depth;
+        } else if (c == '>' && paren_depth == 0 && angle_depth > 0) {
+            --angle_depth;
+        } else if (c == '(') {
+            ++paren_depth;
+        } else if (c == ')' && paren_depth > 0) {
+            --paren_depth;
+        } else if (c == target && !angle_depth && !paren_depth) {
+            return i;
+        }
+    }
+    return std::string::npos;
+}
+
+static bool string_contains_identifier(const std::string& str, const std::string& ident) {
+    size_t pos = 0;
+    while ((pos = str.find(ident, pos)) != std::string::npos) {
+        bool left = !pos || !idchar(str[pos - 1]);
+        size_t end = pos + ident.size();
+        bool right = end == str.size() || !idchar(str[end]);
+        if (left && right) {
+            return true;
+        }
+        ++pos;
+    }
+    return false;
+}
+
+static int parse_parameterized_declaration(const std::string& src, std::string& base, strlist_t& params,
+        strmap_t& defaults) {
+    strlist_t args;
+    int prc = parse_parameterized_type(src, base, args);
+    if (prc <= 0) {
+        return prc;
+    }
+
+    bool default_seen = false;
+    for (std::string& arg : args) {
+        std::string param = arg;
+        std::string default_type;
+        size_t eq = find_top_level_char(arg, '=');
+        if (eq != std::string::npos) {
+            param = arg.substr(0, eq);
+            default_type = arg.substr(eq + 1);
+            trim(default_type);
+            if (default_type.empty()) {
+                error("empty default type in parameterized declaration '%s'\n", src.c_str());
+                return -1;
+            }
+        }
+        trim(param);
+        if (param.empty()) {
+            error("empty type parameter in parameterized declaration '%s'\n", src.c_str());
+            return -1;
+        }
+        if (default_type.empty() && default_seen) {
+            error("type parameter '%s' in declaration '%s' is missing a default type after an earlier type "
+                "parameter declared one\n", param.c_str(), src.c_str());
+            return -1;
+        }
+        if (!default_type.empty()) {
+            default_seen = true;
+            defaults[param] = default_type;
+        }
+        params.push_back(param);
+    }
+    for (const std::string& param : params) {
+        strmap_t::const_iterator def = defaults.find(param);
+        if (def == defaults.end()) {
+            continue;
+        }
+        for (const std::string& other : params) {
+            if (string_contains_identifier(def->second, other)) {
+                error("default type '%s' for type parameter '%s' in declaration '%s' references type parameter "
+                    "'%s', which is not supported yet\n", def->second.c_str(), param.c_str(), src.c_str(),
+                    other.c_str());
+                return -1;
+            }
+        }
+    }
+    return 1;
+}
+
 static int make_type_vec_expr(const strlist_t& args, std::string& expr) {
     expr = "[&]() { type_vec_t qpp_type_args; ";
     for (const std::string& arg : args) {
@@ -4610,7 +4699,8 @@ public:
         {
             std::string base;
             strlist_t params;
-            int prc = parse_parameterized_type(name, base, params);
+            strmap_t defaults;
+            int prc = parse_parameterized_declaration(name, base, params, defaults);
             if (prc < 0) {
                 valid = false;
                 return;
@@ -4618,6 +4708,7 @@ public:
             if (prc > 0) {
                 name = base;
                 type_params = params;
+                type_param_defaults = defaults;
 
                 strset_t seen;
                 for (const std::string& tp : type_params) {
@@ -4798,7 +4889,13 @@ public:
         fprintf(fp, "    if (hd_path.rfind(\"::\", 0) != 0) {\n        hd_path.insert(0, \"::\");\n    }\n");
         fprintf(fp, "    TypedHashDecl* hd = new TypedHashDecl(\"%s\", hd_path.c_str());\n", name.c_str());
         for (const std::string& p : type_params) {
-            fprintf(fp, "    hd->addTypeParameter(\"%s\");\n", p.c_str());
+            strmap_t::const_iterator def = type_param_defaults.find(p);
+            if (def == type_param_defaults.end()) {
+                fprintf(fp, "    hd->addTypeParameter(\"%s\");\n", p.c_str());
+            } else {
+                fprintf(fp, "    hd->addTypeParameter(\"%s\", \"%s\");\n", p.c_str(),
+                    json_escape_string(def->second).c_str());
+            }
         }
 
         // Set parent hashdecl if there is inheritance
@@ -4922,6 +5019,23 @@ public:
                 fprintf(fp, "\"%s\"", json_escape_string(type_params[i]).c_str());
             }
             fputc(']', fp);
+            if (!type_param_defaults.empty()) {
+                fputs(",\"type_parameter_defaults\":{", fp);
+                bool first_default = true;
+                for (const std::string& p : type_params) {
+                    strmap_t::const_iterator def = type_param_defaults.find(p);
+                    if (def == type_param_defaults.end()) {
+                        continue;
+                    }
+                    if (!first_default) {
+                        fputc(',', fp);
+                    }
+                    first_default = false;
+                    fprintf(fp, "\"%s\":\"%s\"", json_escape_string(p).c_str(),
+                        json_escape_string(def->second).c_str());
+                }
+                fputc('}', fp);
+            }
         }
         fprintf(fp, ",\"description\":\"%s\"", json_escape_string(comment).c_str());
         if (!parent_name.empty()) {
@@ -4951,6 +5065,7 @@ protected:
     std::string name;
     std::string parent_name;  // parent hashdecl name for inheritance
     strlist_t type_params;
+    strmap_t type_param_defaults;
     typedef std::map<std::string, HashDeclInfo> hdmap_t;
     hdmap_t hdmap;
     bool valid = true;
@@ -4964,6 +5079,11 @@ protected:
                     rv += ", ";
                 }
                 rv += type_params[i];
+                strmap_t::const_iterator def = type_param_defaults.find(type_params[i]);
+                if (def != type_param_defaults.end()) {
+                    rv += " = ";
+                    rv += def->second;
+                }
             }
             rv += ">";
         }
@@ -6060,6 +6180,7 @@ protected:
 
     strlist_t vparents;            // builtin virtual base/parent classes
     strlist_t type_params;         // formal generic type parameters
+    strmap_t type_param_defaults;  // formal generic type parameter defaults
 
     paramlist_t public_members;    // public members
     paramlist_t private_members;   // private members
@@ -6130,12 +6251,14 @@ public:
         if (!name.empty() && name[0] != '<') {
             std::string base;
             strlist_t params;
-            int prc = parse_parameterized_type(name, base, params);
+            strmap_t defaults;
+            int prc = parse_parameterized_declaration(name, base, params, defaults);
             if (prc < 0) {
                 valid = false;
             } else if (prc > 0) {
                 name = base;
                 type_params = params;
+                type_param_defaults = defaults;
 
                 strset_t seen;
                 for (const std::string& p : type_params) {
@@ -6346,6 +6469,11 @@ public:
                     rv += ", ";
                 }
                 rv += type_params[i];
+                strmap_t::const_iterator def = type_param_defaults.find(type_params[i]);
+                if (def != type_param_defaults.end()) {
+                    rv += " = ";
+                    rv += def->second;
+                }
             }
             rv += ">";
         }
@@ -6522,7 +6650,13 @@ public:
         dom_output_cpp(fp, dom);
         fprintf(fp, ");\n");
         for (const std::string& p : type_params) {
-            fprintf(fp, "    QC_%s->addTypeParameter(\"%s\");\n", UC.c_str(), p.c_str());
+            strmap_t::const_iterator def = type_param_defaults.find(p);
+            if (def == type_param_defaults.end()) {
+                fprintf(fp, "    QC_%s->addTypeParameter(\"%s\");\n", UC.c_str(), p.c_str());
+            } else {
+                fprintf(fp, "    QC_%s->addTypeParameter(\"%s\", \"%s\");\n", UC.c_str(), p.c_str(),
+                    json_escape_string(def->second).c_str());
+            }
         }
         if (raw_accepts_parameterized || raw_construction_defaults_to_auto) {
             fprintf(fp, "    QC_%s->setLegacyRawGenericCompatibility(%s, %s);\n", UC.c_str(),
@@ -6807,6 +6941,23 @@ public:
                 fprintf(fp, "\"%s\"", json_escape_string(type_params[i]).c_str());
             }
             fputc(']', fp);
+            if (!type_param_defaults.empty()) {
+                fputs(",\"type_parameter_defaults\":{", fp);
+                bool first_default = true;
+                for (const std::string& p : type_params) {
+                    strmap_t::const_iterator def = type_param_defaults.find(p);
+                    if (def == type_param_defaults.end()) {
+                        continue;
+                    }
+                    if (!first_default) {
+                        fputc(',', fp);
+                    }
+                    first_default = false;
+                    fprintf(fp, "\"%s\":\"%s\"", json_escape_string(p).c_str(),
+                        json_escape_string(def->second).c_str());
+                }
+                fputc('}', fp);
+            }
             fprintf(fp, ",\"raw_accepts_parameterized\":%s", raw_accepts_parameterized ? "true" : "false");
             fprintf(fp, ",\"raw_construction_defaults_to_auto\":%s",
                 raw_construction_defaults_to_auto ? "true" : "false");

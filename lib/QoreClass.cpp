@@ -39,6 +39,7 @@
 #include "qore/intern/RuntimeConfig.h"
 
 #include <algorithm>
+#include <memory>
 #include <set>
 #include <vector>
 #include <unordered_set>
@@ -1927,22 +1928,47 @@ int BCNode::tryResolveClass(QoreClass* cls, bool raise_error) {
                 }
 
                 size_t expected = qc->getTypeParameterCount();
+                size_t required = qc->getTypeParameterRequiredCount();
                 size_t actual = parsed_type->subtypes.size();
-                if (actual != expected) {
-                    parseException(*loc, "PARSE-TYPE-ERROR",
-                        "cannot inherit '%s': class '%s' expects %d type argument%s, but %d %s provided",
-                        QoreParseTypeInfo::getName(parsed_type), qc->getName(), (int)expected,
-                        expected == 1 ? "" : "s", (int)actual, actual == 1 ? "was" : "were");
+                if (actual < required || actual > expected) {
+                    if (expected == required) {
+                        parseException(*loc, "PARSE-TYPE-ERROR",
+                            "cannot inherit '%s': class '%s' expects %d type argument%s, but %d %s provided",
+                            QoreParseTypeInfo::getName(parsed_type), qc->getName(), (int)expected,
+                            expected == 1 ? "" : "s", (int)actual, actual == 1 ? "was" : "were");
+                    } else {
+                        parseException(*loc, "PARSE-TYPE-ERROR",
+                            "cannot inherit '%s': class '%s' expects between %d and %d type arguments (%d "
+                            "defaulted), but %d %s provided",
+                            QoreParseTypeInfo::getName(parsed_type), qc->getName(), (int)required, (int)expected,
+                            (int)(expected - required), (int)actual, actual == 1 ? "was" : "were");
+                    }
                     return -1;
                 }
 
                 type_vec_t type_args;
-                type_args.reserve(actual);
+                type_args.reserve(expected);
                 int err = 0;
                 {
                     QoreParseClassHelper qpch(cls);
                     for (QoreParseTypeInfo* arg : parsed_type->subtypes) {
                         const QoreTypeInfo* arg_type = QoreParseTypeInfo::resolveAny(arg, loc, err);
+                        if (err) {
+                            return -1;
+                        }
+                        type_args.push_back(arg_type);
+                    }
+                    for (size_t i = actual; i < expected; ++i) {
+                        std::unique_ptr<QoreParseTypeInfo> default_pti(
+                            qore_parse_type_string_to_pti(qc->getTypeParameterDefaultType(i)));
+                        if (!default_pti) {
+                            parseException(*loc, "PARSE-TYPE-ERROR",
+                                "cannot inherit '%s': could not parse default type '%s' for class '%s' type "
+                                "parameter '%s'", QoreParseTypeInfo::getName(parsed_type),
+                                qc->getTypeParameterDefaultType(i), qc->getName(), qc->getTypeParameterName(i));
+                            return -1;
+                        }
+                        const QoreTypeInfo* arg_type = QoreParseTypeInfo::resolveAny(default_pti.get(), loc, err);
                         if (err) {
                             return -1;
                         }
@@ -3079,6 +3105,10 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
     assert(target_base);
 
     for (const QoreTypeInfo* parent_type : parameterized_vparents) {
+        if (hasTypeParams() && rawConstructionDefaultsToAuto()) {
+            type_vec_t raw_args(type_params.size(), autoTypeInfo);
+            parent_type = qore_substitute_type_params(parent_type, getTypeInfo(raw_args));
+        }
         const QoreParameterizedClassTypeInfo* parent_pti = QoreTypeInfo::getParameterizedClassType(parent_type);
         if (!parent_pti) {
             continue;
@@ -5456,6 +5486,10 @@ void QoreClass::addTypeParameter(const char* name) {
     priv->addTypeParam(name);
 }
 
+void QoreClass::addTypeParameter(const char* name, const char* default_type) {
+    priv->addTypeParam(name, default_type);
+}
+
 void QoreClass::setLegacyRawGenericCompatibility(bool raw_accepts_parameterized,
         bool raw_construction_defaults_to_auto) {
     priv->setLegacyRawGenericCompatibility(raw_accepts_parameterized, raw_construction_defaults_to_auto);
@@ -5469,8 +5503,16 @@ size_t QoreClass::getTypeParameterCount() const {
     return priv->getTypeParamCount();
 }
 
+size_t QoreClass::getTypeParameterRequiredCount() const {
+    return priv->getTypeParamRequiredCount();
+}
+
 const char* QoreClass::getTypeParameterName(size_t index) const {
     return priv->getTypeParamName(index);
+}
+
+const char* QoreClass::getTypeParameterDefaultType(size_t index) const {
+    return priv->getTypeParamDefaultType(index);
 }
 
 const QoreTypeInfo* QoreClass::getOrNothingTypeInfo() const {

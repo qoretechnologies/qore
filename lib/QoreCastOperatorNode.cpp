@@ -111,7 +111,7 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
     }
 
     // check special cases
-    if (pti->cscope->size() == 1 && pti->subtypes.empty()) {
+    if (pti->cscope->size() == 1 && !pti->hasExplicitSubtypeList()) {
         const char* type_str = pti->cscope->ostr;
         // check special case of cast<object>(...)
         if (!strcmp(type_str, "object")) {

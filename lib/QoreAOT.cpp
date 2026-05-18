@@ -719,6 +719,9 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // preserved so source-stripped metadata can rebuild symbolic T/K/V member
     // types before resolving hashdecl members.
     flags |= QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS;
+    // Generic type-parameter defaults must be preserved so source-stripped
+    // metadata resolves partial or empty type-argument lists like source parse.
+    flags |= QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS;
     return flags;
 }
 

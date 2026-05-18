@@ -3018,18 +3018,31 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
         }
 
         const typed_hash_decl_private* hp = typed_hash_decl_private::get(*base_hd);
-        if (!hp->hasTypeParams() || hp->getTypeParamCount() != type_arg_paths.size()) {
+        if (!hp->hasTypeParams()) {
+            return nullptr;
+        }
+        size_t expected = hp->getTypeParamCount();
+        size_t actual = type_arg_paths.size();
+        if (actual < hp->getTypeParamRequiredCount() || actual > expected) {
             return nullptr;
         }
 
         type_vec_t type_args;
-        type_args.reserve(type_arg_paths.size());
+        type_args.reserve(expected);
         for (size_t i = 0; i < type_arg_paths.size(); ++i) {
             if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT hashdecl type argument resolution")) {
                 return nullptr;
             }
             std::string arg_error;
             const QoreTypeInfo* arg = resolve(type_arg_paths[i].c_str(), arg_error);
+            if (!arg || !arg_error.empty()) {
+                return nullptr;
+            }
+            type_args.push_back(arg);
+        }
+        for (size_t i = actual; i < expected; ++i) {
+            std::string arg_error;
+            const QoreTypeInfo* arg = resolve(hp->getTypeParamDefaultType(i), arg_error);
             if (!arg || !arg_error.empty()) {
                 return nullptr;
             }
@@ -3173,6 +3186,9 @@ static std::string trim_aot_type_component(const std::string& str);
 
 static bool split_aot_type_args(const std::string& args, std::vector<std::string>& out) {
     out.clear();
+    if (trim_aot_type_component(args).empty()) {
+        return true;
+    }
     std::string current;
     int angle_depth = 0;
     int paren_depth = 0;
@@ -3532,11 +3548,16 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char
         if (split_aot_parameterized_type_use(args[0], param_class_path, type_arg_paths)) {
             param_class_path = normalize_aot_type_path(param_class_path.c_str());
             const QoreClass* qc = qoreAOTResolveClassRefForDeserialization(pgm, param_class_path.c_str());
-            if (!qc || !qc->hasTypeParameters() || type_arg_paths.size() != qc->getTypeParameterCount()) {
+            if (!qc || !qc->hasTypeParameters()) {
+                return nullptr;
+            }
+            size_t expected = qc->getTypeParameterCount();
+            size_t actual = type_arg_paths.size();
+            if (actual < qc->getTypeParameterRequiredCount() || actual > expected) {
                 return nullptr;
             }
             type_vec_t type_args;
-            type_args.reserve(type_arg_paths.size());
+            type_args.reserve(expected);
             for (size_t i = 0; i < type_arg_paths.size(); ++i) {
                 if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT parameterized type argument resolution")) {
                     return nullptr;
@@ -3544,6 +3565,14 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveStructuredComplexType(const char
                 const std::string& type_arg_path = type_arg_paths[i];
                 std::string arg_error;
                 const QoreTypeInfo* type_arg = resolve(type_arg_path.c_str(), arg_error);
+                if (!type_arg || !arg_error.empty()) {
+                    return nullptr;
+                }
+                type_args.push_back(type_arg);
+            }
+            for (size_t i = actual; i < expected; ++i) {
+                std::string arg_error;
+                const QoreTypeInfo* type_arg = resolve(qc->getTypeParameterDefaultType(i), arg_error);
                 if (!type_arg || !arg_error.empty()) {
                     return nullptr;
                 }
@@ -4898,6 +4927,13 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     return false;
                 }
                 writer.writeStringRef(priv->getTypeParamName(i));
+                if ((writer.feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0) {
+                    const char* default_type = priv->getTypeParamDefaultType(i);
+                    writer.writeU8(default_type ? 1 : 0);
+                    if (default_type) {
+                        writer.writeStringRef(default_type);
+                    }
+                }
             }
         }
 
@@ -5084,6 +5120,13 @@ static bool writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                     return false;
                 }
                 writer.writeStringRef(hdp->getTypeParamName(i));
+                if ((writer.feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0) {
+                    const char* default_type = hdp->getTypeParamDefaultType(i);
+                    writer.writeU8(default_type ? 1 : 0);
+                    if (default_type) {
+                        writer.writeStringRef(default_type);
+                    }
+                }
             }
         }
 
@@ -8896,6 +8939,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_INJECTION) != 0;
     const bool has_class_type_params
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0;
+    const bool has_type_param_defaults
+        = (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0;
     const bool has_class_param_bases
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_PARAM_BASES) != 0;
     const bool has_class_raw_generic
@@ -8944,7 +8989,7 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         if (has_class_injection) {
             injected_path = reader.readStringRef(ptr);
         }
-        std::vector<std::string> type_params;
+        std::vector<QoreGenericTypeParam> type_params;
         if (has_class_type_params) {
             uint32_t type_param_count = QoreAOTBinaryReader::readU32(ptr);
             type_params.reserve(type_param_count);
@@ -8966,7 +9011,20 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                         + class_name + "'";
                     return false;
                 }
-                type_params.push_back(std::move(type_param_name));
+                std::string default_type;
+                if (has_type_param_defaults) {
+                    uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
+                    if (has_default) {
+                        const char* default_type_str = reader.readStringRef(ptr);
+                        default_type = default_type_str ? default_type_str : "";
+                        if (default_type.empty()) {
+                            error = "invalid empty default type for type parameter '" + type_param_name
+                                + "' in class '" + class_name + "'";
+                            return false;
+                        }
+                    }
+                }
+                type_params.emplace_back(std::move(type_param_name), std::move(default_type));
             }
         }
 
@@ -8990,8 +9048,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             priv->reexport = true;
         }
         if (!type_params.empty()) {
-            for (const std::string& type_param : type_params) {
-                qc->addTypeParameter(type_param.c_str());
+            for (const QoreGenericTypeParam& type_param : type_params) {
+                qc->addTypeParameter(type_param.name.c_str(), type_param.getDefaultType());
             }
         }
         if (has_class_raw_generic) {
@@ -10263,8 +10321,10 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         uint32_t ns_idx = QoreAOTBinaryReader::readU32(ptr);
         uint16_t flags = QoreAOTBinaryReader::readU16(ptr);
         const char* parent_path = reader.readStringRef(ptr);
-        std::vector<std::string> type_params;
+        std::vector<QoreGenericTypeParam> type_params;
         if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS) != 0) {
+            const bool has_type_param_defaults
+                = (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0;
             uint16_t type_param_count = QoreAOTBinaryReader::readU16(ptr);
             type_params.reserve(type_param_count);
             for (uint16_t ti = 0; ti < type_param_count; ++ti) {
@@ -10273,7 +10333,21 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
                     return false;
                 }
                 const char* type_param = reader.readStringRef(ptr);
-                type_params.push_back(type_param ? type_param : "");
+                std::string type_param_name(type_param ? type_param : "");
+                std::string default_type;
+                if (has_type_param_defaults) {
+                    uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
+                    if (has_default) {
+                        const char* default_type_str = reader.readStringRef(ptr);
+                        default_type = default_type_str ? default_type_str : "";
+                        if (default_type.empty()) {
+                            error = "invalid empty default type for type parameter '" + type_param_name
+                                + "' in hashdecl '" + std::string(name ? name : "(null)") + "'";
+                            return false;
+                        }
+                    }
+                }
+                type_params.emplace_back(std::move(type_param_name), std::move(default_type));
             }
         }
 
@@ -10367,7 +10441,7 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
                 }
                 return false;
             }
-            hdp->addTypeParameter(type_params[ti].c_str());
+            hdp->addTypeParameter(type_params[ti].name.c_str(), type_params[ti].getDefaultType());
         }
 
         // Add to namespace's hashDeclList FIRST (before storing in pending list)

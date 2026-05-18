@@ -1064,7 +1064,16 @@ DIGIT           [0-9]
 WORD            [a-zA-Z_][a-zA-Z0-9_]*
 WS              [ \t\r]
 WSNL            [ \t\r\n]
-CLASS_TPARAMS   \<{WS}*{WORD}({WS}*,{WS}*{WORD})*{WS}*\>
+TYPE_ARG_START  [a-zA-Z_*:]
+TYPE_ARG_TEXT   [a-zA-Z\*<:_0-9 \t,!().=]*
+TYPE_ARG_NESTED [a-zA-Z\*<>:_0-9 \t,!().]*
+CLASS_TPARAM_ATOM [a-zA-Z\*:_0-9 \t,!().=]
+CLASS_TPARAM_NESTED1 \<{CLASS_TPARAM_ATOM}*\>
+CLASS_TPARAM_NESTED2 \<({CLASS_TPARAM_ATOM}|{CLASS_TPARAM_NESTED1})*\>
+CLASS_TPARAM_NESTED3 \<({CLASS_TPARAM_ATOM}|{CLASS_TPARAM_NESTED2})*\>
+CLASS_TPARAMS   \<({CLASS_TPARAM_ATOM}|{CLASS_TPARAM_NESTED3})*\>
+TYPE_ARGS       \<{WS}*({TYPE_ARG_START}{TYPE_ARG_TEXT})?\>
+TYPE_ARGS_NESTED \<{WS}*({TYPE_ARG_START}{TYPE_ARG_NESTED})?\>
 YEAR            [0-9]{4}
 MONTH           (0[1-9])|(1[012])
 DAY             ((0[1-9])|([12][0-9])|(3[01]))
@@ -2533,8 +2542,8 @@ P{D2}:{D2}(:{D2}(\.{US})?)?             yylval->datetime = makeRelativeTime(yyte
 (::{WORD})+                             yylval->string = strdup(yytext); return SCOPED_REF;
 ({WORD}::)+\${WORD}                     yylval->string = make_scoped_vref(yytext); return SCOPED_VREF;
 (::{WORD})?::\${WORD}                   yylval->string = make_scoped_vref(yytext); return SCOPED_VREF;
-cast<{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!]+>)?{WS}*> yylval->string = make_cast(yytext); return QORE_CAST;
-cast<\*{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!]+>)?{WS}*> yylval->string = make_cast(yytext + 1); return QORE_OR_NOTHING_CAST;
+cast<{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!=]*>)?{WS}*> yylval->string = make_cast(yytext); return QORE_CAST;
+cast<\*{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!=]*>)?{WS}*> yylval->string = make_cast(yytext + 1); return QORE_OR_NOTHING_CAST;
 ({WORD}::)+\$\.{WORD}                   yylval->nscope = new NamedScope(strdup(yytext)); yylval->nscope->fixBCCall(); return BASE_CLASS_CALL;
 @[Nn][Aa][Nn]@                          {
 #ifdef NAN
@@ -2662,7 +2671,7 @@ hash\<{WORD}\>\{                        {
 #endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
-({WORD}::)*{WORD}<[a-zA-Z\*<>:_0-9 \t,!().]+>::{WORD} {
+({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD} {
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return SCOPED_REF;
@@ -2672,7 +2681,7 @@ hash\<{WORD}\>\{                        {
                                            yylval->string = strdup(yytext);
                                            return SCOPED_REF;
                                         }
-(::{WORD})+<[a-zA-Z\*<>:_0-9 \t,!().]+>::{WORD} {
+(::{WORD})+{TYPE_ARGS_NESTED}::{WORD} {
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return SCOPED_REF;
@@ -2682,7 +2691,7 @@ hash\<{WORD}\>\{                        {
                                            yylval->string = strdup(yytext);
                                            return SCOPED_REF;
                                         }
-({WORD}::)+{WORD}<[a-zA-Z\*<:_0-9 \t,!().]+> {
+({WORD}::)+{WORD}{TYPE_ARGS} {
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return ANGLE_IDENTIFIER;
@@ -2692,7 +2701,7 @@ hash\<{WORD}\>\{                        {
                                            yylloc->saveFirst();
                                            BEGIN(angle_state);
 }
-(::{WORD})+<[a-zA-Z\*<:_0-9 \t,!().]+>  {
+(::{WORD})+{TYPE_ARGS}  {
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return ANGLE_IDENTIFIER;
@@ -2702,7 +2711,7 @@ hash\<{WORD}\>\{                        {
                                            yylloc->saveFirst();
                                            BEGIN(angle_state);
 }
-{WORD}<[a-zA-Z\*<:_0-9 \t,!().]+>       {
+{WORD}{TYPE_ARGS}       {
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);
                                                return ANGLE_IDENTIFIER;

@@ -50,6 +50,7 @@
 #include "qore/QoreIteratorBase.h"
 
 #include <algorithm>
+#include <memory>
 #include <set>
 #include <string>
 
@@ -2686,6 +2687,48 @@ static const char* qore_type_arg_plural(size_t count) {
     return count == 1 ? "" : "s";
 }
 
+static void qore_raise_type_arg_count_error(const QoreProgramLocation* loc, const char* resolved_name,
+        const char* kind, const char* generic_name, size_t expected, size_t required, size_t actual,
+        const char* missing_param, int& err) {
+    if (expected == required) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic %s '%s' declares %d type "
+            "parameter%s, but %d type argument%s %s provided", resolved_name, kind, generic_name, (int)expected,
+            qore_type_arg_plural(expected), (int)actual, qore_type_arg_plural(actual),
+            actual == 1 ? "was" : "were");
+    } else if (actual < required && missing_param) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic %s '%s' declares %d type "
+            "parameter%s (%d required, %d defaulted), but %d type argument%s %s provided; missing required type "
+            "parameter '%s'", resolved_name, kind, generic_name, (int)expected, qore_type_arg_plural(expected),
+            (int)required, (int)(expected - required), (int)actual, qore_type_arg_plural(actual),
+            actual == 1 ? "was" : "were", missing_param);
+    } else {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic %s '%s' declares %d type "
+            "parameter%s (%d required, %d defaulted), but %d type argument%s %s provided", resolved_name, kind,
+            generic_name, (int)expected, qore_type_arg_plural(expected), (int)required,
+            (int)(expected - required), (int)actual, qore_type_arg_plural(actual),
+            actual == 1 ? "was" : "were");
+    }
+    err = -1;
+}
+
+static const QoreTypeInfo* qore_resolve_parse_default_type_arg(const char* default_type,
+        const QoreProgramLocation* loc, int& err) {
+    std::unique_ptr<QoreParseTypeInfo> default_pti(qore_parse_type_string_to_pti(default_type));
+    if (!default_pti) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve generic type parameter default '%s'",
+            default_type ? default_type : "");
+        err = -1;
+        return autoTypeInfo;
+    }
+    const QoreTypeInfo* arg = QoreParseTypeInfo::resolveAny(default_pti.get(), loc, err);
+    return arg ? arg : autoTypeInfo;
+}
+
+static const QoreTypeInfo* qore_resolve_runtime_default_type_arg(const char* default_type) {
+    std::unique_ptr<QoreParseTypeInfo> default_pti(qore_parse_type_string_to_pti(default_type));
+    return default_pti ? QoreParseTypeInfo::resolveRuntime(default_pti.get()) : nullptr;
+}
+
 static const QoreTypeInfo* qore_resolve_parse_type_parameter(const NamedScope& cscope, bool or_nothing) {
     if (cscope.size() != 1) {
         return nullptr;
@@ -2727,7 +2770,7 @@ static const TypedHashDecl* qore_resolve_parse_hashdecl_type(const QoreParseType
     }
 
     const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
-    if (pti.subtypes.empty()) {
+    if (!pti.hasExplicitSubtypeList()) {
         if (hp->hasTypeParams()) {
             parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic hashdecl '%s' declares %d "
                 "type parameter%s and must be used with explicit type arguments", QoreParseTypeInfo::getName(&pti),
@@ -2747,24 +2790,31 @@ static const TypedHashDecl* qore_resolve_parse_hashdecl_type(const QoreParseType
     }
 
     size_t expected = hp->getTypeParamCount();
+    size_t required = hp->getTypeParamRequiredCount();
     size_t actual = pti.subtypes.size();
-    if (actual != expected) {
-        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic hashdecl '%s' declares %d type "
-            "parameter%s, but %d type argument%s %s provided", QoreParseTypeInfo::getName(&pti),
-            pti.cscope->ostr, (int)expected, qore_type_arg_plural(expected), (int)actual, qore_type_arg_plural(actual),
-            actual == 1 ? "was" : "were");
-        err = -1;
+    if (actual < required || actual > expected) {
+        const char* missing = actual < required ? hp->getTypeParamName(actual) : nullptr;
+        qore_raise_type_arg_count_error(loc, QoreParseTypeInfo::getName(&pti), "hashdecl", pti.cscope->ostr,
+            expected, required, actual, missing, err);
         return hd;
     }
 
     type_vec_t args;
-    args.reserve(actual);
+    args.reserve(expected);
     for (const auto& st : pti.subtypes) {
         const QoreTypeInfo* arg = QoreParseTypeInfo::resolveAny(st, loc, err);
         if (err) {
             return hd;
         }
         args.push_back(arg);
+    }
+    for (size_t i = actual; i < expected; ++i) {
+        const char* default_type = hp->getTypeParamDefaultType(i);
+        assert(default_type);
+        args.push_back(qore_resolve_parse_default_type_arg(default_type, loc, err));
+        if (err) {
+            return hd;
+        }
     }
 
     const TypedHashDecl* parameterized_hd = hp->getParameterizedHashDecl(args);
@@ -2787,24 +2837,31 @@ static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const Qor
     }
 
     size_t expected = qc->getTypeParameterCount();
+    size_t required = qc->getTypeParameterRequiredCount();
     size_t actual = pti.subtypes.size();
-    if (actual != expected) {
-        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; generic class '%s' declares %d type "
-            "parameter%s, but %d type argument%s %s provided", QoreParseTypeInfo::getName(&pti),
-            pti.cscope->ostr, (int)expected, qore_type_arg_plural(expected), (int)actual, qore_type_arg_plural(actual),
-            actual == 1 ? "was" : "were");
-        err = -1;
+    if (actual < required || actual > expected) {
+        const char* missing = actual < required ? qc->getTypeParameterName(actual) : nullptr;
+        qore_raise_type_arg_count_error(loc, QoreParseTypeInfo::getName(&pti), "class", pti.cscope->ostr,
+            expected, required, actual, missing, err);
         return autoTypeInfo;
     }
 
     type_vec_t args;
-    args.reserve(actual);
+    args.reserve(expected);
     for (const auto& st : pti.subtypes) {
         const QoreTypeInfo* arg = QoreParseTypeInfo::resolveAny(st, loc, err);
         if (err) {
             return autoTypeInfo;
         }
         args.push_back(arg);
+    }
+    for (size_t i = actual; i < expected; ++i) {
+        const char* default_type = qc->getTypeParameterDefaultType(i);
+        assert(default_type);
+        args.push_back(qore_resolve_parse_default_type_arg(default_type, loc, err));
+        if (err) {
+            return autoTypeInfo;
+        }
     }
 
     return qc->getTypeInfo(args, or_nothing);
@@ -2813,14 +2870,27 @@ static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const Qor
 static const QoreTypeInfo* qore_resolve_runtime_parameterized_class_type(const QoreParseTypeInfo& pti,
         bool or_nothing) {
     const QoreClass* qc = qore_root_ns_private::get(*getRootNS())->runtimeFindScopedClass(*pti.cscope);
-    if (!qc || !qc->hasTypeParameters() || pti.subtypes.size() != qc->getTypeParameterCount()) {
+    if (!qc || !qc->hasTypeParameters()) {
+        return nullptr;
+    }
+
+    size_t expected = qc->getTypeParameterCount();
+    size_t actual = pti.subtypes.size();
+    if (actual < qc->getTypeParameterRequiredCount() || actual > expected) {
         return nullptr;
     }
 
     type_vec_t args;
-    args.reserve(pti.subtypes.size());
+    args.reserve(expected);
     for (const auto& st : pti.subtypes) {
         const QoreTypeInfo* arg = QoreParseTypeInfo::resolveRuntime(st);
+        if (!arg) {
+            return nullptr;
+        }
+        args.push_back(arg);
+    }
+    for (size_t i = actual; i < expected; ++i) {
+        const QoreTypeInfo* arg = qore_resolve_runtime_default_type_arg(qc->getTypeParameterDefaultType(i));
         if (!arg) {
             return nullptr;
         }
@@ -2838,18 +2908,31 @@ static const TypedHashDecl* qore_resolve_runtime_hashdecl_type(const QoreParseTy
     }
 
     const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
-    if (pti.subtypes.empty()) {
+    if (!pti.hasExplicitSubtypeList()) {
         return hp->hasTypeParams() ? nullptr : hd;
     }
 
-    if (!hp->hasTypeParams() || pti.subtypes.size() != hp->getTypeParamCount()) {
+    if (!hp->hasTypeParams()) {
+        return nullptr;
+    }
+
+    size_t expected = hp->getTypeParamCount();
+    size_t actual = pti.subtypes.size();
+    if (actual < hp->getTypeParamRequiredCount() || actual > expected) {
         return nullptr;
     }
 
     type_vec_t args;
-    args.reserve(pti.subtypes.size());
+    args.reserve(expected);
     for (const auto& st : pti.subtypes) {
         const QoreTypeInfo* arg = QoreParseTypeInfo::resolveRuntime(st);
+        if (!arg) {
+            return nullptr;
+        }
+        args.push_back(arg);
+    }
+    for (size_t i = actual; i < expected; ++i) {
+        const QoreTypeInfo* arg = qore_resolve_runtime_default_type_arg(hp->getTypeParamDefaultType(i));
         if (!arg) {
             return nullptr;
         }
@@ -2860,7 +2943,7 @@ static const TypedHashDecl* qore_resolve_runtime_hashdecl_type(const QoreParseTy
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntime() const {
-    if (!subtypes.empty())
+    if (hasExplicitSubtypeList())
         return resolveRuntimeSubtype();
 
     const QoreTypeInfo* rv = or_nothing ? getBuiltinUserOrNothingTypeInfo(cscope->ostr) : getBuiltinUserTypeInfo(cscope->ostr);
@@ -2988,7 +3071,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeSubtype() const {
         if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
             return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
 
-        if (!subtypes[0]->subtypes.empty()) {
+        if (subtypes[0]->hasExplicitSubtypeList()) {
             return qore_resolve_runtime_parameterized_class_type(*subtypes[0], or_nothing);
         }
 
@@ -3328,7 +3411,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             return or_nothing ? objectOrNothingTypeInfo : objectTypeInfo;
         }
 
-        if (!subtypes[0]->subtypes.empty()) {
+        if (subtypes[0]->hasExplicitSubtypeList()) {
             const QoreTypeInfo* rv = qore_resolve_parse_parameterized_class_type(*subtypes[0], loc, err,
                 or_nothing);
             if (rv || err) {
@@ -3563,7 +3646,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolve(const QoreProgramLocation* loc, int& err) const {
-    if (!subtypes.empty()) {
+    if (hasExplicitSubtypeList()) {
         return resolveSubtype(loc, err);
     }
 
@@ -3571,7 +3654,7 @@ const QoreTypeInfo* QoreParseTypeInfo::resolve(const QoreProgramLocation* loc, i
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveAny(const QoreProgramLocation* loc, int& err) const {
-    if (!subtypes.empty()) {
+    if (hasExplicitSubtypeList()) {
         return resolveSubtype(loc, err);
     }
 

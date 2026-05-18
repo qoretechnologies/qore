@@ -34,11 +34,36 @@
 #include "qore/intern/NamedScope.h"
 #include "qore/intern/QoreTypeInfo.h"
 
+#include <string>
+#include <utility>
+#include <vector>
+
 class QoreParseTypeInfo;
 typedef std::vector<QoreParseTypeInfo*> parse_type_vec_t;
 
 //! Parses a type string into parse-stage type metadata
 DLLLOCAL QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str);
+
+struct QoreGenericTypeParam {
+    std::string name;
+    std::string default_type;
+
+    DLLLOCAL QoreGenericTypeParam(const char* n_name, const char* n_default_type = nullptr)
+            : name(n_name ? n_name : ""), default_type(n_default_type ? n_default_type : "") {
+    }
+
+    DLLLOCAL QoreGenericTypeParam(std::string&& n_name, std::string&& n_default_type = std::string())
+            : name(std::move(n_name)), default_type(std::move(n_default_type)) {
+    }
+
+    DLLLOCAL bool hasDefault() const {
+        return !default_type.empty();
+    }
+
+    DLLLOCAL const char* getDefaultType() const {
+        return hasDefault() ? default_type.c_str() : nullptr;
+    }
+};
 
 // this is basically just a wrapper around NamedScope
 //
@@ -62,12 +87,14 @@ protected:
         if (or_nothing)
             tname = "*";
         tname += cscope->ostr;
-        if (!subtypes.empty()) {
+        if (has_explicit_subtypes) {
             tname += '<';
-            tname += subtypes[0]->getName();
-            for (unsigned i = 1; i < subtypes.size(); ++i) {
-                tname += ", ";
-                tname += subtypes[i]->getName();
+            if (!subtypes.empty()) {
+                tname += subtypes[0]->getName();
+                for (unsigned i = 1; i < subtypes.size(); ++i) {
+                    tname += ", ";
+                    tname += subtypes[i]->getName();
+                }
             }
             tname += '>';
         }
@@ -77,6 +104,7 @@ public:
     NamedScope* cscope; // namespace scope for class
     parse_type_vec_t subtypes;
     bool or_nothing;
+    bool has_explicit_subtypes = false;
 
     DLLLOCAL QoreParseTypeInfo(char* n_cscope, bool n_or_nothing = false) : cscope(new NamedScope(n_cscope)),
             or_nothing(n_or_nothing) {
@@ -85,14 +113,16 @@ public:
     }
 
     DLLLOCAL QoreParseTypeInfo(char* n_cscope, bool n_or_nothing, parse_type_vec_t&& subtypes)
-            : cscope(new NamedScope(n_cscope)), subtypes(subtypes), or_nothing(n_or_nothing) {
+            : cscope(new NamedScope(n_cscope)), subtypes(subtypes), or_nothing(n_or_nothing),
+            has_explicit_subtypes(true) {
         setName();
 
         //printd(5, "QoreParseTypeInfo::QoreParseTypeInfo() %s\n", tname.c_str());
     }
 
     DLLLOCAL QoreParseTypeInfo(const QoreParseTypeInfo& old) : tname(old.tname),
-            cscope(old.cscope ? new NamedScope(*old.cscope) : nullptr), or_nothing(old.or_nothing) {
+            cscope(old.cscope ? new NamedScope(*old.cscope) : nullptr), or_nothing(old.or_nothing),
+            has_explicit_subtypes(old.has_explicit_subtypes) {
         // copy subtypes
         for (const auto& i : old.subtypes)
             subtypes.push_back(new QoreParseTypeInfo(*i));
@@ -165,6 +195,10 @@ public:
 
     DLLLOCAL QoreParseTypeInfo* copy() const {
         return new QoreParseTypeInfo(*this);
+    }
+
+    DLLLOCAL bool hasExplicitSubtypeList() const {
+        return has_explicit_subtypes;
     }
 
     // static version of method, checking for null pointer

@@ -1003,6 +1003,14 @@ public:
     */
     DLLEXPORT void addTypeParameter(const char* name);
 
+    //! adds a formal type parameter to this class with a default type
+    /** @param name the formal type parameter name
+        @param default_type the default type argument used when the type argument is omitted
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addTypeParameter(const char* name, const char* default_type);
+
     //! enables legacy raw generic compatibility behavior for migrated builtin classes
     /** @param raw_accepts_parameterized when true, raw annotations accept parameterized instances
         @param raw_construction_defaults_to_auto when true, raw construction creates the explicit auto instantiation
@@ -1018,6 +1026,11 @@ public:
     //! returns the number of formal type parameters declared by this class
     DLLEXPORT size_t getTypeParameterCount() const;
 
+    //! returns the number of formal type parameters that do not have defaults
+    /** @since %Qore 2.4
+    */
+    DLLEXPORT size_t getTypeParameterRequiredCount() const;
+
     //! returns the name of the formal type parameter at the given index or nullptr if the index is invalid
     /** @param index the zero-based type parameter index
 
@@ -1026,6 +1039,15 @@ public:
         @since %Qore 2.4
     */
     DLLEXPORT const char* getTypeParameterName(size_t index) const;
+
+    //! returns the default type for the formal type parameter at the given index, if any
+    /** @param index the zero-based type parameter index
+
+        @return the default type argument string or nullptr if the parameter has no default or the index is invalid
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterDefaultType(size_t index) const;
 
     //! returns the "or nothing" type information structure for this class
     DLLEXPORT const QoreTypeInfo* getOrNothingTypeInfo() const;

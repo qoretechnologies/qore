@@ -243,8 +243,8 @@ public:
         members.addNoCheck(pair);
     }
 
-    DLLLOCAL void addTypeParameter(const char* param) {
-        type_params.push_back(param);
+    DLLLOCAL void addTypeParameter(const char* param, const char* default_type = nullptr) {
+        type_params.emplace_back(param, default_type);
     }
 
     DLLLOCAL bool hasTypeParams() const {
@@ -257,7 +257,21 @@ public:
 
     DLLLOCAL const char* getTypeParamName(size_t i) const {
         assert(i < type_params.size());
-        return type_params[i].c_str();
+        return type_params[i].name.c_str();
+    }
+
+    DLLLOCAL const char* getTypeParamDefaultType(size_t i) const {
+        assert(i < type_params.size());
+        return type_params[i].getDefaultType();
+    }
+
+    DLLLOCAL size_t getTypeParamRequiredCount() const {
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (type_params[i].hasDefault()) {
+                return i;
+            }
+        }
+        return type_params.size();
     }
 
     DLLLOCAL bool isParameterizedHashDecl() const {
@@ -413,7 +427,7 @@ protected:
     HashDeclMemberMap members;
 
     // Source generic type parameters and cached concrete instantiations.
-    std::vector<std::string> type_params;
+    std::vector<QoreGenericTypeParam> type_params;
     mutable std::mutex parameterized_hashdecl_cache_lock;
     mutable std::map<std::vector<const QoreTypeInfo*>, TypedHashDecl*> parameterized_hashdecl_cache;
     const TypedHashDecl* parameterized_base = nullptr;

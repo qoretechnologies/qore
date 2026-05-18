@@ -237,7 +237,7 @@ private:
 
 public:
     std::string name;
-    std::vector<std::string> type_params;
+    std::vector<QoreGenericTypeParam> type_params;
 
     DLLLOCAL ClassDeclParseInfo(const QoreProgramLocation* loc, char* raw_decl, const char* decl_kind = "class") {
         std::unique_ptr<char, decl_free> raw(raw_decl);
@@ -269,31 +269,58 @@ public:
         }
 
         std::string params = decl.substr(lt + 1, gt - lt - 1);
-        size_t start = 0;
-        while (start <= params.size()) {
-            size_t comma = params.find(',', start);
-            std::string param = params.substr(start,
-                comma == std::string::npos ? std::string::npos : comma - start);
-            trim(param);
+        std::vector<std::string> param_decls;
+        splitTypeParams(params, param_decls);
+        bool default_seen = false;
+        for (std::string& param_decl : param_decls) {
+            trim(param_decl);
+            std::string param;
+            std::string default_type;
+            size_t eq = findTopLevelChar(param_decl, '=');
+            if (eq == std::string::npos) {
+                param = param_decl;
+            } else {
+                param = param_decl.substr(0, eq);
+                default_type = param_decl.substr(eq + 1);
+                trim(param);
+                trim(default_type);
+                if (default_type.empty()) {
+                    parse_error(*loc, "invalid generic %s declaration '%s'; type parameter '%s' has an empty "
+                        "default type", decl_kind, decl.c_str(), param.c_str());
+                }
+            }
+
             if (param.empty()) {
                 parse_error(*loc, "invalid generic %s declaration '%s'; empty type parameter name", decl_kind,
                     decl.c_str());
-                break;
-            }
-            if (!isIdentifier(param)) {
+            } else if (!isIdentifier(param)) {
                 parse_error(*loc, "invalid type parameter name '%s' in generic %s declaration '%s'; type "
                     "parameter names must be identifiers", param.c_str(), decl_kind, decl.c_str());
             } else if (hasParam(param)) {
                 parse_error(*loc, "duplicate type parameter name '%s' in generic %s declaration '%s'",
                     param.c_str(), decl_kind, decl.c_str());
+            } else if (default_type.empty() && default_seen) {
+                parse_error(*loc, "invalid generic %s declaration '%s'; type parameter '%s' is missing a default "
+                    "type after an earlier type parameter declared one", decl_kind, decl.c_str(), param.c_str());
             } else {
-                type_params.push_back(param);
+                if (!default_type.empty()) {
+                    default_seen = true;
+                }
+                type_params.emplace_back(std::move(param), std::move(default_type));
             }
+        }
 
-            if (comma == std::string::npos) {
-                break;
+        for (const QoreGenericTypeParam& param : type_params) {
+            if (!param.hasDefault()) {
+                continue;
             }
-            start = comma + 1;
+            for (const QoreGenericTypeParam& other : type_params) {
+                if (typeStringContainsIdentifier(param.default_type, other.name)) {
+                    parse_error(*loc, "invalid generic %s declaration '%s'; default type '%s' for type parameter "
+                        "'%s' references type parameter '%s', which is not supported yet", decl_kind, decl.c_str(),
+                        param.default_type.c_str(), param.name.c_str(), other.name.c_str());
+                }
+            }
         }
     }
 
@@ -306,14 +333,14 @@ public:
     }
 
     DLLLOCAL void applyTypeParams(QoreClass* qc) const {
-        for (const std::string& param : type_params) {
-            qc->addTypeParameter(param.c_str());
+        for (const QoreGenericTypeParam& param : type_params) {
+            qc->addTypeParameter(param.name.c_str(), param.getDefaultType());
         }
     }
 
     DLLLOCAL void applyTypeParams(typed_hash_decl_private* hp) const {
-        for (const std::string& param : type_params) {
-            hp->addTypeParameter(param.c_str());
+        for (const QoreGenericTypeParam& param : type_params) {
+            hp->addTypeParameter(param.name.c_str(), param.getDefaultType());
         }
     }
 
@@ -347,10 +374,62 @@ public:
     }
 
     DLLLOCAL bool hasParam(const std::string& param) const {
-        for (const std::string& existing : type_params) {
-            if (existing == param) {
+        for (const QoreGenericTypeParam& existing : type_params) {
+            if (existing.name == param) {
                 return true;
             }
+        }
+        return false;
+    }
+
+    DLLLOCAL static size_t findTopLevelChar(const std::string& str, char target) {
+        int angle_depth = 0;
+        int paren_depth = 0;
+        for (size_t i = 0; i < str.size(); ++i) {
+            char c = str[i];
+            if (c == '<' && paren_depth == 0) {
+                ++angle_depth;
+            } else if (c == '>' && paren_depth == 0 && angle_depth > 0) {
+                --angle_depth;
+            } else if (c == '(') {
+                ++paren_depth;
+            } else if (c == ')' && paren_depth > 0) {
+                --paren_depth;
+            } else if (c == target && !angle_depth && !paren_depth) {
+                return i;
+            }
+        }
+        return std::string::npos;
+    }
+
+    DLLLOCAL static void splitTypeParams(const std::string& params, std::vector<std::string>& param_decls) {
+        size_t start = 0;
+        while (start <= params.size()) {
+            size_t comma = findTopLevelChar(params.substr(start), ',');
+            if (comma == std::string::npos) {
+                param_decls.push_back(params.substr(start));
+                break;
+            }
+            param_decls.push_back(params.substr(start, comma));
+            start += comma + 1;
+        }
+    }
+
+    DLLLOCAL static bool isIdentifierChar(char c) {
+        unsigned char uc = static_cast<unsigned char>(c);
+        return isalnum(uc) || c == '_';
+    }
+
+    DLLLOCAL static bool typeStringContainsIdentifier(const std::string& type, const std::string& ident) {
+        size_t pos = 0;
+        while ((pos = type.find(ident, pos)) != std::string::npos) {
+            bool left = !pos || !isIdentifierChar(type[pos - 1]);
+            size_t end = pos + ident.size();
+            bool right = end == type.size() || !isIdentifierChar(type[end]);
+            if (left && right) {
+                return true;
+            }
+            ++pos;
         }
         return false;
     }
@@ -1589,7 +1668,7 @@ public:
                 }
             }
             char* p1 = strrchr(id, '>');
-            if (p1 > (p0 + 1)) {
+            if (p1 > p0) {
                 // terminate main type string
                 *p0 = '\0';
                 // terminate type args
@@ -3612,7 +3691,7 @@ hashdecl_member:
         else if (t)
             parse_error(*loc, "cannot call constructor for non-class base type '%s'", QoreTypeInfo::getName(t));
         else {
-            if (pti->subtypes.size()) {
+            if (pti->hasExplicitSubtypeList()) {
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             }
             else {
@@ -3786,7 +3865,7 @@ classvardecl:
         if (t) {
             parse_error(*loc, "cannot call constructor for non-class base type '%s'", QoreTypeInfo::getName(t));
         } else {
-            if (pti->subtypes.size()) {
+            if (pti->hasExplicitSubtypeList()) {
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $5);
             } else {
                 new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)),
@@ -3827,7 +3906,7 @@ member2:
         else if (t)
             parse_error(*loc, "cannot call constructor for non-class base type '%s'", QoreTypeInfo::getName(t));
         else {
-            if (pti && pti->subtypes.size())
+            if (pti && pti->hasExplicitSubtypeList())
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             else
                 new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $4);
@@ -3864,7 +3943,7 @@ member2:
         else if (t)
             parse_error(*loc, "cannot call constructor for non-class base type '%s'", QoreTypeInfo::getName(t));
         else {
-            if (pti->subtypes.size())
+            if (pti->hasExplicitSubtypeList())
                 new_call = new ParseNewComplexTypeNode(loc, new QoreParseTypeInfo(*pti), $4);
             else
                 new_call = new ScopedObjectCallNode(loc, new NamedScope(strdup(pti->cscope->ostr)), $4);

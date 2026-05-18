@@ -2043,7 +2043,7 @@ public:
         raw_construction_defaults_to_auto : 1
         ;
 
-    std::vector<std::string> type_params;
+    std::vector<QoreGenericTypeParam> type_params;
     std::vector<const QoreTypeInfo*> parameterized_vparents;
 
     int64 domain;                    // capabilities of builtin class to use in the context of parse restrictions
@@ -2298,7 +2298,20 @@ public:
     }
 
     DLLLOCAL const char* getTypeParamName(size_t index) const {
-        return index < type_params.size() ? type_params[index].c_str() : nullptr;
+        return index < type_params.size() ? type_params[index].name.c_str() : nullptr;
+    }
+
+    DLLLOCAL const char* getTypeParamDefaultType(size_t index) const {
+        return index < type_params.size() ? type_params[index].getDefaultType() : nullptr;
+    }
+
+    DLLLOCAL size_t getTypeParamRequiredCount() const {
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (type_params[i].hasDefault()) {
+                return i;
+            }
+        }
+        return type_params.size();
     }
 
     DLLLOCAL bool rawAcceptsParameterized() const {
@@ -2309,8 +2322,8 @@ public:
         return raw_construction_defaults_to_auto;
     }
 
-    DLLLOCAL void addTypeParam(const char* name) {
-        type_params.push_back(name);
+    DLLLOCAL void addTypeParam(const char* name, const char* default_type = nullptr) {
+        type_params.emplace_back(name, default_type);
     }
 
     DLLLOCAL void setLegacyRawGenericCompatibility(bool accepts_parameterized, bool construction_defaults_to_auto) {
