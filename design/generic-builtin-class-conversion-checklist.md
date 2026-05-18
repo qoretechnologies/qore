@@ -15,10 +15,18 @@ The initial core conversions are:
 | `Qore::Thread::Promise<T>` | `T` | `set()` accepts `T`; `getFuture()` returns `Future<T>` |
 | `Qore::Thread::Future<T>` | `T` | `get()` returns `T` |
 | `Qore::Thread::FutureImpl<T>` | `T` | QPP-only concrete implementation with `vparent=Future<T>` |
+| `Qore::TreeMap<V>` | `V` | path keys remain strings; `put()` stores `V`; `get()` returns `*V` |
+| `mongodb::MongoCursor<DocT>` | `DocT` | document type is bounded by `hash<auto>`; `next()` returns `*DocT`; `toList()` returns `list<DocT>` |
 
 All initial conversions use `legacy_raw`, meaning raw construction creates the
 explicit `<auto>` instantiation and raw annotations still accept parameterized
 instances.
+
+Some shipped modules were reviewed and deliberately kept non-generic. For
+example, `DataFrame` rows change shape by operation, protobuf messages are
+selected by a runtime schema/type name, and logger/tokenizer/i18n result hashes
+are runtime metadata records. In those cases, prefer typed hashdecls and
+explicit return classes instead of a misleading class type parameter.
 
 ## Candidate Review
 
@@ -119,6 +127,8 @@ Add focused tests for each conversion:
 Update all applicable documentation:
 
 - Class/method Doxygen examples should show concrete generic use.
+- Examples for reviewed non-generic modules should still avoid unnecessary
+  `auto` where explicit classes or typed hashdecls make API metadata clearer.
 - Language docs should explain user-facing type behavior and compatibility.
 - Release notes should identify the migrated classes and compatibility rules.
 - `design/api-metadata-for-modules.md` should describe any new metadata fields.

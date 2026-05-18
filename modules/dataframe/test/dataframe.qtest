@@ -23,6 +23,7 @@
 class DataFrameTest inherits QUnit::Test {
     constructor() : Test("DataFrameTest", "1.0") {
         addTestCase("constructionTest", \constructionTest());
+        addTestCase("typedApiMetadataTest", \typedApiMetadataTest());
         addTestCase("typeInferenceTest", \typeInferenceTest());
         addTestCase("metadataTest", \metadataTest());
         addTestCase("accessTest", \accessTest());
@@ -74,6 +75,57 @@ class DataFrameTest inherits QUnit::Test {
         assertEq(2, df2.numCols(), "from columns: 2 cols");
     }
 
+    typedApiMetadataTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%requires dataframe
+
+sub typed_dataframe_api() {
+    DataFrame::DataFrame df(({\"a\": 1}, {\"a\": 2}));
+    hash<DataFrame::DataFrameShape> shape = df.shape();
+    DataFrame::DataFrame head = df.head(1);
+    DataFrame::DataFrame tail = df.tail(1);
+    DataFrame::DataFrame sliced = df.slice(0, 1);
+    DataFrame::DataFrame selected = df.select((\"a\",));
+    DataFrame::DataFrame filtered = df.filter(\"a\", \">\", 0);
+    DataFrame::DataFrame sorted = df.sortBy((\"a\",));
+    DataFrame::DataFrame filled = df.fillna(0);
+    DataFrame::DataFrame clean = df.dropna();
+    DataFrame::DataFrame with_col = df.withColumn(\"b\", (3, 4));
+    DataFrame::GroupedDataFrame grouped = df.groupBy((\"a\",));
+    DataFrame::DataFrame counts = grouped.count();
+    list<hash<DataFrame::ColumnStats>> stats = df.describe();
+}
+", "dataframe typed API");
+
+%ifndef NoDataProviderDataFrame
+        Program p3(PO_NEW_STYLE);
+        p3.parse("
+%requires DataProviderDataFrame
+
+sub typed_dataframe_provider() {
+    DataFrame::DataFrame df(({\"a\": 1}, {\"a\": 2}));
+    DataProviderDataFrame::DataFrameDataProvider prov(df);
+    AbstractDataProviderRecordIterator<hash<auto>> iter = prov.searchRecords();
+    hash<auto> rec = iter.getValue();
+}
+", "dataframe provider typed API");
+%endif
+
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \p2.parse(), ("
+%requires dataframe
+
+sub invalid_dataframe_api() {
+    DataFrame::DataFrame df(({\"a\": 1},));
+    string s = df.head(1);
+}
+", "dataframe typed API"));
+    }
+
     typeInferenceTest() {
 %ifdef NoDataFrame
         testSkip("dataframe module not available");
@@ -104,7 +156,7 @@ class DataFrameTest inherits QUnit::Test {
         assertEq(("name", "age"), df.columnNames(), "column names");
         assertEq(("string", "int64"), df.dtypes(), "dtypes");
 
-        hash<auto> s = df.shape();
+        hash<DataFrame::DataFrameShape> s = df.shape();
         assertEq(2, s.rows, "shape rows");
         assertEq(2, s.cols, "shape cols");
     }
@@ -189,7 +241,7 @@ class DataFrameTest inherits QUnit::Test {
              {"val": 30.0, "name": "c"},
              {"val": 40.0, "name": "a"}));
 
-        list<auto> stats = df.describe();
+        list<hash<DataFrame::ColumnStats>> stats = df.describe();
         assertEq(2, stats.size(), "describe returns stats for all columns");
 
         # Numeric column stats
@@ -254,7 +306,7 @@ class DataFrameTest inherits QUnit::Test {
         assertEq("y", row.b, "non-null in row hash");
 
         # Describe with nulls
-        list<auto> stats = df.describe();
+        list<hash<DataFrame::ColumnStats>> stats = df.describe();
         hash<auto> a_stats = stats[0];
         assertEq(2, a_stats.count, "describe count excludes nulls");
         assertEq(1, a_stats.null_count, "describe null_count");

@@ -25,8 +25,8 @@ using namespace QoreDataFrameNS;
          {"dept": "eng",    "salary": 80000},
          {"dept": "eng",    "salary": 90000}));
 
-    auto gdf = df.groupBy(("dept",));
-    auto result = gdf.agg({"salary": "mean"});
+    GroupedDataFrame gdf = df.groupBy(("dept",));
+    DataFrame result = gdf.agg({"salary": "mean"});
     printf("%s\n", result.toString());
     @endcode
 
@@ -54,13 +54,13 @@ GroupedDataFrame::copy() {
 
     @par Example:
     @code{.py}
-    auto result = gdf.agg({"salary": "mean", "bonus": ("sum", "max")});
+    DataFrame result = gdf.agg({"salary": "mean", "bonus": ("sum", "max")});
     @endcode
 
     @throw DATAFRAME-COLUMN-ERROR if a column is not found
 
 */
-auto GroupedDataFrame::agg(hash<auto> agg_spec) [flags=RET_VALUE_ONLY] {
+DataFrame GroupedDataFrame::agg(hash<auto> agg_spec) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = gdf->agg(agg_spec, xsink);
     if (!result) {
         return QoreValue();
@@ -75,11 +75,11 @@ auto GroupedDataFrame::agg(hash<auto> agg_spec) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-    auto counts = gdf.count();
+    DataFrame counts = gdf.count();
     @endcode
 
 */
-auto GroupedDataFrame::count() [flags=RET_VALUE_ONLY] {
+DataFrame GroupedDataFrame::count() [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = gdf->count(xsink);
     if (!result) {
         return QoreValue();
@@ -93,7 +93,7 @@ auto GroupedDataFrame::count() [flags=RET_VALUE_ONLY] {
 /** @return new DataFrame with group key columns plus summed numeric columns
 
 */
-auto GroupedDataFrame::sum() [flags=RET_VALUE_ONLY] {
+DataFrame GroupedDataFrame::sum() [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = gdf->sum(xsink);
     if (!result) {
         return QoreValue();
@@ -107,7 +107,7 @@ auto GroupedDataFrame::sum() [flags=RET_VALUE_ONLY] {
 /** @return new DataFrame with group key columns plus averaged numeric columns
 
 */
-auto GroupedDataFrame::mean() [flags=RET_VALUE_ONLY] {
+DataFrame GroupedDataFrame::mean() [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = gdf->mean(xsink);
     if (!result) {
         return QoreValue();

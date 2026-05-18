@@ -81,7 +81,7 @@ while (*hash<auto> doc = cursor.next()) {
     @par Example:
     @code{.py}
 while (cursor.more()) {
-    hash<auto> doc = cursor.next();
+    *hash<auto> doc = cursor.next();
     // process doc
 }
     @endcode

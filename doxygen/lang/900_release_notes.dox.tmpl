@@ -314,6 +314,8 @@ binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: Fals
     - @ref Qore::Thread::Promise "Promise<T>"
     - @ref Qore::Thread::Future "Future<T>"
     - @ref Qore::TreeMap "TreeMap<V>" for typed path-prefix maps
+    - <tt>MongoCursor&lt;DocT&gt;</tt> for typed MongoDB
+      document cursor iteration in the builtin mongodb module
     - @ref Qore::AbstractIterator "AbstractIterator<T>" and concrete list,
       hash, channel, and single-value iterators
     - @ref Qore::AbstractPollOperation "AbstractPollOperation<T>" and
@@ -1632,6 +1634,10 @@ cargo install tree-sitter-cli@0.26.5
       - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)
       - ML integration: toMatrix, toVector, fromMatrix for zero-overhead ML algorithm feeding
       - describe() for per-column descriptive statistics (mean, std, quartiles, unique count)
+      - DataFrame-returning methods, GroupedDataFrame-returning methods, CSV options, shape()
+        results, and describe() statistics now have explicit API metadata types, including
+        <tt>DataFrame</tt>, <tt>GroupedDataFrame</tt>, <tt>hash&lt;DataFrameShape&gt;</tt>,
+        <tt>list&lt;hash&lt;ColumnStats&gt;&gt;</tt>, and <tt>hash&lt;CsvOptions&gt;</tt>
       - Eigen3-backed float64 columns for SIMD-friendly numeric operations
       - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
       - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O
@@ -1978,6 +1984,9 @@ cargo install tree-sitter-cli@0.26.5
       - wraps DataFrame as a record-oriented DataProvider for Qorus data pipeline integration
       - supports searchRecords with hash-based where conditions (equality and comparison operators)
       - record type reflects DataFrame column schema (int, float, string, bool, date)
+      - record iterator APIs declare
+        <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt>
+        because DataFrame row shape is runtime-schema driven
       - factory registered as "dataframe" in DataProvider FactoryMap
     - @ref dataprovidermlintro "DataProviderML" module
       - new module providing data pipeline processors wrapping the ml binary module
@@ -2277,6 +2286,9 @@ cargo install tree-sitter-cli@0.26.5
       - aggregation pipeline support via aggregate data provider
       - bulk write operations support via bulk data provider
       - record-based interface for collections with search, create, update, upsert, and delete operations
+      - record iterators and internal cursors use
+        <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt> and
+        <tt>MongoCursor&lt;hash&lt;auto&gt;&gt;</tt>
       - connection support with \c mongodb:// URL scheme
     - @ref onedrivedataproviderintro "OneDriveDataProvider" module
       - new module providing a data provider API for <a href="https://onedrive.live.com/">Microsoft OneDrive</a> cloud file storage

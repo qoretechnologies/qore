@@ -24,6 +24,10 @@ DLLLOCAL extern QoreClass* QC_DATAFRAME;
 DLLLOCAL void preinitDataFrameClass();
 DLLLOCAL QoreClass* initDataFrameClass(QoreNamespace& ns);
 
+DLLLOCAL extern const TypedHashDecl* hashdeclDataFrameShape;
+DLLLOCAL extern const TypedHashDecl* hashdeclColumnStats;
+DLLLOCAL extern const TypedHashDecl* hashdeclCsvOptions;
+
 namespace QoreDataFrameNS {
 
 //! Columnar DataFrame with typed columns and null support

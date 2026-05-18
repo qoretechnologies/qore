@@ -116,7 +116,7 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
     }
 
     #! Returns an iterator over records matching the optional where condition
-    private AbstractDataProviderRecordIterator searchRecordsImpl(
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(
             *hash<auto> where_cond, *hash<auto> search_options) {
         return new DataFrameRecordIterator(dataframe, where_cond);
     }
@@ -128,7 +128,7 @@ public class DataFrameDataProvider inherits DataProvider::AbstractDataProvider {
 }
 
 #! Iterator over DataFrame records with optional filtering
-public class DataFrameRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator {
+public class DataFrameRecordIterator inherits DataProvider::AbstractDataProviderRecordIterator<hash<auto>> {
     private {
         #! The records as a list
         list<hash<auto>> records;

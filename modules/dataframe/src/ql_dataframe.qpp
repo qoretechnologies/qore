@@ -11,7 +11,13 @@
 #include "qore/Qore.h"
 
 //! DataFrame shape information
-/** @since dataframe 1.0
+/** @par Example:
+    @code{.py}
+hash<DataFrame::DataFrameShape> shape = df.shape();
+printf("rows=%d cols=%d\n", shape.rows, shape.cols);
+    @endcode
+
+    @since dataframe 1.0
 */
 hashdecl Qore::DataFrame::DataFrameShape {
     //! Number of rows
@@ -23,6 +29,13 @@ hashdecl Qore::DataFrame::DataFrameShape {
 //! Per-column descriptive statistics
 /** Returned by @ref DataFrame::describe()
 
+    @par Example:
+    @code{.py}
+list<hash<DataFrame::ColumnStats>> stats = df.describe();
+foreach hash<DataFrame::ColumnStats> stat in (stats) {
+    printf("%s: count=%d nulls=%d\n", stat.name, stat.count, stat.null_count);
+}
+    @endcode
 */
 hashdecl Qore::DataFrame::ColumnStats {
     //! Column name
@@ -52,7 +65,16 @@ hashdecl Qore::DataFrame::ColumnStats {
 }
 
 //! CSV read/write options
-/** @since dataframe 1.0
+/** @par Example:
+    @code{.py}
+hash<DataFrame::CsvOptions> options = {
+    "separator": "\t",
+    "header": True,
+};
+DataFrame::DataFrame df = DataFrame::DataFrame::readCSV("input.tsv", options);
+    @endcode
+
+    @since dataframe 1.0
 */
 hashdecl Qore::DataFrame::CsvOptions {
     //! Field separator (default ",")

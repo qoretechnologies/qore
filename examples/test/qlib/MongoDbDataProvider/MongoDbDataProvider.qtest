@@ -41,6 +41,7 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
         setenv("QORE_MONGODB_VERBOSE", sprintf("%d", verbose));
         setenv("MONGOC_LOG_LEVEL", verbose > 2 ? "debug" : "warning");
 %ifndef NoMongoDB
+        addTestCase("typed API metadata test", \typedApiMetadataTest());
         addTestCase("connection test", \connectionTest());
         addTestCase("factory test", \factoryTest());
         addTestCase("data provider hierarchy test", \hierarchyTest());
@@ -71,6 +72,18 @@ public class MongoDbDataProviderTest inherits QUnit::Test {
 %ifndef NoMongoDB
     private checkModule() {
         # Module is available, nothing to do
+    }
+
+    typedApiMetadataTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%requires MongoDbDataProvider
+
+sub typed_mongodb_provider(MongoDbDataProvider::MongoDbCollectionDataProvider provider) {
+    AbstractDataProviderRecordIterator<hash<auto>> iter = provider.searchRecords();
+    hash<auto> rec = iter.getValue();
+}
+", "mongodb data provider typed API");
     }
 
     private bool ensureConnection() {

@@ -316,14 +316,44 @@ type is carried through the object.
 | Iterator hierarchy | `AbstractIterator<T>`, `AbstractBidirectionalIterator<T>`, `AbstractQuantifiedIterator<T>`, `AbstractQuantifiedBidirectionalIterator<T>` |
 | Concrete iterators | `ListIterator<T>`, `ListReverseIterator<T>`, `SingleValueIterator<T>`, `ChannelIterator<T>` |
 | Hash iterators | `HashIterator<V>`, `HashPairIterator<V>`, `HashReverseIterator<V>`, `HashPairReverseIterator<V>`, `KeyValueInfo<V>` |
+| Path-prefix map | `TreeMap<V>` |
 | Qlib record iterators | `Mapper::AbstractMapperIterator<RecT>`, `DataProvider::AbstractDataProviderRecordIterator<RecT>`, `DataProvider::DefaultRecordIterator<RecT>` |
 | Poll operations | `AbstractPollOperation<T>`, `SocketPollOperationBase<T>` and fixed-output socket poll subclasses |
+| Shipped module cursor | `mongodb::MongoCursor<DocT: hash<auto> = hash<auto>>` |
 
 Some classes intentionally remain raw or use `<auto>` parents because their
 output varies by call goal or because their records are heterogeneous. Examples
 include variable-output poll wrappers and object/hash member pair iterators
 whose per-entry value type cannot safely be represented as the whole record
 type.
+
+## Shipped Module Rollout
+
+The bundled `modules/*` review applies the same rule: use generics only where
+one logical type is carried through the object.
+
+`mongodb::MongoCursor<DocT>` is generic because the document type is stable for
+the cursor. `MongoCollection::find()` and `MongoCollection::aggregate()` return
+`MongoCursor<hash<auto>>` today, and the type parameter lets future typed
+wrappers preserve narrower document hashdecls.
+
+The `dataframe` module was processed without making `DataFrame` itself generic.
+DataFrame row shapes change with `select()`, `groupBy()`, `agg()`, `join()`,
+`pivot()`, and `melt()`, so `DataFrame<RecT>` would promise more than the
+runtime can guarantee. Instead, DataFrame-producing methods now return
+`DataFrame`, grouping returns `GroupedDataFrame`, `describe()` returns
+`list<hash<ColumnStats>>`, `shape()` returns `hash<DataFrameShape>`, and CSV
+options use `hash<CsvOptions>`. `DataProviderDataFrame` and
+`MongoDbDataProvider` record iterators use
+`AbstractDataProviderRecordIterator<hash<auto>>` because the row/document shape
+is runtime-defined.
+
+Other bundled modules (`logger_bin`, `tokenizer`, `protobuf`, `i18n`,
+`astparser`, `reflection`, `ml`, `ocr`, `krb5`, and `linenoise`) were reviewed
+and do not currently have a safe class-level generic conversion. Where their
+result records are stable, typed hashdecl cleanup remains appropriate follow-up
+work; where schemas or selected fields are runtime-defined, `hash<auto>` is the
+honest public type.
 
 ## Poll Operation Output Policy
 

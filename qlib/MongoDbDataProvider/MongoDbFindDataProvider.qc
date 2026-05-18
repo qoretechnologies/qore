@@ -112,7 +112,7 @@ public class MongoDbFindDataProvider inherits DataProvider::AbstractDataProvider
             opts.projection = req.projection;
         }
 
-        MongoCursor cursor = coll.find(req.filter ?? {}, opts);
+        MongoCursor<hash<auto>> cursor = coll.find(req.filter ?? {}, opts);
         list<hash<auto>> docs = cursor.toList();
 
         return {

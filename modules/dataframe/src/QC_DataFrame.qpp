@@ -28,7 +28,8 @@ using namespace QoreDataFrameNS;
          {"name": "Bob",   "age": 25, "score": 88.0},
          {"name": "Carol", "age": 35, "score": 92.0}));
 
-    printf("Shape: %y\n", df.shape());
+    hash<DataFrameShape> shape = df.shape();
+    printf("Shape: %y\n", shape);
     printf("Columns: %y\n", df.columnNames());
     printf("%s\n", df.toString());
     @endcode
@@ -110,7 +111,7 @@ list<string> DataFrame::dtypes() [flags=CONSTANT] {
 //! Returns the shape as a hash with "rows" and "cols" keys
 /** @return hash with "rows" and "cols" integer values
 */
-hash<auto> DataFrame::shape() [flags=CONSTANT] {
+hash<DataFrameShape> DataFrame::shape() [flags=CONSTANT] {
     return df->shape(xsink);
 }
 
@@ -136,11 +137,11 @@ hash<auto> DataFrame::getRow(int index) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-    auto top3 = df.head(3);
+    DataFrame top3 = df.head(3);
     printf("Top 3: %d rows\n", top3.numRows());
     @endcode
 */
-auto DataFrame::head(*int n) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::head(*int n) [flags=RET_VALUE_ONLY] {
     int64_t rows = n ? (int64_t)n : 5;
     QoreDataFrame* result = df->head(rows, xsink);
     if (!result) {
@@ -156,7 +157,7 @@ auto DataFrame::head(*int n) [flags=RET_VALUE_ONLY] {
 /** @param n number of rows (default 5)
     @return new DataFrame object with the last n rows
 */
-auto DataFrame::tail(*int n) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::tail(*int n) [flags=RET_VALUE_ONLY] {
     int64_t rows = n ? (int64_t)n : 5;
     QoreDataFrame* result = df->tail(rows, xsink);
     if (!result) {
@@ -172,7 +173,7 @@ auto DataFrame::tail(*int n) [flags=RET_VALUE_ONLY] {
     @param end the ending row index (exclusive)
     @return new DataFrame object with the specified row range
 */
-auto DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->slice(start, end, xsink);
     if (!result) {
         return QoreValue();
@@ -223,11 +224,11 @@ list<auto> DataFrame::toVector(string column) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-    auto df = DataFrame::fromMatrix(
+    DataFrame df = DataFrame::fromMatrix(
         ((1.0, 2.0), (3.0, 4.0)), ("x", "y"));
     @endcode
 */
-static auto DataFrame::fromMatrix(list<auto> matrix, *list<string> column_names) [flags=RET_VALUE_ONLY] {
+static DataFrame DataFrame::fromMatrix(list<auto> matrix, *list<string> column_names) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = QoreDataFrame::fromMatrix(matrix, column_names, xsink);
     if (!result) {
         return QoreValue();
@@ -256,24 +257,16 @@ static auto DataFrame::fromMatrix(list<auto> matrix, *list<string> column_names)
         ({"customer_id": 10, "name": "Alice"},
          {"customer_id": 20, "name": "Bob"}));
 
-    auto joined = orders.join(customers, ("customer_id",));
+    DataFrame joined = orders.join(customers, ("customer_id",));
     # Result: order_id, customer_id, amount, name
     @endcode
 
     @throw DATAFRAME-JOIN-ERROR if join type is invalid or key columns not found
 
 */
-auto DataFrame::join(object other_obj, list<string> on, *string how) [flags=RET_VALUE_ONLY] {
-    QoreDataFrame* other = static_cast<QoreDataFrame*>(
-        other_obj->getReferencedPrivateData(CID_DATAFRAME, xsink));
-    if (!other) {
-        xsink->raiseException("DATAFRAME-JOIN-ERROR",
-            "argument is not a DataFrame object");
-        return QoreValue();
-    }
+DataFrame DataFrame::join(DataFrame[QoreDataFrame] other, list<string> on, *string how) [flags=RET_VALUE_ONLY] {
     std::string how_str = how ? how->c_str() : "inner";
-    QoreDataFrame* result = df->join(other, on, how_str, xsink);
-    other->deref(xsink);
+    QoreDataFrame* result = df->join(*other, on, how_str, xsink);
     if (!result) {
         return QoreValue();
     }
@@ -288,15 +281,15 @@ auto DataFrame::join(object other_obj, list<string> on, *string how) [flags=RET_
 
     @par Example:
     @code{.py}
-    auto gdf = df.groupBy(("dept",));
-    auto means = gdf.agg({"salary": "mean"});
-    auto counts = gdf.count();
+    GroupedDataFrame gdf = df.groupBy(("dept",));
+    DataFrame means = gdf.agg({"salary": "mean"});
+    DataFrame counts = gdf.count();
     @endcode
 
     @throw DATAFRAME-COLUMN-ERROR if a column name is not found
 
 */
-auto DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY] {
+GroupedDataFrame DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY] {
     // Convert column name list to std::vector
     std::vector<std::string> col_names;
     for (size_t i = 0; i < columns->size(); ++i) {
@@ -323,13 +316,13 @@ auto DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-    auto nums = df.select(("age", "score"));
+    DataFrame nums = df.select(("age", "score"));
     @endcode
 
     @throw DATAFRAME-COLUMN-ERROR if a column name is not found
 
 */
-auto DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->select(columns, xsink);
     if (!result) {
         return QoreValue();
@@ -349,15 +342,15 @@ auto DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-    auto adults = df.filter("age", ">=", 18);
-    auto bobs = df.filter("name", "==", "Bob");
-    auto has_score = df.filter("score", "not_null", 0);
+    DataFrame adults = df.filter("age", ">=", 18);
+    DataFrame bobs = df.filter("name", "==", "Bob");
+    DataFrame has_score = df.filter("score", "not_null", 0);
     @endcode
 
     @throw DATAFRAME-COLUMN-ERROR if column not found
 
 */
-auto DataFrame::filter(string column, string op, auto value) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::filter(string column, string op, auto value) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->filter(column->c_str(), op->c_str(), value, xsink);
     if (!result) {
         return QoreValue();
@@ -375,15 +368,15 @@ auto DataFrame::filter(string column, string op, auto value) [flags=RET_VALUE_ON
 
     @par Example:
     @code{.py}
-    auto sorted = df.sortBy(("age",));
-    auto desc = df.sortBy(("score",), (False,));
-    auto multi = df.sortBy(("dept", "salary"), (True, False));
+    DataFrame sorted = df.sortBy(("age",));
+    DataFrame desc = df.sortBy(("score",), (False,));
+    DataFrame multi = df.sortBy(("dept", "salary"), (True, False));
     @endcode
 
     @throw DATAFRAME-COLUMN-ERROR if column not found
 
 */
-auto DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->sortBy(columns, ascending, xsink);
     if (!result) {
         return QoreValue();
@@ -399,11 +392,11 @@ auto DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=RET_V
 
     @par Example:
     @code{.py}
-    auto filled = df.fillna(0);
+    DataFrame filled = df.fillna(0);
     @endcode
 
 */
-auto DataFrame::fillna(auto value) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::fillna(auto value) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->fillna(value, xsink);
     if (!result) {
         return QoreValue();
@@ -418,11 +411,11 @@ auto DataFrame::fillna(auto value) [flags=RET_VALUE_ONLY] {
 
     @par Example:
     @code{.py}
-    auto clean = df.dropna();
+    DataFrame clean = df.dropna();
     @endcode
 
 */
-auto DataFrame::dropna() [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::dropna() [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->dropna(xsink);
     if (!result) {
         return QoreValue();
@@ -449,7 +442,7 @@ hash<auto> DataFrame::toColumnHash() [flags=RET_VALUE_ONLY] {
 //! Returns per-column descriptive statistics
 /** @return list of ColumnStats hashes with count, mean, std, min, max, quartiles
 */
-list<auto> DataFrame::describe() [flags=RET_VALUE_ONLY] {
+list<hash<ColumnStats>> DataFrame::describe() [flags=RET_VALUE_ONLY] {
     return df->describe(xsink);
 }
 
@@ -499,14 +492,15 @@ nothing DataFrame::renameColumn(string old_name, string new_name) {
 
     @par Example:
     @code{.py}
-    auto df = DataFrame::readCSV("/path/to/data.csv");
-    auto tsv = DataFrame::readCSV("data.tsv", {"separator": "\t"});
+    DataFrame df = DataFrame::readCSV("/path/to/data.csv");
+    hash<CsvOptions> tsv_options = {"separator": "\t"};
+    DataFrame tsv = DataFrame::readCSV("data.tsv", tsv_options);
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the file cannot be opened
 
 */
-static auto DataFrame::readCSV(string path, *hash<auto> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
+static DataFrame DataFrame::readCSV(string path, *hash<CsvOptions> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = QoreDataFrame::readCSV(path->c_str(), options, xsink);
     if (!result) {
         return QoreValue();
@@ -523,20 +517,21 @@ static auto DataFrame::readCSV(string path, *hash<auto> options) [dom=FILESYSTEM
     @par Example:
     @code{.py}
     df.writeCSV("/path/to/output.csv");
-    df.writeCSV("output.tsv", {"separator": "\t"});
+    hash<CsvOptions> options = {"separator": "\t"};
+    df.writeCSV("output.tsv", options);
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
 
 */
-nothing DataFrame::writeCSV(string path, *hash<auto> options) [dom=FILESYSTEM] {
+nothing DataFrame::writeCSV(string path, *hash<CsvOptions> options) [dom=FILESYSTEM] {
     df->writeCSV(path->c_str(), options, xsink);
 }
 
 //! Creates a DataFrame from a SQL query result
 /** @param ds a Datasource or DatasourcePool object
     @param sql the SQL SELECT query to execute
-    @param args optional bind arguments for the query
+    @param bind_args optional bind arguments for the query
 
     Calls the datasource's \c select() method, which returns a column-oriented
     hash of lists, and builds a DataFrame from the result.
@@ -547,14 +542,14 @@ nothing DataFrame::writeCSV(string path, *hash<auto> options) [dom=FILESYSTEM] {
     @code{.py}
     Datasource ds("pgsql:user/pass@mydb%localhost");
     ds.open();
-    auto df = DataFrame::fromQuery(ds,
+    DataFrame df = DataFrame::fromQuery(ds,
         "SELECT name, age, salary FROM employees WHERE dept = %v", ("sales",));
     printf("Loaded %d rows\n", df.numRows());
     @endcode
 
     @throw DATAFRAME-DB-ERROR if the query fails or returns unexpected results
 */
-static auto DataFrame::fromQuery(object ds, string sql, *list<auto> bind_args) [dom=DATABASE; flags=RET_VALUE_ONLY] {
+static DataFrame DataFrame::fromQuery(object ds, string sql, *list<auto> bind_args) [dom=DATABASE; flags=RET_VALUE_ONLY] {
     if (qore_check_cancel(xsink, "executing query for DataFrame")) {
         return QoreValue();
     }
@@ -607,14 +602,14 @@ static auto DataFrame::fromQuery(object ds, string sql, *list<auto> bind_args) [
 
     @par Example:
     @code{.py}
-    auto df = DataFrame::readParquet("/data/sales.parquet");
+    DataFrame df = DataFrame::readParquet("/data/sales.parquet");
     printf("Loaded %d rows, %d cols\n", df.numRows(), df.numCols());
     @endcode
 
     @throw DATAFRAME-IO-ERROR if the file cannot be opened or parsed
     @throw MISSING-FEATURE-ERROR if Apache Arrow is not installed
 */
-static auto DataFrame::readParquet(string path) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
+static DataFrame DataFrame::readParquet(string path) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = QoreDataFrame::readParquet(path->c_str(), xsink);
     if (!result) {
         return QoreValue();
@@ -752,11 +747,11 @@ nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [d
 
     @par Example:
     @code{.py}
-    auto df2 = df.withColumn("rank", df.rowNumber({"order_by": ("score",)}));
+    DataFrame df2 = df.withColumn("rank", df.rowNumber({"order_by": ("score",)}));
     @endcode
 
 */
-auto DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->withColumn(name->c_str(), data, xsink);
     if (!result) {
         return QoreValue();
@@ -776,11 +771,11 @@ auto DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_ONLY] 
     @par Example:
     @code{.py}
     # Long: name, metric, value → Wide: name, metric1, metric2
-    auto wide = df.pivot("name", "metric", "value");
+    DataFrame wide = df.pivot("name", "metric", "value");
     @endcode
 
 */
-auto DataFrame::pivot(string index_col, string columns_col, string values_col, *string agg_func) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::pivot(string index_col, string columns_col, string values_col, *string agg_func) [flags=RET_VALUE_ONLY] {
     std::string func = agg_func ? agg_func->c_str() : "sum";
     QoreDataFrame* result = df->pivot(index_col->c_str(), columns_col->c_str(),
         values_col->c_str(), func, xsink);
@@ -801,11 +796,11 @@ auto DataFrame::pivot(string index_col, string columns_col, string values_col, *
 
     @par Example:
     @code{.py}
-    auto long_df = df.melt(("name",), ("score", "age"), "metric", "value");
+    DataFrame long_df = df.melt(("name",), ("score", "age"), "metric", "value");
     @endcode
 
 */
-auto DataFrame::melt(list<string> id_vars, *list<string> value_vars, *string var_name, *string value_name) [flags=RET_VALUE_ONLY] {
+DataFrame DataFrame::melt(list<string> id_vars, *list<string> value_vars, *string var_name, *string value_name) [flags=RET_VALUE_ONLY] {
     std::string vn = var_name ? var_name->c_str() : "variable";
     std::string val_n = value_name ? value_name->c_str() : "value";
     QoreDataFrame* result = df->melt(id_vars, value_vars, vn, val_n, xsink);
@@ -824,7 +819,7 @@ auto DataFrame::melt(list<string> id_vars, *list<string> value_vars, *string var
     @par Example:
     @code{.py}
     list<int> rn = df.rowNumber({"partition_by": ("dept",), "order_by": ("salary",)});
-    auto df2 = df.withColumn("row_num", rn);
+    DataFrame df2 = df.withColumn("row_num", rn);
     @endcode
 
 */

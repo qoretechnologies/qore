@@ -24,9 +24,71 @@
     - @ref DataFrame::DataFrame "DataFrame" - the columnar data structure
     - @ref DataFrame::GroupedDataFrame "GroupedDataFrame" - grouped DataFrame for aggregation
 
+    Result hashdecls:
+    - @ref DataFrame::DataFrameShape "DataFrameShape" - returned by
+      @ref DataFrame::DataFrame::shape() "DataFrame::shape()"
+    - @ref DataFrame::ColumnStats "ColumnStats" - returned by
+      @ref DataFrame::DataFrame::describe() "DataFrame::describe()"
+    - @ref DataFrame::CsvOptions "CsvOptions" - accepted by
+      @ref DataFrame::DataFrame::readCSV() "DataFrame::readCSV()" and
+      @ref DataFrame::DataFrame::writeCSV() "DataFrame::writeCSV()"
+
+    @section dataframe_typed_examples Typed DataFrame Examples
+
+    DataFrame methods that produce another frame now declare
+    @ref DataFrame::DataFrame "DataFrame" directly, and grouped operations
+    declare @ref DataFrame::GroupedDataFrame "GroupedDataFrame" or
+    @ref DataFrame::DataFrame "DataFrame" according to the value returned.
+    Methods that return fixed record shapes use typed hashdecls:
+
+    @code{.py}
+%requires dataframe
+
+DataFrame::DataFrame employees(
+    ({"dept": "sales", "name": "Alice", "salary": 65000.0},
+     {"dept": "sales", "name": "Bob", "salary": 70000.0},
+     {"dept": "eng", "name": "Carol", "salary": 95000.0}));
+
+hash<DataFrame::DataFrameShape> shape = employees.shape();
+printf("rows=%d cols=%d\n", shape.rows, shape.cols);
+
+DataFrame::DataFrame sales = employees.filter("dept", "==", "sales");
+DataFrame::GroupedDataFrame grouped = employees.groupBy(("dept",));
+DataFrame::DataFrame means = grouped.mean();
+
+list<hash<DataFrame::ColumnStats>> stats = employees.describe();
+foreach hash<DataFrame::ColumnStats> stat in (stats) {
+    printf("%s: %s count=%d\n", stat.name, stat.dtype, stat.count);
+}
+    @endcode
+
+    CSV option hashes can also be typed explicitly:
+
+    @code{.py}
+hash<DataFrame::CsvOptions> options = {
+    "separator": "\t",
+    "header": True,
+    "null_string": "NULL",
+};
+
+DataFrame::DataFrame tsv = DataFrame::DataFrame::readCSV("employees.tsv", options);
+tsv.writeCSV("employees-copy.tsv", options);
+    @endcode
+
+    A DataFrame itself is intentionally not generic. Operations such as
+    select(), groupBy(), join(), pivot(), and melt() can change the row shape
+    at runtime based on selected columns or remote data. Use typed hashdecls
+    for stable result records and \c hash<auto> for dynamic rows.
+
     @section dataframerelease dataframe Module Release History
 
     @subsection dataframe_1_0 dataframe Module Version 1.0
     - initial public release with full SQL-like query operations, CSV/Parquet/database I/O,
       and ML integration
+    - API metadata and generated Doxygen signatures identify DataFrame-returning
+      operations as @ref DataFrame::DataFrame "DataFrame", grouped operations as
+      @ref DataFrame::GroupedDataFrame "GroupedDataFrame", and fixed result
+      hashes as @ref DataFrame::DataFrameShape "DataFrameShape",
+      @ref DataFrame::ColumnStats "ColumnStats", and
+      @ref DataFrame::CsvOptions "CsvOptions"
 */

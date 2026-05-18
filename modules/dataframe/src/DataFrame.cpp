@@ -168,7 +168,7 @@ QoreListNode* QoreDataFrame::dtypes(ExceptionSink* xsink) const {
 
 QoreHashNode* QoreDataFrame::shape(ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
-    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclDataFrameShape, xsink), xsink);
     h->setKeyValue("rows", n_rows, xsink);
     h->setKeyValue("cols", (int64_t)columns.size(), xsink);
     return h.release();
@@ -349,10 +349,10 @@ QoreListNode* QoreDataFrame::describe(ExceptionSink* xsink) const {
         return nullptr;
     }
     std::lock_guard<std::mutex> lk(mtx);
-    ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> result(new QoreListNode(hashdeclColumnStats->getTypeInfo()), xsink);
 
     for (const auto& col : columns) {
-        ReferenceHolder<QoreHashNode> stats(new QoreHashNode(autoTypeInfo), xsink);
+        ReferenceHolder<QoreHashNode> stats(new QoreHashNode(hashdeclColumnStats, xsink), xsink);
         const ColumnData& cd = *col.data;
 
         stats->setKeyValue("name", new QoreStringNode(col.name), xsink);

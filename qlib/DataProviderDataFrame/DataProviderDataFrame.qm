@@ -48,4 +48,28 @@ module DataProviderDataFrame {
 
     The module registers a \c dataframe data provider factory that creates DataFrames
     from records and exposes them as searchable data providers.
+
+    @par Typed Iterator Example
+    @code{.py}
+%requires DataProviderDataFrame
+
+DataFrame::DataFrame frame(
+    ({"name": "Alice", "score": 95.5},
+     {"name": "Bob", "score": 88.0}));
+
+DataProviderDataFrame::DataFrameDataProvider provider(frame);
+AbstractDataProviderRecordIterator<hash<auto>> iter = provider.searchRecords();
+while (iter.next()) {
+    hash<auto> rec = iter.getValue();
+    printf("%s: %y\n", rec.name, rec.score);
+}
+    @endcode
+
+    @section dataproviderdataframe_relnotes DataProviderDataFrame Release Notes
+
+    @subsection dataproviderdataframe_v1_0 DataProviderDataFrame v1.0
+    - Initial release of the module
+    - DataFrame record iterators declare
+      <tt>AbstractDataProviderRecordIterator&lt;hash&lt;auto&gt;&gt;</tt> because row
+      shape is determined by the DataFrame schema at runtime
 */

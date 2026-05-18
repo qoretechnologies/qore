@@ -241,38 +241,50 @@ data behind a misleading type parameter.
 
 Core candidate checklist:
 
-- [ ] Evaluate `RangeIterator`: it can likely become generic with default
-  integer/value inference, but its value-producing overloads need careful
-  compatibility rules.
-- [ ] Evaluate `TreeMap`: likely candidate for `TreeMap<K, V>` if key and value
-  signatures consistently preserve those types.
-- [ ] Evaluate `HashListIterator` / `ListHashIterator` and reverse variants for
-  `hash<RecT>` result typing or keep them at `hash<auto>` if hash shapes are
-  inherently dynamic.
-- [ ] Evaluate `MongoCursor` in the shipped mongodb module as
-  `MongoCursor<DocT = hash<auto>>`, with `next()` returning `*DocT` and
-  `toList()` returning `list<DocT>`.
-- [ ] Evaluate logger queue internals for `Queue<LoggerEvent>` and typed event
-  hashes without changing intentionally dynamic logger APIs.
-- [ ] Evaluate connection/pool abstractions for a resource type parameter only
-  if subclasses can state a stable `AbstractPoolableResource` subtype.
+- [x] Evaluate `RangeIterator`: deferred. Its constructors can produce either
+  integer sequence values or an arbitrary caller-supplied value. A single class
+  type parameter would hide that overload-dependent behavior unless a separate
+  design splits the integer iterator from the value-repeating iterator.
+- [x] Evaluate `TreeMap`: implemented as `TreeMap<V>`. Keys remain path strings;
+  a separate key type parameter would be misleading because the key API is not
+  a generic map key contract.
+- [x] Evaluate `HashListIterator` / `ListHashIterator` and reverse variants:
+  deferred. These iterators flatten runtime hash/list shapes and often produce
+  heterogeneous `hash<auto>` records, so `hash<RecT>` would overstate row-shape
+  stability.
+- [x] Evaluate `MongoCursor` in the shipped mongodb module: implemented as
+  `MongoCursor<DocT: hash<auto> = hash<auto>>`, with `next()` returning
+  `*DocT` and `toList()` returning `list<DocT>`.
+- [x] Evaluate logger queue internals for `Queue<LoggerEvent>` and typed event
+  hashes: deferred for public APIs. Logger event payloads are intentionally
+  dynamic hashes; queue internals can be tightened later without exposing a
+  public generic class contract.
+- [x] Evaluate connection/pool abstractions for a resource type parameter:
+  deferred. Pool/resource subclasses do not currently expose one stable
+  `AbstractPoolableResource` subtype across the public API.
 
 Qlib candidate checklist:
 
 - [ ] Convert remaining qlib record iterators that already return one stable
   record shape to `AbstractDataProviderRecordIterator<RecT>` or
   `DefaultRecordIterator<RecT>`.
-- [ ] Review provider-specific iterators in MongoDB, ServiceNow, Salesforce,
+- [x] Review provider-specific iterators in MongoDB and DataFrame for this
+  branch. `MongoDbRecordIterator` and `DataFrameRecordIterator` now inherit
+  `AbstractDataProviderRecordIterator<hash<auto>>`; the related
+  `searchRecordsImpl()` methods return the same typed parent.
+- [ ] Review provider-specific iterators in ServiceNow, Salesforce,
   ElasticSearch, SmartSheet, Wave, Jotform, CdsRest/OData, Generator, Qdrant,
-  DataFrame, DbDataProvider, FixedLength, Edifact, CsvUtil, and TableMapper.
-- [ ] Keep provider iterators raw or `hash<auto>` when the record shape depends
+  DbDataProvider, FixedLength, Edifact, CsvUtil, TableMapper, and the broader
+  qlib DataProvider set. This is intentionally left as a follow-up rollout
+  because many providers expose remote-schema or option-dependent records.
+- [x] Keep provider iterators raw or `hash<auto>` when the record shape depends
   on runtime metadata, selected columns, or remote schema discovery.
-- [ ] Update examples to show concrete generic classes where the value type is
+- [x] Update examples to show concrete generic classes where the value type is
   known and keep raw examples only for intentional type erasure.
 
 Shipped binary module candidate checklist:
 
-- [ ] Review bundled `modules/*` QPP classes first: dataframe, logger_bin,
+- [x] Review bundled `modules/*` QPP classes first: dataframe, logger_bin,
   mongodb, tokenizer, protobuf, i18n, astparser, reflection, ml, and ocr.
 - [ ] Review external `~/src/qore/git/module-*` repos that are delivered with
   Qore, prioritizing iterator/cursor/message APIs: json/ndjson, yaml, xml/sax,
@@ -284,3 +296,18 @@ Shipped binary module candidate checklist:
 - [ ] Update module Doxygen examples, release notes, generated `.meta.json`, and
   focused module tests for each conversion.
 - [ ] Apply `audit-changes` before each module commit.
+
+Bundled module review results:
+
+| Module | Decision |
+|--------|----------|
+| `dataframe` | Processed. The class is not generic because row shape changes by operation. DataFrame-returning APIs now return `DataFrame`, grouped APIs return `GroupedDataFrame` / `DataFrame`, and stable hashes use `DataFrameShape`, `ColumnStats`, and `CsvOptions`. |
+| `mongodb` | Processed. `MongoCursor<DocT: hash<auto> = hash<auto>>` preserves the document type through `next()` and `toList()`. MongoDbDataProvider uses `MongoCursor<hash<auto>>` and typed record iterators. |
+| `logger_bin` | No public generic class conversion in this pass. Event hashes are intentionally dynamic; queue internals can be revisited without changing the public API. |
+| `tokenizer` | No class-level generic candidate. Tokenizer result/option hashes are runtime-schema records; consider typed hashdecl cleanup separately. |
+| `protobuf` | No safe class-level generic candidate. Message hashes are schema-selected by the runtime protobuf type name. |
+| `i18n` | No safe class-level generic candidate. Catalogs, locale contexts, options, and stats are metadata hashes rather than carried value types. |
+| `astparser` | No data-container generic candidate. Generic syntax support is parser/tooling behavior, not a public generic object family. |
+| `reflection` | Already exposes generic class/hashdecl metadata and type arguments; reflection objects are handles to runtime metadata, not generic containers. |
+| `ml` | No class-level generic candidate. Models, matrices, and transform outputs are numeric or fitted-schema driven; existing typed result hashdecls remain the right surface. |
+| `ocr`, `krb5`, `linenoise` | No stable carried value type identified for class-level generics. |

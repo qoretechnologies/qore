@@ -42,7 +42,7 @@ MongoCollection users = db.getCollection("users");
 hash<auto> result = users.insertOne({"name": "John", "age": 30});
 
 # Find documents
-MongoCursor cursor = users.find({"age": {"$gt": 25}});
+MongoCursor<hash<auto>> cursor = users.find({"age": {"$gt": 25}});
 while (*hash<auto> doc = cursor.next()) {
     printf("Found: %y\n", doc);
 }
@@ -109,7 +109,7 @@ hash<auto> MongoCollection::insertMany(list<hash<auto>> documents) {
 //! Finds documents in the collection
 /** @param filter the query filter (optional, empty hash matches all)
     @param opts find options (optional): @c projection, @c sort, @c limit, @c skip
-    @return a MongoCursor for iterating the results
+    @return a MongoCursor<hash<auto>> for iterating the results
 
     @par Example:
     @code{.py}
@@ -310,7 +310,7 @@ bool MongoCollection::drop() {
 
 //! Runs an aggregation pipeline on the collection
 /** @param pipeline a list of pipeline stages
-    @return a MongoCursor for iterating the results
+    @return a MongoCursor<hash<auto>> for iterating the results
 
     @par Example:
     @code{.py}
