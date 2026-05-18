@@ -1,14 +1,15 @@
 # Generic Class Future Work Checklist
 
-This checklist covers generic class type work that remains after the core
-source/builtin generic class, generic hashdecl, static generic method,
-method-level generic, default type argument, bounded type argument, and explicit
-generic call type argument implementation.
+This checklist covers generic class type work after the core source/builtin
+generic class, generic hashdecl, static generic method, method-level generic,
+default type argument, bounded type argument, and explicit generic call type
+argument implementation.
 
-The work is intentionally split into semantic phases. Variance changes type
-compatibility, expression-site inference depends on those compatibility rules,
-and specialized code generation should only run after the language semantics are
-stable.
+Phases 1-5 are complete in the current branch. The open follow-on work starts at
+Phase 6 and is intentionally split by risk: native AOT specialization affects
+performance and code size, static factory inference changes accepted syntax, and
+API rollout touches broad public surfaces in core qlib and shipped binary
+modules.
 
 ## Phase 1: Variance And Wildcard Type Arguments
 
@@ -149,9 +150,137 @@ verification before the final commit:
 - [x] `build/generic-classes-qtest-aot`
 - [x] `build/qore modules/astparser/test/astparser.qtest`
 - [x] Relevant docs fast targets, such as `make docs-lang-final-fast`.
-- [x] Full `./run_tests.sh` attempted; branch regressions found by the run were
-  fixed and rechecked with focused tests. The remaining local failures are
-  environment/data setup issues: PostgreSQL is not running, the Qorus test data
-  index is not readable, and Tesseract English data is missing.
+- [ ] Re-run full `./run_tests.sh` after installing Tesseract English data. The
+  previous full run passed 653/654 tests with only
+  `examples/test/qlib/QoreOcrUtils/QoreOcrUtils.qtest` failing due missing
+  `eng.traineddata`; the focused OCR qtest now passes after installing
+  `tesseract-ocr-eng`.
 - [x] Final post-cleanup `git diff --check`.
 - [x] Apply `audit-changes` before each commit.
+
+## Phase 6: Source-Stripped AOT Native Generic Specialization
+
+Goal: decide with benchmark data whether source-stripped AOT should emit
+separate native bodies for concrete generic type-argument tuples, then implement
+it only if the speedup justifies the code size and metadata complexity.
+
+Design checklist:
+
+- [ ] Add benchmarks that compare AST, IR, JIT, current AOT, and source-stripped
+  AOT for hot generic class methods, method-level generic functions, static
+  generic methods, and generic hashdecl-heavy result records.
+- [ ] Define a minimum improvement threshold before implementing native AOT
+  specialization, for example a material speedup on hot generic dispatch or type
+  substitution benchmarks without unacceptable binary growth.
+- [ ] Define specialization keys for AOT native entry points: source body id,
+  receiver class type arguments, method/function type arguments, and any
+  parameterized hashdecl paths needed by the lowered body.
+- [ ] Decide whether specialized AOT entry points are emitted eagerly from known
+  source call sites, lazily from a load-time/runtime cache, or both.
+- [ ] Define code-size controls: per-body specialization limits, fallback to the
+  generic metadata path, and diagnostics or counters for skipped
+  specializations.
+- [ ] Preserve source observability: stack traces, reflection, profiling names,
+  and error locations must continue to identify the source method/function.
+
+Implementation checklist:
+
+- [ ] Extend AOT metadata to record specialization descriptors without changing
+  source-visible type identity.
+- [ ] Teach qcc/AOT lowering to substitute concrete type arguments into native
+  bodies using the same rules as IR/JIT specialization.
+- [ ] Add a dispatch path that selects a matching specialized native entry point
+  and falls back to the generic runtime metadata path when no match exists.
+- [ ] Preserve compatibility for old AOT artifacts and modules built without
+  generic support.
+- [ ] Add correctness tests for source-stripped modules with mixed
+  instantiations, nested generic hashdecls, static generic methods, and fallback
+  paths.
+- [ ] Add performance tests that report both runtime and generated artifact size.
+
+## Phase 7: Broader Static Factory Receiver Inference
+
+Goal: allow raw generic static factory calls to infer the receiver type from
+static method arguments when the binding is unique and all bounds/defaults can
+be checked, while preserving precise ambiguity diagnostics.
+
+Design checklist:
+
+- [ ] Support inference for calls such as `Factory::make(1)` when a static method
+  signature mentions class type parameters in argument positions and produces a
+  unique `Factory<int>` receiver.
+- [ ] Keep explicit receiver types authoritative:
+  `Factory<string>::make(...)` must not be rewritten by argument inference.
+- [ ] Keep target/return-context inference as the first choice when present, then
+  use argument-based receiver inference only for otherwise unbound raw generic
+  static calls.
+- [ ] Integrate method-level type-parameter inference and class receiver
+  inference so method type arguments and class type arguments do not bind each
+  other inconsistently.
+- [ ] Reject calls with ambiguous overload-derived bindings, unbound required
+  class type parameters, conflicting defaulted parameters, or failed bounds.
+- [ ] Define diagnostics that suggest the explicit spelling, for example
+  `Factory<int>::make(...)`.
+
+Implementation checklist:
+
+- [ ] Reuse constructor/method generic inference helpers for static method
+  variant selection before final receiver substitution.
+- [ ] Thread named-call argument mapping into static receiver inference.
+- [ ] Preserve inferred receiver types through IR, JIT specialization keys, and
+  AOT expression metadata.
+- [ ] Add tests for argument inference, defaults, bounds, named arguments,
+  overload ambiguity, method-level generic interaction, AST/IR/JIT/tiered modes,
+  and source-stripped AOT.
+
+## Phase 8: Core, Qlib, And Shipped Binary Module Generic API Rollout
+
+Goal: finish applying generics where the API has a stable logical value type,
+and avoid generics where they would hide heterogeneous or operation-dependent
+data behind a misleading type parameter.
+
+Core candidate checklist:
+
+- [ ] Evaluate `RangeIterator`: it can likely become generic with default
+  integer/value inference, but its value-producing overloads need careful
+  compatibility rules.
+- [ ] Evaluate `TreeMap`: likely candidate for `TreeMap<K, V>` if key and value
+  signatures consistently preserve those types.
+- [ ] Evaluate `HashListIterator` / `ListHashIterator` and reverse variants for
+  `hash<RecT>` result typing or keep them at `hash<auto>` if hash shapes are
+  inherently dynamic.
+- [ ] Evaluate `MongoCursor` in the shipped mongodb module as
+  `MongoCursor<DocT = hash<auto>>`, with `next()` returning `*DocT` and
+  `toList()` returning `list<DocT>`.
+- [ ] Evaluate logger queue internals for `Queue<LoggerEvent>` and typed event
+  hashes without changing intentionally dynamic logger APIs.
+- [ ] Evaluate connection/pool abstractions for a resource type parameter only
+  if subclasses can state a stable `AbstractPoolableResource` subtype.
+
+Qlib candidate checklist:
+
+- [ ] Convert remaining qlib record iterators that already return one stable
+  record shape to `AbstractDataProviderRecordIterator<RecT>` or
+  `DefaultRecordIterator<RecT>`.
+- [ ] Review provider-specific iterators in MongoDB, ServiceNow, Salesforce,
+  ElasticSearch, SmartSheet, Wave, Jotform, CdsRest/OData, Generator, Qdrant,
+  DataFrame, DbDataProvider, FixedLength, Edifact, CsvUtil, and TableMapper.
+- [ ] Keep provider iterators raw or `hash<auto>` when the record shape depends
+  on runtime metadata, selected columns, or remote schema discovery.
+- [ ] Update examples to show concrete generic classes where the value type is
+  known and keep raw examples only for intentional type erasure.
+
+Shipped binary module candidate checklist:
+
+- [ ] Review bundled `modules/*` QPP classes first: dataframe, logger_bin,
+  mongodb, tokenizer, protobuf, i18n, astparser, reflection, ml, and ocr.
+- [ ] Review external `~/src/qore/git/module-*` repos that are delivered with
+  Qore, prioritizing iterator/cursor/message APIs: json/ndjson, yaml, xml/sax,
+  geos, openldap, mongodb, zip/tar streams, grpc streams, nats/amqp/zmq
+  messaging, and database driver cursors or result records.
+- [ ] Convert one module family at a time, guarded by `QORE_HAVE_GENERIC_CLASSES`
+  or equivalent configure checks where the module must also build against plain
+  develop.
+- [ ] Update module Doxygen examples, release notes, generated `.meta.json`, and
+  focused module tests for each conversion.
+- [ ] Apply `audit-changes` before each module commit.

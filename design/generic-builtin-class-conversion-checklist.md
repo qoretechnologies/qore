@@ -37,8 +37,9 @@ Avoid conversion when:
   parameter.
 - Existing APIs deliberately accept arbitrary payloads and return unrelated
   shapes.
-- Method overloads would require variance, wildcard, or expression-site
-  inference semantics that are not implemented yet.
+- Method overloads would require inference beyond the implemented conservative
+  rules, or would need wildcard/variance behavior that cannot be explained
+  clearly at the call site.
 - The class is source-defined Qore code but cannot state a stable type
   parameter contract without misleading callers.
 

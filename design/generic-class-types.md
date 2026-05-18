@@ -359,10 +359,21 @@ For `~/src/qore/git/module-*`, migrate generic APIs conservatively:
 
 ## Known Limits
 
-The following are intentionally not part of this implementation:
+The following are intentionally not part of the current core implementation or
+still require rollout work:
 
-- source-stripped AOT native body generation per type-argument tuple
-- API metadata for structured wildcard type arguments
+- Source-stripped AOT native body generation per type-argument tuple remains
+  future work. Source-stripped AOT preserves generic metadata and resolves it at
+  runtime, but it does not yet emit a separate native entry point for every
+  concrete generic instantiation.
+- Static factory receiver inference remains conservative when there is no
+  assignment target or return context. Calls such as `Factory<int>::make(...)`
+  are fully typed, and target/return contexts can infer the receiver type, but a
+  raw `Factory::make(...)` call still requires explicit class type arguments
+  when method checking needs a substitution context.
+- The core tree and shipped modules still need a systematic API rollout pass for
+  additional builtin, QPP, and qlib classes where a stable logical value type is
+  carried through an object.
 
 Concrete class and hashdecl type arguments are invariant unless the annotation
 uses an explicit wildcard. `auto` remains a concrete type argument, not a
@@ -379,11 +390,8 @@ Class type argument inference is intentionally conservative. Method-level
 generic calls can infer call-local type arguments from supplied arguments, and
 generic classes can infer class type arguments from constructor arguments,
 assignment targets, and return contexts where the expected type is reliable.
-Static factory receiver inference remains limited to target or return contexts;
-raw static calls without an expected type still require explicit class type
-arguments when method type checking needs a substitution context.
 
-The future-work checklist is tracked in
+The follow-on work checklist is tracked in
 `design/generic-future-work-checklist.md`.
 
 ## Test Coverage
