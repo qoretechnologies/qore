@@ -130,6 +130,36 @@ class InheritOwnerNonBlockingPollOp inherits Qore::AbstractPollOperation {
     }
 }
 
+# Regression: flushCallbacks() must NOT wait for an in-flight continuePoll().
+# continuePoll() can block indefinitely (production: a connection-monitor ping
+# doing an OAuth2 token refresh / happy-eyeballs connect via waitForNotifier()
+# against an unreachable endpoint).  Counting it toward dispatcher "idle"
+# wedged HttpServer::stop()->flushCallbacks() forever (qorus-core shutdown
+# deadlock).  This op's continuePoll() blocks until the test releases it.
+class FlushBlockingContinuePollOp inherits Qore::AbstractPollOperation {
+    public {
+        Counter entered(1);   # dec'd once continuePoll() is in-flight
+        Queue release();      # test pushes to unblock continuePoll()
+    }
+    private {
+        bool done = False;
+    }
+    string getGoal() { return "fc-blocking"; }
+    string getState() { return done ? "done" : "blocking"; }
+    bool goalReached() { return done; }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (done) {
+            return NOTHING;
+        }
+        # signal in-flight, then BLOCK here (holds qore_continue_poll_lock)
+        entered.dec();
+        release.get();
+        done = True;
+        return NOTHING;
+    }
+}
+
 public class AsyncSocketIoTest inherits QUnit::Test {
     public {
         const VALUE_TEXT = {
@@ -199,6 +229,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("waitForNotifier explicit safety timeout", \waitForNotifierExplicitSafetyTimeoutTest());
         addTestCase("cancel then resubmit same socket accepted", \cancelThenResubmitSameSocketTest());
         addTestCase("cancelByOwner cascades into nested continuePoll op", \nestedContinuePollInheritedCancelTest());
+        addTestCase("flushCallbacks ignores in-flight continuePoll", \flushCallbacksIgnoresBlockedContinuePollTest());
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -1017,6 +1048,48 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertTrue(elapsed < 20s,
             sprintf("cancelByOwner(parent) freed the nested op via the inherited "
                 "scope promptly (elapsed=%y; pre-fix would be ~120s)", elapsed));
+    }
+
+    #! Fix: flushCallbacks() must return without waiting for an in-flight
+    #! (possibly forever-blocked) continuePoll() — the qorus-core
+    #! HttpServer::stop()->flushCallbacks() shutdown-deadlock scenario.
+    flushCallbacksIgnoresBlockedContinuePollTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        FlushBlockingContinuePollOp op();
+        EventNotifier never();
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": never,
+            "spop": op,
+            "owner": "fc-blk",
+            "to": 120s,
+        });
+        # continuePoll() is now in-flight and blocked (holds the process-global
+        # qore_continue_poll_lock); active_processing > 0 indefinitely
+        op.entered.waitForZero();
+
+        Queue fq();
+        date t0 = now_us();
+        background sub () {
+            io_controller.flushCallbacks();
+            fq.push("done");
+        }();
+        # Pre-fix: flushCallbacks() waits for the in-flight continuePoll
+        # forever -> QUEUE-TIMEOUT here.  Post-fix: returns promptly because
+        # continuePoll dispatches are excluded from the callback-idle barrier.
+        string r = fq.get(15s);
+        date elapsed = now_us() - t0;
+        assertEq("done", r, "flushCallbacks() returned");
+        assertTrue(elapsed < 15s,
+            sprintf("flushCallbacks() did not wait for the in-flight "
+                "continuePoll (elapsed=%y)", elapsed));
+
+        # release the blocked continuePoll so the op completes and teardown is
+        # clean (frees qore_continue_poll_lock)
+        op.release.push(True);
+        *hash<SocketPollResultInfo> info = q.get(20s);
+        assertTrue(exists info, "blocking op completed after release");
     }
 
     autostopTest() {

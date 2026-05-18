@@ -781,7 +781,27 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
 
 void QoreCallDispatcher::waitForIdle() {
     AutoLocker al(m);
-    while (!async_queue.empty() || active_processing > 0) {
+    while (true) {
+        // A callback (non-continuePoll) still being processed by a worker?
+        // active_continue_poll is a subset of active_processing; subtract it
+        // so a blocked continuePoll() (OAuth2 refresh / happy-eyeballs) does
+        // not wedge this barrier — see active_continue_poll in the header.
+        if ((active_processing - active_continue_poll) > 0) {
+            idle_cond.wait(m);
+            continue;
+        }
+        // Any queued non-continuePoll (callback) item still pending?  Queued
+        // continuePoll dispatches are intentionally ignored here.
+        bool pending_callback = false;
+        for (const auto& qi : async_queue) {
+            if (qi.type != DT_CONTINUE_POLL) {
+                pending_callback = true;
+                break;
+            }
+        }
+        if (!pending_callback) {
+            break;
+        }
         idle_cond.wait(m);
     }
 }
@@ -846,9 +866,10 @@ void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm, ExceptionSink
             ++it;
         }
     }
-    if (async_queue.empty() && active_processing == 0) {
-        idle_cond.broadcast();
-    }
+    // Unconditional: waitForIdle()'s predicate excludes continuePoll, so
+    // draining the last queued callbacks here must wake it even while a
+    // continuePoll is still in flight (active_processing > 0).
+    idle_cond.broadcast();
 }
 
 void QoreCallDispatcher::clearProgramShuttingDown(QoreProgram* pgm) {
@@ -941,6 +962,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             async_item = async_queue.front();
             async_queue.pop_front();
             ++active_processing;
+            // continuePoll dispatches are excluded from waitForIdle()/
+            // flushCallbacks() (they may block indefinitely on OAuth2/
+            // happy-eyeballs and are torn down via cancel, not flush).
+            if (async_item.type == DT_CONTINUE_POLL) {
+                ++active_continue_poll;
+            }
             // Track per-program active count for targeted flush
             if (async_item.pgm) {
                 ++active_per_program[async_item.pgm];
@@ -1220,6 +1247,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         {
             AutoLocker al(m);
             --active_processing;
+            if (async_item.type == DT_CONTINUE_POLL) {
+                --active_continue_poll;
+            }
             if (async_item.pgm) {
                 auto it = active_per_program.find(async_item.pgm);
                 if (it != active_per_program.end()) {
@@ -1238,9 +1268,13 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     }
                 }
             }
-            if (async_queue.empty() && active_processing == 0) {
-                idle_cond.broadcast();
-            }
+            // Broadcast unconditionally: waitForIdle()'s predicate now
+            // excludes continuePoll, so it can become satisfiable while
+            // active_processing > 0 (continuePolls still in flight).  The
+            // old "fully idle" gate would then never wake it.  Only
+            // waitForIdle() waits on idle_cond and it re-checks under the
+            // lock, so extra wakeups are harmless.
+            idle_cond.broadcast();
         }
 
         // Drop pgm_guard before depDeref: pgm_guard's destructor calls

@@ -163,11 +163,18 @@ public:
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);
 
-    //! Wait for all pending work items to be processed
-    /** Blocks until the async queue is empty AND no workers are actively
-        processing items. Used during shutdown to ensure all onComplete()
-        callbacks are delivered before stopping thread pools that depend
-        on them.
+    //! Wait for all pending callbacks to be processed
+    /** Blocks until no callback work remains: the async queue holds no
+        non-continuePoll items AND no workers are processing a callback
+        (onComplete/abort/callback/stream/poll-complete).  Used during
+        shutdown to ensure all such callbacks are delivered before stopping
+        thread pools that depend on them.
+
+        Deliberately does NOT wait for in-flight DT_CONTINUE_POLL dispatches
+        (see @ref active_continue_poll): a poll op's continuePoll() may block
+        indefinitely (OAuth2 refresh / happy-eyeballs via waitForNotifier())
+        and is torn down via cancel()/cancelByOwner() + op completion, not via
+        this barrier — waiting for it here deadlocks shutdown.
     */
     DLLLOCAL void waitForIdle();
 
@@ -240,6 +247,16 @@ private:
     std::deque<AsyncWorkItem> async_queue;  //!< Pending async work items
     int active_workers = 0;                 //!< Number of running worker threads
     int active_processing = 0;             //!< Number of workers currently processing items
+    //! Number of workers currently inside a DT_CONTINUE_POLL dispatch
+    /** Subset of @ref active_processing.  waitForIdle()/flushCallbacks() must
+        NOT wait for these: a poll op's continuePoll() can legitimately block
+        (e.g. an OAuth2 token refresh / happy-eyeballs connect via
+        waitForNotifier()), its lifecycle is governed by cancel()/cancelByOwner()
+        + op completion, and flushCallbacks() is documented to drain pending
+        onComplete/abort *callbacks* only.  Counting continuePoll here let a
+        blocked ping continuePoll wedge HttpServer::stop()->flushCallbacks()
+        forever (qorus-core shutdown deadlock). */
+    int active_continue_poll = 0;
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
     AsyncIoControllerPriv* ctrl = nullptr;  //!< Owning controller for logging (not ref'd — controller outlives dispatcher)
