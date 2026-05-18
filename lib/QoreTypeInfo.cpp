@@ -358,6 +358,21 @@ struct TypeParameterCacheKey {
 typedef std::map<TypeParameterCacheKey, QoreTypeParameterTypeInfo*> type_parameter_map_t;
 static type_parameter_map_t type_parameter_map;
 
+struct WildcardTypeCacheKey {
+    QoreWildcardKind kind;
+    const QoreTypeInfo* bound;
+
+    bool operator<(const WildcardTypeCacheKey& other) const {
+        if (kind != other.kind) {
+            return kind < other.kind;
+        }
+        return bound < other.bound;
+    }
+};
+
+typedef std::map<WildcardTypeCacheKey, QoreWildcardTypeInfo*> wildcard_type_map_t;
+static wildcard_type_map_t wildcard_type_map;
+
 // rwlock for global type map
 static QoreRWLock extern_type_info_map_lock;
 
@@ -481,6 +496,9 @@ void delete_qore_types() {
         delete i.second;
     // Clean up symbolic class type parameter cache
     for (auto& i : type_parameter_map)
+        delete i.second;
+    // Clean up wildcard type argument cache
+    for (auto& i : wildcard_type_map)
         delete i.second;
 }
 
@@ -916,6 +934,57 @@ QoreTypeParameterTypeSpec::QoreTypeParameterTypeSpec(const QoreTypeParameterType
         : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_TYPEPARAM) {
 }
 
+static QoreString build_wildcard_type_name(QoreWildcardKind kind, const QoreTypeInfo* bound, bool path) {
+    QoreString rv("?");
+    if (kind == QoreWildcardKind::Extends) {
+        rv.concat(" extends ");
+        rv.concat(path ? QoreTypeInfo::getPath(bound) : QoreTypeInfo::getName(bound));
+    } else if (kind == QoreWildcardKind::Super) {
+        rv.concat(" super ");
+        rv.concat(path ? QoreTypeInfo::getPath(bound) : QoreTypeInfo::getName(bound));
+    }
+    return rv;
+}
+
+static q_accept_vec_t make_wildcard_accept_vec(const QoreWildcardTypeInfo* ti, QoreWildcardKind kind,
+        const QoreTypeInfo* bound) {
+    q_accept_vec_t rv {{QoreWildcardTypeSpec(ti), nullptr, true}};
+    if (kind != QoreWildcardKind::Super || !bound) {
+        return rv;
+    }
+    rv.reserve(bound->getAcceptVecSize() + 1);
+    for (const QoreAcceptSpec& spec : bound->getAcceptSpecs()) {
+        rv.push_back(spec);
+    }
+    return rv;
+}
+
+static q_return_vec_t make_wildcard_return_vec(QoreWildcardKind kind, const QoreTypeInfo* bound) {
+    if (kind == QoreWildcardKind::Extends && bound) {
+        q_return_vec_t rv;
+        rv.reserve(bound->return_vec.size());
+        for (const QoreReturnSpec& spec : bound->return_vec) {
+            rv.push_back(spec);
+        }
+        return rv;
+    }
+    return q_return_vec_t {{NT_ALL}};
+}
+
+QoreWildcardTypeInfo::QoreWildcardTypeInfo(QoreWildcardKind n_kind, const QoreTypeInfo* n_bound)
+        : QoreTypeInfo(make_wildcard_accept_vec(this, n_kind, n_bound),
+            make_wildcard_return_vec(n_kind, n_bound),
+            build_wildcard_type_name(n_kind, n_bound, false)),
+        kind(n_kind),
+        bound(n_bound) {
+    assert(kind == QoreWildcardKind::Unbounded || bound);
+    pname = build_wildcard_type_name(kind, bound, true).c_str();
+}
+
+QoreWildcardTypeSpec::QoreWildcardTypeSpec(const QoreWildcardTypeInfo* ti)
+        : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_WILDCARD) {
+}
+
 const QoreTypeInfo* qore_get_parameterized_class_type(const QoreClass* qc,
         const std::vector<const QoreTypeInfo*>& args, bool or_nothing) {
     assert(qc);
@@ -1016,6 +1085,212 @@ const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* 
 
 const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(const QoreTypeInfo* ti) {
     return dynamic_cast<const QoreTypeParameterTypeInfo*>(ti);
+}
+
+static const QoreTypeInfo* qore_get_wildcard_type_intern(QoreWildcardKind kind, const QoreTypeInfo* bound) {
+    assert(kind == QoreWildcardKind::Unbounded || bound);
+
+    if (kind == QoreWildcardKind::Unbounded) {
+        bound = nullptr;
+    } else if (bound == autoNoNarrowTypeInfo) {
+        bound = autoTypeInfo;
+    }
+
+    AutoLocker al(ctl);
+
+    WildcardTypeCacheKey key {kind, bound};
+    wildcard_type_map_t::iterator i = wildcard_type_map.lower_bound(key);
+    if (i != wildcard_type_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreWildcardTypeInfo* ti = new QoreWildcardTypeInfo(kind, bound);
+    wildcard_type_map.insert(i, wildcard_type_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_wildcard_type() {
+    return qore_get_wildcard_type_intern(QoreWildcardKind::Unbounded, nullptr);
+}
+
+const QoreTypeInfo* qore_get_wildcard_extends_type(const QoreTypeInfo* bound) {
+    assert(bound);
+    return qore_get_wildcard_type_intern(QoreWildcardKind::Extends, bound);
+}
+
+const QoreTypeInfo* qore_get_wildcard_super_type(const QoreTypeInfo* bound) {
+    assert(bound);
+    return qore_get_wildcard_type_intern(QoreWildcardKind::Super, bound);
+}
+
+bool qore_type_contains_wildcard(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return false;
+    }
+    if (QoreTypeInfo::getWildcardType(ti)) {
+        return true;
+    }
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
+            if (qore_type_contains_wildcard(arg)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (const TypedHashDecl* hd = QoreTypeInfo::getTypedHash(ti)) {
+        const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+        if (hp->isParameterizedHashDecl()) {
+            for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
+                if (qore_type_contains_wildcard(arg)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+static qore_type_result_e qore_wildcard_accepts(const QoreWildcardTypeInfo* target_wc,
+        const QoreTypeInfo* source_arg, bool& may_not_match, bool& may_need_filter) {
+    assert(target_wc);
+    if (target_wc->getKind() == QoreWildcardKind::Unbounded) {
+        may_not_match = true;
+        return QTI_AMBIGUOUS;
+    }
+
+    const QoreTypeInfo* bound = target_wc->getBound();
+    assert(bound);
+    if (target_wc->getKind() == QoreWildcardKind::Extends) {
+        qore_type_result_e max_result = QTI_NOT_EQUAL;
+        qore_type_result_e rv = QoreTypeInfo::parseAccepts(bound, source_arg, may_not_match, may_need_filter,
+            max_result);
+        return rv == QTI_NOT_EQUAL ? rv : QTI_AMBIGUOUS;
+    }
+
+    qore_type_result_e max_result = QTI_NOT_EQUAL;
+    qore_type_result_e rv = QoreTypeInfo::parseAccepts(source_arg, bound, may_not_match, may_need_filter,
+        max_result);
+    return rv == QTI_NOT_EQUAL ? rv : QTI_AMBIGUOUS;
+}
+
+qore_type_result_e qore_generic_type_arg_accepts(const QoreTypeInfo* target_arg,
+        const QoreTypeInfo* source_arg, bool& may_not_match, bool& may_need_filter) {
+    if (QoreTypeInfo::equal(target_arg, source_arg)) {
+        return QTI_IDENT;
+    }
+
+    const QoreWildcardTypeInfo* target_wc = QoreTypeInfo::getWildcardType(target_arg);
+    if (!target_wc) {
+        return QTI_NOT_EQUAL;
+    }
+
+    const QoreWildcardTypeInfo* source_wc = QoreTypeInfo::getWildcardType(source_arg);
+    if (!source_wc) {
+        return qore_wildcard_accepts(target_wc, source_arg, may_not_match, may_need_filter);
+    }
+
+    if (target_wc->getKind() == QoreWildcardKind::Unbounded) {
+        may_not_match = true;
+        return QTI_AMBIGUOUS;
+    }
+
+    if (target_wc->getKind() == source_wc->getKind() && source_wc->getBound()) {
+        return qore_wildcard_accepts(target_wc, source_wc->getBound(), may_not_match, may_need_filter);
+    }
+
+    return QTI_NOT_EQUAL;
+}
+
+qore_type_result_e qore_parameterized_class_accepts(const QoreParameterizedClassTypeInfo* target_pti,
+        const QoreTypeInfo* source_type, bool& may_not_match, bool& may_need_filter) {
+    assert(target_pti);
+    const QoreParameterizedClassTypeInfo* source_pti = QoreTypeInfo::getParameterizedClassType(source_type);
+    if (!source_pti) {
+        return QTI_NOT_EQUAL;
+    }
+
+    const QoreTypeInfo* mapped_type = qore_class_private::get(*source_pti->getBaseClass())
+        ->getParameterizedBaseTypeInfo(source_pti, target_pti->getBaseClass());
+    const QoreParameterizedClassTypeInfo* mapped_pti = QoreTypeInfo::getParameterizedClassType(mapped_type);
+    if (!mapped_pti || mapped_pti->getArgCount() != target_pti->getArgCount()) {
+        return QTI_NOT_EQUAL;
+    }
+
+    qore_type_result_e rv = QTI_IDENT;
+    const type_vec_t& target_args = target_pti->getTypeArgs();
+    const type_vec_t& source_args = mapped_pti->getTypeArgs();
+    for (size_t i = 0, e = target_args.size(); i < e; ++i) {
+        qore_type_result_e arg_rv = qore_generic_type_arg_accepts(target_args[i], source_args[i], may_not_match,
+            may_need_filter);
+        if (arg_rv == QTI_NOT_EQUAL) {
+            return QTI_NOT_EQUAL;
+        }
+        if (arg_rv < rv) {
+            rv = arg_rv;
+        }
+    }
+    return rv;
+}
+
+static const TypedHashDecl* qore_get_hashdecl_base(const TypedHashDecl* hd) {
+    const typed_hash_decl_private* hp = typed_hash_decl_private::get(*hd);
+    return hp->isParameterizedHashDecl() ? hp->getParameterizedBase() : hd;
+}
+
+static const TypedHashDecl* qore_get_hashdecl_mapped_to_base(const TypedHashDecl* source_hd,
+        const TypedHashDecl* target_base) {
+    const TypedHashDecl* current = source_hd;
+    while (current) {
+        const TypedHashDecl* current_base = qore_get_hashdecl_base(current);
+        if (typed_hash_decl_private::get(*current_base)->equal(*typed_hash_decl_private::get(*target_base))) {
+            return current;
+        }
+        current = typed_hash_decl_private::get(*current)->getParentHashDecl();
+    }
+    return nullptr;
+}
+
+qore_type_result_e qore_parameterized_hashdecl_accepts(const TypedHashDecl* target_hd,
+        const TypedHashDecl* source_hd, bool& may_not_match, bool& may_need_filter) {
+    assert(target_hd);
+    assert(source_hd);
+
+    const typed_hash_decl_private* target_hp = typed_hash_decl_private::get(*target_hd);
+    const typed_hash_decl_private* source_hp = typed_hash_decl_private::get(*source_hd);
+    if (source_hp->equal(*target_hp)) {
+        return QTI_IDENT;
+    }
+
+    const TypedHashDecl* target_base = qore_get_hashdecl_base(target_hd);
+    const TypedHashDecl* mapped_source = qore_get_hashdecl_mapped_to_base(source_hd, target_base);
+    if (!mapped_source) {
+        return QTI_NOT_EQUAL;
+    }
+
+    const typed_hash_decl_private* mapped_hp = typed_hash_decl_private::get(*mapped_source);
+    if (!target_hp->isParameterizedHashDecl() || !mapped_hp->isParameterizedHashDecl()) {
+        return source_hp->isDescendantOf(*target_hp) ? QTI_AMBIGUOUS : QTI_NOT_EQUAL;
+    }
+
+    const type_vec_t& target_args = target_hp->getTypeArgs();
+    const type_vec_t& source_args = mapped_hp->getTypeArgs();
+    if (target_args.size() != source_args.size()) {
+        return QTI_NOT_EQUAL;
+    }
+
+    qore_type_result_e rv = source_hd == mapped_source ? QTI_IDENT : QTI_AMBIGUOUS;
+    for (size_t i = 0, e = target_args.size(); i < e; ++i) {
+        qore_type_result_e arg_rv = qore_generic_type_arg_accepts(target_args[i], source_args[i], may_not_match,
+            may_need_filter);
+        if (arg_rv == QTI_NOT_EQUAL) {
+            return QTI_NOT_EQUAL;
+        }
+        if (arg_rv < rv) {
+            rv = arg_rv;
+        }
+    }
+    return rv == QTI_IDENT && source_hd != mapped_source ? QTI_AMBIGUOUS : rv;
 }
 
 // Helper function to create a normalized key for union type caching
@@ -1130,6 +1405,24 @@ QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str) {
     std::string str(type_str);
     while (!str.empty() && isspace(str.back())) str.pop_back();
     if (str.empty()) return nullptr;
+
+    if (str == "?") {
+        return new QoreParseTypeInfo(QoreWildcardKind::Unbounded);
+    }
+
+    const char* extends_kw = "? extends ";
+    const char* super_kw = "? super ";
+    if (!strncmp(str.c_str(), extends_kw, strlen(extends_kw))
+            || !strncmp(str.c_str(), super_kw, strlen(super_kw))) {
+        QoreWildcardKind kind = str[2] == 'e' ? QoreWildcardKind::Extends : QoreWildcardKind::Super;
+        const char* bound_str = str.c_str() + (kind == QoreWildcardKind::Extends
+            ? strlen(extends_kw) : strlen(super_kw));
+        while (*bound_str && isspace(*bound_str)) {
+            ++bound_str;
+        }
+        QoreParseTypeInfo* bound = qore_parse_type_string_to_pti(bound_str);
+        return new QoreParseTypeInfo(kind, bound ? bound : new QoreParseTypeInfo(strdup("auto")));
+    }
 
     // Check for or-nothing prefix
     bool or_nothing = false;
@@ -1984,6 +2277,8 @@ qore_type_result_e QoreTypeSpec::tryMatchReferenceType(const QoreTypeSpec& t, bo
 qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
     if (typespec == QTS_TYPEPARAM) {
         return QTI_AMBIGUOUS;
+    } else if (typespec == QTS_WILDCARD) {
+        return QTI_NOT_EQUAL;
     } else if (typespec == QTS_CLASS || typespec == QTS_PARAMCLASS) {
         return t == NT_OBJECT ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_HASHDECL || typespec == QTS_COMPLEXHASH) {
@@ -2166,22 +2461,23 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             if (obj && obj->getInstantiatedTypeInfo() == u.ti) {
                 ok = true;
             } else if (obj && obj->getInstantiatedTypeInfo()) {
-                const QoreParameterizedClassTypeInfo* obj_pti =
-                    QoreTypeInfo::getParameterizedClassType(obj->getInstantiatedTypeInfo());
                 const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
-                if (obj_pti && target_pti) {
-                    const QoreTypeInfo* mapped_type = qore_class_private::get(*obj_pti->getBaseClass())
-                        ->getParameterizedBaseTypeInfo(obj_pti, target_pti->getBaseClass());
-                    if (QoreTypeInfo::equal(mapped_type, u.ti)) {
-                        ok = true;
-                    }
+                if (target_pti) {
+                    bool type_may_not_match = false;
+                    bool type_may_need_filter = false;
+                    ok = qore_parameterized_class_accepts(target_pti, obj->getInstantiatedTypeInfo(),
+                        type_may_not_match, type_may_need_filter) != QTI_NOT_EQUAL;
                 }
             } else if (obj) {
                 const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
                 if (target_pti) {
                     const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
                         ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
-                    if (QoreTypeInfo::equal(mapped_type, u.ti)) {
+                    bool type_may_not_match = false;
+                    bool type_may_need_filter = false;
+                    if (QoreTypeInfo::equal(mapped_type, u.ti)
+                            || qore_parameterized_class_accepts(target_pti, mapped_type, type_may_not_match,
+                                type_may_need_filter) != QTI_NOT_EQUAL) {
                         ok = true;
                     }
                 }
@@ -2198,8 +2494,13 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
             if (hd) {
                 const typed_hash_decl_private* target = typed_hash_decl_private::get(*u.hd);
                 const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
+                bool type_may_not_match = false;
+                bool type_may_need_filter = false;
                 // Accept if same hashdecl or source is a descendant of target
-                if (source->equal(*target) || source->isDescendantOf(*target)) {
+                if (source->equal(*target)
+                        || qore_parameterized_hashdecl_accepts(u.hd, hd, type_may_not_match, type_may_need_filter)
+                            != QTI_NOT_EQUAL
+                        || (!target->isParameterizedHashDecl() && source->isDescendantOf(*target))) {
                     ok = true;
                 }
             }
@@ -2372,6 +2673,7 @@ bool QoreTypeSpec::operator==(const QoreTypeSpec& other) const {
             return QoreTypeInfo::equal(u.ti, other.u.ti);
         case QTS_PARAMCLASS:
         case QTS_TYPEPARAM:
+        case QTS_WILDCARD:
             return u.ti == other.u.ti;
         case QTS_HARDREF:
              return true;
@@ -2429,14 +2731,14 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 return exact ? QTI_IDENT : QTI_AMBIGUOUS;
             }
             if (obj->getInstantiatedTypeInfo()) {
-                const QoreParameterizedClassTypeInfo* obj_pti =
-                    QoreTypeInfo::getParameterizedClassType(obj->getInstantiatedTypeInfo());
                 const QoreParameterizedClassTypeInfo* target_pti = getParameterizedClassTypeInfo();
-                if (obj_pti && target_pti) {
-                    const QoreTypeInfo* mapped_type = qore_class_private::get(*obj_pti->getBaseClass())
-                        ->getParameterizedBaseTypeInfo(obj_pti, target_pti->getBaseClass());
-                    if (QoreTypeInfo::equal(mapped_type, u.ti)) {
-                        return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                if (target_pti) {
+                    bool type_may_not_match = false;
+                    bool type_may_need_filter = false;
+                    qore_type_result_e rv = qore_parameterized_class_accepts(target_pti, obj->getInstantiatedTypeInfo(),
+                        type_may_not_match, type_may_need_filter);
+                    if (rv != QTI_NOT_EQUAL) {
+                        return exact && rv == QTI_IDENT ? QTI_IDENT : QTI_AMBIGUOUS;
                     }
                 }
             } else {
@@ -2444,7 +2746,11 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 if (target_pti) {
                     const QoreTypeInfo* mapped_type = qore_class_private::get(*obj->getClass())
                         ->getConcreteParameterizedBaseTypeInfo(target_pti->getBaseClass());
-                    if (QoreTypeInfo::equal(mapped_type, u.ti)) {
+                    bool type_may_not_match = false;
+                    bool type_may_need_filter = false;
+                    if (QoreTypeInfo::equal(mapped_type, u.ti)
+                            || qore_parameterized_class_accepts(target_pti, mapped_type, type_may_not_match,
+                                type_may_need_filter) != QTI_NOT_EQUAL) {
                         return exact ? QTI_IDENT : QTI_AMBIGUOUS;
                     }
                 }
@@ -2464,6 +2770,16 @@ qore_type_result_e QoreTypeSpec::runtimeAcceptsValue(const QoreValue& n, bool ex
                 const typed_hash_decl_private* source = typed_hash_decl_private::get(*hd);
                 if (source->equal(*target)) {
                     return exact ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
+                bool type_may_not_match = false;
+                bool type_may_need_filter = false;
+                qore_type_result_e rv = qore_parameterized_hashdecl_accepts(u.hd, hd, type_may_not_match,
+                    type_may_need_filter);
+                if (rv != QTI_NOT_EQUAL) {
+                    return exact && rv == QTI_IDENT ? QTI_IDENT : QTI_AMBIGUOUS;
+                }
+                if (target->isParameterizedHashDecl()) {
+                    return QTI_NOT_EQUAL;
                 }
                 // Accept if source is a descendant of target (derived → base)
                 if (source->isDescendantOf(*target)) {
@@ -3094,7 +3410,50 @@ static const TypedHashDecl* qore_resolve_runtime_hashdecl_type(const QoreParseTy
     return hp->getParameterizedHashDecl(args);
 }
 
+static const QoreTypeInfo* qore_resolve_parse_wildcard_type_arg(const QoreParseTypeInfo& pti,
+        const QoreProgramLocation* loc, int& err) {
+    if (!pti.isWildcardTypeArg()) {
+        return nullptr;
+    }
+    if (pti.wildcard_kind == QoreWildcardKind::Unbounded) {
+        return qore_get_wildcard_type();
+    }
+
+    const QoreTypeInfo* bound = QoreParseTypeInfo::resolveAny(pti.wildcard_bound, loc, err);
+    if (err) {
+        return autoTypeInfo;
+    }
+    if (QoreTypeInfo::getWildcardType(bound)) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "wildcard type argument '%s' cannot use another wildcard as its "
+            "bound", QoreParseTypeInfo::getName(&pti));
+        err = -1;
+        return autoTypeInfo;
+    }
+    return pti.wildcard_kind == QoreWildcardKind::Extends
+        ? qore_get_wildcard_extends_type(bound)
+        : qore_get_wildcard_super_type(bound);
+}
+
+static const QoreTypeInfo* qore_resolve_runtime_wildcard_type_arg(const QoreParseTypeInfo& pti) {
+    if (!pti.isWildcardTypeArg()) {
+        return nullptr;
+    }
+    if (pti.wildcard_kind == QoreWildcardKind::Unbounded) {
+        return qore_get_wildcard_type();
+    }
+    const QoreTypeInfo* bound = QoreParseTypeInfo::resolveRuntime(pti.wildcard_bound);
+    if (!bound || QoreTypeInfo::getWildcardType(bound)) {
+        return nullptr;
+    }
+    return pti.wildcard_kind == QoreWildcardKind::Extends
+        ? qore_get_wildcard_extends_type(bound)
+        : qore_get_wildcard_super_type(bound);
+}
+
 const QoreTypeInfo* QoreParseTypeInfo::resolveRuntime() const {
+    if (isWildcardTypeArg()) {
+        return qore_resolve_runtime_wildcard_type_arg(*this);
+    }
     if (hasExplicitSubtypeList())
         return resolveRuntimeSubtype();
 
@@ -3423,6 +3782,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveRuntimeClass(const NamedScope& csc
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation* loc, int& err) const {
+    if (isWildcardTypeArg()) {
+        return qore_resolve_parse_wildcard_type_arg(*this, loc, err);
+    }
     if (!strcmp(cscope->ostr, "hash")) {
         if (subtypes.size() == 1) {
             if (!strcmp(subtypes[0]->cscope->ostr, "auto"))
@@ -3798,6 +4160,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolve(const QoreProgramLocation* loc, int& err) const {
+    if (isWildcardTypeArg()) {
+        return qore_resolve_parse_wildcard_type_arg(*this, loc, err);
+    }
     if (hasExplicitSubtypeList()) {
         return resolveSubtype(loc, err);
     }
@@ -3806,6 +4171,9 @@ const QoreTypeInfo* QoreParseTypeInfo::resolve(const QoreProgramLocation* loc, i
 }
 
 const QoreTypeInfo* QoreParseTypeInfo::resolveAny(const QoreProgramLocation* loc, int& err) const {
+    if (isWildcardTypeArg()) {
+        return qore_resolve_parse_wildcard_type_arg(*this, loc, err);
+    }
     if (hasExplicitSubtypeList()) {
         return resolveSubtype(loc, err);
     }

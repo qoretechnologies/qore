@@ -145,9 +145,9 @@ string c = identity<string>(value: "x");
 
 ## Runtime Model
 
-Generic class types are reified and invariant. There is one runtime class
-definition, and each constructed object carries an instantiated type info such
-as `Box<int>` or `Queue<string>`.
+Generic class types are reified. There is one runtime class definition, and
+each constructed object carries an instantiated type info such as `Box<int>` or
+`Queue<string>`.
 
 The object wrapper is the source of truth:
 
@@ -161,7 +161,7 @@ substituted through `qore_substitute_type_params()` at method dispatch,
 constructor dispatch, member access, local variable declaration, return checks,
 IR interpretation, JIT runtime helpers, and AOT loading.
 
-Matching is invariant:
+Concrete type arguments match invariantly:
 
 ```qore
 Box<int> b(1);
@@ -172,6 +172,19 @@ b instanceof Box<auto>;    # false
 ```
 
 `auto` is a concrete type argument, not a wildcard.
+
+Wildcard annotations can accept families of parameterized types:
+
+```qore
+Box<?> any_box = b;
+Box<? extends int> int_source = b;
+Box<? super int> int_sink = b;
+```
+
+`? extends T` is read-oriented: methods returning the wildcarded type parameter
+return `T`, while methods accepting that parameter reject concrete values.
+`? super T` is write-oriented: methods accepting the wildcarded type parameter
+accept `T`, while methods returning that parameter return `auto`.
 
 ## Raw Compatibility
 
@@ -310,14 +323,13 @@ For `~/src/qore/git/module-*`, migrate generic APIs conservatively:
 
 The following are intentionally not part of this implementation:
 
-- variance
 - monomorphized code generation per type argument
 - inference of class type arguments at arbitrary expression sites
 
-Generic class and hashdecl type arguments are currently invariant. `auto`
-remains a concrete type argument, not a wildcard. Raw compatibility attributes
-are migration aids for specific legacy APIs, not a substitute for general
-wildcard or variance semantics.
+Concrete class and hashdecl type arguments are invariant. `auto` remains a
+concrete type argument, not a wildcard. Raw compatibility attributes are
+migration aids for specific legacy APIs, not a substitute for wildcard
+annotations.
 
 Execution is currently reified and substitution-based. The runtime keeps one
 class or function body and substitutes type parameters for parsing, runtime
@@ -345,5 +357,6 @@ Primary coverage lives in:
 The generic class test covers source generics, multiple type parameters,
 defaults, bounds, namespaces, overloads, inheritance, static generic methods,
 method-level generics, explicit generic call type arguments, generic hashdecls,
-generic hashdecl inheritance, iterators, poll operations, raw compatibility
-attributes, and expected parse or runtime failures.
+generic hashdecl inheritance, wildcard type arguments, iterators, poll
+operations, raw compatibility attributes, and expected parse or runtime
+failures.

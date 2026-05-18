@@ -43,6 +43,7 @@
 class QoreTypeInfo;
 class QoreParameterizedClassTypeInfo;
 class QoreTypeParameterTypeInfo;
+class QoreWildcardTypeInfo;
 class LValueHelper;
 class QoreHashNode;
 class QoreListNode;
@@ -72,9 +73,10 @@ enum q_typespec_t : unsigned char {
     QTS_ENUM = 11,
     QTS_PARAMCLASS = 12,
     QTS_TYPEPARAM = 13,
+    QTS_WILDCARD = 14,
 };
 
-static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_TYPEPARAM) + 1;
+static constexpr unsigned QORE_TYPE_SPEC_COUNT = static_cast<unsigned>(QTS_WILDCARD) + 1;
 
 typedef std::function<void (QoreValue&, ExceptionSink*)> q_type_map_t;
 
@@ -125,6 +127,10 @@ public:
         return typespec == QTS_TYPEPARAM ? reinterpret_cast<const QoreTypeParameterTypeInfo*>(u.ti) : nullptr;
     }
 
+    DLLLOCAL const QoreWildcardTypeInfo* getWildcardTypeInfo() const {
+        return typespec == QTS_WILDCARD ? reinterpret_cast<const QoreWildcardTypeInfo*>(u.ti) : nullptr;
+    }
+
     DLLLOCAL const TypedHashDecl* getHashDecl() const {
         return typespec == QTS_HASHDECL ? u.hd : nullptr;
     }
@@ -172,6 +178,7 @@ public:
                 || typespec == QTS_ENUM
                 || typespec == QTS_PARAMCLASS
                 || typespec == QTS_TYPEPARAM
+                || typespec == QTS_WILDCARD
             ;
     }
 
@@ -201,6 +208,7 @@ public:
 
             case QTS_PARAMCLASS:
             case QTS_TYPEPARAM:
+            case QTS_WILDCARD:
                 return u.ti;
 
             case QTS_TYPE:
@@ -243,6 +251,7 @@ public:
             case QTS_ENUM:
                 return u.ed->getBaseTypeInfo();
             case QTS_TYPEPARAM:
+            case QTS_WILDCARD:
                 return u.ti;
         }
         assert(false);
@@ -370,6 +379,11 @@ public:
 class QoreTypeParameterTypeSpec : public QoreTypeSpec {
 public:
     DLLLOCAL QoreTypeParameterTypeSpec(const QoreTypeParameterTypeInfo* ti);
+};
+
+class QoreWildcardTypeSpec : public QoreTypeSpec {
+public:
+    DLLLOCAL QoreWildcardTypeSpec(const QoreWildcardTypeInfo* ti);
 };
 
 class QoreEmptyListTypeSpec : public QoreTypeSpec {

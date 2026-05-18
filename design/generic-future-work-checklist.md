@@ -17,30 +17,30 @@ without relying on raw legacy annotations.
 
 Design checklist:
 
-- [ ] Choose final wildcard syntax for class and hashdecl type arguments.
-- [ ] Support unbounded wildcards.
-- [ ] Support covariant upper-bound wildcards.
-- [ ] Support contravariant lower-bound wildcards if there is a clear,
+- [x] Choose final wildcard syntax for class and hashdecl type arguments.
+- [x] Support unbounded wildcards.
+- [x] Support covariant upper-bound wildcards.
+- [x] Support contravariant lower-bound wildcards if there is a clear,
   user-facing assignment/call use case.
-- [ ] Define how wildcards interact with `*T` optional types.
-- [ ] Define how wildcards interact with `auto`, which remains a concrete type
+- [x] Define how wildcards interact with `*T` optional types.
+- [x] Define how wildcards interact with `auto`, which remains a concrete type
   argument.
-- [ ] Define compatibility between wildcard arguments and raw generic
+- [x] Define compatibility between wildcard arguments and raw generic
   compatibility attributes.
-- [ ] Define diagnostic wording for rejected wildcard construction attempts.
+- [x] Define diagnostic wording for rejected wildcard construction attempts.
 
 Implementation checklist:
 
-- [ ] Extend parser and scanner type grammar.
-- [ ] Mirror parser/scanner changes in `modules/astparser/src/`.
-- [ ] Extend `QoreTypeInfo` representation for wildcard generic arguments.
-- [ ] Update class type compatibility checks.
-- [ ] Update hashdecl type compatibility checks.
-- [ ] Update `instanceof`, assignment, argument filtering, return checking,
+- [x] Extend parser and scanner type grammar.
+- [x] Mirror parser/scanner changes in `modules/astparser/src/`.
+- [x] Extend `QoreTypeInfo` representation for wildcard generic arguments.
+- [x] Update class type compatibility checks.
+- [x] Update hashdecl type compatibility checks.
+- [x] Update `instanceof`, assignment, argument filtering, return checking,
   casts, and overload selection.
-- [ ] Preserve wildcard type paths through AOT type metadata.
-- [ ] Expose wildcard argument metadata for API metadata consumers.
-- [ ] Add positive and negative tests for source classes, builtin classes,
+- [x] Preserve wildcard type paths through AOT type metadata.
+- [ ] Expose structured wildcard argument metadata for API metadata consumers.
+- [x] Add positive and negative tests for source classes, builtin classes,
   source hashdecls, inherited hashdecls, raw compatibility, AOT, AST mode, and
   error messages.
 

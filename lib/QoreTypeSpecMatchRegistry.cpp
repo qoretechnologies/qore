@@ -128,6 +128,12 @@ const QoreTypeSpecMatchHandlerInfo QORE_TYPE_SPEC_MATCH_REGISTRY[] = {
         match_QTS_TYPEPARAM,
         "Symbolic generic class type-parameter placeholder"
     },
+    {
+        "QTS_WILDCARD",
+        QTS_WILDCARD,
+        match_QTS_WILDCARD,
+        "Use-site generic wildcard type argument"
+    },
     { nullptr, (q_typespec_t)0, nullptr, nullptr } // sentinel
 };
 

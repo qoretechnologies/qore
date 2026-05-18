@@ -43,6 +43,12 @@
 
 class UserSignature;
 
+enum class QoreWildcardKind : unsigned char {
+    Unbounded,
+    Extends,
+    Super,
+};
+
 static inline void validate_date_variant(QoreValue& n, ExceptionSink* xsink, bool require_relative,
         const char* type_name) {
     if (!xsink) {
@@ -251,6 +257,20 @@ public:
             return nullptr;
         }
         return ti->return_vec[0].spec.getParameterizedClassTypeInfo();
+    }
+
+    // static version of method, checking for null pointer
+    DLLLOCAL static const QoreWildcardTypeInfo* getWildcardType(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return nullptr;
+        }
+        if (!ti->return_vec.empty()) {
+            const QoreWildcardTypeInfo* rv = ti->return_vec[0].spec.getWildcardTypeInfo();
+            if (rv) {
+                return rv;
+            }
+        }
+        return ti->isAcceptVecEmpty() ? nullptr : ti->getFirstAcceptSpec().spec.getWildcardTypeInfo();
     }
 
     // static version of method, checking for null pointer
@@ -1045,6 +1065,36 @@ protected:
     size_t index;
     std::string param_name;
     bool or_nothing;
+    std::string pname;
+
+    DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
+        qore_string_private::get(str)->concat(&tname);
+    }
+
+    DLLLOCAL virtual bool canConvertToScalarImpl() const {
+        return false;
+    }
+
+    DLLLOCAL const char* getPathImpl() const {
+        return pname.c_str();
+    }
+};
+
+class QoreWildcardTypeInfo : public QoreTypeInfo {
+public:
+    DLLLOCAL QoreWildcardTypeInfo(QoreWildcardKind kind, const QoreTypeInfo* bound);
+
+    DLLLOCAL QoreWildcardKind getKind() const {
+        return kind;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getBound() const {
+        return bound;
+    }
+
+protected:
+    QoreWildcardKind kind;
+    const QoreTypeInfo* bound = nullptr;
     std::string pname;
 
     DLLLOCAL virtual void getThisTypeImpl(QoreString& str) const {
@@ -3483,6 +3533,30 @@ DLLLOCAL const QoreTypeInfo* qore_get_hashdecl_type_parameter_type(const TypedHa
 //! Returns symbolic signature type-parameter type info
 DLLLOCAL const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* owner, size_t index,
     const char* name, bool or_nothing = false);
+
+//! Returns the unbounded generic wildcard type argument
+DLLLOCAL const QoreTypeInfo* qore_get_wildcard_type();
+
+//! Returns a covariant generic wildcard type argument with an upper bound
+DLLLOCAL const QoreTypeInfo* qore_get_wildcard_extends_type(const QoreTypeInfo* bound);
+
+//! Returns a contravariant generic wildcard type argument with a lower bound
+DLLLOCAL const QoreTypeInfo* qore_get_wildcard_super_type(const QoreTypeInfo* bound);
+
+//! Returns true if the type info or any nested generic argument contains a wildcard
+DLLLOCAL bool qore_type_contains_wildcard(const QoreTypeInfo* ti);
+
+//! Checks whether a target generic type argument accepts a source type argument
+DLLLOCAL qore_type_result_e qore_generic_type_arg_accepts(const QoreTypeInfo* target_arg,
+    const QoreTypeInfo* source_arg, bool& may_not_match, bool& may_need_filter);
+
+//! Checks parameterized class compatibility, including wildcard type arguments
+DLLLOCAL qore_type_result_e qore_parameterized_class_accepts(const QoreParameterizedClassTypeInfo* target_pti,
+    const QoreTypeInfo* source_type, bool& may_not_match, bool& may_need_filter);
+
+//! Checks typed-hash compatibility, including generic wildcard type arguments
+DLLLOCAL qore_type_result_e qore_parameterized_hashdecl_accepts(const TypedHashDecl* target_hd,
+    const TypedHashDecl* source_hd, bool& may_not_match, bool& may_need_filter);
 
 //! Substitutes symbolic type parameters in \a ti using the concrete receiver type
 DLLLOCAL const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti,

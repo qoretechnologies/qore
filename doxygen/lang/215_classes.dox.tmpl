@@ -71,11 +71,21 @@ promise.set(value: "done");
 string result = future.get(timeout_ms: 1s);
     @endcode
 
-    Generic builtin class types are runtime checked and are invariant. For
-    example, <tt>Queue&lt;int&gt;</tt> and <tt>Queue&lt;auto&gt;</tt> are
-    different concrete types. Migrated legacy builtin classes still support raw
-    declarations such as <tt>Queue q()</tt> for compatibility; raw construction
-    creates the explicit <tt>Queue&lt;auto&gt;</tt> form.
+    Generic builtin class types are runtime checked. Concrete type arguments
+    are invariant, so <tt>Queue&lt;int&gt;</tt> and
+    <tt>Queue&lt;auto&gt;</tt> are different concrete types. Use wildcard
+    arguments when an annotation should accept multiple instantiations:
+
+    @code{.py}
+Queue<int> ints();
+Queue<?> any_queue = ints;
+Queue<? extends number> number_source = ints;
+Queue<? super int> int_sink = ints;
+    @endcode
+
+    Migrated legacy builtin classes still support raw declarations such as
+    <tt>Queue q()</tt> for compatibility; raw construction creates the
+    explicit <tt>Queue&lt;auto&gt;</tt> form.
 
     Source-defined classes can also declare type parameters and use them in
     members, method signatures, constructors, local variables, and inherited
@@ -143,10 +153,14 @@ int made = f.get();
     concrete type argument used for argument checking, local declarations, and
     return checking inside the static method body.
 
-    Source-defined generic class types are runtime checked and are invariant.
-    Unlike migrated builtin classes, source-defined generic classes do not
-    provide raw compatibility by default; use explicit type arguments such as
-    <tt>Box&lt;int&gt;</tt> or <tt>Box&lt;auto&gt;</tt>.
+    Source-defined generic class types are runtime checked. Concrete type
+    arguments are invariant; use wildcard annotations such as
+    <tt>Box&lt;?&gt;</tt>, <tt>Box&lt;? extends int&gt;</tt>, or
+    <tt>Box&lt;? super int&gt;</tt> when callers should pass a compatible
+    family of instantiations. Unlike migrated builtin classes, source-defined
+    generic classes do not provide raw compatibility by default; use explicit
+    type arguments such as <tt>Box&lt;int&gt;</tt> or
+    <tt>Box&lt;auto&gt;</tt>.
 
     Existing source classes that are migrated to generic form can opt into
     legacy raw compatibility by placing a compatibility attribute after the

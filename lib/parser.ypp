@@ -1796,8 +1796,62 @@ public:
         }
     }
 
+    DLLLOCAL static QoreParseTypeInfo* getWildcardParseType(const QoreProgramLocation* loc, const char* id,
+            bool raise_error = true) {
+        std::string str(id);
+        while (!str.empty() && isspace(str.front())) {
+            str.erase(0, 1);
+        }
+        while (!str.empty() && isspace(str.back())) {
+            str.pop_back();
+        }
+        if (str == "?") {
+            return new QoreParseTypeInfo(QoreWildcardKind::Unbounded);
+        }
+
+        const char* extends_kw = "? extends ";
+        const char* super_kw = "? super ";
+        QoreWildcardKind kind;
+        const char* bound_str;
+        if (!strncmp(str.c_str(), extends_kw, strlen(extends_kw))) {
+            kind = QoreWildcardKind::Extends;
+            bound_str = str.c_str() + strlen(extends_kw);
+        } else if (!strncmp(str.c_str(), super_kw, strlen(super_kw))) {
+            kind = QoreWildcardKind::Super;
+            bound_str = str.c_str() + strlen(super_kw);
+        } else {
+            return nullptr;
+        }
+
+        while (*bound_str && isspace(*bound_str)) {
+            ++bound_str;
+        }
+        if (!*bound_str) {
+            if (raise_error) {
+                parse_error(*loc, "wildcard type argument '%s' is missing a bound type", str.c_str());
+            }
+            return new QoreParseTypeInfo(QoreWildcardKind::Unbounded);
+        }
+
+        QoreParseTypeInfo* bound = qore_parse_type_string_to_pti(bound_str);
+        if (!bound) {
+            if (raise_error) {
+                parse_error(*loc, "cannot parse wildcard bound type in '%s'", str.c_str());
+            }
+            return new QoreParseTypeInfo(QoreWildcardKind::Unbounded);
+        }
+        return new QoreParseTypeInfo(kind, bound);
+    }
+
     DLLLOCAL static QoreParseTypeInfo* getParseType(const QoreProgramLocation* loc, char* id, bool or_nothing, bool raise_error = true) {
         //printd(0, "gPT() '%s'\n", id);
+        if (!or_nothing) {
+            QoreParseTypeInfo* wildcard = getWildcardParseType(loc, id, raise_error);
+            if (wildcard) {
+                free(id);
+                return wildcard;
+            }
+        }
         char* p0 = strchr(id, '<');
         if (p0) {
             // Check if this is a callable signature with form: ReturnType(Params...)

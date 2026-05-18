@@ -97,6 +97,17 @@ protected:
     }
 
     DLLLOCAL void setName() {
+        if (wildcard_type_arg) {
+            tname = "?";
+            if (wildcard_kind == QoreWildcardKind::Extends) {
+                tname += " extends ";
+                wildcard_bound->concatName(tname);
+            } else if (wildcard_kind == QoreWildcardKind::Super) {
+                tname += " super ";
+                wildcard_bound->concatName(tname);
+            }
+            return;
+        }
         if (or_nothing)
             tname = "*";
         tname += cscope->ostr;
@@ -118,6 +129,9 @@ public:
     parse_type_vec_t subtypes;
     bool or_nothing;
     bool has_explicit_subtypes = false;
+    bool wildcard_type_arg = false;
+    QoreWildcardKind wildcard_kind = QoreWildcardKind::Unbounded;
+    QoreParseTypeInfo* wildcard_bound = nullptr;
 
     DLLLOCAL QoreParseTypeInfo(char* n_cscope, bool n_or_nothing = false) : cscope(new NamedScope(n_cscope)),
             or_nothing(n_or_nothing) {
@@ -133,9 +147,17 @@ public:
         //printd(5, "QoreParseTypeInfo::QoreParseTypeInfo() %s\n", tname.c_str());
     }
 
+    DLLLOCAL QoreParseTypeInfo(QoreWildcardKind n_kind, QoreParseTypeInfo* n_bound = nullptr)
+            : cscope(new NamedScope(strdup("?"))), or_nothing(false), wildcard_type_arg(true),
+            wildcard_kind(n_kind), wildcard_bound(n_bound) {
+        assert(wildcard_kind == QoreWildcardKind::Unbounded || wildcard_bound);
+        setName();
+    }
+
     DLLLOCAL QoreParseTypeInfo(const QoreParseTypeInfo& old) : tname(old.tname),
             cscope(old.cscope ? new NamedScope(*old.cscope) : nullptr), or_nothing(old.or_nothing),
-            has_explicit_subtypes(old.has_explicit_subtypes) {
+            has_explicit_subtypes(old.has_explicit_subtypes), wildcard_type_arg(old.wildcard_type_arg),
+            wildcard_kind(old.wildcard_kind), wildcard_bound(old.wildcard_bound ? old.wildcard_bound->copy() : nullptr) {
         // copy subtypes
         for (const auto& i : old.subtypes)
             subtypes.push_back(new QoreParseTypeInfo(*i));
@@ -145,6 +167,7 @@ public:
         delete cscope;
         for (auto& i : subtypes)
             delete i;
+        delete wildcard_bound;
     }
 
     // static version of method, checking for null pointer
@@ -212,6 +235,10 @@ public:
 
     DLLLOCAL bool hasExplicitSubtypeList() const {
         return has_explicit_subtypes;
+    }
+
+    DLLLOCAL bool isWildcardTypeArg() const {
+        return wildcard_type_arg;
     }
 
     // static version of method, checking for null pointer

@@ -118,16 +118,40 @@ hash<Envelope<int>> response(("request_id": "abc", "result": int_result));
 int payload = response.result.value;
     @endcode
 
-    Generic hashdecl type arguments are invariant and are checked in the same
-    way as other typed hash members. For example,
+    Generic hashdecl type arguments are invariant when concrete type arguments
+    are used and are checked in the same way as other typed hash members. For
+    example,
     <tt>hash&lt;Result&lt;int&gt;&gt;</tt> and
     <tt>hash&lt;Result&lt;string&gt;&gt;</tt> are different concrete hashdecl types.
     Omitting type arguments for a source-defined generic hashdecl, such as
     <tt>hash&lt;Result&gt;</tt>, is a parse-time type error.
 
-    The \c inherits clause continues to name a non-parameterized parent
-    hashdecl. Parameterized parent hashdecl references are rejected with a
-    parse-time error.
+    Wildcard type arguments can be used for read-oriented or write-oriented
+    hashdecl annotations:
+
+    @code{.py}
+hash<Result<int>> result(("status": "ok", "value": 1, "values": (2,)));
+
+hash<Result<?>> any_result = result;
+hash<Result<? extends number>> numeric_result = result;
+number value = numeric_result.value;
+    @endcode
+
+    Generic hashdecl inheritance can pass through type parameters or bind a
+    parent to a concrete type argument:
+
+    @code{.py}
+hashdecl Parent<T> {
+    T value;
+}
+
+hashdecl Child<T> inherits Parent<T> {
+    string name;
+}
+
+hash<Child<int>> child(("value": 1, "name": "one"));
+hash<Parent<?>> parent = child;
+    @endcode
 
     @section hashdecl_type_compatibility Type-Safe Hash Type Compatibility
 

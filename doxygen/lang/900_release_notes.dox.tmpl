@@ -54,6 +54,9 @@
       parameterized receivers such as <tt>Factory&lt;int&gt;::make(...)</tt>, and
       source-defined hashdecls can now declare type parameters for typed result
       records such as <tt>hash&lt;Result&lt;int&gt;&gt;</tt>
+    - generic class and hashdecl annotations now support wildcard type
+      arguments with <tt>?</tt>, <tt>? extends Type</tt>, and
+      <tt>? super Type</tt> syntax
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
     - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH string-literal escapes
     - new \c %%Y printf format specifier for multi-line pseudo-YAML output

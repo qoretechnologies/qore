@@ -105,8 +105,9 @@ Add focused tests for each conversion:
   `legacy_raw_construct` is used.
 - Raw annotations accept parameterized instances only when
   `legacy_raw` or `legacy_raw_accepts` is used.
-- Invariance: `Name<auto>` must not accept `Name<int>` unless a raw annotation is
-  used.
+- Invariance and wildcards: `Name<auto>` must not accept `Name<int>` unless a raw
+  annotation is used, while `Name<?>` and bounded wildcard annotations should
+  accept compatible instantiations.
 - Parameterized vparent checks, when relevant.
 - Static generic methods and method-level generic calls, when relevant.
 - AOT/IR round-trip for parameterized object types when the class appears in

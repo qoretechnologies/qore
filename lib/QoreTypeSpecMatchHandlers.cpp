@@ -93,6 +93,16 @@ static qore_type_result_e match_QTS_HASHDECL(const QoreTypeSpec& self, QoreTypeS
         case QTS_HASHDECL: {
             const typed_hash_decl_private* target = typed_hash_decl_private::get(*self.getHashDecl());
             const typed_hash_decl_private* source = typed_hash_decl_private::get(*ctx.t.getHashDecl());
+            qore_type_result_e generic_rv = qore_parameterized_hashdecl_accepts(self.getHashDecl(),
+                ctx.t.getHashDecl(), ctx.may_not_match, ctx.may_need_filter);
+            if (generic_rv != QTI_NOT_EQUAL) {
+                ctx.max_result = QTI_IDENT;
+                return generic_rv;
+            }
+            if (target->isParameterizedHashDecl()) {
+                ctx.max_result = QTI_NOT_EQUAL;
+                return QTI_NOT_EQUAL;
+            }
             qore_type_result_e rv;
             if (source->parseEqual(*target)) {
                 // Exact match
@@ -312,12 +322,11 @@ static qore_type_result_e match_QTS_PARAMCLASS(const QoreTypeSpec& self, QoreTyp
                 ctx.max_result = QTI_IDENT;
                 return QTI_IDENT;
             }
-            const QoreParameterizedClassTypeInfo* src_pti = ctx.t.getParameterizedClassTypeInfo();
-            const QoreTypeInfo* mapped_type = qore_class_private::get(*src_pti->getBaseClass())
-                ->getParameterizedBaseTypeInfo(src_pti, self_pti->getBaseClass());
-            if (QoreTypeInfo::equal(mapped_type, self_pti)) {
+            qore_type_result_e rv = qore_parameterized_class_accepts(self_pti, ctx.t.getTypeInfo(),
+                ctx.may_not_match, ctx.may_need_filter);
+            if (rv != QTI_NOT_EQUAL) {
                 ctx.max_result = QTI_IDENT;
-                return QTI_IDENT;
+                return rv;
             }
             return QTI_NOT_EQUAL;
         }
@@ -349,6 +358,16 @@ static qore_type_result_e match_QTS_PARAMCLASS(const QoreTypeSpec& self, QoreTyp
     qore_type_result_e rv = self.tryMatchReferenceType(ctx.t, ctx.may_not_match);
     ctx.max_result = (rv > QTI_NOT_EQUAL) ? QTI_IDENT : rv;
     return rv;
+}
+
+// Handler for QTS_WILDCARD: use-site generic wildcard type argument
+static qore_type_result_e match_QTS_WILDCARD(const QoreTypeSpec& self, QoreTypeSpecMatchCtx& ctx) {
+    if (self.getWildcardTypeInfo() == ctx.t.getWildcardTypeInfo()) {
+        ctx.max_result = QTI_IDENT;
+        return QTI_IDENT;
+    }
+    ctx.max_result = QTI_NOT_EQUAL;
+    return QTI_NOT_EQUAL;
 }
 
 // Handler for QTS_TYPEPARAM: unresolved class type-parameter placeholder

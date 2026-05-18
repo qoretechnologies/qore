@@ -450,6 +450,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("static generic methods", \staticGenericMethods());
         addTestCase("method-level generics", \methodLevelGenerics());
         addTestCase("generic hashdecls", \genericHashDecls());
+        addTestCase("generic wildcards", \genericWildcards());
         addTestCase("source generic iterators", \sourceGenericIterators());
         addTestCase("source generic poll operations", \sourceGenericPollOperations());
         addTestCase("builtin iterator element types", \builtinIteratorElementTypes());
@@ -701,6 +702,80 @@ public class GenericClassTypesTest inherits QUnit::Test {
         string default_child_label = default_child.label;
         assertEq(23, default_parent_value);
         assertEq("default", default_child_label);
+    }
+
+    genericWildcards() {
+        SourceGenericBox<int> ibox(1);
+
+        SourceGenericBox<?> any_box = ibox;
+        assertTrue(any_box instanceof SourceGenericBox<?>);
+        assertTrue(any_box instanceof SourceGenericBox<int>);
+        assertEq(1, any_box.get());
+
+        SourceGenericBox<? extends int> int_source = ibox;
+        int source_value = int_source.get();
+        assertEq(1, source_value);
+
+        SourceGenericBox<? extends number> number_source = ibox;
+        number number_value = number_source.get();
+        assertEq(1n, number_value);
+
+        SourceGenericBox<? super int> int_sink = ibox;
+        int_sink.set(2);
+        assertEq(2, ibox.get());
+        auto sink_value = int_sink.get();
+        assertEq(2, sink_value);
+
+        hash<SourceGenericResult<int>> result(("value": 3, "values": (4,)));
+        hash<SourceGenericResult<?>> any_result = result;
+        assertEq(3, any_result.value);
+        assertEq("hash<SourceGenericResult<int>>", any_result.fullType());
+
+        hash<SourceGenericResult<? extends int>> int_result = result;
+        int result_value = int_result.value;
+        assertEq(3, result_value);
+
+        hash<SourceGenericHashChild<int>> child(("value": 5, "name": "five"));
+        hash<SourceGenericHashParent<?>> parent_any = child;
+        assertEq(5, parent_any.value);
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { constructor() {} } sub t() { Box<?> b(); }",
+                "generic-classes");
+            assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { constructor(T value) {} } "
+                "sub t(Box<int> b) { Box<? extends string> s = b; }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { constructor(T value) {} nothing set(T value) {} } "
+                "sub t(Box<? extends int> b) { b.set(1); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T> { T value; } "
+                "sub t(hash<Result<int>> r) { hash<Result<? extends string>> s = r; }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Parent<T> { T value; } "
+                "hashdecl Child<T> inherits Parent<T> { string name; } "
+                "sub t(hash<Child<int>> c) { hash<Parent<? extends string>> p = c; }",
+                "generic-classes"));
+        }
     }
 
     sourceGenericIterators() {

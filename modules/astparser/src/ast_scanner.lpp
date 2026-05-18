@@ -808,9 +808,9 @@ DIGIT           [0-9]
 WORD            [a-zA-Z_][a-zA-Z0-9_]*
 WS              [ \t\r]
 WSNL            [ \t\r\n]
-TYPE_ARG_START  [a-zA-Z_*:]
-TYPE_ARG_TEXT   [a-zA-Z\*<:_0-9 \t,!().=]*
-TYPE_ARG_NESTED [a-zA-Z\*<>:_0-9 \t,!().]*
+TYPE_ARG_START  [a-zA-Z_*:?]
+TYPE_ARG_TEXT   [a-zA-Z\*<:_0-9 \t,!().=?]*
+TYPE_ARG_NESTED [a-zA-Z\*<>:_0-9 \t,!().?]*
 CLASS_TPARAM_ATOM [a-zA-Z\*:_0-9 \t,!().=]
 CLASS_TPARAM_NESTED1 \<{CLASS_TPARAM_ATOM}*\>
 CLASS_TPARAM_NESTED2 \<({CLASS_TPARAM_ATOM}|{CLASS_TPARAM_NESTED1})*\>
@@ -1928,7 +1928,7 @@ P{D2}:{D2}(:{D2}(\.{US})?)?             { yylval->string = strdup(yytext); retur
 (::{WORD})+                             { yylval->string = strdup(yytext); return SCOPED_REF;}
 ({WORD}::)+\${WORD}                     { yylval->string = make_scoped_vref(yytext); return SCOPED_VREF;}
 (::{WORD})?::\${WORD}                   { yylval->string = make_scoped_vref(yytext); return SCOPED_VREF;}
-cast<\*?{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!=]*>)?{WS}*>  { yylval->string = make_cast(yytext); return QORE_CAST; }
+cast<\*?{WS}*({WORD}::)*{WORD}!?{WS}*(<[a-zA-Z<>:_0-9 \t,\*!=?]*>)?{WS}*>  { yylval->string = make_cast(yytext); return QORE_CAST; }
 ({WORD}::)+\$\.{WORD}                   { yylval->string = strdup(yytext); return BASE_CLASS_CALL;}
 @[Nn][Aa][Nn]@                          {
 #ifdef NAN

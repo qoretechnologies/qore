@@ -1398,6 +1398,12 @@ static const QoreTypeInfo* qore_get_instantiated_object_type_info(const QoreClas
                 object_class->getName(), QoreTypeInfo::getName(object_type_info));
             return nullptr;
         }
+        if (qore_type_contains_wildcard(pcti)) {
+            xsink->raiseException("MISSING-TYPE-ARGUMENTS", "cannot instantiate generic class '%s' with wildcard "
+                "type arguments in '%s'; use concrete type arguments for object construction", object_class->getName(),
+                QoreTypeInfo::getName(object_type_info));
+            return nullptr;
+        }
         return pcti;
     }
 

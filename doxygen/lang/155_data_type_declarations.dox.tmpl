@@ -504,15 +504,43 @@ p.set(value: {"status": 200, "body": "ok"});
 hash<auto> response = f.get(timeout_ms: 5s);
     @endcode
 
-    Parameterized class types are invariant. For example,
-    <tt>Queue&lt;auto&gt;</tt> is a concrete value-erased queue type; it is
-    not a wildcard that accepts every queue instantiation:
+    Parameterized class types are invariant when concrete type arguments are
+    used. For example, <tt>Queue&lt;auto&gt;</tt> is a concrete value-erased
+    queue type; it is not a wildcard that accepts every queue instantiation:
 
     @code{.py}
 Queue<int> ints();
 Queue<auto> values();
 
 values = ints;  # PARSE-TYPE-ERROR
+    @endcode
+
+    Use-site wildcard type arguments are available when an API needs to accept
+    a family of compatible generic instantiations:
+
+    @code{.py}
+Queue<int> ints();
+
+Queue<?> any_queue = ints;                 # accepts any Queue<T>
+Queue<? extends number> number_source = ints;  # values can be read as number
+Queue<? super int> int_sink = ints;        # int values can be written safely
+    @endcode
+
+    The unbounded wildcard <tt>?</tt> accepts any type argument for assignment
+    and runtime checks, but methods using the wildcarded type parameter cannot
+    accept new values of that unknown type. An upper-bound wildcard
+    <tt>? extends T</tt> is read-oriented: methods returning the type parameter
+    return \c T, while methods accepting the type parameter reject concrete
+    values. A lower-bound wildcard <tt>? super T</tt> is write-oriented:
+    methods accepting the type parameter accept \c T, while methods returning
+    the type parameter return \c auto because the precise stored type is not
+    known.
+
+    Wildcards are only type annotations; they are not concrete object
+    instantiations:
+
+    @code{.py}
+Queue<?> q();  # MISSING-TYPE-ARGUMENTS
     @endcode
 
     The first generic builtin classes keep source compatibility with existing raw
@@ -558,10 +586,13 @@ Child<int> child();
 int value = child.echo(42);
     @endcode
 
-    Source-defined generic class types are runtime checked and invariant.
-    Source-defined generic classes do not provide raw compatibility by default;
-    use explicit type arguments such as <tt>Box&lt;int&gt;</tt> or
-    <tt>Box&lt;auto&gt;</tt>.
+    Source-defined generic class types are runtime checked. Concrete type
+    arguments are invariant; use wildcard arguments such as
+    <tt>Box&lt;?&gt;</tt>, <tt>Box&lt;? extends int&gt;</tt>, or
+    <tt>Box&lt;? super int&gt;</tt> when a variable or parameter should accept
+    more than one instantiation. Source-defined generic classes do not provide
+    raw compatibility by default; use explicit type arguments such as
+    <tt>Box&lt;int&gt;</tt> or <tt>Box&lt;auto&gt;</tt>.
 
     Static methods on source-defined generic classes can use class type
     parameters when the call target supplies concrete type arguments:
