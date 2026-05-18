@@ -100,6 +100,9 @@ hashdecl ObjectSerializationInfo {
     //! class path name
     string _class;
 
+    //! concrete parameterized object type path, if the serialized object was instantiated with generic type arguments
+    *string _object_type;
+
     //! member values per class; class path -> member hash
     *hash<string, hash<string, auto>> _class_data;
 }

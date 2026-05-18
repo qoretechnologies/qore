@@ -2250,6 +2250,15 @@ class ReflectionTest inherits QUnit::Test {
         assertEq("object<SingleValueIterator<int>>", single_value_iterator_int.getName());
         assertTrue(IntType.isEqual(single_value_iterator_int.getTypeArguments()[0]));
 
+        TypedHash key_value_info_hashdecl = TypedHash::forName("KeyValueInfo");
+        assertEq(("V",), key_value_info_hashdecl.getTypeParameters());
+        Type key_value_info_int("hash<KeyValueInfo<int>>");
+        assertTrue(key_value_info_int.isParameterized());
+        assertEq("hash<KeyValueInfo<int>>", key_value_info_int.getName());
+        list<Type> key_value_info_args = key_value_info_int.getTypeArguments();
+        assertEq(1, key_value_info_args.size());
+        assertTrue(IntType.isEqual(key_value_info_args[0]));
+
         assertFalse(IntType.isParameterized());
         assertNothing(IntType.getTypeArguments());
 

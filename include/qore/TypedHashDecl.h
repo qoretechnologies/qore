@@ -123,6 +123,25 @@ public:
     */
     DLLEXPORT const char* getTypeParameterBoundType(size_t index) const;
 
+    //! returns true if this hashdecl declares formal type parameters
+    /** @since %Qore 2.4
+    */
+    DLLEXPORT bool hasTypeParameters() const;
+
+    //! returns the number of formal type parameters declared by this hashdecl
+    /** @since %Qore 2.4
+    */
+    DLLEXPORT size_t getTypeParameterCount() const;
+
+    //! returns the name of the formal type parameter at the given index, or nullptr if the index is invalid
+    /** @param index the zero-based type parameter index
+
+        @return the formal type parameter name, or nullptr if the index is invalid
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterName(size_t index) const;
+
     //! returns the number of built-in hashdecl type parameters that do not have defaults
     /** @note This method is intended for use by system hashdecls only
 

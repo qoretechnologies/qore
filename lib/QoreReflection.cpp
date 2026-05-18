@@ -34,6 +34,7 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/typed_hash_decl_private.h"
 
 const char* get_access_string(ClassAccess access) {
     switch (access) {
@@ -139,12 +140,23 @@ bool qore_type_code_has_varargs(const QoreTypeInfo* ti) {
 }
 
 bool qore_type_is_parameterized(const QoreTypeInfo* ti) {
-    return QoreTypeInfo::getParameterizedClassType(ti) != nullptr;
+    if (QoreTypeInfo::getParameterizedClassType(ti)) {
+        return true;
+    }
+    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+    return hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl();
 }
 
 const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti) {
     const QoreParameterizedClassTypeInfo* parameterized_type = QoreTypeInfo::getParameterizedClassType(ti);
-    return parameterized_type ? &parameterized_type->getTypeArgs() : nullptr;
+    if (parameterized_type) {
+        return &parameterized_type->getTypeArgs();
+    }
+    const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+    if (hd && typed_hash_decl_private::get(*hd)->isParameterizedHashDecl()) {
+        return &typed_hash_decl_private::get(*hd)->getTypeArgs();
+    }
+    return nullptr;
 }
 
 bool qore_type_is_type_parameter(const QoreTypeInfo* ti) {

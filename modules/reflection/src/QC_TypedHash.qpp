@@ -275,6 +275,38 @@ Type TypedHash::getType() [flags=RET_VALUE_ONLY] {
     return rv;
 }
 
+//! Returns the formal type parameter names for this typed hash, or @ref nothing if the typed hash is not generic
+/** @par Example:
+    @code{.py}
+*list<string> params = TypedHash::forName("KeyValueInfo").getTypeParameters();
+# returns ("V",)
+    @endcode
+
+    @return the formal type parameter names for this typed hash, or @ref nothing if the typed hash is not generic
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the @ref hashdecl "typed hash (hashdecl)" has been destroyed
+
+    @since %Qore 2.4
+*/
+*list<string> TypedHash::getTypeParameters() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, thd->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    size_t param_count = thd->th->getTypeParameterCount();
+    if (!param_count) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (size_t i = 0; i < param_count; ++i) {
+        rv->push(new QoreStringNode(thd->th->getTypeParameterName(i)), xsink);
+    }
+    return rv.release();
+}
+
 //! Returns the "or nothing" type object for this typed hash
 /** @par Example:
     @code{.py}

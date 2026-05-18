@@ -469,6 +469,10 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
 
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclObjectSerializationInfo, xsink), xsink);
     h->setKeyValue("_class", new QoreStringNode(cls.getNamespacePath()), xsink);
+    const QoreTypeInfo* object_type_info = self.getInstantiatedTypeInfo();
+    if (object_type_info) {
+        h->setKeyValue("_object_type", new QoreStringNode(QoreTypeInfo::getPath(object_type_info)), xsink);
+    }
 
     ReferenceHolder<QoreHashNode> class_data(xsink);
 
@@ -809,6 +813,26 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                     return QoreValue();
                 }
                 QoreObject* obj = new QoreObject(cls, pgm);
+                v = oh->getKeyValue("_object_type");
+                if (v) {
+                    if (v.getType() != NT_STRING) {
+                        obj->deref(xsink);
+                        xsink->raiseException("DESERIALIZATION-ERROR", "'_object_type' key for class '%s' has "
+                            "invalid type '%s'; expecting 'string'", cname, v.getTypeName());
+                        return QoreValue();
+                    }
+                    QoreStringValueHelper type_str(v);
+                    const QoreTypeInfo* object_type = qore_get_type_from_string_intern(type_str->c_str());
+                    const QoreParameterizedClassTypeInfo* pcti = QoreTypeInfo::getParameterizedClassType(object_type);
+                    if (!pcti || pcti->isOrNothing() || pcti->getBaseClass() != cls) {
+                        obj->deref(xsink);
+                        xsink->raiseException("DESERIALIZATION-ERROR", "'_object_type' key has value '%s', which "
+                            "is not a concrete parameterized object type for serialized class '%s'",
+                            type_str->c_str(), cname);
+                        return QoreValue();
+                    }
+                    obj->setInstantiatedTypeInfo(object_type);
+                }
                 assert(context.oimap.find(key) == context.oimap.end());
                 context.oimap.insert(oimap_t::value_type(key, obj));
             } else if (hashdeclHashSerializationInfo->equal(oh->getHashDecl())) {

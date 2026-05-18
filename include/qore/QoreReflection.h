@@ -484,12 +484,12 @@ DLLEXPORT const type_vec_t* qore_type_get_code_param_types(const QoreTypeInfo* t
 */
 DLLEXPORT bool qore_type_code_has_varargs(const QoreTypeInfo* ti);
 
-//! returns true if the type is a parameterized class type
+//! returns true if the type is a parameterized class or hashdecl type
 /** @since %Qore 2.4
  */
 DLLEXPORT bool qore_type_is_parameterized(const QoreTypeInfo* ti);
 
-//! returns a pointer to the type arguments for a parameterized class type, or nullptr if not a parameterized class type
+//! returns a pointer to the type arguments for a parameterized class or hashdecl type, or nullptr if not parameterized
 /** @note this returns a pointer to internal storage; do not delete
     @since %Qore 2.4
  */

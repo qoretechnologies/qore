@@ -90,6 +90,19 @@ const char* TypedHashDecl::getTypeParameterBoundType(size_t index) const {
     return index < hp->getTypeParamCount() ? hp->getTypeParamBoundType(index) : nullptr;
 }
 
+bool TypedHashDecl::hasTypeParameters() const {
+    return typed_hash_decl_private::get(*this)->hasTypeParams();
+}
+
+size_t TypedHashDecl::getTypeParameterCount() const {
+    return typed_hash_decl_private::get(*this)->getTypeParamCount();
+}
+
+const char* TypedHashDecl::getTypeParameterName(size_t index) const {
+    const typed_hash_decl_private* hp = typed_hash_decl_private::get(*this);
+    return index < hp->getTypeParamCount() ? hp->getTypeParamName(index) : nullptr;
+}
+
 size_t TypedHashDecl::getTypeParameterRequiredCount() const {
     return typed_hash_decl_private::get(*this)->getTypeParamRequiredCount();
 }
