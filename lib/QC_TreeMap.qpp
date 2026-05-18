@@ -32,14 +32,23 @@
 #include <qore/Qore.h>
 #include "qore/intern/QC_TreeMap.h"
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/RSet.h"
+
+static const QoreTypeInfo* get_treemap_value_type(const QoreTypeInfo* treemap_type_info) {
+    const QoreParameterizedClassTypeInfo* treemap_type
+        = QoreTypeInfo::getParameterizedClassType(treemap_type_info);
+    const QoreTypeInfo* value_type
+        = treemap_type && treemap_type->getArgCount() ? treemap_type->getTypeArgs()[0] : autoTypeInfo;
+    return QoreTypeInfo::hasType(value_type) ? value_type : autoTypeInfo;
+}
 
 //! A container for efficient path prefix lookup.
 /** The primary use of this class is in HttpServer for matching request URIs to handlers.
 
     Example:
     @code{.py}
-TreeMap tm();
+TreeMap<code> tm();
 
 tm.put("path/to/resource", handler1);
 tm.put("scripts", handler2);
@@ -55,7 +64,7 @@ tm.get("scripts/special/main.js");      # returns handler3
 tm.get("scripts/normal/main.js");       # returns handler2
     @endcode
 */
-qclass TreeMap [arg=TreeMapData* tm];
+qclass TreeMap<V> [arg=TreeMapData* tm; legacy_raw];
 
 //! Creates an empty TreeMap container
 /** Creates an empty TreeMap container.
@@ -87,14 +96,14 @@ TreeMap::copy() {
 
     @see TreeMap::remove()
  */
-nothing TreeMap::put(string path, auto value) [flags=NAMED_ARGS] {
+nothing TreeMap::put(string path, V value) [flags=NAMED_ARGS] {
     tm->put(self, path, value, xsink);
 }
 
 //! Retrieves a value from the TreeMap and optionally returns the unmatched path suffix
 /** @par Example:
     @code{.py}
-TreeMap tm();
+TreeMap<string> tm();
 tm.put("abc", "1");
 tm.put("def/g/hi", "5");
 
@@ -119,7 +128,7 @@ v = tm.get("def/g/hi/five", \h.unmatched);  # returns "5" and h.unmatched is "fi
 
     @since %Qore 0.8.13
  */
-auto TreeMap::get(string path, *reference<*string> unmatched) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
+*V TreeMap::get(string path, *reference<*string> unmatched) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     return tm->get(path, unmatched, xsink);
 }
 
@@ -132,15 +141,15 @@ auto TreeMap::get(string path, *reference<*string> unmatched) [flags=RET_VALUE_O
 
     @see TreeMap::put()
 */
-auto TreeMap::take(string path) [flags=NAMED_ARGS] {
+*V TreeMap::take(string path) [flags=NAMED_ARGS] {
     return tm->take(self, path, xsink);
 }
 
 //! Retrieves the entire TreeMap as a hash; returns @ref nothing if the TreeMap is empty
 /** @return the entire TreeMap as a hash; returns @ref nothing if the TreeMap is empty
  */
-*hash TreeMap::getAll() [flags=CONSTANT] {
-    return tm->getAll();
+*hash<string, V> TreeMap::getAll() [flags=CONSTANT] {
+    return tm->getAll(get_treemap_value_type(self->getInstantiatedTypeInfo()));
 }
 
 void TreeMapData::destructor(ExceptionSink* xsink) {

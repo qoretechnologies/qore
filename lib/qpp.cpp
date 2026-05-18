@@ -7285,6 +7285,42 @@ typedef std::map<std::string, ClassElement*> cemap_t;
 
 typedef std::vector<AbstractElement*> source_t;
 
+static const char* find_qclass_name_end(const char* p) {
+    int angle_depth = 0;
+
+    for (const char* q = p; *q; ++q) {
+        if (*q == '<') {
+            ++angle_depth;
+            continue;
+        }
+        if (*q == '>') {
+            if (angle_depth) {
+                --angle_depth;
+            }
+            continue;
+        }
+        if (angle_depth) {
+            continue;
+        }
+        if (*q == '[') {
+            return q;
+        }
+        if (whitespace(*q)) {
+            const char* next = q;
+            while (*next && whitespace(*next)) {
+                ++next;
+            }
+            if (*next == '<') {
+                q = next - 1;
+                continue;
+            }
+            return q;
+        }
+    }
+
+    return p + strlen(p);
+}
+
 class Code {
 protected:
     const char* fileName;
@@ -7435,16 +7471,14 @@ protected:
 
                 if (!strncmp(sc.c_str(), "qclass ", 7)) {
                     const char* p = sc.c_str() + 7;
-                    while (*p && *p == ' ')
+                    while (*p && whitespace(*p))
                         ++p;
                     if (!*p) {
                         error("%s:%d: premature EOF reading class header line\n", fileName, lineNumber);
                         rc = -1;
                         break;
                     }
-                    const char* p1 = p;
-                    while (*p1 && *p1 != ' ')
-                        ++p1;
+                    const char* p1 = find_qclass_name_end(p);
 
                     std::string cn(p, p1 - p);
 

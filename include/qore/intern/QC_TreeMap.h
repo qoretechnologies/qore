@@ -126,13 +126,13 @@ public:
         return QoreValue();
     }
 
-    DLLLOCAL QoreHashNode* getAll() const {
+    DLLLOCAL QoreHashNode* getAll(const QoreTypeInfo* valueTypeInfo) const {
         QoreAutoRWReadLocker al(rwl);
 
         if (data.empty())
             return nullptr;
 
-        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), nullptr);
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(valueTypeInfo), nullptr);
         for (Map::const_iterator i = data.begin(), e = data.end(); i != e; ++i)
             h->setKeyValue(i->first.c_str(), i->second.refSelf(), nullptr);
         return h.release();

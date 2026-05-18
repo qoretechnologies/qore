@@ -28,6 +28,15 @@
 #include "qore/Qore.h"
 #include "QC_MongoCursor.h"
 
+QoreObject* qore_new_mongo_cursor_object(QoreProgram* pgm, mongoc_cursor_t* cursor, const QoreTypeInfo* docTypeInfo) {
+    type_vec_t type_args;
+    type_args.push_back(docTypeInfo ? docTypeInfo : autoHashTypeInfo);
+
+    QoreObject* rv = new QoreObject(QC_MONGOCURSOR, pgm, new QoreMongoCursor(cursor));
+    rv->setInstantiatedTypeInfo(QC_MONGOCURSOR->getTypeInfo(type_args));
+    return rv;
+}
+
 //! The MongoCursor class provides iteration over MongoDB query results
 /** This class is returned by find() and aggregate() operations and allows
     iterating over the result documents one at a time.
@@ -35,19 +44,20 @@
     @par Example:
     @code{.py}
 # Iterate using next()
-MongoCursor cursor = coll.find({"status": "active"});
+MongoCursor<hash<auto>> cursor = coll.find({"status": "active"});
 while (*hash<auto> doc = cursor.next()) {
     printf("Document: %y\n", doc);
 }
 
 # Get all results as a list
-MongoCursor cursor = coll.find();
+MongoCursor<hash<auto>> cursor = coll.find();
 list<hash<auto>> docs = cursor.toList();
     @endcode
 
     @since mongodb 1.0
 */
-qclass MongoCursor [arg=QoreMongoCursor* cursor; ns=mongodb; flags=final];
+qclass MongoCursor<DocT: hash<auto> = hash<auto>> [arg=QoreMongoCursor* cursor; ns=mongodb; flags=final;
+    legacy_raw];
 
 //! Returns the next document from the cursor
 /** @return the next document, or @ref nothing if no more documents
@@ -61,7 +71,7 @@ while (*hash<auto> doc = cursor.next()) {
 
     @throw MONGODB-CURSOR-ERROR cursor error
 */
-*hash<auto> MongoCursor::next() {
+*DocT MongoCursor::next() {
     return cursor->next(xsink);
 }
 
@@ -99,7 +109,7 @@ foreach hash<auto> doc in (docs) {
     @note This method exhausts the cursor. After calling toList(),
     subsequent calls to next() will return @ref nothing.
 */
-list<hash<auto>> MongoCursor::toList() {
+list<DocT> MongoCursor::toList() {
     return cursor->toList(xsink);
 }
 

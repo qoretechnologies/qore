@@ -61,7 +61,9 @@ class MyClass inherits MyBaseClass {
     @ref Qore::Thread::Future "Future<T>", the iterator hierarchy such as
     @ref Qore::AbstractIterator "AbstractIterator<T>" and
     @ref Qore::HashIterator "HashIterator<V>", and poll operation classes such
-    as @ref Qore::AbstractPollOperation "AbstractPollOperation<T>".
+    as @ref Qore::AbstractPollOperation "AbstractPollOperation<T>". Other
+    value-carrying builtin classes, such as @ref Qore::TreeMap "TreeMap<V>",
+    use type parameters where one stable value type moves through the object.
 
     @par Example
     @code{.py}
@@ -79,6 +81,10 @@ HashIterator<int> iterator(data);
 while (iterator.next()) {
     int current = iterator.getValue();
 }
+
+TreeMap<code> route_handlers();
+route_handlers.put(path: "api/v1", value: \handleApiV1());
+*code handler = route_handlers.get(path: "api/v1/users");
 
 AbstractPollOperation<auto> op = sock.startPollConnect(target: "example.com:443");
     @endcode

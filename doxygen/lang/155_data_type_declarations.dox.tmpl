@@ -504,6 +504,17 @@ p.set(value: {"status": 200, "body": "ok"});
 hash<auto> response = f.get(timeout_ms: 5s);
     @endcode
 
+    @par Generic TreeMap Example
+    @code{.py}
+TreeMap<code> handlers();
+handlers.put(path: "api/v1", value: \handleApiV1());
+
+*code handler = handlers.get(path: "api/v1/users");
+if (exists handler) {
+    handler();
+}
+    @endcode
+
     Parameterized class types are invariant when concrete type arguments are
     used. For example, <tt>Queue&lt;auto&gt;</tt> is a concrete value-erased
     queue type; it is not a wildcard that accepts every queue instantiation:

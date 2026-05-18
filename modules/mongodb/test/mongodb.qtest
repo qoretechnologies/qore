@@ -57,6 +57,7 @@ public class MongoDbTest inherits QUnit::Test {
         addTestCase("Upsert and replace tests", \upsertAndReplaceTests());
         addTestCase("Query operators tests", \queryOperatorsTests());
         addTestCase("Aggregation tests", \aggregationTests());
+        addTestCase("Generic cursor type tests", \genericCursorTypeTests());
         addTestCase("Cursor tests", \cursorTests());
         addTestCase("Negative tests", \negativeTests());
         addTestCase("Corner cases", \cornerCaseTests());
@@ -737,6 +738,50 @@ public class MongoDbTest inherits QUnit::Test {
         assertEq("added", results[0].newField, "$addFields stage");
 
         # Clean up
+        coll.drop();
+    }
+
+    genericCursorTypeTests() {
+        Program p(PO_NEW_STYLE);
+        p.parse("
+%requires mongodb
+hashdecl Doc {
+    string name;
+    int age;
+}
+sub typed_cursor(MongoCursor<hash<Doc>> cursor) {
+    *hash<Doc> doc = cursor.next();
+    list<hash<Doc>> docs = cursor.toList();
+}
+", "mongodb generic cursor");
+
+        Program p2(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", \p2.parse(), ("
+%requires mongodb
+sub invalid_cursor(MongoCursor<int> cursor) {
+}
+", "mongodb generic cursor"));
+
+        if (!ensureClient()) return;
+
+        *MongoCollection coll;
+        try {
+            coll = getCleanCollection("generic_cursor_type_tests");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("MongoDB not available: " + ex.desc);
+            return;
+        }
+
+        coll.insertMany((
+            {"name": "Alice", "age": 30},
+            {"name": "Bob", "age": 35},
+        ));
+
+        MongoCursor<hash<auto>> cursor = coll.find({}, {"sort": {"age": 1}});
+        list<hash<auto>> docs = cursor.toList();
+        assertEq(2, docs.size(), "typed MongoCursor<hash<auto>> toList size");
+        assertEq("Alice", docs[0].name, "typed MongoCursor<hash<auto>> toList value");
+
         coll.drop();
     }
 

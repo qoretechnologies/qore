@@ -313,6 +313,7 @@ binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: Fals
     - @ref Qore::Thread::Channel "Channel<T>"
     - @ref Qore::Thread::Promise "Promise<T>"
     - @ref Qore::Thread::Future "Future<T>"
+    - @ref Qore::TreeMap "TreeMap<V>" for typed path-prefix maps
     - @ref Qore::AbstractIterator "AbstractIterator<T>" and concrete list,
       hash, channel, and single-value iterators
     - @ref Qore::AbstractPollOperation "AbstractPollOperation<T>" and
@@ -337,6 +338,10 @@ HashIterator<int> it(values);
 while (it.next()) {
     int item = it.getValue();
 }
+
+TreeMap<code> handlers();
+handlers.put(path: "api/v1", value: \handleApiV1());
+*code handler = handlers.get(path: "api/v1/users");
 
 AbstractPollOperation<auto> connect = sock.startPollConnect(target: "example.com:443");
     @endcode
@@ -1716,6 +1721,9 @@ cargo install tree-sitter-cli@0.26.5
     - @ref mongodbintro "mongodb" module
       - new builtin module providing <a href="https://www.mongodb.com/">MongoDB</a> client connectivity using libmongoc
       - provides MongoClient, MongoDatabase, MongoCollection, MongoCursor, and ObjectId classes
+      - MongoCursor is now generic as <tt>MongoCursor<DocT: hash<auto> = hash<auto>></tt>; MongoCollection::find()
+        and MongoCollection::aggregate() return <tt>MongoCursor<hash<auto>></tt>, and cursor next()/toList() preserve
+        the document type parameter
       - full CRUD operations support (insertOne, insertMany, find, findOne, updateOne, updateMany, deleteOne,
         deleteMany)
       - aggregation pipeline support

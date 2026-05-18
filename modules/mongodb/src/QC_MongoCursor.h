@@ -37,6 +37,8 @@ DLLLOCAL extern QoreClass* QC_MONGOCURSOR;
 
 DLLLOCAL void preinitMongoCursorClass();
 DLLLOCAL QoreClass* initMongoCursorClass(QoreNamespace& ns);
+DLLLOCAL QoreObject* qore_new_mongo_cursor_object(QoreProgram* pgm, mongoc_cursor_t* cursor,
+    const QoreTypeInfo* docTypeInfo = autoHashTypeInfo);
 
 //! MongoDB cursor wrapper class
 class QoreMongoCursor : public AbstractPrivateData {
