@@ -493,9 +493,19 @@ public class GenericClassTypesTest inherits QUnit::Test {
         assertEq(1, iterator_pair.value);
         assertEq("hash<KeyValueInfo<int>>", iterator_pair.fullType());
 
+        map assertIntHashPair($1), pair_it;
+
         hash<string, int> copied = map {$1.key: $1.value}, values.pairIterator();
         assertEq(1, copied.a);
         assertEq(2, copied.b);
+
+        map assertIntHashPair($1), values.pairIterator();
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("sub f(hash<auto> m) {} sub t(hash h) { map f($1), h.pairIterator(); }",
+                "generic-classes");
+        }
 
         hash<SourceGenericResult<int>> typed_record(("value": 3, "values": (4,)));
         auto record_value_it = typed_record.iterator();
@@ -525,6 +535,10 @@ public class GenericClassTypesTest inherits QUnit::Test {
         hash<auto> object_members = map {$1.key: $1.value}, obj.pairIterator();
         assertEq(3, object_members.count);
         assertEq("three", object_members.label);
+    }
+
+    assertIntHashPair(hash<KeyValueInfo<int>> pair) {
+        assertEq("hash<KeyValueInfo<int>>", pair.fullType());
     }
 
     sourceRawGenericCompatibility() {

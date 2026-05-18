@@ -351,10 +351,6 @@ struct TypeParameterCacheKey {
 typedef std::map<TypeParameterCacheKey, QoreTypeParameterTypeInfo*> type_parameter_map_t;
 static type_parameter_map_t type_parameter_map;
 
-// Cache for parameterized HashPairInfo types based on value type
-typedef std::map<const QoreTypeInfo*, TypedHashDecl*> hp_decl_map_t;
-static hp_decl_map_t hp_decl_map;
-
 // rwlock for global type map
 static QoreRWLock extern_type_info_map_lock;
 
@@ -479,9 +475,6 @@ void delete_qore_types() {
     // Clean up symbolic class type parameter cache
     for (auto& i : type_parameter_map)
         delete i.second;
-    // Clean up hash pair info decl cache
-    for (auto& i : hp_decl_map)
-        typed_hash_decl_private::get(*i.second)->deref();
 }
 
 void add_to_type_map(qore_type_t t, const QoreTypeInfo* typeInfo) {
@@ -3798,41 +3791,36 @@ void map_get_plain_list(QoreValue& n, ExceptionSink* xsink) {
 }
 
 const QoreTypeInfo* QoreTypeInfo::getHashPairType(const QoreTypeInfo* valueType) {
-    // For auto/any value types, return autoHashTypeInfo as the element type
-    if (!valueType || valueType == autoTypeInfo || valueType == anyTypeInfo) {
+    const QoreTypeInfo* resolvedType = valueType && valueType != anyTypeInfo && hasType(valueType)
+        ? valueType
+        : autoTypeInfo;
+
+    if (!hashdeclKeyValueInfo) {
         return autoHashTypeInfo;
     }
 
-    // Check cache under lock
-    {
-        AutoLocker al(ctl);
-        hp_decl_map_t::iterator i = hp_decl_map.lower_bound(valueType);
-        if (i != hp_decl_map.end() && i->first == valueType) {
-            return i->second->getTypeInfo();
-        }
+    type_vec_t typeArgs;
+    typeArgs.push_back(resolvedType);
+    return hashdeclKeyValueInfo->getParameterizedHashDecl(typeArgs)->getTypeInfo();
+}
+
+static const QoreTypeInfo* get_known_iterator_element_type(const QoreClass* qc, const QoreTypeInfo* valueType) {
+    if (!qc) {
+        return nullptr;
     }
 
-    // Create a new TypedHashDecl for this value type
-    // HashPairInfo has "key" (string) and "value" (valueType)
-    TypedHashDecl* hd = new TypedHashDecl("HashPairInfo", "Qore::HashPairInfo");
-    typed_hash_decl_private::get(*hd)->addMember("key", stringTypeInfo, QoreValue());
-    typed_hash_decl_private::get(*hd)->addMember("value", valueType, QoreValue());
-    typed_hash_decl_private::get(*hd)->setSystemPublic();
-
-    // Cache it under lock
-    {
-        AutoLocker al(ctl);
-        // Check again in case another thread added it
-        hp_decl_map_t::iterator i = hp_decl_map.lower_bound(valueType);
-        if (i != hp_decl_map.end() && i->first == valueType) {
-            // Another thread added it - clean up and use theirs
-            typed_hash_decl_private::get(*hd)->deref();
-            return i->second->getTypeInfo();
-        }
-        hp_decl_map.insert(i, hp_decl_map_t::value_type(valueType, hd));
+    const char* className = qc->getName();
+    if (!strcmp(className, "HashPairIterator") || !strcmp(className, "HashPairReverseIterator")
+            || !strcmp(className, "ObjectPairIterator") || !strcmp(className, "ObjectPairReverseIterator")) {
+        return QoreTypeInfo::getHashPairType(valueType);
     }
 
-    return hd->getTypeInfo();
+    if (!strcmp(className, "HashKeyIterator") || !strcmp(className, "HashKeyReverseIterator")
+            || !strcmp(className, "ObjectKeyIterator") || !strcmp(className, "ObjectKeyReverseIterator")) {
+        return stringTypeInfo;
+    }
+
+    return nullptr;
 }
 
 const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iteratorClass,
@@ -3860,6 +3848,9 @@ const QoreTypeInfo* QoreTypeInfo::getIteratorElementType(const QoreClass* iterat
     if (!hashValueType) {
         // Also try hash-or-nothing types
         hashValueType = getReturnComplexHashOrNothing(sourceTypeInfo);
+    }
+    if (!hashValueType && parseReturns(sourceTypeInfo, NT_HASH) != QTI_NOT_EQUAL) {
+        hashValueType = autoTypeInfo;
     }
 
     if (hashValueType) {
@@ -3920,6 +3911,12 @@ const QoreTypeInfo* QoreTypeInfo::getAbstractIteratorElementType(const QoreTypeI
 
     const QoreParameterizedClassTypeInfo* pti = getParameterizedClassType(iteratorTypeInfo);
     if (pti) {
+        const QoreTypeInfo* valueType = pti->getArgCount() ? pti->getTypeArgs()[0] : autoTypeInfo;
+        const QoreTypeInfo* knownType = get_known_iterator_element_type(pti->getBaseClass(), valueType);
+        if (knownType) {
+            return knownType;
+        }
+
         abstract_iterator_type = qore_class_private::get(*pti->getBaseClass())
             ->getParameterizedBaseTypeInfo(pti, QC_ABSTRACTITERATOR);
     }
@@ -3927,6 +3924,11 @@ const QoreTypeInfo* QoreTypeInfo::getAbstractIteratorElementType(const QoreTypeI
     if (!abstract_iterator_type) {
         const QoreClass* qc = getUniqueReturnClass(iteratorTypeInfo);
         if (qc) {
+            const QoreTypeInfo* knownType = get_known_iterator_element_type(qc, autoTypeInfo);
+            if (knownType) {
+                return knownType;
+            }
+
             abstract_iterator_type = qore_class_private::get(*qc)
                 ->getConcreteParameterizedBaseTypeInfo(QC_ABSTRACTITERATOR);
         }

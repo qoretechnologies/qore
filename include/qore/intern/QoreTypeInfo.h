@@ -311,7 +311,7 @@ public:
 
     //! Returns the element type info for an iterator class based on source type
     /** For HashPairIterator with source hash<string, int>: returns the type info for
-        hash<HashPairInfo> where HashPairInfo has key: string and value: int
+        hash<KeyValueInfo<int>> where KeyValueInfo has key: string and value: int
         For HashKeyIterator with source hash<string, int>: returns the type info for string
         For HashIterator with source hash<string, int>: returns the type info for int (value type)
         For ListIterator with source list<T>: returns the type info for T
@@ -338,9 +338,9 @@ public:
     DLLLOCAL static const QoreTypeInfo* getImplicitArgTypeForIterator(const QoreValue& iteratorExpr,
         const QoreTypeInfo* iteratorTypeInfo);
 
-    //! Returns or creates a HashPairInfo type with the given value type
+    //! Returns a KeyValueInfo hash type with the given value type
     /** @param valueType the type for the "value" member
-        @return the HashPairInfo type with the specified value type
+        @return the KeyValueInfo type with the specified value type
 
         @since Qore 2.1
     */
