@@ -1460,8 +1460,16 @@ public class DataProviderActionCatalog {
     static hash<string, hash<ActionOptionInfo>> getActionOptionFromFields(hash<auto> fields,
             *hash<auto> additional_fields) {
         hash<string, hash<ActionOptionInfo>> rv;
-        foreach hash<auto> i in (fields.pairIterator()) {
+        hash plain_fields = hash(fields);
+        foreach hash<auto> i in (plain_fields.pairIterator()) {
             on_error rethrow $1.err, sprintf("%s (while processing field %y)", $1.desc, i.key);
+            if (!(i.value instanceof AbstractDataField) && i.value.typeCode() == NT_HASH
+                    && i.value.type.typeCode() != NT_LIST) {
+                if (!exists i.value.name) {
+                    i.value.name = i.key;
+                }
+                i.value = new QoreDataField(i.value);
+            }
             if (i.value instanceof AbstractDataField) {
                 hash<DataFieldInfo> info = i.value.getLocalInfo();
                 i.value = info{"display_name", "short_desc", "desc", "default_value", "example_value",

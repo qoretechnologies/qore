@@ -277,7 +277,7 @@ class UnionTypeTest inherits QUnit::Test {
     testUnionEmptyError() {
         # Test that empty union type causes parse error
         Program p(PO_NEW_STYLE);
-        assertThrows("PARSE-EXCEPTION", \p.parse(), ("
+        assertThrows("PARSE-TYPE-ERROR", \p.parse(), ("
             union<> sub test() {
                 return 1;
             }

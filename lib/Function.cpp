@@ -2398,7 +2398,8 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
     }
 
     if (infer_from_args && qore_class_private::get(*cls)->rawConstructionDefaultsToAuto()) {
-        return nullptr;
+        type_vec_t args(cls->getTypeParameterCount(), autoTypeInfo);
+        return cls->getTypeInfo(args);
     }
 
     if (const QoreTypeInfo* expected_receiver = qore_get_class_receiver_from_expected(cls, expected_type_info)) {

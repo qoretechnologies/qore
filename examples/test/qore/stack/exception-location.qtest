@@ -147,7 +147,7 @@ class ExceptionLocationTest inherits QUnit::Test {
 
             ex = getEx(\p.parse(), Code1 + "A::X::method() {\nx = 1;\n}\n", "X");
             assertEq(4, ex.line);
-            assertEq(6, ex.endline);
+            assertEq(4, ex.endline);
             assertEq("X", ex.file);
 
             ex = getEx(\p.parse(), Code1 + "const A::X::P\n= 1;\n", "Y");

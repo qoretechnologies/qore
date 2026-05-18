@@ -138,14 +138,20 @@ Documentation checklist:
 Run focused checks after each implementation phase, then run a complete local
 verification before the final commit:
 
-- [ ] `cmake --build build --target qore -j$(nproc)`
-- [ ] `cmake --build build --target qpp astparser -j$(nproc)`
-- [ ] `./run_tests.sh -d qore/misc/generic-classes.qtest`
-- [ ] `build/qore --exec-mode=ast examples/test/qore/misc/generic-classes.qtest`
-- [ ] `build/qcc -o build/generic-classes-qtest-aot examples/test/qore/misc/generic-classes.qtest`
-- [ ] `build/generic-classes-qtest-aot`
-- [ ] `build/qore modules/astparser/test/astparser.qtest`
-- [ ] Relevant docs fast targets, such as `make docs-lang-final-fast`.
-- [ ] Full `./run_tests.sh`.
-- [ ] `git diff --check`.
-- [ ] Apply `audit-changes` before each commit.
+- [x] `cmake --build build --target qore -j$(nproc)`
+- [x] `cmake --build build --target qpp astparser -j$(nproc)`
+- [x] `./run_tests.sh -d qore/misc/generic-classes.qtest`
+- [x] `build/qore --exec-mode=ast examples/test/qore/misc/generic-classes.qtest`
+- [x] `build/qore --exec-mode=ir examples/test/qore/misc/generic-classes.qtest`
+- [x] `build/qore --exec-mode=jit examples/test/qore/misc/generic-classes.qtest`
+- [x] `build/qore --exec-mode=tiered examples/test/qore/misc/generic-classes.qtest`
+- [x] `build/qcc -o build/generic-classes-qtest-aot examples/test/qore/misc/generic-classes.qtest`
+- [x] `build/generic-classes-qtest-aot`
+- [x] `build/qore modules/astparser/test/astparser.qtest`
+- [x] Relevant docs fast targets, such as `make docs-lang-final-fast`.
+- [x] Full `./run_tests.sh` attempted; branch regressions found by the run were
+  fixed and rechecked with focused tests. The remaining local failures are
+  environment/data setup issues: PostgreSQL is not running, the Qorus test data
+  index is not readable, and Tesseract English data is missing.
+- [x] Final post-cleanup `git diff --check`.
+- [x] Apply `audit-changes` before each commit.

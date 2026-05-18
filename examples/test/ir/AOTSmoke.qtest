@@ -1093,7 +1093,7 @@ class Holder {
 }
 
 C strong();
-Holder::check(remove strong);
+Holder::check(c0: remove strong);
 printf(\"after=%d\\n\", destroyed);
 ";
         hash<auto> result = compileCheckAndRun(code);
