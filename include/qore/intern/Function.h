@@ -436,7 +436,8 @@ public:
             const AbstractQoreFunctionVariant*& variant, const char* n_name, const QoreListNode* args = nullptr,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
-            const QoreTypeInfo* explicit_receiver_type_info = nullptr);
+            const QoreTypeInfo* explicit_receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
     //! Creates the object for evaluating the given code (function, method, closure) with the given arguments
     /**
@@ -456,7 +457,8 @@ public:
             const AbstractQoreFunctionVariant*& variant, const char* n_name, QoreListNode* args,
             QoreObject* self = nullptr, const qore_class_private* n_qc = nullptr, qore_call_t n_ct = CT_UNUSED,
             bool is_copy = false, const qore_class_private* cctx = nullptr, QoreProgram* pgm_ctx = nullptr,
-            const QoreTypeInfo* explicit_receiver_type_info = nullptr);
+            const QoreTypeInfo* explicit_receiver_type_info = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
     DLLLOCAL ~CodeEvaluationHelper();
 
@@ -570,6 +572,7 @@ protected:
     QoreParseOptions old_rc_po;
     const QoreTypeInfo* explicit_receiver_type_info = nullptr;
     const QoreTypeInfo* old_receiver_type_info = nullptr;
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr;
     QoreTypeParamInstantiation type_param_instantiation;
     const QoreTypeParamInstantiation* old_type_param_instantiation = nullptr;
     q_rt_flags_t old_rtflags = 0;
@@ -1399,12 +1402,14 @@ public:
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     DLLLOCAL virtual QoreValue evalFunction(const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
-            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink) const;
+            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // if the variant was identified at parse time, then variant will not be NULL, otherwise if NULL then it is identified at run time
     // this function will use destructive evaluation of "args"
     DLLLOCAL virtual QoreValue evalFunctionTmpArgs(const AbstractQoreFunctionVariant* variant, QoreListNode* args,
-            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink) const;
+            QoreProgram* pgm, RuntimeConfig& rc, ExceptionSink* xsink,
+            const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr) const;
 
     // finds a variant and checks variant capabilities against current program parse options and executes the variant
     DLLLOCAL QoreValue evalDynamic(const QoreListNode* args, RuntimeConfig& rc, ExceptionSink* xsink) const;
@@ -1419,13 +1424,15 @@ public:
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
             const QoreTypeInfo* receiver_type_info = nullptr,
-            QoreTypeParamInstantiation* type_param_inst = nullptr) const;
+            QoreTypeParamInstantiation* type_param_inst = nullptr,
+            const type_vec_t* explicit_type_args = nullptr) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNamed(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const name_vec_t& argNames,
             const qore_class_private* class_ctx, int& err, QoreNamedArgBinding& binding,
             const QoreTypeInfo* receiver_type_info = nullptr,
-            QoreTypeParamInstantiation* type_param_inst = nullptr) const;
+            QoreTypeParamInstantiation* type_param_inst = nullptr,
+            const type_vec_t* explicit_type_args = nullptr) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {
@@ -1444,12 +1451,14 @@ public:
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
             bool only_user, const qore_class_private* class_ctx,
             const QoreTypeInfo* receiver_type_info = nullptr,
-            QoreTypeParamInstantiation* type_param_inst = nullptr) const;
+            QoreTypeParamInstantiation* type_param_inst = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
 
     // finds the best match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
             const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
-            QoreTypeParamInstantiation* type_param_inst = nullptr) const;
+            QoreTypeParamInstantiation* type_param_inst = nullptr,
+            const QoreTypeParamInstantiation* explicit_type_param_inst = nullptr) const;
     // finds only an exact match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
 

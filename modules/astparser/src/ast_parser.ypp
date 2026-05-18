@@ -3349,6 +3349,12 @@ exp_c:
             free($1);
             $$ = new ASTCallExpression(new ASTNameExpression(std::move(name)), $3);
         }
+        | ANGLE_IDENTIFIER '(' call_args ')' {
+            ASTName name($1, ASTNameKind::ANK_AngleIdentifier);
+            name.loc = @1;
+            free($1);
+            $$ = new ASTCallExpression(new ASTNameExpression(std::move(name)), $3);
+        }
         | KW_IDENTIFIER_OPENPAREN call_args ')' {
             ASTName name($1, ASTNameKind::ANK_KWIdentifier);
             name.loc.setFirst(@1);

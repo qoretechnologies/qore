@@ -44,6 +44,10 @@ protected:
     const AbstractQoreFunctionVariant* variant = nullptr;
     const QoreTypeInfo* receiver_type_info = nullptr;
     QoreTypeParamInstantiation type_param_instantiation;
+    ptype_vec_t explicit_parse_type_args;
+    type_vec_t explicit_type_args;
+    QoreTypeParamInstantiation explicit_runtime_type_param_instantiation;
+    bool has_explicit_type_args = false;
 
 public:
     DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args),
@@ -55,12 +59,26 @@ public:
         args(old.args ? old.args->listRefSelf() : nullptr),
         variant(old.variant),
         receiver_type_info(old.receiver_type_info),
-        type_param_instantiation(old.type_param_instantiation) {
+        type_param_instantiation(old.type_param_instantiation),
+        explicit_type_args(old.explicit_type_args),
+        explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
+        has_explicit_type_args(old.has_explicit_type_args) {
+        explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
+        for (const QoreParseTypeInfo* pti : old.explicit_parse_type_args) {
+            explicit_parse_type_args.push_back(pti ? pti->copy() : nullptr);
+        }
     }
 
     DLLLOCAL FunctionCallBase(const FunctionCallBase& old, QoreListNode* n_args) : args(n_args),
             variant(old.variant), receiver_type_info(old.receiver_type_info),
-            type_param_instantiation(old.type_param_instantiation) {
+            type_param_instantiation(old.type_param_instantiation),
+            explicit_type_args(old.explicit_type_args),
+            explicit_runtime_type_param_instantiation(old.explicit_runtime_type_param_instantiation),
+            has_explicit_type_args(old.has_explicit_type_args) {
+        explicit_parse_type_args.reserve(old.explicit_parse_type_args.size());
+        for (const QoreParseTypeInfo* pti : old.explicit_parse_type_args) {
+            explicit_parse_type_args.push_back(pti ? pti->copy() : nullptr);
+        }
     }
 
     DLLLOCAL ~FunctionCallBase() {
@@ -68,6 +86,9 @@ public:
             parse_args->deref();
         if (args)
             args->deref(nullptr);
+        for (QoreParseTypeInfo* pti : explicit_parse_type_args) {
+            delete pti;
+        }
     }
 
     DLLLOCAL const QoreParseListNode* getParseArgs() const { return parse_args; }
@@ -90,6 +111,41 @@ public:
         return type_param_instantiation.empty() ? nullptr : &type_param_instantiation;
     }
 
+    DLLLOCAL const QoreTypeParamInstantiation* getExplicitTypeParamInstantiation() const {
+        if (!has_explicit_type_args) {
+            return nullptr;
+        }
+        if (!explicit_runtime_type_param_instantiation.type_args.empty()) {
+            return &explicit_runtime_type_param_instantiation;
+        }
+        if (!type_param_instantiation.type_args.empty()) {
+            return &type_param_instantiation;
+        }
+        return nullptr;
+    }
+
+    DLLLOCAL bool hasExplicitTypeArgs() const {
+        return has_explicit_type_args;
+    }
+
+    DLLLOCAL void setExplicitTypeArgs(ptype_vec_t&& type_args) {
+        has_explicit_type_args = true;
+        explicit_parse_type_args = std::move(type_args);
+        explicit_type_args.clear();
+        explicit_runtime_type_param_instantiation.clear();
+    }
+
+    DLLLOCAL void moveExplicitTypeArgsFrom(FunctionCallBase& old) {
+        has_explicit_type_args = old.has_explicit_type_args;
+        explicit_parse_type_args = std::move(old.explicit_parse_type_args);
+        explicit_type_args = std::move(old.explicit_type_args);
+        explicit_runtime_type_param_instantiation = std::move(old.explicit_runtime_type_param_instantiation);
+        type_param_instantiation = std::move(old.type_param_instantiation);
+        old.has_explicit_type_args = false;
+        old.explicit_runtime_type_param_instantiation.clear();
+        old.type_param_instantiation.clear();
+    }
+
     DLLLOCAL void setVariant(const AbstractQoreFunctionVariant* v) {
         variant = v;
     }
@@ -105,6 +161,8 @@ public:
         when any entry is an AST node. Must be called after deserialization.
     */
     DLLLOCAL void resolveParseArgs();
+
+    DLLLOCAL int resolveExplicitTypeArgs(const QoreProgramLocation* loc);
 };
 
 class AbstractFunctionCallNode : public ParseNode, public FunctionCallBase {

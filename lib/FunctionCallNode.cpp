@@ -121,21 +121,24 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
         }
 
         RuntimeConfig& rc = rc_get_current_ref();
+        const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
         // When tmp_args is true (clone from IR interpreter), use evalTmpArgs to preserve
         // ReferenceNode values in the arg list. The eval() path goes through
         // CodeEvaluationHelper with const args, which calls evalList() and dereferences
         // ReferenceNodes.
         if (tmp_args) {
-            return qore_method_private::evalTmpArgs(*method, xsink, rc, o, args, ctx, variant);
+            return qore_method_private::evalTmpArgs(*method, xsink, rc, o, args, ctx, variant, nullptr,
+                explicit_inst);
         }
         return variant
             ? qore_method_private::evalNormalVariant(*method, xsink, rc, o,
-                reinterpret_cast<const QoreExternalMethodVariant*>(variant), args)
-            : qore_method_private::eval(*method, xsink, rc, o, args, ctx);
+                reinterpret_cast<const QoreExternalMethodVariant*>(variant), args, explicit_inst)
+            : qore_method_private::eval(*method, xsink, rc, o, args, ctx, nullptr, nullptr, explicit_inst);
     }
     //printd(5, "AbstractMethodCallNode::exec() calling QoreObject::evalMethod() for %s::%s()\n", o->getClassName(),
     //    c_str);
     RuntimeConfig& rc = rc_get_current_ref();
+    const QoreTypeParamInstantiation* explicit_inst = getExplicitTypeParamInstantiation();
     if (tmp_args) {
         // Dynamic dispatch with pre-evaluated args: look up the method on the actual class
         // and use evalTmpArgs to preserve ReferenceNode values
@@ -145,10 +148,10 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
             return QoreValue();
         }
         if (w) {
-            return qore_method_private::evalTmpArgs(*w, xsink, rc, o, args, ctx);
+            return qore_method_private::evalTmpArgs(*w, xsink, rc, o, args, ctx, nullptr, nullptr, explicit_inst);
         }
     }
-    return qore_class_private::get(*o->getClass())->evalMethod(o, c_str, args, ctx, rc, xsink);
+    return qore_class_private::get(*o->getClass())->evalMethod(o, c_str, args, ctx, rc, xsink, explicit_inst);
 }
 
 const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
@@ -248,6 +251,24 @@ void FunctionCallBase::resolveParseArgs() {
     }
 }
 
+int FunctionCallBase::resolveExplicitTypeArgs(const QoreProgramLocation* loc) {
+    if (!has_explicit_type_args || explicit_parse_type_args.empty()) {
+        return 0;
+    }
+
+    int err = 0;
+    explicit_type_args.clear();
+    explicit_type_args.reserve(explicit_parse_type_args.size());
+    for (QoreParseTypeInfo* pti : explicit_parse_type_args) {
+        explicit_type_args.push_back(QoreParseTypeInfo::resolveAny(pti, loc, err));
+        delete pti;
+    }
+    explicit_parse_type_args.clear();
+    explicit_runtime_type_param_instantiation.owner = nullptr;
+    explicit_runtime_type_param_instantiation.type_args = explicit_type_args;
+    return err;
+}
+
 int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
         QoreFunction* func, qore_ns_private* ns) {
     int err = 0;
@@ -279,6 +300,10 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
     }
     parse_context.typeInfo = nullptr;
+
+    if (resolveExplicitTypeArgs(loc) && !err) {
+        err = -1;
+    }
 
     //printd(5, "FunctionCallBase::parseArgsVariant() this: %p args: %p '%s' func: %p\n", this, args,
     //    args ? get_full_type_name(args) : "n/a", func);
@@ -314,9 +339,9 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         type_param_instantiation.clear();
         variant = named_args
             ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding,
-                receiver_type_info, &type_param_instantiation)
+                receiver_type_info, &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr)
             : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info,
-                &type_param_instantiation);
+                &type_param_instantiation, has_explicit_type_args ? &explicit_type_args : nullptr);
 
         if (named_args) {
             if (!variant) {
@@ -687,8 +712,8 @@ QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, Excep
         call_pgm = getProgram();
     }
     return tmp_args
-        ? func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink)
-        : func->evalFunction(variant, args, call_pgm, rc, xsink);
+        ? func->evalFunctionTmpArgs(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation())
+        : func->evalFunction(variant, args, call_pgm, rc, xsink, getExplicitTypeParamInstantiation());
 }
 
 int FunctionCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
@@ -1189,10 +1214,11 @@ QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
            "call resolveParseArgs() after AOT deserialization");
     // Pass the class context so that private static methods called from within the same class are visible
     const qore_class_private* cctx = method ? qore_class_private::get(*qore_method_private::get(*method)->parent_class) : nullptr;
-
     return tmp_args
-        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx, variant, receiver_type_info)
-        : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx, nullptr, receiver_type_info);
+        ? qore_method_private::evalTmpArgs(*method, xsink, rc, nullptr, args, cctx, variant, receiver_type_info,
+            getExplicitTypeParamInstantiation())
+        : qore_method_private::eval(*method, xsink, rc, nullptr, args, cctx, nullptr, receiver_type_info,
+            getExplicitTypeParamInstantiation());
 }
 
 const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {

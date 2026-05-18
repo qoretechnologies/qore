@@ -44,6 +44,7 @@ static inline uint64_t toBitsNB(const QoreValue& v) {
 
 // Forward declarations for JIT runtime functions used by QoreIRInterpreter
 DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
-    uint64_t* args, int nargs, ExceptionSink* xsink);
+    uint64_t* args, int nargs, ExceptionSink* xsink,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation = nullptr);
 
 #endif

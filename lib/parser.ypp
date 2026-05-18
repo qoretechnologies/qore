@@ -513,6 +513,62 @@ static void apply_callable_type_params(UserVariantBase* variant, std::vector<Qor
     }
 }
 
+static char* parse_explicit_generic_call_name(const QoreProgramLocation* loc, char* raw_name,
+        ptype_vec_t& type_args) {
+    struct call_decl_free {
+        DLLLOCAL void operator()(char* p) const {
+            free(p);
+        }
+    };
+    std::unique_ptr<char, call_decl_free> raw(raw_name);
+    std::string decl(raw.get());
+    if (decl.empty() || decl.back() != '>') {
+        return strdup(decl.c_str());
+    }
+
+    int depth = 0;
+    size_t lt = std::string::npos;
+    for (size_t i = decl.size(); i > 0; --i) {
+        char c = decl[i - 1];
+        if (c == '>') {
+            ++depth;
+        } else if (c == '<') {
+            --depth;
+            if (!depth) {
+                lt = i - 1;
+                break;
+            }
+        }
+    }
+
+    if (lt == std::string::npos) {
+        parse_error(*loc, "invalid explicit generic call '%s'; missing opening '<'", decl.c_str());
+        return strdup(decl.c_str());
+    }
+
+    std::string name = decl.substr(0, lt);
+    ClassDeclParseInfo::trim(name);
+    std::string params = decl.substr(lt + 1, decl.size() - lt - 2);
+    std::vector<std::string> param_decls;
+    ClassDeclParseInfo::splitTypeParams(params, param_decls);
+    for (std::string& param_decl : param_decls) {
+        ClassDeclParseInfo::trim(param_decl);
+        if (param_decl.empty()) {
+            parse_error(*loc, "invalid explicit generic call '%s'; empty type argument", decl.c_str());
+            continue;
+        }
+        QoreParseTypeInfo* pti = qore_parse_type_string_to_pti(param_decl.c_str());
+        if (!pti) {
+            parse_error(*loc, "invalid explicit generic call '%s'; cannot parse type argument '%s'",
+                decl.c_str(), param_decl.c_str());
+            continue;
+        }
+        type_args.push_back(pti);
+    }
+
+    return strdup(name.c_str());
+}
+
 class HashDeclDef {
 public:
     const QoreProgramLocation* loc;
@@ -1818,6 +1874,7 @@ static AbstractQoreNode* process_dot(int sline, int eline, QoreValue l, QoreValu
             assert(!f->getFunction());
             if (!f->isFinalized()) {
                 MethodCallNode* m = new MethodCallNode(loc, f->takeName(), f->takeParseArgs());
+                m->moveExplicitTypeArgsFrom(*f);
                 f->deref();
 
                 return new QoreDotEvalOperatorNode(loc, l, m);
@@ -4561,6 +4618,21 @@ exp_c:
     { $$ = $1; }
     | '(' hash ')'
     { $$ = $2; }
+    | ANGLE_IDENTIFIER '(' call_args ')' {
+        const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line,
+            @4.last_line);
+        ptype_vec_t type_args;
+        char* name = parse_explicit_generic_call_name(loc, $1, type_args);
+        if (strstr(name, "::")) {
+            StaticMethodCallNode* node = new StaticMethodCallNode(loc, new NamedScope(name), $3);
+            node->setExplicitTypeArgs(std::move(type_args));
+            $$ = node;
+        } else {
+            FunctionCallNode* node = new FunctionCallNode(loc, name, $3);
+            node->setExplicitTypeArgs(std::move(type_args));
+            $$ = node;
+        }
+    }
     | SCOPED_REF
     {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line);

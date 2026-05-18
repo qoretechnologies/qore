@@ -3528,6 +3528,16 @@ static const char* qoreIROpcodeDiagnosticName(QoreIROpcode op) {
     return getOpcodeName(static_cast<int>(op));
 }
 
+static const QoreTypeParamInstantiation* qore_ir_get_explicit_dot_eval_type_instantiation(
+        const QoreValue& expr) {
+    auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(expr.getInternalNode());
+    if (!dot_eval) {
+        return nullptr;
+    }
+    MethodCallNode* call = dot_eval->getMethodCall();
+    return call ? call->getExplicitTypeParamInstantiation() : nullptr;
+}
+
 static bool canEmitAotInvokeExprFallback(const QoreIRInstruction* inst) {
     if (inst->opcode == QoreIROpcode::Invoke) {
         return true;
@@ -9840,6 +9850,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     nargs, has_arg_cleanups);
 
             llvm::Value* call_result;
+            const QoreTypeParamInstantiation* explicit_inst =
+                qore_ir_get_explicit_dot_eval_type_instantiation(direct_inst->expr);
+            llvm::Value* explicit_inst_ptr = explicit_inst
+                ? builder->CreateIntToPtr(
+                    llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
+                : nullptr;
 
             // Check for optimizable pseudo-methods (no arguments, known fast paths)
             if (InlinePseudoDotEvalFastPath && direct_inst->pseudo && nargs == 0 && direct_inst->method) {
@@ -9923,24 +9939,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::Value* variant_ptr = builder->CreateIntToPtr(
                                 llvm::ConstantInt::get(i64_type,
                                     reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
-                        auto ft = has_arg_cleanups
-                            ? llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                                false)
-                            : llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                                false);
-                        auto helper = module.getOrInsertFunction(has_arg_cleanups
-                                ? "qore_rt_dot_eval_pseudo_method_direct_consume_args"
-                                : "qore_rt_dot_eval_pseudo_method_direct", ft);
+                        auto ft = explicit_inst_ptr
+                            ? (has_arg_cleanups
+                                ? llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
+                                     ptr_type, ptr_type}, false)
+                                : llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type,
+                                     ptr_type}, false))
+                            : (has_arg_cleanups
+                                ? llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
+                                     ptr_type}, false)
+                                : llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                    false));
+                        auto helper = module.getOrInsertFunction(
+                                explicit_inst_ptr
+                                    ? (has_arg_cleanups
+                                        ? "qore_rt_dot_eval_pseudo_method_direct_with_inst_consume_args"
+                                        : "qore_rt_dot_eval_pseudo_method_direct_with_inst")
+                                    : (has_arg_cleanups
+                                        ? "qore_rt_dot_eval_pseudo_method_direct_consume_args"
+                                        : "qore_rt_dot_eval_pseudo_method_direct"), ft);
                         if (has_arg_cleanups) {
-                            call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
-                                    variant_ptr, args_array, arg_cleanups,
-                                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                            std::vector<llvm::Value*> call_args{base_boxed, method_ptr, qc_ptr, variant_ptr,
+                                args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs)};
+                            if (explicit_inst_ptr) {
+                                call_args.push_back(explicit_inst_ptr);
+                            }
+                            call_args.push_back(xsink_arg);
+                            call_result = builder->CreateCall(helper, call_args);
                         } else {
-                            call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
-                                    variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
-                                    xsink_arg});
+                            std::vector<llvm::Value*> call_args{base_boxed, method_ptr, qc_ptr, variant_ptr,
+                                args_array, llvm::ConstantInt::get(i32_type, nargs)};
+                            if (explicit_inst_ptr) {
+                                call_args.push_back(explicit_inst_ptr);
+                            }
+                            call_args.push_back(xsink_arg);
+                            call_result = builder->CreateCall(helper, call_args);
                         }
                     }
                 }
@@ -9994,29 +10031,53 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(direct_inst->variant)), ptr_type);
                 const char* helper_name = direct_inst->pseudo
-                        ? "qore_rt_dot_eval_pseudo_method_direct"
-                        : "qore_rt_dot_eval_method_direct";
+                        ? (explicit_inst_ptr
+                            ? "qore_rt_dot_eval_pseudo_method_direct_with_inst"
+                            : "qore_rt_dot_eval_pseudo_method_direct")
+                        : (explicit_inst_ptr
+                            ? "qore_rt_dot_eval_method_direct_with_inst"
+                            : "qore_rt_dot_eval_method_direct");
                 if (has_arg_cleanups) {
                     helper_name = direct_inst->pseudo
-                            ? "qore_rt_dot_eval_pseudo_method_direct_consume_args"
-                            : "qore_rt_dot_eval_method_direct_consume_args";
+                            ? (explicit_inst_ptr
+                                ? "qore_rt_dot_eval_pseudo_method_direct_with_inst_consume_args"
+                                : "qore_rt_dot_eval_pseudo_method_direct_consume_args")
+                            : (explicit_inst_ptr
+                                ? "qore_rt_dot_eval_method_direct_with_inst_consume_args"
+                                : "qore_rt_dot_eval_method_direct_consume_args");
                 }
-                auto ft = has_arg_cleanups
-                    ? llvm::FunctionType::get(i64_type,
-                        {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                        false)
-                    : llvm::FunctionType::get(i64_type,
-                        {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                        false);
+                auto ft = explicit_inst_ptr
+                    ? (has_arg_cleanups
+                        ? llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type,
+                             ptr_type}, false)
+                        : llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type},
+                            false))
+                    : (has_arg_cleanups
+                        ? llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                            false)
+                        : llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                            false));
                 auto helper = module.getOrInsertFunction(helper_name, ft);
                 if (has_arg_cleanups) {
-                    call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
-                            variant_ptr, args_array, arg_cleanups,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    std::vector<llvm::Value*> call_args{base_boxed, method_ptr, qc_ptr, variant_ptr,
+                        args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs)};
+                    if (explicit_inst_ptr) {
+                        call_args.push_back(explicit_inst_ptr);
+                    }
+                    call_args.push_back(xsink_arg);
+                    call_result = builder->CreateCall(helper, call_args);
                 } else {
-                    call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
-                            variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
-                            xsink_arg});
+                    std::vector<llvm::Value*> call_args{base_boxed, method_ptr, qc_ptr, variant_ptr,
+                        args_array, llvm::ConstantInt::get(i32_type, nargs)};
+                    if (explicit_inst_ptr) {
+                        call_args.push_back(explicit_inst_ptr);
+                    }
+                    call_args.push_back(xsink_arg);
+                    call_result = builder->CreateCall(helper, call_args);
                 }
             } else {
                 // Unresolved method (abstract/dynamic): use name-based dispatch with
@@ -10024,21 +10085,41 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const char* method_name = direct_inst->fallback_method_name
                     ? direct_inst->fallback_method_name : "";
                 llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
-                auto ft = has_arg_cleanups
-                    ? llvm::FunctionType::get(i64_type,
-                        {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false)
-                    : llvm::FunctionType::get(i64_type,
-                        {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false);
-                auto helper = module.getOrInsertFunction(has_arg_cleanups
-                        ? "qore_rt_dot_eval_method_by_name_consume_args"
-                        : "qore_rt_dot_eval_method_by_name", ft);
+                auto ft = explicit_inst_ptr
+                    ? (has_arg_cleanups
+                        ? llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type}, false)
+                        : llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type}, false))
+                    : (has_arg_cleanups
+                        ? llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false)
+                        : llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                auto helper = module.getOrInsertFunction(
+                        explicit_inst_ptr
+                            ? (has_arg_cleanups
+                                ? "qore_rt_dot_eval_method_by_name_with_inst_consume_args"
+                                : "qore_rt_dot_eval_method_by_name_with_inst")
+                            : (has_arg_cleanups
+                                ? "qore_rt_dot_eval_method_by_name_consume_args"
+                                : "qore_rt_dot_eval_method_by_name"), ft);
                 if (has_arg_cleanups) {
-                    call_result = builder->CreateCall(helper, {base_boxed, name_ptr,
-                            args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs),
-                            xsink_arg});
+                    std::vector<llvm::Value*> call_args{base_boxed, name_ptr, args_array, arg_cleanups,
+                        llvm::ConstantInt::get(i32_type, nargs)};
+                    if (explicit_inst_ptr) {
+                        call_args.push_back(explicit_inst_ptr);
+                    }
+                    call_args.push_back(xsink_arg);
+                    call_result = builder->CreateCall(helper, call_args);
                 } else {
-                    call_result = builder->CreateCall(helper, {base_boxed, name_ptr, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    std::vector<llvm::Value*> call_args{base_boxed, name_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs)};
+                    if (explicit_inst_ptr) {
+                        call_args.push_back(explicit_inst_ptr);
+                    }
+                    call_args.push_back(xsink_arg);
+                    call_result = builder->CreateCall(helper, call_args);
                 }
             }
 
@@ -10074,6 +10155,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     nargs, has_arg_cleanups);
 
             llvm::Value* call_result;
+            const QoreTypeParamInstantiation* explicit_inst =
+                qore_ir_get_explicit_dot_eval_type_instantiation(invoke_inst->expr);
+            llvm::Value* explicit_inst_ptr = explicit_inst
+                ? builder->CreateIntToPtr(
+                    llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(explicit_inst)), ptr_type)
+                : nullptr;
 
             // Check for optimizable pseudo-methods (no arguments, known fast paths)
             if (InlinePseudoDotEvalFastPath && invoke_inst->pseudo && nargs == 0 && invoke_inst->method) {
@@ -10157,24 +10244,45 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::Value* variant_ptr = builder->CreateIntToPtr(
                                 llvm::ConstantInt::get(i64_type,
                                     reinterpret_cast<uint64_t>(invoke_inst->variant)), ptr_type);
-                        auto ft = has_arg_cleanups
-                            ? llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                                false)
-                            : llvm::FunctionType::get(i64_type,
-                                {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                                false);
-                        auto helper = module.getOrInsertFunction(has_arg_cleanups
-                                ? "qore_rt_dot_eval_pseudo_method_direct_consume_args"
-                                : "qore_rt_dot_eval_pseudo_method_direct", ft);
+                        auto ft = explicit_inst_ptr
+                            ? (has_arg_cleanups
+                                ? llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
+                                     ptr_type, ptr_type}, false)
+                                : llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type,
+                                     ptr_type}, false))
+                            : (has_arg_cleanups
+                                ? llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type,
+                                     ptr_type}, false)
+                                : llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                                    false));
+                        auto helper = module.getOrInsertFunction(
+                                explicit_inst_ptr
+                                    ? (has_arg_cleanups
+                                        ? "qore_rt_dot_eval_pseudo_method_direct_with_inst_consume_args"
+                                        : "qore_rt_dot_eval_pseudo_method_direct_with_inst")
+                                    : (has_arg_cleanups
+                                        ? "qore_rt_dot_eval_pseudo_method_direct_consume_args"
+                                        : "qore_rt_dot_eval_pseudo_method_direct"), ft);
                         if (has_arg_cleanups) {
-                            call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
-                                    variant_ptr, args_array, arg_cleanups,
-                                    llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                            std::vector<llvm::Value*> call_args{base_boxed, method_ptr, qc_ptr, variant_ptr,
+                                args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs)};
+                            if (explicit_inst_ptr) {
+                                call_args.push_back(explicit_inst_ptr);
+                            }
+                            call_args.push_back(xsink_arg);
+                            call_result = builder->CreateCall(helper, call_args);
                         } else {
-                            call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
-                                    variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
-                                    xsink_arg});
+                            std::vector<llvm::Value*> call_args{base_boxed, method_ptr, qc_ptr, variant_ptr,
+                                args_array, llvm::ConstantInt::get(i32_type, nargs)};
+                            if (explicit_inst_ptr) {
+                                call_args.push_back(explicit_inst_ptr);
+                            }
+                            call_args.push_back(xsink_arg);
+                            call_result = builder->CreateCall(helper, call_args);
                         }
                     }
                 }
@@ -10228,29 +10336,53 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(invoke_inst->variant)), ptr_type);
                 const char* helper_name = invoke_inst->pseudo
-                        ? "qore_rt_dot_eval_pseudo_method_direct"
-                        : "qore_rt_dot_eval_method_direct";
+                        ? (explicit_inst_ptr
+                            ? "qore_rt_dot_eval_pseudo_method_direct_with_inst"
+                            : "qore_rt_dot_eval_pseudo_method_direct")
+                        : (explicit_inst_ptr
+                            ? "qore_rt_dot_eval_method_direct_with_inst"
+                            : "qore_rt_dot_eval_method_direct");
                 if (has_arg_cleanups) {
                     helper_name = invoke_inst->pseudo
-                            ? "qore_rt_dot_eval_pseudo_method_direct_consume_args"
-                            : "qore_rt_dot_eval_method_direct_consume_args";
+                            ? (explicit_inst_ptr
+                                ? "qore_rt_dot_eval_pseudo_method_direct_with_inst_consume_args"
+                                : "qore_rt_dot_eval_pseudo_method_direct_consume_args")
+                            : (explicit_inst_ptr
+                                ? "qore_rt_dot_eval_method_direct_with_inst_consume_args"
+                                : "qore_rt_dot_eval_method_direct_consume_args");
                 }
-                auto ft = has_arg_cleanups
-                    ? llvm::FunctionType::get(i64_type,
-                        {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                        false)
-                    : llvm::FunctionType::get(i64_type,
-                        {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
-                        false);
+                auto ft = explicit_inst_ptr
+                    ? (has_arg_cleanups
+                        ? llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type,
+                             ptr_type}, false)
+                        : llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type},
+                            false))
+                    : (has_arg_cleanups
+                        ? llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                            false)
+                        : llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type},
+                            false));
                 auto helper = module.getOrInsertFunction(helper_name, ft);
                 if (has_arg_cleanups) {
-                    call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
-                            variant_ptr, args_array, arg_cleanups,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    std::vector<llvm::Value*> call_args{base_boxed, method_ptr, qc_ptr, variant_ptr,
+                        args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs)};
+                    if (explicit_inst_ptr) {
+                        call_args.push_back(explicit_inst_ptr);
+                    }
+                    call_args.push_back(xsink_arg);
+                    call_result = builder->CreateCall(helper, call_args);
                 } else {
-                    call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
-                            variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
-                            xsink_arg});
+                    std::vector<llvm::Value*> call_args{base_boxed, method_ptr, qc_ptr, variant_ptr,
+                        args_array, llvm::ConstantInt::get(i32_type, nargs)};
+                    if (explicit_inst_ptr) {
+                        call_args.push_back(explicit_inst_ptr);
+                    }
+                    call_args.push_back(xsink_arg);
+                    call_result = builder->CreateCall(helper, call_args);
                 }
             } else {
                 // Unresolved method (abstract/dynamic): use name-based dispatch with
@@ -10258,21 +10390,41 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 const char* method_name = invoke_inst->fallback_method_name
                     ? invoke_inst->fallback_method_name : "";
                 llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
-                auto ft = has_arg_cleanups
-                    ? llvm::FunctionType::get(i64_type,
-                        {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false)
-                    : llvm::FunctionType::get(i64_type,
-                        {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false);
-                auto helper = module.getOrInsertFunction(has_arg_cleanups
-                        ? "qore_rt_dot_eval_method_by_name_consume_args"
-                        : "qore_rt_dot_eval_method_by_name", ft);
+                auto ft = explicit_inst_ptr
+                    ? (has_arg_cleanups
+                        ? llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type}, false)
+                        : llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, i32_type, ptr_type, ptr_type}, false))
+                    : (has_arg_cleanups
+                        ? llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false)
+                        : llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                auto helper = module.getOrInsertFunction(
+                        explicit_inst_ptr
+                            ? (has_arg_cleanups
+                                ? "qore_rt_dot_eval_method_by_name_with_inst_consume_args"
+                                : "qore_rt_dot_eval_method_by_name_with_inst")
+                            : (has_arg_cleanups
+                                ? "qore_rt_dot_eval_method_by_name_consume_args"
+                                : "qore_rt_dot_eval_method_by_name"), ft);
                 if (has_arg_cleanups) {
-                    call_result = builder->CreateCall(helper, {base_boxed, name_ptr,
-                            args_array, arg_cleanups, llvm::ConstantInt::get(i32_type, nargs),
-                            xsink_arg});
+                    std::vector<llvm::Value*> call_args{base_boxed, name_ptr, args_array, arg_cleanups,
+                        llvm::ConstantInt::get(i32_type, nargs)};
+                    if (explicit_inst_ptr) {
+                        call_args.push_back(explicit_inst_ptr);
+                    }
+                    call_args.push_back(xsink_arg);
+                    call_result = builder->CreateCall(helper, call_args);
                 } else {
-                    call_result = builder->CreateCall(helper, {base_boxed, name_ptr, args_array,
-                            llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
+                    std::vector<llvm::Value*> call_args{base_boxed, name_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs)};
+                    if (explicit_inst_ptr) {
+                        call_args.push_back(explicit_inst_ptr);
+                    }
+                    call_args.push_back(xsink_arg);
+                    call_result = builder->CreateCall(helper, call_args);
                 }
             }
 

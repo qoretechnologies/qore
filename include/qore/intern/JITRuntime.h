@@ -981,24 +981,56 @@ uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* ctx, int32_t opcode, 
 uint64_t qore_rt_dot_eval_method_direct(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
     const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Direct dot-eval method call with explicit generic method type arguments.
+uint64_t qore_rt_dot_eval_method_direct_with_inst(uint64_t base_bits, const QoreMethod* method,
+    const QoreClass* qc, const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink);
+
 //! Direct dot-eval method call that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_method_direct_consume_args(uint64_t base_bits, const QoreMethod* method,
     const QoreClass* qc, const AbstractQoreFunctionVariant* variant, uint64_t* args,
     uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+//! Direct dot-eval method call with explicit type arguments that consumes caller-owned cleanup slots.
+uint64_t qore_rt_dot_eval_method_direct_with_inst_consume_args(uint64_t base_bits, const QoreMethod* method,
+    const QoreClass* qc, const AbstractQoreFunctionVariant* variant, uint64_t* args,
+    uint64_t** arg_cleanups, int nargs, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+    ExceptionSink* xsink);
 
 //! Direct dot-eval pseudo-method call with pre-evaluated base and arguments.
 //! Dispatches to qore_class_private::evalPseudoMethod() with QoreListNode built from args.
 uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t base_bits, const QoreMethod* method, const QoreClass* qc,
     const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Direct dot-eval pseudo-method call with explicit generic type arguments for object/name fallback.
+uint64_t qore_rt_dot_eval_pseudo_method_direct_with_inst(uint64_t base_bits, const QoreMethod* method,
+    const QoreClass* qc, const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink);
+
 //! Direct dot-eval pseudo-method call that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_pseudo_method_direct_consume_args(uint64_t base_bits, const QoreMethod* method,
     const QoreClass* qc, const AbstractQoreFunctionVariant* variant, uint64_t* args,
     uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
 
+//! Direct dot-eval pseudo-method call with explicit type arguments that consumes cleanup slots.
+uint64_t qore_rt_dot_eval_pseudo_method_direct_with_inst_consume_args(uint64_t base_bits,
+    const QoreMethod* method, const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink);
+
 //! Name-based dot-eval method call that consumes caller-owned temporary argument cleanup slots.
 uint64_t qore_rt_dot_eval_method_by_name_consume_args(uint64_t base_bits, const char* method_name,
     uint64_t* args, uint64_t** arg_cleanups, int nargs, ExceptionSink* xsink);
+
+//! Name-based dot-eval method call with explicit generic method type arguments.
+uint64_t qore_rt_dot_eval_method_by_name_with_inst(uint64_t base_bits, const char* method_name,
+    uint64_t* args, int nargs, const QoreTypeParamInstantiation* explicit_type_param_instantiation,
+    ExceptionSink* xsink);
+
+//! Name-based dot-eval method call with explicit type arguments that consumes cleanup slots.
+uint64_t qore_rt_dot_eval_method_by_name_with_inst_consume_args(uint64_t base_bits, const char* method_name,
+    uint64_t* args, uint64_t** arg_cleanups, int nargs,
+    const QoreTypeParamInstantiation* explicit_type_param_instantiation, ExceptionSink* xsink);
 
 //! AOT variant of qore_rt_dot_eval_method_direct: resolves method/qc/variant from context slot.
 uint64_t qore_rt_dot_eval_method_direct_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,

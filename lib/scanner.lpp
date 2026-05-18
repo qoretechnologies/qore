@@ -2671,6 +2671,26 @@ hash\<{WORD}\>\{                        {
 #endif
                                             return HASHDECL_IDENTIFIER_OPENCURLY;
                                         }
+({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return ANGLE_IDENTIFIER;
+                                           }
+                                           parse_error(*get_loc(yylloc), "unterminated type specification in "
+                                               "explicit generic static method call '%s'", yytext);
+                                           yylval->string = strdup(yytext);
+                                           return ANGLE_IDENTIFIER;
+                                        }
+(::{WORD})+{TYPE_ARGS_NESTED}::{WORD}{TYPE_ARGS} {
+                                           if (angle_balanced(yytext)) {
+                                               yylval->string = strdup(yytext);
+                                               return ANGLE_IDENTIFIER;
+                                           }
+                                           parse_error(*get_loc(yylloc), "unterminated type specification in "
+                                               "explicit generic static method call '%s'", yytext);
+                                           yylval->string = strdup(yytext);
+                                           return ANGLE_IDENTIFIER;
+                                        }
 ({WORD}::)*{WORD}{TYPE_ARGS_NESTED}::{WORD} {
                                            if (angle_balanced(yytext)) {
                                                yylval->string = strdup(yytext);

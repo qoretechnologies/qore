@@ -348,6 +348,12 @@ T sub SourceGenericDefault<T = int>(T value = 11) {
     return value;
 }
 
+T sub SourceGenericMakeString<T = int>() {
+    auto value = "made";
+    T local = value;
+    return local;
+}
+
 T sub SourceGenericBound<T: int>(T value) {
     return value;
 }
@@ -362,6 +368,12 @@ class SourceGenericCallMethods {
         return first;
     }
 
+    T make<T = int>() {
+        auto value = "made-method";
+        T local = value;
+        return local;
+    }
+
     static T staticEcho<T>(T value) {
         return value;
     }
@@ -370,8 +382,20 @@ class SourceGenericCallMethods {
         return value;
     }
 
+    static T staticMake<T = int>() {
+        auto value = "made-static";
+        T local = value;
+        return local;
+    }
+
     static T staticBound<T: int>(T value) {
         return value;
+    }
+}
+
+class SourceGenericStaticChooser<T> {
+    static U choose<U>(T left, U right) {
+        return right;
     }
 }
 
@@ -568,33 +592,75 @@ public class GenericClassTypesTest inherits QUnit::Test {
         int function_int = SourceGenericIdentity(20);
         assertEq(20, function_int);
 
+        int explicit_function_int = SourceGenericIdentity<int>(25);
+        assertEq(25, explicit_function_int);
+
         string function_string = SourceGenericIdentity(value: "twenty");
         assertEq("twenty", function_string);
+
+        string explicit_function_string = SourceGenericIdentity<string>(value: "twenty-five");
+        assertEq("twenty-five", explicit_function_string);
 
         int default_function = SourceGenericDefault();
         assertEq(11, default_function);
 
+        int explicit_default_function = SourceGenericDefault<int>();
+        assertEq(11, explicit_default_function);
+
+        string explicit_no_arg_function = SourceGenericMakeString<string>();
+        assertEq("made", explicit_no_arg_function);
+
         int bound_function = SourceGenericBound(21);
         assertEq(21, bound_function);
+
+        int explicit_bound_function = SourceGenericBound<int>(26);
+        assertEq(26, explicit_bound_function);
 
         SourceGenericCallMethods calls();
         int method_int = calls.echo(22);
         assertEq(22, method_int);
 
+        int explicit_method_int = calls.echo<int>(27);
+        assertEq(27, explicit_method_int);
+
         string method_string = calls.echo(value: "twenty-two");
         assertEq("twenty-two", method_string);
+
+        string explicit_method_string = calls.echo<string>(value: "twenty-seven");
+        assertEq("twenty-seven", explicit_method_string);
+
+        string explicit_no_arg_method = calls.make<string>();
+        assertEq("made-method", explicit_no_arg_method);
 
         int static_int = SourceGenericCallMethods::staticEcho(23);
         assertEq(23, static_int);
 
+        int explicit_static_int = SourceGenericCallMethods::staticEcho<int>(28);
+        assertEq(28, explicit_static_int);
+
         string static_string = SourceGenericCallMethods::staticEcho(value: "twenty-three");
         assertEq("twenty-three", static_string);
+
+        string explicit_static_string = SourceGenericCallMethods::staticEcho<string>(value: "twenty-eight");
+        assertEq("twenty-eight", explicit_static_string);
 
         int static_default = SourceGenericCallMethods::staticDefault();
         assertEq(12, static_default);
 
+        int explicit_static_default = SourceGenericCallMethods::staticDefault<int>();
+        assertEq(12, explicit_static_default);
+
+        string explicit_no_arg_static = SourceGenericCallMethods::staticMake<string>();
+        assertEq("made-static", explicit_no_arg_static);
+
         int static_bound = SourceGenericCallMethods::staticBound(24);
         assertEq(24, static_bound);
+
+        int explicit_static_bound = SourceGenericCallMethods::staticBound<int>(29);
+        assertEq(29, explicit_static_bound);
+
+        string explicit_receiver_static = SourceGenericStaticChooser<int>::choose<string>(30, "thirty");
+        assertEq("thirty", explicit_receiver_static);
     }
 
     genericHashDecls() {
@@ -874,6 +940,16 @@ public class GenericClassTypesTest inherits QUnit::Test {
         }
 
         {
+            Program p(PO_NEW_STYLE);
+            p.parse("T sub identity<T>(T value) { return value; } "
+                "class C { T echo<T>(T value) { return value; } static T stat<T>(T value) { return value; } } "
+                "sub t() { int i = identity<int>(1); string s = identity<string>(value: \"x\"); C c(); "
+                "int mi = c.echo<int>(2); string ms = c.echo<string>(value: \"y\"); int si = C::stat<int>(3); }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
             Program p(PO_NEW_STYLE, True);
             p.parse("namespace N; T sub N::identity<T>(T value) { return value; } "
                 "class C {} T C::echo<T>(T value) { return value; } static T C::stat<T>(T value) { return value; } "
@@ -883,9 +959,40 @@ public class GenericClassTypesTest inherits QUnit::Test {
         }
 
         {
+            Program p(PO_NEW_STYLE, True);
+            p.parse("namespace N; T sub N::identity<T>(T value) { return value; } "
+                "class C {} T C::echo<T>(T value) { return value; } static T C::stat<T>(T value) { return value; } "
+                "sub t() { int i = N::identity<int>(1); C c(); int mi = c.echo<int>(2); "
+                "int si = C::stat<int>(3); }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T> { static U choose<U>(T left, U right) { return right; } } "
+                "sub t() { string s = Box<int>::choose<string>(1, \"x\"); }", "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
             Program p(PO_NEW_STYLE);
             assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
                 "T sub identity<T>(T value) { return value; } sub t() { int i = identity(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub identity<T>(T value) { return value; } sub t() { int i = identity<string>(1); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub identity<T>(T value) { return value; } sub t() { int i = identity<int, string>(1); }",
                 "generic-classes"));
         }
 
@@ -900,6 +1007,27 @@ public class GenericClassTypesTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE);
             assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
                 "T sub bounded<T: int>(T value) { return value; } sub t() { string s = bounded(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub bounded<T: int>(T value) { return value; } sub t() { string s = bounded<string>(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "int sub plain(int value) { return value; } sub t() { int i = plain<int>(1); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class C { T echo<T>(T value) { return value; } } sub t() { C c(); int i = c.echo<string>(1); }",
                 "generic-classes"));
         }
 

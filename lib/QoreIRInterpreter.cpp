@@ -10357,6 +10357,12 @@ lvalue_path_unary_done:
                 for (int i = 0; i < nargs; ++i) {
                     nanboxed_args[i] = toBits(getIRValue(values, direct_inst->operands[i + 1]));
                 }
+                auto* explicit_dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                    direct_inst->expr.getInternalNode());
+                const QoreTypeParamInstantiation* explicit_inst = explicit_dot_eval
+                    && explicit_dot_eval->getMethodCall()
+                    ? explicit_dot_eval->getMethodCall()->getExplicitTypeParamInstantiation()
+                    : nullptr;
 
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
@@ -10384,7 +10390,7 @@ lvalue_path_unary_done:
                     if (name_dispatch_first && method_name) {
                         called_external = true;
                         res = fromBits(dot_eval_fallback_with_args(base, method_name,
-                            nanboxed_args, nargs, xsink));
+                            nanboxed_args, nargs, xsink, explicit_inst));
                     } else if (method_name && !strcmp(method_name, "typeCode") && nargs == 0) {
                         // Inline: return type code constant
                         res = QoreValue(static_cast<int64_t>(base_type));
@@ -10469,9 +10475,11 @@ lvalue_path_unary_done:
                 } else {
                     called_external = true;
                     if (direct_inst->method && direct_inst->qc) {
-                        res = fromBits(qore_rt_dot_eval_method_direct(
-                            toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
-                            nanboxed_args, nargs, xsink));
+                        res = fromBits(explicit_inst
+                            ? qore_rt_dot_eval_method_direct_with_inst(toBits(base), direct_inst->method,
+                                direct_inst->qc, direct_inst->variant, nanboxed_args, nargs, explicit_inst, xsink)
+                            : qore_rt_dot_eval_method_direct(toBits(base), direct_inst->method, direct_inst->qc,
+                                direct_inst->variant, nanboxed_args, nargs, xsink));
                     } else {
                         // Abstract/unresolved method: use name-based dispatch
                         auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
@@ -10483,7 +10491,7 @@ lvalue_path_unary_done:
                         }
                         if (mname) {
                             res = fromBits(dot_eval_fallback_with_args(base, mname,
-                                nanboxed_args, nargs, xsink));
+                                nanboxed_args, nargs, xsink, explicit_inst));
                         } else {
                             xsink->raiseException("IR-ERROR",
                                 "DotEvalMethodDirect: null method pointer and no method name");
@@ -10524,6 +10532,12 @@ lvalue_path_unary_done:
                 for (int i = 0; i < nargs; ++i) {
                     nanboxed_args[i] = toBits(getIRValue(values, de_invoke_inst->operands[i + 1]));
                 }
+                auto* explicit_dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                    de_invoke_inst->expr.getInternalNode());
+                const QoreTypeParamInstantiation* explicit_inst = explicit_dot_eval
+                    && explicit_dot_eval->getMethodCall()
+                    ? explicit_dot_eval->getMethodCall()->getExplicitTypeParamInstantiation()
+                    : nullptr;
 
                 QoreValue res;
                 bool called_external = false;  // Track if we called external code
@@ -10551,7 +10565,7 @@ lvalue_path_unary_done:
                     if (name_dispatch_first && method_name) {
                         called_external = true;
                         res = fromBits(dot_eval_fallback_with_args(base, method_name,
-                            nanboxed_args, nargs, xsink));
+                            nanboxed_args, nargs, xsink, explicit_inst));
                     } else if (method_name && !strcmp(method_name, "typeCode") && nargs == 0) {
                         // Inline: return type code constant
                         res = QoreValue(static_cast<int64_t>(base_type));
@@ -10636,9 +10650,12 @@ lvalue_path_unary_done:
                 } else {
                     called_external = true;
                     if (de_invoke_inst->method && de_invoke_inst->qc) {
-                        res = fromBits(qore_rt_dot_eval_method_direct(
-                            toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
-                            nanboxed_args, nargs, xsink));
+                        res = fromBits(explicit_inst
+                            ? qore_rt_dot_eval_method_direct_with_inst(toBits(base), de_invoke_inst->method,
+                                de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs, explicit_inst,
+                                xsink)
+                            : qore_rt_dot_eval_method_direct(toBits(base), de_invoke_inst->method,
+                                de_invoke_inst->qc, de_invoke_inst->variant, nanboxed_args, nargs, xsink));
                     } else {
                         // Abstract/unresolved method: use name-based dispatch
                         auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
@@ -10649,7 +10666,7 @@ lvalue_path_unary_done:
                         }
                         if (mname) {
                             res = fromBits(dot_eval_fallback_with_args(base, mname,
-                                nanboxed_args, nargs, xsink));
+                                nanboxed_args, nargs, xsink, explicit_inst));
                         } else {
                             xsink->raiseException("IR-ERROR",
                                 "InvokeDotEvalMethodDirect: null method pointer and no method name");

@@ -9834,6 +9834,9 @@ QoreIRValue QoreIRLowering::lowerFunctionCall(const QoreValue& expr, std::string
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
+    if (call->hasExplicitTypeArgs()) {
+        return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, call->loc, error);
+    }
 
     // If the function is resolved at parse time, use CallDirect to skip the AST round-trip
     const QoreFunction* func = call->getFunction();
@@ -9979,6 +9982,9 @@ QoreIRValue QoreIRLowering::lowerSelfCall(const QoreValue& expr, std::string& er
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), operands, error)) {
         return QoreIRValue();
     }
+    if (call->hasExplicitTypeArgs()) {
+        return lowerExprOpOrInvoke(QoreIROpcode::CallMethod, expr, operands, call->loc, error);
+    }
 
     // Check for devirtualization opportunities
     // We can bypass virtual dispatch if:
@@ -10032,6 +10038,9 @@ QoreIRValue QoreIRLowering::lowerStaticCall(const QoreValue& expr, std::string& 
     std::vector<QoreIRValue> lowered_args;
     if (!lowerCallArgs(call->getParseArgs(), call->getArgs(), lowered_args, error)) {
         return QoreIRValue();
+    }
+    if (call->hasExplicitTypeArgs()) {
+        return lowerExprOpOrInvoke(QoreIROpcode::CallStatic, expr, lowered_args, call->loc, error);
     }
 
     // Only use CallStaticDirect if AST conclusively determined the variant at parse time.
