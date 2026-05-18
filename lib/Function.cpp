@@ -2120,6 +2120,424 @@ static bool bind_named_call_args(const AbstractFunctionSignature* sig, const typ
     return true;
 }
 
+static bool qore_bind_class_type_param(const QoreClass* cls, const QoreTypeParameterTypeInfo* tpi,
+        const QoreTypeInfo* actual, type_vec_t& bindings) {
+    if (tpi->getOwnerClass() != cls) {
+        return true;
+    }
+    if (!actual || !QoreTypeInfo::hasType(actual) || actual == nothingTypeInfo) {
+        return true;
+    }
+
+    size_t index = tpi->getIndex();
+    if (index >= bindings.size()) {
+        return false;
+    }
+
+    if (tpi->isOrNothing() && !qore_get_type_parameter_type_info(actual)
+            && !QoreTypeInfo::parseAcceptsReturns(actual, NT_NOTHING)) {
+        return false;
+    }
+
+    if (bindings[index]) {
+        return qore_method_type_args_compatible(bindings[index], actual);
+    }
+
+    bindings[index] = actual;
+    return true;
+}
+
+static bool qore_infer_class_type_args_from_type(const QoreClass* cls, const QoreTypeInfo* formal,
+        const QoreTypeInfo* actual, type_vec_t& bindings);
+
+static bool qore_infer_class_type_args_from_vec(const QoreClass* cls, const type_vec_t& formal,
+        const type_vec_t& actual, type_vec_t& bindings) {
+    if (formal.size() != actual.size()) {
+        return false;
+    }
+    for (size_t i = 0, e = formal.size(); i < e; ++i) {
+        if (!qore_infer_class_type_args_from_type(cls, formal[i], actual[i], bindings)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool qore_infer_class_type_args_from_type(const QoreClass* cls, const QoreTypeInfo* formal,
+        const QoreTypeInfo* actual, type_vec_t& bindings) {
+    if (!formal || !actual) {
+        return true;
+    }
+
+    if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(formal)) {
+        return qore_bind_class_type_param(cls, tpi, actual, bindings);
+    }
+
+    if (!QoreTypeInfo::hasType(formal) || !QoreTypeInfo::hasType(actual)) {
+        return true;
+    }
+
+    const QoreParameterizedClassTypeInfo* formal_pc = QoreTypeInfo::getParameterizedClassType(formal);
+    if (formal_pc) {
+        const QoreParameterizedClassTypeInfo* actual_pc = QoreTypeInfo::getParameterizedClassType(actual);
+        if (!actual_pc || formal_pc->getBaseClass() != actual_pc->getBaseClass()
+                || formal_pc->isOrNothing() != actual_pc->isOrNothing()) {
+            return true;
+        }
+        return qore_infer_class_type_args_from_vec(cls, formal_pc->getTypeArgs(), actual_pc->getTypeArgs(),
+            bindings);
+    }
+
+    const TypedHashDecl* formal_hd = QoreTypeInfo::getTypedHash(formal);
+    if (formal_hd) {
+        const TypedHashDecl* actual_hd = QoreTypeInfo::getTypedHash(actual);
+        if (!actual_hd) {
+            return true;
+        }
+        const typed_hash_decl_private* formal_hp = typed_hash_decl_private::get(*formal_hd);
+        const typed_hash_decl_private* actual_hp = typed_hash_decl_private::get(*actual_hd);
+        if (!formal_hp->isParameterizedHashDecl() || !actual_hp->isParameterizedHashDecl()) {
+            return true;
+        }
+        const TypedHashDecl* formal_base = formal_hp->getParameterizedBase();
+        const TypedHashDecl* actual_base = actual_hp->getParameterizedBase();
+        if (!formal_base || !actual_base || !formal_base->equal(actual_base)) {
+            return true;
+        }
+        return qore_infer_class_type_args_from_vec(cls, formal_hp->getTypeArgs(), actual_hp->getTypeArgs(),
+            bindings);
+    }
+
+    const QoreComplexCodeTypeInfo* formal_code = QoreTypeInfo::getComplexCodeType(formal);
+    if (formal_code) {
+        const QoreComplexCodeTypeInfo* actual_code = QoreTypeInfo::getComplexCodeType(actual);
+        if (!actual_code || formal_code->hasVarArgs() != actual_code->hasVarArgs()
+                || formal_code->isOrNothing() != actual_code->isOrNothing()) {
+            return true;
+        }
+        return qore_infer_class_type_args_from_type(cls, formal_code->getReturnType(),
+                actual_code->getReturnType(), bindings)
+            && qore_infer_class_type_args_from_vec(cls, formal_code->getParamTypes(),
+                actual_code->getParamTypes(), bindings);
+    }
+
+    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getUniqueReturnComplexHash(formal);
+    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getUniqueReturnComplexHash(actual);
+    if (formal_subtype) {
+        return actual_subtype
+            ? qore_infer_class_type_args_from_type(cls, formal_subtype, actual_subtype, bindings)
+            : true;
+    }
+
+    formal_subtype = QoreTypeInfo::getUniqueReturnComplexList(formal);
+    actual_subtype = QoreTypeInfo::getUniqueReturnComplexList(actual);
+    if (formal_subtype) {
+        return actual_subtype
+            ? qore_infer_class_type_args_from_type(cls, formal_subtype, actual_subtype, bindings)
+            : true;
+    }
+
+    formal_subtype = QoreTypeInfo::getUniqueReturnComplexReference(formal);
+    actual_subtype = QoreTypeInfo::getUniqueReturnComplexReference(actual);
+    if (formal_subtype) {
+        return actual_subtype
+            ? qore_infer_class_type_args_from_type(cls, formal_subtype, actual_subtype, bindings)
+            : true;
+    }
+
+    return true;
+}
+
+static const QoreTypeInfo* qore_resolve_class_type_param_type(const QoreProgramLocation* loc, const QoreClass* cls,
+        size_t index, const char* type_str, const char* kind, int& err) {
+    if (!type_str || !*type_str) {
+        return nullptr;
+    }
+    std::unique_ptr<QoreParseTypeInfo> pti(qore_parse_type_string_to_pti(type_str));
+    if (!pti) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot parse %s type '%s' for generic class '%s' type "
+            "parameter '%s'", kind, type_str, cls->getName(), cls->getTypeParameterName(index));
+        err = -1;
+        return nullptr;
+    }
+    return QoreParseTypeInfo::resolveAny(pti.get(), loc, err);
+}
+
+static bool qore_class_type_arg_satisfies_bound(const QoreTypeInfo* bound, const QoreTypeInfo* arg) {
+    if (!bound || !arg || arg == autoTypeInfo) {
+        return true;
+    }
+    bool may_not_match = false;
+    bool may_need_filter = false;
+    qore_type_result_e max_result = QTI_NOT_EQUAL;
+    qore_type_result_e rc = QoreTypeInfo::parseAccepts(bound, arg, may_not_match, may_need_filter, max_result, true);
+    return rc != QTI_NOT_EQUAL && !may_not_match;
+}
+
+static bool qore_finalize_class_type_args(const QoreProgramLocation* loc, const QoreClass* cls, type_vec_t& bindings,
+        int& err, bool emit_errors) {
+    bindings.resize(cls->getTypeParameterCount(), nullptr);
+    for (size_t i = 0, e = cls->getTypeParameterCount(); i < e; ++i) {
+        if (!bindings[i]) {
+            const char* default_type = cls->getTypeParameterDefaultType(i);
+            if (default_type) {
+                bindings[i] = qore_resolve_class_type_param_type(loc, cls, i, default_type, "default", err);
+                if (err) {
+                    return false;
+                }
+            }
+        }
+        if (!bindings[i]) {
+            if (emit_errors) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot infer type argument '%s' for generic class '%s'; "
+                    "use '%s<...>' with explicit type arguments", cls->getTypeParameterName(i), cls->getName(),
+                    cls->getName());
+                err = -1;
+            }
+            return false;
+        }
+
+        const char* bound_type = cls->getTypeParameterBoundType(i);
+        if (!bound_type) {
+            continue;
+        }
+        const QoreTypeInfo* bound = qore_resolve_class_type_param_type(loc, cls, i, bound_type, "bound", err);
+        if (err) {
+            return false;
+        }
+        if (!qore_class_type_arg_satisfies_bound(bound, bindings[i])) {
+            if (emit_errors) {
+                parseException(*loc, "PARSE-TYPE-ERROR", "type argument '%s' inferred for generic class '%s' type "
+                    "parameter '%s' does not satisfy bound '%s'", QoreTypeInfo::getName(bindings[i]),
+                    cls->getName(), cls->getTypeParameterName(i), QoreTypeInfo::getName(bound));
+                err = -1;
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+static const QoreTypeInfo* qore_get_class_receiver_from_expected(const QoreClass* cls,
+        const QoreTypeInfo* expected_type_info) {
+    const QoreParameterizedClassTypeInfo* expected = QoreTypeInfo::getParameterizedClassType(expected_type_info);
+    if (!expected || expected->getBaseClass() != cls || qore_type_contains_wildcard(expected)) {
+        return nullptr;
+    }
+    return cls->getTypeInfo(expected->getTypeArgs());
+}
+
+struct ClassReceiverInferenceResult {
+    const QoreTypeInfo* type_info = nullptr;
+    int score = -1;
+    int nperfect = -1;
+    int score_len = -1;
+    bool ambiguous = false;
+};
+
+static bool qore_score_class_receiver_inference_candidate(const AbstractFunctionSignature* sig,
+        const type_vec_t& arg_types, const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
+        int& score, int& nperfect, int& score_len) {
+    score = 0;
+    nperfect = 0;
+    score_len = sig->numParams();
+
+    for (unsigned pi = 0, e = sig->numParams(); pi < e; ++pi) {
+        bool pos_supplied = supplied ? (pi < supplied->size() && (*supplied)[pi]) : (pi < arg_types.size());
+        const QoreTypeInfo* actual = pos_supplied && pi < arg_types.size() ? arg_types[pi] : nullptr;
+        bool pos_has_arg = pos_supplied && QoreTypeInfo::hasType(actual);
+        const QoreTypeInfo* formal = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info);
+
+        qore_type_result_e rc = QTI_UNASSIGNED;
+        qore_type_result_e max_rc = QTI_UNASSIGNED;
+        if (QoreTypeInfo::hasType(formal)) {
+            if (pos_supplied && sig->hasDefaultArg(pi)
+                    && (QoreTypeInfo::isType(actual, NT_NOTHING)
+                        || (QoreTypeInfo::isType(actual, NT_NULL)
+                            && qore_is_non_optional_soft_type(formal)))) {
+                rc = max_rc = QTI_IDENT;
+            } else if (!pos_has_arg) {
+                if (pos_supplied) {
+                    return false;
+                } else if (sig->hasDefaultArg(pi)) {
+                    rc = max_rc = QTI_IGNORE;
+                } else {
+                    actual = nothingTypeInfo;
+                }
+            }
+        }
+
+        if (rc == QTI_UNASSIGNED) {
+            bool may_not_match = false;
+            bool may_need_filter = false;
+            rc = QoreTypeInfo::parseAccepts(formal, actual, may_not_match, may_need_filter, max_rc, true);
+            if (may_not_match) {
+                return false;
+            }
+            if (rc == QTI_IDENT) {
+                ++nperfect;
+            }
+        }
+
+        if (rc == QTI_NOT_EQUAL) {
+            return false;
+        }
+        if (rc != QTI_IGNORE && pos_has_arg) {
+            score += rc;
+        }
+    }
+    return true;
+}
+
+const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProgramLocation* loc,
+        const type_vec_t& argTypeInfo, const name_vec_t* argNames, const qore_class_private* class_ctx,
+        int& err, const QoreTypeInfo* expected_type_info, bool infer_from_args) const {
+    const QoreClass* cls = getClass();
+    if (!cls || !cls->hasTypeParameters()) {
+        return nullptr;
+    }
+
+    if (infer_from_args && qore_class_private::get(*cls)->rawConstructionDefaultsToAuto()) {
+        return nullptr;
+    }
+
+    if (const QoreTypeInfo* expected_receiver = qore_get_class_receiver_from_expected(cls, expected_type_info)) {
+        return expected_receiver;
+    }
+
+    if (!infer_from_args) {
+        return nullptr;
+    }
+
+    ClassReceiverInferenceResult best;
+    bool saw_failed_bindings = false;
+    type_vec_t failed_bindings;
+    QoreFunction* aqf = nullptr;
+    const qore_class_private* last_class = nullptr;
+    bool internal_access = false;
+    QoreParseOptions po = parse_get_parse_options();
+
+    for (ilist_t::const_iterator aqfi = ilist.begin(), aqfe = ilist.end(); aqfi != aqfe; ++aqfi) {
+        bool stop;
+        aqf = ilist.getFunction(class_ctx, last_class, aqfi, internal_access, stop);
+        if (!aqf) {
+            break;
+        }
+
+        for (vlist_t::const_iterator i = aqf->vlist.begin(), e = aqf->vlist.end(); i != e; ++i) {
+            if (last_class && skip_method_variant(*i, class_ctx, internal_access)) {
+                continue;
+            }
+
+            AbstractFunctionSignature* sig = (*i)->getSignature();
+            int64 vflags = (*i)->getFlags();
+            bool strict_args = static_cast<bool>((*i)->getParseOptions(po) & (PO_REQUIRE_TYPES|PO_STRICT_ARGS));
+            if (strict_args && (vflags & (QCF_NOOP | QCF_RUNTIME_NOOP))) {
+                continue;
+            }
+
+            bool uses_extra_args = (*i)->hasVarargs();
+            if ((sig->numParams() < argTypeInfo.size()) && !uses_extra_args && strict_args
+                    && check_extra_args(sig, argTypeInfo)) {
+                continue;
+            }
+
+            NamedArgCandidateBinding named_binding;
+            const type_vec_t* candidate_arg_types = &argTypeInfo;
+            const std::vector<bool>* supplied = nullptr;
+            if (argNames) {
+                NamedArgBindFailure bind_failure;
+                if (!bind_named_call_args(sig, argTypeInfo, *argNames, named_binding, bind_failure)) {
+                    continue;
+                }
+                candidate_arg_types = &named_binding.arg_types;
+                supplied = &named_binding.supplied;
+            }
+
+            type_vec_t bindings(cls->getTypeParameterCount(), nullptr);
+            for (unsigned pi = 0, pe = sig->numParams(); pi < pe; ++pi) {
+                bool pos_supplied = supplied ? (pi < supplied->size() && (*supplied)[pi])
+                    : (pi < candidate_arg_types->size());
+                if (!pos_supplied || pi >= candidate_arg_types->size()) {
+                    continue;
+                }
+                const QoreTypeInfo* actual = (*candidate_arg_types)[pi];
+                if (!actual || !QoreTypeInfo::hasType(actual)) {
+                    continue;
+                }
+                if (!qore_infer_class_type_args_from_type(cls, sig->getParamTypeInfo(pi), actual, bindings)) {
+                    bindings.clear();
+                    break;
+                }
+            }
+            if (bindings.empty()) {
+                continue;
+            }
+            bool has_inferred_binding = false;
+            for (const QoreTypeInfo* binding : bindings) {
+                if (binding) {
+                    has_inferred_binding = true;
+                    break;
+                }
+            }
+            if (!qore_finalize_class_type_args(loc, cls, bindings, err, false)) {
+                if (err) {
+                    return nullptr;
+                }
+                if (has_inferred_binding) {
+                    saw_failed_bindings = true;
+                    failed_bindings = bindings;
+                }
+                continue;
+            }
+
+            const QoreTypeInfo* receiver_type_info = cls->getTypeInfo(bindings);
+            int candidate_score;
+            int candidate_nperfect;
+            int candidate_score_len;
+            if (!qore_score_class_receiver_inference_candidate(sig, *candidate_arg_types, supplied,
+                    receiver_type_info, candidate_score, candidate_nperfect, candidate_score_len)) {
+                continue;
+            }
+
+            bool better = candidate_score > best.score
+                || (candidate_score == best.score
+                    && (candidate_nperfect > best.nperfect
+                        || (candidate_nperfect == best.nperfect
+                            && (best.score_len == -1 || candidate_score_len < best.score_len))));
+            bool tied = candidate_score == best.score && candidate_nperfect == best.nperfect
+                && candidate_score_len == best.score_len;
+            if (better) {
+                best.type_info = receiver_type_info;
+                best.score = candidate_score;
+                best.nperfect = candidate_nperfect;
+                best.score_len = candidate_score_len;
+                best.ambiguous = false;
+            } else if (tied && best.type_info && !QoreTypeInfo::equal(best.type_info, receiver_type_info)) {
+                best.ambiguous = true;
+            }
+        }
+
+        if (stop || best.type_info) {
+            break;
+        }
+    }
+
+    if (best.ambiguous) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "constructor call for generic class '%s' has ambiguous inferred "
+            "type arguments; use '%s<...>' with explicit type arguments", cls->getName(), cls->getName());
+        err = -1;
+        return nullptr;
+    }
+
+    if (!best.type_info && saw_failed_bindings) {
+        qore_finalize_class_type_args(loc, cls, failed_bindings, err, true);
+        return nullptr;
+    }
+
+    return best.type_info;
+}
+
 QoreListNode* QoreFunction::runtimeGetCallVariants() const {
    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoHashTypeInfo), nullptr);
 

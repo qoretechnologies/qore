@@ -1434,6 +1434,21 @@ public:
             QoreTypeParamInstantiation* type_param_inst = nullptr,
             const type_vec_t* explicit_type_args = nullptr) const;
 
+    //! Infers a concrete receiver type for a raw generic class constructor or static method call
+    /** @param loc source location for diagnostics
+        @param argTypeInfo parse-time argument types
+        @param argNames named argument names, or nullptr for positional calls
+        @param class_ctx current class context for access checks
+        @param err parse error flag
+        @param expected_type_info surrounding expected type hint, or nullptr
+        @param infer_from_args true to infer from formal/actual constructor arguments
+        @return the inferred parameterized class type, or nullptr if no unique inference is available
+    */
+    DLLLOCAL const QoreTypeInfo* parseInferClassReceiverTypeInfo(const QoreProgramLocation* loc,
+            const type_vec_t& argTypeInfo, const name_vec_t* argNames,
+            const qore_class_private* class_ctx, int& err, const QoreTypeInfo* expected_type_info,
+            bool infer_from_args) const;
+
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {
         return vlist.empty() || !check_parse;

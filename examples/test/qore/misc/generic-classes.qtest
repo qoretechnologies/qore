@@ -451,6 +451,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("method-level generics", \methodLevelGenerics());
         addTestCase("generic hashdecls", \genericHashDecls());
         addTestCase("generic wildcards", \genericWildcards());
+        addTestCase("expression-site inference", \expressionSiteInference());
         addTestCase("source generic iterators", \sourceGenericIterators());
         addTestCase("source generic poll operations", \sourceGenericPollOperations());
         addTestCase("builtin iterator element types", \builtinIteratorElementTypes());
@@ -776,6 +777,64 @@ public class GenericClassTypesTest inherits QUnit::Test {
                 "sub t(hash<Child<int>> c) { hash<Parent<? extends string>> p = c; }",
                 "generic-classes"));
         }
+    }
+
+    expressionSiteInference() {
+        auto inferred_box = new SourceGenericBox(31);
+        assertTrue(inferred_box instanceof SourceGenericBox<int>);
+        assertFalse(inferred_box instanceof SourceGenericBox<string>);
+        int inferred_value = inferred_box.get();
+        assertEq(31, inferred_value);
+
+        SourceGenericBox<int> target_box = new SourceGenericBox(32);
+        assertTrue(target_box instanceof SourceGenericBox<int>);
+        assertEq(32, target_box.get());
+
+        SourceGenericBox<?> wildcard_target = new SourceGenericBox(33);
+        assertTrue(wildcard_target instanceof SourceGenericBox<int>);
+        assertEq(33, wildcard_target.get());
+
+        auto named_box = new SourceGenericBox(value: 34);
+        assertTrue(named_box instanceof SourceGenericBox<int>);
+        assertEq(34, named_box.get());
+
+        SourceBoundBox<int> bounded_box = new SourceBoundBox(35);
+        assertTrue(bounded_box instanceof SourceBoundBox<int>);
+        assertEq(35, bounded_box.get());
+
+        SourceGenericStaticFactory<int> static_target = SourceGenericStaticFactory::make(36);
+        assertTrue(static_target instanceof SourceGenericStaticFactory<int>);
+        assertEq(36, static_target.get());
+
+        SourceGenericBox<int> returned_box = self.makeInferredSourceGenericBox();
+        assertTrue(returned_box instanceof SourceGenericBox<int>);
+        assertEq(37, returned_box.get());
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Pair<K, V = string> { constructor(K key) {} } "
+                "bool sub t() { auto p = new Pair(1); return p instanceof Pair<int, string>; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class C<T> { constructor(T value) {} constructor(list<T> values) {} } "
+                "sub t() { auto c = new C((1, 2)); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T: int> { constructor(T value) {} } "
+                "sub t() { auto b = new Box(\"x\"); }", "generic-classes"));
+        }
+    }
+
+    SourceGenericBox<int> makeInferredSourceGenericBox() {
+        return new SourceGenericBox(37);
     }
 
     sourceGenericIterators() {
@@ -1210,8 +1269,8 @@ public class GenericClassTypesTest inherits QUnit::Test {
             Program p(PO_NEW_STYLE);
             p.parse(
                 "class Box<T> [legacy_raw_accepts] { constructor(T value) {} } "
-                "sub t() { auto b = new Box(1); }", "generic-classes");
-            assertThrows("MISSING-TYPE-ARGUMENTS", \p.callFunction(), ("t"));
+                "bool sub t() { auto b = new Box(1); return b instanceof Box<int>; }", "generic-classes");
+            assertTrue(p.callFunction("t"));
         }
     }
 }

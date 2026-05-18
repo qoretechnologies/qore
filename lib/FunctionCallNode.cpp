@@ -334,6 +334,15 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             class_ctx = nullptr;
         }
 
+        if (!receiver_type_info && qc && qc->hasTypeParameters()) {
+            const QoreTypeInfo* inferred_receiver = func->parseInferClassReceiverTypeInfo(loc, argTypeInfo,
+                named_args ? &arg_names : nullptr, class_ctx, err, parse_context.expected_type_info,
+                !strcmp(func->getName(), "constructor"));
+            if (inferred_receiver) {
+                receiver_type_info = inferred_receiver;
+            }
+        }
+
         // find variant
         QoreNamedArgBinding named_binding;
         type_param_instantiation.clear();
@@ -960,6 +969,13 @@ int ScopedObjectCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
     }
 
     if (oc) {
+        if (!object_type_info && receiver_type_info) {
+            const QoreParameterizedClassTypeInfo* pcti = QoreTypeInfo::getParameterizedClassType(receiver_type_info);
+            if (pcti && pcti->getBaseClass() == oc) {
+                object_type_info = receiver_type_info;
+            }
+        }
+
         // parse init the class and check if we're trying to instantiate an abstract class
         qore_class_private::get(*const_cast<QoreClass*>(oc))->parseCheckAbstractNew(loc);
 

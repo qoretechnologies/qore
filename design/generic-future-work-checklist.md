@@ -51,30 +51,32 @@ ambiguity when it is not.
 
 Design checklist:
 
-- [ ] Infer constructor type arguments from explicit constructor arguments.
-- [ ] Infer constructor type arguments from assignment target type.
-- [ ] Infer static factory receiver type arguments from assignment target type
+- [x] Infer constructor type arguments from explicit constructor arguments.
+- [x] Infer constructor type arguments from assignment target type.
+- [x] Infer static factory receiver type arguments from assignment target type
   only when the receiver is generic and otherwise unbound.
-- [ ] Infer from return context only where Qore already has a reliable expected
+- [x] Infer from return context only where Qore already has a reliable expected
   type.
-- [ ] Reject ambiguous inference when overloads, defaults, or unrelated
+- [x] Reject ambiguous inference when overloads, defaults, or unrelated
   argument positions produce competing bindings.
-- [ ] Prefer explicit type arguments over inference.
-- [ ] Preserve default type argument behavior when inference does not bind an
+- [x] Prefer explicit type arguments over inference.
+- [x] Preserve default type argument behavior when inference does not bind an
   optional parameter.
-- [ ] Define diagnostics that tell users which explicit spelling to write.
+- [x] Define diagnostics that tell users which explicit spelling to write.
+- [x] Preserve `[legacy_raw]` and `[legacy_raw_construct]` raw construction
+  semantics by skipping constructor argument inference for those classes.
 
 Implementation checklist:
 
-- [ ] Reuse or extend method-level type-parameter inference helpers for class
+- [x] Reuse or extend method-level type-parameter inference helpers for class
   constructors.
-- [ ] Thread expected target type through declaration construction, assignment,
+- [x] Thread expected target type through declaration construction, assignment,
   and return-expression parse initialization where available.
-- [ ] Add inference bindings for constructor formal types containing class type
+- [x] Add inference bindings for constructor formal types containing class type
   parameters.
-- [ ] Apply bounds/default checks after inference.
-- [ ] Preserve inferred object type through IR, JIT helpers, and AOT.
-- [ ] Add tests for constructor inference, target-type inference, defaults,
+- [x] Apply bounds/default checks after inference.
+- [x] Preserve inferred object type through IR, JIT helpers, and AOT.
+- [x] Add tests for constructor inference, target-type inference, defaults,
   bounds, overload ambiguity, named arguments, AST mode, and AOT.
 
 ## Phase 3: Specialized Generic Code Generation

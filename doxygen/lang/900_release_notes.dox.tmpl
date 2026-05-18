@@ -57,6 +57,10 @@
     - generic class and hashdecl annotations now support wildcard type
       arguments with <tt>?</tt>, <tt>? extends Type</tt>, and
       <tt>? super Type</tt> syntax
+    - generic class constructor calls can infer class type arguments from
+      constructor arguments and expected result types, and static factory calls
+      can infer a generic receiver from assignment or return context when the
+      target type is concrete
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
     - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH string-literal escapes
     - new \c %%Y printf format specifier for multi-line pseudo-YAML output

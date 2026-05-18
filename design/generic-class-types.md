@@ -87,8 +87,32 @@ class Factory<T> {
 Factory<int> f = Factory<int>::make(1);
 ```
 
-Calling a type-parameter-dependent static method through a raw generic class
-is rejected because there is no substitution context.
+When the parse context provides a concrete expected result type, Qore can infer
+the generic receiver for constructor and static factory calls:
+
+```qore
+Box<int> explicit_target = new Box(1);
+Box<int> returned() {
+    return new Box(2);
+}
+
+Factory<int> inferred_factory = Factory::make(3);
+```
+
+Constructor calls also infer class type arguments from supplied constructor
+arguments when the result is unique:
+
+```qore
+auto inferred = new Box(4);       # creates Box<int>
+auto named = new Box(value: 5);   # named calls participate in inference
+```
+
+Defaults fill any type parameters that inference does not bind. Bounds are
+checked after inference, and ambiguous overload-derived bindings are rejected
+with a parse-time error that asks the caller to write explicit type arguments.
+Static factory receiver inference is intentionally limited to target/return
+contexts; a raw static call with no expected type is still rejected when method
+type checking needs a class type-argument substitution context.
 
 Generic hashdecls are supported:
 
@@ -213,9 +237,13 @@ CompatBox<int> typed(1);
 CompatBox any = typed;     # allowed by raw annotation compatibility
 ```
 
-New generic classes should normally avoid raw compatibility and require
-explicit type arguments. A raw construction expression for such a class is
-rejected at construction time with `MISSING-TYPE-ARGUMENTS`.
+New generic classes should normally avoid raw compatibility. If constructor
+argument or target-type inference cannot determine all required type arguments,
+the raw construction expression is rejected at construction time with
+`MISSING-TYPE-ARGUMENTS`. Classes marked with `[legacy_raw]` or
+`[legacy_raw_construct]` keep their compatibility behavior: raw construction
+creates the all-`auto` instantiation instead of inferring from constructor
+arguments.
 
 The same rules are serialized into AOT class metadata. API metadata exposes
 `type_parameters`, `raw_accepts_parameterized`, and

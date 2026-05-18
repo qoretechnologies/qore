@@ -620,9 +620,50 @@ Factory<int> f = Factory<int>::make(10);
 int made = f.get();
     @endcode
 
-    A static generic call must use the parameterized receiver spelling, such as
-    <tt>Factory&lt;int&gt;::make(...)</tt>, so the type parameter can be
-    substituted in arguments, local declarations, and return checks.
+    Constructor calls can infer class type arguments from constructor arguments
+    when the inferred instantiation is unique:
+
+    @code{.py}
+class InferredBox<T> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+auto inferred = new InferredBox(10);         # creates InferredBox<int>
+auto named = new InferredBox(value: 11);     # named constructor calls work too
+int inferred_value = inferred.get();
+    @endcode
+
+    Expected result types also supply class type arguments for constructor calls,
+    return expressions, and static factory calls:
+
+    @code{.py}
+InferredBox<int> typed_target = new InferredBox(12);
+
+InferredBox<int> make_box() {
+    return new InferredBox(13);
+}
+
+Factory<int> inferred_factory = Factory::make(14);
+    @endcode
+
+    Explicit type arguments take precedence over inference. If inference cannot
+    choose a unique instantiation, or an inferred type argument violates a bound,
+    parsing raises a \c PARSE-TYPE-ERROR and the call should be written with an
+    explicit receiver such as <tt>InferredBox&lt;int&gt;</tt> or
+    <tt>Factory&lt;int&gt;::make(...)</tt>. Classes marked with
+    <tt>[legacy_raw]</tt> or <tt>[legacy_raw_construct]</tt> keep their legacy
+    behavior: raw constructor calls create the all-<tt>auto</tt> instantiation
+    instead of inferring type arguments from constructor values.
 
     @par Source Raw-Compatibility Attributes
     Source-defined generic classes that migrate an existing raw class API can
@@ -650,7 +691,7 @@ class RawAccepts<T> [legacy_raw_accepts] {
 
 RawAccepts<int> typed_accepts(1);
 RawAccepts raw_accepts = typed_accepts;  # allowed
-# RawAccepts invalid(1);                 # raw construction still rejected
+# RawAccepts invalid(1);                 # raw declaration construction still rejected
 
 class RawConstructs<T> [legacy_raw_construct] {
     constructor(T value) {

@@ -151,16 +151,36 @@ int made = f.get();
 
     The receiver type in <tt>Factory&lt;int&gt;::make(...)</tt> supplies the
     concrete type argument used for argument checking, local declarations, and
-    return checking inside the static method body.
+    return checking inside the static method body. Qore can also infer class
+    type arguments at expression sites:
+
+    @code{.py}
+auto inferred = new Factory(10);             # creates Factory<int>
+auto named = new Factory(value: 11);         # named constructor arguments work
+Factory<int> target = new Factory(12);       # assignment target supplies T
+
+Factory<int> make_factory() {
+    return new Factory(13);                  # return type supplies T
+}
+
+Factory<int> made_by_static = Factory::make(14);
+    @endcode
+
+    Explicit receiver type arguments take precedence. Inference uses constructor
+    arguments and reliable expected result types, applies type-parameter defaults
+    where possible, and checks bounds after inference. Ambiguous constructor
+    overloads or invalid inferred bounds raise \c PARSE-TYPE-ERROR; write the
+    explicit spelling, for example <tt>Factory&lt;int&gt;</tt>, when the inferred
+    type is not unique.
 
     Source-defined generic class types are runtime checked. Concrete type
     arguments are invariant; use wildcard annotations such as
     <tt>Box&lt;?&gt;</tt>, <tt>Box&lt;? extends int&gt;</tt>, or
     <tt>Box&lt;? super int&gt;</tt> when callers should pass a compatible
     family of instantiations. Unlike migrated builtin classes, source-defined
-    generic classes do not provide raw compatibility by default; use explicit
-    type arguments such as <tt>Box&lt;int&gt;</tt> or
-    <tt>Box&lt;auto&gt;</tt>.
+    generic classes do not provide raw compatibility by default. If inference
+    cannot determine all required type arguments, use explicit type arguments
+    such as <tt>Box&lt;int&gt;</tt> or <tt>Box&lt;auto&gt;</tt>.
 
     Existing source classes that are migrated to generic form can opt into
     legacy raw compatibility by placing a compatibility attribute after the
@@ -192,7 +212,7 @@ class AcceptsOnly<T> [legacy_raw_accepts] {
 
 AcceptsOnly<int> typed_accepts(1);
 AcceptsOnly raw_accepts = typed_accepts;  # allowed
-# AcceptsOnly invalid(1);                 # MISSING-TYPE-ARGUMENTS
+# AcceptsOnly invalid(1);                 # raw declaration construction rejected
 
 class ConstructsOnly<T> [legacy_raw_construct] {
     constructor(T value) {
@@ -208,9 +228,10 @@ ConstructsOnly<int> typed_constructs(1);
     <tt>[legacy_raw_accepts]</tt>, <tt>[legacy_raw_construct]</tt>, and
     <tt>[legacy_raw]</tt>. The combined <tt>[legacy_raw]</tt> form enables
     both raw annotation acceptance and raw construction defaulting to
-    <tt>&lt;auto&gt;</tt>. These attributes should be used only for migration
-    compatibility; new generic classes should normally require explicit type
-    arguments.
+    <tt>&lt;auto&gt;</tt>. Classes with raw-construction compatibility keep that
+    behavior: raw constructor calls create the all-<tt>auto</tt> instantiation
+    instead of inferring from constructor argument values. These attributes
+    should be used only for migration compatibility.
 
     @note No semicolon (\c ";") is required to terminate a class declaration (in fact using a semicolon would raise a parse exception).
 
