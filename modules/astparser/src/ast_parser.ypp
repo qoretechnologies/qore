@@ -580,6 +580,7 @@ extern std::string* takeSubDocComment();
 %type <enummember>     enum_member
 %type <typedefdecl>    typedef_def
 %type <string>         ident_openparen
+%type <string>         scoped_method_openparen
 %type <hashdeclhash>   immediate_typed_hash
 %type <sclist>         inheritance_list
 %type <funcdecl>       inline_methoddef
@@ -633,7 +634,7 @@ extern std::string* takeSubDocComment();
 
  // destructor actions for elements that need deleting when parse errors occur
 %destructor { delete $$; $$ = nullptr; } DOT_KW_IDENTIFIER PARSE_OPTION_END PARSE_OPTION_FULL QUOTED_WORD REGEX REGEX_EXTRACT REGEX_SUBST REGEX_TRANS alt_hash base_constructor base_constructor_list block call_args case_block case_code classvardecl class_def context_mod enum_def enum_member exp exp_c exp_n exp_nl gvardecl hash hash_element hashdecl_def hashdecl_inherits hashdecl_member immediate_typed_hash inline_methoddef internal_member_list list list_n member member2 myexp named_arg_list named_call_args namespace_decl optname outofline_methoddef parse_option private_member_list public_member_list qtypedef return_statement return_value scalar scoped_const_decl scoped_sub_def statement statements statement_or_block string sub_def superclass switch_statement top_level_command top_namespace_decl transient_member transient_member2 try_statement typedef_def uncqtypedef unscoped_const_decl
-%destructor { free($$); $$ = nullptr; } ANGLE_IDENTIFIER BACKQUOTE BASE_CLASS_CALL BINARY CLASS_SCOPED_REF CLASS_STRING COMPLEX_CONTEXT_REF CONTEXT_REF DATETIME HASHDECL_IDENTIFIER_OPENCURLY IDENTIFIER KW_IDENTIFIER_OPENPAREN NAMESPACE NUMBER QORE_CAST SCOPED_REF SCOPED_VREF SELF_REF VAR_REF ident_openparen
+%destructor { free($$); $$ = nullptr; } ANGLE_IDENTIFIER BACKQUOTE BASE_CLASS_CALL BINARY CLASS_SCOPED_REF CLASS_STRING COMPLEX_CONTEXT_REF CONTEXT_REF DATETIME HASHDECL_IDENTIFIER_OPENCURLY IDENTIFIER KW_IDENTIFIER_OPENPAREN NAMESPACE NUMBER QORE_CAST SCOPED_REF SCOPED_VREF SELF_REF VAR_REF ident_openparen scoped_method_openparen
 %destructor { if ($$) { for (int i = 0, count = $$->size(); i < count; i++) {delete (*$$)[i];} delete $$; } $$ = nullptr; } base_constructors class_attributes context_mods enum_members hashdecl_attributes inheritance_list member_list member_list2 namespace_decls superclass_list
 %destructor { delete $$; $$ = nullptr; } module_decls
 %destructor { if ($$) { delete $$->second; delete $$; } $$ = nullptr; } module_decl
@@ -2499,10 +2500,22 @@ ident_openparen:
         IDENTIFIER '(' {
             $$ = $1;
         }
+        | ANGLE_IDENTIFIER '(' {
+            $$ = $1;
+        }
         | TOK_KEYS '(' {
             $$ = strdup("keys");
         }
         | KW_IDENTIFIER_OPENPAREN {
+            $$ = $1;
+        }
+        ;
+
+scoped_method_openparen:
+        SCOPED_REF '(' {
+            $$ = $1;
+        }
+        | ANGLE_IDENTIFIER '(' {
             $$ = $1;
         }
         ;
@@ -2565,16 +2578,16 @@ inline_methoddef:
         ;
 
 outofline_methoddef:
-        method_modifiers SCOPED_REF '(' myexp ')' base_constructor_list return_value block {
+        method_modifiers scoped_method_openparen myexp ')' base_constructor_list return_value block {
             ASTModifiers mods($1);
             ASTName name($2, ASTNameKind::ANK_ScopedRef);
             name.loc = @2;
             free($2);
 
-            $$ = new ASTFunctionDeclaration(mods, std::move(name), AFDKind::AFDK_Outofline, $7, $4, $6, $8);
-            $$->loc.set(@1, @8);
+            $$ = new ASTFunctionDeclaration(mods, std::move(name), AFDKind::AFDK_Outofline, $6, $3, $5, $7);
+            $$->loc.set(@1, @7);
         }
-        | method_modifiers uncqtypedef SCOPED_REF '(' myexp ')' base_constructor_list block {
+        | method_modifiers uncqtypedef scoped_method_openparen myexp ')' base_constructor_list block {
             ASTModifiers mods($1);
             ASTName typeName($2, ASTNameKind::ANK_UncQTypedef);
             typeName.loc = @2;
@@ -2588,20 +2601,20 @@ outofline_methoddef:
                 std::move(name),
                 AFDKind::AFDK_Outofline,
                 new ASTNameExpression(std::move(typeName)),
-                $5, $7, $8
+                $4, $6, $7
             );
-            $$->loc.set(@1, @8);
+            $$->loc.set(@1, @7);
         }
-        | method_modifiers SCOPED_REF '(' myexp ')' base_constructor_list return_value ';' {
+        | method_modifiers scoped_method_openparen myexp ')' base_constructor_list return_value ';' {
             ASTModifiers mods($1);
             ASTName name($2, ASTNameKind::ANK_ScopedRef);
             name.loc = @2;
             free($2);
 
-            $$ = new ASTFunctionDeclaration(mods, std::move(name), AFDKind::AFDK_Outofline, $7, $4, $6);
-            $$->loc.set(@1, @8);
+            $$ = new ASTFunctionDeclaration(mods, std::move(name), AFDKind::AFDK_Outofline, $6, $3, $5);
+            $$->loc.set(@1, @7);
         }
-        | method_modifiers uncqtypedef SCOPED_REF '(' myexp ')' base_constructor_list ';' {
+        | method_modifiers uncqtypedef scoped_method_openparen myexp ')' base_constructor_list ';' {
             ASTModifiers mods($1);
             ASTName typeName($2, ASTNameKind::ANK_UncQTypedef);
             typeName.loc = @2;
@@ -2615,19 +2628,19 @@ outofline_methoddef:
                 std::move(name),
                 AFDKind::AFDK_Outofline,
                 new ASTNameExpression(std::move(typeName)),
-                $5, $7
+                $4, $6
             );
-            $$->loc.set(@1, @8);
+            $$->loc.set(@1, @7);
         }
-        | SCOPED_REF '(' call_args ')' base_constructor_list return_value block {
+        | scoped_method_openparen call_args ')' base_constructor_list return_value block {
             ASTName name($1, ASTNameKind::ANK_ScopedRef);
             name.loc = @1;
             free($1);
 
-            $$ = new ASTFunctionDeclaration(std::move(name), AFDKind::AFDK_Outofline, $6, $3, $5, $7);
-            $$->loc.set(@1, @7);
+            $$ = new ASTFunctionDeclaration(std::move(name), AFDKind::AFDK_Outofline, $5, $2, $4, $6);
+            $$->loc.set(@1, @6);
         }
-        | uncqtypedef SCOPED_REF '(' myexp ')' base_constructor_list block {
+        | uncqtypedef scoped_method_openparen myexp ')' base_constructor_list block {
             ASTName typeName($1, ASTNameKind::ANK_UncQTypedef);
             typeName.loc = @1;
             delete $1;
@@ -2639,9 +2652,9 @@ outofline_methoddef:
                 std::move(name),
                 AFDKind::AFDK_Outofline,
                 new ASTNameExpression(std::move(typeName)),
-                $4, $6, $7
+                $3, $5, $6
             );
-            $$->loc.set(@1, @7);
+            $$->loc.set(@1, @6);
         }
         ;
 
@@ -2728,24 +2741,27 @@ return_value:
 
 sub_def:
         TOK_SUB ident_openparen myexp ')' return_value block {
-            ASTName name($2, ASTNameKind::ANK_IdentOpenParen);
+            bool scoped = strstr($2, "::");
+            ASTName name($2, scoped ? ASTNameKind::ANK_ScopedRef : ASTNameKind::ANK_IdentOpenParen);
             name.loc = @2;
             free($2);
 
-            $$ = new ASTFunctionDeclaration(std::move(name), AFDKind::AFDK_Sub, $5, $3, nullptr, $6);
+            $$ = new ASTFunctionDeclaration(std::move(name), scoped ? AFDKind::AFDK_ScopedSub : AFDKind::AFDK_Sub,
+                $5, $3, nullptr, $6);
             $$->loc.set(@1, @6);
         }
         | uncqtypedef TOK_SUB ident_openparen myexp ')' block {
             ASTName typeName($1, ASTNameKind::ANK_UncQTypedef);
             typeName.loc = @1;
             delete $1;
-            ASTName name($3, ASTNameKind::ANK_IdentOpenParen);
+            bool scoped = strstr($3, "::");
+            ASTName name($3, scoped ? ASTNameKind::ANK_ScopedRef : ASTNameKind::ANK_IdentOpenParen);
             name.loc = @3;
             free($3);
 
             $$ = new ASTFunctionDeclaration(
                 std::move(name),
-                AFDKind::AFDK_Sub,
+                scoped ? AFDKind::AFDK_ScopedSub : AFDKind::AFDK_Sub,
                 new ASTNameExpression(std::move(typeName)),
                 $4, nullptr, $6
             );
@@ -2753,11 +2769,13 @@ sub_def:
         }
         | method_modifiers TOK_SUB ident_openparen myexp ')' return_value block {
             ASTModifiers mods($1);
-            ASTName name($3, ASTNameKind::ANK_IdentOpenParen);
+            bool scoped = strstr($3, "::");
+            ASTName name($3, scoped ? ASTNameKind::ANK_ScopedRef : ASTNameKind::ANK_IdentOpenParen);
             name.loc = @3;
             free($3);
 
-            $$ = new ASTFunctionDeclaration(mods, std::move(name), AFDKind::AFDK_Sub, $6, $4, nullptr, $7);
+            $$ = new ASTFunctionDeclaration(mods, std::move(name),
+                scoped ? AFDKind::AFDK_ScopedSub : AFDKind::AFDK_Sub, $6, $4, nullptr, $7);
             $$->loc.set(@1, @7);
         }
         | method_modifiers uncqtypedef TOK_SUB ident_openparen myexp ')' block {
@@ -2765,14 +2783,15 @@ sub_def:
             ASTName typeName($2, ASTNameKind::ANK_UncQTypedef);
             typeName.loc = @2;
             delete $2;
-            ASTName name($4, ASTNameKind::ANK_IdentOpenParen);
+            bool scoped = strstr($4, "::");
+            ASTName name($4, scoped ? ASTNameKind::ANK_ScopedRef : ASTNameKind::ANK_IdentOpenParen);
             name.loc = @4;
             free($4);
 
             $$ = new ASTFunctionDeclaration(
                 mods,
                 std::move(name),
-                AFDKind::AFDK_Sub,
+                scoped ? AFDKind::AFDK_ScopedSub : AFDKind::AFDK_Sub,
                 new ASTNameExpression(std::move(typeName)),
                 $5, nullptr, $7
             );
@@ -2780,15 +2799,15 @@ sub_def:
         }
 
 scoped_sub_def:
-        TOK_SUB SCOPED_REF '(' myexp ')' return_value block {
+        TOK_SUB scoped_method_openparen myexp ')' return_value block {
             ASTName name($2, ASTNameKind::ANK_ScopedRef);
             name.loc = @2;
             free($2);
 
-            $$ = new ASTFunctionDeclaration(std::move(name), AFDKind::AFDK_ScopedSub, $6, $4, nullptr, $7);
-            $$->loc.set(@1, @7);
+            $$ = new ASTFunctionDeclaration(std::move(name), AFDKind::AFDK_ScopedSub, $5, $3, nullptr, $6);
+            $$->loc.set(@1, @6);
         }
-        | uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' block {
+        | uncqtypedef TOK_SUB scoped_method_openparen myexp ')' block {
             ASTName typeName($1, ASTNameKind::ANK_UncQTypedef);
             typeName.loc = @1;
             delete $1;
@@ -2800,20 +2819,20 @@ scoped_sub_def:
                 std::move(name),
                 AFDKind::AFDK_ScopedSub,
                 new ASTNameExpression(std::move(typeName)),
-                $5, nullptr, $7
+                $4, nullptr, $6
             );
-            $$->loc.set(@1, @7);
+            $$->loc.set(@1, @6);
         }
-        | method_modifiers TOK_SUB SCOPED_REF '(' myexp ')' return_value block {
+        | method_modifiers TOK_SUB scoped_method_openparen myexp ')' return_value block {
             ASTModifiers mods($1);
             ASTName name($3, ASTNameKind::ANK_ScopedRef);
             name.loc = @3;
             free($3);
 
-            $$ = new ASTFunctionDeclaration(mods, std::move(name), AFDKind::AFDK_ScopedSub, $7, $5, nullptr, $8);
-            $$->loc.set(@1, @8);
+            $$ = new ASTFunctionDeclaration(mods, std::move(name), AFDKind::AFDK_ScopedSub, $6, $4, nullptr, $7);
+            $$->loc.set(@1, @7);
         }
-        | method_modifiers uncqtypedef TOK_SUB SCOPED_REF '(' myexp ')' block {
+        | method_modifiers uncqtypedef TOK_SUB scoped_method_openparen myexp ')' block {
             ASTModifiers mods($1);
             ASTName typeName($2, ASTNameKind::ANK_UncQTypedef);
             typeName.loc = @2;
@@ -2827,9 +2846,9 @@ scoped_sub_def:
                 std::move(name),
                 AFDKind::AFDK_ScopedSub,
                 new ASTNameExpression(std::move(typeName)),
-                $6, nullptr, $8
+                $5, nullptr, $7
             );
-            $$->loc.set(@1, @8);
+            $$->loc.set(@1, @7);
         }
         ;
 

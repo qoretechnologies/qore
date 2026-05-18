@@ -335,14 +335,20 @@ struct ParameterizedClassCacheKey {
 typedef std::map<ParameterizedClassCacheKey, QoreParameterizedClassTypeInfo*> parameterized_class_map_t;
 static parameterized_class_map_t parameterized_class_map;
 
+enum TypeParameterOwnerKind : unsigned {
+    TPO_CLASS = 0,
+    TPO_HASHDECL = 1,
+    TPO_SIGNATURE = 2,
+};
+
 struct TypeParameterCacheKey {
     const void* owner;
-    bool hashdeclOwner;
+    unsigned ownerKind;
     size_t index;
     bool orNothing;
 
     bool operator<(const TypeParameterCacheKey& other) const {
-        if (hashdeclOwner != other.hashdeclOwner) return hashdeclOwner < other.hashdeclOwner;
+        if (ownerKind != other.ownerKind) return ownerKind < other.ownerKind;
         if (owner != other.owner) return owner < other.owner;
         if (index != other.index) return index < other.index;
         return orNothing < other.orNothing;
@@ -890,6 +896,22 @@ QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const TypedHashDecl* owner,
     pname = tname.c_str();
 }
 
+QoreTypeParameterTypeInfo::QoreTypeParameterTypeInfo(const UserSignature* owner, size_t n_index,
+        const char* name, bool n_or_nothing, const QoreTypeParameterTypeInfo* value_type)
+        : QoreTypeInfo(
+            make_type_parameter_accept_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            make_type_parameter_return_vec(n_or_nothing ? value_type : this, n_or_nothing),
+            build_type_parameter_name(name, n_or_nothing)),
+        owner_signature(owner),
+        index(n_index),
+        param_name(name),
+        or_nothing(n_or_nothing) {
+    assert(owner_signature);
+    assert(name && *name);
+    assert(!or_nothing || value_type);
+    pname = tname.c_str();
+}
+
 QoreTypeParameterTypeSpec::QoreTypeParameterTypeSpec(const QoreTypeParameterTypeInfo* ti)
         : QoreTypeSpec(static_cast<const QoreTypeInfo*>(ti), QTS_TYPEPARAM) {
 }
@@ -933,7 +955,7 @@ const QoreTypeInfo* qore_get_type_parameter_type(const QoreClass* owner, size_t 
 
     AutoLocker al(ctl);
 
-    TypeParameterCacheKey key {owner, false, index, or_nothing};
+    TypeParameterCacheKey key {owner, TPO_CLASS, index, or_nothing};
     type_parameter_map_t::iterator i = type_parameter_map.lower_bound(key);
     if (i != type_parameter_map.end() && !(key < i->first)) {
         return i->second;
@@ -957,7 +979,31 @@ const QoreTypeInfo* qore_get_hashdecl_type_parameter_type(const TypedHashDecl* o
 
     AutoLocker al(ctl);
 
-    TypeParameterCacheKey key {owner, true, index, or_nothing};
+    TypeParameterCacheKey key {owner, TPO_HASHDECL, index, or_nothing};
+    type_parameter_map_t::iterator i = type_parameter_map.lower_bound(key);
+    if (i != type_parameter_map.end() && !(key < i->first)) {
+        return i->second;
+    }
+
+    QoreTypeParameterTypeInfo* ti = new QoreTypeParameterTypeInfo(owner, index, name, or_nothing, value_type);
+    type_parameter_map.insert(i, type_parameter_map_t::value_type(key, ti));
+    return ti;
+}
+
+const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* owner, size_t index,
+        const char* name, bool or_nothing) {
+    assert(owner);
+    assert(name && *name);
+
+    const QoreTypeParameterTypeInfo* value_type = nullptr;
+    if (or_nothing) {
+        value_type = static_cast<const QoreTypeParameterTypeInfo*>(
+            qore_get_signature_type_parameter_type(owner, index, name, false));
+    }
+
+    AutoLocker al(ctl);
+
+    TypeParameterCacheKey key {owner, TPO_SIGNATURE, index, or_nothing};
     type_parameter_map_t::iterator i = type_parameter_map.lower_bound(key);
     if (i != type_parameter_map.end() && !(key < i->first)) {
         return i->second;
@@ -1383,7 +1429,17 @@ const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* re
 }
 
 static const QoreTypeInfo* get_substituted_type_param_arg(const QoreTypeParameterTypeInfo* tpi,
-        const QoreTypeInfo* receiver_type_info) {
+        const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst) {
+    if (const UserSignature* owner_signature = tpi->getOwnerSignature()) {
+        if (!type_param_inst || type_param_inst->owner != owner_signature
+                || tpi->getIndex() >= type_param_inst->type_args.size()) {
+            return nullptr;
+        }
+
+        const QoreTypeInfo* arg = type_param_inst->type_args[tpi->getIndex()];
+        return tpi->isOrNothing() ? get_or_nothing_type_check(arg) : arg;
+    }
+
     if (const TypedHashDecl* owner_hashdecl = tpi->getOwnerHashDecl()) {
         const TypedHashDecl* receiver_hashdecl = QoreTypeInfo::getTypedHash(receiver_type_info);
         if (!receiver_hashdecl) {
@@ -1451,12 +1507,17 @@ const QoreTypeInfo* qore_get_current_receiver_type_info() {
 }
 
 const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const QoreTypeInfo* receiver_type_info) {
-    if (!ti || !receiver_type_info) {
+    return qore_substitute_type_params(ti, receiver_type_info, runtime_get_type_param_instantiation());
+}
+
+const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const QoreTypeInfo* receiver_type_info,
+        const QoreTypeParamInstantiation* type_param_inst) {
+    if (!ti || (!receiver_type_info && (!type_param_inst || type_param_inst->empty()))) {
         return ti;
     }
 
     if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
-        const QoreTypeInfo* subst = get_substituted_type_param_arg(tpi, receiver_type_info);
+        const QoreTypeInfo* subst = get_substituted_type_param_arg(tpi, receiver_type_info, type_param_inst);
         return subst ? subst : ti;
     }
 
@@ -1465,7 +1526,7 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
         args.reserve(pti->getArgCount());
         bool changed = false;
         for (const QoreTypeInfo* arg : pti->getTypeArgs()) {
-            const QoreTypeInfo* subst = qore_substitute_type_params(arg, receiver_type_info);
+            const QoreTypeInfo* subst = qore_substitute_type_params(arg, receiver_type_info, type_param_inst);
             args.push_back(subst);
             if (subst != arg) {
                 changed = true;
@@ -1481,7 +1542,7 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
             args.reserve(hp->getTypeArgs().size());
             bool changed = false;
             for (const QoreTypeInfo* arg : hp->getTypeArgs()) {
-                const QoreTypeInfo* subst = qore_substitute_type_params(arg, receiver_type_info);
+                const QoreTypeInfo* subst = qore_substitute_type_params(arg, receiver_type_info, type_param_inst);
                 args.push_back(subst);
                 if (subst != arg) {
                     changed = true;
@@ -1495,12 +1556,13 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
     }
 
     if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
-        const QoreTypeInfo* ret = qore_substitute_type_params(cti->getReturnType(), receiver_type_info);
+        const QoreTypeInfo* ret = qore_substitute_type_params(cti->getReturnType(), receiver_type_info,
+            type_param_inst);
         type_vec_t params;
         params.reserve(cti->getParamTypes().size());
         bool changed = ret != cti->getReturnType();
         for (const QoreTypeInfo* param : cti->getParamTypes()) {
-            const QoreTypeInfo* subst = qore_substitute_type_params(param, receiver_type_info);
+            const QoreTypeInfo* subst = qore_substitute_type_params(param, receiver_type_info, type_param_inst);
             params.push_back(subst);
             if (subst != param) {
                 changed = true;
@@ -1517,7 +1579,7 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
             if (member == nothingTypeInfo) {
                 continue;
             }
-            const QoreTypeInfo* subst = qore_substitute_type_params(member, receiver_type_info);
+            const QoreTypeInfo* subst = qore_substitute_type_params(member, receiver_type_info, type_param_inst);
             members.push_back(subst);
             if (subst != member) {
                 changed = true;
@@ -1528,7 +1590,7 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
 
     const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti);
     if (subtype) {
-        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info);
+        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
         if (subst != subtype) {
             return QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)
                 ? qore_get_complex_hash_or_nothing_type(subst)
@@ -1538,7 +1600,7 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
 
     subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
     if (subtype) {
-        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info);
+        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
         if (subst != subtype) {
             bool is_soft = !strncmp(QoreTypeInfo::getName(ti), "softlist<", 9)
                 || !strncmp(QoreTypeInfo::getName(ti), "*softlist<", 10);
@@ -1552,7 +1614,7 @@ const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti, const Qo
 
     subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
     if (subtype) {
-        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info);
+        const QoreTypeInfo* subst = qore_substitute_type_params(subtype, receiver_type_info, type_param_inst);
         if (subst != subtype) {
             return QoreTypeInfo::parseAcceptsReturns(ti, NT_NOTHING)
                 ? qore_get_complex_reference_or_nothing_type(subst)
@@ -2787,6 +2849,16 @@ static const QoreTypeInfo* qore_resolve_parse_type_parameter(const NamedScope& c
     }
 
     const char* name = cscope.getIdentifier();
+    const UserSignature* sig = parse_get_signature_type_param_context();
+    if (sig && sig->hasTypeParameters()) {
+        for (size_t i = 0, e = sig->getTypeParameterCount(); i < e; ++i) {
+            const char* param = sig->getTypeParameterName(i);
+            if (!strcmp(name, param)) {
+                return qore_get_signature_type_parameter_type(sig, i, param, or_nothing);
+            }
+        }
+    }
+
     qore_class_private* qc = parse_get_class_priv();
     if (qc && qc->hasTypeParams()) {
         for (size_t i = 0, e = qc->getTypeParamCount(); i < e; ++i) {

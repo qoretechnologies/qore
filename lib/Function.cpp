@@ -57,6 +57,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/typed_hash_decl_private.h"
 
 #include <algorithm>
 #include <atomic>
@@ -89,6 +90,32 @@ static bool qore_is_defaulted_null_soft_arg(const QoreTypeInfo* ti, const QoreVa
     return has_default && arg.isNull() && qore_is_non_optional_soft_type(ti);
 }
 
+static thread_local const UserSignature* parse_signature_type_param_context = nullptr;
+static thread_local const QoreTypeParamInstantiation* runtime_type_param_instantiation = nullptr;
+
+UserSignatureTypeParamContextHelper::UserSignatureTypeParamContextHelper(const UserSignature* sig)
+        : old_sig(parse_signature_type_param_context) {
+    parse_signature_type_param_context = sig && sig->hasTypeParameters() ? sig : nullptr;
+}
+
+UserSignatureTypeParamContextHelper::~UserSignatureTypeParamContextHelper() {
+    parse_signature_type_param_context = old_sig;
+}
+
+const UserSignature* parse_get_signature_type_param_context() {
+    return parse_signature_type_param_context;
+}
+
+const QoreTypeParamInstantiation* runtime_get_type_param_instantiation() {
+    return runtime_type_param_instantiation;
+}
+
+const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(const QoreTypeParamInstantiation* inst) {
+    const QoreTypeParamInstantiation* old = runtime_type_param_instantiation;
+    runtime_type_param_instantiation = inst && !inst->empty() ? inst : nullptr;
+    return old;
+}
+
 static void duplicateSignatureException(const char* cname, const char* name, const UserSignature* sig) {
     parseException(*sig->getParseLocation(), "DUPLICATE-SIGNATURE", "%s%s%s(%s) has already been declared",
         cname ? cname : "", cname ? "::" : "", name, sig->getSignatureText());
@@ -108,7 +135,37 @@ static void genericDuplicateSignatureException(const char* cname, const char* na
         name, sig2->getSignatureText(), name, sig1->getSignatureText());
 }
 
-typedef std::pair<const QoreClass*, size_t> GenericTypeParamKey;
+struct GenericTypeParamKey {
+    const void* owner = nullptr;
+    unsigned owner_kind = 0;
+    size_t index = 0;
+
+    DLLLOCAL GenericTypeParamKey() = default;
+
+    DLLLOCAL GenericTypeParamKey(const QoreTypeParameterTypeInfo* tpi)
+            : index(tpi->getIndex()) {
+        if (tpi->getOwnerClass()) {
+            owner = tpi->getOwnerClass();
+            owner_kind = 0;
+        } else if (tpi->getOwnerHashDecl()) {
+            owner = tpi->getOwnerHashDecl();
+            owner_kind = 1;
+        } else {
+            owner = tpi->getOwnerSignature();
+            owner_kind = 2;
+        }
+    }
+
+    DLLLOCAL bool operator<(const GenericTypeParamKey& other) const {
+        if (owner_kind != other.owner_kind) {
+            return owner_kind < other.owner_kind;
+        }
+        if (owner != other.owner) {
+            return owner < other.owner;
+        }
+        return index < other.index;
+    }
+};
 typedef std::map<GenericTypeParamKey, const QoreTypeInfo*> GenericTypeParamBindings;
 
 static bool qore_type_contains_type_param(const QoreTypeInfo* ti);
@@ -147,12 +204,18 @@ static bool qore_type_contains_type_param(const QoreTypeInfo* ti) {
         return true;
     }
     subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    if (qore_type_contains_type_param(subtype)) {
+        return true;
+    }
+    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
     return qore_type_contains_type_param(subtype);
 }
 
 static bool qore_type_is_type_param_key(const QoreTypeInfo* ti, const GenericTypeParamKey& key) {
     const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
-    return tpi && tpi->getOwnerClass() == key.first && tpi->getIndex() == key.second;
+    return tpi && GenericTypeParamKey(tpi).owner == key.owner
+        && GenericTypeParamKey(tpi).owner_kind == key.owner_kind
+        && tpi->getIndex() == key.index;
 }
 
 static bool qore_type_vec_contains_type_param_key(const type_vec_t& types, const GenericTypeParamKey& key) {
@@ -186,6 +249,10 @@ static bool qore_type_contains_type_param_key(const QoreTypeInfo* ti, const Gene
         return true;
     }
     subtype = QoreTypeInfo::getUniqueReturnComplexList(ti);
+    if (qore_type_contains_type_param_key(subtype, key)) {
+        return true;
+    }
+    subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti);
     return qore_type_contains_type_param_key(subtype, key);
 }
 
@@ -198,7 +265,7 @@ static bool qore_bind_generic_type_param(const QoreTypeParameterTypeInfo* tpi, c
         return false;
     }
 
-    GenericTypeParamKey key(tpi->getOwnerClass(), tpi->getIndex());
+    GenericTypeParamKey key(tpi);
     if (!qore_type_is_type_param_key(other, key) && qore_type_contains_type_param_key(other, key)) {
         return false;
     }
@@ -278,6 +345,12 @@ static bool qore_generic_types_unify(const QoreTypeInfo* a, const QoreTypeInfo* 
         return list_a && list_b && qore_generic_types_unify(list_a, list_b, bindings, saw_type_param);
     }
 
+    const QoreTypeInfo* ref_a = QoreTypeInfo::getUniqueReturnComplexReference(a);
+    const QoreTypeInfo* ref_b = QoreTypeInfo::getUniqueReturnComplexReference(b);
+    if (ref_a || ref_b) {
+        return ref_a && ref_b && qore_generic_types_unify(ref_a, ref_b, bindings, saw_type_param);
+    }
+
     return false;
 }
 
@@ -334,6 +407,326 @@ static const AbstractFunctionSignature* qore_find_generic_colliding_signature(
         }
     }
     return nullptr;
+}
+
+static const UserSignature* qore_get_variant_user_signature(const AbstractQoreFunctionVariant* variant) {
+    const UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    return uvb ? uvb->getUserSignature() : nullptr;
+}
+
+static const UserSignature* qore_find_signature_type_param_owner_in_type(const QoreTypeInfo* ti);
+
+static const UserSignature* qore_find_signature_type_param_owner_in_vec(const type_vec_t& types) {
+    for (const QoreTypeInfo* ti : types) {
+        if (const UserSignature* sig = qore_find_signature_type_param_owner_in_type(ti)) {
+            return sig;
+        }
+    }
+    return nullptr;
+}
+
+static const UserSignature* qore_find_signature_type_param_owner_in_type(const QoreTypeInfo* ti) {
+    if (!ti) {
+        return nullptr;
+    }
+    if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti)) {
+        return tpi->getOwnerSignature();
+    }
+    if (!QoreTypeInfo::hasType(ti)) {
+        return nullptr;
+    }
+    if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
+        return qore_find_signature_type_param_owner_in_vec(pti->getTypeArgs());
+    }
+    if (const QoreComplexCodeTypeInfo* cti = QoreTypeInfo::getComplexCodeType(ti)) {
+        if (const UserSignature* sig = qore_find_signature_type_param_owner_in_type(cti->getReturnType())) {
+            return sig;
+        }
+        return qore_find_signature_type_param_owner_in_vec(cti->getParamTypes());
+    }
+    if (const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexHash(ti)) {
+        if (const UserSignature* sig = qore_find_signature_type_param_owner_in_type(subtype)) {
+            return sig;
+        }
+    }
+    if (const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexList(ti)) {
+        if (const UserSignature* sig = qore_find_signature_type_param_owner_in_type(subtype)) {
+            return sig;
+        }
+    }
+    if (const QoreTypeInfo* subtype = QoreTypeInfo::getUniqueReturnComplexReference(ti)) {
+        return qore_find_signature_type_param_owner_in_type(subtype);
+    }
+    return nullptr;
+}
+
+static const UserSignature* qore_find_signature_type_param_owner(const AbstractFunctionSignature* sig) {
+    if (!sig) {
+        return nullptr;
+    }
+    for (unsigned i = 0, e = sig->numParams(); i < e; ++i) {
+        if (const UserSignature* owner = qore_find_signature_type_param_owner_in_type(sig->getParamTypeInfo(i))) {
+            return owner;
+        }
+    }
+    return qore_find_signature_type_param_owner_in_type(sig->getReturnTypeInfo());
+}
+
+static const UserSignature* qore_get_variant_generic_signature(const AbstractQoreFunctionVariant* variant) {
+    const UserSignature* sig = variant ? qore_find_signature_type_param_owner(variant->getSignature()) : nullptr;
+    if (sig && sig->hasTypeParameters()) {
+        return sig;
+    }
+
+    sig = qore_get_variant_user_signature(variant);
+    return sig && sig->hasTypeParameters() ? sig : nullptr;
+}
+
+static bool qore_method_type_args_compatible(const QoreTypeInfo* existing, const QoreTypeInfo* candidate) {
+    if (QoreTypeInfo::isInputIdentical(existing, candidate)) {
+        return true;
+    }
+
+    bool may_not_match = false;
+    bool may_need_filter = false;
+    qore_type_result_e max_result = QTI_NOT_EQUAL;
+    qore_type_result_e rc = QoreTypeInfo::parseAccepts(existing, candidate, may_not_match, may_need_filter,
+        max_result, true);
+    if (rc != QTI_NOT_EQUAL && !may_not_match) {
+        return true;
+    }
+
+    may_not_match = false;
+    may_need_filter = false;
+    max_result = QTI_NOT_EQUAL;
+    rc = QoreTypeInfo::parseAccepts(candidate, existing, may_not_match, may_need_filter, max_result, true);
+    return rc != QTI_NOT_EQUAL && !may_not_match;
+}
+
+static bool qore_bind_signature_type_param(const UserSignature* sig, const QoreTypeParameterTypeInfo* tpi,
+        const QoreTypeInfo* actual, type_vec_t& bindings) {
+    if (tpi->getOwnerSignature() != sig) {
+        return true;
+    }
+    if (!actual || !QoreTypeInfo::hasType(actual) || actual == nothingTypeInfo) {
+        return true;
+    }
+
+    size_t index = tpi->getIndex();
+    if (index >= bindings.size()) {
+        return false;
+    }
+
+    const QoreTypeInfo* bind_actual = actual;
+    if (bindings[index]) {
+        return qore_method_type_args_compatible(bindings[index], bind_actual);
+    }
+
+    bindings[index] = bind_actual;
+    return true;
+}
+
+static bool qore_infer_signature_type_args_from_type(const UserSignature* sig, const QoreTypeInfo* formal,
+        const QoreTypeInfo* actual, type_vec_t& bindings);
+
+static bool qore_infer_signature_type_args_from_vec(const UserSignature* sig, const type_vec_t& formal,
+        const type_vec_t& actual, type_vec_t& bindings) {
+    if (formal.size() != actual.size()) {
+        return false;
+    }
+    for (size_t i = 0, e = formal.size(); i < e; ++i) {
+        if (!qore_infer_signature_type_args_from_type(sig, formal[i], actual[i], bindings)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool qore_infer_signature_type_args_from_type(const UserSignature* sig, const QoreTypeInfo* formal,
+        const QoreTypeInfo* actual, type_vec_t& bindings) {
+    if (!formal || !actual) {
+        return true;
+    }
+
+    if (const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(formal)) {
+        return qore_bind_signature_type_param(sig, tpi, actual, bindings);
+    }
+
+    if (!QoreTypeInfo::hasType(formal) || !QoreTypeInfo::hasType(actual)) {
+        return true;
+    }
+
+    const QoreParameterizedClassTypeInfo* formal_pc = QoreTypeInfo::getParameterizedClassType(formal);
+    if (formal_pc) {
+        const QoreParameterizedClassTypeInfo* actual_pc = QoreTypeInfo::getParameterizedClassType(actual);
+        if (!actual_pc || formal_pc->getBaseClass() != actual_pc->getBaseClass()
+                || formal_pc->isOrNothing() != actual_pc->isOrNothing()) {
+            return true;
+        }
+        return qore_infer_signature_type_args_from_vec(sig, formal_pc->getTypeArgs(), actual_pc->getTypeArgs(),
+            bindings);
+    }
+
+    const TypedHashDecl* formal_hd = QoreTypeInfo::getTypedHash(formal);
+    if (formal_hd) {
+        const TypedHashDecl* actual_hd = QoreTypeInfo::getTypedHash(actual);
+        if (!actual_hd) {
+            return true;
+        }
+        const typed_hash_decl_private* formal_hp = typed_hash_decl_private::get(*formal_hd);
+        const typed_hash_decl_private* actual_hp = typed_hash_decl_private::get(*actual_hd);
+        if (!formal_hp->isParameterizedHashDecl() || !actual_hp->isParameterizedHashDecl()) {
+            return true;
+        }
+        const TypedHashDecl* formal_base = formal_hp->getParameterizedBase();
+        const TypedHashDecl* actual_base = actual_hp->getParameterizedBase();
+        if (!formal_base || !actual_base || !formal_base->equal(actual_base)) {
+            return true;
+        }
+        return qore_infer_signature_type_args_from_vec(sig, formal_hp->getTypeArgs(), actual_hp->getTypeArgs(),
+            bindings);
+    }
+
+    const QoreComplexCodeTypeInfo* formal_code = QoreTypeInfo::getComplexCodeType(formal);
+    if (formal_code) {
+        const QoreComplexCodeTypeInfo* actual_code = QoreTypeInfo::getComplexCodeType(actual);
+        if (!actual_code || formal_code->hasVarArgs() != actual_code->hasVarArgs()
+                || formal_code->isOrNothing() != actual_code->isOrNothing()) {
+            return true;
+        }
+        return qore_infer_signature_type_args_from_type(sig, formal_code->getReturnType(),
+                actual_code->getReturnType(), bindings)
+            && qore_infer_signature_type_args_from_vec(sig, formal_code->getParamTypes(),
+                actual_code->getParamTypes(), bindings);
+    }
+
+    const QoreTypeInfo* formal_subtype = QoreTypeInfo::getUniqueReturnComplexHash(formal);
+    const QoreTypeInfo* actual_subtype = QoreTypeInfo::getUniqueReturnComplexHash(actual);
+    if (formal_subtype) {
+        return actual_subtype
+            ? qore_infer_signature_type_args_from_type(sig, formal_subtype, actual_subtype, bindings)
+            : true;
+    }
+
+    formal_subtype = QoreTypeInfo::getUniqueReturnComplexList(formal);
+    actual_subtype = QoreTypeInfo::getUniqueReturnComplexList(actual);
+    if (formal_subtype) {
+        return actual_subtype
+            ? qore_infer_signature_type_args_from_type(sig, formal_subtype, actual_subtype, bindings)
+            : true;
+    }
+
+    formal_subtype = QoreTypeInfo::getUniqueReturnComplexReference(formal);
+    actual_subtype = QoreTypeInfo::getUniqueReturnComplexReference(actual);
+    if (formal_subtype) {
+        return actual_subtype
+            ? qore_infer_signature_type_args_from_type(sig, formal_subtype, actual_subtype, bindings)
+            : true;
+    }
+
+    return true;
+}
+
+static bool qore_signature_type_arg_satisfies_bound(const QoreTypeInfo* bound, const QoreTypeInfo* arg) {
+    if (!bound || !arg || arg == autoTypeInfo) {
+        return true;
+    }
+    bool may_not_match = false;
+    bool may_need_filter = false;
+    qore_type_result_e max_result = QTI_NOT_EQUAL;
+    qore_type_result_e rc = QoreTypeInfo::parseAccepts(bound, arg, may_not_match, may_need_filter, max_result, true);
+    return rc != QTI_NOT_EQUAL && !may_not_match;
+}
+
+static bool qore_finalize_signature_type_args(const UserSignature* sig, type_vec_t& bindings) {
+    bindings.resize(sig->getTypeParameterCount(), nullptr);
+    for (size_t i = 0, e = sig->getTypeParameterCount(); i < e; ++i) {
+        const QoreTypeInfo* bound = sig->getTypeParameterBoundTypeInfo(i);
+        if (!bindings[i]) {
+            bindings[i] = sig->getTypeParameterDefaultTypeInfo(i);
+        }
+        if (!bindings[i]) {
+            bindings[i] = bound ? bound : autoTypeInfo;
+        }
+        if (!qore_signature_type_arg_satisfies_bound(bound, bindings[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool qore_infer_signature_type_args(const AbstractQoreFunctionVariant* variant, const type_vec_t& arg_types,
+        const std::vector<bool>* supplied, const QoreTypeInfo* receiver_type_info,
+        QoreTypeParamInstantiation* type_param_inst) {
+    if (type_param_inst) {
+        type_param_inst->clear();
+    }
+
+    const UserSignature* sig = qore_get_variant_generic_signature(variant);
+    if (!sig) {
+        return true;
+    }
+    if (const_cast<UserSignature*>(sig)->resolve()) {
+        return false;
+    }
+
+    type_vec_t bindings(sig->getTypeParameterCount(), nullptr);
+    for (unsigned pi = 0, e = sig->numParams(); pi < e; ++pi) {
+        if (supplied && (pi >= supplied->size() || !(*supplied)[pi])) {
+            continue;
+        }
+        if (pi >= arg_types.size()) {
+            continue;
+        }
+        const QoreTypeInfo* actual = arg_types[pi];
+        if (!actual || !QoreTypeInfo::hasType(actual)) {
+            continue;
+        }
+        const QoreTypeInfo* formal = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info);
+        if (!qore_infer_signature_type_args_from_type(sig, formal, actual, bindings)) {
+            return false;
+        }
+    }
+
+    if (!qore_finalize_signature_type_args(sig, bindings)) {
+        return false;
+    }
+
+    if (type_param_inst) {
+        type_param_inst->owner = sig;
+        type_param_inst->type_args = std::move(bindings);
+    }
+    return true;
+}
+
+static const QoreTypeInfo* qore_get_runtime_value_type_info(const QoreValue& v) {
+    if (v.getType() == NT_OBJECT) {
+        const QoreObject* obj = v.get<const QoreObject>();
+        if (obj) {
+            const QoreTypeInfo* ti = obj->getInstantiatedTypeInfo();
+            return ti ? ti : obj->getClass()->getTypeInfo();
+        }
+    }
+    return v.getFullTypeInfo();
+}
+
+static bool qore_infer_signature_type_args_runtime(const AbstractQoreFunctionVariant* variant,
+        const QoreListNode* args, const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst) {
+    const UserSignature* sig = qore_get_variant_generic_signature(variant);
+    if (!sig) {
+        if (type_param_inst) {
+            type_param_inst->clear();
+        }
+        return true;
+    }
+
+    type_vec_t arg_types;
+    size_t nargs = args ? args->size() : 0;
+    arg_types.reserve(nargs);
+    for (size_t i = 0; i < nargs; ++i) {
+        arg_types.push_back(qore_get_runtime_value_type_info(args->retrieveEntry(i)));
+    }
+    return qore_infer_signature_type_args(variant, arg_types, nullptr, receiver_type_info, type_param_inst);
 }
 
 static const QoreTypeInfo* getParamLocalTypeInfo(const QoreTypeInfo* ti) {
@@ -533,6 +926,9 @@ CodeEvaluationHelper::~CodeEvaluationHelper() {
     if (restore_receiver_type_info) {
         runtime_set_receiver_type_info(old_receiver_type_info);
     }
+    if (restore_type_param_instantiation) {
+        runtime_set_type_param_instantiation(old_type_param_instantiation);
+    }
     if (returnTypeInfo != (const QoreTypeInfo*)-1) {
         saveReturnTypeInfo(returnTypeInfo);
     }
@@ -587,6 +983,9 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     if (variant) {
         // get default argument list of variant
         AbstractFunctionSignature* sig = variant->getSignature();
+        if (setTypeParamInstantiation(variant, sig)) {
+            return;
+        }
 
         const AbstractQoreFunctionVariant* v = variant;
         ExceptionSink xsink2;
@@ -604,6 +1003,9 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
             xsink2.clear();
             tmp.discard();
             sig = variant->getSignature();
+            if (setTypeParamInstantiation(variant, sig)) {
+                return;
+            }
             // prepare all args
             if (prepareDefaultArgs(xsink, variant, sig, is_copy, self, ARG_DEF | ARG_OTHER)) {
                 return;
@@ -620,6 +1022,9 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
         }
         // get default argument list of variant
         AbstractFunctionSignature* sig = variant->getSignature();
+        if (setTypeParamInstantiation(variant, sig)) {
+            return;
+        }
         // prepare all args
         if (prepareDefaultArgs(xsink, variant, sig, is_copy, self, ARG_DEF | ARG_OTHER)) {
             return;
@@ -630,7 +1035,8 @@ void CodeEvaluationHelper::init(const QoreFunction* func, const AbstractQoreFunc
     }
 
     setCallType(variant->getCallType());
-    setReturnTypeInfo(qore_substitute_type_params(variant->getReturnTypeInfo(), receiver_type_info));
+    setReturnTypeInfo(qore_substitute_type_params(variant->getReturnTypeInfo(), receiver_type_info,
+        &type_param_instantiation));
     old_rtflags = rc.getRuntimeFlags();
     rc.setRuntimeFlags(static_cast<q_rt_flags_t>(variant->getFlags()));
     restore_rtflags = true;
@@ -651,7 +1057,8 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
         class_ctx = nullptr;
     }
 
-    variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx, receiver_type_info);
+    variant = func->runtimeFindVariant(xsink, getArgs(), false, class_ctx, receiver_type_info,
+        &type_param_instantiation);
     if (!variant) {
         assert(*xsink);
         return -1;
@@ -671,8 +1078,44 @@ int CodeEvaluationHelper::findVariant(const QoreFunction* func, const AbstractQo
     return 0;
 }
 
+int CodeEvaluationHelper::setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
+        const AbstractFunctionSignature* sig) {
+    const UserSignature* generic_sig = qore_get_variant_generic_signature(variant);
+    if (!generic_sig) {
+        type_param_instantiation.clear();
+        if (restore_type_param_instantiation) {
+            runtime_set_type_param_instantiation(old_type_param_instantiation);
+            restore_type_param_instantiation = false;
+            old_type_param_instantiation = nullptr;
+        }
+        return 0;
+    }
+
+    if (!qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info, &type_param_instantiation)) {
+        xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
+            callName.c_str(), sig ? sig->getSignatureText() : "");
+        return -1;
+    }
+
+    if (!restore_type_param_instantiation) {
+        old_type_param_instantiation = runtime_set_type_param_instantiation(&type_param_instantiation);
+        restore_type_param_instantiation = true;
+    } else {
+        runtime_set_type_param_instantiation(&type_param_instantiation);
+    }
+    return 0;
+}
+
 int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const AbstractQoreFunctionVariant* variant,
         AbstractFunctionSignature* sig, bool is_copy, QoreObject* self, int arg_type) {
+    if (type_param_instantiation.empty()) {
+        if (!qore_infer_signature_type_args_runtime(variant, getArgs(), receiver_type_info, &type_param_instantiation)) {
+            xsink->raiseException("RUNTIME-TYPE-ERROR", "cannot infer type arguments for generic call '%s(%s)'",
+                callName.c_str(), sig ? sig->getSignatureText() : "");
+            return -1;
+        }
+    }
+
     const arg_vec_t& defaultArgList = sig->getDefaultArgList();
     const type_vec_t& typeList = sig->getTypeList();
 
@@ -684,7 +1127,7 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
     bool self_set = false;
     for (unsigned i = 0; i < max; ++i) {
         const QoreTypeInfo* paramTypeInfo = i < typeList.size()
-            ? qore_substitute_type_params(sig->getParamTypeInfo(i), receiver_type_info)
+            ? qore_substitute_type_params(sig->getParamTypeInfo(i), receiver_type_info, &type_param_instantiation)
             : nullptr;
         bool use_default_arg = false;
         if (i < defaultArgList.size() && defaultArgList[i]) {
@@ -732,11 +1175,10 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                 }
 
                 const QoreTypeInfo* paramTypeInfo = qore_substitute_type_params(sig->getParamTypeInfo(i),
-                    receiver_type_info);
+                    receiver_type_info, &type_param_instantiation);
                 if (!paramTypeInfo) {
                     continue;
                 }
-
                 // issue #3184: do not create a NOTHING argument if none is needed
                 if (!QoreTypeInfo::hasType(paramTypeInfo)
                     || (tmp.size() < i && QoreTypeInfo::parseAcceptsReturns(paramTypeInfo, NT_NOTHING))) {
@@ -1247,8 +1689,36 @@ int UserSignature::resolve() {
     }
 
     resolved = true;
+    UserSignatureTypeParamContextHelper type_param_context(this);
 
     int err = 0;
+
+    if (!type_params.empty()) {
+        type_param_default_types.assign(type_params.size(), nullptr);
+        type_param_bound_types.assign(type_params.size(), nullptr);
+        for (size_t i = 0, e = type_params.size(); i < e; ++i) {
+            if (type_params[i].hasDefault()) {
+                std::unique_ptr<QoreParseTypeInfo> pti(qore_parse_type_string_to_pti(type_params[i].getDefaultType()));
+                if (!pti) {
+                    parseException(*loc, "PARSE-TYPE-ERROR", "cannot parse default type '%s' for type parameter "
+                        "'%s'", type_params[i].getDefaultType(), type_params[i].name.c_str());
+                    err = -1;
+                } else {
+                    type_param_default_types[i] = QoreParseTypeInfo::resolveAny(pti.get(), loc, err);
+                }
+            }
+            if (type_params[i].hasBound()) {
+                std::unique_ptr<QoreParseTypeInfo> pti(qore_parse_type_string_to_pti(type_params[i].getBoundType()));
+                if (!pti) {
+                    parseException(*loc, "PARSE-TYPE-ERROR", "cannot parse bound type '%s' for type parameter '%s'",
+                        type_params[i].getBoundType(), type_params[i].name.c_str());
+                    err = -1;
+                } else {
+                    type_param_bound_types[i] = QoreParseTypeInfo::resolveAny(pti.get(), loc, err);
+                }
+            }
+        }
+    }
 
     if (!returnTypeInfo) {
         returnTypeInfo = QoreParseTypeInfo::resolveAndDelete(parseReturnTypeInfo, loc, err);
@@ -1669,7 +2139,11 @@ QoreListNode* QoreFunction::runtimeGetCallVariants() const {
 
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
-        bool only_user, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info) const {
+        bool only_user, const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
+        QoreTypeParamInstantiation* type_param_inst) const {
+    if (type_param_inst) {
+        type_param_inst->clear();
+    }
     unsigned nargs = args ? args->size() : 0;
     QoreParseOptions ppo = runtime_get_parse_options();
 
@@ -1743,6 +2217,11 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             sig = (*i)->getSignature();
             assert(sig);
 
+            QoreTypeParamInstantiation candidate_inst;
+            if (!qore_infer_signature_type_args_runtime(*i, args, receiver_type_info, &candidate_inst)) {
+                continue;
+            }
+
             // if the signature has ellipses, then QCF_USES_EXTRA_ARGS must be set in vflags
             assert(uses_extra_args || !sig->hasVarargs());
 
@@ -1754,6 +2233,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             // issue 1507: ensure that calls with no arguments and no params are considered a perfect match
             if (!nargs && !sig->numParams()) {
                 variant = *i;
+                if (type_param_inst) {
+                    *type_param_inst = std::move(candidate_inst);
+                }
                 break;
             }
 
@@ -1765,7 +2247,8 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             int pscore = 0;
             bool ok = true;
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info);
+                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info,
+                    &candidate_inst);
                 QoreValue n{};  // value-initialized to NOTHING (bits=0)
                 if (args) {
                     n = args->retrieveEntry(pi);
@@ -1820,6 +2303,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             if (pscore > score || (pscore == score && (score_len == -1 || (sig->numParams() < (unsigned)score_len)))) {
                 score = pscore;
                 variant = *i;
+                if (type_param_inst) {
+                    *type_param_inst = std::move(candidate_inst);
+                }
 
                 score_len = sig->numParams();
             }
@@ -1917,7 +2403,11 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
 
 // finds a variant at runtime
 const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
-        const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info) const {
+        const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info,
+        QoreTypeParamInstantiation* type_param_inst) const {
+    if (type_param_inst) {
+        type_param_inst->clear();
+    }
     int match = -1;
 
     const AbstractQoreFunctionVariant* variant = nullptr;
@@ -1971,11 +2461,19 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             sig = (*i)->getSignature();
             assert(sig);
 
+            QoreTypeParamInstantiation candidate_inst;
+            if (!qore_infer_signature_type_args(*i, args, nullptr, receiver_type_info, &candidate_inst)) {
+                continue;
+            }
+
             //printd(5, "QoreFunction::runtimeFindVariant() this: %p %s(%s) args: %d class: %s class_ctx: %p '%s' nparams: %d\n", this, getName(), sig->getSignatureText(), args.size(), aqf->className() ? aqf->className() : "n/a", class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a", sig->numParams());
 
             // issue 1507: ensure that calls with no arguments and no params are considered a perfect match
             if (args.empty() && !sig->numParams()) {
                 variant = *i;
+                if (type_param_inst) {
+                    *type_param_inst = std::move(candidate_inst);
+                }
                 break;
             }
 
@@ -1987,7 +2485,8 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             int count = 0;
             bool ok = true;
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
-                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info);
+                const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi), receiver_type_info,
+                    &candidate_inst);
                 const QoreTypeInfo* a = args[pi];
 
                 int rc = QoreTypeInfo::runtimeTypeMatch(t, a);
@@ -2005,6 +2504,9 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindVariant(ExceptionSin
             //printd(5, "QoreFunction::runtimeFindVariant() variant: %p count: %d match: %d (%s)\n", variant, count, match, sig->getSignatureText());
             if (count > match) {
                 variant = *i;
+                if (type_param_inst) {
+                    *type_param_inst = std::move(candidate_inst);
+                }
                 match = count;
             }
         }
@@ -2187,7 +2689,11 @@ const AbstractQoreFunctionVariant* QoreFunction::runtimeFindExactVariant(Excepti
 
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const name_vec_t& argNames, const qore_class_private* class_ctx,
-        int& err, QoreNamedArgBinding& binding, const QoreTypeInfo* receiver_type_info) const {
+        int& err, QoreNamedArgBinding& binding, const QoreTypeInfo* receiver_type_info,
+        QoreTypeParamInstantiation* type_param_inst) const {
+    if (type_param_inst) {
+        type_param_inst->clear();
+    }
     int score_len = -1;
     int score = -1;
     int max_score = -1;
@@ -2199,6 +2705,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
     const AbstractQoreFunctionVariant* variant = nullptr;
     const AbstractQoreFunctionVariant* pvariant = nullptr;
     NamedArgCandidateBinding best_binding;
+    QoreTypeParamInstantiation best_type_param_inst;
 
     QoreFunction* aqf = nullptr;
     const qore_class_private* last_class = nullptr;
@@ -2257,6 +2764,12 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 continue;
             }
 
+            QoreTypeParamInstantiation candidate_inst;
+            if (!qore_infer_signature_type_args(*i, cb.arg_types, &cb.supplied, receiver_type_info,
+                    &candidate_inst)) {
+                continue;
+            }
+
             if ((int)(sig->numParams() * QTI_IDENT) < score) {
                 continue;
             }
@@ -2271,7 +2784,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
             for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
                 const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi),
-                    receiver_type_info);
+                    receiver_type_info, &candidate_inst);
                 bool pos_supplied = pi < cb.supplied.size() && cb.supplied[pi];
                 const QoreTypeInfo* a = pos_supplied && pi < cb.arg_types.size() ? cb.arg_types[pi] : nullptr;
                 bool pos_has_arg = pos_supplied && QoreTypeInfo::hasType(a);
@@ -2380,6 +2893,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
                 score_len = sig->numParams();
                 omitted_defaultable = cb.omitted_defaultable;
                 variant = *i;
+                best_type_param_inst = candidate_inst;
                 best_binding = std::move(cb);
             } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
                 if (variant_soft_match && variant) {
@@ -2549,6 +3063,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 
         binding.source_to_param = std::move(best_binding.source_to_param);
         binding.result_size = best_binding.result_size;
+        if (type_param_inst) {
+            *type_param_inst = std::move(best_type_param_inst);
+        }
     }
 
     return variant;
@@ -2557,7 +3074,10 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariantNamed(const Qor
 // finds a variant at parse time
 const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
-        const QoreTypeInfo* receiver_type_info) const {
+        const QoreTypeInfo* receiver_type_info, QoreTypeParamInstantiation* type_param_inst) const {
+    if (type_param_inst) {
+        type_param_inst->clear();
+    }
     // the lowest match length with the highest score wins
     int score_len = -1;
     // the score for the match of the variant
@@ -2614,6 +3134,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             }
             AbstractFunctionSignature* sig = (*i)->getSignature();
 
+            QoreTypeParamInstantiation candidate_inst;
+            if (!qore_infer_signature_type_args(*i, argTypeInfo, nullptr, receiver_type_info, &candidate_inst)) {
+                continue;
+            }
+
             // get variant parse flags
             int64 vflags = (*i)->getFlags();
 
@@ -2637,6 +3162,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
             // issue 1507: ensure that calls with no arguments and no params are considered a perfect match
             if (!num_args && !sig->numParams()) {
                 variant = *i;
+                if (type_param_inst) {
+                    *type_param_inst = std::move(candidate_inst);
+                }
                 break;
             }
 
@@ -2653,7 +3181,7 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 
                 for (unsigned pi = 0; pi < sig->numParams(); ++pi) {
                     const QoreTypeInfo* t = qore_substitute_type_params(sig->getParamTypeInfo(pi),
-                        receiver_type_info);
+                        receiver_type_info, &candidate_inst);
                     bool pos_has_arg = num_args && num_args > pi;
                     const QoreTypeInfo* a = pos_has_arg ? argTypeInfo[pi] : nullptr;
                     if (pos_has_arg) {
@@ -2789,6 +3317,9 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
                         printd(5, "QoreFunction::parseFindVariant() assigning variant %p %s(%s)\n", *i, getName(),
                             sig->getSignatureText());
                         variant = *i;
+                        if (type_param_inst) {
+                            *type_param_inst = candidate_inst;
+                        }
                     }
                 } else if (variant_pmatch && (variant_pmatch >= pmatch || max_pscore >= max_score)) {
                     if (variant_soft_match && variant) {
@@ -3258,8 +3789,9 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
                 val = (*args)->retrieveEntry(i).refSelf();
             }
 
+            const QoreTypeInfo* paramTypeInfo = qore_substitute_type_params(signature.getParamTypeInfo(i),
+                qore_get_current_receiver_type_info());
             // Apply type filtering for complex hash parameters
-            const QoreTypeInfo* paramTypeInfo = signature.getParamTypeInfo(i);
             if (paramTypeInfo && val.getType() == NT_HASH) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, signature.getName(i), val, xsink);
                 if (*xsink) {
@@ -3267,14 +3799,16 @@ int UserVariantBase::setupCall(CodeEvaluationHelper *ceh, ReferenceHolder<QoreLi
                 }
             }
 
-            signature.lv[i]->instantiate(val);
+            signature.lv[i]->instantiate(val, paramTypeInfo);
             continue;
         }
 
         //printd(5, "UserVariantBase::setupCall() eval %d: instantiating param lvar %p ('%s') (exp nt: %d '%s')\n",
         //    i, signature.lv[i], signature.lv[i]->getName(), np.getType(), np.getTypeName());
 
-        signature.lv[i]->instantiate(QoreValue());
+        const QoreTypeInfo* paramTypeInfo = qore_substitute_type_params(signature.getParamTypeInfo(i),
+            qore_get_current_receiver_type_info());
+        signature.lv[i]->instantiate(QoreValue(), paramTypeInfo);
     }
 
     // if there are more arguments than parameters

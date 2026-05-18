@@ -43,6 +43,7 @@ protected:
     QoreListNode* args = nullptr;
     const AbstractQoreFunctionVariant* variant = nullptr;
     const QoreTypeInfo* receiver_type_info = nullptr;
+    QoreTypeParamInstantiation type_param_instantiation;
 
 public:
     DLLLOCAL FunctionCallBase(QoreParseListNode* parse_args, QoreListNode* args = nullptr) : parse_args(parse_args),
@@ -53,11 +54,13 @@ public:
         parse_args(old.parse_args ? old.parse_args->listRefSelf() : nullptr),
         args(old.args ? old.args->listRefSelf() : nullptr),
         variant(old.variant),
-        receiver_type_info(old.receiver_type_info) {
+        receiver_type_info(old.receiver_type_info),
+        type_param_instantiation(old.type_param_instantiation) {
     }
 
     DLLLOCAL FunctionCallBase(const FunctionCallBase& old, QoreListNode* n_args) : args(n_args),
-            variant(old.variant), receiver_type_info(old.receiver_type_info) {
+            variant(old.variant), receiver_type_info(old.receiver_type_info),
+            type_param_instantiation(old.type_param_instantiation) {
     }
 
     DLLLOCAL ~FunctionCallBase() {
@@ -81,6 +84,10 @@ public:
 
     DLLLOCAL const QoreTypeInfo* getReceiverTypeInfo() const {
         return receiver_type_info;
+    }
+
+    DLLLOCAL const QoreTypeParamInstantiation* getTypeParamInstantiation() const {
+        return type_param_instantiation.empty() ? nullptr : &type_param_instantiation;
     }
 
     DLLLOCAL void setVariant(const AbstractQoreFunctionVariant* v) {

@@ -9754,6 +9754,7 @@ lvalue_path_unary_done:
                             // Only inline if caller and callee are in the same program
                             bool same_program = (uvb->pgm == direct_inst->pgm);
                             if (same_program && callee_ir && callee_ir->direct_params_eligible
+                                    && uvb->isStaticallyFastCallEligible()
                                     && !uvb->hasCachedFunction()
                                     && !direct_inst->has_ref_args
                                     && callee_ir->ast_visible_body_locals.empty()

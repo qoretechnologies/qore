@@ -41,6 +41,8 @@
 
 #include "qore/intern/QoreTypeSpec.h"
 
+class UserSignature;
+
 static inline void validate_date_variant(QoreValue& n, ExceptionSink* xsink, bool require_relative,
         const char* type_name) {
     if (!xsink) {
@@ -1009,6 +1011,8 @@ public:
             const QoreTypeParameterTypeInfo* value_type = nullptr);
     DLLLOCAL QoreTypeParameterTypeInfo(const TypedHashDecl* owner, size_t index, const char* name, bool or_nothing,
             const QoreTypeParameterTypeInfo* value_type = nullptr);
+    DLLLOCAL QoreTypeParameterTypeInfo(const UserSignature* owner, size_t index, const char* name, bool or_nothing,
+            const QoreTypeParameterTypeInfo* value_type = nullptr);
 
     DLLLOCAL const QoreClass* getOwnerClass() const {
         return owner_class;
@@ -1016,6 +1020,10 @@ public:
 
     DLLLOCAL const TypedHashDecl* getOwnerHashDecl() const {
         return owner_hashdecl;
+    }
+
+    DLLLOCAL const UserSignature* getOwnerSignature() const {
+        return owner_signature;
     }
 
     DLLLOCAL size_t getIndex() const {
@@ -1033,6 +1041,7 @@ public:
 protected:
     const QoreClass* owner_class = nullptr;
     const TypedHashDecl* owner_hashdecl = nullptr;
+    const UserSignature* owner_signature = nullptr;
     size_t index;
     std::string param_name;
     bool or_nothing;
@@ -3439,6 +3448,21 @@ protected:
 //! Vector of type infos for union member types
 typedef std::vector<const QoreTypeInfo*> type_vec_t;
 
+//! Per-call binding for a source function or method's generic type parameters
+struct QoreTypeParamInstantiation {
+    const UserSignature* owner = nullptr;
+    type_vec_t type_args;
+
+    DLLLOCAL void clear() {
+        owner = nullptr;
+        type_args.clear();
+    }
+
+    DLLLOCAL bool empty() const {
+        return !owner || type_args.empty();
+    }
+};
+
 //! Creates or retrieves a cached union type for the given member types
 /** @param member_types vector of member types
     @param or_nothing if true, the union type also accepts NOTHING
@@ -3456,9 +3480,17 @@ DLLLOCAL const QoreTypeParameterTypeInfo* qore_get_type_parameter_type_info(cons
 DLLLOCAL const QoreTypeInfo* qore_get_hashdecl_type_parameter_type(const TypedHashDecl* owner, size_t index,
     const char* name, bool or_nothing = false);
 
+//! Returns symbolic signature type-parameter type info
+DLLLOCAL const QoreTypeInfo* qore_get_signature_type_parameter_type(const UserSignature* owner, size_t index,
+    const char* name, bool or_nothing = false);
+
 //! Substitutes symbolic type parameters in \a ti using the concrete receiver type
 DLLLOCAL const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti,
     const QoreTypeInfo* receiver_type_info);
+
+//! Substitutes symbolic type parameters in \a ti using receiver and call-local generic bindings
+DLLLOCAL const QoreTypeInfo* qore_substitute_type_params(const QoreTypeInfo* ti,
+    const QoreTypeInfo* receiver_type_info, const QoreTypeParamInstantiation* type_param_inst);
 
 //! Returns the effective receiver type for class type-parameter substitution
 DLLLOCAL const QoreTypeInfo* qore_get_object_receiver_type_info(const QoreObject* self);

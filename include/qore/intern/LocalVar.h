@@ -512,12 +512,17 @@ public:
         instantiateIntern(nval, true);
     }
 
-    DLLLOCAL void instantiateIntern(QoreValue nval, bool assign) {
+    DLLLOCAL void instantiate(QoreValue nval, const QoreTypeInfo* runtimeTypeInfo) {
+        instantiateIntern(nval, true, runtimeTypeInfo);
+    }
+
+    DLLLOCAL void instantiateIntern(QoreValue nval, bool assign, const QoreTypeInfo* runtimeTypeInfo = nullptr) {
+        const QoreTypeInfo* ti = runtimeTypeInfo ? runtimeTypeInfo : typeInfo;
         if (!closure_use) {
             LocalVarValue* val = thread_instantiate_lvar();
-            val->set(name.c_str(), this, typeInfo, nval, assign, false);
+            val->set(name.c_str(), this, ti, nval, assign, false);
         } else {
-            thread_instantiate_closure_var(name.c_str(), typeInfo, nval, assign);
+            thread_instantiate_closure_var(name.c_str(), ti, nval, assign);
         }
     }
 

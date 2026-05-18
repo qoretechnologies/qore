@@ -335,6 +335,46 @@ class SourceRawConstructBox<T> [legacy_raw_construct] {
     }
 }
 
+T sub SourceGenericIdentity<T>(T value) {
+    T local = value;
+    return local;
+}
+
+T sub SourceGenericFirst<T>(T first, T second) {
+    return first;
+}
+
+T sub SourceGenericDefault<T = int>(T value = 11) {
+    return value;
+}
+
+T sub SourceGenericBound<T: int>(T value) {
+    return value;
+}
+
+class SourceGenericCallMethods {
+    T echo<T>(T value) {
+        T local = value;
+        return local;
+    }
+
+    T first<T>(T first, T second) {
+        return first;
+    }
+
+    static T staticEcho<T>(T value) {
+        return value;
+    }
+
+    static T staticDefault<T = int>(T value = 12) {
+        return value;
+    }
+
+    static T staticBound<T: int>(T value) {
+        return value;
+    }
+}
+
 namespace SourceGenericNs {
     class Box<T> {
         T echo(T value) {
@@ -384,6 +424,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("runtime substitution errors", \runtimeSubstitutionErrors());
         addTestCase("generic inheritance", \genericInheritance());
         addTestCase("static generic methods", \staticGenericMethods());
+        addTestCase("method-level generics", \methodLevelGenerics());
         addTestCase("generic hashdecls", \genericHashDecls());
         addTestCase("source generic iterators", \sourceGenericIterators());
         addTestCase("source generic poll operations", \sourceGenericPollOperations());
@@ -521,6 +562,39 @@ public class GenericClassTypesTest inherits QUnit::Test {
         assertEq(14, SourceGenericNs::StaticFactory<int>::echoThroughLocal(14));
         assertThrows("RUNTIME-TYPE-ERROR",
             sub () { SourceGenericNs::StaticFactory<int>::echoThroughLocal("x"); });
+    }
+
+    methodLevelGenerics() {
+        int function_int = SourceGenericIdentity(20);
+        assertEq(20, function_int);
+
+        string function_string = SourceGenericIdentity(value: "twenty");
+        assertEq("twenty", function_string);
+
+        int default_function = SourceGenericDefault();
+        assertEq(11, default_function);
+
+        int bound_function = SourceGenericBound(21);
+        assertEq(21, bound_function);
+
+        SourceGenericCallMethods calls();
+        int method_int = calls.echo(22);
+        assertEq(22, method_int);
+
+        string method_string = calls.echo(value: "twenty-two");
+        assertEq("twenty-two", method_string);
+
+        int static_int = SourceGenericCallMethods::staticEcho(23);
+        assertEq(23, static_int);
+
+        string static_string = SourceGenericCallMethods::staticEcho(value: "twenty-three");
+        assertEq("twenty-three", static_string);
+
+        int static_default = SourceGenericCallMethods::staticDefault();
+        assertEq(12, static_default);
+
+        int static_bound = SourceGenericCallMethods::staticBound(24);
+        assertEq(24, static_bound);
     }
 
     genericHashDecls() {
@@ -787,6 +861,46 @@ public class GenericClassTypesTest inherits QUnit::Test {
             p.parse("class C<T> { nothing set(T v) {} nothing set(list<T> v) {} } "
                 "sub t() { C<int> c(); c.set(1); c.set((1, 2)); }", "generic-classes");
             p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("T sub identity<T>(T value) { return value; } "
+                "class C { T echo<T>(T value) { return value; } static T stat<T>(T value) { return value; } } "
+                "sub t() { int i = identity(1); string s = identity(value: \"x\"); C c(); "
+                "int mi = c.echo(2); string ms = c.echo(value: \"y\"); int si = C::stat(3); }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE, True);
+            p.parse("namespace N; T sub N::identity<T>(T value) { return value; } "
+                "class C {} T C::echo<T>(T value) { return value; } static T C::stat<T>(T value) { return value; } "
+                "sub t() { int i = N::identity(1); C c(); int mi = c.echo(2); int si = C::stat(3); }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub identity<T>(T value) { return value; } sub t() { int i = identity(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub first<T>(T a, T b) { return a; } sub t() { int i = first(1, \"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "T sub bounded<T: int>(T value) { return value; } sub t() { string s = bounded(\"x\"); }",
+                "generic-classes"));
         }
 
         {

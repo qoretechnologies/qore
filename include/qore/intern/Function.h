@@ -44,6 +44,7 @@
 
 #include "qore/intern/QoreJITException.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
+#include "qore/intern/QoreParseTypeInfo.h"
 
 class qore_class_private;
 class QoreIRFunction;
@@ -62,6 +63,7 @@ class QoreFunction;
 class qore_class_private;
 class qore_ns_private;
 class QoreClosureBase;
+class UserSignature;
 
 typedef std::vector<QoreParseTypeInfo*> ptype_vec_t;
 typedef std::vector<LocalVar*> lvar_vec_t;
@@ -207,6 +209,20 @@ struct QoreNamedArgBinding {
     size_t result_size = 0;
 };
 
+class UserSignatureTypeParamContextHelper {
+public:
+    DLLLOCAL UserSignatureTypeParamContextHelper(const UserSignature* sig);
+    DLLLOCAL ~UserSignatureTypeParamContextHelper();
+
+private:
+    const UserSignature* old_sig;
+};
+
+DLLLOCAL const UserSignature* parse_get_signature_type_param_context();
+DLLLOCAL const QoreTypeParamInstantiation* runtime_get_type_param_instantiation();
+DLLLOCAL const QoreTypeParamInstantiation* runtime_set_type_param_instantiation(
+    const QoreTypeParamInstantiation* inst);
+
 // used to store return type info during parsing for user code
 class RetTypeInfo {
     QoreParseTypeInfo* parseTypeInfo;
@@ -233,6 +249,9 @@ class UserSignature : public AbstractFunctionSignature {
 protected:
     ptype_vec_t parseTypeList;
     QoreParseTypeInfo* parseReturnTypeInfo;
+    std::vector<QoreGenericTypeParam> type_params;
+    type_vec_t type_param_default_types;
+    type_vec_t type_param_bound_types;
 
     const QoreProgramLocation* loc;
 
@@ -310,6 +329,45 @@ public:
 
     DLLLOCAL virtual const QoreParseTypeInfo* getParseParamTypeInfo(unsigned num) const {
         return num < parseTypeList.size() ? parseTypeList[num] : nullptr;
+    }
+
+    DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& n_type_params) {
+        type_params = std::move(n_type_params);
+        type_param_default_types.clear();
+        type_param_bound_types.clear();
+    }
+
+    DLLLOCAL bool hasTypeParameters() const {
+        return !type_params.empty();
+    }
+
+    DLLLOCAL size_t getTypeParameterCount() const {
+        return type_params.size();
+    }
+
+    DLLLOCAL const char* getTypeParameterName(size_t index) const {
+        return index < type_params.size() ? type_params[index].name.c_str() : nullptr;
+    }
+
+    DLLLOCAL const char* getTypeParameterDefaultType(size_t index) const {
+        return index < type_params.size() ? type_params[index].getDefaultType() : nullptr;
+    }
+
+    DLLLOCAL const char* getTypeParameterBoundType(size_t index) const {
+        return index < type_params.size() ? type_params[index].getBoundType() : nullptr;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeParameterDefaultTypeInfo(size_t index) const {
+        return index < type_param_default_types.size() ? type_param_default_types[index] : nullptr;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeParameterBoundTypeInfo(size_t index) const {
+        return index < type_param_bound_types.size() ? type_param_bound_types[index] : nullptr;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getTypeParameterType(size_t index, bool or_nothing = false) const {
+        const char* name = getTypeParameterName(index);
+        return name ? qore_get_signature_type_parameter_type(this, index, name, or_nothing) : nullptr;
     }
 
     // resolves all parse types to the final types
@@ -512,10 +570,13 @@ protected:
     QoreParseOptions old_rc_po;
     const QoreTypeInfo* explicit_receiver_type_info = nullptr;
     const QoreTypeInfo* old_receiver_type_info = nullptr;
+    QoreTypeParamInstantiation type_param_instantiation;
+    const QoreTypeParamInstantiation* old_type_param_instantiation = nullptr;
     q_rt_flags_t old_rtflags = 0;
     bool restore_stack = false;
     bool restore_runtime_ctx = false;
     bool restore_receiver_type_info = false;
+    bool restore_type_param_instantiation = false;
     bool restore_rtflags = false;
 
     DLLLOCAL void init(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant, bool is_copy,
@@ -523,6 +584,9 @@ protected:
 
     DLLLOCAL int findVariant(const QoreFunction* func, const AbstractQoreFunctionVariant*& variant,
         const qore_class_private* cctx);
+
+    DLLLOCAL int setTypeParamInstantiation(const AbstractQoreFunctionVariant* variant,
+        const AbstractFunctionSignature* sig);
 
     DLLLOCAL void setCallName(const QoreFunction* func);
 };
@@ -783,6 +847,14 @@ public:
         return const_cast<UserSignature*>(&signature);
     }
 
+    DLLLOCAL void setTypeParameters(std::vector<QoreGenericTypeParam>&& type_params) {
+        signature.setTypeParameters(std::move(type_params));
+    }
+
+    DLLLOCAL bool hasTypeParameters() const {
+        return signature.hasTypeParameters();
+    }
+
     DLLLOCAL bool isSynchronized() const {
         return (bool)gate;
     }
@@ -937,6 +1009,9 @@ public:
     //! is checked separately by qore_rt_call_fast() which falls back if not ready.
     DLLLOCAL bool isStaticallyFastCallEligible() const {
         if (isSynchronized()) {
+            return false;
+        }
+        if (signature.hasTypeParameters()) {
             return false;
         }
         // Check for default args
@@ -1343,12 +1418,14 @@ public:
     // reachable
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariant(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const qore_class_private* class_ctx, int& err,
-            const QoreTypeInfo* receiver_type_info = nullptr) const;
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            QoreTypeParamInstantiation* type_param_inst = nullptr) const;
 
     DLLLOCAL const AbstractQoreFunctionVariant* parseFindVariantNamed(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const name_vec_t& argNames,
             const qore_class_private* class_ctx, int& err, QoreNamedArgBinding& binding,
-            const QoreTypeInfo* receiver_type_info = nullptr) const;
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            QoreTypeParamInstantiation* type_param_inst = nullptr) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {
@@ -1366,11 +1443,13 @@ public:
     // class_ctx is only for use in a class hierarchy and is only set if there is a current class context and it's reachable from the object being executed
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const QoreListNode* args,
             bool only_user, const qore_class_private* class_ctx,
-            const QoreTypeInfo* receiver_type_info = nullptr) const;
+            const QoreTypeInfo* receiver_type_info = nullptr,
+            QoreTypeParamInstantiation* type_param_inst = nullptr) const;
 
     // finds the best match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindVariant(ExceptionSink* xsink, const type_vec_t& args,
-            const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr) const;
+            const qore_class_private* class_ctx, const QoreTypeInfo* receiver_type_info = nullptr,
+            QoreTypeParamInstantiation* type_param_inst = nullptr) const;
     // finds only an exact match with the given arg types
     DLLLOCAL const AbstractQoreFunctionVariant* runtimeFindExactVariant(ExceptionSink* xsink, const type_vec_t& args, const qore_class_private* class_ctx) const;
 
@@ -1706,11 +1785,12 @@ public:
 
 class UserParamListLocalVarHelper {
 protected:
+    UserSignatureTypeParamContextHelper type_param_context;
     UserVariantBase* uvb;
 
 public:
     DLLLOCAL UserParamListLocalVarHelper(UserVariantBase* n_uvb, const QoreTypeInfo* classTypeInfo = nullptr)
-            : uvb(n_uvb) {
+            : type_param_context(n_uvb->getUserSignature()), uvb(n_uvb) {
         uvb->parseInitPushLocalVars(classTypeInfo);
     }
 

@@ -152,11 +152,12 @@ QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const q
 }
 
 const QoreTypeInfo* AbstractMethodCallNode::getTypeInfo() const {
-    return variant
+    const QoreTypeInfo* rv = variant
         ? variant->parseGetReturnTypeInfo()
         : (method
             ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
             : nullptr);
+    return qore_substitute_type_params(rv, receiver_type_info, getTypeParamInstantiation());
 }
 
 static void invalid_access(const QoreProgramLocation* loc, QoreFunction* func) {
@@ -310,10 +311,12 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
         // find variant
         QoreNamedArgBinding named_binding;
+        type_param_instantiation.clear();
         variant = named_args
             ? func->parseFindVariantNamed(loc, argTypeInfo, arg_names, class_ctx, err, named_binding,
-                receiver_type_info)
-            : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info);
+                receiver_type_info, &type_param_instantiation)
+            : func->parseFindVariant(loc, argTypeInfo, class_ctx, err, receiver_type_info,
+                &type_param_instantiation);
 
         if (named_args) {
             if (!variant) {
@@ -351,7 +354,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
                     //    func->getName());
                     // issue #3387: set return type before clearing variant
                     parse_context.typeInfo = qore_substitute_type_params(mv->parseGetReturnTypeInfo(),
-                        receiver_type_info);
+                        receiver_type_info, &type_param_instantiation);
                     variant = nullptr;
                     func = nullptr;
                     return err;
@@ -395,7 +398,7 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
 
         parse_context.typeInfo = qore_substitute_type_params(
             variant ? variant->parseGetReturnTypeInfo() : func->parseGetUniqueReturnTypeInfo(),
-            receiver_type_info);
+            receiver_type_info, &type_param_instantiation);
 
         //printd(5, "FunctionCallBase::parseArgsVariant() this: %p func: %s variant: %p pflag: %d pe: %d\n", this,
         //    func ? func->getName() : "n/a", variant, pflag, func ? func->empty() : -1);
@@ -1198,5 +1201,5 @@ const QoreTypeInfo* StaticMethodCallNode::getTypeInfo() const {
         : (method
             ? qore_method_private::get(*method)->getFunction()->parseGetUniqueReturnTypeInfo()
             : 0);
-    return qore_substitute_type_params(rv, receiver_type_info);
+    return qore_substitute_type_params(rv, receiver_type_info, getTypeParamInstantiation());
 }
