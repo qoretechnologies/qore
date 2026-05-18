@@ -110,7 +110,7 @@ public namespace CsvUtil {
         |\c default|@ref any_type "any"|Default output value (for writers only)
 
      */
-    public class AbstractCsvIterator inherits Qore::AbstractIterator, private CsvHelper {
+    public class AbstractCsvIterator inherits Qore::AbstractIterator<hash<auto>>, private CsvHelper {
         private {
             #! valid options for the object (a hash for quick lookups of valid keys)
             const Options = {

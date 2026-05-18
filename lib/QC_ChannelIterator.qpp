@@ -58,7 +58,7 @@ QoreObject* qore_new_channel_iterator_object(QoreProgram* pgm, QoreChannel* ch, 
 
     @par Example: Using foreach
     @code{.py}
-Channel ch(10);
+Channel<int> ch(10);
 background sub() {
     for (int i = 0; i < 5; ++i) {
         ch.send(i);
@@ -72,7 +72,7 @@ foreach auto val in (ch.iterator()) {
 
     @par Example: Using while loop
     @code{.py}
-ChannelIterator it(ch);
+ChannelIterator<int> it(ch);
 while (it.next()) {
     printf("value: %y\n", it.getValue());
 }
@@ -92,7 +92,7 @@ qclass ChannelIterator<T> [dom=THREAD_CLASS; arg=QoreChannelIterator* i; ns=Qore
 
     @par Example:
     @code{.py}
-ChannelIterator it(channel);
+ChannelIterator<int> it(channel);
     @endcode
  */
 ChannelIterator::constructor(Channel<T>[QoreChannel] channel) [flags=NAMED_ARGS] {
@@ -126,7 +126,7 @@ bool ChannelIterator::next() {
 
     @par Example:
     @code{.py}
-auto val = it.getValue();
+int val = it.getValue();
     @endcode
 
     @throw INVALID-ITERATOR iterator is not pointing at a valid element

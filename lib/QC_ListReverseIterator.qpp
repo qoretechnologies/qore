@@ -67,14 +67,14 @@ public:
 
     @par Example: ListIterator basic usage
     @code{.py}
-    list data = (1, "foo", 2);
-    ListReverseIterator it(data);
+    list<int> data = (1, 2, 3);
+    ListReverseIterator<int> it(data);
     while (it.next()) {
         printf("iter: %n\n", it.getValue());
     }
 
+    iter: 3
     iter: 2
-    iter: "foo"
     iter: 1
     @endcode
 
@@ -97,7 +97,7 @@ qclass ListReverseIterator<T> [arg=QoreListReverseIterator* i; ns=Qore; vparent=
 
     @par Example:
     @code{.py}
-ListReverseIterator li(l);
+ListReverseIterator<int> li(l);
     @endcode
 
     @note the constructor's argument is @ref softlist_type "softlist" so that it can also accept @ref nothing
@@ -110,7 +110,7 @@ ListReverseIterator::constructor(softlist<T> list_value) [flags=NAMED_ARGS] {
 //! Creates a copy of the ListReverseIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-ListReverseIterator ni = i.copy();
+ListReverseIterator<int> ni = i.copy();
     @endcode
  */
 ListReverseIterator::copy() {

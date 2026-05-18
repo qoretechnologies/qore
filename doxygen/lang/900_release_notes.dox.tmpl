@@ -305,14 +305,22 @@ binary frame = ws_encode_frame(message: payload, opcode: WSOP_Text, masked: Fals
     @endcode
     @endparblock
 
-    @par Generic Builtin Thread Classes
+    @par Generic Builtin Classes and Result Records
     @parblock
-    The first builtin generic class types are now available for thread value
-    containers:
+    Builtin generic class types are now available for thread value
+    containers, iterators, and poll operations:
     - @ref Qore::Thread::Queue "Queue<T>"
     - @ref Qore::Thread::Channel "Channel<T>"
     - @ref Qore::Thread::Promise "Promise<T>"
     - @ref Qore::Thread::Future "Future<T>"
+    - @ref Qore::AbstractIterator "AbstractIterator<T>" and concrete list,
+      hash, channel, and single-value iterators
+    - @ref Qore::AbstractPollOperation "AbstractPollOperation<T>" and
+      @ref Qore::SocketPollOperationBase "SocketPollOperationBase<T>"
+    - generic result hashdecls such as
+      @ref Qore::Thread::QueueTryResult "QueueTryResult<T>",
+      @ref Qore::Thread::ChannelTryResult "ChannelTryResult<T>", and
+      @ref Qore::KeyValueInfo "KeyValueInfo<T>"
 
     @code{.py}
 Queue<int> q();
@@ -323,12 +331,27 @@ Promise<string> p();
 Future<string> f = p.getFuture();
 p.set(value: "complete");
 string result = f.get(timeout_ms: 1s);
+
+hash<string, int> values = {"one": 1};
+HashIterator<int> it(values);
+while (it.next()) {
+    int item = it.getValue();
+}
+
+AbstractPollOperation<auto> connect = sock.startPollConnect(target: "example.com:443");
     @endcode
 
     Generic builtin class types are reified and runtime checked. Existing raw
     declarations such as <tt>Queue q()</tt> and <tt>Future f</tt> remain source
     compatible and behave as value-erased <tt>&lt;auto&gt;</tt> instances for
     migrated classes.
+
+    Object serialization preserves specialized generic class types, reflection
+    exposes type parameters, defaults, and bounds for generic classes and
+    hashdecls, and QoreApiMetadata merges generic metadata from AST parsing,
+    reflection, and qpp metadata. The astparser and QoreCodeFormat modules
+    preserve generic class/hashdecl declarations, wildcards, defaults, bounds,
+    and parameterized inheritance.
     @endparblock
 
     @par Source-Defined Generic Classes
@@ -2318,9 +2341,13 @@ cargo install tree-sitter-cli@0.26.5
       - @ref QoreApiMetadata::SymbolMerger "SymbolMerger" for merging all pipelines with priority
       - @ref QoreApiMetadata::QoreApiMetadata "QoreApiMetadata" facade with search, serialization
         (JSON/YAML), and the full merge pipeline
+      - class and hashdecl metadata includes generic type parameters, defaults, bounds, and
+        migrated raw-compatibility flags when available
     - @ref qorecodecompletionintro "QoreCodeCompletion" module
       - new module providing a shared code completion engine for %Qore tools
       - context-aware completion: identifiers, @c new, dot-access (@c .), scope (@c ::)
+      - dot-access and scope completion understand parameterized targets such as
+        <tt>Factory&lt;int&gt;::make</tt>
       - abstract provider interface for pluggable symbol resolution backends
       - %Qore keyword and built-in type completions
     - @ref qorecodeformatintro "QoreCodeFormat" module
@@ -2329,6 +2356,8 @@ cargo install tree-sitter-cli@0.26.5
       - line-length-aware wrapping (120 character default) with intelligent binary expression chain and ternary
         operator wrapping
       - preserves comments, parse directives, and string literals
+      - preserves generic class and hashdecl declarations, type defaults and bounds, wildcard
+        annotations, generic call type arguments, and parameterized inheritance
       - idempotent formatting (formatting already-formatted code produces identical output)
     - @ref qorecryptointro "QoreCrypto" module
       - new module providing provider-neutral envelope encryption helpers for sensitive long-lived records

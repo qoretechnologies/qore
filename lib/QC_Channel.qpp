@@ -88,7 +88,7 @@ foreach auto val in (channel.iterator()) {
 
     @par Example: Producer-consumer pipeline
     @code{.py}
-Channel ch(10);  # buffered channel with capacity 10
+Channel<int> ch(10);  # buffered channel with capacity 10
 background sub() {
     for (int i = 0; i < 5; ++i) {
         ch.send(i);
@@ -102,7 +102,7 @@ foreach auto val in (ch.iterator()) {
 
     @par Example: Unbuffered synchronous handoff
     @code{.py}
-Channel ch(0);  # unbuffered — send() blocks until recv() is called
+Channel<string> ch(0);  # unbuffered, send() blocks until recv() is called
 background sub() {
     ch.send("hello");  # blocks until the main thread calls recv()
 }();
@@ -111,7 +111,7 @@ auto val = ch.recv();  # "hello"
 
     @par Example: Multiple producers, single consumer
     @code{.py}
-Channel ch(20);
+Channel<hash<auto>> ch(20);
 int num_producers = 4;
 Counter done(num_producers);
 
@@ -138,7 +138,7 @@ foreach auto val in (ch.iterator()) {
 
     @par Example: Backpressure with timeout
     @code{.py}
-Channel ch(100);  # bounded buffer for backpressure
+Channel<hash<auto>> ch(100);  # bounded buffer for backpressure
 background sub() {
     while (auto item = get_next_item()) {
         try {
@@ -157,7 +157,7 @@ background sub() {
 
     @par Example: Non-blocking send/recv
     @code{.py}
-Channel ch(5);
+Channel<int> ch(5);
 if (ch.trySend(42)) {
     printf("sent successfully\n");
 } else {
@@ -174,8 +174,8 @@ if (exists result) {
 
     @par Example: Fan-out to multiple workers
     @code{.py}
-Channel work_ch(50);
-Channel result_ch(50);
+Channel<hash<auto>> work_ch(50);
+Channel<hash<auto>> result_ch(50);
 
 # Start workers
 int num_workers = 4;
@@ -225,9 +225,9 @@ qclass Channel<T> [dom=THREAD_CLASS; arg=QoreChannel* ch; ns=Qore::Thread; legac
 
     @par Example:
     @code{.py}
-Channel ch(10);  # buffered with capacity 10
-Channel sync_ch(0);  # unbuffered
-Channel unlimited(-1);  # unlimited buffer (like Queue but with close semantics)
+Channel<int> ch(10);  # buffered with capacity 10
+Channel<int> sync_ch(0);  # unbuffered
+Channel<int> unlimited(-1);  # unlimited buffer (like Queue but with close semantics)
     @endcode
 
     @throw CHANNEL-ERROR capacity less than -1
@@ -286,7 +286,7 @@ nothing Channel::send(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 
     @par Example:
     @code{.py}
-auto val = ch.recv();
+int val = ch.recv();
     @endcode
 
     @throw CHANNEL-ERROR channel deleted in another thread

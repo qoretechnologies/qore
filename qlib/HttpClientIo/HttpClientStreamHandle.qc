@@ -1009,7 +1009,7 @@ f.cancel();
 
     @since %HttpClientIo 1.3
 */
-public class HttpCancellableFuture inherits Future {
+public class HttpCancellableFuture inherits Future<auto> {
     private {
         #! The raw protocol Future from submitAsync()
         Future real_future;

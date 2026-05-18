@@ -51,7 +51,12 @@ class AbstractSQLStatement {};
 //! This class defines an abstract interface for the @ref Qore::SQL::SQLStatement "SQLStatement" class
 /** @since %Qore 0.9.0
  */
-qclass AbstractSQLStatement [dom=DATABASE; arg=AbstractSQLStatement* ds; ns=Qore::SQL; vparent=AbstractIterator];
+qclass AbstractSQLStatement [
+    dom=DATABASE;
+    arg=AbstractSQLStatement* ds;
+    ns=Qore::SQL;
+    vparent=AbstractIterator<*hash<auto>>
+];
 
 //! Saves an SQL statement that will be prepared and executed later, along with optional arguments
 /** The statement is actually only prepared when used for the first time, this is so that SQLStatement objects created with DatasourcePool objects use the DatasourcePool more efficiently, as many drivers require the actual DB API prepare call to be made on the same connection as the connection the statement will be executed on as well.

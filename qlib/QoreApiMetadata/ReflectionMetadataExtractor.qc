@@ -147,6 +147,21 @@ public class ReflectionMetadataExtractor {
             ci.module_name = mod;
         }
 
+        *list<string> type_params = cls.getTypeParameters();
+        if (exists type_params) {
+            ci.type_parameters = type_params;
+        }
+        *hash<string, string> type_param_defaults =
+            cls.getTypeParameterDefaults();
+        if (exists type_param_defaults) {
+            ci.type_parameter_defaults = type_param_defaults;
+        }
+        *hash<string, string> type_param_bounds =
+            cls.getTypeParameterBounds();
+        if (exists type_param_bounds) {
+            ci.type_parameter_bounds = type_param_bounds;
+        }
+
         # extract parent classes
         list<auto> parents = cls.getParentClasses();
         if (parents.size()) {
@@ -357,6 +372,21 @@ public class ReflectionMetadataExtractor {
         int pos = full_name.rfind("::");
         if (pos >= 0) {
             hi.namespace_path = full_name.substr(0, pos);
+        }
+
+        *list<string> type_params = typed_hash.getTypeParameters();
+        if (exists type_params) {
+            hi.type_parameters = type_params;
+        }
+        *hash<string, string> type_param_defaults =
+            typed_hash.getTypeParameterDefaults();
+        if (exists type_param_defaults) {
+            hi.type_parameter_defaults = type_param_defaults;
+        }
+        *hash<string, string> type_param_bounds =
+            typed_hash.getTypeParameterBounds();
+        if (exists type_param_bounds) {
+            hi.type_parameter_bounds = type_param_bounds;
         }
 
         # extract members

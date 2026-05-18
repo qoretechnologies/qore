@@ -106,7 +106,7 @@ qclass Queue<T> [dom=THREAD_CLASS; arg=Queue *q; ns=Qore::Thread; legacy_raw];
 
 //! Creates the Queue object
 /** @par Example:
-    @code{.py} Queue queue(); @endcode
+    @code{.py} Queue<int> queue(); @endcode
 
     @param max_size the maximum size of the Queue; -1 means no limit; if 0 or a negative number other than -1 is passed
     then a \c QUEUE-SIZE-ERROR exception will be thrown
@@ -145,7 +145,7 @@ Queue::copy() {
 
 //! Pushes a value on the end of the queue
 /** @par Example:
-    @code{.py} queue.push(value); @endcode
+    @code{.py} queue.push(value: 42); @endcode
 
     @param value value to be put on the queue
     @param timeout_ms a timeout value to wait for a free entry to become available on the queue; integers are
@@ -174,7 +174,7 @@ nothing Queue::push(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 
 //! Inserts a value at the beginning of the queue
 /** @par Example:
-    @code{.py} queue.insert(value); @endcode
+    @code{.py} queue.insert(value: 42); @endcode
 
     @param value value to be put on the queue
     @param timeout_ms a timeout value to wait for a free entry to become available on the queue; integers are interpreted as milliseconds; relative date/time values are interpreted literally with a maximum resolution of milliseconds.  A negative timeout value causes the call to time out immediately with a \c QUEUE-TIMEOUT exception if the call would otherwise block.  If a positive timeout argument is passed, and the queue has already reached its maximum size and does not go below the maximum size within the timeout period, a \c "QUEUE-TIMEOUT" exception is thrown.  If no value or a value that converts to integer 0 is passed as the argument, then the call does not timeout until a slot becomes available on the queue.  Queue slots are only limited if a maximum size is passed to Queue::constructor().
@@ -196,7 +196,7 @@ nothing Queue::insert(T value, timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 
 //! Blocks until at least one entry is available on the queue, then returns the first entry in the queue. If a timeout occurs, an exception is thrown. If the timeout value equal to zero, then the call does not timeout until data is available, while negative timeout values cause the call to timeout immediately if the call would otherwise block
 /** @par Example:
-    @code{.py} auto data = queue.get();@endcode
+    @code{.py} int data = queue.get();@endcode
 
     @param timeout_ms a timeout value to wait for data to become available on the queue; integers are interpreted as
     milliseconds; relative date/time values are interpreted literally with a maximum resolution of milliseconds.  A
@@ -275,7 +275,7 @@ T Queue::get(timeout timeout_ms = 0) [flags=NAMED_ARGS] {
 
 //! Blocks until at least one entry is available on the queue, then returns the last entry in the queue. If a timeout occurs, an exception is thrown. If the timeout is less than or equal to zero, then the call does not timeout until data is available
 /** @par Example:
-    @code{.py} auto data = queue.pop(); @endcode
+    @code{.py} int data = queue.pop(); @endcode
 
     @param timeout_ms a timeout value to wait for data to become available on the queue; integers are interpreted as
     milliseconds; relative date/time values are interpreted literally with a maximum resolution of milliseconds.  A

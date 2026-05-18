@@ -2421,7 +2421,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     returning.  No extra threads — cookie extraction happens synchronously
     on the caller's thread when they call \c get().
 */
-class CookieExtractingFuture inherits Future {
+class CookieExtractingFuture inherits Future<auto> {
     private {
         Future real_future;
         CookieJar jar;

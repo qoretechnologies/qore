@@ -64,7 +64,11 @@ static SocketConnectPollOperation* get_connect_poll_operation(ExceptionSink* xsi
 
     @since %Qore 1.12
 */
-qclass SocketPollOperation [private_members=string goal; arg=SocketPollOperationBase* op; vparent=SocketPollOperationBase];
+qclass SocketPollOperation [
+    private_members=string goal;
+    arg=SocketPollOperationBase* op;
+    vparent=SocketPollOperationBase<auto>
+];
 
 //! Creates the object with the given goal
 /** @param socket the Socket object to poll
@@ -129,7 +133,7 @@ SocketPollOperation::copy() {
 //! Initiates QUIC connection migration to a new network path (client-side active migration)
 /** @par Example:
     @code{.py}
-    AbstractPollOperation op = sock.startPollQuicConnect(host, port);
+    AbstractPollOperation<auto> op = sock.startPollQuicConnect(host, port);
     # ... drive connection to ready ...
     # Migrate to a new network path:
     op.migrateQuicConnection();

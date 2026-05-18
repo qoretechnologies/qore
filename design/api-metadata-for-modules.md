@@ -91,6 +91,8 @@ For every class object, metadata may include:
 | Field | Type | Meaning |
 |-------|------|---------|
 | `type_parameters` | `list<string>` | Formal class type parameter names in declaration order |
+| `type_parameter_defaults` | `hash<string, string>` | Default type argument by formal parameter name |
+| `type_parameter_bounds` | `hash<string, string>` | Concrete upper bound by formal parameter name |
 | `raw_accepts_parameterized` | `bool` | Raw annotations of this class accept parameterized instances for legacy compatibility |
 | `raw_construction_defaults_to_auto` | `bool` | Raw construction creates the explicit all-`auto` instantiation |
 
@@ -101,6 +103,8 @@ Example:
   "name": "Queue",
   "namespace_path": "Qore::Thread",
   "type_parameters": ["T"],
+  "type_parameter_defaults": {},
+  "type_parameter_bounds": {},
   "raw_accepts_parameterized": true,
   "raw_construction_defaults_to_auto": true,
   "instance_methods": [
@@ -139,6 +143,11 @@ When `raw_construction_defaults_to_auto` is true, raw examples may still be
 valid for compatibility, but new generated snippets should prefer explicit
 type arguments when the value type is known and use `<auto>` only when it is not.
 
+`type_parameters` is the canonical metadata key. `SymbolMerger` accepts the
+older `type_params` key as input only so stale qpp metadata in an existing build
+tree can still be merged during development; newly generated qpp metadata must
+emit `type_parameters`.
+
 Static methods on source-defined generic classes can also use the formal class
 type parameters. Metadata consumers should generate examples with a
 parameterized receiver so the call site contains enough information for type
@@ -147,6 +156,18 @@ substitution:
 ```qore
 Factory<int> f = Factory<int>::make(value: 42);
 ```
+
+### Source-Specific Generic Rules
+
+- qpp `.meta.json`: generic classes and hashdecls emit `type_parameters`,
+  `type_parameter_defaults`, and `type_parameter_bounds`. Classes also emit
+  `raw_accepts_parameterized` and `raw_construction_defaults_to_auto` when a
+  raw-compatibility qpp attribute is present.
+- Reflection metadata: `Reflection::Class` and `Reflection::TypedHash` expose
+  formal type parameters, defaults, and bounds for loaded runtime symbols.
+- QM/QC metadata: `AstMetadataExtractor` reads source generic class and
+  hashdecl declarations, including defaults, bounds, parameterized hashdecl
+  parents, and source raw-compatibility attributes.
 
 ## Generic Hashdecl Metadata
 
@@ -160,6 +181,8 @@ For every hashdecl object, metadata may include:
 | Field | Type | Meaning |
 |-------|------|---------|
 | `type_parameters` | `list<string>` | Formal hashdecl type parameter names in declaration order |
+| `type_parameter_defaults` | `hash<string, string>` | Default type argument by formal parameter name |
+| `type_parameter_bounds` | `hash<string, string>` | Concrete upper bound by formal parameter name |
 | `members` | `list<object>` | Member metadata with type strings that may reference formal parameters |
 
 Example:
@@ -169,6 +192,8 @@ Example:
   "name": "Result",
   "namespace_path": "Example",
   "type_parameters": ["T"],
+  "type_parameter_defaults": {},
+  "type_parameter_bounds": {},
   "members": [
     {"name": "status", "type_name": "string"},
     {"name": "value", "type_name": "T"},

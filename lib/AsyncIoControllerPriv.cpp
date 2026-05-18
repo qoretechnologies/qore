@@ -54,6 +54,18 @@ extern QoreClass* QC_QUEUE;
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 extern QoreClass* QC_ASYNCIOCONTROLLER;
 
+static const QoreTypeInfo* async_io_get_socket_poll_result_queue_type_info() {
+    type_vec_t args;
+    args.push_back(hashdeclSocketPollResultInfo->getTypeInfo(false));
+    return QC_QUEUE->getTypeInfo(args, false);
+}
+
+static QoreObject* async_io_new_socket_poll_result_queue_object(Queue* queue) {
+    QoreObject* obj = new QoreObject(QC_QUEUE, getProgram(), queue);
+    obj->setInstantiatedTypeInfo(async_io_get_socket_poll_result_queue_type_info());
+    return obj;
+}
+
 static int qore_socket_poll_events_from_controller_events(int events) {
     int rv = 0;
     if (events & QORE_EV_READ) {
@@ -1631,7 +1643,7 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // If no onComplete override and no shared queue, create a new result queue
     if (!has_qore_on_complete && !res.result_queue) {
         res.result_queue = new Queue();
-        res.new_queue_obj = new QoreObject(QC_QUEUE, getProgram(), res.result_queue);
+        res.new_queue_obj = async_io_new_socket_poll_result_queue_object(res.result_queue);
         res.result_queue->ref();  // extra ref for PollInfo storage
     }
 

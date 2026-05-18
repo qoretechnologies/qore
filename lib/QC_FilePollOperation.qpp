@@ -43,7 +43,7 @@
 
     @since %Qore 1.19
 */
-qclass FilePollOperation [arg=SocketPollOperationBase* op; vparent=SocketPollOperationBase];
+qclass FilePollOperation [arg=SocketPollOperationBase* op; vparent=SocketPollOperationBase<auto>];
 
 //! Creates the object with the given goal
 /** @param file the File object to poll

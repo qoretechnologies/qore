@@ -452,7 +452,7 @@ HTTPClient::destructor() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation HTTPClient::startPollConnect() {
+AbstractPollOperation<auto> HTTPClient::startPollConnect() {
     return client->startPollConnect(xsink, self);
 }
 
@@ -1198,7 +1198,7 @@ nothing HTTPClient::disconnect() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path, string body,
+AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string path, string body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
     return client->startPollSendRecv(xsink, self, method, path, body, body->c_str(), body->size(), headers,
         body->getEncoding());
@@ -1237,7 +1237,7 @@ AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path,
 
     @since %Qore 1.12
 */
-AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path, *binary body,
+AbstractPollOperation<auto> HTTPClient::startPollSendRecv(string method, *string path, *binary body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
     return client->startPollSendRecv(xsink, self, method, path, body, body ? body->getPtr() : nullptr,
         body ? body->size() : 0, headers);
@@ -1259,7 +1259,7 @@ AbstractPollOperation HTTPClient::startPollSendRecv(string method, *string path,
 
     @since %Qore 2.3
 */
-AbstractPollOperation HTTPClient::startPollSendAndStream(string method, *string path, string body,
+AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, string body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
     return client->startPollSendAndStream(xsink, self, method, path, body, body->c_str(), body->size(), headers,
         body->getEncoding());
@@ -1270,7 +1270,7 @@ AbstractPollOperation HTTPClient::startPollSendAndStream(string method, *string 
 
     @since %Qore 2.3
 */
-AbstractPollOperation HTTPClient::startPollSendAndStream(string method, *string path, *binary body,
+AbstractPollOperation<auto> HTTPClient::startPollSendAndStream(string method, *string path, *binary body,
         *hash<auto> headers) [flags=NAMED_ARGS] {
     return client->startPollSendAndStream(xsink, self, method, path, body, body ? body->getPtr() : nullptr,
         body ? body->size() : 0, headers);

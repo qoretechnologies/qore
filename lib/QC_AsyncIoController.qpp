@@ -64,7 +64,7 @@ hashdecl Qore::SocketPollOperationInfo {
     AbstractPollableIoObjectBase sock;
 
     //! Poll operation
-    AbstractPollOperation spop;
+    AbstractPollOperation<?> spop;
 
     //! Last poll info for this operation
     *hash<SocketPollInfo> poll_info;
@@ -86,7 +86,7 @@ hashdecl Qore::SocketPollOperationInfo {
         If neither a Queue nor an @ref AbstractPollOperation::onComplete() "onComplete()" override
         is provided, a new Queue is created and returned from @ref submit().
     */
-    *Queue resultQueue;
+    *Queue<hash<SocketPollResultInfo>> resultQueue;
 
     //! Optional custom cache key; default: sock.uniqueHash()
     /** Allows multiple concurrent operations on the same socket (e.g., concurrent accepts
@@ -121,7 +121,7 @@ hashdecl Qore::SocketPollResultInfo {
     AbstractPollableIoObjectBase sock;
 
     //! The poll operation that completed
-    AbstractPollOperation spop;
+    AbstractPollOperation<?> spop;
 
     //! If the operation was canceled
     *bool canceled;
@@ -203,7 +203,8 @@ AsyncIoController::copy() {
 //! Submits an async I/O operation to the global singleton
 /** @par Example:
     @code{.py}
-    Queue q = AsyncIoController::submit(operation_info: {"sock": sock, "spop": op, "owner": "server"});
+    *Queue<hash<SocketPollResultInfo>> q =
+        AsyncIoController::submit(operation_info: {"sock": sock, "spop": op, "owner": "server"});
     hash<SocketPollResultInfo> result = q.get();
     @endcode
 
@@ -217,7 +218,8 @@ AsyncIoController::copy() {
 
     @since %Qore 2.3
 */
-static *Queue AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info, *bool replace_existing)
+static *Queue<hash<SocketPollResultInfo>> AsyncIoController::submit(hash<SocketPollOperationInfo> operation_info,
+        *bool replace_existing)
         [flags=NAMED_ARGS] {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);

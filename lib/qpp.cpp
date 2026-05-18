@@ -1908,10 +1908,64 @@ static bool has_top_level_comma(const std::string& str) {
     return false;
 }
 
+static bool starts_with_keyword_bound(const std::string& str, const char* keyword) {
+    size_t len = strlen(keyword);
+    return str.size() > len && !str.compare(0, len, keyword) && whitespace(str[len]);
+}
+
+static int get_wildcard_type_expr(const std::string& qt, std::string& cppt) {
+    std::string type = qt;
+    trim(type);
+    if (type.empty() || type[0] != '?') {
+        return 0;
+    }
+
+    if (type == "?") {
+        cppt = "qore_get_wildcard_type()";
+        return 1;
+    }
+
+    std::string bound;
+    const char* factory = nullptr;
+    std::string rest(type, 1);
+    trim(rest);
+    if (starts_with_keyword_bound(rest, "extends")) {
+        bound = rest.substr(7);
+        factory = "qore_get_wildcard_extends_type";
+    } else if (starts_with_keyword_bound(rest, "super")) {
+        bound = rest.substr(5);
+        factory = "qore_get_wildcard_super_type";
+    } else {
+        error("invalid wildcard type argument '%s'\n", qt.c_str());
+        return -1;
+    }
+    trim(bound);
+    if (bound.empty()) {
+        error("wildcard type argument '%s' is missing a bound type\n", qt.c_str());
+        return -1;
+    }
+    if (bound.find('?') != std::string::npos) {
+        error("wildcard type argument '%s' cannot use another wildcard in its bound type\n", qt.c_str());
+        return -1;
+    }
+
+    std::string bound_expr;
+    if (get_qore_type(bound, bound_expr)) {
+        return -1;
+    }
+    cppt = std::string(factory) + "(" + bound_expr + ")";
+    return 1;
+}
+
 static int get_qore_type(const std::string& qt, std::string& cppt) {
     if (qt.empty()) {
         cppt = "nothingTypeInfo";
         return 0;
+    }
+
+    int wrc = get_wildcard_type_expr(qt, cppt);
+    if (wrc) {
+        return wrc < 0 ? -1 : 0;
     }
 
     bool context_dependent = qpp_type_contains_current_type_param(qt);
@@ -3665,12 +3719,12 @@ protected:
                 if (p != std::string::npos)
                     cn.append((*i).type, p + 2, -1);
                 else {
-                    size_t j = (*i).type.find_first_of("<>*(),: ");
+                    size_t j = (*i).type.find_first_of("<>*(),: ?");
                     if (j != std::string::npos) {
                         std::string ptype = (*i).type;
                         while (j != std::string::npos) {
                             ptype.replace(j, 1, "_");
-                            j = ptype.find_first_of("<>*(),: ");
+                            j = ptype.find_first_of("<>*(),: ?");
                         }
                         cn = ptype;
                     }
@@ -5138,7 +5192,7 @@ public:
             fprintf(fp, ",\"namespace_path\":\"%s\"", json_escape_string(ns).c_str());
         }
         if (!type_params.empty()) {
-            fputs(",\"type_params\":[", fp);
+            fputs(",\"type_parameters\":[", fp);
             for (unsigned i = 0; i < type_params.size(); ++i) {
                 if (i) {
                     fputc(',', fp);

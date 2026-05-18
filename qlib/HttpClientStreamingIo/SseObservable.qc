@@ -64,7 +64,7 @@ obs.observersReady();
 
 namespace Priv {
 
-class SseNotifierPollOperation inherits Qore::AbstractPollOperation {
+class SseNotifierPollOperation inherits Qore::AbstractPollOperation<auto> {
     private {
         EventNotifier notifier;
         code<bool()> drain;

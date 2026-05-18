@@ -1544,7 +1544,8 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
     }
 
     if (const QoreParameterizedClassTypeInfo* pti = QoreTypeInfo::getParameterizedClassType(ti)) {
-        std::string rv = pti->isOrNothing() ? "*object<" : "object<";
+        bool or_nothing = aotSerializableTypePathIsOrNothing(ti);
+        std::string rv = or_nothing ? "*object<" : "object<";
         rv += pti->getBaseClass() ? pti->getBaseClass()->getPath() : "";
         rv += "<";
         const std::vector<const QoreTypeInfo*>& args = pti->getTypeArgs();

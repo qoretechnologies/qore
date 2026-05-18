@@ -56,15 +56,15 @@ QoreObject* qore_new_list_iterator_object(QoreProgram* pgm, const QoreListNode* 
 
     @par Example: ListIterator basic usage
     @code{.py}
-    list data = (1, "foo", 2);
-    ListIterator it(data);
+    list<int> data = (1, 2, 3);
+    ListIterator<int> it(data);
     while (it.next()) {
         printf("iter: %n\n", it.getValue());
     }
 
     iter: 1
-    iter: "foo"
     iter: 2
+    iter: 3
     @endcode
 
     @note
@@ -83,7 +83,7 @@ qclass ListIterator<T> [arg=QoreListIterator* i; ns=Qore;
 
     @par Example:
     @code{.py}
-ListIterator li(l);
+ListIterator<int> li(l);
     @endcode
 
     @note the constructor's argument is @ref softlist_type "softlist" so that it can also accept @ref nothing
@@ -96,7 +96,7 @@ ListIterator::constructor(softlist<T> list_value) [flags=NAMED_ARGS] {
 //! Creates a copy of the ListIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-ListIterator ni = i.copy();
+ListIterator<int> ni = i.copy();
     @endcode
  */
 ListIterator::copy() {

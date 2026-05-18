@@ -310,7 +310,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
 }
 
 #! Wraps an HTTP poller so that the response body is always returned as the output
-public class HttpPollWrapper inherits AbstractPollOperation {
+public class HttpPollWrapper inherits AbstractPollOperation<auto> {
     private {
         #! The HTTP poller to execute
         AbstractPollOperation op;

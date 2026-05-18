@@ -39,7 +39,7 @@
 %endtry
 
 module QoreApiMetadata {
-    version = "1.1";
+    version = "1.3";
     desc = "structured API metadata extraction for Qore";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
@@ -88,6 +88,11 @@ module QoreApiMetadata {
 
     @section qoreapimetadata_relnotes Release Notes
 
+    @subsection qoreapimetadata_v1_3 v1.3
+    - added generic class and hashdecl metadata:
+      \c type_parameters, \c type_parameter_defaults, \c type_parameter_bounds,
+      \c raw_accepts_parameterized, and \c raw_construction_defaults_to_auto
+
     @subsection qoreapimetadata_v1_2 v1.2
     - added named-argument metadata on function and method variants:
       \c named_callable and \c named_parameters
@@ -114,7 +119,7 @@ module QoreApiMetadata {
 #! Main namespace for the QoreApiMetadata module
 public namespace QoreApiMetadata {
     #! Schema version for serialized metadata
-    public const SCHEMA_VERSION = "1.1";
+    public const SCHEMA_VERSION = "1.2";
 
     #! Function/method parameter metadata
     public hashdecl ParameterInfo {
@@ -228,6 +233,12 @@ public namespace QoreApiMetadata {
         list<hash<MemberInfo>> members = ();
         #! Parent hashdecl name (for inheritance)
         *string parent_name;
+        #! Formal generic type parameter names in declaration order
+        list<string> type_parameters = ();
+        #! Generic type parameter defaults keyed by parameter name
+        hash<string, string> type_parameter_defaults = {};
+        #! Generic type parameter upper bounds keyed by parameter name
+        hash<string, string> type_parameter_bounds = {};
         #! Source file path, if known
         *string source_file;
         #! Module that provides this hashdecl
@@ -334,6 +345,16 @@ public namespace QoreApiMetadata {
         bool is_abstract = False;
         #! Whether this class is final
         bool is_final = False;
+        #! Formal generic type parameter names in declaration order
+        list<string> type_parameters = ();
+        #! Generic type parameter defaults keyed by parameter name
+        hash<string, string> type_parameter_defaults = {};
+        #! Generic type parameter upper bounds keyed by parameter name
+        hash<string, string> type_parameter_bounds = {};
+        #! Raw annotations accept parameterized instances for legacy compatibility
+        bool raw_accepts_parameterized = False;
+        #! Raw construction creates the explicit all-auto instantiation
+        bool raw_construction_defaults_to_auto = False;
     }
 
     #! Namespace metadata (recursive)

@@ -3946,7 +3946,7 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
     response hash.  Higher layers can then deserialize the response using the
     final request context exposed by the getter methods below.
 */
-public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperation {
+public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Waiting for the underlying connection to become ready
         const SPS_CONNECTING = "connecting";
@@ -4295,7 +4295,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     EventNotifier, performs at most one Kerberos/SPNEGO Negotiate retry on
     401, then installs the C++ SSE parser on the surviving stream.
 */
-public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPollOperation {
+public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         const SPS_CONNECTING = "connecting";
         const SPS_STREAM_WAITING = "stream-waiting";
@@ -4709,7 +4709,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
 */
 public namespace RestClientIo {
 
-public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation {
+public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Waiting for the OAuth2 token endpoint connection to become ready
         const SPS_OAUTH2_CONNECTING = "oauth2-connecting";

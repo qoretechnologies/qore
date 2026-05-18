@@ -1488,7 +1488,7 @@ qclass Http2ClientPollOperationBase [
     private_members=object sock,string goal,auto data_save;
     ns=Qore;
     arg=Http2ClientPollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<auto>
 ];
 
 //! Creates the HTTP/2 client poll operation base

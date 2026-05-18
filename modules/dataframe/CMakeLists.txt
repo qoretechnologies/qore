@@ -79,7 +79,7 @@ set(DF_CPP_SRC
 )
 
 # Process QPP files
-qore_wrap_qpp_value(DF_QPP_SOURCES DOXLIST _dox_src ${DF_QPP_SRC})
+qore_wrap_qpp_value(DF_QPP_SOURCES DOXLIST _dox_src METALIST DF_QPP_META_SRC ${DF_QPP_SRC})
 add_custom_target(DF_QPP_GENERATED_FILES DEPENDS qpp ${DF_QPP_SOURCES})
 
 # Create the module library
@@ -93,3 +93,4 @@ endif()
 add_dependencies(${df_module_name} libqore DF_QPP_GENERATED_FILES)
 
 qore_binary_module_qore(${df_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${df_module_name} ${DF_QPP_META_SRC})

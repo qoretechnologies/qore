@@ -2507,7 +2507,7 @@ Socket::destructor() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollConnect(string target) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollConnect(string target) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, false, target->c_str(), s),
         xsink);
@@ -2536,7 +2536,7 @@ AbstractPollOperation Socket::startPollConnect(string target) [flags=NAMED_ARGS]
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollConnectSsl(string target) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollConnectSsl(string target) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketConnectPollOperation(xsink, true, target->c_str(), s),
         xsink);
@@ -2558,7 +2558,7 @@ AbstractPollOperation Socket::startPollConnectSsl(string target) [flags=NAMED_AR
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollSend(string data) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollSend(string data) [flags=NAMED_ARGS] {
     SimpleRefHolder<QoreStringNode> tmp;
     if (data->getEncoding() != s->getEncoding()) {
         tmp = data->convertEncoding(s->getEncoding(), xsink);
@@ -2588,7 +2588,7 @@ AbstractPollOperation Socket::startPollSend(string data) [flags=NAMED_ARGS] {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollSend(binary data) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollSend(binary data) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketSendPollOperation(xsink, data->binRefSelf(), s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -2616,7 +2616,7 @@ AbstractPollOperation Socket::startPollSend(binary data) [flags=NAMED_ARGS] {
 
     @par Example:
     @code{.py}
-    AbstractPollOperation op = sock.startPollSendHttpResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "Hello");
+    AbstractPollOperation<auto> op = sock.startPollSendHttpResponse(200, "OK", "1.1", {"Content-Type": "text/plain"}, "Hello");
     while (!op.goalReached()) {
         int rc = sock.poll(op, 1s);
         if (rc < 0) {
@@ -2634,7 +2634,7 @@ AbstractPollOperation Socket::startPollSend(binary data) [flags=NAMED_ARGS] {
 
     @since %Qore 2.2
 */
-AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string status_description,
+AbstractPollOperation<auto> Socket::startPollSendHttpResponse(int status_code, string status_description,
         string http_version, *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
@@ -2709,7 +2709,7 @@ AbstractPollOperation Socket::startPollSendHttpResponse(int status_code, string 
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
+AbstractPollOperation<auto> Socket::startPollSendHttpResponseAndReadHeader(int status_code, string status_description,
         string http_version, *hash<auto> headers, *data body, timeout idle_timeout) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
     if (status_code < 100 || status_code >= 600) {
@@ -2789,7 +2789,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseAndReadHeader(int status_
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
+AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStreamAndReadHeader(int status_code,
         string status_description, string http_version, *hash<auto> headers,
         InputStream[InputStream] body, softint content_length, timeout idle_timeout) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
@@ -2882,7 +2882,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int status_code,
+AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseAndReadHeader(int status_code,
         string status_description, string http_version, *hash<auto> headers,
         InputStream[InputStream] body, timeout idle_timeout) [flags=NAMED_ARGS] {
     if (status_code < 100 || status_code >= 600) {
@@ -2976,7 +2976,7 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int 
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_code,
+AbstractPollOperation<auto> Socket::startPollSendHttpResponseWithStream(int status_code,
         string status_description, string http_version, *hash<auto> headers,
         InputStream[InputStream] body, softint content_length) [flags=NAMED_ARGS] {
     // Validate status code (must be between 100 and 599)
@@ -3063,7 +3063,7 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttpChunkedResponseWithStream(int status_code,
+AbstractPollOperation<auto> Socket::startPollSendHttpChunkedResponseWithStream(int status_code,
         string status_description, string http_version, *hash<auto> headers,
         InputStream[InputStream] body) [flags=NAMED_ARGS] {
     if (status_code < 100 || status_code >= 600) {
@@ -3138,7 +3138,7 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseWithStream(int sta
 
     @since %Qore 2.0
 */
-AbstractPollOperation Socket::startPollAccept() {
+AbstractPollOperation<auto> Socket::startPollAccept() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketAcceptPollOperation(xsink, s),
         xsink);
@@ -3163,7 +3163,7 @@ AbstractPollOperation Socket::startPollAccept() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvString(int size) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollRecvString(int size) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvPollOperation(xsink, size, s, true), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3187,7 +3187,7 @@ AbstractPollOperation Socket::startPollRecvString(int size) [flags=NAMED_ARGS] {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvBinary(int size) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollRecvBinary(int size) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvPollOperation(xsink, size, s, false), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3210,7 +3210,7 @@ AbstractPollOperation Socket::startPollRecvBinary(int size) [flags=NAMED_ARGS] {
 
     @since %Qore 2.0
 */
-AbstractPollOperation Socket::startPollRecvData() {
+AbstractPollOperation<auto> Socket::startPollRecvData() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvDataPollOperation(xsink, s, false), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3242,7 +3242,7 @@ AbstractPollOperation Socket::startPollRecvData() {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollReadHttpBody(int content_length, bool chunked,
+AbstractPollOperation<auto> Socket::startPollReadHttpBody(int content_length, bool chunked,
         bool connection_close) [flags=NAMED_ARGS] {
     // Use status_code=200 and is_head=false since this reads request bodies (not responses)
     s->ref();
@@ -3273,7 +3273,7 @@ AbstractPollOperation Socket::startPollReadHttpBody(int content_length, bool chu
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvUntilBytesString(string pattern) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollRecvUntilBytesString(string pattern) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvUntilBytesPollOperation(xsink, pattern, s, true), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3297,7 +3297,7 @@ AbstractPollOperation Socket::startPollRecvUntilBytesString(string pattern) [fla
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollRecvUntilBytesBinary(string pattern) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketRecvUntilBytesPollOperation(xsink, pattern, s, false), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3331,7 +3331,7 @@ AbstractPollOperation Socket::startPollRecvUntilBytesBinary(string pattern) [fla
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollRecvFrom(*int max_size) [flags=NAMED_ARGS; dom=NETWORK] {
+AbstractPollOperation<auto> Socket::startPollRecvFrom(*int max_size) [flags=NAMED_ARGS; dom=NETWORK] {
     size_t ms = max_size ? (size_t)max_size : 65535;
     if (ms == 0 || ms > 65535) {
         ms = 65535;
@@ -3365,7 +3365,7 @@ AbstractPollOperation Socket::startPollRecvFrom(*int max_size) [flags=NAMED_ARGS
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendTo(
+AbstractPollOperation<auto> Socket::startPollSendTo(
         string host, int port, binary data, *int family) [flags=NAMED_ARGS; dom=NETWORK] {
     int fam = family ? (int)family : AF_UNSPEC;
 
@@ -3413,7 +3413,7 @@ AbstractPollOperation Socket::startPollSendTo(
 
     @since %Qore 2.0
 */
-AbstractPollOperation Socket::startPollReadHttpHeader() {
+AbstractPollOperation<auto> Socket::startPollReadHttpHeader() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketReadHttpHeaderPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3428,7 +3428,7 @@ AbstractPollOperation Socket::startPollReadHttpHeader() {
 }
 
 /*
-AbstractPollOperation Socket::startPollReadServerSentEvent() {
+AbstractPollOperation<auto> Socket::startPollReadServerSentEvent() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketReadServerSentEventPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3458,7 +3458,7 @@ AbstractPollOperation Socket::startPollReadServerSentEvent() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
+AbstractPollOperation<auto> Socket::startPollUpgradeClientToSSL() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketUpgradeClientSslPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -3487,7 +3487,7 @@ AbstractPollOperation Socket::startPollUpgradeClientToSSL() {
 
     @since %Qore 1.12
 */
-AbstractPollOperation Socket::startPollUpgradeServerToSSL() {
+AbstractPollOperation<auto> Socket::startPollUpgradeServerToSSL() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketUpgradeServerSslPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -6738,7 +6738,7 @@ static list<hash<SocketPollInfo>> Socket::poll(
     @par Example:
     @code{.py}
     # After accepting an HTTPS connection with HTTP/2 negotiated
-    AbstractPollOperation op = sock.startPollReadHttp2Request();
+    AbstractPollOperation<auto> op = sock.startPollReadHttp2Request();
     while (True) {
         *hash<SocketPollInfo> info = op.continuePoll();
         if (!info) {
@@ -6777,7 +6777,7 @@ static list<hash<SocketPollInfo>> Socket::poll(
 
     @since %Qore 2.1 (headers_only option added in %Qore 2.3)
 */
-AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> options) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollReadHttp2Request(*hash<auto> options) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketHttp2ServerPollOperation(xsink, s), xsink);
     if (*xsink) {
@@ -6806,7 +6806,7 @@ AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> options) [fl
     @par Example:
     @code{.py}
     # After reading request with startPollReadHttp2Request()
-    AbstractPollOperation op = sock.startPollSendHttp2Response(
+    AbstractPollOperation<auto> op = sock.startPollSendHttp2Response(
         request.stream_id,
         200,
         {"Content-Type": "text/plain"},
@@ -6833,7 +6833,7 @@ AbstractPollOperation Socket::startPollReadHttp2Request(*hash<auto> options) [fl
 
     @since %Qore 2.1
 */
-AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
+AbstractPollOperation<auto> Socket::startPollSendHttp2Response(int stream_id, int status_code, *hash<auto> headers,
         *data body) [flags=NAMED_ARGS] {
     s->ref();
 
@@ -6882,7 +6882,7 @@ AbstractPollOperation Socket::startPollSendHttp2Response(int stream_id, int stat
 
     @since %Qore 2.2
 */
-AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
+AbstractPollOperation<auto> Socket::startPollSendHttp2StreamingResponse(int stream_id, int status_code,
         *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) [flags=NAMED_ARGS] {
     // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
     InputStream* body_ptr = body.release();
@@ -7028,7 +7028,7 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
     @code{.py}
     # After reading a WebSocket CONNECT request with startPollReadHttp2Request()
     if (request.is_websocket_connect) {
-        AbstractPollOperation op = sock.startPollSendHttp2ConnectResponse(
+        AbstractPollOperation<auto> op = sock.startPollSendHttp2ConnectResponse(
             request.stream_id,
             200,
             {"sec-websocket-protocol": "graphql-ws"}
@@ -7055,7 +7055,7 @@ nothing Socket::submitHttp2ConnectResponse(int stream_id, int status_code,
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollSendHttp2ConnectResponse(int stream_id, int status_code,
+AbstractPollOperation<auto> Socket::startPollSendHttp2ConnectResponse(int stream_id, int status_code,
         *hash<auto> headers) [flags=NAMED_ARGS] {
     s->ref();
 
@@ -7262,7 +7262,7 @@ int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_cod
     sock.sendHttp2StreamData(stream_id, body_data, False);
     sock.sendHttp2Trailers(stream_id, {"grpc-status": "0"});
 
-    AbstractPollOperation flush_op = sock.startPollHttp2Flush();
+    AbstractPollOperation<auto> flush_op = sock.startPollHttp2Flush();
     while (True) {
         *hash<SocketPollInfo> info = flush_op.continuePoll();
         if (!info) {
@@ -7278,7 +7278,7 @@ int Socket::submitHttp2StreamingResponseWithStream(int stream_id, int status_cod
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollHttp2Flush() {
+AbstractPollOperation<auto> Socket::startPollHttp2Flush() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketHttp2FlushPollOperation(xsink, s),
@@ -7307,7 +7307,7 @@ AbstractPollOperation Socket::startPollHttp2Flush() {
     @par Example:
     @code{.py}
     # After establishing an HTTP/2 connection
-    AbstractPollOperation op = sock.startPollHttp2ClientMultiplex();
+    AbstractPollOperation<auto> op = sock.startPollHttp2ClientMultiplex();
 
     # The operation continuously reads responses - use callbacks for dispatch
     while (op.getState() != "closed") {
@@ -7329,7 +7329,7 @@ AbstractPollOperation Socket::startPollHttp2Flush() {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollHttp2ClientMultiplex() {
+AbstractPollOperation<auto> Socket::startPollHttp2ClientMultiplex() {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketHttp2ClientMultiplexPollOperation(xsink, s), xsink);
     ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
@@ -7397,7 +7397,7 @@ nothing Socket::cancelHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
     # Bind a UDP socket and start a QUIC client connection
     Socket sock();
     sock.bindINET("0.0.0.0", 0, True, AF_INET);
-    AbstractPollOperation op = sock.startPollQuicConnect("example.com", 443);
+    AbstractPollOperation<auto> op = sock.startPollQuicConnect("example.com", 443);
     @endcode
 
     @param host the remote host to connect to
@@ -7424,7 +7424,7 @@ nothing Socket::cancelHttp2Stream(int stream_id) [flags=NAMED_ARGS] {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int family = AF_INET) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollQuicConnect(string host, int port, int family = AF_INET) [flags=NAMED_ARGS] {
     if (port < 1 || port > 65535) {
         xsink->raiseException("QUIC-ERROR", "port %d is out of range (1-65535)", (int)port);
         return QoreValue();
@@ -7455,7 +7455,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
     # Bind a UDP socket and accept QUIC connections
     Socket sock();
     sock.bindINET("0.0.0.0", 8443, True, AF_INET);
-    AbstractPollOperation op = sock.startPollQuicAccept();
+    AbstractPollOperation<auto> op = sock.startPollQuicAccept();
     @endcode
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a QUIC connection
@@ -7496,7 +7496,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
     @code{.py}
     Socket sock();
     sock.bindINET("0.0.0.0", 8443, True, AF_INET);
-    AbstractPollOperation op = sock.startPollQuicAccept(options: {"headers_only": True});
+    AbstractPollOperation<auto> op = sock.startPollQuicAccept(options: {"headers_only": True});
     while (*hash<SocketPollInfo> info = op.continuePoll()) {
         Socket::poll((info,), 10s);
     }
@@ -7520,7 +7520,7 @@ AbstractPollOperation Socket::startPollQuicConnect(string host, int port, int fa
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> options) [flags=NAMED_ARGS] {
+AbstractPollOperation<auto> Socket::startPollQuicAccept(*hash<auto> options) [flags=NAMED_ARGS] {
     s->ref();
     ReferenceHolder<SocketPollOperationBase> poller(new SocketQuicServerPollOperation(xsink, s), xsink);
     if (*xsink) {
@@ -7554,7 +7554,7 @@ AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> options) [flags=NA
 /** @par Example:
     @code{.py}
     # After receiving an HTTP/3 request via startPollQuicAccept()
-    AbstractPollOperation op = sock.startPollQuicSendResponse(session_id, stream_id, 200, headers, body);
+    AbstractPollOperation<auto> op = sock.startPollQuicSendResponse(session_id, stream_id, 200, headers, body);
     @endcode
 
     @param session_id the QUIC session ID from the request
@@ -7570,7 +7570,7 @@ AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> options) [flags=NA
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicSendResponse(int session_id, int stream_id, int status_code,
+AbstractPollOperation<auto> Socket::startPollQuicSendResponse(int session_id, int stream_id, int status_code,
         *hash<auto> headers, *data body) [flags=NAMED_ARGS] {
     if (session_id <= 0) {
         xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
@@ -7996,7 +7996,7 @@ bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
 //! Creates a poll operation for sending an HTTP/3 streaming response via InputStream
 /** @par Example:
     @code{.py}
-    AbstractPollOperation op = sock.startPollQuicSendStreamingResponse(
+    AbstractPollOperation<auto> op = sock.startPollQuicSendStreamingResponse(
         session_id, stream_id, 200, headers, input_stream);
     @endcode
 
@@ -8020,7 +8020,7 @@ bool Socket::isQuicGoawayReceived(int session_id) [flags=NAMED_ARGS] {
 
     @since %Qore 2.3
 */
-AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id, int stream_id,
+AbstractPollOperation<auto> Socket::startPollQuicSendStreamingResponse(int session_id, int stream_id,
         int status_code, *hash<auto> headers, InputStream[InputStream] body,
         *int chunk_size) [flags=NAMED_ARGS] {
     if (session_id <= 0) {

@@ -46,9 +46,9 @@ static const QoreTypeInfo* get_hash_reverse_iterator_value_type(const QoreTypeIn
 
     @par Example: HashReverseIterator basic usage
     @code{.py}
-    hash<auto> h = ( "key1" : 1, "key2" : 2, );
+    hash<string, int> h = ( "key1" : 1, "key2" : 2, );
 
-    HashReverseIterator it(h);
+    HashReverseIterator<int> it(h);
     while (it.next()) {
         printf("getKey: %n; getKeyValue: %n; getValue: %n; getValuePair: %n\n",
                it.getKey(), it.getKeyValue(), it.getValue(), it.getValuePair());
@@ -77,7 +77,8 @@ qclass HashReverseIterator<V> [arg=QoreHashReverseIterator* i; ns=Qore; vparent=
 
     @par Example:
     @code{.py}
-HashReverseIterator hi(h);
+hash<string, int> h = {"key": 1};
+HashReverseIterator<int> hi(h);
     @endcode
  */
 HashReverseIterator::constructor(hash<string, V> hash_value) [flags=NAMED_ARGS] {
@@ -88,8 +89,8 @@ HashReverseIterator::constructor(hash<string, V> hash_value) [flags=NAMED_ARGS] 
 //! Creates an empty iterator object
 /** @par Example:
     @code{.py}
-*hash<auto> h = get_hash_or_nothing();
-HashReverseIterator hi(h);
+*hash<string, int> h = get_hash_or_nothing();
+HashReverseIterator<int> hi(h);
     @endcode
  */
 HashReverseIterator::constructor() {
@@ -100,7 +101,7 @@ HashReverseIterator::constructor() {
 //! Creates a copy of the HashReverseIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-HashReverseIterator ni = i.copy();
+HashReverseIterator<int> ni = i.copy();
     @endcode
  */
 HashReverseIterator::copy() {

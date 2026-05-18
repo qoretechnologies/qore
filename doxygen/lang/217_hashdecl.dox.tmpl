@@ -165,6 +165,35 @@ hash<Child<int>> child(("value": 1, "name": "one"));
 hash<Parent<?>> parent = child;
     @endcode
 
+    Some builtin APIs also expose generic hashdecl result records. The type
+    argument ties the record payload back to the producing generic class:
+
+    @code{.py}
+Queue<string> q();
+q.push(value: "ready");
+hash<QueueTryResult<string>> q_result = q.tryGet();
+if (q_result.exists) {
+    string value = q_result.value;
+}
+
+Channel<int> ch(1);
+ch.send(value: 42);
+hash<ChannelTryResult<int>> ch_result = ch.tryRecv();
+
+hash<string, number> totals = {"net": 10.5};
+HashPairIterator<number> it(totals);
+while (it.next()) {
+    hash<KeyValueInfo<number>> pair = it.getValue();
+    printf("%s = %n\n", pair.key, pair.value);
+}
+    @endcode
+
+    Reflection and API metadata preserve generic hashdecl type parameters,
+    defaults, bounds, and parameterized parents. Tools should render
+    <tt>hash&lt;Result&lt;int&gt;&gt;</tt> and
+    <tt>hash&lt;KeyValueInfo&lt;number&gt;&gt;</tt> instead of the raw hashdecl
+    name when the payload type is known.
+
     @section hashdecl_type_compatibility Type-Safe Hash Type Compatibility
 
     Type-safe hashes can be assigned to any variable that accepts an untyped @ref hash_type "hash",

@@ -17,7 +17,7 @@
 %exec-class InjectionTest
 
 public namespace Test {
-    class FileLineIteratorFake inherits AbstractIterator {
+    class FileLineIteratorFake inherits AbstractIterator<string> {
         private {
             bool valid = False;
         }

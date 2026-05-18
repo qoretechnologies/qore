@@ -76,6 +76,18 @@ static std::atomic<uint64_t> qore_socket_sync_exec_seq{0};
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 extern QoreClass* QC_EVENTNOTIFIER;
 
+static const QoreTypeInfo* qore_socket_get_poll_result_queue_type_info() {
+    type_vec_t args;
+    args.push_back(hashdeclSocketPollResultInfo->getTypeInfo(false));
+    return QC_QUEUE->getTypeInfo(args, false);
+}
+
+static QoreObject* qore_socket_new_poll_result_queue_object(Queue* queue) {
+    QoreObject* obj = new QoreObject(QC_QUEUE, getProgram(), queue);
+    obj->setInstantiatedTypeInfo(qore_socket_get_poll_result_queue_type_info());
+    return obj;
+}
+
 static int qore_socket_close_private_from_controller(qore_socket_private* priv);
 
 static QoreSandboxManager* qore_socket_ref_current_sandbox_manager() {
@@ -8953,7 +8965,7 @@ QoreListNode* qore_socket_private::poll(const QoreListNode* poll_list, int timeo
         return nullptr;
     }
 
-    ReferenceHolder<QoreObject> queue_obj(new QoreObject(QC_QUEUE, getProgram(), new Queue()), xsink);
+    ReferenceHolder<QoreObject> queue_obj(qore_socket_new_poll_result_queue_object(new Queue()), xsink);
     ReferenceHolder<Queue> queue(
         static_cast<Queue*>((*queue_obj)->getReferencedPrivateData(CID_QUEUE, xsink)), xsink);
     if (*xsink || !queue) {

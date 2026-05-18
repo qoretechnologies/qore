@@ -1421,11 +1421,12 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // TimerEventInfo has no special dependencies
     hashdeclTimerEventInfo = init_hashdecl_TimerEventInfo(qns);
     qns.addSystemClass(initEventLoopClass(qns));
-    // Init hashdecls that reference Socket, AbstractPollOperation, and Queue classes
-    // Must be after initSocketClass, initAbstractPollOperationClass, and get_thread_ns (Queue)
-    // Must be before initAsyncIoControllerClass which references these hashdecls
-    hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
+    // Init hashdecls that reference Socket, AbstractPollOperation, and Queue classes.
+    // SocketPollOperationInfo references SocketPollResultInfo through resultQueue.
+    // Must be after initSocketClass, preinitAbstractPollOperationClass, and get_thread_ns (Queue).
+    // Must be before initAsyncIoControllerClass which references these hashdecls.
     hashdeclSocketPollResultInfo = init_hashdecl_SocketPollResultInfo(qns);
+    hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
     // Now that SocketPollResultInfo is available, finish AbstractPollOperation init
     // (adds onComplete(hash<SocketPollResultInfo>) which references the hashdecl)
     qns.addSystemClass(initAbstractPollOperationClass(qns));

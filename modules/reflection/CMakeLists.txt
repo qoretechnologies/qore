@@ -117,7 +117,7 @@ foreach (it ${REFLECTION_H_SRC})
     set(REFLECTION_H_SOURCES, ${REFLECTION_H_SOURCES} ${_outfile})
 endforeach(it)
 
-qore_wrap_qpp_value(REFLECTION_QPP_SOURCES DOXLIST _dox_src ${REFLECTION_QPP_SRC})
+qore_wrap_qpp_value(REFLECTION_QPP_SOURCES DOXLIST _dox_src METALIST REFLECTION_QPP_META_SRC ${REFLECTION_QPP_SRC})
 add_custom_target(REFLECTION_QPP_GENERATED_FILES DEPENDS qpp ${REFLECTION_QPP_SOURCES} ${REFLECTION_H_SOURCES})
 
 # prepare reflection module target
@@ -162,6 +162,7 @@ endif (SINGLE_COMPILATION_UNIT)
 add_dependencies(${reflection_module_name} libqore REFLECTION_QPP_GENERATED_FILES)
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/reflection/mainpage.dox ${_dox_src})
 qore_binary_module_qore(${reflection_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${reflection_module_name} ${REFLECTION_QPP_META_SRC})
 
 if (DOXYGEN_FOUND)
     qore_wrap_dox(QORE_DOX_REFLECTION_SRC ${QORE_DOX_REFLECTION_TMPL_SRC})

@@ -67,6 +67,14 @@ class MockCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProv
                     "noArgsOnly": True, "detail": "() returns int",
                 },
             ),
+            "Queue": (
+                <QoreCodeCompletion::CompletionItem>{
+                    "label": "push", "kind": "method", "isCallable": True,
+                },
+                <QoreCodeCompletion::CompletionItem>{
+                    "label": "pop", "kind": "method", "isCallable": True,
+                },
+            ),
         };
         scopeMembers = {
             "Qore": (
@@ -78,6 +86,9 @@ class MockCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProv
                 <QoreCodeCompletion::CompletionItem>{"label": "Red", "kind": "enum_value"},
                 <QoreCodeCompletion::CompletionItem>{"label": "Green", "kind": "enum_value"},
                 <QoreCodeCompletion::CompletionItem>{"label": "Blue", "kind": "enum_value"},
+            ),
+            "Factory": (
+                <QoreCodeCompletion::CompletionItem>{"label": "make", "kind": "method", "isCallable": True},
             ),
         };
     }
@@ -161,6 +172,8 @@ public class QoreCodeCompletionTest inherits QUnit::Test {
         addTestCase("extractCompletionContext: scope with prefix", \testContextScope());
         addTestCase("extractCompletionContext: scope without prefix", \testContextScopeEmpty());
         addTestCase("extractCompletionContext: chained scope", \testContextChainedScope());
+        addTestCase("extractCompletionContext: generic scope", \testContextGenericScope());
+        addTestCase("extractCompletionContext: generic chained scope", \testContextGenericChainedScope());
         addTestCase("extractCompletionContext: command arg is identifier", \testContextCommandArg());
 
         # computeWordStart tests
@@ -168,12 +181,14 @@ public class QoreCodeCompletionTest inherits QUnit::Test {
 
         # matchesPrefix tests
         addTestCase("matchesPrefix: basic cases", \testMatchesPrefix());
+        addTestCase("stripGenericTypeArguments: target normalization", \testStripGenericTypeArguments());
 
         # Engine dispatch tests
         addTestCase("Engine: identifier dispatch", \testEngineIdentifier());
         addTestCase("Engine: new dispatch", \testEngineNew());
         addTestCase("Engine: dot dispatch", \testEngineDot());
         addTestCase("Engine: scope dispatch", \testEngineScope());
+        addTestCase("Engine: generic target dispatch", \testEngineGenericTarget());
         addTestCase("Engine: complete() full pipeline", \testEngineComplete());
 
         # Keyword filtering tests
@@ -294,6 +309,25 @@ public class QoreCodeCompletionTest inherits QUnit::Test {
         assertEq("M", ctx.prefix, "prefix should be 'M'");
     }
 
+    testContextGenericScope() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext("Factory<int>::ma");
+        assertEq(QoreCodeCompletion::CC_SCOPE, ctx.kind, "'Factory<int>::ma' should be CC_SCOPE");
+        assertEq("Factory<int>", ctx.target, "target should preserve generic receiver spelling");
+        assertEq("ma", ctx.prefix, "prefix should be 'ma'");
+    }
+
+    testContextGenericChainedScope() {
+
+        hash<auto> ctx = QoreCodeCompletion::CompletionEngine::extractCompletionContext(
+            "Qore::Thread::Queue<hash<string, int>>::po");
+        assertEq(QoreCodeCompletion::CC_SCOPE, ctx.kind,
+            "'Qore::Thread::Queue<hash<string, int>>::po' should be CC_SCOPE");
+        assertEq("Qore::Thread::Queue<hash<string, int>>", ctx.target,
+            "target should preserve scoped generic receiver spelling");
+        assertEq("po", ctx.prefix, "prefix should be 'po'");
+    }
+
     testContextCommandArg() {
 
         # "/describe M" has a space, so it's not a command — engine sees it as CC_IDENTIFIER
@@ -332,6 +366,17 @@ public class QoreCodeCompletionTest inherits QUnit::Test {
             "'Mutex' matches 'Mu'");
         assertFalse(QoreCodeCompletion::CompletionEngine::matchesPrefix("Mutex", "mu"),
             "'Mutex' does NOT match 'mu' (case-sensitive)");
+    }
+
+    testStripGenericTypeArguments() {
+
+        assertEq("Queue",
+            QoreCodeCompletion::CompletionEngine::stripGenericTypeArguments("Queue<int>"),
+            "simple generic target should normalize to base class");
+        assertEq("Qore::Thread::Queue",
+            QoreCodeCompletion::CompletionEngine::stripGenericTypeArguments(
+                "Qore::Thread::Queue<hash<string, int>>"),
+            "scoped nested generic target should normalize to base class path");
     }
 
     testEngineIdentifier() {
@@ -439,6 +484,20 @@ public class QoreCodeCompletionTest inherits QUnit::Test {
         }
         assertTrue(has_red, "'Color::R' should include 'Red'");
         assertFalse(has_green, "'Color::R' should NOT include 'Green'");
+    }
+
+    testEngineGenericTarget() {
+
+        MockCompletionProvider provider();
+        QoreCodeCompletion::CompletionEngine engine(provider);
+
+        list<hash<QoreCodeCompletion::CompletionItem>> items = engine.complete("Factory<int>::ma");
+        assertEq(1, items.size(), "'Factory<int>::ma' should resolve against 'Factory'");
+        assertEq("make", items[0].label, "generic static target should include 'make'");
+
+        items = engine.complete("Queue<string>.pu");
+        assertEq(1, items.size(), "'Queue<string>.pu' should resolve against 'Queue'");
+        assertEq("push", items[0].label, "generic instance target should include 'push'");
     }
 
     testEngineComplete() {

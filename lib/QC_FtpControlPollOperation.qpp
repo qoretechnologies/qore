@@ -1083,7 +1083,7 @@ qclass FtpPortAcceptPollOperation [
     @param secure_data if True, upgrade accepted socket to SSL
 */
 FtpPortAcceptPollOperation::constructor(Socket[QoreSocketObject] listener_socket,
-        AbstractPollOperation accept_operation, bool secure_data = False) [flags=NAMED_ARGS] {
+        AbstractPollOperation<auto> accept_operation, bool secure_data = False) [flags=NAMED_ARGS] {
     // Get C++ accept op
     SocketPollOperationBase* accept_base = static_cast<SocketPollOperationBase*>(
         const_cast<QoreObject*>(accept_operation)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));

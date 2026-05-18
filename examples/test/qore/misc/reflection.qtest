@@ -2161,10 +2161,26 @@ class ReflectionTest inherits QUnit::Test {
     genericReflectionTests() {
         Class queue_class = Class::forName("Queue");
         assertEq(("T",), queue_class.getTypeParameters());
+        assertNothing(queue_class.getTypeParameterDefaults());
+        assertNothing(queue_class.getTypeParameterBounds());
         assertNothing(Class::forName("Mutex").getTypeParameters());
+        assertNothing(Class::forName("Mutex").getTypeParameterDefaults());
+        assertNothing(Class::forName("Mutex").getTypeParameterBounds());
         NormalMethodVariant push_variant = queue_class.getMethod("push").getVariants()[0];
         assertEq("T value, timeout timeout_ms = 0", push_variant.getParamString());
         assertEq("nothing", push_variant.getReturnType().getName());
+
+        Program generic_pgm(PO_NEW_STYLE);
+        generic_pgm.parse("class GenericBox<T: int = int> { private { T value; } }\n"
+            "hashdecl GenericResult<V: string = string> { V value; }\n", "");
+        Class generic_box = Class::forName(generic_pgm, "GenericBox");
+        assertEq(("T",), generic_box.getTypeParameters());
+        assertEq("int", generic_box.getTypeParameterDefaults().T);
+        assertEq("int", generic_box.getTypeParameterBounds().T);
+        TypedHash generic_result = TypedHash::forName(generic_pgm, "GenericResult");
+        assertEq(("V",), generic_result.getTypeParameters());
+        assertEq("string", generic_result.getTypeParameterDefaults().V);
+        assertEq("string", generic_result.getTypeParameterBounds().V);
 
         NormalMethodVariant future_get_variant = Class::forName("Future").getMethod("get").getVariants()[0];
         assertEq("T", future_get_variant.getReturnType().getName());
@@ -2252,6 +2268,8 @@ class ReflectionTest inherits QUnit::Test {
 
         TypedHash key_value_info_hashdecl = TypedHash::forName("KeyValueInfo");
         assertEq(("V",), key_value_info_hashdecl.getTypeParameters());
+        assertNothing(key_value_info_hashdecl.getTypeParameterDefaults());
+        assertNothing(key_value_info_hashdecl.getTypeParameterBounds());
         Type key_value_info_int("hash<KeyValueInfo<int>>");
         assertTrue(key_value_info_int.isParameterized());
         assertEq("hash<KeyValueInfo<int>>", key_value_info_int.getName());

@@ -56,8 +56,8 @@ QoreObject* qore_new_single_value_iterator_object(QoreProgram* pgm, QoreValue va
 
     @par Example: SingleValueIterator basic usage
     @code{.py}
-    auto val = 1;
-    SingleValueIterator it(val);
+    int val = 1;
+    SingleValueIterator<int> it(val);
     while (it.next()) {
         printf("iter: %n\n", it.getValue());
     }
@@ -80,7 +80,7 @@ qclass SingleValueIterator<T> [arg=SingleValueIterator* i; ns=Qore; vparent=Abst
 
     @par Example:
     @code{.py}
-SingleValueIterator i(v);
+SingleValueIterator<int> i(v);
     @endcode
  */
 SingleValueIterator::constructor(T value) [flags=NAMED_ARGS] {
@@ -91,7 +91,7 @@ SingleValueIterator::constructor(T value) [flags=NAMED_ARGS] {
 //! Creates a copy of the SingleValueIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-SingleValueIterator ni = i.copy();
+SingleValueIterator<int> ni = i.copy();
     @endcode
  */
 SingleValueIterator::copy() {

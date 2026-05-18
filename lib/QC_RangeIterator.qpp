@@ -60,7 +60,7 @@ foreach int i in (r) {
     - %Qore 0.8.6
     - %Qore 0.9.5 does not include the upper limit in the range unless @ref broken-range "%broken-range" is set
  */
-qclass RangeIterator [arg=RangeIterator* i; ns=Qore; vparent=AbstractIterator];
+qclass RangeIterator [arg=RangeIterator* i; ns=Qore; vparent=AbstractIterator<auto>];
 
 //! creates the numerical sequence iterator with the initial arguments
 /** @param start an initial value

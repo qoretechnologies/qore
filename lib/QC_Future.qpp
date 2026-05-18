@@ -46,20 +46,21 @@ class AbstractFuture {
 
     @par Example: Basic async computation
     @code{.py}
-Promise p();
-Future f = p.getFuture();
+Promise<int> p();
+Future<int> f = p.getFuture();
 background sub() { p.set(value: 42); }();
-auto result = f.get(timeout_ms: 0);  # blocks until set, returns 42
+int result = f.get(timeout_ms: 0);  # blocks until set, returns 42
     @endcode
 
     @par Example: Custom Future subclass
     @code{.py}
-class TransformingFuture inherits Future {
-    private { Future real; code transform; }
-    constructor(Future real, code transform) { self.real = real; self.transform = transform; }
-    auto get(timeout t = 0) { return transform(real.get(t)); }
+class TransformingFuture<T> inherits Future<T> {
+    private { Future<T> real; code<T(T)> transform; }
+    constructor(Future<T> real, code<T(T)> transform) { self.real = real; self.transform = transform; }
+    T get(timeout t = 0) { return transform(real.get(t)); }
     bool isDone() { return real.isDone(); }
     bool isError() { return real.isError(); }
+    bool cancel() { return real.cancel(); }
 }
     @endcode
 

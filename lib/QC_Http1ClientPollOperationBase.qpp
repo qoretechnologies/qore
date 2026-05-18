@@ -2362,7 +2362,7 @@ qclass Http1ClientPollOperationBase [
     private_members=object sock,string goal,auto data_save;
     ns=Qore;
     arg=Http1ClientPollOperationPriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<auto>
 ];
 
 //! Creates the HTTP/1.1 client poll operation base

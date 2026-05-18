@@ -2349,7 +2349,8 @@ public:
 
     DLLLOCAL const QoreTypeInfo* getParameterizedBaseTypeInfo(const QoreParameterizedClassTypeInfo* source,
             const QoreClass* target_base) const;
-    DLLLOCAL const QoreTypeInfo* getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base) const;
+    DLLLOCAL const QoreTypeInfo* getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base,
+        bool allow_raw_self = true) const;
 
     DLLLOCAL bool runtimeIsPrivateMemberIntern(const char* str, bool toplevel) const;
 

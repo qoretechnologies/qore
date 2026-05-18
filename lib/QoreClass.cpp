@@ -3109,8 +3109,14 @@ const QoreTypeInfo* qore_class_private::getParameterizedBaseTypeInfo(
     return nullptr;
 }
 
-const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base) const {
+const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(const QoreClass* target_base,
+        bool allow_raw_self) const {
     assert(target_base);
+
+    if (allow_raw_self && cls == target_base && hasTypeParams() && rawConstructionDefaultsToAuto()) {
+        type_vec_t raw_args(type_params.size(), autoTypeInfo);
+        return getTypeInfo(raw_args);
+    }
 
     for (const QoreTypeInfo* parent_type : parameterized_vparents) {
         if (hasTypeParams() && rawConstructionDefaultsToAuto()) {
@@ -3131,20 +3137,29 @@ const QoreTypeInfo* qore_class_private::getConcreteParameterizedBaseTypeInfo(con
         }
     }
 
+    const QoreTypeInfo* raw_target_fallback = nullptr;
     QoreClassHierarchyIterator i(*cls);
     while (i.next()) {
         const QoreClass& base = i.get();
         if (&base == cls) {
             continue;
         }
+        if (&base == target_base) {
+            const qore_class_private* target = qore_class_private::get(base);
+            if (!raw_target_fallback && target->hasTypeParams() && target->rawConstructionDefaultsToAuto()) {
+                type_vec_t raw_args(base.getTypeParameterCount(), autoTypeInfo);
+                raw_target_fallback = base.getTypeInfo(raw_args);
+            }
+            continue;
+        }
         const QoreTypeInfo* indirect = qore_class_private::get(base)->getConcreteParameterizedBaseTypeInfo(
-            target_base);
+            target_base, false);
         if (indirect) {
             return indirect;
         }
     }
 
-    return nullptr;
+    return raw_target_fallback;
 }
 
 void QoreClass::addParameterizedBuiltinVirtualBaseClass(const QoreTypeInfo* typeInfo) {

@@ -27,7 +27,7 @@
     |@ref object_type "object"|@ref object|@ref object|Restricts values to @ref object values
     |@ref classname_type "object<...>"|@ref object|@ref object|Restricts values to objects of the specific class
     |@ref classname_type "<classname>"|@ref object|@ref object|Restricts values to objects of the specific class given; either the class name can be given (ex: @ref Qore::Thread::Mutex "Mutex" or a qualified path to the class: @ref Qore::Thread::Mutex)
-    |@ref generic_class_type "Class<T>"|@ref object|@ref object|Restricts values to objects of a builtin class with the declared type arguments
+    |@ref generic_class_type "Class<T>"|@ref object|@ref object|Restricts values to objects of a builtin or source-defined class with the declared type arguments
     |@ref null_type "null"|@ref null|@ref null|Restricts values to %Qore's @ref null type; this type has few (if any) practical applications and has been included for completeness' sake
     |@ref nothing_type "nothing"|@ref nothing|@ref nothing|Restricts values to %Qore's @ref nothing type; this type is mostly useful for declaring that a function or method returns no value
     |@ref timeout_type "timeout"|@ref integer, @ref date|@ref integer|Accepts @ref integer, @ref date and converts dates to an integer value representing milliseconds and returns the integer; incoming integers are assumed to represent milliseconds
@@ -543,11 +543,33 @@ Queue<? super int> int_sink = ints;        # int values can be written safely
 Queue<?> q();  # MISSING-TYPE-ARGUMENTS
     @endcode
 
-    The first generic builtin classes keep source compatibility with existing raw
+    Migrated generic builtin classes keep source compatibility with existing raw
     code. A raw declaration such as <tt>Queue q()</tt> constructs a
     <tt>Queue&lt;auto&gt;</tt> object, and a raw \c Queue annotation accepts
     migrated parameterized queue objects. Use explicit type arguments in new code
     when the element or result type is known.
+
+    Generic builtin classes include value containers, iterators, and poll
+    operations. Generic builtin hashdecls describe result records whose payload
+    type matches the associated class type parameter:
+
+    @code{.py}
+Queue<int> q();
+q.push(value: 10);
+hash<QueueTryResult<int>> maybe_value = q.tryPop();
+
+list<string> names = ("alice", "bob");
+ListIterator<string> it(names);
+while (it.next()) {
+    string name = it.getValue();
+}
+
+hash<string, int> values = {"one": 1};
+HashPairIterator<int> pair_it(values);
+hash<KeyValueInfo<int>> pair = pair_it.getValue();
+
+AbstractPollOperation<auto> connect = sock.startPollConnect(target: "example.com:443");
+    @endcode
 
     @par Source-Defined Generic Class Example
     @code{.py}
@@ -716,6 +738,18 @@ Factory<int> inferred_factory = Factory::make(14);
     execution modes. AST and AOT metadata paths use runtime type-parameter
     substitution, while IR/JIT execution can internally cache specialized source
     bodies for concrete receiver and method type-argument tuples.
+
+    Serialization preserves specialized generic object types. A serialized
+    object with runtime type <tt>Box&lt;int&gt;</tt> or
+    <tt>Queue&lt;string&gt;</tt> is deserialized with the same parameterized type
+    path, so runtime type checks still see the concrete type arguments.
+
+    Reflection, AST parser output, qpp metadata, QoreApiMetadata, and
+    QoreCodeFormat preserve generic class and hashdecl declarations, type
+    argument spellings, defaults, bounds, wildcards, and parameterized
+    inheritance. Tooling that generates examples should prefer concrete type
+    arguments instead of raw compatibility spellings when the value type is
+    known.
 
     @par Source Raw-Compatibility Attributes
     Source-defined generic classes that migrate an existing raw class API can

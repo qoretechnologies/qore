@@ -1822,7 +1822,7 @@ qclass PollPipeline [
     private_members=object sock,string goal;
     ns=Qore;
     arg=PollPipelinePriv* priv;
-    vparent=SocketPollOperationBase
+    vparent=SocketPollOperationBase<auto>
 ];
 
 //! Creates a new poll pipeline for the given socket

@@ -54,7 +54,9 @@ public class AstMetadataExtractor {
         if (!exists tree) {
             return AstMetadataExtractor::emptyRoot();
         }
-        return AstMetadataExtractor::extractFromTree(parser, tree, path, options);
+        string source_text = ReadOnlyFile::readTextFile(path);
+        return AstMetadataExtractor::extractFromTree(parser, tree, path, options,
+            AstMetadataExtractor::sourceLines(source_text));
     }
 
     #! Extract metadata from a source string
@@ -72,7 +74,8 @@ public class AstMetadataExtractor {
             return AstMetadataExtractor::emptyRoot();
         }
         string uri = options.uri ?? "string.q";
-        return AstMetadataExtractor::extractFromTree(parser, tree, uri, options);
+        return AstMetadataExtractor::extractFromTree(parser, tree, uri, options,
+            AstMetadataExtractor::sourceLines(source));
     }
 
     #! Apply options to the parser
@@ -86,7 +89,7 @@ public class AstMetadataExtractor {
 
     #! Extract metadata from a parsed tree
     private static hash<NamespaceInfo> extractFromTree(AstParser parser, AstTree tree,
-            string uri, *hash<auto> options) {
+            string uri, *hash<auto> options, *list<string> source_lines) {
         AstTreeSearcher searcher();
 
         # get all symbols
@@ -110,15 +113,25 @@ public class AstMetadataExtractor {
         # detect enums via getNodesInfo (findSymbols reports them as ASYK_Constant)
         # store enum name → node info for extraction in the symbol loop
         hash<string, hash<auto>> enum_nodes;
+        hash<string, hash<auto>> class_nodes;
+        hash<string, hash<auto>> hashdecl_nodes;
         *list<auto> nodes = tree.getNodesInfo();
         if (exists nodes) {
             foreach hash<auto> n in (nodes) {
-                if (string(n.type) == "enum_declaration") {
-                    *string enum_name =
-                        AstMetadataExtractor::extractNodeName(n);
-                    if (exists enum_name) {
-                        enum_nodes{enum_name} = n;
-                    }
+                *string decl_name = AstMetadataExtractor::extractNodeName(n);
+                if (!exists decl_name) {
+                    continue;
+                }
+                switch (string(n.type)) {
+                    case "enum_declaration":
+                        enum_nodes{decl_name} = n;
+                        break;
+                    case "class_declaration":
+                        class_nodes{decl_name} = n;
+                        break;
+                    case "hashdecl_declaration":
+                        hashdecl_nodes{decl_name} = n;
+                        break;
                 }
             }
         }
@@ -141,8 +154,11 @@ public class AstMetadataExtractor {
 
             switch (kind) {
                 case ASYK_Class: {
+                    *hash<auto> class_node =
+                        class_nodes{AstMetadataExtractor::baseName(name)};
                     hash<ClassInfo> ci = AstMetadataExtractor::extractClassInfo(
-                        searcher, tree, uri, name, doc, parsed_doc, src_file);
+                        searcher, tree, uri, name, doc, parsed_doc, src_file,
+                        class_node, source_lines);
                     if (!exists ns_classes{ns_key}) {
                         ns_classes{ns_key} = ();
                     }
@@ -207,10 +223,12 @@ public class AstMetadataExtractor {
                     break;
                 }
                 case ASYK_Interface: {
+                    *hash<auto> hashdecl_node =
+                        hashdecl_nodes{AstMetadataExtractor::baseName(name)};
                     hash<HashdeclInfo> hi =
                         AstMetadataExtractor::extractHashdeclInfo(
                             searcher, tree, uri, name, doc, parsed_doc,
-                            src_file);
+                            src_file, hashdecl_node, source_lines);
                     if (!exists ns_hashdecls{ns_key}) {
                         ns_hashdecls{ns_key} = ();
                     }
@@ -366,7 +384,8 @@ public class AstMetadataExtractor {
     #! Extract class info including members
     private static hash<ClassInfo> extractClassInfo(AstTreeSearcher searcher,
             AstTree tree, string uri, string name, *string doc,
-            *hash<auto> parsed_doc, *string source_file) {
+            *hash<auto> parsed_doc, *string source_file,
+            *hash<auto> class_node, *list<string> source_lines) {
         string base = AstMetadataExtractor::baseName(name);
 
         *string class_desc;
@@ -380,6 +399,17 @@ public class AstMetadataExtractor {
             "description": class_desc,
             "source_file": source_file,
         });
+
+        if (exists class_node) {
+            hash<auto> type_info =
+                AstMetadataExtractor::extractTypeParameterInfo(class_node, source_lines);
+            ci.type_parameters = cast<list<string>>(type_info.type_parameters);
+            ci.type_parameter_defaults =
+                cast<hash<string, string>>(type_info.type_parameter_defaults);
+            ci.type_parameter_bounds =
+                cast<hash<string, string>>(type_info.type_parameter_bounds);
+            AstMetadataExtractor::applyClassCompatibilityInfo(\ci, class_node);
+        }
 
         # get class members via findTypeMembers
         *list<auto> members = searcher.findTypeMembers(tree, uri, base, False);
@@ -637,7 +667,8 @@ public class AstMetadataExtractor {
     #! Extract hashdecl info including members
     private static hash<HashdeclInfo> extractHashdeclInfo(AstTreeSearcher searcher,
             AstTree tree, string uri, string name, *string doc,
-            *hash<auto> parsed_doc, *string source_file) {
+            *hash<auto> parsed_doc, *string source_file,
+            *hash<auto> hashdecl_node, *list<string> source_lines) {
         string base = AstMetadataExtractor::baseName(name);
 
         *string hd_desc;
@@ -651,6 +682,25 @@ public class AstMetadataExtractor {
             "description": hd_desc,
             "source_file": source_file,
         });
+
+        if (exists hashdecl_node) {
+            hash<auto> type_info =
+                AstMetadataExtractor::extractTypeParameterInfo(hashdecl_node, source_lines);
+            hi.type_parameters = cast<list<string>>(type_info.type_parameters);
+            hi.type_parameter_defaults =
+                cast<hash<string, string>>(type_info.type_parameter_defaults);
+            hi.type_parameter_bounds =
+                cast<hash<string, string>>(type_info.type_parameter_bounds);
+            *hash<auto> superclass_list =
+                AstMetadataExtractor::findChildByType(hashdecl_node, "superclass_list");
+            if (exists superclass_list) {
+                *hash<auto> superclass =
+                    AstMetadataExtractor::findChildByType(superclass_list, "superclass");
+                if (exists superclass) {
+                    hi.parent_name = AstMetadataExtractor::nodeText(superclass, source_lines);
+                }
+            }
+        }
 
         *list<auto> members = searcher.findTypeMembers(tree, uri, base, False);
         if (exists members) {
@@ -668,6 +718,188 @@ public class AstMetadataExtractor {
         }
 
         return hi;
+    }
+
+    #! Extract formal type parameter metadata from a class or hashdecl CST node
+    private static hash<auto> extractTypeParameterInfo(hash<auto> declaration_node,
+            *list<string> source_lines) {
+        list<string> params = ();
+        hash<string, string> defaults = {};
+        hash<string, string> bounds = {};
+        *hash<auto> type_params =
+            AstMetadataExtractor::findChildByField(declaration_node,
+                "type_parameters");
+        if (!exists type_params || !exists type_params.children) {
+            return {
+                "type_parameters": params,
+                "type_parameter_defaults": defaults,
+                "type_parameter_bounds": bounds,
+            };
+        }
+
+        foreach hash<auto> param in (type_params.children) {
+            if (!exists param.type || string(param.type) != "type_parameter") {
+                continue;
+            }
+            *hash<auto> name_node =
+                AstMetadataExtractor::findChildByField(param, "name");
+            if (!exists name_node) {
+                continue;
+            }
+            string name = AstMetadataExtractor::nodeText(name_node, source_lines);
+            params += name;
+
+            *hash<auto> default_node =
+                AstMetadataExtractor::findChildByField(param, "default");
+            if (exists default_node) {
+                defaults{name} = AstMetadataExtractor::nodeText(default_node, source_lines);
+            }
+
+            *hash<auto> bound_node =
+                AstMetadataExtractor::findChildByField(param, "bound");
+            if (exists bound_node) {
+                bounds{name} = AstMetadataExtractor::nodeText(bound_node, source_lines);
+            }
+        }
+
+        return {
+            "type_parameters": params,
+            "type_parameter_defaults": defaults,
+            "type_parameter_bounds": bounds,
+        };
+    }
+
+    #! Apply generic raw-compatibility metadata from a class CST node
+    private static applyClassCompatibilityInfo(reference<hash<ClassInfo>> result,
+            hash<auto> class_node) {
+        *hash<auto> attrs =
+            AstMetadataExtractor::findChildByType(class_node,
+                "class_compatibility_attributes");
+        if (!exists attrs || !exists attrs.children) {
+            return;
+        }
+
+        foreach hash<auto> attr in (attrs.children) {
+            if (!exists attr.type
+                    || string(attr.type) != "class_compatibility_attribute") {
+                continue;
+            }
+            *hash<auto> name_node =
+                AstMetadataExtractor::findChildByField(attr, "name");
+            if (!exists name_node) {
+                continue;
+            }
+            switch (AstMetadataExtractor::nodeText(name_node)) {
+                case "legacy_raw":
+                    result.raw_accepts_parameterized = True;
+                    result.raw_construction_defaults_to_auto = True;
+                    break;
+                case "legacy_raw_accepts":
+                    result.raw_accepts_parameterized = True;
+                    break;
+                case "legacy_raw_construct":
+                    result.raw_construction_defaults_to_auto = True;
+                    break;
+            }
+        }
+    }
+
+    #! Returns the first child with the given CST field name
+    private static *hash<auto> findChildByField(hash<auto> node, string field) {
+        if (!exists node.children) {
+            return NOTHING;
+        }
+        foreach hash<auto> child in (node.children) {
+            if (exists child.field && string(child.field) == field) {
+                return child;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Returns the first direct child with the given CST node type
+    private static *hash<auto> findChildByType(hash<auto> node, string type) {
+        if (!exists node.children) {
+            return NOTHING;
+        }
+        foreach hash<auto> child in (node.children) {
+            if (exists child.type && string(child.type) == type) {
+                return child;
+            }
+        }
+        return NOTHING;
+    }
+
+    #! Split source text into lines for location-based CST text extraction
+    private static list<string> sourceLines(string source_text) {
+        return source_text.split("\n");
+    }
+
+    #! Extract exact source text for a CST node location
+    private static *string sourceText(hash<auto> node, *list<string> source_lines) {
+        if (!exists source_lines || !exists node.loc) {
+            return NOTHING;
+        }
+        int start_line = int(node.loc.start_line);
+        int start_column = int(node.loc.start_column);
+        int end_line = int(node.loc.end_line);
+        int end_column = int(node.loc.end_column);
+
+        if (start_line < 0 || end_line < start_line
+                || start_line >= source_lines.size()
+                || end_line >= source_lines.size()) {
+            return NOTHING;
+        }
+
+        if (start_line == end_line) {
+            return source_lines[start_line].substr(start_column,
+                end_column - start_column);
+        }
+
+        string rv = source_lines[start_line].substr(start_column);
+        for (int i = start_line + 1; i < end_line; ++i) {
+            rv += "\n" + source_lines[i];
+        }
+        rv += "\n" + source_lines[end_line].substr(0, end_column);
+        return rv;
+    }
+
+    #! Returns the source text for a CST node, reconstructing it from children when needed
+    private static string nodeText(hash<auto> node, *list<string> source_lines) {
+        if (exists node.text) {
+            return string(node.text);
+        }
+        *string exact = AstMetadataExtractor::sourceText(node, source_lines);
+        if (exists exact) {
+            return exact;
+        }
+
+        if (exists node.type && string(node.type) == "scoped_identifier"
+                && exists node.children) {
+            list<string> parts = ();
+            foreach hash<auto> child in (node.children) {
+                parts += AstMetadataExtractor::nodeText(child, source_lines);
+            }
+            return parts.join("::");
+        }
+
+        if (exists node.type && string(node.type) == "generic_type"
+                && exists node.children && node.children.size() > 0) {
+            string base = AstMetadataExtractor::nodeText(node.children[0], source_lines);
+            list<string> args = ();
+            for (int i = 1; i < node.children.size(); ++i) {
+                args += AstMetadataExtractor::nodeText(node.children[i], source_lines);
+            }
+            return base + "<" + args.join(", ") + ">";
+        }
+
+        string rv = "";
+        if (exists node.children) {
+            foreach hash<auto> child in (node.children) {
+                rv += AstMetadataExtractor::nodeText(child, source_lines);
+            }
+        }
+        return rv;
     }
 
     #! Extract enum info including values

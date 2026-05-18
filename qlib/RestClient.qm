@@ -4853,7 +4853,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
 #! REST ping polling I/O class with OAuth2 authentication
 /** Ensures a 200 response to the polling send/receive operation
 */
-public class RestPingPollOperation inherits Qore::AbstractPollOperation {
+public class RestPingPollOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Retrieve Swagger schema
         const SPS_GET_SWAGGER = 'get-swagger';
@@ -5255,7 +5255,7 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
 
     @since %RestClient 2.4
 */
-public class RestRequestPollOperation inherits Qore::AbstractPollOperation {
+public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto> {
     public {
         #! Send request state
         const SPS_SEND_REQUEST = "send-request";

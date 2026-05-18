@@ -36,7 +36,7 @@ public namespace HttpClientIo {
     @note The inherited AbstractPollOperation methods (continuePoll, abort, getGoal,
     goalReached, getState) are implemented by concrete subclasses directly.
 */
-public class HttpClientPollOperation inherits AbstractPollOperation {
+public class HttpClientPollOperation inherits AbstractPollOperation<auto> {
     public {
         #! Connecting state
         const STATE_CONNECTING = "connecting";

@@ -54,10 +54,14 @@ class MyClass inherits MyBaseClass {
     @subsection generic_classes Generic Classes
     Classes can declare formal type parameters in their public API. User code
     supplies concrete type arguments in type positions, as documented in
-    @ref generic_class_type "Generic Class Types". The first generic builtin
-    classes are the threading value-container classes @ref Qore::Thread::Queue
-    "Queue", @ref Qore::Thread::Channel "Channel", @ref Qore::Thread::Promise
-    "Promise", and @ref Qore::Thread::Future "Future".
+    @ref generic_class_type "Generic Class Types". Generic builtin classes now
+    include the threading value-container classes @ref Qore::Thread::Queue
+    "Queue<T>", @ref Qore::Thread::Channel "Channel<T>",
+    @ref Qore::Thread::Promise "Promise<T>", and
+    @ref Qore::Thread::Future "Future<T>", the iterator hierarchy such as
+    @ref Qore::AbstractIterator "AbstractIterator<T>" and
+    @ref Qore::HashIterator "HashIterator<V>", and poll operation classes such
+    as @ref Qore::AbstractPollOperation "AbstractPollOperation<T>".
 
     @par Example
     @code{.py}
@@ -69,6 +73,14 @@ Promise<string> promise();
 Future<string> future = promise.getFuture();
 promise.set(value: "done");
 string result = future.get(timeout_ms: 1s);
+
+hash<string, int> data = {"one": 1, "two": 2};
+HashIterator<int> iterator(data);
+while (iterator.next()) {
+    int current = iterator.getValue();
+}
+
+AbstractPollOperation<auto> op = sock.startPollConnect(target: "example.com:443");
     @endcode
 
     Generic builtin class types are runtime checked. Concrete type arguments
@@ -85,7 +97,9 @@ Queue<? super int> int_sink = ints;
 
     Migrated legacy builtin classes still support raw declarations such as
     <tt>Queue q()</tt> for compatibility; raw construction creates the
-    explicit <tt>Queue&lt;auto&gt;</tt> form.
+    explicit <tt>Queue&lt;auto&gt;</tt> form. New examples should use concrete type
+    arguments when the value or result type is known and <tt>&lt;auto&gt;</tt>
+    only when the operation genuinely returns different shapes.
 
     Source-defined classes can also declare type parameters and use them in
     members, method signatures, constructors, local variables, and inherited
@@ -228,6 +242,17 @@ Factory<int> made_by_static = Factory::make(14);
     generic classes do not provide raw compatibility by default. If inference
     cannot determine all required type arguments, use explicit type arguments
     such as <tt>Box&lt;int&gt;</tt> or <tt>Box&lt;auto&gt;</tt>.
+
+    Object serialization preserves specialized generic class types. A
+    deserialized <tt>Box&lt;int&gt;</tt> or <tt>Queue&lt;string&gt;</tt> object keeps the
+    same parameterized runtime type, and runtime checks such as
+    <tt>instanceof Box&lt;int&gt;</tt> continue to use the concrete type arguments.
+
+    The Reflection API exposes generic metadata on loaded classes and typed
+    hashes with type-parameter name, default, and bound accessors. The
+    QoreApiMetadata module merges the same information from AST parsing,
+    runtime reflection, and qpp metadata so tools can render signatures and
+    generated examples with the generic spelling.
 
     Existing source classes that are migrated to generic form can opt into
     legacy raw compatibility by placing a compatibility attribute after the

@@ -45,16 +45,16 @@
 
     @par Example: Basic usage
     @code{.py}
-Promise p();
-Future f = p.getFuture();
+Promise<int> p();
+Future<int> f = p.getFuture();
 background sub() { p.set(value: 42); }();
-auto result = f.get(timeout_ms: 0);  # blocks until set, returns 42
+int result = f.get(timeout_ms: 0);  # blocks until set, returns 42
     @endcode
 
     @par Example: Error propagation
     @code{.py}
-Promise p();
-Future f = p.getFuture();
+Promise<hash<auto>> p();
+Future<hash<auto>> f = p.getFuture();
 background sub() {
     try {
         auto data = fetch_data_from_api();
@@ -69,9 +69,9 @@ auto data = f.get(timeout_ms: 0);  # throws the same exception if setError() was
 
     @par Example: Promise destroyed without set
     @code{.py}
-Future f;
+Future<int> f;
 {
-    Promise p();
+    Promise<int> p();
     f = p.getFuture();
     # p goes out of scope without calling set() or setError()
 }
@@ -86,11 +86,11 @@ try {
     @par Example: Worker thread pattern
     @code{.py}
 # Create a pool of async workers
-list<Future> futures = ();
+list<Future<int>> futures = ();
 for (int i = 0; i < 10; ++i) {
-    Promise p();
+    Promise<int> p();
     push futures, p.getFuture();
-    background sub(Promise p, int id) {
+    background sub(Promise<int> p, int id) {
         on_error p.setError(error: $1.err, description: $1.desc);
         p.set(value: process_item(id));
     }(p, i);
@@ -114,7 +114,7 @@ qclass Promise<T> [dom=THREAD_CLASS; arg=QorePromise* p; ns=Qore::Thread; legacy
 //! Creates the Promise object
 /** @par Example:
     @code{.py}
-Promise p();
+Promise<int> p();
     @endcode
  */
 Promise::constructor() {
@@ -174,7 +174,7 @@ nothing Promise::setError(string error, string description, auto argument) [flag
 
     @par Example:
     @code{.py}
-Future f = p.getFuture();
+Future<int> f = p.getFuture();
     @endcode
 
     @throw PROMISE-ERROR Future has already been retrieved from this Promise

@@ -135,7 +135,7 @@ set(QORE_DOX_ASTPARSER_TMPL_SRC
     docs/mainpage.dox.tmpl
 )
 
-qore_wrap_qpp_value(ASTPARSER_QPP_SOURCES DOXLIST _dox_src ${ASTPARSER_QPP_SRC})
+qore_wrap_qpp_value(ASTPARSER_QPP_SOURCES DOXLIST _dox_src METALIST ASTPARSER_QPP_META_SRC ${ASTPARSER_QPP_SRC})
 add_custom_target(ASTPARSER_QPP_GENERATED_FILES DEPENDS qpp ${ASTPARSER_QPP_SOURCES})
 
 # prepare astparser module target
@@ -198,6 +198,7 @@ target_link_libraries(${astparser_module_name} tree-sitter-lib tree-sitter-qore-
 add_dependencies(${astparser_module_name} libqore ASTPARSER_QPP_GENERATED_FILES)
 set(MODULE_DOX_INPUT ${CMAKE_BINARY_DIR}/modules/astparser/mainpage.dox ${_dox_src})
 qore_binary_module_qore(${astparser_module_name} "${VERSION}" "/${VERSION}")
+qore_install_qpp_metadata(${astparser_module_name} ${ASTPARSER_QPP_META_SRC})
 
 # Install grammar artifacts so module-treesitter can reuse them
 install(FILES

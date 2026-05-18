@@ -104,7 +104,7 @@ namespace DtorOrder {
     }
 }
 
-class MyQueue inherits Queue {
+class MyQueue inherits Queue<auto> {
     public {
         static int dc = 0;
     }

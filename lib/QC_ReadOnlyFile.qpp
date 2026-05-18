@@ -1065,7 +1065,7 @@ bool ReadOnlyFile::isTty() [flags=CONSTANT] {
 
     @since %Qore 1.19
 */
-AbstractPollOperation ReadOnlyFile::startPollRead(string path, bool as_string = True, int max_bytes = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
+AbstractPollOperation<auto> ReadOnlyFile::startPollRead(string path, bool as_string = True, int max_bytes = -1) [flags=NAMED_ARGS;dom=FILESYSTEM] {
     TempEncodingHelper npath(path, QCS_DEFAULT, xsink);
     return f->startPollRead(xsink, self, npath->c_str(), max_bytes, as_string);
 }

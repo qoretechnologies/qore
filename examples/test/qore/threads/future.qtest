@@ -520,7 +520,7 @@ class FutureTest inherits QUnit::Test {
     }
 }
 
-class CancellableWrapper inherits Future {
+class CancellableWrapper inherits Future<auto> {
     private {
         Future real;
     }

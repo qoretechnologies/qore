@@ -91,9 +91,9 @@ hashdecl Qore::KeyValueInfo<V> {
 
     @par Example: HashIterator basic usage
     @code{.py}
-    hash<auto> h = {"key1": 1, "key2": 2,};
+    hash<string, int> h = {"key1": 1, "key2": 2,};
 
-    HashIterator it(h);
+    HashIterator<int> it(h);
     while (it.next()) {
         printf("getKey: %n; getKeyValue: %n; getValue: %n; getValuePair: %n\n",
                it.getKey(), it.getKeyValue(), it.getValue(), it.getValuePair());
@@ -118,7 +118,7 @@ qclass HashIterator<V> [arg=QoreHashIterator* i; ns=Qore;
 
     @par Example:
     @code{.py}
-HashIterator hi(h);
+HashIterator<int> hi(h);
     @endcode
  */
 HashIterator::constructor(hash<string, V> hash_value) [flags=NAMED_ARGS] {
@@ -129,8 +129,8 @@ HashIterator::constructor(hash<string, V> hash_value) [flags=NAMED_ARGS] {
 //! Creates an empty hash iterator object
 /** @par Example:
     @code{.py}
-*hash<auto> h = get_hash_or_nothing();
-HashIterator hi(h);
+*hash<string, int> h = get_hash_or_nothing();
+HashIterator<int> hi(h);
     @endcode
  */
 HashIterator::constructor() {
@@ -141,7 +141,7 @@ HashIterator::constructor() {
 //! Creates a copy of the HashIterator object, iterating the same object as the original and in the same position
 /** @par Example:
     @code{.py}
-HashIterator ni = i.copy();
+HashIterator<int> ni = i.copy();
     @endcode
  */
 HashIterator::copy() {

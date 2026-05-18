@@ -50,7 +50,7 @@ public namespace AsyncSocketIo {
     }
     @endcode
 */
-public class NotifierPollOperation inherits Qore::AbstractPollOperation {
+public class NotifierPollOperation inherits Qore::AbstractPollOperation<auto> {
     private {
         #! The notifier being waited on (referenced for the lifetime of the operation)
         EventNotifier notifier;

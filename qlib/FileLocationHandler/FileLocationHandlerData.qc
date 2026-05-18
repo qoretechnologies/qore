@@ -126,7 +126,7 @@ class FileLocationHandlerData inherits AbstractFileLocationHandler {
 }
 
 #! This class allows immediate data to be returned for a polling operation
-public class ImmediateDataPollOperation inherits AbstractPollOperation {
+public class ImmediateDataPollOperation inherits AbstractPollOperation<auto> {
     private {
         #! The value to return
         auto value;

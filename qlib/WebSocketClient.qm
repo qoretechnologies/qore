@@ -6053,7 +6053,7 @@ public class WebSocketClientHcioPollOp {
 %ifdef __REMOVED_WEBSOCKET_CONNECT_AND_RUN_POLL_OPERATION__
 # thread), which prevents them from delegating to C++ poll operations that require
 # I/O-thread execution. The DelegatingPollOperation approach is used instead.
-public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOperation {
+public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOperation<auto> {
     private {
         #! The WebSocketClient that created this operation
         WebSocketClient wsc;
@@ -6342,7 +6342,7 @@ public class WebSocketConnectAndRunPollOperation inherits Qore::AbstractPollOper
 
     @since WebSocketClient 2.4
 */
-public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
+public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation<bool> {
     private {
         #! The WebSocketClient that created this operation
         WebSocketClient wsc;
@@ -6477,7 +6477,7 @@ public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
 
     @since WebSocketClient 2.4
 */
-public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation {
+public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation<hash<auto>> {
     private {
         #! The WebSocketClient that created this operation
         WebSocketClient wsc;

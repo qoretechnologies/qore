@@ -177,11 +177,12 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     /** @param info a hash describing the socket, poll operation, owner, and optional key/goal
         @param replace if @ref True "True", replaces any existing operation for the same socket
 
-        @return a @ref Qore::Thread::Queue "Queue" if the operation has a goal, otherwise @ref nothing
+        @return a @ref Qore::Thread::Queue "Queue<hash<SocketPollResultInfo>>" if the operation has a goal,
+            otherwise @ref nothing
 
         @throw CONTROLLER-ADD-ERROR missing required \c sock, \c spop, or \c owner field in \a info
     */
-    *Queue submit(hash<SocketPollOperationInfo> info, *bool replace) {
+    *object<Queue<hash<SocketPollResultInfo>>> submit(hash<SocketPollOperationInfo> info, *bool replace) {
         if (!info.sock) {
             throw "CONTROLLER-ADD-ERROR", sprintf("Missing 'sock' value; got: %y", info);
         }
@@ -216,7 +217,7 @@ public class AsyncSocketIoController inherits LoggerWrapper {
     */
     bool waitForNotifier(EventNotifier notifier, timeout to = 30s) {
         NotifierPollOperation op(notifier);
-        Queue q = submit(<SocketPollOperationInfo>{
+        object<Queue<hash<SocketPollResultInfo>>> q = submit(<SocketPollOperationInfo>{
             "sock": notifier,
             "spop": op,
             "owner": sprintf("notifier-wait-%d-%d", gettid(), clock_getmicros()),

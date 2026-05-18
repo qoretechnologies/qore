@@ -57,6 +57,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("ast: function extraction", \testAstFunctionExtraction());
         addTestCase("ast: named argument metadata", \testAstNamedArgumentMetadata());
         addTestCase("ast: hashdecl extraction", \testAstHashdeclExtraction());
+        addTestCase("ast: generic metadata", \testAstGenericMetadata());
         addTestCase("ast: enum extraction", \testAstEnumExtraction());
         addTestCase("ast: namespace hierarchy", \testAstNamespaceHierarchy());
         addTestCase("ast: doc comments on members", \testAstDocComments());
@@ -68,9 +69,11 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("reflection: namespace hierarchy", \testReflectionNamespaceHierarchy());
         addTestCase("reflection: method variants", \testReflectionMethodVariants());
         addTestCase("reflection: typed hashes", \testReflectionTypedHashes());
+        addTestCase("reflection: generic metadata", \testReflectionGenericMetadata());
         addTestCase("reflection: no documentation", \testReflectionNoDocs());
         addTestCase("qpp doc index: build from meta files", \testQppBuildFromMetaFiles());
         addTestCase("qpp doc index: named argument metadata", \testQppNamedArgumentMetadata());
+        addTestCase("qpp doc index: generic metadata", \testQppGenericMetadata());
         addTestCase("qpp doc index: build from directory", \testQppBuildFromDirectory());
         addTestCase("qpp doc index: class indexing", \testQppClassIndexing());
         addTestCase("qpp doc index: function indexing", \testQppFunctionIndexing());
@@ -82,6 +85,7 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("merger: reflection + qpp docs", \testMergerReflectionQpp());
         addTestCase("merger: ast priority over qpp", \testMergerAstPriorityOverQpp());
         addTestCase("merger: param description enrichment", \testMergerParamEnrichment());
+        addTestCase("merger: generic metadata", \testMergerGenericMetadata());
         addTestCase("facade: fromSourceString", \testFacadeFromSourceString());
         addTestCase("facade: fromRuntime", \testFacadeFromRuntime());
         addTestCase("facade: searchSymbols", \testFacadeSearchSymbols());
@@ -601,6 +605,49 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertTrue(found_age);
     }
 
+    testAstGenericMetadata() {
+        string source = "%modern\n"
+            "\n"
+            "class Box<T: int = int> [legacy_raw] {\n"
+            "    T value;\n"
+            "}\n"
+            "\n"
+            "hashdecl Result<T: int = int> {\n"
+            "    T value;\n"
+            "}\n"
+            "\n"
+            "hashdecl Child<T> inherits Result<T> {\n"
+            "    string name;\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        assertEq(1, result.classes.size());
+        hash<QoreApiMetadata::ClassInfo> ci = result.classes[0];
+        assertEq(("T",), ci.type_parameters);
+        assertEq("int", ci.type_parameter_defaults.T);
+        assertEq("int", ci.type_parameter_bounds.T);
+        assertTrue(ci.raw_accepts_parameterized);
+        assertTrue(ci.raw_construction_defaults_to_auto);
+
+        assertEq(2, result.hashdecls.size());
+        hash<QoreApiMetadata::HashdeclInfo> result_info;
+        hash<QoreApiMetadata::HashdeclInfo> child_info;
+        foreach hash<QoreApiMetadata::HashdeclInfo> hi in (result.hashdecls) {
+            if (hi.name == "Result") {
+                result_info = hi;
+            } else if (hi.name == "Child") {
+                child_info = hi;
+            }
+        }
+        assertEq(("T",), result_info.type_parameters);
+        assertEq("int", result_info.type_parameter_defaults.T);
+        assertEq("int", result_info.type_parameter_bounds.T);
+        assertEq(("T",), child_info.type_parameters);
+        assertEq("Result<T>", child_info.parent_name);
+    }
+
     testAstEnumExtraction() {
         string source = "%modern\n"
             "\n"
@@ -883,6 +930,26 @@ class QoreApiMetadataTest inherits QUnit::Test {
         assertTrue(found);
     }
 
+    testReflectionGenericMetadata() {
+        hash<QoreApiMetadata::ClassInfo> queue =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractClass("Queue");
+        assertEq(("T",), queue.type_parameters);
+        assertEq(0, queue.type_parameter_defaults.size());
+        assertEq(0, queue.type_parameter_bounds.size());
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::ReflectionMetadataExtractor::extractFromRuntime("Qore");
+        bool found = False;
+        foreach hash<QoreApiMetadata::HashdeclInfo> hi in (result.hashdecls) {
+            if (hi.name == "KeyValueInfo") {
+                found = True;
+                assertEq(("V",), hi.type_parameters);
+                break;
+            }
+        }
+        assertTrue(found);
+    }
+
     testReflectionNoDocs() {
         # reflection doesn't provide documentation — verify fields are empty
         hash<QoreApiMetadata::ClassInfo> ci =
@@ -943,6 +1010,29 @@ class QoreApiMetadataTest inherits QUnit::Test {
         hash<auto> acquire = index."Qore::Thread::Semaphore::acquire";
         assertTrue(acquire.named_callable);
         assertEq(("timeout_ms",), acquire.named_parameters);
+    }
+
+    testQppGenericMetadata() {
+        string meta_dir = getMetaDir();
+        string queue_path = meta_dir + "/QC_Queue.meta.json";
+        string hash_iterator_path = meta_dir + "/QC_HashIterator.meta.json";
+        if (!is_readable(queue_path) || !is_readable(hash_iterator_path)) {
+            testSkip("build meta files not available");
+        }
+
+        hash<string, hash<auto>> index =
+            QoreApiMetadata::QppDocIndex::buildFromMetaFiles(
+                (queue_path, hash_iterator_path));
+
+        assertTrue(exists index."Qore::Thread::Queue");
+        hash<auto> queue = index."Qore::Thread::Queue";
+        assertEq(("T",), cast<list<string>>(queue.type_parameters));
+        assertTrue(queue.raw_accepts_parameterized);
+        assertTrue(queue.raw_construction_defaults_to_auto);
+
+        assertTrue(exists index."Qore::KeyValueInfo");
+        hash<auto> key_value_info = index."Qore::KeyValueInfo";
+        assertEq(("V",), cast<list<string>>(key_value_info.type_parameters));
     }
 
     testQppBuildFromDirectory() {
@@ -1391,6 +1481,43 @@ class QoreApiMetadataTest inherits QUnit::Test {
         # function param should have description from AST
         assertEq("number of items",
             merged.functions[0].params[0].description);
+    }
+
+    testMergerGenericMetadata() {
+        hash<QoreApiMetadata::NamespaceInfo> refl = buildMockReflection();
+        hash<string, hash<auto>> doc_index = {
+            "Test::Foo": {
+                "symbol_type": "class",
+                "name": "Foo",
+                "type_parameters": ("T",),
+                "type_parameter_defaults": {"T": "int"},
+                "type_parameter_bounds": {"T": "number"},
+                "raw_accepts_parameterized": True,
+                "raw_construction_defaults_to_auto": True,
+            },
+            "Test::MyInfo": {
+                "symbol_type": "hashdecl",
+                "name": "MyInfo",
+                # Also accept the legacy qpp metadata key while older generated
+                # metadata may still exist in a build tree.
+                "type_params": ("V",),
+                "type_parameter_defaults": {"V": "string"},
+            },
+        };
+
+        hash<QoreApiMetadata::NamespaceInfo> merged =
+            QoreApiMetadata::SymbolMerger::merge(refl, NOTHING, doc_index);
+
+        hash<QoreApiMetadata::ClassInfo> ci = merged.classes[0];
+        assertEq(("T",), ci.type_parameters);
+        assertEq("int", ci.type_parameter_defaults.T);
+        assertEq("number", ci.type_parameter_bounds.T);
+        assertTrue(ci.raw_accepts_parameterized);
+        assertTrue(ci.raw_construction_defaults_to_auto);
+
+        hash<QoreApiMetadata::HashdeclInfo> hi = merged.hashdecls[0];
+        assertEq(("V",), hi.type_parameters);
+        assertEq("string", hi.type_parameter_defaults.V);
     }
 
     testFacadeFromSourceString() {
