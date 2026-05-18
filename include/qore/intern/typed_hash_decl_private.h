@@ -369,11 +369,14 @@ public:
         return from_module.empty() ? nullptr : from_module.c_str();
     }
 
-    //! Sets the parse-time parent hashdecl scope to be resolved during parseInit
-    DLLLOCAL void setParseParent(NamedScope* parent) {
+    //! Sets the parse-time parent hashdecl type to be resolved during parseInit
+    DLLLOCAL void setParseParent(QoreParseTypeInfo* parent) {
         assert(!parse_parent);
         parse_parent = parent;
     }
+
+    //! Resolves the parse-time parent hashdecl type, if any
+    DLLLOCAL int resolveParseParent();
 
     //! Returns the resolved parent hashdecl or nullptr if none
     DLLLOCAL const TypedHashDecl* getParentHashDecl() const {
@@ -383,6 +386,7 @@ public:
     //! Sets the parent hashdecl directly (for system hashdecls)
     DLLLOCAL void setParentHashDecl(const TypedHashDecl* parent) {
         parentHashDecl = parent;
+        parentHashDeclName = parent ? get(*parent)->getPath() : "";
     }
 
     //! Returns the name of the parent hashdecl (for use when updating parent pointers after copying)
@@ -437,8 +441,8 @@ protected:
     const TypedHashDecl* parentHashDecl = nullptr;
     // parent hashdecl name (stored during copy to avoid dangling pointer dereference)
     std::string parentHashDeclName;
-    // parse-time parent scope (to be resolved during parseInit)
-    NamedScope* parse_parent = nullptr;
+    // parse-time parent type (to be resolved during parseInit)
+    QoreParseTypeInfo* parse_parent = nullptr;
 
     bool pub = false;
     bool sys = false;

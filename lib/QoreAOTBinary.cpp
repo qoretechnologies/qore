@@ -41,6 +41,7 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/typed_hash_decl_private.h"
+#include "qore/intern/QoreParseTypeInfo.h"
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/VarRefNode.h"
@@ -10233,6 +10234,16 @@ bool QoreAOTBinaryDeserializer::resolveHashdeclMembers(std::string& error) {
         }
     }
 
+    for (auto& entry : pending_hashdecl_members) {
+        TypedHashDecl* hd = entry.first;
+        if (typed_hash_decl_private::get(*hd)->resolveParseParent()) {
+            error = "failed to resolve parent hashdecl for '";
+            error += hd->getName();
+            error += "'";
+            return false;
+        }
+    }
+
     // Clear pending data
     pending_hashdecl_members.clear();
     return true;
@@ -10491,8 +10502,24 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
     }
 
     // Second pass: resolve parent hashdecl pointers
+    const bool has_parameterized_hashdecl_parents
+        = (reader.getHeader().feature_flags & QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS) != 0;
     for (auto& hdi : hashdecl_list) {
         if (!hdi.parent_path.empty()) {
+            if (has_parameterized_hashdecl_parents && strchr(hdi.parent_path.c_str(), '<')) {
+                QoreParseTypeInfo* parent_pti = qore_parse_type_string_to_pti(hdi.parent_path.c_str());
+                if (!parent_pti) {
+                    error = "cannot parse parameterized parent hashdecl path '";
+                    error += hdi.parent_path;
+                    error += "' for hashdecl '";
+                    error += hdi.hd->getName();
+                    error += "'";
+                    return false;
+                }
+                typed_hash_decl_private::get(*hdi.hd)->setParseParent(parent_pti);
+                continue;
+            }
+
             // Look up parent by path in the program
             qore_program_private* pp = qore_program_private::get(*pgm);
             qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(

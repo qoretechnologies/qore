@@ -145,6 +145,32 @@ HashDeclMemberInfo* HashDeclMemberInfo::instantiate(const QoreTypeInfo* receiver
     return rv;
 }
 
+int typed_hash_decl_private::resolveParseParent() {
+    if (!parse_parent) {
+        return 0;
+    }
+
+    int err = 0;
+    {
+        HashDeclTypeParamContextHelper hashdecl_type_param_context(this);
+        const QoreTypeInfo* parent_type = QoreParseTypeInfo::resolveAny(parse_parent, loc, err);
+        if (!err) {
+            const TypedHashDecl* parent = QoreTypeInfo::getUniqueReturnHashDecl(parent_type);
+            if (parent) {
+                setParentHashDecl(parent);
+            } else {
+                parseException(*loc, "PARSE-TYPE-ERROR", "hashdecl '%s' inherits from '%s', which does not "
+                    "resolve to a hashdecl", name.c_str(), QoreParseTypeInfo::getName(parse_parent));
+                err = -1;
+            }
+        }
+    }
+
+    delete parse_parent;
+    parse_parent = nullptr;
+    return err;
+}
+
 int typed_hash_decl_private::parseInit() {
     if (parse_init_done || sys) {
         return 0;
@@ -155,14 +181,10 @@ int typed_hash_decl_private::parseInit() {
 
     // Resolve parent hashdecl if specified
     if (parse_parent) {
-        parentHashDecl = qore_root_ns_private::get(*getRootNS())->parseFindHashDecl(loc, *parse_parent);
-        delete parse_parent;
-        parse_parent = nullptr;
-
-        if (!parentHashDecl) {
-            // parseFindHashDecl already reports the error for undefined hashdecl
+        if (resolveParseParent()) {
             err = -1;
-        } else {
+        }
+        if (parentHashDecl) {
             // Initialize parent first
             const_cast<typed_hash_decl_private*>(get(*parentHashDecl))->parseInit();
 
@@ -208,6 +230,18 @@ int typed_hash_decl_private::parseInit() {
     return err;
 }
 
+static const TypedHashDecl* instantiate_parent_hashdecl(const TypedHashDecl* parent,
+        const QoreTypeInfo* receiver_type_info) {
+    if (!parent || !receiver_type_info) {
+        return parent;
+    }
+
+    const QoreTypeInfo* parent_type = parent->getTypeInfo();
+    const QoreTypeInfo* instantiated_type = qore_substitute_type_params(parent_type, receiver_type_info);
+    const TypedHashDecl* instantiated_parent = QoreTypeInfo::getUniqueReturnHashDecl(instantiated_type);
+    return instantiated_parent ? instantiated_parent : parent;
+}
+
 static std::string make_parameterized_hashdecl_name(const std::string& base,
         const std::vector<const QoreTypeInfo*>& args, bool path) {
     std::string rv(base);
@@ -249,8 +283,6 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
     priv->path = make_parameterized_hashdecl_name(path, args, true);
     priv->from_module = from_module;
     priv->orig = priv;
-    priv->parentHashDecl = parentHashDecl;
-    priv->parentHashDeclName = parentHashDeclName;
     priv->pub = pub;
     priv->sys = sys;
     priv->reexport = reexport;
@@ -261,6 +293,7 @@ const TypedHashDecl* typed_hash_decl_private::getParameterizedHashDecl(
 
     priv->thd = new TypedHashDecl(priv);
     const QoreTypeInfo* receiver_type_info = priv->thd->getTypeInfo();
+    priv->setParentHashDecl(instantiate_parent_hashdecl(parentHashDecl, receiver_type_info));
     for (auto& mi : members.member_list) {
         priv->members.addNoCheck(strdup(mi.first), mi.second ? mi.second->instantiate(receiver_type_info) : nullptr);
     }
@@ -292,7 +325,7 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
         parentHashDecl(old.parentHashDecl),
         // Store parent path while old.parentHashDecl is still valid to avoid use-after-free
         // Use getPath() to get the full namespace path for cross-namespace inheritance
-        parentHashDeclName(old.parentHashDecl ? get(*old.parentHashDecl)->getPath() : ""),
+        parentHashDeclName(old.parentHashDecl ? get(*old.parentHashDecl)->getPath() : old.parentHashDeclName),
         // Preserve the source's public flag so cross-program imports done with
         // CSP_UNCHANGED (the documented "leave visibility as-is" mode) actually
         // do leave it as-is — symmetric with qore_class_private's import ctor.
@@ -306,6 +339,7 @@ typed_hash_decl_private::typed_hash_decl_private(const typed_hash_decl_private& 
     type_params = old.type_params;
     parameterized_base = old.parameterized_base;
     type_args = old.type_args;
+    parse_parent = old.parse_parent ? old.parse_parent->copy() : nullptr;
     // copy member list
     for (auto& i : old.members.member_list) {
         HashDeclMemberInfo* new_member = i.second ? new HashDeclMemberInfo(*i.second) : nullptr;

@@ -149,8 +149,9 @@ constexpr uint64_t QORE_AOT_FEAT_CLASS_RAW_GENERIC = 1ULL << 46; //!< class reco
 constexpr uint64_t QORE_AOT_FEAT_STATIC_CALL_RECEIVER_TYPE = 1ULL << 47; //!< static method calls preserve parameterized receiver typeInfo
 constexpr uint64_t QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS = 1ULL << 48; //!< hashdecl records preserve source generic type parameter names
 constexpr uint64_t QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS = 1ULL << 49; //!< class/hashdecl type parameter records preserve default type arguments
+constexpr uint64_t QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS = 1ULL << 50; //!< hashdecl parent records may preserve parameterized generic parent type paths
 //! Mask of all currently supported features
-constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x3FFFFFFFFFFFFULL;
+constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x7FFFFFFFFFFFFULL;
 
 //! Section type IDs
 enum class QoreAOTSectionType : uint16_t {

@@ -1583,16 +1583,30 @@ static int parse_parameterized_type(const std::string& src, std::string& base, s
                 base.assign(type, 0, lt);
                 trim(base);
                 std::string inner(type, lt + 1, i - lt - 1);
-                if (base.empty() || inner.empty()) {
+                if (base.empty()) {
                     error("invalid parameterized type '%s'\n", src.c_str());
                     return -1;
                 }
-                if (get_string_list(args, inner, ',', true)) {
-                    return -1;
-                }
-                for (std::string& arg : args) {
-                    trim(arg);
-                    if (arg.empty()) {
+                if (!inner.empty()) {
+                    if (get_string_list(args, inner, ',', true)) {
+                        return -1;
+                    }
+                    for (std::string& arg : args) {
+                        trim(arg);
+                        if (arg.empty()) {
+                            error("empty type argument in parameterized type '%s'\n", src.c_str());
+                            return -1;
+                        }
+                    }
+                } else {
+                    std::string tail(type, lt + 1, i - lt - 1);
+                    for (char c : tail) {
+                        if (!whitespace(c)) {
+                            error("empty type argument in parameterized type '%s'\n", src.c_str());
+                            return -1;
+                        }
+                    }
+                    if (type[lt + 1] != '>') {
                         error("empty type argument in parameterized type '%s'\n", src.c_str());
                         return -1;
                     }
@@ -1650,6 +1664,10 @@ static int parse_parameterized_declaration(const std::string& src, std::string& 
     int prc = parse_parameterized_type(src, base, args);
     if (prc <= 0) {
         return prc;
+    }
+    if (args.empty()) {
+        error("parameterized declaration '%s' must declare at least one type parameter\n", src.c_str());
+        return -1;
     }
 
     bool default_seen = false;
@@ -4759,10 +4777,36 @@ public:
                 ++p1;
 
             const char* parent_start = p1;
-            while (*p1 && (idnschar(*p1) || *p1 == ':'))
+            int angle_depth = 0;
+            while (*p1) {
+                if (*p1 == '<') {
+                    ++angle_depth;
+                } else if (*p1 == '>') {
+                    if (!angle_depth) {
+                        error("%s:%d: unbalanced angle brackets in parent hashdecl declaration\n",
+                            fileName, lineNumber);
+                        valid = false;
+                        return;
+                    }
+                    --angle_depth;
+                } else if (!angle_depth && (*p1 == '{' || whitespace(*p1))) {
+                    break;
+                }
                 ++p1;
+            }
+            if (angle_depth) {
+                error("%s:%d: unbalanced angle brackets in parent hashdecl declaration\n", fileName, lineNumber);
+                valid = false;
+                return;
+            }
 
             parent_name.assign(parent_start, p1 - parent_start);
+            trim(parent_name);
+            if (parent_name.empty()) {
+                error("%s:%d: missing parent hashdecl name after 'inherits'\n", fileName, lineNumber);
+                valid = false;
+                return;
+            }
 
             while (whitespace(*p1))
                 ++p1;
@@ -4898,19 +4942,43 @@ public:
             }
         }
 
-        // Set parent hashdecl if there is inheritance
-        if (!parent_name.empty()) {
-            std::string parent_var = parent_name;
-            size_t i = parent_var.rfind(':');
-            if (i != std::string::npos) {
-                parent_var.erase(0, i + 1);
-            }
-            fprintf(fp, "    hd->setParent(hashdecl%s);\n", parent_var.c_str());
-        }
-
         // get type name to substitute references to self if necessary
         std::string tname = "hashdecl" + name;
         TypeParamContext type_param_context(type_params, "hd", true);
+
+        // Set parent hashdecl if there is inheritance
+        if (!parent_name.empty()) {
+            std::string parent_base;
+            strlist_t parent_args;
+            int prc = parse_parameterized_type(parent_name, parent_base, parent_args);
+            if (prc < 0) {
+                return -1;
+            }
+            if (prc > 0) {
+                std::string parent_var;
+                get_type_name(parent_var, parent_base);
+                std::string type_vec;
+                if (make_type_vec_expr(parent_args, type_vec)) {
+                    return -1;
+                }
+                fprintf(fp, "    {\n");
+                fprintf(fp, "        const TypedHashDecl* qpp_parent = hashdecl%s->getParameterizedHashDecl(%s);\n",
+                    parent_var.c_str(), type_vec.c_str());
+                fprintf(fp, "        if (!qpp_parent) {\n");
+                fprintf(fp, "            return nullptr;\n");
+                fprintf(fp, "        }\n");
+                fprintf(fp, "        hd->setParent(qpp_parent);\n");
+                fprintf(fp, "    }\n");
+            } else {
+                std::string parent_var = parent_name;
+                size_t i = parent_var.rfind(':');
+                if (i != std::string::npos) {
+                    parent_var.erase(0, i + 1);
+                }
+                fprintf(fp, "    hd->setParent(hashdecl%s);\n", parent_var.c_str());
+            }
+        }
+
         for (auto& i : hdmap) {
             if (i.second.serializeCpp(fp, i.first.c_str(), tname))
                 return -1;

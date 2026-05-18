@@ -2184,6 +2184,7 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
     BCAList* bcalist;
     BCANode* bcanode;
     NamedScope *nscope;
+    QoreParseTypeInfo* parseTypeInfo;
     QoreRegex* Regex;
     QoreImplicitArgumentNode* implicit_arg;
     RetTypeInfo* returnTypeInfo;
@@ -2487,7 +2488,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %type <sclist>         superclass_list
 %type <sclist>         inheritance_list
 %type <sclnode>        superclass
-%type <nscope>         hashdecl_inherits
+%type <parseTypeInfo>  hashdecl_inherits
 %type <bcalist>        base_constructor_list
 %type <bcalist>        base_constructors
 %type <bcanode>        base_constructor
@@ -3356,18 +3357,15 @@ hashdecl_def:
 
 hashdecl_inherits:
     TOK_INHERITS IDENTIFIER {
-        $$ = new NamedScope($2);
+        $$ = new QoreParseTypeInfo($2);
     }
     | TOK_INHERITS ANGLE_IDENTIFIER {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@2.first_line,
             @2.last_line);
-        parse_error(*loc, "parameterized parent hashdecl references such as '%s' are not supported; declare a "
-            "non-parameterized parent hashdecl in the inherits clause", $2);
-        free($2);
-        $$ = nullptr;
+        $$ = ParserTypeStruct::getParseType(loc, $2, false);
     }
     | TOK_INHERITS SCOPED_REF {
-        $$ = new NamedScope($2);
+        $$ = new QoreParseTypeInfo($2);
     }
     | /* empty */ {
         $$ = nullptr;

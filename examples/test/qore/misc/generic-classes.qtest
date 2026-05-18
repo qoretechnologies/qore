@@ -197,6 +197,26 @@ hashdecl SourceDefaultPairResult<K, V = string> {
     V value;
 }
 
+hashdecl SourceGenericHashParent<T> {
+    T value;
+}
+
+hashdecl SourceGenericHashChild<T> inherits SourceGenericHashParent<T> {
+    string name;
+}
+
+hashdecl SourceFixedHashParentChild<T> inherits SourceGenericHashParent<string> {
+    T extra;
+}
+
+hashdecl SourceDefaultHashParent<T = int> {
+    T id;
+}
+
+hashdecl SourceDefaultHashParentChild<T = string> inherits SourceDefaultHashParent<> {
+    T label;
+}
+
 class SourceTypedIterator<T> inherits AbstractIterator<T> {
     private {
         T value;
@@ -493,6 +513,28 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
         any bad_value = {"value": "x", "values": (1,)};
         assertThrows("RUNTIME-TYPE-ERROR", sub () { hash<SourceGenericResult<int>> bad = bad_value; });
+
+        hash<SourceGenericHashChild<int>> child(("value": 21, "name": "twenty-one"));
+        int child_value = child.value;
+        assertEq(21, child_value);
+        assertEq("twenty-one", child.name);
+        assertEq("hash<SourceGenericHashChild<int>>", child.fullType());
+
+        hash<SourceGenericHashChild<string>> string_child(("value": "v", "name": "value"));
+        string inherited_value = string_child.value;
+        assertEq("v", inherited_value);
+
+        hash<SourceFixedHashParentChild<int>> fixed_child(("value": "fixed", "extra": 22));
+        string fixed_inherited_value = fixed_child.value;
+        int fixed_extra = fixed_child.extra;
+        assertEq("fixed", fixed_inherited_value);
+        assertEq(22, fixed_extra);
+
+        hash<SourceDefaultHashParentChild<>> default_child(("id": 23, "label": "default"));
+        int default_parent_value = default_child.id;
+        string default_child_label = default_child.label;
+        assertEq(23, default_parent_value);
+        assertEq("default", default_child_label);
     }
 
     sourceGenericIterators() {
@@ -737,8 +779,24 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
         {
             Program p(PO_NEW_STYLE);
+            p.parse("hashdecl Parent<T> { T value; } hashdecl Child<T> inherits Parent<T> { string name; } "
+                "sub t() { hash<Child<int>> c((\"value\": 1, \"name\": \"ok\")); int i = c.value; }",
+                "generic-classes");
+            p.callFunction("t");
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
             assertThrows("PARSE-EXCEPTION", \p.parse(), (
-                "hashdecl Parent<T> { T value; } hashdecl Child<T> inherits Parent<T> { string name; }",
+                "hashdecl Parent<T> { T value; } hashdecl Child<T> inherits Parent<T> { string name; } "
+                "sub t() { hash<Child<int>> c((\"value\": \"x\", \"name\": \"bad\")); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), (
+                "hashdecl Parent<T> { T value; } hashdecl Child<T> inherits Parent<T> { string value; }",
                 "generic-classes"));
         }
 

@@ -722,6 +722,10 @@ static uint64_t computeFeatureFlags(const std::vector<AOTCompiledFunc>& funcs) {
     // Generic type-parameter defaults must be preserved so source-stripped
     // metadata resolves partial or empty type-argument lists like source parse.
     flags |= QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS;
+    // Generic hashdecl inheritance needs the full parameterized parent type
+    // path, not only the raw parent hashdecl path, so AOT cold-load can rebuild
+    // inherited member type substitutions.
+    flags |= QORE_AOT_FEAT_HASHDECL_PARAM_PARENTS;
     return flags;
 }
 
