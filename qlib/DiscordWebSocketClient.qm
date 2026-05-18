@@ -37,6 +37,7 @@
 %requires(reexport) Mime >= 1.3
 %requires(reexport) WebSocketClient >= 1.3.1
 %requires(reexport) ConnectionProvider >= 1.4
+%requires AsyncSocketIo
 
 %try-module json >= 1.8.2
 %define NoJson
@@ -261,6 +262,20 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
             "api": DefaultApi,
         };
 
+        #! Milliseconds to wait for the gateway HELLO after (re)connecting before forcing a reconnect
+        /** The Discord gateway sends @ref DOP_HELLO immediately after the WebSocket
+            handshake.  If it is not received within this window the async receive
+            path has stalled (e.g. a lost first read completion after a reconnect);
+            without this watchdog the connection stays silently dead forever — the
+            heartbeat thread is only (re)started in handleHello(), and zombie
+            detection lives in that thread, so a lost HELLO disables all recovery.
+            See helloWatchdogFired().
+        */
+        const HelloWatchdogTimeoutMs = 30000;
+
+        #! Consecutive missed-HELLO reconnect cycles after which the watchdog escalates logging
+        const HelloWatchdogEscalateAfter = 5;
+
         #! Receive: An event was dispatched
         const DOP_DISPATCH = 0;
 
@@ -351,6 +366,21 @@ public class DiscordWebSocketClient inherits WebSocketClientWithSerialization {
         */
         bool heartbeat_ack = True;
 
+        #! HELLO watchdog: lock protecting the watchdog timer/state below
+        Mutex hello_watchdog_lock();
+
+        #! HELLO watchdog: active async I/O controller timer id (0 = none)
+        int hello_watchdog_timer = 0;
+
+        #! HELLO watchdog: set once the gateway HELLO is seen for the current connection
+        /** Also set on teardown so a racing timer fire becomes a no-op.  Protected
+            by @ref hello_watchdog_lock.
+        */
+        bool hello_received = False;
+
+        #! HELLO watchdog: consecutive (re)connects with no HELLO (escalation/observability)
+        int hello_miss_count = 0;
+
         #! API version
         int api = DefaultApi;
     }
@@ -374,6 +404,9 @@ DiscordWebSocketClient ws();
 
     #! Deletes the object
     destructor() {
+        # cancel the HELLO watchdog before teardown so a pending timer cannot
+        # fire on an already-deleted object
+        cancelHelloWatchdog();
         stopHeartbeatThread();
     }
 
@@ -386,6 +419,8 @@ DiscordWebSocketClient ws();
         @since DiscordWebSocketClient 1.1
     */
     disconnect(int cmd = WSCC_GoingAway) {
+        # explicit disconnect: never let the HELLO watchdog resurrect the connection
+        cancelHelloWatchdog();
         stopHeartbeatThread();
         WebSocketClientWithSerialization::disconnect(cmd);
     }
@@ -428,6 +463,10 @@ hash<auto> h = ws.getInfo();
         @since DiscordWebSocketClient 1.2
     */
     private closingConnection() {
+        # the connection is closing: cancel the HELLO watchdog so a pending
+        # timer cannot fire a spurious reconnect during teardown (the normal
+        # reconnect path handles a close-before-HELLO and will re-arm)
+        cancelHelloWatchdog();
         stopHeartbeatThread();
     }
 
@@ -541,6 +580,93 @@ hash<auto> h = ws.getInfo();
 %endif
     }
 
+    #! Arms the HELLO watchdog after every (re)connect
+    /** Single choke point: WebSocketClient::connect() and every reconnect path
+        (reestablishConnection()/doReconnect()) dispatch through connectIntern(),
+        so arming here covers initial connect and all reconnects.  The gateway
+        must send @ref DOP_HELLO promptly; handleHello() disarms the watchdog.
+        If HELLO never arrives (stalled async receive after a reconnect — the
+        connection stays "Connected" with no heartbeat thread and thus no zombie
+        detection), the watchdog forces a reconnect instead of dying silently.
+    */
+    private hash<auto> connectIntern(*hash<auto> opts, *reference<hash<auto>> info, *bool reconnect) {
+        hash<auto> rv = WebSocketClient::connectIntern(opts, \info, reconnect);
+        armHelloWatchdog();
+        return rv;
+    }
+
+    #! Arms (or re-arms) the HELLO watchdog timer for the current connection
+    private armHelloWatchdog() {
+        AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+        AutoLock al(hello_watchdog_lock);
+        hello_received = False;
+        if (hello_watchdog_timer) {
+            try {
+                controller.cancelTimer(hello_watchdog_timer);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            hello_watchdog_timer = 0;
+        }
+        hello_watchdog_timer = controller.addTimer(now_us() + milliseconds(HelloWatchdogTimeoutMs),
+            \helloWatchdogFired());
+    }
+
+    #! Cancels the HELLO watchdog (HELLO received, or connection closing / shutting down)
+    /** Idempotent; safe to call when no timer is armed.  Marks @ref hello_received
+        so any timer already in flight becomes a no-op, and resets the consecutive
+        miss counter (a delivered HELLO means the receive path is healthy).
+    */
+    private cancelHelloWatchdog() {
+        AutoLock al(hello_watchdog_lock);
+        hello_received = True;
+        hello_miss_count = 0;
+        if (hello_watchdog_timer) {
+            AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
+            try {
+                controller.cancelTimer(hello_watchdog_timer);
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            hello_watchdog_timer = 0;
+        }
+    }
+
+    #! HELLO watchdog timer callback: forces a reconnect if no gateway HELLO arrived
+    /** Dispatched on an async I/O controller worker thread (never the I/O
+        thread), so it is safe to drive a reconnect here.
+        @ref triggerZombieReconnect() already runs the reconnect on its own
+        thread and the heartbeat thread is not running pre-HELLO, so
+        reconnectPreamble()->stopHeartbeatThread() is a harmless no-op.
+    */
+    private helloWatchdogFired() {
+        int miss;
+        {
+            AutoLock al(hello_watchdog_lock);
+            # disarmed in the race window (HELLO arrived / connection closing)
+            if (hello_received || !hello_watchdog_timer) {
+                return;
+            }
+            hello_watchdog_timer = 0;
+            miss = ++hello_miss_count;
+        }
+        try {
+            if (miss >= HelloWatchdogEscalateAfter) {
+                logError("no Discord gateway HELLO within %d ms for %d consecutive (re)connects; "
+                    "the async receive path is stalled — forcing another reconnect",
+                    HelloWatchdogTimeoutMs, miss);
+            } else {
+                logWarn("no Discord gateway HELLO within %d ms after (re)connect (miss %d); "
+                    "the async receive path is stalled — forcing a reconnect",
+                    HelloWatchdogTimeoutMs, miss);
+            }
+            triggerZombieReconnect();
+        } catch (hash<ExceptionInfo> ex) {
+            # the client/service may have been torn down while the timer was pending
+            if (ex.err != "OBJECT-ALREADY-DELETED") {
+                rethrow;
+            }
+        }
+    }
+
     #! Sends a heartbeat message to the gateway with the last sequence number received
     private sendHeartbeat() {
         sendData({
@@ -587,6 +713,9 @@ hash<auto> h = ws.getInfo();
 
     #! Handle a HELLO message
     private handleHello(hash<auto> d) {
+        # the gateway responded with HELLO: the async receive path is alive for
+        # this connection — disarm the HELLO watchdog (see helloWatchdogFired())
+        cancelHelloWatchdog();
         *int hbi = d.heartbeat_interval;
         if (!hbi) {
             throw "DISCORD-ERROR", sprintf("Missing heartbeat interval in Hello msg: %y", d);

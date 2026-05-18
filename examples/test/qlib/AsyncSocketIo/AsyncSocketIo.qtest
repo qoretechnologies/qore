@@ -70,6 +70,66 @@ class BlockingAbortPollOperation inherits Qore::AbstractPollOperation {
     }
 }
 
+#! Fix #3: a Qore poll op whose continuePoll() blocks in a NESTED controller
+#! op (like RestClientIoPingPollOperation -> waitForNotifier).  The nested op
+#! is submitted under a DIFFERENT owner; only the inherited cancel scope
+#! (PollInfo::inherited_owner, set because continuePoll runs on a worker with
+#! current_continue_poll_owner = this op's owner) lets cancelByOwner() of the
+#! PARENT owner free it.  entered.dec() happens AFTER the nested submit is
+#! enqueued so the test can cancel deterministically (no races/sleeps).
+# Fix #3 regression: a *non-blocking* parent poll op whose continuePoll()
+# submits a nested op and then RETURNS — the correct poll-op pattern, as used
+# in production by RestClientIoPingPollOperation::continuePoll().  The nested
+# op is given a distinct direct owner and a long controller `to`, so the ONLY
+# way cancelByOwner("p3-parent") can free it within the bound is via the
+# inherited parent scope (current_continue_poll_owner → PollInfo::inherited_owner).
+#
+# NOTE: continuePoll() must NOT block here.  qore_continue_poll_lock
+# (AsyncIoControllerPriv.cpp) is a single process-global lock held across
+# evalMethod("continuePoll"); a continuePoll() that blocks waiting on a nested
+# Qore poll op self-deadlocks (the nested op's own continuePoll can never
+# acquire that lock).  Production poll ops never block in continuePoll(); this
+# regression must mirror that.
+class InheritOwnerNonBlockingPollOp inherits Qore::AbstractPollOperation {
+    public {
+        Counter entered(1);
+        *Queue nested_q;
+    }
+    private {
+        AsyncSocketIo::AsyncSocketIoController ctl;
+        EventNotifier never();
+        bool started = False;
+    }
+    constructor(AsyncSocketIo::AsyncSocketIoController ctl) {
+        self.ctl = ctl;
+    }
+    string getGoal() { return "p3-parent-nonblocking"; }
+    string getState() { return started ? "submitted-nested" : "pending"; }
+    bool goalReached() { return started; }
+
+    *hash<SocketPollInfo> continuePoll() {
+        if (started) {
+            return NOTHING;
+        }
+        started = True;
+        AsyncSocketIo::NotifierPollOperation nop(never);
+        # nested op: distinct direct owner + long controller `to` so ONLY a
+        # cancel via the inherited "p3-parent" scope can free it within bound
+        nested_q = ctl.submit(<SocketPollOperationInfo>{
+            "sock": never,
+            "spop": nop,
+            "owner": "p3-nested-inner",
+            "to": 120s,
+        });
+        # signal only AFTER the nested SubmitOp is enqueued, so the test's
+        # cancelByOwner() command is processed strictly after it (FIFO cmdq)
+        entered.dec();
+        # RETURN (non-blocking): releases qore_continue_poll_lock so the nested
+        # op's own continuePoll can run; the parent op completes here
+        return NOTHING;
+    }
+}
+
 public class AsyncSocketIoTest inherits QUnit::Test {
     public {
         const VALUE_TEXT = {
@@ -134,6 +194,11 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         addTestCase("submit from callback", \submitFromCallbackTest());
         addTestCase("addListener after stop", \addListenerAfterStopTest());
         addTestCase("concurrent io scalability", \concurrentIoScalabilityTest());
+        addTestCase("notifier timeout always delivered", \notifierTimeoutAlwaysDeliveredTest());
+        addTestCase("deliver exactly once under cancel churn", \deliverExactlyOnceUnderCancelChurnTest());
+        addTestCase("waitForNotifier explicit safety timeout", \waitForNotifierExplicitSafetyTimeoutTest());
+        addTestCase("cancel then resubmit same socket accepted", \cancelThenResubmitSameSocketTest());
+        addTestCase("cancelByOwner cascades into nested continuePoll op", \nestedContinuePollInheritedCancelTest());
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -720,6 +785,238 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         assertEq("SOCKET-TIMEOUT", info.ex.err, "0s timeout should expire immediately");
         spop.abort();
         SimpleStringHandler::interruptSleep(False);
+    }
+
+    #! Regression: every NotifierPollOperation submitted with a per-op timeout
+    #! must have that timeout armed and a completion delivered, even when the
+    #! watched notifier is never signaled and many ops run concurrently.
+    /** Reproduces the production op type (NotifierPollOperation on an
+        EventNotifier that never fires because the peer connection failed).
+        Pre-fix, an op submitted from I/O-thread context never had its
+        timeout armed (missing new_entry_keys push) and Queue::get() — which
+        has no queue-level timeout — blocked forever.
+    */
+    notifierTimeoutAlwaysDeliveredTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        int N = 20;
+        list<Queue> queues = ();
+        list<EventNotifier> notifiers = ();
+        for (int i = 0; i < N; ++i) {
+            EventNotifier n();
+            push notifiers, n;
+            AsyncSocketIo::NotifierPollOperation op(n);
+            push queues, io_controller.submit(<SocketPollOperationInfo>{
+                "sock": n,
+                "spop": op,
+                "owner": sprintf("notifier-timeout-%d", i),
+                "to": 300ms,
+            });
+        }
+
+        date start = now_us();
+        for (int i = 0; i < N; ++i) {
+            # generous bound: the 300ms controller timeout must fire and the
+            # completion must be delivered well within this.
+            *hash<SocketPollResultInfo> info = queues[i].get(8s);
+            assertTrue(exists info, sprintf("op %d: completion delivered", i));
+            assertEq("SOCKET-TIMEOUT", info.ex.err,
+                sprintf("op %d: expected timeout completion", i));
+        }
+        date elapsed = now_us() - start;
+        assertTrue(elapsed < 8s,
+            sprintf("all %d notifier timeouts delivered within bound (elapsed=%y)", N, elapsed));
+    }
+
+    #! Regression: the deliver-exactly-once invariant must hold under
+    #! concurrent submit + cancel churn — no waiter may ever hang, and no
+    #! queue may receive more than one completion.
+    /** Mirrors the production trigger (shared controller hammered with
+        submits + cancelByOwner of never-signaled notifier ops).  The
+        cleanup() backstop guarantees a torn-down op with an undelivered
+        result still frees its waiter exactly once.
+    */
+    deliverExactlyOnceUnderCancelChurnTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        int N = 30;
+        list<Queue> queues = ();
+        list<string> owners = ();
+        for (int i = 0; i < N; ++i) {
+            EventNotifier n();
+            AsyncSocketIo::NotifierPollOperation op(n);
+            string owner = sprintf("churn-owner-%d", i);
+            push owners, owner;
+            push queues, io_controller.submit(<SocketPollOperationInfo>{
+                "sock": n,
+                "spop": op,
+                "owner": owner,
+                # long controller timeout: only a cancel or the backstop can
+                # free these within the test bound
+                "to": 30s,
+            });
+        }
+
+        # Concurrently cancel every op from a separate thread to maximise
+        # submit/cancel interleaving on the shared controller.
+        Counter cancels_done(1);
+        background sub () {
+            on_exit cancels_done.dec();
+            foreach string owner in (owners) {
+                io_controller.cancelByOwner(owner);
+            }
+        }();
+
+        date start = now_us();
+        for (int i = 0; i < N; ++i) {
+            # Each waiter MUST be freed (cancel completion or backstop) — never
+            # hang.  q.get(10s) throws QUEUE-TIMEOUT if the invariant is
+            # violated, failing the test deterministically instead of hanging.
+            *hash<SocketPollResultInfo> info = queues[i].get(10s);
+            assertTrue(exists info, sprintf("op %d: a completion was delivered", i));
+            # Exactly one completion: nothing else queued behind it.
+            assertEq(0, queues[i].size(),
+                sprintf("op %d: exactly one completion (no duplicate)", i));
+        }
+        cancels_done.waitForZero();
+        date elapsed = now_us() - start;
+        assertTrue(elapsed < 10s,
+            sprintf("all %d waiters freed within bound (elapsed=%y)", N, elapsed));
+    }
+
+    #! Layer 2: the explicit opt-in queue_safety_timeout to waitForNotifier()
+    #! frees the caller independently of the controller's per-op timeout.
+    waitForNotifierExplicitSafetyTimeoutTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        EventNotifier n();
+        date start = now_us();
+        # controller `to` is 30s, but the explicit 400ms queue safety bound
+        # must free the caller first and report "not signaled".
+        bool signaled = io_controller.waitForNotifier(n, 30s, 400ms);
+        date elapsed = now_us() - start;
+        assertFalse(signaled, "never-signaled notifier must return False");
+        assertTrue(elapsed >= 400ms,
+            sprintf("safety timeout should not be immediate (elapsed=%y)", elapsed));
+        assertTrue(elapsed < 5s,
+            sprintf("explicit safety timeout freed caller well before the 30s "
+                "controller timeout (elapsed=%y)", elapsed));
+    }
+
+    #! Regression: a deliberate cancel-then-resubmit on the SAME socket key
+    #! must be accepted, not rejected/canceled by the cancelled_keys tombstone.
+    /** Same gate as the WebSocket-reconnect pattern (WebSocketClient cancels
+        the HCIO poll op for a socket fd, then immediately submits the WS poll
+        op for the SAME socket/key).  cancelByOwner() is synchronous and
+        tombstones cancelled_keys for each matched op, so the resubmit's
+        seq_at_push is strictly greater than the tombstone seq and the
+        sequence gate (CancelInfo) must let it through to create a live op.
+        A distinct owner for the resubmit isolates the cancelled_keys gate
+        (the cancelled_owners gate would otherwise also reject the same
+        owner).  Pre-fix (no cancelled_keys seq gate) the resubmit was
+        immediately canceled by the tombstone — a permanent reconnect
+        failure for all WS clients once this libqore is active.
+    */
+    cancelThenResubmitSameSocketTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        EventNotifier n();
+
+        # op A: never-signaled, long controller timeout
+        AsyncSocketIo::NotifierPollOperation op_a(n);
+        Queue qa = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op_a,
+            "owner": "cr-a",
+            "to": 30s,
+        });
+
+        # synchronous cancel-by-owner: cancels A and tombstones n's key
+        assertEq(1, io_controller.cancelByOwner("cr-a"), "cancelByOwner cancels op A");
+        hash<SocketPollResultInfo> ia = qa.get(2s);
+        assertTrue(ia.canceled, "op A delivered a canceled completion");
+
+        # op B: a FRESH op on the SAME notifier (same socket hash = same
+        # just-tombstoned key) under a DIFFERENT owner, short timeout.  The
+        # cancelled_keys sequence gate must accept it (deliberate post-cancel
+        # resubmit) so it runs and times out per its own `to`, rather than
+        # being immediately canceled by the tombstone.
+        AsyncSocketIo::NotifierPollOperation op_b(n);
+        Queue qb = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": n,
+            "spop": op_b,
+            "owner": "cr-b",
+            "to": 1s,
+        });
+        date start = now_us();
+        hash<SocketPollResultInfo> ib = qb.get(8s);
+        date elapsed = now_us() - start;
+
+        # not canceled: a timed-out op has no "canceled" key (NOTHING), a
+        # tombstone-canceled op would have canceled == True
+        assertFalse(ib.canceled ?? False,
+            "resubmit on the just-cancelled socket must NOT be canceled by the tombstone");
+        assertEq("SOCKET-TIMEOUT", ib.ex.err,
+            "resubmitted op runs and times out normally per its own `to`");
+        assertTrue(elapsed >= 500ms,
+            sprintf("resubmit was not immediately canceled (elapsed=%y, expected ~1s)", elapsed));
+        assertTrue(elapsed < 8s,
+            sprintf("resubmit timed out within bound (elapsed=%y)", elapsed));
+    }
+
+    #! Fix #3: cancelByOwner(parent) must cascade into a nested op spawned by
+    #! that op's continuePoll() via the inherited cancel scope
+    #! (current_continue_poll_owner → PollInfo::inherited_owner), so a nested
+    #! controller wait is promptly interruptible — the connection-monitor ping
+    #! / shutdown-hang scenario.  The parent continuePoll() is non-blocking
+    #! (the correct poll-op pattern); it submits the nested op and returns.
+    nestedContinuePollInheritedCancelTest() {
+        AsyncSocketIoController io_controller(logger);
+        on_exit delete io_controller;
+
+        InheritOwnerNonBlockingPollOp op(io_controller);
+        EventNotifier sock();
+        Queue q = io_controller.submit(<SocketPollOperationInfo>{
+            "sock": sock,
+            "spop": op,
+            "owner": "p3-parent",
+            "to": 120s,
+        });
+
+        # deterministic: continuePoll() submits the nested op then dec()s
+        # `entered`; the test's cancelByOwner() is enqueued strictly after the
+        # nested SubmitOp (FIFO command queue) — no sleeps/races
+        op.entered.waitForZero();
+        assertTrue(exists op.nested_q, "parent continuePoll submitted the nested op");
+
+        # parent returned NOTHING → it completes on its own; the nested op
+        # (distinct direct owner "p3-nested-inner", controller `to` 120s) is
+        # now reachable ONLY via the inherited "p3-parent" scope captured at
+        # submit time
+        *hash<SocketPollResultInfo> pinfo = q.get(20s);
+        assertTrue(exists pinfo, "parent op completion delivered");
+
+        date start = now_us();
+        background sub () {
+            io_controller.cancelByOwner("p3-parent");
+        }();
+
+        # Fix #3: cancelByOwner(parent) must reach the nested op via the
+        # inherited scope and free it promptly.  Pre-fix the nested op had no
+        # "p3-parent" association, so this would block ~120s (nested `to`).
+        *hash<SocketPollResultInfo> ninfo = op.nested_q.get(20s);
+        date elapsed = now_us() - start;
+
+        assertTrue(exists ninfo, "nested op completion delivered");
+        assertTrue(ninfo.canceled ?? False,
+            "nested op was canceled via the inherited parent scope");
+        assertTrue(elapsed < 20s,
+            sprintf("cancelByOwner(parent) freed the nested op via the inherited "
+                "scope promptly (elapsed=%y; pre-fix would be ~120s)", elapsed));
     }
 
     autostopTest() {

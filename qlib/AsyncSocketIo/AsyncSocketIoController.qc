@@ -210,23 +210,56 @@ public class AsyncSocketIoController inherits LoggerWrapper {
 
         @param notifier the notifier to wait on
         @param to the maximum time to wait; a negative value means wait indefinitely
+        @param queue_safety_timeout an @b explicit, opt-in upper bound on the
+        Queue wait itself, independent of the controller's per-operation timeout
+        \a to.  Normally @ref nothing: the controller is the authority on timing
+        and pushes the completion on goal-reached, timeout, cancellation, or
+        error, so a Queue-level timeout would only race with it.  Callers on
+        critical, must-not-block paths (e.g. system startup) may pass a positive
+        value as a belt-and-suspenders guarantee: if the controller ever fails
+        to deliver a completion (a lost-completion bug), the caller is still
+        freed instead of blocking forever.  When the safety timeout fires the
+        (possibly orphaned) operation is canceled and @ref False is returned.
 
         @return @ref True if the notifier was signaled within the timeout, @ref False
-        if the wait timed out
+        if the wait timed out (either the controller's \a to timeout or, when
+        given, the explicit \a queue_safety_timeout)
     */
-    bool waitForNotifier(EventNotifier notifier, timeout to = 30s) {
+    bool waitForNotifier(EventNotifier notifier, timeout to = 30s, *timeout queue_safety_timeout) {
         NotifierPollOperation op(notifier);
+        string owner = sprintf("notifier-wait-%d-%d", gettid(), clock_getmicros());
         Queue q = submit(<SocketPollOperationInfo>{
             "sock": notifier,
             "spop": op,
-            "owner": sprintf("notifier-wait-%d-%d", gettid(), clock_getmicros()),
+            "owner": owner,
             "to": to,
         });
         # Pull the completion result (the controller pushes it on goal-reached,
-        # timeout, cancellation, or error).  Use Queue::get() with no timeout
-        # here — the controller is the authority on timing; an additional
+        # timeout, cancellation, or error).  By default use Queue::get() with no
+        # timeout — the controller is the authority on timing; an additional
         # Queue-level timeout would only race with it.
-        q.get();
+        #
+        # When an explicit queue_safety_timeout is given (> 0), bound the Queue
+        # wait itself as an independent backstop: if the controller never
+        # delivers, cancel the orphaned op and report "not signaled" rather
+        # than blocking the caller forever.  (Queue::get(0) blocks forever, so
+        # a non-positive value is treated as "not given".)
+        if (exists queue_safety_timeout && queue_safety_timeout > 0ms) {
+            try {
+                q.get(queue_safety_timeout);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "QUEUE-TIMEOUT") {
+                    rethrow;
+                }
+                # Controller did not deliver within the explicit safety bound:
+                # cancel the (possibly orphaned) operation and treat the wait
+                # as timed out / not signaled.
+                cancelByOwner(owner);
+                return False;
+            }
+        } else {
+            q.get();
+        }
         return op.goalReached();
     }
 

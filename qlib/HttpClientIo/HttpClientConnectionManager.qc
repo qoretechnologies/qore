@@ -83,6 +83,16 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         #! Maximum retry count for connection and capacity errors in request() and submitRequestAsync()
         const MaxRequestRetries = DefaultMaxRequestRetries;
+
+        #! Grace added to \c connect_timeout for the explicit Queue-level safety
+        #! bound passed to AsyncSocketIoController::waitForNotifier()
+        /** Belt-and-suspenders against a lost I/O-controller completion: the
+            controller's own per-operation timeout (<= \c connect_timeout)
+            always fires first in healthy operation, so this only ever trips
+            if the controller is genuinely stuck — preventing a happy-eyeballs
+            connect from stranding a caller (e.g. system startup) forever.
+        */
+        const AsyncQueueSafetyGraceMs = 30000;
     }
 
     private {
@@ -1559,7 +1569,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # False on timeout; in either case we still acknowledge() to drain
             # the fd (matches the former Socket::poll pattern) and then check
             # isReady() for the authoritative state.
-            controller.waitForNotifier(h3_notifier, HappyEyeballsStaggerMs);
+            #
+            # Pass an explicit Queue-level safety bound (connect_timeout + 30s
+            # grace) so a lost controller completion can never strand this
+            # call on a critical path forever; the controller's own per-op
+            # timeout (<= connect_timeout) always wins in healthy operation.
+            controller.waitForNotifier(h3_notifier, HappyEyeballsStaggerMs,
+                opts.connect_timeout + AsyncQueueSafetyGraceMs);
             h3_notifier.acknowledge();
             if (h3conn.isReady()) {
                 log(LoggerLevel::DEBUG, "happy eyeballs: H3 won within stagger for %s", key);
@@ -1639,8 +1655,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 remaining = opts.connect_timeout;
             }
             # Async wait via the I/O controller (replaces a handler-thread
-            # Socket::poll syscall).  See the h3_notifier path above.
-            controller.waitForNotifier(race_notifier, remaining);
+            # Socket::poll syscall).  See the h3_notifier path above; the
+            # explicit Queue-level safety bound is the same belt-and-suspenders
+            # guard against a lost controller completion.
+            controller.waitForNotifier(race_notifier, remaining,
+                opts.connect_timeout + AsyncQueueSafetyGraceMs);
             race_notifier.acknowledge();
         } else {
             log(LoggerLevel::DEBUG,
