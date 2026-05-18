@@ -279,7 +279,7 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
         @throw OPENAPI3-SEARCH-ERROR the response type exists but is not list or hash and therefore does not support
         searching
     */
-    private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req,
+    private AbstractDataProviderRecordIterator<hash<auto>> requestSearchRecordsImpl(auto req,
             *hash<DataProviderExpression> where_cond, *hash<auto> search_options) {
         hash<auto> resp = doRequestIntern(req, search_options);
         return makeRecordIterator(resp, where_cond, search_options);
@@ -290,29 +290,43 @@ public class OpenApi3RequestDataProvider inherits OpenApi3DataProviderBase {
         @param where_cond the search criteria
         @param search_options the search options after processing by validateSearchOptions()
     */
-    private AbstractDataProviderRecordIterator requestSearchRecordsImpl(auto req, *hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> requestSearchRecordsImpl(auto req, *hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> resp = doRequestIntern(req, search_options);
         return makeRecordIterator(resp, where_cond, search_options);
     }
 
     #! Wraps an HTTP response body into a record iterator
-    private AbstractDataProviderRecordIterator makeRecordIterator(hash<auto> resp, auto where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> makeRecordIterator(hash<auto> resp, auto where_cond,
             *hash<auto> search_options) {
-        AbstractIterator i;
+        AbstractIterator<hash<auto>> i;
         switch (resp.body.typeCode()) {
             case NT_HASH:
+                i = new SingleValueIterator<hash<auto>>(resp.body);
+                break;
             case NT_NOTHING:
-                i = new SingleValueIterator(resp.body);
+                i = new ListHashIterator(());
                 break;
-            case NT_LIST:
-                i = new ListIterator(resp.body);
+            case NT_LIST: {
+                list<hash<auto>> records = ();
+                int index = 0;
+                foreach auto record in (resp.body) {
+                    if (record.typeCode() != NT_HASH) {
+                        throw "OPENAPI3-SEARCH-ERROR", sprintf("the response body list cannot be searched because "
+                            "element %d has type %y; expected every list element to be a hash record", index,
+                            record.type());
+                    }
+                    records += record;
+                    ++index;
+                }
+                i = new ListHashIterator(records);
                 break;
+            }
             default:
-                throw "OPENAPI3-SEARCH-ERROR", sprintf("the response has type %y, which does not support searching",
-                    resp.body.type());
+                throw "OPENAPI3-SEARCH-ERROR", sprintf("the response body has type %y, which cannot be searched; "
+                    "expected a hash record, a list of hash records, or NOTHING", resp.body.type());
         }
-        return new DefaultRecordIterator(i, where_cond, search_options, record_type);
+        return new DefaultRecordIterator<hash<auto>>(i, where_cond, search_options, record_type);
     }
 
     #! Makes a REST request and returns the response
