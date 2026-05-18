@@ -604,8 +604,19 @@ public class GenericClassTypesTest inherits QUnit::Test {
         SourceGenericStaticFactory<int> f = SourceGenericStaticFactory<int>::make(8);
         assertEq(8, f.get());
 
+        auto inferred = SourceGenericStaticFactory::make(15);
+        assertTrue(inferred instanceof SourceGenericStaticFactory<int>);
+        assertEq(15, inferred.get());
+
+        auto inferred_named = SourceGenericStaticFactory::make(value: "fifteen");
+        assertTrue(inferred_named instanceof SourceGenericStaticFactory<string>);
+        assertEq("fifteen", inferred_named.get());
+
         list<int> values = SourceGenericStaticFactory<int>::collect(9);
         assertEq((9,), values);
+
+        list<int> inferred_values = SourceGenericStaticFactory::collect(16);
+        assertEq((16,), inferred_values);
 
         assertEq(10, SourceGenericStaticFactory<int>::echoThroughLocal(10));
         assertThrows("RUNTIME-TYPE-ERROR",
@@ -851,6 +862,14 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
         {
             Program p(PO_NEW_STYLE);
+            p.parse("class Box<T = int> { constructor() {} static Box<T> make() { return new Box<T>(); } } "
+                "bool sub t() { auto b = Box::make(); return b instanceof Box<int>; }",
+                "generic-classes");
+            assertTrue(p.callFunction("t"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
             assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
                 "class C<T> { constructor(T value) {} constructor(list<T> values) {} } "
                 "sub t() { auto c = new C((1, 2)); }", "generic-classes"));
@@ -859,8 +878,25 @@ public class GenericClassTypesTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE);
             assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T> { constructor(T value) {} "
+                "static Box<T> make(T value) { return new Box<T>(value); } "
+                "static Box<T> make(list<T> values) { return new Box<T>(values[0]); } } "
+                "sub t() { auto b = Box::make((1, 2)); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
                 "class Box<T: int> { constructor(T value) {} } "
                 "sub t() { auto b = new Box(\"x\"); }", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T: int> { constructor(T value) {} static Box<T> make(T value) { "
+                "return new Box<T>(value); } } sub t() { auto b = Box::make(\"x\"); }",
+                "generic-classes"));
         }
     }
 

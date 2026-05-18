@@ -36,6 +36,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreParseTypeInfo.h"
 
+#include <string>
 #include <vector>
 
 static bool static_scope_has_parameterized_receiver(const NamedScope& scope) {
@@ -270,7 +271,8 @@ int FunctionCallBase::resolveExplicitTypeArgs(const QoreProgramLocation* loc) {
 }
 
 int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context,
-        QoreFunction* func, qore_ns_private* ns) {
+        QoreFunction* func, qore_ns_private* ns, bool infer_class_receiver_from_args,
+        const char* receiver_inference_call_desc) {
     int err = 0;
     QoreParseAnalysis arg_analysis;
 
@@ -335,9 +337,13 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
         }
 
         if (!receiver_type_info && qc && qc->hasTypeParameters()) {
+            bool constructor_call = !strcmp(func->getName(), "constructor");
             const QoreTypeInfo* inferred_receiver = func->parseInferClassReceiverTypeInfo(loc, argTypeInfo,
                 named_args ? &arg_names : nullptr, class_ctx, err, parse_context.expected_type_info,
-                !strcmp(func->getName(), "constructor"));
+                constructor_call || infer_class_receiver_from_args,
+                receiver_inference_call_desc
+                    ? receiver_inference_call_desc
+                    : (constructor_call ? "constructor call" : "generic class call"));
             if (inferred_receiver) {
                 receiver_type_info = inferred_receiver;
             }
@@ -1208,7 +1214,13 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
 
     assert(method->isStatic());
 
-    if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr) && !err) {
+    std::string receiver_inference_call_desc = "static method call '";
+    receiver_inference_call_desc += method->getClass()->getNamespacePath(false);
+    receiver_inference_call_desc += "::";
+    receiver_inference_call_desc += method->getName();
+    receiver_inference_call_desc += "()'";
+    if (parseArgs(parse_context, qore_method_private::get(*method)->getFunction(), nullptr, true,
+            receiver_inference_call_desc.c_str()) && !err) {
         err = -1;
     }
     // issue #2380 make sure to set the method correctly if resolved from a hierarchy

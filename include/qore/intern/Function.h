@@ -1462,7 +1462,7 @@ public:
     DLLLOCAL const QoreTypeInfo* parseInferClassReceiverTypeInfo(const QoreProgramLocation* loc,
             const type_vec_t& argTypeInfo, const name_vec_t* argNames,
             const qore_class_private* class_ctx, int& err, const QoreTypeInfo* expected_type_info,
-            bool infer_from_args) const;
+            bool infer_from_args, const char* call_desc = nullptr) const;
 
     // returns true if there are no uncommitted parse variants in the function
     DLLLOCAL bool pendingEmpty() const {

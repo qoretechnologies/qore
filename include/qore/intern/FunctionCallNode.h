@@ -97,7 +97,8 @@ public:
 
     // ns can be nullptr if the function is a method
     DLLLOCAL int parseArgsVariant(const QoreProgramLocation* loc, QoreParseContext& parse_context, QoreFunction* func,
-            qore_ns_private* ns);
+            qore_ns_private* ns, bool infer_class_receiver_from_args = false,
+            const char* receiver_inference_call_desc = nullptr);
 
     DLLLOCAL const AbstractQoreFunctionVariant* getVariant() const {
         return variant;
@@ -210,8 +211,10 @@ public:
     }
 
     // ns can be nullptr if the function is a method
-    DLLLOCAL int parseArgs(QoreParseContext& parse_context, QoreFunction* func, qore_ns_private* ns) {
-        int err = parseArgsVariant(loc, parse_context, func, ns);
+    DLLLOCAL int parseArgs(QoreParseContext& parse_context, QoreFunction* func, qore_ns_private* ns,
+            bool infer_class_receiver_from_args = false, const char* receiver_inference_call_desc = nullptr) {
+        int err = parseArgsVariant(loc, parse_context, func, ns, infer_class_receiver_from_args,
+            receiver_inference_call_desc);
         // clear "effect" flag if possible, only if QCF_CONSTANT is set on the variant or function
         if (variant) {
             doFlags(variant->getFlags());

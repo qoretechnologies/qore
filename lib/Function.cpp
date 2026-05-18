@@ -2275,7 +2275,7 @@ static bool qore_class_type_arg_satisfies_bound(const QoreTypeInfo* bound, const
 }
 
 static bool qore_finalize_class_type_args(const QoreProgramLocation* loc, const QoreClass* cls, type_vec_t& bindings,
-        int& err, bool emit_errors) {
+        int& err, bool emit_errors, const char* call_desc) {
     bindings.resize(cls->getTypeParameterCount(), nullptr);
     for (size_t i = 0, e = cls->getTypeParameterCount(); i < e; ++i) {
         if (!bindings[i]) {
@@ -2289,9 +2289,9 @@ static bool qore_finalize_class_type_args(const QoreProgramLocation* loc, const 
         }
         if (!bindings[i]) {
             if (emit_errors) {
-                parseException(*loc, "PARSE-TYPE-ERROR", "cannot infer type argument '%s' for generic class '%s'; "
-                    "use '%s<...>' with explicit type arguments", cls->getTypeParameterName(i), cls->getName(),
-                    cls->getName());
+                parseException(*loc, "PARSE-TYPE-ERROR", "cannot infer type argument '%s' for generic class '%s' in "
+                    "%s; use '%s<...>' with explicit type arguments", cls->getTypeParameterName(i), cls->getName(),
+                    call_desc ? call_desc : "generic class call", cls->getName());
                 err = -1;
             }
             return false;
@@ -2308,8 +2308,9 @@ static bool qore_finalize_class_type_args(const QoreProgramLocation* loc, const 
         if (!qore_class_type_arg_satisfies_bound(bound, bindings[i])) {
             if (emit_errors) {
                 parseException(*loc, "PARSE-TYPE-ERROR", "type argument '%s' inferred for generic class '%s' type "
-                    "parameter '%s' does not satisfy bound '%s'", QoreTypeInfo::getName(bindings[i]),
-                    cls->getName(), cls->getTypeParameterName(i), QoreTypeInfo::getName(bound));
+                    "parameter '%s' in %s does not satisfy bound '%s'", QoreTypeInfo::getName(bindings[i]),
+                    cls->getName(), cls->getTypeParameterName(i), call_desc ? call_desc : "generic class call",
+                    QoreTypeInfo::getName(bound));
                 err = -1;
             }
             return false;
@@ -2391,7 +2392,7 @@ static bool qore_score_class_receiver_inference_candidate(const AbstractFunction
 
 const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProgramLocation* loc,
         const type_vec_t& argTypeInfo, const name_vec_t* argNames, const qore_class_private* class_ctx,
-        int& err, const QoreTypeInfo* expected_type_info, bool infer_from_args) const {
+        int& err, const QoreTypeInfo* expected_type_info, bool infer_from_args, const char* call_desc) const {
     const QoreClass* cls = getClass();
     if (!cls || !cls->hasTypeParameters()) {
         return nullptr;
@@ -2481,7 +2482,7 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
                     break;
                 }
             }
-            if (!qore_finalize_class_type_args(loc, cls, bindings, err, false)) {
+            if (!qore_finalize_class_type_args(loc, cls, bindings, err, false, call_desc)) {
                 if (err) {
                     return nullptr;
                 }
@@ -2525,14 +2526,15 @@ const QoreTypeInfo* QoreFunction::parseInferClassReceiverTypeInfo(const QoreProg
     }
 
     if (best.ambiguous) {
-        parseException(*loc, "PARSE-TYPE-ERROR", "constructor call for generic class '%s' has ambiguous inferred "
-            "type arguments; use '%s<...>' with explicit type arguments", cls->getName(), cls->getName());
+        parseException(*loc, "PARSE-TYPE-ERROR", "%s for generic class '%s' has ambiguous inferred type arguments; "
+            "use '%s<...>' with explicit type arguments", call_desc ? call_desc : "generic class call",
+            cls->getName(), cls->getName());
         err = -1;
         return nullptr;
     }
 
     if (!best.type_info && saw_failed_bindings) {
-        qore_finalize_class_type_args(loc, cls, failed_bindings, err, true);
+        qore_finalize_class_type_args(loc, cls, failed_bindings, err, true, call_desc);
         return nullptr;
     }
 
