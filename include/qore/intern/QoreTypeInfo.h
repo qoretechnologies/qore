@@ -768,7 +768,9 @@ protected:
 
     DLLLOCAL qore_type_t getBaseType() const {
         assert(!return_vec.empty());
-        return return_vec[0].spec.getType();
+        const QoreTypeSpec& spec = return_vec[0].spec;
+        // Symbolic type parameters have no concrete base type.
+        return spec.getTypeSpec() == QTS_TYPEPARAM ? NT_ALL : spec.getType();
     }
 
     DLLLOCAL bool parseAcceptsReturns(qore_type_t t) const {

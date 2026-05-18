@@ -59,6 +59,9 @@ qore_type_t QoreTypeSpec::getType() const {
         case QTS_ENUM:
             // Enum types return the base type of the enum
             return QoreTypeInfo::getBaseType(u.ed->getBaseTypeInfo());
+        case QTS_TYPEPARAM:
+            // Keep type parameters distinct from untyped auto/any in internal type checks.
+            return NT_NOTHING;
     }
     assert(false);
     return NT_NOTHING;
