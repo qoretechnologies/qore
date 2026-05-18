@@ -6732,6 +6732,11 @@ public:
         return (*i)->sclass;
     }
 
+    DLLLOCAL const QoreTypeInfo* getTypeInfo() const {
+        assert(valid());
+        return (*i)->type_info ? (*i)->type_info : (*i)->sclass->getTypeInfo();
+    }
+
     DLLLOCAL ClassAccess getAccess() const {
         assert(valid());
         return (*i)->access;
@@ -6762,6 +6767,10 @@ bool QoreParentClassIterator::valid() const {
 
 const QoreClass& QoreParentClassIterator::getParentClass() const {
     return *priv->getParentClass();
+}
+
+const QoreTypeInfo* QoreParentClassIterator::getTypeInfo() const {
+    return priv->getTypeInfo();
 }
 
 ClassAccess QoreParentClassIterator::getAccess() const {

@@ -1395,6 +1395,13 @@ public:
     //! returns the parent class
     DLLEXPORT const QoreClass& getParentClass() const;
 
+    //! returns the type info for the parent class declaration
+    /** This can differ from getParentClass().getTypeInfo() when the parent is declared as a parameterized class type.
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const QoreTypeInfo* getTypeInfo() const;
+
     //! returns the access of the parent class
     DLLEXPORT ClassAccess getAccess() const;
 

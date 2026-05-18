@@ -147,6 +147,35 @@ const type_vec_t* qore_type_get_type_arguments(const QoreTypeInfo* ti) {
     return parameterized_type ? &parameterized_type->getTypeArgs() : nullptr;
 }
 
+bool qore_type_is_type_parameter(const QoreTypeInfo* ti) {
+    return qore_get_type_parameter_type_info(ti) != nullptr;
+}
+
+const QoreClass* qore_type_get_type_parameter_owner_class(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->getOwnerClass() : nullptr;
+}
+
+const TypedHashDecl* qore_type_get_type_parameter_owner_hashdecl(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->getOwnerHashDecl() : nullptr;
+}
+
+size_t qore_type_get_type_parameter_index(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->getIndex() : static_cast<size_t>(-1);
+}
+
+const char* qore_type_get_type_parameter_name(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->getParameterName().c_str() : nullptr;
+}
+
+bool qore_type_parameter_accepts_nothing(const QoreTypeInfo* ti) {
+    const QoreTypeParameterTypeInfo* tpi = qore_get_type_parameter_type_info(ti);
+    return tpi ? tpi->isOrNothing() : false;
+}
+
 bool qore_type_is_union(const QoreTypeInfo* ti) {
     return QoreTypeInfo::getUnionType(ti) != nullptr;
 }
