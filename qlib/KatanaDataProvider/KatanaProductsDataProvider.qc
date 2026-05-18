@@ -108,7 +108,7 @@ public class KatanaProductsDataProvider inherits KatanaDataProviderBase {
         return new KatanaProductDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return runListSearch("products", where_cond, search_options);
     }

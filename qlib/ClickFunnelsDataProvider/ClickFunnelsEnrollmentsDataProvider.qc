@@ -89,11 +89,11 @@ public class ClickFunnelsEnrollmentsDataProvider inherits ClickFunnelsDataProvid
         *Class cls = ChildMap{name}; if (cls) { return cls.newObject(rest); }
     }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsEnrollmentDataType().getFields(); }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.enrollment_id) {
             auto result = doGet("courses/enrollments/" + search_options.enrollment_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)), where_cond, search_options);
         }
         if (!search_options.course_id) {
             throw "CLICKFUNNELS-ERROR", "course_id is required to list enrollments";
@@ -102,7 +102,7 @@ public class ClickFunnelsEnrollmentsDataProvider inherits ClickFunnelsDataProvid
         if (search_options.after) { params.after = search_options.after; }
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages("courses/" + search_options.course_id + "/enrollments", params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

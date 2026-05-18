@@ -117,14 +117,14 @@ public class FreshsalesContactsDataProvider inherits FreshsalesDataProviderBase 
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If ID provided, get single record
         if (search_options.id) {
             hash<auto> result = doGet("contacts/" + string(search_options.id));
             # Freshsales wraps response in a "contact" key
             hash<auto> contact = result.contact ?? result;
-            return new DefaultRecordIterator(new ListHashIterator((contact,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((contact,)),
                 where_cond, search_options);
         }
 
@@ -136,7 +136,7 @@ public class FreshsalesContactsDataProvider inherits FreshsalesDataProviderBase 
             if (search_options.limit && contacts.size() > search_options.limit) {
                 contacts = contacts[0..search_options.limit-1];
             }
-            return new DefaultRecordIterator(new ListHashIterator(contacts),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(contacts),
                 where_cond, search_options);
         }
 
@@ -145,7 +145,7 @@ public class FreshsalesContactsDataProvider inherits FreshsalesDataProviderBase 
             list<hash<auto>> all_records = fetchAllPages(
                 "contacts/view/" + string(search_options.view_id), "contacts",
                 NOTHING, search_options.limit);
-            return new DefaultRecordIterator(new ListHashIterator(all_records),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records),
                 where_cond, search_options);
         }
 
@@ -157,11 +157,11 @@ public class FreshsalesContactsDataProvider inherits FreshsalesDataProviderBase 
             list<hash<auto>> all_records = fetchAllPages(
                 "contacts/view/" + string(filter_list[0].id), "contacts",
                 NOTHING, search_options.limit);
-            return new DefaultRecordIterator(new ListHashIterator(all_records),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records),
                 where_cond, search_options);
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(()),
             where_cond, search_options);
     }
 

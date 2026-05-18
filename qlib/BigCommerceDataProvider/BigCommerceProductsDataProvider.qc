@@ -209,7 +209,7 @@ public class BigCommerceProductsDataProvider inherits BigCommerceDataProviderBas
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Build query params mapping user-friendly names to BigCommerce API params
         hash<auto> params;
@@ -256,7 +256,7 @@ public class BigCommerceProductsDataProvider inherits BigCommerceDataProviderBas
 
         list<hash<auto>> all_records = fetchAllPagesV3("catalog/products", params,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

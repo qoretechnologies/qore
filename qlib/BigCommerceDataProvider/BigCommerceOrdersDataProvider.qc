@@ -194,7 +194,7 @@ public class BigCommerceOrdersDataProvider inherits BigCommerceDataProviderBase 
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Build query params for V2 Orders API
         hash<auto> params;
@@ -207,10 +207,10 @@ public class BigCommerceOrdersDataProvider inherits BigCommerceDataProviderBase 
                 if (result.typeCode() == NT_HASH) {
                     data = (result,);
                 }
-                return new DefaultRecordIterator(new ListHashIterator(data), where_cond,
+                return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(data), where_cond,
                     search_options);
             } catch (hash<ExceptionInfo> ex) {
-                return new DefaultRecordIterator(new ListHashIterator(()),
+                return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(()),
                     where_cond, search_options);
             }
         }
@@ -250,7 +250,7 @@ public class BigCommerceOrdersDataProvider inherits BigCommerceDataProviderBase 
 
         list<hash<auto>> all_records = fetchAllPagesV2("orders", params,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

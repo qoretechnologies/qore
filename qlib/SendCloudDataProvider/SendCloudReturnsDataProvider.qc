@@ -117,12 +117,12 @@ public class SendCloudReturnsDataProvider inherits SendCloudDataProviderBase {
         return new SendCloudReturnDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (search_options.id) {
             hash<auto> resp = doGet(sprintf("returns/%d", search_options.id));
             hash<auto> record = resp."return" ?? resp;
-            return new DefaultRecordIterator(new ListHashIterator((record,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((record,)),
                 where_cond, search_options);
         }
         # Per the v2 OpenAPI spec, GET /returns accepts only the `cursor` query parameter;
@@ -181,7 +181,7 @@ public class SendCloudReturnsDataProvider inherits SendCloudDataProviderBase {
             }
             records = filtered;
         }
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() {

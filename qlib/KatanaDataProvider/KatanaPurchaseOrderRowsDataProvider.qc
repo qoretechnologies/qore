@@ -47,7 +47,7 @@ public class KatanaPurchaseOrderRowsDataProvider inherits KatanaDataProviderBase
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return new KatanaPurchaseOrderRowRecordDataType().getFields();
     }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return runListSearch("purchase_order_rows", where_cond, search_options);
     }

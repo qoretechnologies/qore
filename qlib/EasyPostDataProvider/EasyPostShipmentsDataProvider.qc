@@ -60,7 +60,7 @@ public class EasyPostShipmentsDataProvider inherits EasyPostDataProviderBase {
         return recordType.getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         list<hash<auto>> records = ();
         if (search_options.id) {
@@ -78,7 +78,7 @@ public class EasyPostShipmentsDataProvider inherits EasyPostDataProviderBase {
             }
             records = paginate("shipments", "shipments", params);
         }
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

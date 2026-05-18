@@ -54,11 +54,11 @@ public class ClickFunnelsFormSubmissionsDataProvider inherits ClickFunnelsDataPr
     private *list<string> getChildProviderNamesImpl() { return keys ChildMap; }
     private *AbstractDataProvider getChildProviderImpl(string name) { *Class cls = ChildMap{name}; if (cls) { return cls.newObject(rest); } }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsFormSubmissionDataType().getFields(); }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.submission_id) {
             auto result = doGet("forms/submissions/" + search_options.submission_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)), where_cond, search_options);
         }
         if (!search_options.form_id) {
             throw "CLICKFUNNELS-ERROR", "form_id is required to list form submissions";
@@ -67,7 +67,7 @@ public class ClickFunnelsFormSubmissionsDataProvider inherits ClickFunnelsDataPr
         if (search_options.after) { params.after = search_options.after; }
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages("forms/" + search_options.form_id + "/submissions", params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

@@ -115,12 +115,12 @@ public class ZohoInvoiceRecurringInvoicesDataProvider inherits ZohoInvoiceDataPr
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If recurring_invoice_id is provided, fetch single recurring invoice (for DPAT_FIND_SINGLE)
         if (search_options.recurring_invoice_id) {
             hash<auto> response = doGet(sprintf("/recurringinvoices/%s", search_options.recurring_invoice_id));
-            return new DefaultRecordIterator(new ListHashIterator((response.recurring_invoice,)), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((response.recurring_invoice,)), where_cond, search_options);
         }
 
         # Build query parameters for listing recurring invoices
@@ -142,7 +142,7 @@ public class ZohoInvoiceRecurringInvoicesDataProvider inherits ZohoInvoiceDataPr
         }
 
         hash<auto> response = doGet("/recurringinvoices", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.recurring_invoices ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.recurring_invoices ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

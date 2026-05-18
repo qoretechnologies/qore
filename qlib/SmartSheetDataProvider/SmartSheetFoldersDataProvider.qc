@@ -74,16 +74,16 @@ public class SmartSheetFoldersDataProvider inherits SmartSheetDataProviderBase {
         return new SmartSheetFolderDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (search_options.folderId) {
             hash<auto> result = doGet("folders/" + search_options.folderId);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
         hash<auto> response = doGet("home/folders");
         list<hash<auto>> records = response.data ?? ();
-        return new DefaultRecordIterator(new ListHashIterator(records),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records),
             where_cond, search_options);
     }
 

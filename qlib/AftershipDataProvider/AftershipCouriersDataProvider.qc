@@ -44,11 +44,11 @@ public class AftershipCouriersDataProvider inherits AftershipDataProviderBase {
     constructor(*hash<auto> options) : AftershipDataProviderBase(options) {}
     string getName() { return ProviderInfo.name; }
 
-    private *AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private *AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> response = doTrackingCommand("GET", "couriers");
         list<hash<auto>> couriers = response.body.data.couriers ?? ();
-        return new DefaultRecordIterator(new ListIterator(couriers));
+        return new DefaultRecordIterator<hash<auto>>(new ListIterator<hash<auto>>(couriers));
     }
 
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {

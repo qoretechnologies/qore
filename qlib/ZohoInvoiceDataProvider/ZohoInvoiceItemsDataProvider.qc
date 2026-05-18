@@ -110,12 +110,12 @@ public class ZohoInvoiceItemsDataProvider inherits ZohoInvoiceDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If item_id is provided, fetch single item (for DPAT_FIND_SINGLE)
         if (search_options.item_id) {
             hash<auto> response = doGet(sprintf("/items/%s", search_options.item_id));
-            return new DefaultRecordIterator(new ListHashIterator((response.item,)), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((response.item,)), where_cond, search_options);
         }
 
         # Build query parameters for listing items
@@ -137,7 +137,7 @@ public class ZohoInvoiceItemsDataProvider inherits ZohoInvoiceDataProviderBase {
         }
 
         hash<auto> response = doGet("/items", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.items ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.items ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

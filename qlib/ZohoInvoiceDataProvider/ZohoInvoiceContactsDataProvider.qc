@@ -122,12 +122,12 @@ public class ZohoInvoiceContactsDataProvider inherits ZohoInvoiceDataProviderBas
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If contact_id is provided, fetch single contact (for DPAT_FIND_SINGLE)
         if (search_options.contact_id) {
             hash<auto> response = doGet(sprintf("/contacts/%s", search_options.contact_id));
-            return new DefaultRecordIterator(new ListHashIterator((response.contact,)), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((response.contact,)), where_cond, search_options);
         }
 
         # Build query parameters for listing contacts
@@ -152,7 +152,7 @@ public class ZohoInvoiceContactsDataProvider inherits ZohoInvoiceDataProviderBas
         }
 
         hash<auto> response = doGet("/contacts", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.contacts ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.contacts ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

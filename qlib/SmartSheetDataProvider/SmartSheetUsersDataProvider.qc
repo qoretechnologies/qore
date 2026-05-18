@@ -80,11 +80,11 @@ public class SmartSheetUsersDataProvider inherits SmartSheetDataProviderBase {
         return new SmartSheetUserDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (search_options.userId) {
             hash<auto> result = doGet("users/" + search_options.userId);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
         hash<auto> params;
@@ -92,7 +92,7 @@ public class SmartSheetUsersDataProvider inherits SmartSheetDataProviderBase {
             params.email = search_options.email;
         }
         list<hash<auto>> records = fetchAllPages("users", "data", params);
-        return new DefaultRecordIterator(new ListHashIterator(records),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records),
             where_cond, search_options);
     }
 

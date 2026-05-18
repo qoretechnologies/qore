@@ -68,12 +68,12 @@ public class LinearCycleDataProvider inherits LinearDataProviderBase {
     }
 
     #! Searches for the cycle record (returns single record iterator)
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching cycle id=%y", cycleId));
         hash<auto> data = doGraphQL(GetCycleQuery, {"id": cycleId});
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: cycle found=%y", exists data.cycle));
-        return new DefaultRecordIterator(new ListHashIterator(data.cycle ? (data.cycle,) : ()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(data.cycle ? (data.cycle,) : ()),
             where_cond, search_options, recordType.getFields());
     }
 

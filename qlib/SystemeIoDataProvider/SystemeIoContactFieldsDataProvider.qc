@@ -84,11 +84,11 @@ public class SystemeIoContactFieldsDataProvider inherits SystemeIoDataProviderBa
         return new SystemeIoContactFieldDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (search_options.slug) {
             hash<auto> result = doGet("contact_fields/" + string(search_options.slug));
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
 
@@ -97,7 +97,7 @@ public class SystemeIoContactFieldsDataProvider inherits SystemeIoDataProviderBa
             params.order = search_options.order;
         }
         list<auto> records = doPaginatedGet("contact_fields", params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records),
             where_cond, search_options);
     }
 

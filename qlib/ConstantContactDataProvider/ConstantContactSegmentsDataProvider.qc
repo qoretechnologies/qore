@@ -130,12 +130,12 @@ public class ConstantContactSegmentsDataProvider inherits ConstantContactDataPro
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If segment_id provided, get single record
         if (search_options.segment_id) {
             hash<auto> result = doGet("segments/" + string(search_options.segment_id));
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
 
@@ -147,7 +147,7 @@ public class ConstantContactSegmentsDataProvider inherits ConstantContactDataPro
 
         list<hash<auto>> all_records = fetchAllPages("segments", "segments", params,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

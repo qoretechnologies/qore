@@ -85,15 +85,15 @@ public class SmartSheetSheetsDataProvider inherits SmartSheetDataProviderBase {
     }
 
     #! Searches for sheets
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (search_options.sheetId) {
             hash<auto> result = doGet("sheets/" + search_options.sheetId);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
         list<hash<auto>> records = fetchAllPages("sheets", "data");
-        return new DefaultRecordIterator(new ListHashIterator(records),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records),
             where_cond, search_options);
     }
 

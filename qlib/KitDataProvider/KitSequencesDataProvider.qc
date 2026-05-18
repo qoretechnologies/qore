@@ -101,18 +101,18 @@ public class KitSequencesDataProvider inherits KitDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If sequence_id provided, get single record
         if (search_options.sequence_id) {
             hash<auto> result = doGet("sequences/" + encode_url(search_options.sequence_id, True));
-            return new DefaultRecordIterator(new ListHashIterator((result.sequence,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result.sequence,)),
                 where_cond, search_options);
         }
 
         list<hash<auto>> all_records = fetchAllPages("sequences", "sequences", NOTHING,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

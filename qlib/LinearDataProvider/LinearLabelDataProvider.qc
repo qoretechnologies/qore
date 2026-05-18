@@ -68,12 +68,12 @@ public class LinearLabelDataProvider inherits LinearDataProviderBase {
     }
 
     #! Searches for the label record (returns single record iterator)
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching label id=%y", labelId));
         hash<auto> data = doGraphQL(GetLabelQuery, {"id": labelId});
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: label found=%y", exists data.issueLabel));
-        return new DefaultRecordIterator(new ListHashIterator(data.issueLabel ? (data.issueLabel,) : ()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(data.issueLabel ? (data.issueLabel,) : ()),
             where_cond, search_options, recordType.getFields());
     }
 

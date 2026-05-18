@@ -79,18 +79,18 @@ public class ClickFunnelsFulfillmentsDataProvider inherits ClickFunnelsDataProvi
     private *list<string> getChildProviderNamesImpl() { return keys ChildMap; }
     private *AbstractDataProvider getChildProviderImpl(string name) { *Class cls = ChildMap{name}; if (cls) { return cls.newObject(rest); } }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsFulfillmentDataType().getFields(); }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.fulfillment_id) {
             auto result = doGet("fulfillments/" + search_options.fulfillment_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)), where_cond, search_options);
         }
         hash<auto> params;
         if (search_options.contact_id) { params.contact_id = search_options.contact_id; }
         if (search_options.after) { params.after = search_options.after; }
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages(getWorkspacePath("fulfillments"), params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

@@ -75,7 +75,7 @@ public class UnbounceUsersDataProvider inherits UnbounceDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         string path;
         if (search_options.user_id) {
@@ -84,7 +84,7 @@ public class UnbounceUsersDataProvider inherits UnbounceDataProviderBase {
             path = "users/self";
         }
         hash<auto> result = doGet(path);
-        return new DefaultRecordIterator(new ListHashIterator((result,)),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
             where_cond, search_options);
     }
 

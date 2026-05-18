@@ -157,7 +157,7 @@ public class WaveInvoicesDataProvider inherits WaveDataProviderBase {
     }
 
     #! Searches for invoices
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Get a single invoice by ID
         if (search_options.id) {
@@ -177,10 +177,10 @@ public class WaveInvoicesDataProvider inherits WaveDataProviderBase {
                 }
             }
             if (!invoice) {
-                return new DefaultRecordIterator(new ListHashIterator(()),
+                return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(()),
                     where_cond, search_options, recordType.getFields());
             }
-            return new DefaultRecordIterator(new ListHashIterator((flattenEdges(invoice),)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((flattenEdges(invoice),)),
                 where_cond, search_options, recordType.getFields());
         }
 
@@ -216,7 +216,7 @@ public class WaveInvoicesDataProvider inherits WaveDataProviderBase {
                 }
                 vars.page++;
             }
-            return new DefaultRecordIterator(new ListHashIterator(results),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(results),
                 where_cond, search_options, recordType.getFields());
         }
 
@@ -248,7 +248,7 @@ public class WaveInvoicesDataProvider inherits WaveDataProviderBase {
                 }
                 vars.page++;
             }
-            return new DefaultRecordIterator(new ListHashIterator(results),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(results),
                 where_cond, search_options, recordType.getFields());
         }
 

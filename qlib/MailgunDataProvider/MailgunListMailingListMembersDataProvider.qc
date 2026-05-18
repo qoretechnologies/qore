@@ -98,7 +98,7 @@ public class MailgunListMailingListMembersDataProvider inherits MailgunDataProvi
     }
 
     #! Searches for mailing list members
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         string list_address = search_options.list_address.value ?? search_options.list_address;
         if (!list_address.val()) {
@@ -122,7 +122,7 @@ public class MailgunListMailingListMembersDataProvider inherits MailgunDataProvi
         hash<auto> response = doGet(path, params);
         list<hash<auto>> records = response.items ?? ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

@@ -146,12 +146,12 @@ public class GoHighLevelOpportunitiesDataProvider inherits GoHighLevelDataProvid
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If opportunity_id provided, get single record
         if (search_options.opportunity_id) {
             hash<auto> result = doGet("opportunities/" + search_options.opportunity_id);
-            return new DefaultRecordIterator(new ListHashIterator((result.opportunity,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result.opportunity,)),
                 where_cond, search_options);
         }
 
@@ -182,7 +182,7 @@ public class GoHighLevelOpportunitiesDataProvider inherits GoHighLevelDataProvid
         }
 
         hash<auto> response = doGet("opportunities/search", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.opportunities ?? ()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.opportunities ?? ()),
             where_cond, search_options);
     }
 

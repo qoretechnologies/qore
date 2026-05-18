@@ -72,17 +72,17 @@ public class ClickFunnelsCoursesDataProvider inherits ClickFunnelsDataProviderBa
     string getName() { return "courses"; }
     *string getDesc() { return "ClickFunnels courses data provider"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsCourseDataType().getFields(); }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.course_id) {
             auto result = doGet("courses/" + search_options.course_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)), where_cond, search_options);
         }
         hash<auto> params;
         if (search_options.after) { params.after = search_options.after; }
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages(getWorkspacePath("courses"), params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 }

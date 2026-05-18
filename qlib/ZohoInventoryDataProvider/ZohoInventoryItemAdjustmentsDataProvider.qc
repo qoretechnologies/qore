@@ -67,13 +67,13 @@ public class ZohoInventoryItemAdjustmentsDataProvider inherits ZohoInventoryData
     }
 
     #! Searches for inventory adjustments
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
             params.organization_id = search_options.organization_id;
         }
         hash<auto> response = doGet("/inventoryadjustments", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.inventory_adjustments ?? ()), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.inventory_adjustments ?? ()), where_cond,
             search_options);
     }
 

@@ -50,7 +50,7 @@ public class BaseLinkerCourierServicesDataProvider inherits BaseLinkerDataProvid
         return (new BaseLinkerCourierServiceDataType()).getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (!exists search_options.courier_code) {
             throw "BASELINKER-SEARCH-ERROR", "`courier_code` search option is required";
@@ -66,7 +66,7 @@ public class BaseLinkerCourierServicesDataProvider inherits BaseLinkerDataProvid
                 "service_name": string(services{sid}),
             };
         }
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerCourierServiceDataType()).getFields());
     }
 

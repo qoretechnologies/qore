@@ -49,7 +49,7 @@ public class KatanaSalesOrderAddressesDataProvider inherits KatanaDataProviderBa
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return new KatanaSalesOrderAddressDataType().getFields();
     }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Katana has no GET /sales_order_addresses/{id}; fetch a single record via ids= filter.
         # Also rename sales_order_id to sales_order_ids (the API filter name).

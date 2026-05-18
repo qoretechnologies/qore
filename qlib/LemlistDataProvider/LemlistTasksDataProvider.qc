@@ -97,7 +97,7 @@ public class LemlistTasksDataProvider inherits LemlistDataProviderBase {
     }
 
     #! Searches for tasks
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If taskId is provided, get a specific task
         if (search_options.taskId) {
@@ -106,7 +106,7 @@ public class LemlistTasksDataProvider inherits LemlistDataProviderBase {
             if (response.typeCode() == NT_HASH) {
                 records = (response,);
             }
-            return new DefaultRecordIterator(new ListHashIterator(records), where_cond, NOTHING,
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, NOTHING,
                 recordType.getFields());
         }
 
@@ -130,7 +130,7 @@ public class LemlistTasksDataProvider inherits LemlistDataProviderBase {
             records = response.data;
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, NOTHING,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, NOTHING,
             recordType.getFields());
     }
 

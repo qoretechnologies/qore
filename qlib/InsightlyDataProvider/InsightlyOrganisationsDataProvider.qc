@@ -85,7 +85,7 @@ public class InsightlyOrganisationsDataProvider inherits InsightlyDataProviderBa
         return new InsightlyOrganisationDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return runListSearch("Organisations", where_cond, search_options);
     }

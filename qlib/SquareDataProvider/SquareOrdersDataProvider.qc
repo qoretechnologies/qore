@@ -139,12 +139,12 @@ public class SquareOrdersDataProvider inherits SquareDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If order_id provided, get single record
         if (search_options.order_id) {
             hash<auto> result = doGet("orders/" + search_options.order_id);
-            return new DefaultRecordIterator(new ListHashIterator((result.order,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result.order,)),
                 where_cond, search_options);
         }
 
@@ -202,7 +202,7 @@ public class SquareOrdersDataProvider inherits SquareDataProviderBase {
 
         list<hash<auto>> all_records = fetchAllPagesPost("orders/search", "orders", body,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

@@ -68,12 +68,12 @@ public class LinearCommentDataProvider inherits LinearDataProviderBase {
     }
 
     #! Searches for the comment record (returns single record iterator)
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching comment id=%y", commentId));
         hash<auto> data = doGraphQL(GetCommentQuery, {"id": commentId});
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: comment found=%y", exists data.comment));
-        return new DefaultRecordIterator(new ListHashIterator(data.comment ? (data.comment,) : ()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(data.comment ? (data.comment,) : ()),
             where_cond, search_options, recordType.getFields());
     }
 

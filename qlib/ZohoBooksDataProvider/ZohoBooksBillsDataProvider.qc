@@ -56,7 +56,7 @@ public class ZohoBooksBillsDataProvider inherits ZohoBooksDataProviderBase {
         return new ZohoBooksBillDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
             params.organization_id = search_options.organization_id;
@@ -68,7 +68,7 @@ public class ZohoBooksBillsDataProvider inherits ZohoBooksDataProviderBase {
             params.vendor_id = search_options.vendor_id;
         }
         hash<auto> response = doGet("/bills", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.bills ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.bills ?? ()), where_cond, search_options);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

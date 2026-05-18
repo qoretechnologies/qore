@@ -111,14 +111,14 @@ public class SquarespaceInventoryDataProvider inherits SquarespaceDataProviderBa
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If variant_id provided, get inventory for specific variant
         if (search_options.variant_id) {
             hash<auto> result = doGet("1.0/commerce/inventory/" + search_options.variant_id);
             # Squarespace wraps even single-variant responses in {"inventory": [...]}
             list<hash<auto>> items = result.inventory ?? (result,);
-            return new DefaultRecordIterator(new ListHashIterator(items),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(items),
                 where_cond, search_options);
         }
 
@@ -133,7 +133,7 @@ public class SquarespaceInventoryDataProvider inherits SquarespaceDataProviderBa
 
         list<hash<auto>> all_records = fetchAllPages("1.0/commerce/inventory", "inventory", params,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

@@ -102,7 +102,7 @@ public class DeelTimeOffTypesDataProvider inherits DeelDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # time_offs uses pageSize (not limit) and cursor-based pagination with has_next_page/next
         int page_size = DefaultPageSize;
@@ -136,7 +136,7 @@ public class DeelTimeOffTypesDataProvider inherits DeelDataProviderBase {
             }
             params{"next"} = next_cursor;
         }
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

@@ -169,12 +169,12 @@ public class ChargebeeCouponsDataProvider inherits ChargebeeDataProviderBase {
     }
 
     #! Searches for coupons
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If id provided, get single record
         if (search_options.id) {
             hash<auto> response = doGet("/coupons/" + search_options.id);
-            return new DefaultRecordIterator(new ListHashIterator((response.coupon,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((response.coupon,)),
                 where_cond, search_options, recordType.getFields());
         }
 
@@ -220,7 +220,7 @@ public class ChargebeeCouponsDataProvider inherits ChargebeeDataProviderBase {
             records = ();
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

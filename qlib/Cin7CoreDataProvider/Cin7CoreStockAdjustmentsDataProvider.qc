@@ -130,7 +130,7 @@ public class Cin7CoreStockAdjustmentsDataProvider inherits Cin7CoreDataProviderB
     }
 
     #! Searches for stock adjustments
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -166,7 +166,7 @@ public class Cin7CoreStockAdjustmentsDataProvider inherits Cin7CoreDataProviderB
         hash<auto> response = doGet("/StockAdjustment", params);
         list<hash<auto>> records = response.StockAdjustmentList ?? ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

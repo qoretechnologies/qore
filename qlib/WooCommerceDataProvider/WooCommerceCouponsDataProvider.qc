@@ -144,7 +144,7 @@ public class WooCommerceCouponsDataProvider inherits WooCommerceDataProviderBase
     }
 
     #! Searches for coupons
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params = {} + search_options;
         if (!params.per_page) {
@@ -157,7 +157,7 @@ public class WooCommerceCouponsDataProvider inherits WooCommerceDataProviderBase
             params.before = format_date("YYYY-MM-DDTHH:mm:SS", params.before);
         }
         auto result = doGet("coupons", params);
-        return new DefaultRecordIterator(new ListHashIterator(result.typeCode() == NT_LIST ? result : ()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(result.typeCode() == NT_LIST ? result : ()),
             where_cond, search_options, recordType.getFields());
     }
 

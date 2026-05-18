@@ -130,12 +130,12 @@ public class ZohoInvoiceEstimatesDataProvider inherits ZohoInvoiceDataProviderBa
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If estimate_id is provided, fetch single estimate (for DPAT_FIND_SINGLE)
         if (search_options.estimate_id) {
             hash<auto> response = doGet(sprintf("/estimates/%s", search_options.estimate_id));
-            return new DefaultRecordIterator(new ListHashIterator((response.estimate,)), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((response.estimate,)), where_cond, search_options);
         }
 
         # Build query parameters for listing estimates
@@ -163,7 +163,7 @@ public class ZohoInvoiceEstimatesDataProvider inherits ZohoInvoiceDataProviderBa
         }
 
         hash<auto> response = doGet("/estimates", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.estimates ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.estimates ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

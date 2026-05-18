@@ -101,18 +101,18 @@ public class TableauExtractRefreshTasksDataProvider inherits TableauDataProvider
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If task_id provided, get single record
         if (search_options.task_id) {
             hash<auto> result = doGet("tasks/extractRefreshes/" + search_options.task_id);
-            return new DefaultRecordIterator(new ListHashIterator((result.task,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result.task,)),
                 where_cond, search_options);
         }
 
         list<hash<auto>> all_records = fetchAllPages("tasks/extractRefreshes", "tasks.task",
             NOTHING, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond,
             search_options);
     }
 

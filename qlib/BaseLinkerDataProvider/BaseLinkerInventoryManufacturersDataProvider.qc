@@ -38,11 +38,11 @@ public class BaseLinkerInventoryManufacturersDataProvider inherits BaseLinkerDat
         return (new BaseLinkerInventoryManufacturerDataType()).getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> response = callMethod("getInventoryManufacturers", NOTHING);
         list<auto> records = response.manufacturers ?? ();
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerInventoryManufacturerDataType()).getFields());
     }
 

@@ -104,7 +104,7 @@ public class LinearLabelsDataProvider inherits LinearDataProviderBase {
     }
 
     #! Searches for labels
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> filter;
         if (search_options.teamId) {

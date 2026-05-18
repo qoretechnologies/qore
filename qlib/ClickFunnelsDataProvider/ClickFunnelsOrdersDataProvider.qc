@@ -123,12 +123,12 @@ public class ClickFunnelsOrdersDataProvider inherits ClickFunnelsDataProviderBas
     }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ClickFunnelsOrderDataType().getFields(); }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.order_id) {
             auto result = doGet("orders/" + search_options.order_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
         hash<auto> params;
@@ -137,7 +137,7 @@ public class ClickFunnelsOrdersDataProvider inherits ClickFunnelsDataProviderBas
         if (search_options.sort_order) { params.sort_order = search_options.sort_order; }
         list<auto> records = fetchAllPages(getWorkspacePath("orders"), params,
             search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options);
     }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

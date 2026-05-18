@@ -47,7 +47,7 @@ public class BaseLinkerCourierAccountsDataProvider inherits BaseLinkerDataProvid
         return (new BaseLinkerCourierAccountDataType()).getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (!exists search_options.courier_code) {
             throw "BASELINKER-SEARCH-ERROR", "`courier_code` search option is required";
@@ -56,7 +56,7 @@ public class BaseLinkerCourierAccountsDataProvider inherits BaseLinkerDataProvid
             "courier_code": search_options.courier_code,
         });
         list<auto> records = response.accounts ?? ();
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerCourierAccountDataType()).getFields());
     }
 

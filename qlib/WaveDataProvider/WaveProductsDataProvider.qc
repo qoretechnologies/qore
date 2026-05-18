@@ -100,7 +100,7 @@ public class WaveProductsDataProvider inherits WaveDataProviderBase {
     }
 
     #! Searches for products
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Get a single product by ID
         if (search_options.id) {
@@ -120,10 +120,10 @@ public class WaveProductsDataProvider inherits WaveDataProviderBase {
                 }
             }
             if (!product) {
-                return new DefaultRecordIterator(new ListHashIterator(()),
+                return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(()),
                     where_cond, search_options, recordType.getFields());
             }
-            return new DefaultRecordIterator(new ListHashIterator((flattenEdges(product),)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((flattenEdges(product),)),
                 where_cond, search_options, recordType.getFields());
         }
 

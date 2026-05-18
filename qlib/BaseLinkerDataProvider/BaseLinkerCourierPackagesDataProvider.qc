@@ -71,7 +71,7 @@ public class BaseLinkerCourierPackagesDataProvider inherits BaseLinkerDataProvid
         }
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (!exists search_options.order_id) {
             throw "BASELINKER-SEARCH-ERROR", "`order_id` search option is required";
@@ -80,7 +80,7 @@ public class BaseLinkerCourierPackagesDataProvider inherits BaseLinkerDataProvid
             "order_id": int(search_options.order_id),
         });
         list<auto> records = response.packages ?? ();
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerCourierPackageDataType()).getFields());
     }
 

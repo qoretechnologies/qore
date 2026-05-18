@@ -122,12 +122,12 @@ public class ZohoInvoicePaymentsDataProvider inherits ZohoInvoiceDataProviderBas
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If payment_id is provided, fetch single payment (for DPAT_FIND_SINGLE)
         if (search_options.payment_id) {
             hash<auto> response = doGet(sprintf("/customerpayments/%s", search_options.payment_id));
-            return new DefaultRecordIterator(new ListHashIterator((response.customerpayment ?? response.payment,)), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((response.customerpayment ?? response.payment,)), where_cond, search_options);
         }
 
         # Build query parameters for listing payments
@@ -155,7 +155,7 @@ public class ZohoInvoicePaymentsDataProvider inherits ZohoInvoiceDataProviderBas
         }
 
         hash<auto> response = doGet("/customerpayments", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.customerpayments ?? response.payments ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.customerpayments ?? response.payments ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

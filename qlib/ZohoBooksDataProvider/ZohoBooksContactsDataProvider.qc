@@ -41,7 +41,7 @@ public class ZohoBooksContactsDataProvider inherits ZohoBooksDataProviderBase {
     string getName() { return "contacts"; }
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) { return new ZohoBooksContactDataType().getFields(); }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
             params.organization_id = search_options.organization_id;
@@ -50,7 +50,7 @@ public class ZohoBooksContactsDataProvider inherits ZohoBooksDataProviderBase {
             params.contact_type = search_options.contact_type;
         }
         hash<auto> response = doGet("/contacts", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.contacts ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.contacts ?? ()), where_cond, search_options);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

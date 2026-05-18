@@ -80,10 +80,10 @@ public class SegmentLabelsDataProvider inherits SegmentDataProviderBase {
     }
 
     #! Searches for labels
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         list<auto> records = doPaginatedGet("labels", search_options.count);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

@@ -51,7 +51,7 @@ public class BaseLinkerInventoryCategoriesDataProvider inherits BaseLinkerDataPr
         return (new BaseLinkerInventoryCategoryDataType()).getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         *hash<auto> params;
         if (exists search_options.inventory_id) {
@@ -59,7 +59,7 @@ public class BaseLinkerInventoryCategoriesDataProvider inherits BaseLinkerDataPr
         }
         hash<auto> response = callMethod("getInventoryCategories", params);
         list<auto> records = response.categories ?? ();
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options, (new BaseLinkerInventoryCategoryDataType()).getFields());
     }
 

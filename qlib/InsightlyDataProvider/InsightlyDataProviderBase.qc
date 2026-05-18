@@ -410,11 +410,11 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
         @param id_field the SearchOptions key holding the resource id (defaults to \c "id")
         @return a record iterator over the matching records
     */
-    private AbstractDataProviderRecordIterator runListSearch(string resource,
+    private AbstractDataProviderRecordIterator<hash<auto>> runListSearch(string resource,
             *hash<auto> where_cond, *hash<auto> search_options, string id_field = "id") {
         if (search_options{id_field}) {
             hash<auto> result = doGet(resource + "/" + string(search_options{id_field}));
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
         bool use_search = InsightlyDataProviderBase::requiresSearchEndpoint(search_options);
@@ -426,7 +426,7 @@ public class InsightlyDataProviderBase inherits DataProvider::AbstractDataProvid
         } else {
             records = fetchAllPages(path);
         }
-        return new DefaultRecordIterator(new ListHashIterator(records),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records),
             where_cond, search_options);
     }
 

@@ -36,7 +36,7 @@ public class InsightlyCalendarEventsDataProvider inherits InsightlyDataProviderB
     private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
         return new InsightlyCalendarEventDataType().getFields();
     }
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         return runListSearch("Events", where_cond, search_options);
     }

@@ -120,7 +120,7 @@ public class ZohoBooksInvoicesDataProvider inherits ZohoBooksDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Build query parameters
         hash<auto> params;
@@ -147,7 +147,7 @@ public class ZohoBooksInvoicesDataProvider inherits ZohoBooksDataProviderBase {
         }
 
         hash<auto> response = doGet("/invoices", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.invoices ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.invoices ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

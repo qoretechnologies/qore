@@ -79,14 +79,14 @@ public class FreshBooksServicesDataProvider inherits FreshBooksDataProviderBase 
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         setBusinessIdFromSearchOpts(search_options);
 
         # If id provided, get single record (note: singular /service/ for single lookup)
         if (search_options.id) {
             hash<auto> result = doGet(businessPath(sprintf("/service/%d", search_options.id)));
-            return new DefaultRecordIterator(new ListHashIterator((result.service,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result.service,)),
                 where_cond, search_options);
         }
 
@@ -112,7 +112,7 @@ public class FreshBooksServicesDataProvider inherits FreshBooksDataProviderBase 
             ++page;
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(all_records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records), where_cond, search_options);
     }
 
     #! Returns static provider info

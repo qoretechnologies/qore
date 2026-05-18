@@ -101,12 +101,12 @@ public class ConstantContactCustomFieldsDataProvider inherits ConstantContactDat
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If custom_field_id provided, get single record
         if (search_options.custom_field_id) {
             hash<auto> result = doGet("contact_custom_fields/" + search_options.custom_field_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
 
@@ -116,7 +116,7 @@ public class ConstantContactCustomFieldsDataProvider inherits ConstantContactDat
         if (search_options.limit && records.size() > search_options.limit) {
             records = records[0..search_options.limit-1];
         }
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options);
     }
 

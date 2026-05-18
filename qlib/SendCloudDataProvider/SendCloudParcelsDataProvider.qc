@@ -129,13 +129,13 @@ public class SendCloudParcelsDataProvider inherits SendCloudDataProviderBase {
     }
 
     #! Searches for parcels
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # If id supplied, fetch a single record
         if (search_options.id) {
             hash<auto> resp = doGet(sprintf("parcels/%d", search_options.id));
             hash<auto> record = resp.parcel ?? resp;
-            return new DefaultRecordIterator(new ListHashIterator((record,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((record,)),
                 where_cond, search_options);
         }
         hash<auto> params;
@@ -166,7 +166,7 @@ public class SendCloudParcelsDataProvider inherits SendCloudDataProviderBase {
             params.cursor = search_options.cursor;
         }
         list<auto> records = fetchAllCursorPages("parcels", "parcels", params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
     }
 
     #! Returns static provider info

@@ -350,19 +350,19 @@ public class KatanaDataProviderBase inherits DataProvider::AbstractDataProvider 
         this is required for Katana resources that do not expose @c GET on the single-record
         path (customers, suppliers, customer_addresses, sales_order_addresses, stock_adjustments).
     */
-    private AbstractDataProviderRecordIterator runListSearch(string resource,
+    private AbstractDataProviderRecordIterator<hash<auto>> runListSearch(string resource,
             *hash<auto> where_cond, *hash<auto> search_options, string id_field = "id",
             bool use_ids_filter = False) {
         if (exists search_options{id_field}) {
             if (use_ids_filter) {
                 list<hash<auto>> records = doGetList(resource,
                     {"ids": string(search_options{id_field})});
-                return new DefaultRecordIterator(new ListHashIterator(records),
+                return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records),
                     where_cond, search_options);
             }
             auto result = doGet(resource + "/" + string(search_options{id_field}));
             hash<auto> record = result.typeCode() == NT_HASH ? result : {};
-            return new DefaultRecordIterator(new ListHashIterator((record,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((record,)),
                 where_cond, search_options);
         }
         hash<auto> params = KatanaDataProviderBase::buildListParams(search_options);
@@ -372,7 +372,7 @@ public class KatanaDataProviderBase inherits DataProvider::AbstractDataProvider 
         } else {
             records = fetchAllPages(resource, params);
         }
-        return new DefaultRecordIterator(new ListHashIterator(records),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records),
             where_cond, search_options);
     }
 

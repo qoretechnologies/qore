@@ -73,7 +73,7 @@ public class ShipStationWarehousesDataProvider inherits ShipStationDataProviderB
     }
 
     #! Searches for warehouses
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching warehouses"));
 
@@ -82,7 +82,7 @@ public class ShipStationWarehousesDataProvider inherits ShipStationDataProviderB
             ? cast<list<hash<auto>>>(response)
             : ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

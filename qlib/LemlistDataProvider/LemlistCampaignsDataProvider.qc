@@ -111,12 +111,12 @@ public class LemlistCampaignsDataProvider inherits LemlistDataProviderBase {
     }
 
     #! Searches for campaigns
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         # Single-record lookup by campaignId (used by get-campaign DPAT_FIND_SINGLE)
         if (search_options.campaignId) {
             auto campaign = doGet(sprintf("/campaigns/%s", encode_url(search_options.campaignId, True)));
-            return new DefaultRecordIterator(new ListHashIterator((campaign,)), where_cond, NOTHING,
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((campaign,)), where_cond, NOTHING,
                 recordType.getFields());
         }
 
@@ -141,7 +141,7 @@ public class LemlistCampaignsDataProvider inherits LemlistDataProviderBase {
             records = response.campaigns;
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, NOTHING,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, NOTHING,
             recordType.getFields());
     }
 

@@ -97,7 +97,7 @@ public class ZohoInventorySalesOrdersDataProvider inherits ZohoInventoryDataProv
     }
 
     #! Searches for sales orders
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
             params.organization_id = search_options.organization_id;
@@ -109,7 +109,7 @@ public class ZohoInventorySalesOrdersDataProvider inherits ZohoInventoryDataProv
             params.status = search_options.status;
         }
         hash<auto> response = doGet("/salesorders", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.salesorders ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.salesorders ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

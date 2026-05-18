@@ -96,7 +96,7 @@ public class JotformFormReportsDataProvider inherits JotformDataProviderBase {
     }
 
     #! Searches for reports
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         string form_id = search_options.formID ?? formID;
         @assert(form_id.val(), "formID is required to get reports");
@@ -110,7 +110,7 @@ public class JotformFormReportsDataProvider inherits JotformDataProviderBase {
                 records = (response.content,);
             }
         }
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

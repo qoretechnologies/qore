@@ -80,7 +80,7 @@ public class InstantlyWorkspaceGroupMembersDataProvider inherits InstantlyDataPr
     }
 
     #! Searches for workspace group members
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -90,7 +90,7 @@ public class InstantlyWorkspaceGroupMembersDataProvider inherits InstantlyDataPr
 
         list<auto> records = doPaginatedGet("/workspace-group-members", params);
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

@@ -68,12 +68,12 @@ public class LinearProjectDataProvider inherits LinearDataProviderBase {
     }
 
     #! Searches for the project record (returns single record iterator)
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: fetching project id=%y", projectId));
         hash<auto> data = doGraphQL(GetProjectQuery, {"id": projectId});
         @debug(log(LoggerLevel::DEBUG, "searchRecordsImpl: project found=%y", exists data.project));
-        return new DefaultRecordIterator(new ListHashIterator(data.project ? (data.project,) : ()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(data.project ? (data.project,) : ()),
             where_cond, search_options, recordType.getFields());
     }
 

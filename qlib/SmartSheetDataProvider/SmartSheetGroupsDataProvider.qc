@@ -74,16 +74,16 @@ public class SmartSheetGroupsDataProvider inherits SmartSheetDataProviderBase {
         return new SmartSheetGroupDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (search_options.groupId) {
             hash<auto> result = doGet("groups/" + search_options.groupId);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
         hash<auto> response = doGet("groups");
         list<hash<auto>> records = response.data ?? ();
-        return new DefaultRecordIterator(new ListHashIterator(records),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records),
             where_cond, search_options);
     }
 

@@ -124,7 +124,7 @@ public class Cin7CoreFindSaleInvoiceDataProvider inherits Cin7CoreDataProviderBa
     }
 
     #! Searches for sale invoices
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         hash<auto> params;
 
@@ -157,7 +157,7 @@ public class Cin7CoreFindSaleInvoiceDataProvider inherits Cin7CoreDataProviderBa
         hash<auto> response = doGet("/SaleInvoice", params);
         list<hash<auto>> records = response.InvoiceList ?? ();
 
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options,
             recordType.getFields());
     }
 

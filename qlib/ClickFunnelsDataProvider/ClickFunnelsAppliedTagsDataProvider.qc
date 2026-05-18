@@ -103,12 +103,12 @@ public class ClickFunnelsAppliedTagsDataProvider inherits ClickFunnelsDataProvid
         return new ClickFunnelsAppliedTagDataType().getFields();
     }
 
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         setWorkspaceIdFromSearchOpts(search_options);
         if (search_options.applied_tag_id) {
             auto result = doGet("contacts/applied_tags/" + search_options.applied_tag_id);
-            return new DefaultRecordIterator(new ListHashIterator((result,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((result,)),
                 where_cond, search_options);
         }
         if (!search_options.contact_id) {
@@ -121,7 +121,7 @@ public class ClickFunnelsAppliedTagsDataProvider inherits ClickFunnelsDataProvid
         list<auto> records = fetchAllPages(
             "contacts/" + search_options.contact_id + "/applied_tags",
             params, search_options.limit);
-        return new DefaultRecordIterator(new ListHashIterator(records), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond,
             search_options);
     }
 

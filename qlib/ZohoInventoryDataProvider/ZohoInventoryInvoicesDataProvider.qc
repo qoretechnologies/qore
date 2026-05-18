@@ -115,7 +115,7 @@ public class ZohoInventoryInvoicesDataProvider inherits ZohoInventoryDataProvide
     }
 
     #! Searches for invoices
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         # Support DPAT_FIND_SINGLE: get a single invoice by ID
         if (search_options.invoice_id) {
             hash<auto> params;
@@ -124,7 +124,7 @@ public class ZohoInventoryInvoicesDataProvider inherits ZohoInventoryDataProvide
             }
             hash<auto> response = doGet(sprintf("/invoices/%s", search_options.invoice_id), params);
             list<auto> records = response.invoice ? (response.invoice,) : ();
-            return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
         }
 
         hash<auto> params;
@@ -138,7 +138,7 @@ public class ZohoInventoryInvoicesDataProvider inherits ZohoInventoryDataProvide
             params.status = search_options.status;
         }
         hash<auto> response = doGet("/invoices", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.invoices ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.invoices ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

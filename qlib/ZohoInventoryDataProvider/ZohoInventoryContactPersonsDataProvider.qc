@@ -80,7 +80,7 @@ public class ZohoInventoryContactPersonsDataProvider inherits ZohoInventoryDataP
     }
 
     #! Searches for contact persons
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         hash<auto> params;
         if (search_options.organization_id) {
             params.organization_id = search_options.organization_id;
@@ -93,11 +93,11 @@ public class ZohoInventoryContactPersonsDataProvider inherits ZohoInventoryDataP
             hash<auto> response = doGet(sprintf("/contacts/%s/contactpersons/%s", contact_id,
                 search_options.contact_person_id), params);
             list<auto> records = response.contact_person ? (response.contact_person,) : ();
-            return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
         }
 
         hash<auto> response = doGet(sprintf("/contacts/%s/contactpersons", contact_id), params);
-        return new DefaultRecordIterator(new ListHashIterator(response.contact_persons ?? ()), where_cond,
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.contact_persons ?? ()), where_cond,
             search_options);
     }
 

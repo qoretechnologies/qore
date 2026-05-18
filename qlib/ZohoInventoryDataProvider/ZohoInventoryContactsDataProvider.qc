@@ -123,7 +123,7 @@ public class ZohoInventoryContactsDataProvider inherits ZohoInventoryDataProvide
     }
 
     #! Searches for contacts
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         # Support DPAT_FIND_SINGLE: get a single contact by ID
         if (search_options.contact_id) {
             hash<auto> params;
@@ -132,7 +132,7 @@ public class ZohoInventoryContactsDataProvider inherits ZohoInventoryDataProvide
             }
             hash<auto> response = doGet(sprintf("/contacts/%s", search_options.contact_id), params);
             list<auto> records = response.contact ? (response.contact,) : ();
-            return new DefaultRecordIterator(new ListHashIterator(records), where_cond, search_options);
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(records), where_cond, search_options);
         }
 
         hash<auto> params;
@@ -155,7 +155,7 @@ public class ZohoInventoryContactsDataProvider inherits ZohoInventoryDataProvide
             params.contact_type = search_options.contact_type;
         }
         hash<auto> response = doGet("/contacts", params);
-        return new DefaultRecordIterator(new ListHashIterator(response.contacts ?? ()), where_cond, search_options);
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(response.contacts ?? ()), where_cond, search_options);
     }
 
     #! Returns static provider info

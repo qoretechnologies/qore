@@ -109,12 +109,12 @@ public class FreshsalesDealsDataProvider inherits FreshsalesDataProviderBase {
     }
 
     #! Returns an iterator for records matching the search criteria
-    private AbstractDataProviderRecordIterator searchRecordsImpl(*hash<auto> where_cond,
+    private AbstractDataProviderRecordIterator<hash<auto>> searchRecordsImpl(*hash<auto> where_cond,
             *hash<auto> search_options) {
         if (search_options.id) {
             hash<auto> result = doGet("deals/" + string(search_options.id));
             hash<auto> deal = result.deal ?? result;
-            return new DefaultRecordIterator(new ListHashIterator((deal,)),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator((deal,)),
                 where_cond, search_options);
         }
 
@@ -122,7 +122,7 @@ public class FreshsalesDealsDataProvider inherits FreshsalesDataProviderBase {
             list<hash<auto>> all_records = fetchAllPages(
                 "deals/view/" + string(search_options.view_id), "deals",
                 NOTHING, search_options.limit);
-            return new DefaultRecordIterator(new ListHashIterator(all_records),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records),
                 where_cond, search_options);
         }
 
@@ -133,11 +133,11 @@ public class FreshsalesDealsDataProvider inherits FreshsalesDataProviderBase {
             list<hash<auto>> all_records = fetchAllPages(
                 "deals/view/" + string(filter_list[0].id), "deals",
                 NOTHING, search_options.limit);
-            return new DefaultRecordIterator(new ListHashIterator(all_records),
+            return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(all_records),
                 where_cond, search_options);
         }
 
-        return new DefaultRecordIterator(new ListHashIterator(()),
+        return new DefaultRecordIterator<hash<auto>>(new ListHashIterator(()),
             where_cond, search_options);
     }
 
