@@ -275,6 +275,7 @@ public:
         for (std::string& param_decl : param_decls) {
             trim(param_decl);
             std::string param;
+            std::string bound_type;
             std::string default_type;
             size_t eq = findTopLevelChar(param_decl, '=');
             if (eq == std::string::npos) {
@@ -287,6 +288,18 @@ public:
                 if (default_type.empty()) {
                     parse_error(*loc, "invalid generic %s declaration '%s'; type parameter '%s' has an empty "
                         "default type", decl_kind, decl.c_str(), param.c_str());
+                }
+            }
+
+            size_t colon = findTopLevelBoundColon(param);
+            if (colon != std::string::npos) {
+                bound_type = param.substr(colon + 1);
+                param = param.substr(0, colon);
+                trim(param);
+                trim(bound_type);
+                if (bound_type.empty()) {
+                    parse_error(*loc, "invalid generic %s declaration '%s'; type parameter '%s' has an empty "
+                        "bound type", decl_kind, decl.c_str(), param.c_str());
                 }
             }
 
@@ -306,19 +319,27 @@ public:
                 if (!default_type.empty()) {
                     default_seen = true;
                 }
-                type_params.emplace_back(std::move(param), std::move(default_type));
+                type_params.emplace_back(std::move(param), std::move(default_type), std::move(bound_type));
             }
         }
 
         for (const QoreGenericTypeParam& param : type_params) {
-            if (!param.hasDefault()) {
-                continue;
+            if (param.hasDefault()) {
+                for (const QoreGenericTypeParam& other : type_params) {
+                    if (typeStringContainsIdentifier(param.default_type, other.name)) {
+                        parse_error(*loc, "invalid generic %s declaration '%s'; default type '%s' for type parameter "
+                            "'%s' references type parameter '%s', which is not supported yet", decl_kind,
+                            decl.c_str(), param.default_type.c_str(), param.name.c_str(), other.name.c_str());
+                    }
+                }
             }
-            for (const QoreGenericTypeParam& other : type_params) {
-                if (typeStringContainsIdentifier(param.default_type, other.name)) {
-                    parse_error(*loc, "invalid generic %s declaration '%s'; default type '%s' for type parameter "
-                        "'%s' references type parameter '%s', which is not supported yet", decl_kind, decl.c_str(),
-                        param.default_type.c_str(), param.name.c_str(), other.name.c_str());
+            if (param.hasBound()) {
+                for (const QoreGenericTypeParam& other : type_params) {
+                    if (typeStringContainsIdentifier(param.bound_type, other.name)) {
+                        parse_error(*loc, "invalid generic %s declaration '%s'; bound type '%s' for type parameter "
+                            "'%s' references type parameter '%s', which is not supported yet", decl_kind,
+                            decl.c_str(), param.bound_type.c_str(), param.name.c_str(), other.name.c_str());
+                    }
                 }
             }
         }
@@ -334,13 +355,13 @@ public:
 
     DLLLOCAL void applyTypeParams(QoreClass* qc) const {
         for (const QoreGenericTypeParam& param : type_params) {
-            qc->addTypeParameter(param.name.c_str(), param.getDefaultType());
+            qc->addTypeParameter(param.name.c_str(), param.getDefaultType(), param.getBoundType());
         }
     }
 
     DLLLOCAL void applyTypeParams(typed_hash_decl_private* hp) const {
         for (const QoreGenericTypeParam& param : type_params) {
-            hp->addTypeParameter(param.name.c_str(), param.getDefaultType());
+            hp->addTypeParameter(param.name.c_str(), param.getDefaultType(), param.getBoundType());
         }
     }
 
@@ -397,6 +418,30 @@ public:
                 --paren_depth;
             } else if (c == target && !angle_depth && !paren_depth) {
                 return i;
+            }
+        }
+        return std::string::npos;
+    }
+
+    DLLLOCAL static size_t findTopLevelBoundColon(const std::string& str) {
+        int angle_depth = 0;
+        int paren_depth = 0;
+        for (size_t i = 0; i < str.size(); ++i) {
+            char c = str[i];
+            if (c == '<' && paren_depth == 0) {
+                ++angle_depth;
+            } else if (c == '>' && paren_depth == 0 && angle_depth > 0) {
+                --angle_depth;
+            } else if (c == '(') {
+                ++paren_depth;
+            } else if (c == ')' && paren_depth > 0) {
+                --paren_depth;
+            } else if (c == ':' && !angle_depth && !paren_depth) {
+                bool scope_left = i && str[i - 1] == ':';
+                bool scope_right = i + 1 < str.size() && str[i + 1] == ':';
+                if (!scope_left && !scope_right) {
+                    return i;
+                }
             }
         }
         return std::string::npos;

@@ -76,9 +76,18 @@ void TypedHashDecl::addTypeParameter(const char* param, const char* default_type
     typed_hash_decl_private::get(*this)->addTypeParameter(param, default_type);
 }
 
+void TypedHashDecl::addTypeParameter(const char* param, const char* default_type, const char* bound_type) {
+    typed_hash_decl_private::get(*this)->addTypeParameter(param, default_type, bound_type);
+}
+
 const char* TypedHashDecl::getTypeParameterDefaultType(size_t index) const {
     const typed_hash_decl_private* hp = typed_hash_decl_private::get(*this);
     return index < hp->getTypeParamCount() ? hp->getTypeParamDefaultType(index) : nullptr;
+}
+
+const char* TypedHashDecl::getTypeParameterBoundType(size_t index) const {
+    const typed_hash_decl_private* hp = typed_hash_decl_private::get(*this);
+    return index < hp->getTypeParamCount() ? hp->getTypeParamBoundType(index) : nullptr;
 }
 
 size_t TypedHashDecl::getTypeParameterRequiredCount() const {

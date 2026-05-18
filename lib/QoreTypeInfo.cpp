@@ -2729,6 +2729,58 @@ static const QoreTypeInfo* qore_resolve_runtime_default_type_arg(const char* def
     return default_pti ? QoreParseTypeInfo::resolveRuntime(default_pti.get()) : nullptr;
 }
 
+static int qore_check_parse_type_arg_bound(const QoreProgramLocation* loc, const char* resolved_name,
+        const char* kind, const char* generic_name, const char* param_name, const char* bound_type,
+        const QoreTypeInfo* arg) {
+    if (!bound_type || !*bound_type) {
+        return 0;
+    }
+
+    int err = 0;
+    std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
+    if (!bound_pti) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve bound type '%s' for type parameter '%s' of "
+            "generic %s '%s'", bound_type, param_name, kind, generic_name);
+        return -1;
+    }
+
+    const QoreTypeInfo* bound = QoreParseTypeInfo::resolveAny(bound_pti.get(), loc, err);
+    if (err) {
+        return -1;
+    }
+
+    bool may_not_match = false;
+    qore_type_result_e res = QoreTypeInfo::parseAccepts(bound, arg, may_not_match);
+    if (res == QTI_NOT_EQUAL || may_not_match) {
+        parseException(*loc, "PARSE-TYPE-ERROR", "cannot resolve '%s'; type argument '%s' for type parameter "
+            "'%s' of generic %s '%s' does not satisfy bound '%s'", resolved_name,
+            QoreTypeInfo::getName(arg), param_name, kind, generic_name, bound_type);
+        return -1;
+    }
+
+    return 0;
+}
+
+static bool qore_runtime_type_arg_satisfies_bound(const char* bound_type, const QoreTypeInfo* arg) {
+    if (!bound_type || !*bound_type) {
+        return true;
+    }
+
+    std::unique_ptr<QoreParseTypeInfo> bound_pti(qore_parse_type_string_to_pti(bound_type));
+    if (!bound_pti) {
+        return false;
+    }
+
+    const QoreTypeInfo* bound = QoreParseTypeInfo::resolveRuntime(bound_pti.get());
+    if (!bound) {
+        return false;
+    }
+
+    bool may_not_match = false;
+    qore_type_result_e res = QoreTypeInfo::parseAccepts(bound, arg, may_not_match);
+    return res != QTI_NOT_EQUAL && !may_not_match;
+}
+
 static const QoreTypeInfo* qore_resolve_parse_type_parameter(const NamedScope& cscope, bool or_nothing) {
     if (cscope.size() != 1) {
         return nullptr;
@@ -2817,6 +2869,14 @@ static const TypedHashDecl* qore_resolve_parse_hashdecl_type(const QoreParseType
         }
     }
 
+    for (size_t i = 0; i < expected; ++i) {
+        if (qore_check_parse_type_arg_bound(loc, QoreParseTypeInfo::getName(&pti), "hashdecl", pti.cscope->ostr,
+                hp->getTypeParamName(i), hp->getTypeParamBoundType(i), args[i])) {
+            err = -1;
+            return hd;
+        }
+    }
+
     const TypedHashDecl* parameterized_hd = hp->getParameterizedHashDecl(args);
     return parameterized_hd ? parameterized_hd : hd;
 }
@@ -2864,6 +2924,14 @@ static const QoreTypeInfo* qore_resolve_parse_parameterized_class_type(const Qor
         }
     }
 
+    for (size_t i = 0; i < expected; ++i) {
+        if (qore_check_parse_type_arg_bound(loc, QoreParseTypeInfo::getName(&pti), "class", pti.cscope->ostr,
+                qc->getTypeParameterName(i), qc->getTypeParameterBoundType(i), args[i])) {
+            err = -1;
+            return autoTypeInfo;
+        }
+    }
+
     return qc->getTypeInfo(args, or_nothing);
 }
 
@@ -2895,6 +2963,12 @@ static const QoreTypeInfo* qore_resolve_runtime_parameterized_class_type(const Q
             return nullptr;
         }
         args.push_back(arg);
+    }
+
+    for (size_t i = 0; i < expected; ++i) {
+        if (!qore_runtime_type_arg_satisfies_bound(qc->getTypeParameterBoundType(i), args[i])) {
+            return nullptr;
+        }
     }
 
     return qc->getTypeInfo(args, or_nothing);
@@ -2937,6 +3011,12 @@ static const TypedHashDecl* qore_resolve_runtime_hashdecl_type(const QoreParseTy
             return nullptr;
         }
         args.push_back(arg);
+    }
+
+    for (size_t i = 0; i < expected; ++i) {
+        if (!qore_runtime_type_arg_satisfies_bound(hp->getTypeParamBoundType(i), args[i])) {
+            return nullptr;
+        }
     }
 
     return hp->getParameterizedHashDecl(args);

@@ -5490,6 +5490,10 @@ void QoreClass::addTypeParameter(const char* name, const char* default_type) {
     priv->addTypeParam(name, default_type);
 }
 
+void QoreClass::addTypeParameter(const char* name, const char* default_type, const char* bound_type) {
+    priv->addTypeParam(name, default_type, bound_type);
+}
+
 void QoreClass::setLegacyRawGenericCompatibility(bool raw_accepts_parameterized,
         bool raw_construction_defaults_to_auto) {
     priv->setLegacyRawGenericCompatibility(raw_accepts_parameterized, raw_construction_defaults_to_auto);
@@ -5513,6 +5517,10 @@ const char* QoreClass::getTypeParameterName(size_t index) const {
 
 const char* QoreClass::getTypeParameterDefaultType(size_t index) const {
     return priv->getTypeParamDefaultType(index);
+}
+
+const char* QoreClass::getTypeParameterBoundType(size_t index) const {
+    return priv->getTypeParamBoundType(index);
 }
 
 const QoreTypeInfo* QoreClass::getOrNothingTypeInfo() const {

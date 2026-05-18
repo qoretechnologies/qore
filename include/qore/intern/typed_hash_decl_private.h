@@ -247,6 +247,10 @@ public:
         type_params.emplace_back(param, default_type);
     }
 
+    DLLLOCAL void addTypeParameter(const char* param, const char* default_type, const char* bound_type) {
+        type_params.emplace_back(param, default_type, bound_type);
+    }
+
     DLLLOCAL bool hasTypeParams() const {
         return !type_params.empty();
     }
@@ -263,6 +267,11 @@ public:
     DLLLOCAL const char* getTypeParamDefaultType(size_t i) const {
         assert(i < type_params.size());
         return type_params[i].getDefaultType();
+    }
+
+    DLLLOCAL const char* getTypeParamBoundType(size_t i) const {
+        assert(i < type_params.size());
+        return type_params[i].getBoundType();
     }
 
     DLLLOCAL size_t getTypeParamRequiredCount() const {

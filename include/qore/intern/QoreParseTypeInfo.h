@@ -46,14 +46,27 @@ DLLLOCAL QoreParseTypeInfo* qore_parse_type_string_to_pti(const char* type_str);
 
 struct QoreGenericTypeParam {
     std::string name;
+    std::string bound_type;
     std::string default_type;
 
-    DLLLOCAL QoreGenericTypeParam(const char* n_name, const char* n_default_type = nullptr)
-            : name(n_name ? n_name : ""), default_type(n_default_type ? n_default_type : "") {
+    DLLLOCAL QoreGenericTypeParam(const char* n_name, const char* n_default_type = nullptr,
+            const char* n_bound_type = nullptr)
+            : name(n_name ? n_name : ""), bound_type(n_bound_type ? n_bound_type : ""),
+                default_type(n_default_type ? n_default_type : "") {
     }
 
-    DLLLOCAL QoreGenericTypeParam(std::string&& n_name, std::string&& n_default_type = std::string())
-            : name(std::move(n_name)), default_type(std::move(n_default_type)) {
+    DLLLOCAL QoreGenericTypeParam(std::string&& n_name, std::string&& n_default_type = std::string(),
+            std::string&& n_bound_type = std::string())
+            : name(std::move(n_name)), bound_type(std::move(n_bound_type)),
+                default_type(std::move(n_default_type)) {
+    }
+
+    DLLLOCAL bool hasBound() const {
+        return !bound_type.empty();
+    }
+
+    DLLLOCAL const char* getBoundType() const {
+        return hasBound() ? bound_type.c_str() : nullptr;
     }
 
     DLLLOCAL bool hasDefault() const {

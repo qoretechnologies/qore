@@ -2305,6 +2305,10 @@ public:
         return index < type_params.size() ? type_params[index].getDefaultType() : nullptr;
     }
 
+    DLLLOCAL const char* getTypeParamBoundType(size_t index) const {
+        return index < type_params.size() ? type_params[index].getBoundType() : nullptr;
+    }
+
     DLLLOCAL size_t getTypeParamRequiredCount() const {
         for (size_t i = 0, e = type_params.size(); i < e; ++i) {
             if (type_params[i].hasDefault()) {
@@ -2324,6 +2328,10 @@ public:
 
     DLLLOCAL void addTypeParam(const char* name, const char* default_type = nullptr) {
         type_params.emplace_back(name, default_type);
+    }
+
+    DLLLOCAL void addTypeParam(const char* name, const char* default_type, const char* bound_type) {
+        type_params.emplace_back(name, default_type, bound_type);
     }
 
     DLLLOCAL void setLegacyRawGenericCompatibility(bool accepts_parameterized, bool construction_defaults_to_auto) {

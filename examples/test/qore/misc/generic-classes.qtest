@@ -109,6 +109,20 @@ class SourceNestedDefaultStatic<T = list<hash<auto>>> {
     }
 }
 
+class SourceBoundBox<T: int = int> {
+    private {
+        T value;
+    }
+
+    constructor(T value) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
 class SourceGenericOverloads<T> {
     string take(T value) {
         return "scalar";
@@ -195,6 +209,10 @@ hashdecl SourceDefaultResult<T = string> {
 hashdecl SourceDefaultPairResult<K, V = string> {
     K key;
     V value;
+}
+
+hashdecl SourceBoundResult<T: int = int> {
+    T value;
 }
 
 hashdecl SourceGenericHashParent<T> {
@@ -426,6 +444,14 @@ public class GenericClassTypesTest inherits QUnit::Test {
         assertEq(5, pair_result.key);
         assertEq("five", pair_result.value);
         assertEq("hash<SourceDefaultPairResult<int, string>>", pair_result.fullType());
+
+        SourceBoundBox<> bounded_box(6);
+        int bounded_value = bounded_box.get();
+        assertEq(6, bounded_value);
+
+        hash<SourceBoundResult<>> bounded_result(("value": 7));
+        int bounded_hash_value = bounded_result.value;
+        assertEq(7, bounded_hash_value);
     }
 
     namespacedGenericClassTypes() {
@@ -699,6 +725,37 @@ public class GenericClassTypesTest inherits QUnit::Test {
         {
             Program p(PO_NEW_STYLE);
             assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T, U = T> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T:> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("class Bad<T: T> {}", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "class Box<T: int> { constructor(T value) {} } sub t() { Box<string> b(\"x\"); }",
+                "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            assertThrows("PARSE-TYPE-ERROR", \p.parse(), (
+                "hashdecl Result<T: int> { T value; } hash<Result<string>> r;", "generic-classes"));
+        }
+
+        {
+            Program p(PO_NEW_STYLE);
+            p.parse("class Box<T: int = int> { constructor(T value) {} } "
+                "hashdecl Result<T: int = int> { T value; } "
+                "sub t() { Box<> b(1); hash<Result<>> r((\"value\": 2)); }", "generic-classes");
+            p.callFunction("t");
         }
 
         {

@@ -4935,6 +4935,13 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                         writer.writeStringRef(default_type);
                     }
                 }
+                if ((writer.feature_flags & QORE_AOT_FEAT_TYPE_PARAM_BOUNDS) != 0) {
+                    const char* bound_type = priv->getTypeParamBoundType(i);
+                    writer.writeU8(bound_type ? 1 : 0);
+                    if (bound_type) {
+                        writer.writeStringRef(bound_type);
+                    }
+                }
             }
         }
 
@@ -5126,6 +5133,13 @@ static bool writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
                     writer.writeU8(default_type ? 1 : 0);
                     if (default_type) {
                         writer.writeStringRef(default_type);
+                    }
+                }
+                if ((writer.feature_flags & QORE_AOT_FEAT_TYPE_PARAM_BOUNDS) != 0) {
+                    const char* bound_type = hdp->getTypeParamBoundType(i);
+                    writer.writeU8(bound_type ? 1 : 0);
+                    if (bound_type) {
+                        writer.writeStringRef(bound_type);
                     }
                 }
             }
@@ -8942,6 +8956,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_TYPE_PARAMS) != 0;
     const bool has_type_param_defaults
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0;
+    const bool has_type_param_bounds
+        = (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_BOUNDS) != 0;
     const bool has_class_param_bases
         = (reader.getHeader().feature_flags & QORE_AOT_FEAT_CLASS_PARAM_BASES) != 0;
     const bool has_class_raw_generic
@@ -9025,7 +9041,21 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                         }
                     }
                 }
-                type_params.emplace_back(std::move(type_param_name), std::move(default_type));
+                std::string bound_type;
+                if (has_type_param_bounds) {
+                    uint8_t has_bound = QoreAOTBinaryReader::readU8(ptr);
+                    if (has_bound) {
+                        const char* bound_type_str = reader.readStringRef(ptr);
+                        bound_type = bound_type_str ? bound_type_str : "";
+                        if (bound_type.empty()) {
+                            error = "invalid empty bound type for type parameter '" + type_param_name
+                                + "' in class '" + class_name + "'";
+                            return false;
+                        }
+                    }
+                }
+                type_params.emplace_back(std::move(type_param_name), std::move(default_type),
+                    std::move(bound_type));
             }
         }
 
@@ -9050,7 +9080,8 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         }
         if (!type_params.empty()) {
             for (const QoreGenericTypeParam& type_param : type_params) {
-                qc->addTypeParameter(type_param.name.c_str(), type_param.getDefaultType());
+                qc->addTypeParameter(type_param.name.c_str(), type_param.getDefaultType(),
+                    type_param.getBoundType());
             }
         }
         if (has_class_raw_generic) {
@@ -10336,6 +10367,8 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
         if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_HASHDECL_TYPE_PARAMS) != 0) {
             const bool has_type_param_defaults
                 = (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_DEFAULTS) != 0;
+            const bool has_type_param_bounds
+                = (reader.getHeader().feature_flags & QORE_AOT_FEAT_TYPE_PARAM_BOUNDS) != 0;
             uint16_t type_param_count = QoreAOTBinaryReader::readU16(ptr);
             type_params.reserve(type_param_count);
             for (uint16_t ti = 0; ti < type_param_count; ++ti) {
@@ -10358,7 +10391,21 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
                         }
                     }
                 }
-                type_params.emplace_back(std::move(type_param_name), std::move(default_type));
+                std::string bound_type;
+                if (has_type_param_bounds) {
+                    uint8_t has_bound = QoreAOTBinaryReader::readU8(ptr);
+                    if (has_bound) {
+                        const char* bound_type_str = reader.readStringRef(ptr);
+                        bound_type = bound_type_str ? bound_type_str : "";
+                        if (bound_type.empty()) {
+                            error = "invalid empty bound type for type parameter '" + type_param_name
+                                + "' in hashdecl '" + std::string(name ? name : "(null)") + "'";
+                            return false;
+                        }
+                    }
+                }
+                type_params.emplace_back(std::move(type_param_name), std::move(default_type),
+                    std::move(bound_type));
             }
         }
 
@@ -10452,7 +10499,8 @@ bool QoreAOTBinaryDeserializer::deserializeHashDecls(std::string& error) {
                 }
                 return false;
             }
-            hdp->addTypeParameter(type_params[ti].name.c_str(), type_params[ti].getDefaultType());
+            hdp->addTypeParameter(type_params[ti].name.c_str(), type_params[ti].getDefaultType(),
+                type_params[ti].getBoundType());
         }
 
         // Add to namespace's hashDeclList FIRST (before storing in pending list)

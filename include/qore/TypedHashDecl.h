@@ -90,6 +90,17 @@ public:
     */
     DLLEXPORT void addTypeParameter(const char* param, const char* default_type);
 
+    //! adds a type parameter with an optional default type and bound
+    /** @param param the type parameter name
+        @param default_type the default type argument used when the type argument is omitted, or nullptr
+        @param bound_type the upper bound type that type arguments must satisfy, or nullptr
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT void addTypeParameter(const char* param, const char* default_type, const char* bound_type);
+
     //! returns the default type for a built-in hashdecl type parameter, if any
     /** @param index the type parameter index
 
@@ -100,6 +111,17 @@ public:
         @since %Qore 2.4
     */
     DLLEXPORT const char* getTypeParameterDefaultType(size_t index) const;
+
+    //! returns the bound type for a built-in hashdecl type parameter, if any
+    /** @param index the type parameter index
+
+        @return the bound type string or nullptr if the parameter has no bound or the index is invalid
+
+        @note This method is intended for use by system hashdecls only
+
+        @since %Qore 2.4
+    */
+    DLLEXPORT const char* getTypeParameterBoundType(size_t index) const;
 
     //! returns the number of built-in hashdecl type parameters that do not have defaults
     /** @note This method is intended for use by system hashdecls only
