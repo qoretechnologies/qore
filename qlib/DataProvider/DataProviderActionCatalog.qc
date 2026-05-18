@@ -1463,8 +1463,10 @@ public class DataProviderActionCatalog {
         hash plain_fields = hash(fields);
         foreach hash<auto> i in (plain_fields.pairIterator()) {
             on_error rethrow $1.err, sprintf("%s (while processing field %y)", $1.desc, i.key);
+            *hash<auto> raw_info;
             if (!(i.value instanceof AbstractDataField) && i.value.typeCode() == NT_HASH
                     && i.value.type.typeCode() != NT_LIST) {
+                raw_info = i.value;
                 if (!exists i.value.name) {
                     i.value.name = i.key;
                 }
@@ -1542,6 +1544,14 @@ public class DataProviderActionCatalog {
                 if (info.attr.option_type_name) {
                     i.value.option_type_name = info.attr.option_type_name;
                 }
+                if (raw_info) {
+                    i.value += raw_info{"required", "sensitive", "ref_data", "element_ref_data",
+                        "default_ref_data", "preselected", "required_groups", "exclusive_with",
+                        "validation_regex", "depends_on", "on_change", "metadata", "messages",
+                        "icon", "image", "disabled", "readonly", "supports_custom_values",
+                        "supports_templates", "supports_expressions", "server_expression_handling",
+                        "option_type_name"};
+                }
             }
             on_error rethrow $1.err, sprintf("%s (field: %y)", $1.desc, i.value);
             hash<ActionOptionInfo> info = <ActionOptionInfo>{
@@ -1605,6 +1615,12 @@ public class DataProviderActionCatalog {
                 if (i.value.allowed_values instanceof list<hash<AllowedValueInfo>>
                     || i.value.allowed_values instanceof hash<AllowedValueInfo>) {
                     info.allowed_values = i.value.allowed_values;
+                } else if (i.value.allowed_values.typeCode() == NT_LIST
+                    && i.value.allowed_values.size()
+                    && i.value.allowed_values[0].typeCode() == NT_HASH
+                    && i.value.allowed_values[0].hasKey("value")) {
+                    info.allowed_values =
+                        map cast<hash<AllowedValueInfo>>($1), i.value.allowed_values;
                 } else {
                     info.allowed_values = map <AllowedValueInfo>{
                         "value": $1,
@@ -1619,6 +1635,12 @@ public class DataProviderActionCatalog {
                 if (i.value.element_allowed_values instanceof list<hash<AllowedValueInfo>>
                     || i.value.element_allowed_values instanceof hash<AllowedValueInfo>) {
                     info.element_allowed_values = i.value.element_allowed_values;
+                } else if (i.value.element_allowed_values.typeCode() == NT_LIST
+                    && i.value.element_allowed_values.size()
+                    && i.value.element_allowed_values[0].typeCode() == NT_HASH
+                    && i.value.element_allowed_values[0].hasKey("value")) {
+                    info.element_allowed_values =
+                        map cast<hash<AllowedValueInfo>>($1), i.value.element_allowed_values;
                 } else {
                     info.element_allowed_values = map <AllowedValueInfo>{
                         "value": $1,

@@ -2204,7 +2204,7 @@ and s.name = %v and t.name = %v order by i.name, ic.key_ordinal", schema, name);
 
             foreach hash<auto> i in (ih.pairIterator()) {
                 # check primary key index and add filegroup to primary key definition
-                if (i.primary && !primaryKey.empty()) {
+                if (i.value.primary && !primaryKey.empty()) {
                     MssqlPrimaryKey pk = cast<MssqlPrimaryKey>(primaryKey);
                     if (i.value.filegroup && !pk.filegroup)
                         pk.filegroup = i.value.filegroup;

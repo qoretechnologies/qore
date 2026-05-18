@@ -3369,7 +3369,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
             foreach hash<auto> i in (ih.pairIterator()) {
                 # check primary key index and add tablespace to primary key definition
-                if (i.primary && !primaryKey.empty()) {
+                if (i.value.primary && !primaryKey.empty()) {
                     PgsqlPrimaryKey pk = cast<PgsqlPrimaryKey>(primaryKey);
                     if (i.value.tablespace && !pk.tablespace)
                         pk.tablespace = i.value.tablespace;
