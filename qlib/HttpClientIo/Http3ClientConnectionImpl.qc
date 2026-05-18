@@ -160,7 +160,6 @@ public class Http3ClientConnection inherits HttpClientConnection {
     /** Queued QUIC packets are produced and sent by the controller's I/O
         thread; this method only wakes the controller.
 
-        @since %HttpClientIo 1.3
     */
     flushPendingWrites() {
         notifyPendingData();

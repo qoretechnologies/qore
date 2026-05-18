@@ -129,49 +129,30 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
 
     @section httpclientio_relnotes Release Notes
 
-    @subsection httpclientio_v1_2 Version 1.2
-    - Added HTTP proxy support via \c proxy_url option in
-      @ref HttpClientConnectionManagerOptions
-    - HTTP/1.1: plain HTTP requests through proxy use absolute URLs; HTTPS targets
-      use HTTP CONNECT tunnel + TLS upgrade
-    - HTTP/2: HTTPS through proxy uses HTTP/1.1 CONNECT tunnel before TLS+ALPN
-      negotiation
-    - HTTP/3: auto-downgrades to HTTP/2 when a proxy is configured; throws if
-      HTTP/3 is explicitly forced with a proxy
-    - Added \c HttpClientStreamHandle::submitAsyncWithNotifier()
-      for async request submission with EventNotifier signaling on completion
-    - Added \c HttpClientConnectionManager::submitRequestAsync()
-      for connection-manager-level async request submission with automatic retry
-    - Added \c HttpClientConnectionManager::ensureConnectionAsync()
-      for non-blocking connection pre-warming
-    - Added \c max_request_retries to @ref HttpClientConnectionManagerOptions
-      to make automatic request retry behavior configurable
-    - Non-idempotent requests are only retried automatically before stream
-      submission, avoiding duplicate \c POST-style requests after transport
-      errors
-
-    @subsection httpclientio_v1_1 Version 1.1
-    - Added HTTP/1.1 support via @ref Http1ClientConnection, @ref Http1ClientPollOperation,
-      and @ref Http1ClientStreamHandle
-    - HTTP/1.1 serial request/response with keep-alive and connection pooling
-    - Supports Content-Length, chunked transfer encoding, and connection-close body types
-    - Protocol selection: \c "h1" forces HTTP/1.1; \c "auto" races H3 and H2 with happy eyeballs for HTTPS
-    - Connection manager creates multiple HTTP/1.1 connections for concurrent requests
-    - Added \c HttpClientStreamHandle::submitAsyncNonBlocking()
-      for non-blocking async request submission (throws if the connection is not ready)
-
     @subsection httpclientio_v1_0 Version 1.0
-    - Initial release of unified HttpClientIo module
+    Initial (not yet released) version of the unified %HttpClientIo module —
+    HTTP/1.1, HTTP/2, and HTTP/3 client I/O behind a single API, as currently
+    implemented:
     - Async-only I/O: all managers share the process-wide global
-      AsyncSocketIoController singleton with \c autostop=True; sync \c request()
-      blocks via Future while the controller event loop drives actual I/O
-    - Single-controller architecture eliminates cross-controller deadlocks
-    - Protocol auto-selection with HTTP/3-first happy eyeballs for HTTPS
-    - Abstract base classes for protocol-agnostic code
-    - Connection pooling with configurable limits
-    - Sync and async request APIs
+      @ref AsyncSocketIo::AsyncSocketIoController singleton with
+      \c autostop = @ref True; the synchronous \c request() API blocks the
+      caller via a \c Future while the controller event loop drives the actual
+      I/O; the single-controller architecture eliminates cross-controller
+      deadlocks
+    - Protocol auto-selection for HTTPS via an HTTP/3-preferred happy-eyeballs
+      race.  The synchronous request path runs the race inline; poll-operation
+      callers use @ref HttpClientConnectionManager::acquireConnectionAsync()
+      for a fully non-blocking, immediately cancelable happy-eyeballs race
+      (winner / error / protocol-cache semantics identical to the synchronous
+      path) and @ref HttpClientConnectionManager::abandonAsyncHEForUrl() to
+      tear an in-flight race down with no leaked socket or stagger timer
+    - HTTP/1.1 serial request/response with keep-alive; the connection manager
+      creates multiple connections for concurrent requests
+    - Connection pooling with configurable limits, HTTP-proxy support,
+      configurable automatic request retry, and QUIC connection migration for
+      HTTP/3
+    - Sync and async (\c Future / \c EventNotifier) request APIs
     - Streaming support (WebSocket, SSE) over HTTP/1.1, HTTP/2, and HTTP/3
-    - HTTP/3 connection migration support
 */
 
 #! Main namespace for HttpClientIo module

@@ -435,7 +435,6 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         @throw HTTPCLIENT-STATE-ERROR if the stream is not in streaming mode
         @throw HTTPCLIENT-STREAM-CLOSED if the stream is already closed
 
-        @since %HttpClientIo 1.4
     */
     installFrameState(Queue msg_queue) {
         int sid;

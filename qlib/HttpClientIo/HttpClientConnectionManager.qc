@@ -25,6 +25,53 @@
 #! Main namespace
 public namespace HttpClientIo {
 
+#! Internal: async happy-eyeballs race state (module-private; not a public API)
+/** Holds the in-flight H3/H2 candidates and phase for a single brand-new pool
+    key while a non-blocking caller (e.g. the connection-monitor ping op) drives
+    the race re-entrantly through @ref HttpClientConnectionManager::advanceAsyncHE().
+
+    Exactly one @ref AsyncRace exists per pool key at a time (serialized by the
+    manager's @c async_race_lock).  The race is torn down deterministically on
+    win, on connect error, or on caller cancel (@c abandonAsyncHEByKey()).
+*/
+class AsyncRace {
+    public {
+        #! The HTTP/3 (QUIC) candidate (always present once the race starts)
+        Http3ClientConnection h3conn;
+
+        #! The HTTP/2 (TCP/TLS) candidate (created when the race enters "race")
+        *Http2ClientConnection h2conn;
+
+        #! Controller stagger-timer id (NOTHING once fired/cancelled)
+        *int stagger_timer_id;
+
+        #! Race phase: "stagger" (H3-only head start) or "race" (H3 + H2)
+        string phase = "stagger";
+
+        #! When the race started (diagnostics)
+        date started;
+
+        #! Parsed URL info used to build the H2 candidate
+        hash<auto> url_info;
+
+        #! host:port pool key
+        string key;
+
+        #! Set by the stagger-timer callback when the head-start elapsed
+        bool stagger_fired = False;
+
+        #! The per-call notifier the caller is currently polling
+        /** Refreshed on every @ref HttpClientConnectionManager::advanceAsyncHE()
+            re-entry (the caller deletes its previous notifier each wake), so the
+            stagger-timer callback always signals the live one.
+        */
+        *EventNotifier current_notifier;
+
+        #! True if this race set the per-key @c creating flag (clears it on teardown)
+        bool we_set_creating = False;
+    }
+}
+
 #! Unified connection pool manager with protocol auto-selection
 /** This class manages a pool of HTTP/1.1, HTTP/2, and HTTP/3 connections, providing:
 
@@ -203,6 +250,23 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             subsequent matching requests regardless of which connection is used.
         */
         *CookieJar cookie_jar;
+
+        #! In-flight async happy-eyeballs races: host:port pool key -> AsyncRace
+        /** Populated by @ref acquireConnectionAsync() / @ref startAsyncHE() for
+            non-blocking callers (the connection-monitor ping op).  At most one
+            race per key.  Each race is torn down deterministically on win, on
+            connect error, or on caller cancel — no blocked thread, no leaked
+            socket or stagger timer.
+        */
+        hash<string, AsyncRace> async_races;
+
+        #! Serializes access to @ref async_races and per-race fields
+        /** Held only for short map/field operations — never across connection
+            construction, @c controller.submit(), or @c pool_lock — so the lock
+            order is always @c async_race_lock then @c pool_lock (the sync path
+            never touches @c async_race_lock).
+        */
+        Mutex async_race_lock();
     }
 
     #! Creates a new connection manager with the given options
@@ -354,13 +418,20 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         @param url the target URL (e.g., \c "https://example.com"); only the scheme,
         host, and port are used for connection management
+        @param non_blocking retained plumbing only — superseded by the dedicated
+        @ref acquireConnectionAsync() entry, which is the cancelable,
+        non-blocking happy-eyeballs path for poll-op callers (connection-monitor
+        ping / pre-warm).  This parameter no longer alters connection
+        establishment; @ref acquireStream() always uses the synchronous request
+        path.  Kept optional so existing @c acquireStream(url) callers are
+        unaffected.
 
         @return a stream handle ready for submitting requests
 
         @throw HTTPCLIENT-URL-ERROR if the URL is invalid
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired
     */
-    HttpClientStreamHandle acquireStream(string url) {
+    HttpClientStreamHandle acquireStream(string url, *bool non_blocking) {
         # Pin @c pool_lock across this method: see @ref pool_lock_pin.
         RWLock pool_lock_pin = pool_lock;
         # Opportunistically evict idle connections on request entry so the pool
@@ -390,7 +461,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         bool from_pool = False;
-        HttpClientConnection conn = getConnection(url_info, \from_pool);
+        HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking);
 
         # Create protocol-appropriate stream handle; release the reservation
         # if the constructor throws to avoid leaking a pending slot
@@ -431,13 +502,13 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @return an EventNotifier to poll for readiness, or NOTHING if the connection is
         already ready
 
-        @since %HttpClientIo 1.2
     */
     *EventNotifier ensureConnectionAsync(string url) {
-        HttpClientStreamHandle stream = acquireStream(url);
-        *EventNotifier notifier = stream.getConnectionReadyNotifier();
-        # stream destructs here, releasing its reservation if not yet submitted
-        return notifier;
+        # Delegate to the V2 cancelable non-blocking entry so pre-warm uses the
+        # same real H3/H2 happy-eyeballs race as the connection-monitor ping op
+        # (and shares its per-key race state).  Never blocks the caller.
+        *HttpClientConnection conn_out;
+        return acquireConnectionAsync(url, \conn_out);
     }
 
     #! Acquires a stream and starts streaming with automatic retry on stale connections
@@ -539,7 +610,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
 
-        @since %HttpClientIo 1.2
     */
     hash<auto> submitRequestAsync(string url, string method, string path,
             *hash<auto> headers, *data body) {
@@ -640,7 +710,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
         @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
 
-        @since %HttpClientIo 1.3
     */
     HttpCancellableFuture requestAsync(string url, string method, string path,
             *hash<auto> headers, *data body) {
@@ -1018,6 +1087,27 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             shutdown = True;
         }
 
+        # Tear down any in-flight async happy-eyeballs races: cancel the
+        # stagger timers (their closures retain a self-ref until cancelled,
+        # which would otherwise defer this manager's destruction) and close
+        # the not-yet-pooled H3/H2 candidates so the cancelByOwner() barrier
+        # below has nothing left to leak.
+        {
+            AutoLock al(async_race_lock);
+            foreach string race_key in (keys async_races) {
+                *AsyncRace race = async_races{race_key};
+                if (!race) {
+                    continue;
+                }
+                heAbandonTimer(race);
+                try { race.h3conn.close(); } catch (hash<ExceptionInfo> ex) {}
+                if (race.h2conn) {
+                    try { race.h2conn.close(); } catch (hash<ExceptionInfo> ex) {}
+                }
+            }
+            remove async_races;
+        }
+
         try {
             controller.cancelByOwner(owner_id);
         } catch (hash<ExceptionInfo> ex) {
@@ -1219,7 +1309,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
     }
 
     #! Internal: gets or creates a connection for the given URL info
-    private HttpClientConnection getConnection(hash<auto> url_info, reference<bool> from_pool) {
+    /** @param non_blocking retained plumbing only (see @ref acquireStream());
+        no longer alters connection establishment — the cancelable non-blocking
+        happy-eyeballs path is @ref acquireConnectionAsync().
+    */
+    private HttpClientConnection getConnection(hash<auto> url_info, reference<bool> from_pool,
+            *bool non_blocking) {
         string key = sprintf("%s:%d", url_info.host, url_info.port);
 
         while (True) {
@@ -1369,6 +1464,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # stall unrelated pool operations.
             HttpClientConnection conn;
             if (protocol == "happy-eyeballs") {
+                # Synchronous request path: the blocking H3/H2 happy-eyeballs
+                # race (byte-identical to its pre-stopgap behavior).  The
+                # cancelable non-blocking happy-eyeballs race for poll-op
+                # callers (connection-monitor ping / pre-warm) is the dedicated
+                # acquireConnectionAsync() entry — the @c non_blocking parameter
+                # here is retained plumbing only and no longer alters this
+                # branch (the option-2 stopgap's single-H2 line was superseded
+                # by the real async race).
                 conn = createConnectionHappyEyeballs(url_info, key);
             } else {
                 conn = createConnection(url_info, key, protocol);
@@ -1508,6 +1611,136 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
     }
 
+    #! Internal: happy-eyeballs winner selection (H3-preferred), pure / no side effects
+    /** Returns the connection that has reached a usable READY state, preferring
+        HTTP/3 over HTTP/2 (the happy-eyeballs preference order).  Returns
+        @ref NOTHING if neither connection is ready yet.
+
+        @note Pure: reads only the authoritative C++ connection state
+        (@ref AbstractHttpPollConnection::isReady()).  It performs no logging,
+        caching, closing, or pool mutation — the caller commits the result via
+        @ref heCommitWinner().  Shared by the synchronous happy-eyeballs race
+        and the async race coordinator so winner semantics are identical.
+
+        @param h3conn the HTTP/3 candidate
+        @param h2conn the HTTP/2 candidate (\c NOTHING during the H3-only stagger)
+
+        @return the ready connection (H3 preferred), or NOTHING if undecided
+    */
+    private *HttpClientConnection hePickReady(Http3ClientConnection h3conn,
+            *Http2ClientConnection h2conn) {
+        if (h3conn.isReady()) {
+            return h3conn;
+        }
+        if (h2conn && h2conn.isReady()) {
+            return h2conn;
+        }
+        return NOTHING;
+    }
+
+    #! Internal: commits a happy-eyeballs winner — close loser, cache protocol, log
+    /** Mirrors the synchronous race's commit points (former inline blocks at the
+        H3-within-stagger / H3-won / H2-won decision sites).  The loser (the
+        non-winning candidate, when it exists) is closed first so it is never
+        pool-inserted, then the winning protocol is cached under @c pool_lock.
+
+        @param winner the connection that won the race (H3 or H2)
+        @param h3conn the HTTP/3 candidate from the race
+        @param h2conn the HTTP/2 candidate (\c NOTHING during the H3-only stagger)
+        @param key the host:port pool key
+
+        @note Shared by the synchronous race and the async race coordinator so
+        the winner/cache/close semantics are byte-identical between paths.
+    */
+    private heCommitWinner(HttpClientConnection winner, Http3ClientConnection h3conn,
+            *Http2ClientConnection h2conn, string key) {
+        string proto = winner.getProtocol();
+        log(LoggerLevel::DEBUG, "happy eyeballs: %s won for %s", proto, key);
+        # Close the loser (if any) before the winner is pool-inserted.  H3 is the
+        # only candidate during the stagger phase, so there is no loser to close
+        # when h2conn is absent.
+        if (proto == "h3") {
+            if (h2conn) {
+                try { h2conn.close(); } catch () {}
+            }
+        } else {
+            try { h3conn.close(); } catch () {}
+        }
+        {
+            AutoWriteLock al(pool_lock);
+            cacheProtocol(key, proto);
+        }
+    }
+
+    #! Internal: True if the H2 attempt failed fast with SOCKET-CONNECT-ERROR
+    /** TCP was refused at the kernel level (ECONNREFUSED or similar) so the
+        port is definitively closed; H3 over UDP cannot recover it.  The
+        happy-eyeballs race uses this to abandon immediately instead of waiting
+        out H3's own connect timeout.  Extracted from the synchronous race's
+        H2-TCP-refused-while-H3-pending fast-fail so the async race fast-fails
+        identically.
+
+        @param h2conn the HTTP/2 candidate
+        @return @ref True if H2 is not ready and its poll op reported
+        \c SOCKET-CONNECT-ERROR
+    */
+    private bool heH2FastFail(Http2ClientConnection h2conn) {
+        if (h2conn.isReady()) {
+            return False;
+        }
+        *hash<auto> h2_err = h2conn.getPollOperation().getError();
+        return h2_err.err == "SOCKET-CONNECT-ERROR";
+    }
+
+    #! Internal: builds and throws the happy-eyeballs connect error, closing both conns
+    /** Exact behavior of the synchronous race's terminal error path: collect the
+        underlying H3/H2 poll-op errors, close both connections, and throw a
+        user-friendly error.  If the H2 (TCP) attempt reported
+        \c SOCKET-CONNECT-ERROR the underlying error is propagated (it is
+        deliberately NOT in @ref isConnectionError(), so the request retry loop
+        fails fast); otherwise \c HTTPCLIENT-CONNECT-ERROR is thrown.
+
+        This single helper also covers the synchronous race's earlier
+        H2-fast-fail throw site: in that case @c h2_err.err is
+        \c SOCKET-CONNECT-ERROR and @c h2_err.desc is set, so the message and
+        thrown error code are identical to the former inline block.
+
+        @param h3conn the HTTP/3 candidate (closed here)
+        @param h2conn the HTTP/2 candidate (closed here)
+        @param key the host:port pool key
+
+        @throw SOCKET-CONNECT-ERROR the underlying TCP-refused error (fast-fail)
+        @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
+    */
+    private heThrowConnectError(Http3ClientConnection h3conn, Http2ClientConnection h2conn,
+            string key) {
+        *hash<auto> h3_err = h3conn.getPollOperation().getError();
+        *hash<auto> h2_err = h2conn.getPollOperation().getError();
+        try { h3conn.close(); } catch () {}
+        try { h2conn.close(); } catch () {}
+
+        # Build a user-friendly error message with the underlying failure reasons
+        string desc = sprintf("could not connect to %s", key);
+        # Use the most informative underlying error (prefer H2 as it's TCP-based)
+        *string detail = h2_err.desc ?? h3_err.desc;
+        if (detail) {
+            desc += sprintf(": %s", detail);
+        }
+
+        # Fail-fast path: if the H2 (TCP) attempt reported SOCKET-CONNECT-ERROR,
+        # the endpoint is definitively refused at the kernel level (ECONNREFUSED
+        # or similar).  H3 over UDP can't recover this because the remote host
+        # has rejected the port — retrying via the outer isConnectionError loop
+        # just wastes another connect_timeout per attempt.  Propagate the
+        # underlying SOCKET-CONNECT-ERROR, which is NOT in isConnectionError(),
+        # so the retry loop fails fast.
+        if (h2_err.err == "SOCKET-CONNECT-ERROR") {
+            throw h2_err.err, desc;
+        }
+
+        throw "HTTPCLIENT-CONNECT-ERROR", desc;
+    }
+
     #! Internal: happy eyeballs parallel H3 + H2 connection race
     /** Tries H3 (QUIC/UDP) and H2 (TCP/TLS) in parallel. H3 starts first;
         if it doesn't connect within the stagger delay, H2 starts alongside.
@@ -1517,7 +1750,6 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @param key the host:port pool key
         @return the winning connection (H3 or H2)
 
-        @since HttpClientIo 1.3
     */
     private HttpClientConnection createConnectionHappyEyeballs(hash<auto> url_info, string key) {
         # Stagger delay: H3 gets a head start before H2 begins
@@ -1552,13 +1784,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         bool h3_queued = h3conn.registerReadyNotifier(h3_notifier);
         if (!h3_queued) {
             # Already decided (ready or failed)
-            if (h3conn.isReady()) {
-                log(LoggerLevel::DEBUG, "happy eyeballs: H3 connected immediately for %s", key);
-                {
-                    AutoWriteLock al(pool_lock);
-                    cacheProtocol(key, "h3");
-                }
-                return h3conn;
+            *HttpClientConnection w = hePickReady(h3conn, NOTHING);
+            if (w) {
+                heCommitWinner(w, h3conn, NOTHING, key);
+                return w;
             }
             # H3 failed immediately — fall through to start H2
         } else {
@@ -1577,13 +1806,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             controller.waitForNotifier(h3_notifier, HappyEyeballsStaggerMs,
                 opts.connect_timeout + AsyncQueueSafetyGraceMs);
             h3_notifier.acknowledge();
-            if (h3conn.isReady()) {
-                log(LoggerLevel::DEBUG, "happy eyeballs: H3 won within stagger for %s", key);
-                {
-                    AutoWriteLock al(pool_lock);
-                    cacheProtocol(key, "h3");
-                }
-                return h3conn;
+            *HttpClientConnection w = hePickReady(h3conn, NOTHING);
+            if (w) {
+                heCommitWinner(w, h3conn, NOTHING, key);
+                return w;
             }
         }
 
@@ -1604,23 +1830,10 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         # If either already decided (ready or failed), check immediately
         if (!h3_pending || !h2_pending) {
-            if (h3conn.isReady()) {
-                log(LoggerLevel::DEBUG, "happy eyeballs: H3 already ready for %s", key);
-                try { h2conn.close(); } catch () {}
-                {
-                    AutoWriteLock al(pool_lock);
-                    cacheProtocol(key, "h3");
-                }
-                return h3conn;
-            }
-            if (h2conn.isReady()) {
-                log(LoggerLevel::DEBUG, "happy eyeballs: H2 already ready for %s", key);
-                try { h3conn.close(); } catch () {}
-                {
-                    AutoWriteLock al(pool_lock);
-                    cacheProtocol(key, "h2");
-                }
-                return h2conn;
+            *HttpClientConnection w = hePickReady(h3conn, h2conn);
+            if (w) {
+                heCommitWinner(w, h3conn, h2conn, key);
+                return w;
             }
             # Race: H2 setClosed() can fire between submit and registerReadyNotifier,
             # so race_notifier gets queued only on H3.  If H2 failed with
@@ -1629,18 +1842,11 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
             # connect_timeout for H3's own timeout to expire) and fall straight
             # through to error handling so asyncModeConnectionRefusedTest
             # fast-fails in ~100ms instead of 10s.
-            if (!h2_pending && !h2conn.isReady()) {
-                *hash<auto> h2_err_early = h2conn.getPollOperation().getError();
-                if (h2_err_early.err == "SOCKET-CONNECT-ERROR") {
-                    log(LoggerLevel::DEBUG,
-                        "happy eyeballs: H2 failed fast with SOCKET-CONNECT-ERROR for %s,"
-                        " aborting H3", key);
-                    try { h3conn.close(); } catch () {}
-                    try { h2conn.close(); } catch () {}
-                    string desc_fast = sprintf("could not connect to %s: %s", key,
-                        h2_err_early.desc);
-                    throw "SOCKET-CONNECT-ERROR", desc_fast;
-                }
+            if (!h2_pending && heH2FastFail(h2conn)) {
+                log(LoggerLevel::DEBUG,
+                    "happy eyeballs: H2 failed fast with SOCKET-CONNECT-ERROR for %s,"
+                    " aborting H3", key);
+                heThrowConnectError(h3conn, h2conn, key);
             }
         }
 
@@ -1667,52 +1873,450 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         }
 
         # Determine winner
-        if (h3conn.isReady()) {
-            log(LoggerLevel::DEBUG, "happy eyeballs: H3 won for %s", key);
-            try { h2conn.close(); } catch () {}
-            {
-                AutoWriteLock al(pool_lock);
-                cacheProtocol(key, "h3");
-            }
-            return h3conn;
+        *HttpClientConnection w = hePickReady(h3conn, h2conn);
+        if (w) {
+            heCommitWinner(w, h3conn, h2conn, key);
+            return w;
         }
-        if (h2conn.isReady()) {
-            log(LoggerLevel::DEBUG, "happy eyeballs: H2 won for %s", key);
-            try { h3conn.close(); } catch () {}
+
+        # Neither connected — collect error details, clean up both, and throw
+        heThrowConnectError(h3conn, h2conn, key);
+    }
+
+    #! Acquires a connection for the given URL without ever blocking the caller
+    /** The cancelable, non-blocking counterpart of the synchronous
+        @ref acquireStream() path, intended for poll-op callers (e.g. the
+        connection-monitor ping op) that must never park a thread establishing
+        a connection.  Unlike the @c non_blocking stopgap (which skipped the
+        race entirely and used a single H2 connection), this restores a real
+        H3/H2 happy-eyeballs race for brand-new keys while keeping every step
+        non-blocking and immediately cancelable via
+        @ref abandonAsyncHEForUrl().
+
+        Re-entrant: the caller polls the returned @ref Qore::EventNotifier under
+        its own cancelable controller submission and, on each wake, calls this
+        method again — the race is advanced one step per call.
+
+        @param url the target URL (only scheme, host, and port are used)
+        @param conn_out set to the connection the caller should track for
+        failure detection (the H3 candidate while a race is in progress, or the
+        resolved/pooled connection)
+
+        @return an @ref Qore::EventNotifier to poll for readiness, or
+        @ref NOTHING if a usable connection is already available (caller should
+        proceed immediately)
+
+        @throw HTTPCLIENT-URL-ERROR the URL is invalid
+        @throw HTTPCLIENT-SHUTDOWN the manager is shutting down
+        @throw SOCKET-CONNECT-ERROR TCP refused (fast-fail; identical to the
+        synchronous race)
+        @throw HTTPCLIENT-CONNECT-ERROR neither protocol connected
+
+        @note Winner / error / cache semantics are identical to the synchronous
+        race (both paths share @ref hePickReady() / @ref heCommitWinner() /
+        @ref heThrowConnectError()).
+
+    */
+    *EventNotifier acquireConnectionAsync(string url, reference<*HttpClientConnection> conn_out) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
+        maybeCleanupIdle();
+        drainPendingAltSvc();
+
+        hash<UrlInfo> url_info;
+        try {
+            url_info = parse_url(url);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
+        }
+        if (!url_info.host) {
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
+        }
+        if (!url_info.protocol) {
+            url_info.protocol = "https";
+        }
+        if (!url_info.port) {
+            url_info.port = url_info.protocol == "https" ? 443 : 80;
+        }
+        string key = sprintf("%s:%d", url_info.host, url_info.port);
+
+        # Pool-reuse fast path (read lock, mirrors getConnection's first scan).
+        # No stream is reserved here: the caller holds no StreamHandle and will
+        # acquire its own stream later via the normal request path.
+        {
+            *HttpClientConnection reuse;
+            {
+                AutoReadLock al(pool_lock);
+                if (shutdown) {
+                    throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
+                }
+                if (pool.hasKey(key)) {
+                    foreach HttpClientConnection conn in (pool{key}) {
+                        if (conn.isClosed() || conn.isDraining()) {
+                            continue;
+                        }
+                        if (!isConnectionAlive(conn)) {
+                            continue;
+                        }
+                        reuse = conn;
+                        break;
+                    }
+                }
+            }
+            if (reuse) {
+                conn_out = reuse;
+                if (reuse.isReady()) {
+                    return NOTHING;
+                }
+                EventNotifier n();
+                if (!reuse.registerReadyNotifier(n)) {
+                    return NOTHING;
+                }
+                return n;
+            }
+        }
+
+        # Race section: serialized by async_race_lock.  Lock order is always
+        # async_race_lock -> {pool_lock | create_mutex} (never the reverse; the
+        # sync path never takes async_race_lock), so this cannot deadlock.
+        AutoLock arl(async_race_lock);
+
+        if (async_races.hasKey(key)) {
+            # Brand-new-key race already in flight — advance it one step
+            return advanceAsyncHE(key, \conn_out);
+        }
+
+        string protocol;
+        {
+            AutoWriteLock al(pool_lock);
+            if (shutdown) {
+                throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
+            }
+            protocol = resolveProtocol(url_info, key);
+        }
+
+        if (protocol != "happy-eyeballs") {
+            # Cached / forced protocol — single non-blocking connection
+            return startSingleConnectionAsync(url_info, key, protocol, \conn_out);
+        }
+        return startAsyncHE(url_info, key, \conn_out);
+    }
+
+    #! Cancels and tears down any in-flight async happy-eyeballs race for a URL
+    /** Idempotent.  Called from the connection-monitor ping op's
+        abort()/cancel path so a @c cancelByOwner("pcm:<name>") leaves no
+        leaked H3/H2 socket or stagger timer.  Safe to call when no race exists.
+
+        @param url the target URL (only scheme, host, and port are used)
+
+    */
+    abandonAsyncHEForUrl(string url) {
+        # Pin @c pool_lock across this method: see @ref pool_lock_pin.
+        RWLock pool_lock_pin = pool_lock;
+        hash<UrlInfo> url_info;
+        try {
+            url_info = parse_url(url);
+        } catch (hash<ExceptionInfo> ex) {
+            return;
+        }
+        if (!url_info.host) {
+            return;
+        }
+        if (!url_info.protocol) {
+            url_info.protocol = "https";
+        }
+        if (!url_info.port) {
+            url_info.port = url_info.protocol == "https" ? 443 : 80;
+        }
+        abandonAsyncHEByKey(sprintf("%s:%d", url_info.host, url_info.port));
+    }
+
+    #! Internal: tears down any in-flight async happy-eyeballs race for a key
+    /** Idempotent.  Cancels the stagger timer, closes both in-flight
+        candidates (neither is pool-inserted until the race resolves), and
+        drops the race state.
+    */
+    abandonAsyncHEByKey(string key) {
+        AutoLock al(async_race_lock);
+        *AsyncRace race = async_races{key};
+        if (!race) {
+            return;
+        }
+        log(LoggerLevel::DEBUG, "happy eyeballs (async): abandoning race for %s", key);
+        heAbandonTimer(race);
+        try { race.h3conn.close(); } catch () {}
+        if (race.h2conn) {
+            try { race.h2conn.close(); } catch () {}
+        }
+        removeAsyncRaceLocked(key);
+    }
+
+    #! Internal: starts a single non-blocking connection (cached/forced protocol)
+    /** Mirrors the synchronous @ref getConnection() tail (pool-insert + submit)
+        minus the blocking h2c probe and minus the held stream reservation (the
+        async caller holds no StreamHandle).  @note Caller holds async_race_lock.
+    */
+    private *EventNotifier startSingleConnectionAsync(hash<auto> url_info, string key,
+            string protocol, reference<*HttpClientConnection> conn_out) {
+        HttpClientConnection conn = createConnection(url_info, key, protocol);
+        {
+            AutoWriteLock al(pool_lock);
+            if (shutdown) {
+                try { conn.close(); } catch () {}
+                throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
+            }
+            if (!pool.hasKey(key)) {
+                pool{key} = ();
+            }
+            push pool{key}, conn;
+            conn.setControllerRef(controller);
+            submitConnectionToController(key, conn);
+            # Reserve+release under the same lock so the pool-scan path can't
+            # grab the sole slot mid-insert (mirrors the sync tail); released
+            # immediately because the async caller holds no StreamHandle —
+            # net-zero, like ensureConnectionAsync().
+            if (conn.tryReserveStream()) {
+                conn.releaseStreamReservation();
+            }
+        }
+        conn_out = conn;
+        if (conn.isReady()) {
+            return NOTHING;
+        }
+        EventNotifier n();
+        if (!conn.registerReadyNotifier(n)) {
+            return NOTHING;
+        }
+        return n;
+    }
+
+    #! Internal: starts a non-blocking H3/H2 happy-eyeballs race for a new key
+    /** Creates and submits the H3 candidate, registers the race, arms the
+        stagger timer, then performs an immediate authoritative re-check via
+        @ref advanceAsyncHE() (so an instantly-settled H3 resolves with no
+        extra wake).  @note Caller holds async_race_lock.
+    */
+    private *EventNotifier startAsyncHE(hash<auto> url_info, string key,
+            reference<*HttpClientConnection> conn_out) {
+        log(LoggerLevel::DEBUG, "happy eyeballs (async): starting H3 + H2 race for %s", key);
+        h3_probe_times{key} = now_us();
+
+        *Http3ClientConnection h3conn;
+        try {
+            h3conn = new Http3ClientConnection(url_info, opts.connect_timeout, logger,
+                opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
+                opts.client_cert, opts.client_pk);
+            h3conn.setControllerRef(controller);
+            h3conn.setManagerContext(self, key);
+            submitConnectionToController(key, h3conn);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG,
+                "happy eyeballs (async): H3 creation failed (%s: %s), using H2",
+                key, ex.err, ex.desc);
             {
                 AutoWriteLock al(pool_lock);
                 cacheProtocol(key, "h2");
             }
-            return h2conn;
+            return startSingleConnectionAsync(url_info, key, "h2", \conn_out);
         }
 
-        # Neither connected — collect error details and clean up both
-        *hash<auto> h3_err = h3conn.getPollOperation().getError();
-        *hash<auto> h2_err = h2conn.getPollOperation().getError();
-        try { h3conn.close(); } catch () {}
-        try { h2conn.close(); } catch () {}
+        AsyncRace race();
+        race.h3conn = h3conn;
+        race.phase = "stagger";
+        race.started = now_us();
+        race.url_info = url_info;
+        race.key = key;
+        # Coordinate with the sync per-key creating{} gate so a concurrent sync
+        # getConnection() for the same brand-new key waits on create_cond and
+        # then reuses our pooled winner instead of starting a duplicate race.
+        {
+            AutoLock cl(create_mutex);
+            if (!creating{key}) {
+                creating{key} = True;
+                race.we_set_creating = True;
+            }
+        }
+        async_races{key} = race;
 
-        # Build a user-friendly error message with the underlying failure reasons
-        string desc = sprintf("could not connect to %s", key);
-        # Use the most informative underlying error (prefer H2 as it's TCP-based)
-        *string detail = h2_err.desc ?? h3_err.desc;
-        if (detail) {
-            desc += sprintf(": %s", detail);
+        # Stagger: H3 gets a head start before H2 begins.  The timer wakes the
+        # caller (which re-enters advanceAsyncHE) so H2 still starts even if H3
+        # never settles.  The callback runs on a controller worker thread.
+        int HappyEyeballsStaggerMs = 100;
+        race.stagger_timer_id = controller.addTimer(
+            now_us() + milliseconds(HappyEyeballsStaggerMs),
+            sub () {
+                AutoLock al(async_race_lock);
+                *AsyncRace r = async_races{key};
+                if (!r) {
+                    return;
+                }
+                r.stagger_fired = True;
+                if (r.current_notifier) {
+                    try {
+                        r.current_notifier.notify();
+                    } catch (hash<ExceptionInfo> ex) {
+                        # caller deleted its per-call notifier between wakes;
+                        # the next advanceAsyncHE re-entry reads stagger_fired
+                        # authoritatively, so the head-start is not lost
+                    }
+                }
+            });
+
+        # Immediate authoritative re-check (H3 may have settled already).
+        return advanceAsyncHE(key, \conn_out);
+    }
+
+    #! Internal: advances an in-flight async happy-eyeballs race one step
+    /** Re-entrant and authoritative: re-reads isReady()/isClosed() on every
+        call (the notifier is only a wakeup).  Resolves the winner, fast-fails,
+        transitions stagger->race, or returns a fresh per-call notifier to poll.
+        @note Caller holds async_race_lock.
+    */
+    private *EventNotifier advanceAsyncHE(string key,
+            reference<*HttpClientConnection> conn_out) {
+        *AsyncRace race = async_races{key};
+        if (!race) {
+            # abandoned/resolved concurrently (op being canceled) — nothing to do
+            conn_out = NOTHING;
+            return NOTHING;
         }
 
-        # Fail-fast path: if the H2 (TCP) attempt reported SOCKET-CONNECT-ERROR,
-        # the endpoint is definitively refused at the kernel level (ECONNREFUSED
-        # or similar).  H3 over UDP can't recover this because the remote host
-        # has rejected the port — retrying via the outer isConnectionError loop
-        # just wastes another connect_timeout per attempt (seen in
-        # asyncModeConnectionRefusedTest: 2×10s = 20s, 5s over the 15s budget).
-        # Propagate the underlying SOCKET-CONNECT-ERROR, which is NOT in
-        # isConnectionError(), so the retry loop fails fast.
-        if (h2_err.err == "SOCKET-CONNECT-ERROR") {
-            throw h2_err.err, desc;
+        if (race.phase == "stagger") {
+            *HttpClientConnection sw = hePickReady(race.h3conn, NOTHING);
+            if (sw) {
+                heAbandonTimer(race);
+                heCommitWinner(sw, race.h3conn, NOTHING, key);
+                finishAsyncRace(key, sw);
+                conn_out = sw;
+                return NOTHING;
+            }
+            if (race.h3conn.isClosed() || race.stagger_fired) {
+                # H3 head start over (settled-closed or stagger elapsed) —
+                # start H2 alongside and enter the race phase
+                startRaceH2(race);
+                heAbandonTimer(race);
+                race.phase = "race";
+                # fall through to race handling below
+            } else {
+                conn_out = race.h3conn;
+                return mintAndRegisterRaceNotifier(race);
+            }
         }
 
-        throw "HTTPCLIENT-CONNECT-ERROR", desc;
+        # phase == "race"
+        *HttpClientConnection w = hePickReady(race.h3conn, race.h2conn);
+        if (w) {
+            heCommitWinner(w, race.h3conn, race.h2conn, key);
+            finishAsyncRace(key, w);
+            conn_out = w;
+            return NOTHING;
+        }
+        Http2ClientConnection h2 = race.h2conn;
+        bool both_closed = race.h3conn.isClosed() && h2.isClosed();
+        if (heH2FastFail(h2) || both_closed) {
+            Http3ClientConnection h3 = race.h3conn;
+            # Drop race state first — heThrowConnectError closes both and throws
+            removeAsyncRaceLocked(key);
+            heThrowConnectError(h3, h2, key);
+        }
+        conn_out = race.h3conn;
+        return mintAndRegisterRaceNotifier(race);
+    }
+
+    #! Internal: creates + submits the H2 candidate when the race phase begins
+    /** @note Caller holds async_race_lock. */
+    private startRaceH2(AsyncRace race) {
+        log(LoggerLevel::DEBUG,
+            "happy eyeballs (async): starting H2 for %s (H3 still pending)", race.key);
+        Http2ClientConnection h2conn(race.url_info, opts.connect_timeout, logger,
+            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
+            proxy_info, opts.client_cert, opts.client_pk);
+        applyTcpUserTimeout(h2conn);
+        h2conn.setControllerRef(controller);
+        h2conn.setManagerContext(self, race.key);
+        submitConnectionToController(race.key, h2conn);
+        race.h2conn = h2conn;
+    }
+
+    #! Internal: mints a fresh per-call notifier and registers it on the race
+    /** A fresh notifier is minted on every re-entry because the caller deletes
+        its previous notifier each wake (the established re-entrant poll-op
+        pattern).  It is registered on every still-CONNECTING candidate;
+        @c registerReadyNotifier() returning False (already settled) is benign
+        because @ref advanceAsyncHE() re-checks state authoritatively — and at
+        least one candidate is still CONNECTING here, so the notifier is
+        guaranteed to be signalled by a connection settling or the stagger
+        timer (no lost wakeup).  @note Caller holds async_race_lock.
+    */
+    private EventNotifier mintAndRegisterRaceNotifier(AsyncRace race) {
+        EventNotifier n();
+        race.h3conn.registerReadyNotifier(n);
+        if (race.h2conn) {
+            race.h2conn.registerReadyNotifier(n);
+        }
+        race.current_notifier = n;
+        return n;
+    }
+
+    #! Internal: cancels a race's stagger timer if still armed (idempotent)
+    /** @note Caller holds async_race_lock. */
+    private heAbandonTimer(AsyncRace race) {
+        if (race.stagger_timer_id) {
+            try {
+                controller.cancelTimer(race.stagger_timer_id);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::DEBUG,
+                    "happy eyeballs (async): cancelTimer error: %s: %s", ex.err, ex.desc);
+            }
+            remove race.stagger_timer_id;
+        }
+    }
+
+    #! Internal: pool-inserts the race winner and drops the race state
+    /** Mirrors the synchronous getConnection() tail (pool-insert + re-submit +
+        reserve/release stream).  The loser was already closed by
+        @ref heCommitWinner(); the winner was already submitted during the race
+        (re-submitting the same controller key is idempotent, matching the sync
+        path).  @note Caller holds async_race_lock.
+    */
+    private finishAsyncRace(string key, HttpClientConnection winner) {
+        {
+            AutoWriteLock al(pool_lock);
+            if (shutdown) {
+                try { winner.close(); } catch () {}
+                removeAsyncRaceLocked(key);
+                throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
+            }
+            if (!pool.hasKey(key)) {
+                pool{key} = ();
+            }
+            push pool{key}, winner;
+            winner.setControllerRef(controller);
+            submitConnectionToController(key, winner);
+            if (winner.tryReserveStream()) {
+                winner.releaseStreamReservation();
+            }
+        }
+        removeAsyncRaceLocked(key);
+    }
+
+    #! Internal: removes a race from the map + clears the sync creating gate
+    /** Idempotent.  Cancels any remaining stagger timer and, if this race set
+        the per-key @c creating flag, clears it and broadcasts @c create_cond so
+        a waiting sync getConnection() wakes and reuses the pooled winner.
+        @note Caller holds async_race_lock.  Does not close connections.
+    */
+    private removeAsyncRaceLocked(string key) {
+        *AsyncRace race = remove async_races{key};
+        if (!race) {
+            return;
+        }
+        heAbandonTimer(race);
+        if (race.we_set_creating) {
+            AutoLock cl(create_mutex);
+            remove creating{key};
+            create_cond.broadcast();
+        }
     }
 
     #! Internal: submits a connection poll operation to the controller
@@ -2365,14 +2969,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         @param ct the new connect timeout (must be positive)
 
-        @since HttpClientIo 1.1
     */
     setConnectTimeout(timeout ct) {
         opts.connect_timeout = ct;
     }
 
     #! Returns the default connection timeout in milliseconds
-    /** @since HttpClientIo 1.1 */
     timeout getConnectTimeout() {
         return opts.connect_timeout;
     }
@@ -2382,20 +2984,17 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         @param rt the new default request timeout (must be positive)
 
-        @since HttpClientIo 1.1
     */
     setRequestTimeout(timeout rt) {
         opts.request_timeout = rt;
     }
 
     #! Returns the default request timeout in milliseconds
-    /** @since HttpClientIo 1.1 */
     timeout getRequestTimeout() {
         return opts.request_timeout;
     }
 
     #! Returns the configured protocol mode (@c "auto", @c "h1", @c "h2", @c "h3")
-    /** @since HttpClientIo 1.1 */
     string getProtocolMode() {
         return opts.protocol;
     }
