@@ -1,5 +1,7 @@
 # Generic Phase 4: Static Methods And Hashdecls Checklist
 
+## Status: Implemented
+
 This checklist captures the remaining generic-type work that affects static
 methods, generic hashdecls, and typed result records. It applies to the core
 Qore repository first, then to binary module repositories such as
@@ -70,9 +72,8 @@ Implementation checklist:
 - [x] Preserve parameterized hashdecl use sites through AOT type metadata.
 - [x] Preserve source-defined generic hashdecl definitions in source-stripped
   AOT metadata.
-- [x] Implement or explicitly reject parameterized parent hashdecl references;
-  the initial implementation keeps existing non-generic hashdecl inheritance
-  behavior.
+- [x] Implement parameterized parent hashdecl references and substitute parent
+  member types in child hashdecl instantiations.
 - [x] Update reflection and API metadata so tools can distinguish raw
   `hash<Result>` from `hash<Result<int>>`.
 - [x] Add tests for concrete member assignment, nested generic members, wrong

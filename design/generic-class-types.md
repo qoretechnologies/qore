@@ -13,6 +13,7 @@ Related operational checklists:
 
 - `design/generic-builtin-class-conversion-checklist.md`
 - `design/generic-phase4-static-and-hashdecl-checklist.md`
+- `design/generic-future-work-checklist.md`
 
 User-facing documentation lives in:
 
@@ -100,8 +101,47 @@ hashdecl Result<T> {
 hash<Result<int>> r(("value": 1, "values": (2, 3)));
 ```
 
-Generic hashdecl inheritance is intentionally not implemented in this phase;
-`hashdecl Child<T> inherits Parent<T>` is rejected.
+Generic hashdecl inheritance is supported:
+
+```qore
+hashdecl Parent<T> {
+    T value;
+}
+
+hashdecl Child<T> inherits Parent<T> {
+    string name;
+}
+
+hash<Child<int>> h(("value": 1, "name": "one"));
+```
+
+Type parameters may declare defaults and concrete upper bounds:
+
+```qore
+class Box<T: int = int> {
+    private T value;
+
+    constructor(T value = 1) {
+        self.value = value;
+    }
+}
+
+Box<> b();
+```
+
+Functions and methods may declare their own type parameters. Explicit generic
+call type arguments are optional when the argument types infer a unique
+instantiation:
+
+```qore
+T sub identity<T>(T value) {
+    return value;
+}
+
+int a = identity(1);
+int b = identity<int>(1);
+string c = identity<string>(value: "x");
+```
 
 ## Runtime Model
 
@@ -270,17 +310,28 @@ For `~/src/qore/git/module-*`, migrate generic APIs conservatively:
 
 The following are intentionally not part of this implementation:
 
-- method-level generic functions such as `T identity<T>(T value)`
-- type-parameter constraints or bounds
-- type-parameter defaults
 - variance
-- generic hashdecl inheritance
 - monomorphized code generation per type argument
 - inference of class type arguments at arbitrary expression sites
 
-These limits keep the runtime model reified and substitution-based, matching
-Qore's existing `QoreValue` execution model while giving users and tooling
-concrete type information where it is safe.
+Generic class and hashdecl type arguments are currently invariant. `auto`
+remains a concrete type argument, not a wildcard. Raw compatibility attributes
+are migration aids for specific legacy APIs, not a substitute for general
+wildcard or variance semantics.
+
+Execution is currently reified and substitution-based. The runtime keeps one
+class or function body and substitutes type parameters for parsing, runtime
+checks, IR, JIT fallback, and AOT metadata. It does not yet create specialized
+compiled bodies for each type-argument tuple.
+
+Class type argument inference is intentionally conservative. Method-level
+generic calls can infer call-local type arguments from supplied arguments, and
+generic classes may use defaults for omitted type arguments. General inference
+from constructor arguments, assignment target types, or broader expression
+context remains future work.
+
+The future-work checklist is tracked in
+`design/generic-future-work-checklist.md`.
 
 ## Test Coverage
 
@@ -292,6 +343,7 @@ Primary coverage lives in:
   the generic class conversion commits
 
 The generic class test covers source generics, multiple type parameters,
-namespaces, overloads, inheritance, static generic methods, generic hashdecls,
-iterators, poll operations, raw compatibility attributes, and expected parse
-or runtime failures.
+defaults, bounds, namespaces, overloads, inheritance, static generic methods,
+method-level generics, explicit generic call type arguments, generic hashdecls,
+generic hashdecl inheritance, iterators, poll operations, raw compatibility
+attributes, and expected parse or runtime failures.

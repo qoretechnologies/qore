@@ -37,10 +37,10 @@ Avoid conversion when:
   parameter.
 - Existing APIs deliberately accept arbitrary payloads and return unrelated
   shapes.
-- Method overloads would need method-level generics, which are not available in
-  this phase.
-- The class is source-defined Qore code; source-defined `class C<T>` is not
-  enabled yet.
+- Method overloads would require variance, wildcard, or expression-site
+  inference semantics that are not implemented yet.
+- The class is source-defined Qore code but cannot state a stable type
+  parameter contract without misleading callers.
 
 ## QPP Declaration Checklist
 
@@ -76,6 +76,8 @@ For each method and constructor:
   come from the declared object type.
 - Confirm raw legacy subclasses still satisfy abstract methods when the parent
   was migrated to `T` return types.
+- Prefer method-level generics for helpers where the type is call-local and does
+  not describe object state.
 
 ## Runtime Construction Checklist
 
@@ -106,6 +108,7 @@ Add focused tests for each conversion:
 - Invariance: `Name<auto>` must not accept `Name<int>` unless a raw annotation is
   used.
 - Parameterized vparent checks, when relevant.
+- Static generic methods and method-level generic calls, when relevant.
 - AOT/IR round-trip for parameterized object types when the class appears in
   compiled code.
 
@@ -134,3 +137,5 @@ When applying this to `~/src/qore/git/module-*`:
    compatibility flags.
 7. Prefer explicit typed examples in docs and qlib/module code when the type is
    known; keep raw examples only where the value type is intentionally erased.
+8. Use method-level generics for API helpers that merely transform or echo a
+   call-local type and should not force a class-level type parameter.
