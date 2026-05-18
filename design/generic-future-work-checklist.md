@@ -39,7 +39,7 @@ Implementation checklist:
 - [x] Update `instanceof`, assignment, argument filtering, return checking,
   casts, and overload selection.
 - [x] Preserve wildcard type paths through AOT type metadata.
-- [ ] Expose structured wildcard argument metadata for API metadata consumers.
+- [x] Expose structured wildcard argument metadata for API metadata consumers.
 - [x] Add positive and negative tests for source classes, builtin classes,
   source hashdecls, inherited hashdecls, raw compatibility, AOT, AST mode, and
   error messages.
@@ -116,7 +116,7 @@ Implementation checklist:
   receiver/type-argument context.
 - [x] Add correctness tests that compare specialized and non-specialized paths.
 - [x] Add stress tests for cache reuse and mixed instantiations.
-- [ ] Add performance-focused smoke tests only after correctness is stable.
+- [x] Add performance-focused smoke tests only after correctness is stable.
 
 ## Phase 4: Doxygen And User Documentation
 

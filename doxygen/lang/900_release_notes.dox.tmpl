@@ -349,7 +349,11 @@ AbstractPollOperation<auto> connect = sock.startPollConnect(target: "example.com
     Object serialization preserves specialized generic class types, reflection
     exposes type parameters, defaults, and bounds for generic classes and
     hashdecls, and QoreApiMetadata merges generic metadata from AST parsing,
-    reflection, and qpp metadata. The astparser and QoreCodeFormat modules
+    reflection, and qpp metadata. QoreApiMetadata also exposes structured
+    type-use metadata for generic arguments and wildcards, including
+    unbounded, upper-bound, and lower-bound wildcard entries for parameters,
+    members, returns, and inherited class/hashdecl types. The astparser and
+    QoreCodeFormat modules
     preserve generic class/hashdecl declarations, wildcards, defaults, bounds,
     and parameterized inheritance.
     @endparblock
@@ -2343,6 +2347,8 @@ cargo install tree-sitter-cli@0.26.5
         (JSON/YAML), and the full merge pipeline
       - class and hashdecl metadata includes generic type parameters, defaults, bounds, and
         migrated raw-compatibility flags when available
+      - parameter, member, return, parent-class, and parent-hashdecl metadata includes
+        structured type-use fields and flattened wildcard argument metadata
     - @ref qorecodecompletionintro "QoreCodeCompletion" module
       - new module providing a shared code completion engine for %Qore tools
       - context-aware completion: identifiers, @c new, dot-access (@c .), scope (@c ::)

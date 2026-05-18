@@ -194,7 +194,7 @@ public class ReflectionMetadataExtractor {
             }
         }
 
-        return ci;
+        return TypeMetadata::enrichClass(ci);
     }
 
     #! Build MethodInfo from a reflection Method + Variant
@@ -247,7 +247,7 @@ public class ReflectionMetadataExtractor {
             domain = sprintf("0x%x", variant.getDomain());
         }
 
-        return <MethodInfo>{
+        hash<MethodInfo> info({
             "name": method_name,
             "full_name": class_full_name + "::" + method_name,
             "signature": sig,
@@ -260,7 +260,8 @@ public class ReflectionMetadataExtractor {
             "is_abstract": is_abstract,
             "is_deprecated": is_deprecated,
             "functional_domain": domain,
-        };
+        });
+        return TypeMetadata::enrichMethod(info);
     }
 
     #! Build FunctionInfo from a reflection Function + Variant
@@ -292,7 +293,7 @@ public class ReflectionMetadataExtractor {
             domain = sprintf("0x%x", variant.getDomain());
         }
 
-        return <FunctionInfo>{
+        hash<FunctionInfo> info({
             "name": name,
             "full_name": full_name,
             "namespace_path": ns_full_name,
@@ -303,7 +304,8 @@ public class ReflectionMetadataExtractor {
             "named_parameters": named_params,
             "is_deprecated": is_deprecated,
             "functional_domain": domain,
-        };
+        });
+        return TypeMetadata::enrichFunction(info);
     }
 
     #! Extract parameter info from a variant
@@ -329,7 +331,7 @@ public class ReflectionMetadataExtractor {
                 "type_name": p_type,
                 "default_value": p_default,
             });
-            params += pi;
+            params += TypeMetadata::enrichParameter(pi);
         }
         return params;
     }
@@ -351,11 +353,12 @@ public class ReflectionMetadataExtractor {
     private static hash<ConstantInfo> buildConstantInfo(auto constant) {
         string name = constant.getName();
         string type_name = constant.getType().getName();
-        return <ConstantInfo>{
+        hash<ConstantInfo> info({
             "name": name,
             "full_name": name,
             "type_name": type_name,
-        };
+        });
+        return TypeMetadata::enrichConstant(info);
     }
 
     #! Build HashdeclInfo from a reflection TypedHash
@@ -396,10 +399,10 @@ public class ReflectionMetadataExtractor {
                 "name": string(m.getName()),
                 "type_name": string(m.getType().getName()),
             });
-            hi.members += mi;
+            hi.members += TypeMetadata::enrichMember(mi);
         }
 
-        return hi;
+        return TypeMetadata::enrichHashdecl(hi);
     }
 }
 

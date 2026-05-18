@@ -443,7 +443,7 @@ public class AstMetadataExtractor {
                             "access": f_access,
                             "is_static": m.isStatic ? True : False,
                         });
-                        ci.members += fi;
+                        ci.members += TypeMetadata::enrichMember(fi);
                         break;
                     }
                     case ASYK_Constant: {
@@ -458,7 +458,7 @@ public class AstMetadataExtractor {
             }
         }
 
-        return ci;
+        return TypeMetadata::enrichClass(ci);
     }
 
     #! Build a MethodInfo from a type member detail hash
@@ -485,7 +485,7 @@ public class AstMetadataExtractor {
                     "type_name": p_type,
                     "default_value": p_default,
                 });
-                params += pi;
+                params += TypeMetadata::enrichParameter(pi);
             }
         }
 
@@ -544,7 +544,7 @@ public class AstMetadataExtractor {
             meth_access = string(m.access);
         }
 
-        return <MethodInfo>{
+        hash<MethodInfo> info({
             "name": method_name,
             "full_name": full_name,
             "signature": sig,
@@ -561,7 +561,8 @@ public class AstMetadataExtractor {
             "deprecated_reason": meth_depr_reason,
             "since": meth_since,
             "see_also": meth_see,
-        };
+        });
+        return TypeMetadata::enrichMethod(info);
     }
 
     #! Build a FunctionInfo from symbol data
@@ -598,7 +599,7 @@ public class AstMetadataExtractor {
                         pi.description =
                             string(parsed_doc.params{p_name});
                     }
-                    params += pi;
+                    params += TypeMetadata::enrichParameter(pi);
                 }
             }
         }
@@ -630,7 +631,7 @@ public class AstMetadataExtractor {
             }
         }
 
-        return <FunctionInfo>{
+        hash<FunctionInfo> info({
             "name": base,
             "full_name": name,
             "namespace_path": AstMetadataExtractor::namespacePath(name),
@@ -646,7 +647,8 @@ public class AstMetadataExtractor {
             "since": func_since,
             "see_also": func_see,
             "source_file": source_file,
-        };
+        });
+        return TypeMetadata::enrichFunction(info);
     }
 
     #! Build a ConstantInfo from symbol data
@@ -713,11 +715,11 @@ public class AstMetadataExtractor {
                     "name": string(m.name),
                     "type_name": m_type,
                 });
-                hi.members += mi;
+                hi.members += TypeMetadata::enrichMember(mi);
             }
         }
 
-        return hi;
+        return TypeMetadata::enrichHashdecl(hi);
     }
 
     #! Extract formal type parameter metadata from a class or hashdecl CST node

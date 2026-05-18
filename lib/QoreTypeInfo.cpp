@@ -3165,6 +3165,16 @@ static const QoreTypeInfo* qore_resolve_parse_type_parameter(const NamedScope& c
     }
 
     const char* name = cscope.getIdentifier();
+    const typed_hash_decl_private* hd = parse_get_hashdecl_type_param_context();
+    if (hd && hd->hasTypeParams()) {
+        for (size_t i = 0, e = hd->getTypeParamCount(); i < e; ++i) {
+            const char* param = hd->getTypeParamName(i);
+            if (!strcmp(name, param)) {
+                return qore_get_hashdecl_type_parameter_type(hd->getHashDecl(), i, param, or_nothing);
+            }
+        }
+    }
+
     const UserSignature* sig = parse_get_signature_type_param_context();
     if (sig && sig->hasTypeParameters()) {
         for (size_t i = 0, e = sig->getTypeParameterCount(); i < e; ++i) {
@@ -3181,16 +3191,6 @@ static const QoreTypeInfo* qore_resolve_parse_type_parameter(const NamedScope& c
             const char* param = qc->getTypeParamName(i);
             if (!strcmp(name, param)) {
                 return qore_get_type_parameter_type(qc->cls, i, param, or_nothing);
-            }
-        }
-    }
-
-    const typed_hash_decl_private* hd = parse_get_hashdecl_type_param_context();
-    if (hd && hd->hasTypeParams()) {
-        for (size_t i = 0, e = hd->getTypeParamCount(); i < e; ++i) {
-            const char* param = hd->getTypeParamName(i);
-            if (!strcmp(name, param)) {
-                return qore_get_hashdecl_type_parameter_type(hd->getHashDecl(), i, param, or_nothing);
             }
         }
     }

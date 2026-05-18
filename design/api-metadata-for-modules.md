@@ -222,6 +222,76 @@ Consumers must distinguish a raw generic hashdecl declaration (`Result<T>`) from
 a concrete typed hash use (`hash<Result<int>>`). New examples should use
 concrete type arguments whenever the payload type is known.
 
+## Structured Type-Use Metadata
+
+String type fields remain the canonical human-readable representation, but
+metadata consumers that need to reason about generic arguments should use the
+structured companion fields. These fields are populated by AST extraction,
+reflection extraction, and `QppDocIndex` enrichment.
+
+| Owner | String field | Structured field | Wildcard list field |
+|-------|--------------|------------------|---------------------|
+| parameter/member/constant | `type_name` | `type_info` | `wildcard_type_arguments` |
+| function/method | `return_type` | `return_type_info` | `return_wildcard_type_arguments` |
+| hashdecl | `parent_name` | `parent_type_info` | `parent_wildcard_type_arguments` |
+| class | `parents` | `parent_type_info` | `parent_wildcard_type_arguments` |
+
+`type_info` values use:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `text` | `string` | Original type string |
+| `base_type` | `string` | Base type without optional marker or type arguments |
+| `is_optional` | `bool` | `True` for leading `*` optional types |
+| `type_arguments` | `list<object>` | Ordered nested type argument metadata |
+| `wildcard_arguments` | `list<object>` | Flattened wildcard arguments in this type expression |
+
+Wildcard entries include `path`, `owner_type`, `argument_index`, `text`,
+`kind`, and optional `bound_type` / `bound_type_info`. The `kind` value is one
+of `unbounded`, `extends`, or `super`. `path` is a dot-separated argument path
+from the outer type; for example `hash<Result<? extends int>>` exposes the
+wildcard at path `0.0`.
+
+Example:
+
+```json
+{
+  "name": "operation",
+  "type_name": "AbstractPollOperation<?>",
+  "type_info": {
+    "text": "AbstractPollOperation<?>",
+    "base_type": "AbstractPollOperation",
+    "is_optional": false,
+    "type_arguments": [
+      {"text": "?", "is_wildcard": true, "wildcard_kind": "unbounded"}
+    ],
+    "wildcard_arguments": [
+      {
+        "path": "0",
+        "owner_type": "AbstractPollOperation",
+        "argument_index": 0,
+        "text": "?",
+        "kind": "unbounded"
+      }
+    ]
+  },
+  "wildcard_type_arguments": [
+    {
+      "path": "0",
+      "owner_type": "AbstractPollOperation",
+      "argument_index": 0,
+      "text": "?",
+      "kind": "unbounded"
+    }
+  ]
+}
+```
+
+Consumers should prefer the structured fields for wildcard-aware completions,
+signature help, generated examples, and module metadata indexes. The string
+fields should still be displayed to users and preserved for backward
+compatibility.
+
 ## Problem
 
 Previously, only the core `qore` repo generated `.meta.json` files from its 132+ qpp

@@ -3,8 +3,7 @@
 
 %modern
 
-%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
+%requires ../../../../qlib/QUnit.qm
 
 %exec-class GenericClassTypesTest
 
@@ -482,6 +481,7 @@ public class GenericClassTypesTest inherits QUnit::Test {
         addTestCase("generic wildcards", \genericWildcards());
         addTestCase("expression-site inference", \expressionSiteInference());
         addTestCase("specialized generic execution", \specializedGenericExecution());
+        addTestCase("specialized generic performance smoke", \specializedGenericPerformanceSmoke());
         addTestCase("source generic iterators", \sourceGenericIterators());
         addTestCase("source generic poll operations", \sourceGenericPollOperations());
         addTestCase("builtin iterator element types", \builtinIteratorElementTypes());
@@ -901,6 +901,39 @@ public class GenericClassTypesTest inherits QUnit::Test {
 
         assertEq("right", SourceSpecializedOps<int>::choose<string>(6, "right"));
         assertEq(7, SourceSpecializedOps<string>::choose<int>("left", 7));
+    }
+
+    specializedGenericPerformanceSmoke() {
+        SourceSpecializedOps<int> int_ops();
+        SourceSpecializedOps<string> string_ops();
+
+        int iterations = 10000;
+        int start_us = clock_getmicros();
+        int sum = 0;
+        for (int i = 0; i < iterations; ++i) {
+            int value = int_ops.identity(i);
+            sum += value;
+
+            list<int> values = int_ops.wrap(value);
+            sum += values[0];
+
+            hash<SourceGenericResult<int>> result = int_ops.result(value);
+            sum += result.value;
+
+            hash<SourceGenericResult<int>> static_result =
+                SourceSpecializedOps<int>::staticResult(value);
+            sum += static_result.value;
+
+            string text = string_ops.identity("value");
+            if (text != "value") {
+                throw "SPECIALIZED-GENERIC-SMOKE-ERROR",
+                    sprintf("unexpected specialized string result: %y", text);
+            }
+        }
+        int elapsed_us = clock_getmicros() - start_us;
+        assertEq(((iterations - 1) * iterations / 2) * 4, sum);
+        assertLt(30000000, elapsed_us,
+            sprintf("specialized generic loop took %d us", elapsed_us));
     }
 
     sourceGenericIterators() {
