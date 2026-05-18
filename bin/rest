@@ -346,9 +346,46 @@ class RestCmd {
         doRequest(rest, meth, request_path, body, rest_url);
     }
 
+    #! Idempotently percent-encodes characters illegal as-is in a URI request
+    /** Preserves existing \c %XX escapes and URI structure (\c '?', \c '&',
+        \c '=', \c '/', \c '#', …); re-running on an already-encoded URI is a
+        no-op (no double-encoding).  HTTP/2 and HTTP/3 mandate percent-encoded
+        URIs at the protocol level and RestClientIo sends the path verbatim,
+        so a human-typed path/query (with e.g. spaces or a literal \c '%')
+        must be normalized here or it produces a malformed request that the
+        server rejects as an opaque \c HTTP3-PEER-CLOSE / connection reset.
+    */
+    private static string encodeUriRequestSafe(string s) {
+        # turn only a lone '%' (not part of a valid %XX escape) into %25 so
+        # already-encoded input passes through unchanged
+        s = regex_subst(s, "%(?![0-9A-Fa-f]{2})", "%25", RE_Global);
+        string out = "";
+        int n = s.strlen();
+        for (int i = 0; i < n; ++i) {
+            int b = s.getByte(i);
+            # keep printable ASCII that is legal as-is (incl. structure and
+            # the '%' of preserved escapes); percent-encode space, '"', the
+            # RFC 3986 "unwise" set, controls/DEL, and all non-ASCII bytes
+            if (b >= 0x21 && b <= 0x7e
+                && b != 0x22 && b != 0x3c && b != 0x3e && b != 0x5c
+                && b != 0x5e && b != 0x60 && b != 0x7b && b != 0x7d
+                && b != 0x7c) {
+                out += chr(b);
+            } else {
+                out += sprintf("%%%02X", b);
+            }
+        }
+        return out;
+    }
+
     #! Performs a REST request using RestClientIo (fully async)
     private doRequest(RestClientIo::RestClientIo rest, string meth, string request_path,
             auto body, string rest_url) {
+        # HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol level
+        # (RestClientIo sends the path verbatim); idempotently encode the
+        # user-supplied request path/query (no-op if already encoded).
+        request_path = RestCmd::encodeUriRequestSafe(request_path);
+
         hash<RestClient::RestResponseInfo> h;
         try {
             on_error rethrow $1.err, sprintf("%s (using url: %y request path: %y)", $1.desc,

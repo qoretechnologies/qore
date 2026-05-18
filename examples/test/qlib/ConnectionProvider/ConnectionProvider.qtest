@@ -42,6 +42,7 @@ public class ConnectionProviderTest inherits QUnit::Test {
         addTestCase("custom option validation", \customValidateOptions());
         addTestCase("polling monitor", \pollingMonitorTest());
         addTestCase("indexed scheme fallback", \indexedSchemeFallbackTest());
+        addTestCase("async HE cancel mid-race", \asyncHeCancelMidRaceTest());
 
         # Return for compatibility with a test harness that checks the return value
         set_return_value(main());
@@ -664,6 +665,60 @@ public class ConnectionProviderTest inherits QUnit::Test {
             assertEq("OK", result.result);
             assertTrue(pcm.running());
         }
+    }
+
+    #! Regression: an in-flight async happy-eyeballs connect must be cancelable
+    #! immediately — stopClear() must not hang on the connect timeout.
+    /** Reproduces the production deadlock class (PollingConnectionMonitor::
+        stopClear()'s task_cnt.waitForZero() hanging because the ping op's
+        connect blocked an uncancelable thread).  With V2's cancelable
+        non-blocking happy-eyeballs (acquireConnectionAsync + abandonAsyncHEForUrl
+        in the ping op's cancel path), stopClear() returns in well under the
+        connect/ping timeouts, the monitor stops, and connections clear — proving
+        the race (H3/H2 sockets + stagger timer) was torn down with no leak.
+    */
+    asyncHeCancelMidRaceTest() {
+        # An HTTPS URL to a plain-TCP server that accepts but never speaks TLS:
+        # the H2 (TCP) candidate connects TCP then hangs in the TLS handshake,
+        # and the H3 (QUIC) candidate has no UDP listener — so the async
+        # happy-eyeballs race stays genuinely in flight until the (long)
+        # connect timeout.  A working cancel must free it almost immediately.
+        SimpleTcpServer server();
+        on_exit server.stop();
+        string url = "https://127.0.0.1:" + server.getPort();
+
+        SlowPingMonitor pcm();
+        on_exit delete pcm;
+        # connect_timeout (60s) and ping_timeout (60s, set by SlowPingMonitor)
+        # are far larger than the assertion bound, so a fast stopClear() can
+        # only be the cancel path working — not a timeout masking a stuck thread.
+        HttpConnection hc("async-he-cancel", "test", url, {},
+            {"connect_timeout": 60s});
+        pcm.add(hc);
+        assertTrue(pcm.running());
+
+        # Let the ping op start and the async race reach mid-flight (H3
+        # submitted, stagger elapsed, H2 started and stuck in TLS).
+        usleep(1500ms);
+
+        date t0 = now_us();
+        pcm.stopClear();
+        date elapsed = now_us() - t0;
+
+        assertTrue(elapsed < 5s,
+            sprintf("stopClear() mid async-HE-race took %y, expected << "
+                "connect/ping timeout 60s (cancel must free it)", elapsed));
+        assertFalse(pcm.running(), "monitor stopped after stopClear()");
+        assertFalse(pcm.getInfo().connections.val(),
+            "connections cleared after stopClear()");
+    }
+}
+
+class SlowPingMonitor inherits TestPollingConnectionMonitor {
+    constructor(*LoggerInterface logger) : TestPollingConnectionMonitor(logger) {
+        # Long ping timeout so a fast stopClear() unambiguously proves the
+        # in-flight async connect was cancelable (not freed by a timeout).
+        ping_timeout = 60s;
     }
 }
 

@@ -175,11 +175,18 @@ public:
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);
 
-    //! Wait for all pending work items to be processed
-    /** Blocks until the async queue is empty AND no workers are actively
-        processing items. Used during shutdown to ensure all onComplete()
-        callbacks are delivered before stopping thread pools that depend
-        on them.
+    //! Wait for all pending callbacks to be processed
+    /** Blocks until no callback work remains: the async queue holds no
+        non-continuePoll items AND no workers are processing a callback
+        (onComplete/abort/callback/stream/poll-complete).  Used during
+        shutdown to ensure all such callbacks are delivered before stopping
+        thread pools that depend on them.
+
+        Deliberately does NOT wait for in-flight DT_CONTINUE_POLL dispatches
+        (see @ref active_continue_poll): a poll op's continuePoll() may block
+        indefinitely (OAuth2 refresh / happy-eyeballs via waitForNotifier())
+        and is torn down via cancel()/cancelByOwner() + op completion, not via
+        this barrier — waiting for it here deadlocks shutdown.
     */
     DLLLOCAL void waitForIdle();
 
@@ -251,6 +258,16 @@ private:
     std::deque<AsyncWorkItem> async_queue;  //!< Pending async work items
     int active_workers = 0;                 //!< Number of running worker threads
     int active_processing = 0;             //!< Number of workers currently processing items
+    //! Number of workers currently inside a DT_CONTINUE_POLL dispatch
+    /** Subset of @ref active_processing.  waitForIdle()/flushCallbacks() must
+        NOT wait for these: a poll op's continuePoll() can legitimately block
+        (e.g. an OAuth2 token refresh / happy-eyeballs connect via
+        waitForNotifier()), its lifecycle is governed by cancel()/cancelByOwner()
+        + op completion, and flushCallbacks() is documented to drain pending
+        onComplete/abort *callbacks* only.  Counting continuePoll here let a
+        blocked ping continuePoll wedge HttpServer::stop()->flushCallbacks()
+        forever (qorus-core shutdown deadlock). */
+    int active_continue_poll = 0;
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
     AsyncIoControllerPriv* ctrl = nullptr;  //!< Owning controller for logging (not ref'd — controller outlives dispatcher)
@@ -578,6 +595,13 @@ private:
         IoCommand cmd = IoCommand::WakeSocket;
         std::string key;                //!< For Cancel / ContinuePollResult / SubmitOp: the cache key
         std::string owner;              //!< For CancelOwner / SubmitOp: the owner string
+        //! For SubmitOp: the owner of the poll op whose continuePoll() was
+        //! running on this (worker) thread when submit() was called — the
+        //! op's *inherited* cancel scope.  cancelByOwner() of this owner also
+        //! cancels the op, so cancelling a poll op cancels async work its
+        //! continuePoll() spawned (e.g. a nested waitForNotifier()).  Empty
+        //! when submitted outside a continuePoll() dispatch.
+        std::string inherited_owner;
         //! For CancelOwner/CancelByProgram/GetInfo: shared completion object.
         /** When non-null, owns one ref on the referenced AsyncOpCompletion.
             The ref is released when the command is processed (normal path
@@ -638,11 +662,25 @@ private:
         QoreHashNode* poll_info;        //!< Last SocketPollInfo hash (referenced, or nullptr)
         int64 timeout_us;               //!< Timeout in microseconds (negative = no timeout)
         std::string owner;              //!< Owner identifier
+        //! Inherited cancel scope: the owner of the poll op whose
+        //! continuePoll() spawned this op (empty if none).  cancelByOwner()
+        //! matches this in addition to @ref owner so cancelling a poll op
+        //! also cancels nested async work (e.g. a blocked waitForNotifier()).
+        std::string inherited_owner;
         QoreHashNode* other;            //!< Free-form data (referenced, or nullptr)
         Queue* queue;                   //!< Result queue (referenced, or nullptr)
         SocketPollOperationBase* spop_base; //!< C++ poll operation (referenced, or nullptr)
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
+        //! True once a terminal completion (goal/timeout/cancel/error) has been
+        //! committed for delivery to \c queue / onComplete.  Enforces the
+        //! deliver-exactly-once invariant: every PollInfo that owns a result
+        //! \c queue delivers exactly one completion before the queue ref is
+        //! dropped.  Set at the real delivery funnels (doCancelIntern, Phase 3
+        //! deferred delivery); the cleanup() backstop synthesizes a canceled
+        //! completion when this is still false at teardown so a waiting
+        //! Queue::get() can never block forever on a lost completion.
+        bool completion_delivered;
         bool continue_poll_in_flight;   //!< True when continuePoll() dispatched to worker
         bool socket_async_io;           //!< True if this operation owns a Socket async I/O claim
         int64 poll_timeout_deadline_us; //!< Absolute deadline for protocol-level poll timeout (QUIC)
@@ -679,6 +717,7 @@ private:
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),
             other(nullptr), queue(nullptr),
             spop_base(nullptr), has_qore_abort(false), has_qore_on_complete(false),
+            completion_delivered(false),
             continue_poll_in_flight(false), socket_async_io(false), poll_timeout_deadline_us(0) {
         }
 
@@ -875,12 +914,33 @@ private:
         //! Extra fd readiness is key-scoped; primary socket event masks can be zero.
         std::unordered_map<int, std::unordered_map<std::string, int>> extra_fd_to_key_events;
 
+        //! Tombstone record: TTL (memory-hygiene bound) + sequence gate
+        /** The sequence gate is authoritative: a SubmitOp whose @c seq_at_push
+            is strictly greater than @c seq is a fresh submit pushed after the
+            cancel and is accepted; an equal-or-lesser seq is rejected as a
+            racing/stale resubmit.  This makes a synchronous
+            cancel-then-fresh-submit (e.g. cancelByOwner() before an FtpClient
+            reconnect with the same owner; or a WebSocket reconnect that
+            cancels the HCIO poll op then submits the WS poll op on the same
+            socket fd) work without depending on TTL aging.
+        */
+        struct CancelInfo {
+            int ttl;
+            int seq;
+        };
+
         //! Recently-cancelled operation keys — prevents re-submission of stale ops
-        /** I/O-thread-only. Value is a TTL counter decremented each processCommands()
-            cycle; entry is erased when it reaches zero.
+        /** I/O-thread-only.  Sequence-gated tombstone (see @ref CancelInfo): a
+            SubmitOp for a tombstoned key is rejected only when its
+            @c seq_at_push is <= the recorded @c seq (a stale racing
+            resubmit); a strictly-greater seq is a deliberate
+            cancel-then-resubmit on the same key (e.g. WebSocket reconnect
+            taking over the fd from the HCIO poll op) and is accepted.  The
+            TTL is decremented each processCommands() cycle and the entry
+            erased at zero; it is only a memory-hygiene bound.
             @since %Qore 2.3
         */
-        std::unordered_map<std::string, int> cancelled_keys;
+        std::unordered_map<std::string, CancelInfo> cancelled_keys;
 
         //! Recently-cancelled owners on this I/O thread — set by CancelOwner
         //! regardless of whether any cache entries were found.  Fixes the race
@@ -897,10 +957,6 @@ private:
             disconnect-then-reconnect with the same owner string) work
             without depending on TTL aging.  TTL is retained only as a
             memory-hygiene bound. */
-        struct CancelInfo {
-            int ttl;
-            int seq;
-        };
         std::unordered_map<std::string, CancelInfo> cancelled_owners;
 
         //! Cancels deferred because continuePoll() was in flight on a worker
@@ -1058,6 +1114,14 @@ private:
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
+
+    //! Deliver-exactly-once backstop: if \a pinfo owns a result queue but no
+    //! terminal completion was ever committed, synthesize and deliver a
+    //! canceled completion so a waiting Queue::get() cannot block forever.
+    /** Called from PollInfo::cleanup() before the queue ref is dropped.  No
+        controller mutex may be held.  Sets pinfo.completion_delivered.
+    */
+    DLLLOCAL void deliverBackstopCompletionIfUndelivered(PollInfo& pinfo, ExceptionSink* xsink);
 
     //! Cancel all operations in one I/O-thread context matching a socket hash
     DLLLOCAL int cancelSocketInContext(IoThreadContext& t, const std::string& sock_hash,

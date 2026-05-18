@@ -246,7 +246,6 @@ public class HttpClientConnection inherits HttpClientConnectionBase {
         controller's I/O thread after a wake.  For HTTP/1.1 and HTTP/2
         (TCP), this is a no-op since TCP writes are synchronous.
 
-        @since %HttpClientIo 1.3
     */
     flushPendingWrites() {
         # No-op for TCP-based protocols (H1, H2) — writes are synchronous

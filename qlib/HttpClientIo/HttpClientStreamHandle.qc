@@ -433,7 +433,6 @@ public class HttpClientStreamHandle {
 
         @return hash with "stream_id" (int) and "future" (Future)
 
-        @since %HttpClientIo 1.2
     */
     hash<auto> submitAsyncWithNotifier(string method, string path, *hash<auto> headers,
             *data body, EventNotifier notifier) {
@@ -503,7 +502,6 @@ public class HttpClientStreamHandle {
         @note This method never blocks. The Future is resolved by a C++ PromiseAction
         on the I/O thread (pure C++, no user code on I/O thread).
 
-        @since %HttpClientIo 1.1
     */
     hash<auto> submitAsyncNonBlocking(string method, string path, *hash<auto> headers, *data body) {
         {
@@ -687,7 +685,6 @@ public class HttpClientStreamHandle {
 
         @return an EventNotifier to poll, or NOTHING if already decided
 
-        @since %HttpClientIo 1.2
     */
     *EventNotifier getConnectionReadyNotifier() {
         if (conn.isReady()) {
@@ -835,7 +832,6 @@ public class HttpClientStreamHandle {
     #! Returns trailers from the completed response
     /** @return trailers hash, or NOTHING if no trailers or not yet complete
 
-        @since HttpClientIo 1.3
     */
     *hash<string, string> getTrailers() {
         return NOTHING;
@@ -844,7 +840,6 @@ public class HttpClientStreamHandle {
     #! Returns True if this stream handle supports streaming
     /** @return \c True if \c startStreaming(), \c readData(), and \c sendData() are available
 
-        @since HttpClientIo 1.3
     */
     bool supportsStreaming() {
         return False;
@@ -867,7 +862,6 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not
                support frame-state streaming (H1 uses a dedicated C++ codec)
 
-        @since %HttpClientIo 1.4
     */
     installFrameState(Queue msg_queue) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
@@ -888,7 +882,6 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-STREAMING-NOT-SUPPORTED if the protocol does not
                support SSE parser installation
 
-        @since %HttpClientIo 1.5
     */
     installSseState(Queue queue, *EventNotifier notifier, *data initial_body) {
         throw "HTTPCLIENT-STREAMING-NOT-SUPPORTED",
@@ -918,7 +911,6 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
 
-        @since %HttpClientIo 1.4
     */
     Queue startSseStreaming(string method, string path, *hash<auto> headers, *data body,
             *EventNotifier notifier) {
@@ -1007,7 +999,6 @@ HttpCancellableFuture f = mgr.requestAsync("https://api.example.com", "POST", "/
 f.cancel();
     @endcode
 
-    @since %HttpClientIo 1.3
 */
 public class HttpCancellableFuture inherits Future<auto> {
     private {

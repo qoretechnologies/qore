@@ -323,6 +323,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Auto protocol on plain HTTP (must use HTTP/1.1)
         addTestCase("auto protocol plain HTTP uses H1", \testAutoProtocolPlainHttp());
 
+        # V2 cancelable non-blocking happy-eyeballs (acquireConnectionAsync)
+        addTestCase("async HE connects + caches h2", \testAsyncHeConnectsH2());
+        addTestCase("async HE H3 wins within stagger", \testAsyncHeH3WinsStagger());
+        addTestCase("async HE SOCKET-CONNECT-ERROR fast-fail",
+            \testAsyncHeConnectRefusedFastFail());
+        addTestCase("async HE non-blocking + sync unchanged",
+            \testAsyncHeNonBlockingAndSyncParity());
+
         # H3 end-to-end tests
         addTestCase("H3 end-to-end basic request", \testH3EndToEndBasic());
         addTestCase("H3 end-to-end concurrent", \testH3EndToEndConcurrent());
@@ -1230,6 +1238,167 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         stream = mgr.acquireStream(mSslUrl);
         response = stream.request("GET", "/simple");
         assertEq(200, response.status_code, "auto protocol cached request status code");
+    }
+
+    #! Drives acquireConnectionAsync()'s re-entrant loop the way the
+    #! connection-monitor ping op does: poll the returned per-call notifier via
+    #! the controller, then re-enter.  Returns the resolved connection.
+    /** The TEST thread blocking on the controller notifier here mirrors the
+        ping op's controller-submitted SPS_CONNECTING poll — it does NOT mean
+        acquireConnectionAsync() itself blocks the caller (see
+        @ref testAsyncHeNonBlockingAndSyncParity()).
+    */
+    private HttpClientIo::HttpClientConnection driveAsyncConnect(
+            HttpClientIo::HttpClientConnectionManager mgr, string url, timeout to) {
+        *HttpClientIo::HttpClientConnection cout;
+        *EventNotifier n = mgr.acquireConnectionAsync(url, \cout);
+        int iters = 0;
+        while (n) {
+            assertTrue(++iters < 200, "async connect converged");
+            mgr.getController().waitForNotifier(n, to, to + 30s);
+            n.acknowledge();
+            delete n;
+            n = mgr.acquireConnectionAsync(url, \cout);
+        }
+        assertTrue(exists cout, "resolved connection returned via conn_out");
+        return cout;
+    }
+
+    testAsyncHeConnectsH2() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "ssl_verify_mode": 0,
+            "protocol": "auto",
+            "logger": mLogger,
+        });
+        on_exit delete mgr;
+
+        # The async happy-eyeballs race resolves to whichever protocol the test
+        # server wins with (it supports both H3 and H2 — see
+        # testAutoProtocolFallback), caching the winner via the shared
+        # heCommitWinner().
+        HttpClientIo::HttpClientConnection conn = driveAsyncConnect(mgr, mSslUrl, 15s);
+        assertTrue(conn.isReady(), "async HE connection ready");
+        assertTrue(inlist(conn.getProtocol(), ("h2", "h3")),
+            sprintf("async HE resolved to a raced protocol (got %y)",
+                conn.getProtocol()));
+
+        # The winner was pool-inserted: a synchronous request reuses it
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code,
+            "request over async-HE-established H2 connection");
+
+        # Protocol now cached: a fresh async acquire resolves with no race
+        # (live pooled connection reused immediately, notifier NOTHING)
+        *HttpClientIo::HttpClientConnection cout2;
+        *EventNotifier n2 = mgr.acquireConnectionAsync(mSslUrl, \cout2);
+        assertNothing(n2, "cached-protocol async acquire reuses pooled conn");
+        assertTrue(exists cout2 && cout2.isReady(), "reused pooled H2 connection");
+    }
+
+    testAsyncHeH3WinsStagger() {
+        if (!mQuicPort) {
+            testSkip("QUIC listener not available — the stagger->H2 transition "
+                "is covered by testAsyncHeConnectsH2()");
+        }
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "ssl_verify_mode": 0,
+            "protocol": "auto",
+            "logger": mLogger,
+        });
+        on_exit delete mgr;
+
+        # mQuicUrl has a working H3/QUIC listener: H3 should win the race
+        # (preferred), the H2 loser is closed, and "h3" is cached.
+        HttpClientIo::HttpClientConnection conn = driveAsyncConnect(mgr, mQuicUrl, 15s);
+        assertTrue(conn.isReady(), "async HE (QUIC) connection ready");
+        assertEq("h3", conn.getProtocol(), "async HE resolved to H3 (preferred)");
+    }
+
+    testAsyncHeConnectRefusedFastFail() {
+        # A port nothing listens on → TCP RST (ECONNREFUSED).  The async race's
+        # H2 (TCP) attempt fails fast with SOCKET-CONNECT-ERROR; the shared
+        # heH2FastFail()/heThrowConnectError() must propagate it WITHOUT waiting
+        # connect_timeout (identical to the synchronous race's fast-fail).
+        Socket tmp();
+        tmp.bind("127.0.0.1:0");
+        int bad_port = tmp.getSocketInfo().port;
+        delete tmp;
+        string refused = "https://127.0.0.1:" + bad_port;
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "ssl_verify_mode": 0,
+            "protocol": "auto",
+            "connect_timeout": 20s,
+            "logger": mLogger,
+        });
+        on_exit delete mgr;
+
+        date t0 = now_us();
+        try {
+            driveAsyncConnect(mgr, refused, 20s);
+            assertTrue(False, "connect to refused port must throw");
+        } catch (hash<ExceptionInfo> ex) {
+            date elapsed = now_us() - t0;
+            assertRegex("CONNECT-ERROR|SOCKET-CONNECT-ERROR", ex.err,
+                "async HE refused error type");
+            assertTrue(elapsed < 10s,
+                sprintf("async HE fast-fail took %y, expected << connect_timeout 20s",
+                    elapsed));
+        }
+    }
+
+    testAsyncHeNonBlockingAndSyncParity() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "ssl_verify_mode": 0,
+            "protocol": "auto",
+            "logger": mLogger,
+        });
+        on_exit delete mgr;
+
+        # Every acquireConnectionAsync() call must return promptly without
+        # parking the calling thread (the whole point of V2): time each call.
+        *HttpClientIo::HttpClientConnection cout;
+        date c0 = now_us();
+        *EventNotifier n = mgr.acquireConnectionAsync(mSslUrl, \cout);
+        assertTrue(now_us() - c0 < 3s,
+            "initial acquireConnectionAsync did not block the caller");
+        int iters = 0;
+        while (n) {
+            assertTrue(++iters < 200, "async connect converged");
+            mgr.getController().waitForNotifier(n, 15s, 45s);
+            n.acknowledge();
+            delete n;
+            date c1 = now_us();
+            n = mgr.acquireConnectionAsync(mSslUrl, \cout);
+            assertTrue(now_us() - c1 < 3s,
+                "acquireConnectionAsync re-entry did not block the caller");
+        }
+        assertTrue(cout.isReady() && inlist(cout.getProtocol(), ("h2", "h3")),
+            sprintf("async HE resolved to a ready raced connection (got %y)",
+                exists cout ? cout.getProtocol() : NOTHING));
+
+        # Sync happy-eyeballs path remains unaffected: a normal synchronous
+        # acquireStream() to a fresh key still establishes and works.
+        HttpClientIo::HttpClientConnectionManager smgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "ssl_verify_mode": 0,
+            "protocol": "auto",
+            "logger": mLogger,
+        });
+        on_exit delete smgr;
+        HttpClientIo::HttpClientStreamHandle s = smgr.acquireStream(mSslUrl);
+        hash<auto> r = s.request("GET", "/simple");
+        assertEq(200, r.status_code, "sync happy-eyeballs request unaffected");
     }
 
     testAutoProtocolPlainHttp() {

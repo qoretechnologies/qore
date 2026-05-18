@@ -5134,10 +5134,15 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
     }
 
     private *EventNotifier startMainConnectionAsync() {
-        HttpClientIo::HttpClientStreamHandle stream =
-            rcio.getConnectionManager().acquireStream(rcio.getUrl());
-        connection_ready_conn = stream.getConnection();
-        *EventNotifier rv = stream.getConnectionReadyNotifier();
+        # acquireConnectionAsync(): the V2 cancelable, non-blocking happy-eyeballs
+        # entry — never blocks this thread (the PollingConnectionMonitor
+        # submitPing task / continuePoll worker) establishing the connection, and
+        # restores a real H3/H2 race for brand-new keys.  The SPS_CONNECTING
+        # state polls the returned per-call notifier via the controller under
+        # this op's own owner, so cancelByOwner() interrupts it immediately; the
+        # race is torn down by abandonAsyncHEForUrl() in cancelPendingWork().
+        *EventNotifier rv = rcio.getConnectionManager().acquireConnectionAsync(
+            rcio.getUrl(), \connection_ready_conn);
         if (!rv) {
             checkTrackedConnectionFailure(connection_ready_conn);
             connection_ready_conn = NOTHING;
@@ -5146,10 +5151,10 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
     }
 
     private *EventNotifier startOAuth2ConnectionAsync() {
-        HttpClientIo::HttpClientStreamHandle stream =
-            oauth2_rcio.getConnectionManager().acquireStream(oauth2_rcio.getUrl());
-        oauth2_connection_ready_conn = stream.getConnection();
-        *EventNotifier rv = stream.getConnectionReadyNotifier();
+        # acquireConnectionAsync(): see startMainConnectionAsync() — the OAuth2
+        # token endpoint connect must also never block the ping op's thread
+        *EventNotifier rv = oauth2_rcio.getConnectionManager().acquireConnectionAsync(
+            oauth2_rcio.getUrl(), \oauth2_connection_ready_conn);
         if (!rv) {
             checkTrackedConnectionFailure(oauth2_connection_ready_conn);
             oauth2_connection_ready_conn = NOTHING;
@@ -5184,6 +5189,21 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation<
     }
 
     private cancelPendingWork() {
+        # Tear down any in-flight async happy-eyeballs race started by
+        # startMainConnectionAsync()/startOAuth2ConnectionAsync() so a
+        # cancelByOwner("pcm:<name>") from PollingConnectionMonitor::stopClear()
+        # leaves no leaked H3/H2 socket or stagger timer.  Idempotent and safe
+        # when no race exists.
+        try {
+            rcio.getConnectionManager().abandonAsyncHEForUrl(rcio.getUrl());
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        if (oauth2_rcio) {
+            try {
+                oauth2_rcio.getConnectionManager().abandonAsyncHEForUrl(oauth2_rcio.getUrl());
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
         if (pending_stream) {
             try {
                 pending_stream.cancel();
