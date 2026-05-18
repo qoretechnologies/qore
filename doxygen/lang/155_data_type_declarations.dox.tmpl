@@ -569,6 +569,31 @@ Box<string> box("ready");
 string value = box.get();
     @endcode
 
+    Type parameters can declare defaults and upper bounds. Defaults are used
+    when a generic type position explicitly omits the argument with
+    <tt>&lt;&gt;</tt>, and bounds are checked after explicit arguments or
+    inferred arguments are applied:
+
+    @code{.py}
+class IntBox<T: int = int> {
+    private {
+        T value;
+    }
+
+    constructor(T value = 1) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+IntBox<> default_box();        # same type as IntBox<int>
+IntBox<int> explicit_box(2);
+# IntBox<string> bad("x");     # PARSE-TYPE-ERROR: string violates T: int
+    @endcode
+
     Source-defined generic classes can inherit generic base classes and pass
     through their own type parameters:
 
@@ -620,6 +645,28 @@ Factory<int> f = Factory<int>::make(10);
 int made = f.get();
     @endcode
 
+    Functions, methods, and static methods can also declare their own type
+    parameters. These method-level type parameters are independent of class type
+    parameters and can be inferred from arguments or supplied explicitly at the
+    call site:
+
+    @code{.py}
+T sub identity<T>(T value) {
+    return value;
+}
+
+int i = identity(1);
+string s = identity<string>(value: "ready");
+
+class Chooser<T> {
+    static U choose<U>(T left, U right) {
+        return right;
+    }
+}
+
+string chosen = Chooser<int>::choose<string>(1, "one");
+    @endcode
+
     Constructor calls can infer class type arguments from constructor arguments
     when the inferred instantiation is unique:
 
@@ -664,6 +711,11 @@ Factory<int> inferred_factory = Factory::make(14);
     <tt>[legacy_raw]</tt> or <tt>[legacy_raw_construct]</tt> keep their legacy
     behavior: raw constructor calls create the all-<tt>auto</tt> instantiation
     instead of inferring type arguments from constructor values.
+
+    Generic source bodies keep the same source-visible behavior in all
+    execution modes. AST and AOT metadata paths use runtime type-parameter
+    substitution, while IR/JIT execution can internally cache specialized source
+    bodies for concrete receiver and method type-argument tuples.
 
     @par Source Raw-Compatibility Attributes
     Source-defined generic classes that migrate an existing raw class API can

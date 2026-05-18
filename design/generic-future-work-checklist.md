@@ -122,16 +122,16 @@ Implementation checklist:
 
 Documentation checklist:
 
-- [ ] Update `doxygen/lang/155_data_type_declarations.dox.tmpl`.
-- [ ] Update `doxygen/lang/215_classes.dox.tmpl`.
-- [ ] Update `doxygen/lang/217_hashdecl.dox.tmpl`.
-- [ ] Update `doxygen/lang/220_threading.dox.tmpl` if builtin generic examples
+- [x] Update `doxygen/lang/155_data_type_declarations.dox.tmpl`.
+- [x] Update `doxygen/lang/215_classes.dox.tmpl`.
+- [x] Update `doxygen/lang/217_hashdecl.dox.tmpl`.
+- [x] Update `doxygen/lang/220_threading.dox.tmpl` if builtin generic examples
   change.
-- [ ] Update `doxygen/lang/900_release_notes.dox.tmpl`.
-- [ ] Include examples for defaults, bounds, method-level generics, explicit
+- [x] Update `doxygen/lang/900_release_notes.dox.tmpl`.
+- [x] Include examples for defaults, bounds, method-level generics, explicit
   generic call type arguments, generic hashdecl inheritance, variance/wildcards,
   expression-site inference, and any visible specialization behavior.
-- [ ] Keep examples concrete and executable where practical.
+- [x] Keep examples concrete and executable where practical.
 
 ## Phase 5: Local Verification
 

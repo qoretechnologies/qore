@@ -61,6 +61,13 @@
       constructor arguments and expected result types, and static factory calls
       can infer a generic receiver from assignment or return context when the
       target type is concrete
+    - generic class, hashdecl, function, method, and static method type
+      parameters can declare defaults and upper bounds; functions and methods
+      can also infer method-level type arguments or accept explicit call type
+      arguments such as <tt>identity&lt;string&gt;(...)</tt>
+    - IR/JIT execution can internally specialize source generic method and
+      function bodies for concrete receiver and call type arguments, while AOT
+      metadata keeps generic type paths and resolves them at runtime
     - parameterised date types (@ref date_type "date<absolute>" / @ref date_type "date<relative>")
     - new \c \\uXXXX, \c \\UXXXXXXXX, and \c \\xHH string-literal escapes
     - new \c %%Y printf format specifier for multi-line pseudo-YAML output

@@ -123,6 +123,28 @@ Child<int> child();
 int echoed = child.echo(value);
     @endcode
 
+    Type parameters can have defaults and upper bounds:
+
+    @code{.py}
+class IntBox<T: int = int> {
+    private {
+        T value;
+    }
+
+    constructor(T value = 1) {
+        self.value = value;
+    }
+
+    T get() {
+        return self.value;
+    }
+}
+
+IntBox<> default_box();
+IntBox<int> explicit_box(2);
+# IntBox<string> invalid("x");  # PARSE-TYPE-ERROR
+    @endcode
+
     Static methods on source-defined generic classes can use class type
     parameters when the call target is parameterized:
 
@@ -147,6 +169,31 @@ class Factory<T> {
 
 Factory<int> f = Factory<int>::make(10);
 int made = f.get();
+    @endcode
+
+    Methods and static methods can also declare their own call-local type
+    parameters after the method name. These type parameters can be inferred from
+    call arguments or supplied explicitly:
+
+    @code{.py}
+class Mapper<T> {
+    T get(T value) {
+        return value;
+    }
+
+    U convert<U>(T source, U target) {
+        return target;
+    }
+
+    static U choose<U>(T source, U target) {
+        return target;
+    }
+}
+
+Mapper<int> mapper();
+string inferred_method = mapper.convert(1, "one");
+string explicit_method = mapper.convert<string>(2, target: "two");
+string static_value = Mapper<int>::choose<string>(3, "three");
     @endcode
 
     The receiver type in <tt>Factory&lt;int&gt;::make(...)</tt> supplies the

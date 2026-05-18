@@ -43,6 +43,75 @@
 
     This is most important with @ref abstract "abstract" class methods.
 
+    @subsection function_type_parameters Function Type Parameters
+    Functions can declare formal type parameters after the function name. The
+    type parameters can then be used in the return type, parameter types, local
+    declarations, and nested type declarations in the function body:
+
+    @code{.py}
+T sub identity<T>(T value) {
+    T local = value;
+    return local;
+}
+
+int i = identity(1);                         # T inferred as int
+string s = identity(value: "ready");         # named calls also infer T
+string explicit = identity<string>("done");  # explicit call type argument
+    @endcode
+
+    Explicit generic call type arguments are written after the function name
+    and before the normal argument list. Explicit type arguments take precedence
+    over inference and are required when the call has no arguments from which a
+    type parameter can be inferred:
+
+    @code{.py}
+T sub make<T = int>() {
+    auto value = 1;
+    T rv = value;
+    return rv;
+}
+
+int default_value = make();          # default type argument T = int
+int explicit_value = make<int>();    # explicit T
+    @endcode
+
+    Type parameters can declare an upper bound and a default. Bounds are
+    checked after inference or after explicit type arguments are applied:
+
+    @code{.py}
+T sub bounded<T: int = int>(T value = 1) {
+    return value;
+}
+
+int ok = bounded(2);
+int explicit_ok = bounded<int>(3);
+# string bad = bounded<string>("x");  # PARSE-TYPE-ERROR
+    @endcode
+
+    Methods and static methods use the same call-type-argument syntax:
+
+    @code{.py}
+class Chooser {
+    T echo<T>(T value) {
+        return value;
+    }
+
+    static U choose<T, U>(T left, U right) {
+        return right;
+    }
+}
+
+Chooser c();
+int method_value = c.echo(4);
+string explicit_method_value = c.echo<string>(value: "four");
+string static_value = Chooser::choose<int, string>(1, "one");
+    @endcode
+
+    If inference cannot choose one unique type argument, or if an explicit type
+    argument violates a bound, parsing raises \c PARSE-TYPE-ERROR. Functions
+    or methods without type parameters cannot be called with generic call type
+    arguments.
+
     @subsection function_named_arguments Named Arguments
     Function, method, constructor, and base-constructor calls can pass arguments by parameter name using
     <tt>name: expression</tt> syntax. Named arguments make call sites clearer when a call has optional arguments,

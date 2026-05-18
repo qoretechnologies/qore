@@ -118,6 +118,18 @@ hash<Envelope<int>> response(("request_id": "abc", "result": int_result));
 int payload = response.result.value;
     @endcode
 
+    Generic hashdecl type parameters can declare defaults and upper bounds:
+
+    @code{.py}
+hashdecl Count<T: int = int> {
+    T value;
+}
+
+hash<Count<>> default_count(("value": 1));      # same type as hash<Count<int>>
+hash<Count<int>> explicit_count(("value": 2));
+# hash<Count<string>> bad(("value": "x"));      # PARSE-TYPE-ERROR
+    @endcode
+
     Generic hashdecl type arguments are invariant when concrete type arguments
     are used and are checked in the same way as other typed hash members. For
     example,
